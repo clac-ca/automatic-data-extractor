@@ -21,6 +21,10 @@ class WorkspaceOut(BaseSchema):
     roles: list[str]
     permissions: list[str]
     is_default: bool
+    processing_paused: bool = Field(
+        default=False,
+        description="Whether document processing is paused for the workspace.",
+    )
 
 
 class WorkspaceCreate(BaseSchema):
@@ -30,6 +34,10 @@ class WorkspaceCreate(BaseSchema):
     slug: str | None = Field(default=None, min_length=1, max_length=100)
     owner_user_id: UUIDStr | None = Field(default=None, alias="owner_user_id")
     settings: dict[str, Any] | None = None
+    processing_paused: bool | None = Field(
+        default=None,
+        description="Optional processing pause state for the workspace.",
+    )
 
 
 class WorkspaceUpdate(BaseSchema):
@@ -38,6 +46,10 @@ class WorkspaceUpdate(BaseSchema):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     slug: str | None = Field(default=None, min_length=1, max_length=100)
     settings: dict[str, Any] | None = None
+    processing_paused: bool | None = Field(
+        default=None,
+        description="Optional processing pause state for the workspace.",
+    )
 
 
 class WorkspaceDefaultSelectionOut(BaseSchema):

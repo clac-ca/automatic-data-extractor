@@ -1,9 +1,9 @@
 import clsx from "clsx";
-import { useEffect, useMemo, useRef, useState } from "react";
-
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Input } from "@ui/Input";
 import type { WorkspacePerson } from "../types";
-
-const UNASSIGNED_KEY = "__unassigned__";
+import { UNASSIGNED_KEY } from "../filters";
+import { CheckIcon, ChevronDownIcon, SearchIcon } from "@ui/Icons";
 
 export function PeoplePicker({
   people,
@@ -14,6 +14,7 @@ export function PeoplePicker({
   includeUnassigned = false,
   disabled = false,
   buttonClassName,
+  onOpenChange,
 }: {
   people: WorkspacePerson[];
   value: string[];
@@ -23,23 +24,56 @@ export function PeoplePicker({
   includeUnassigned?: boolean;
   disabled?: boolean;
   buttonClassName?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+  const toggleOpen = useCallback(() => {
+    setOpen((prev) => {
+      if (prev) setQuery("");
+      return !prev;
+    });
+  }, []);
 
   useEffect(() => {
-    function onClickOutside(event: MouseEvent) {
-      if (!open) return;
-      const target = event.target as Node | null;
-      if (containerRef.current && target && !containerRef.current.contains(target)) {
-        setOpen(false);
-        setQuery("");
-      }
+    if (open) {
+      inputRef.current?.focus();
     }
-    window.addEventListener("mousedown", onClickOutside);
-    return () => window.removeEventListener("mousedown", onClickOutside);
   }, [open]);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (containerRef.current?.contains(target)) return;
+      close();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [close, open]);
 
   const allOptions = useMemo(() => {
     const base = people.slice().sort((a, b) => a.label.localeCompare(b.label));
@@ -64,8 +98,7 @@ export function PeoplePicker({
 
     if (!multiple) {
       onChange([key]);
-      setOpen(false);
-      setQuery("");
+      close();
       return;
     }
     const next = new Set(value);
@@ -84,16 +117,24 @@ export function PeoplePicker({
         : selectedLabels[0];
 
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className={clsx("relative", open ? "z-50" : "z-0")}
+      data-ignore-row-click="true"
+    >
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
+        ref={triggerRef}
         className={clsx(
-          "inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition",
-          disabled ? "opacity-60" : "hover:border-brand-300",
+          "inline-flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition",
+          disabled ? "opacity-60" : "hover:bg-background",
           buttonClassName,
         )}
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-haspopup="listbox"
       >
         <span
           className={clsx(
@@ -103,20 +144,29 @@ export function PeoplePicker({
         >
           {buttonText}
         </span>
-        <span className="text-muted-foreground" aria-hidden>
-          v
-        </span>
+        <ChevronDownIcon
+          className={clsx("h-3.5 w-3.5 text-muted-foreground transition", open && "rotate-180")}
+        />
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg">
+        <div
+          className="absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg"
+          role="listbox"
+          id={listId}
+          aria-multiselectable={multiple || undefined}
+        >
           <div className="border-b border-border p-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search people..."
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-300"
-            />
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search people..."
+                className="h-9 pl-9 text-sm"
+              />
+            </div>
           </div>
           <div className="max-h-72 overflow-auto p-2">
             {filtered.length === 0 ? (
@@ -129,22 +179,17 @@ export function PeoplePicker({
                     key={person.key}
                     type="button"
                     onClick={() => toggle(person.key)}
+                    role="option"
+                    aria-selected={selected}
                     className={clsx(
                       "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
-                      selected ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
+                      selected
+                        ? "bg-brand-50 text-foreground dark:bg-brand-500/20 dark:text-brand-200"
+                        : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="min-w-0 truncate font-semibold text-foreground">{person.label}</span>
-                    {multiple ? (
-                      <span
-                        className={clsx(
-                          "text-xs font-semibold",
-                          selected ? "text-brand-700 dark:text-brand-200" : "text-muted-foreground",
-                        )}
-                      >
-                        {selected ? "Selected" : "Select"}
-                      </span>
-                    ) : null}
+                    {selected ? <CheckIcon className="h-4 w-4 text-brand-600" /> : null}
                   </button>
                 );
               })
@@ -160,14 +205,7 @@ export function PeoplePicker({
               >
                 Clear
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setQuery("");
-                }}
-                className="text-xs font-semibold text-brand-600"
-              >
+              <button type="button" onClick={close} className="text-xs font-semibold text-brand-600">
                 Done
               </button>
             </div>

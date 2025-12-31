@@ -13,6 +13,21 @@ import {
 import clsx from "clsx";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
+import {
+  ChevronDownSmallIcon,
+  ChevronRightTinyIcon,
+  ChevronUpSmallIcon,
+  CollapseAllIcon,
+  CopyPathIcon,
+  DeleteIcon,
+  FileIcon,
+  FolderIcon,
+  HideSidebarIcon,
+  NewFileIcon,
+  NewFolderIcon,
+  OpenFileIcon,
+  UploadIcon,
+} from "@ui/Icons";
 import { createScopedStorage } from "@shared/storage";
 
 import type { WorkbenchFileNode, WorkbenchUploadFile } from "../types";
@@ -477,12 +492,12 @@ export function Explorer({
 
     if (node.kind === "file") {
       return [
-        { id: "open-file", label: "Open", icon: <MenuIconOpenFile />, shortcut: shortcuts.open, onSelect: () => onSelectFile(node.id) },
+        { id: "open-file", label: "Open", icon: <OpenFileIcon className={MENU_ICON_CLASS} />, shortcut: shortcuts.open, onSelect: () => onSelectFile(node.id) },
         {
           id: "copy-path",
           label: "Copy Path",
           dividerAbove: true,
-          icon: <MenuIconCopyPath />,
+          icon: <CopyPathIcon className={MENU_ICON_CLASS} />,
           shortcut: shortcuts.copyPath,
           onSelect: () => {
             void handleCopyPath(node.id);
@@ -491,7 +506,7 @@ export function Explorer({
         {
           id: "delete-file",
           label: "Delete",
-          icon: <MenuIconDelete />,
+          icon: <DeleteIcon className={MENU_ICON_CLASS} />,
           shortcut: shortcuts.delete,
           disabled: !canDeleteFile || !onDeleteFile,
           onSelect: () => handleDeleteFile(node.id),
@@ -504,7 +519,7 @@ export function Explorer({
       {
         id: "new-file",
         label: "New File…",
-        icon: <MenuIconNewFile />,
+        icon: <NewFileIcon className={MENU_ICON_CLASS} />,
         shortcut: shortcuts.newFile,
         disabled: !canCreateFile || !onCreateFile,
         onSelect: () => {
@@ -518,7 +533,7 @@ export function Explorer({
       {
         id: "new-folder",
         label: "New Folder…",
-        icon: <MenuIconNewFolder />,
+        icon: <NewFolderIcon className={MENU_ICON_CLASS} />,
         shortcut: shortcuts.newFolder,
         disabled: !canCreateFolder || !onCreateFolder,
         onSelect: () => {
@@ -532,13 +547,13 @@ export function Explorer({
       {
         id: "toggle-folder",
         label: isExpanded ? "Collapse Folder" : "Expand Folder",
-        icon: isExpanded ? <MenuIconCollapse /> : <MenuIconExpand />,
+        icon: isExpanded ? <ChevronDownSmallIcon className={MENU_ICON_CLASS} /> : <ChevronUpSmallIcon className={MENU_ICON_CLASS} />,
         onSelect: () => setFolderExpanded(node.id, !isExpanded),
       },
       {
         id: "collapse-all",
         label: "Collapse All",
-        icon: <MenuIconCollapseAll />,
+        icon: <CollapseAllIcon className={MENU_ICON_CLASS} />,
         shortcut: shortcuts.collapseAll,
         dividerAbove: true,
         onSelect: () => collapseAll(),
@@ -547,7 +562,7 @@ export function Explorer({
         id: "copy-path",
         label: "Copy Path",
         dividerAbove: true,
-        icon: <MenuIconCopyPath />,
+        icon: <CopyPathIcon className={MENU_ICON_CLASS} />,
         shortcut: shortcuts.copyPath,
         onSelect: () => {
           void handleCopyPath(node.id);
@@ -556,7 +571,7 @@ export function Explorer({
       {
         id: "delete-folder",
         label: "Delete Folder",
-        icon: <MenuIconDelete />,
+        icon: <DeleteIcon className={MENU_ICON_CLASS} />,
         shortcut: shortcuts.delete,
         disabled: !canDeleteFolder || !onDeleteFolder,
         onSelect: () => handleDeleteFolder(node.id),
@@ -634,7 +649,7 @@ export function Explorer({
               "hover:bg-muted hover:text-foreground",
             )}
           >
-            <HideSidebarIcon />
+            <HideSidebarIcon className="h-3.5 w-3.5" />
           </button>
         </div>
         <nav
@@ -677,7 +692,7 @@ export function Explorer({
               <li className="pl-2">
                 <CreateEntryRow
                   appearance={theme}
-                  icon={editing.kind === "folder" ? <MenuIconNewFolder /> : undefined}
+                  icon={editing.kind === "folder" ? <NewFolderIcon className={MENU_ICON_CLASS} /> : undefined}
                   placeholder={editing.kind === "folder" ? "new_folder" : "new_file.py"}
                   onSubmit={(name) => handleSubmitCreate(tree.id, name, editing.kind)}
                   onCancel={handleCancelCreate}
@@ -707,7 +722,7 @@ export function Explorer({
                   )}
                   style={{ color: tokens.badgeActive }}
                 >
-                  <UploadIcon />
+                  <UploadIcon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[13px] font-semibold" style={{ color: tokens.textPrimary }}>
@@ -833,8 +848,16 @@ function ExplorerNode({
           aria-expanded={isOpen}
           disabled={isDeleting}
         >
-          <ChevronIcon open={isOpen} tokens={tokens} />
-          <FolderIcon open={isOpen} tokens={tokens} />
+          <ChevronRightTinyIcon
+            className={clsx("h-3 w-3 flex-shrink-0 transition-transform duration-150", isOpen ? "rotate-90" : undefined)}
+            stroke={isOpen ? tokens.chevronActive : tokens.chevronIdle}
+          />
+          <FolderIcon
+            className="h-4 w-4 flex-shrink-0 transition-colors"
+            stroke={isOpen ? tokens.folderIconActive : tokens.folderIcon}
+            fill={isOpen ? tokens.folderIconActive : "none"}
+            opacity={isOpen ? 0.25 : 1}
+          />
           <span className="truncate">{node.name}</span>
         </button>
         {isOpen ? (
@@ -870,7 +893,7 @@ function ExplorerNode({
               <li className="pl-2">
                 <CreateEntryRow
                   appearance={theme}
-                  icon={editing?.kind === "folder" ? <MenuIconNewFolder /> : undefined}
+                  icon={editing?.kind === "folder" ? <NewFolderIcon className={MENU_ICON_CLASS} /> : undefined}
                   placeholder={editing?.kind === "folder" ? "new_folder" : "new_file.py"}
                   onSubmit={(name) => {
                     if (!editing) return;
@@ -924,7 +947,14 @@ function ExplorerNode({
         disabled={isDeleting}
       >
         <span className="inline-flex w-4 justify-center">
-          <FileIcon className={clsx(fileAccent, isOpen && !isActive && "opacity-90", !isOpen && !isActive && "opacity-75")} />
+          <FileIcon
+            className={clsx(
+              "h-4 w-4 flex-shrink-0",
+              fileAccent,
+              isOpen && !isActive && "opacity-90",
+              !isOpen && !isActive && "opacity-75",
+            )}
+          />
         </span>
         <span className={clsx("flex-1 truncate", isActive && "font-semibold")}>{node.name}</span>
         {isOpen && !isActive ? <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tokens.badgeOpen }} /> : null}
@@ -958,190 +988,7 @@ function getFileAccent(name: string, language?: string) {
   return "text-muted-foreground";
 }
 
-function ChevronIcon({ open, tokens }: { readonly open: boolean; readonly tokens: ExplorerThemeTokens }) {
-  return (
-    <svg
-      className={clsx("h-3 w-3 flex-shrink-0 transition-transform duration-150", open ? "rotate-90" : undefined)}
-      viewBox="0 0 10 10"
-      aria-hidden
-    >
-      <path
-        d="M3 1l4 4-4 4"
-        stroke={open ? tokens.chevronActive : tokens.chevronIdle}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function FolderIcon({ open, tokens }: { readonly open: boolean; readonly tokens: ExplorerThemeTokens }) {
-  return (
-    <svg className="h-4 w-4 flex-shrink-0 transition-colors" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M3.5 5.5h4l1.5 1.5H16a1 1 0 0 1 1 1V15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z"
-        stroke={open ? tokens.folderIconActive : tokens.folderIcon}
-        strokeWidth={1.4}
-        strokeLinejoin="round"
-        fill={open ? tokens.folderIconActive : "none"}
-        opacity={open ? 0.25 : 1}
-      />
-    </svg>
-  );
-}
-
-function FileIcon({ className }: { readonly className?: string }) {
-  return (
-    <svg className={clsx("h-4 w-4 flex-shrink-0", className)} viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M6 3h4l4 4v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth={1.3}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M10 3v4h4" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function HideSidebarIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M3 3h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M3 13h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M3 8h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M11 5l2 3-2 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function UploadIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path d="M10 12V3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      <path
-        d="M6.25 6.75 10 3l3.75 3.75"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4 12.5v2A2.5 2.5 0 0 0 6.5 17h7A2.5 2.5 0 0 0 16 14.5v-2"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 const MENU_ICON_CLASS = "h-4 w-4 text-current opacity-80";
-
-function MenuIconOpenFile() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M3 4.5h3l1 1H13a1 1 0 0 1 1 1V12.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        fill="none"
-      />
-    </svg>
-  );
-}
-
-function MenuIconCopyPath() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M6 4.5h5.5a1 1 0 0 1 1 1V13"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-      <rect x="3.5" y="2.5" width="6" height="9" rx="1" stroke="currentColor" strokeWidth="1.1" fill="none" />
-    </svg>
-  );
-}
-
-function MenuIconCollapse() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path d="M5 6l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function MenuIconNewFile() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M3.5 4.5h4.5l3 3V13a1 1 0 0 1-1 1h-6.5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        fill="none"
-      />
-      <path d="M11 7.5h-2v-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8.5 7.5h2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconNewFolder() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M3.5 5h3.5l1.2 1.4H12.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        fill="none"
-        strokeLinejoin="round"
-      />
-      <path d="M8 8v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M6.5 9.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconExpand() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path d="M5 10l3-3 3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function MenuIconCollapseAll() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path d="M3 5h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M3 8h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M3 11h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconDelete() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path d="M6 3.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M4 4.5h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path
-        d="M5.5 4.5v7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-7"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M6.5 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M9.5 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function CreateEntryRow({
   appearance: _appearance,
@@ -1178,7 +1025,7 @@ function CreateEntryRow({
   return (
     <div className="rounded-md border border-border bg-muted px-2 py-1">
       <div className="flex items-center gap-2">
-        <span className="inline-flex w-4 justify-center text-brand-500">{icon ?? <MenuIconNewFile />}</span>
+        <span className="inline-flex w-4 justify-center text-brand-500">{icon ?? <NewFileIcon className={MENU_ICON_CLASS} />}</span>
         <input
           ref={inputRef}
           value={value}

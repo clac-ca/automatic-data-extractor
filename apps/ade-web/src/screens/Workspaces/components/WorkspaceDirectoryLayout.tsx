@@ -2,12 +2,11 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "@app/nav/history";
 
 import { useSession } from "@shared/auth/context/SessionContext";
+import { AppearanceMenu } from "@app/shell/AppearanceMenu";
 import { GlobalTopBar, type GlobalTopBarSearchProps } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
 import { DirectoryIcon } from "@ui/Icons";
-import { ModeToggle } from "@ui/ModeToggle";
-import { ThemePicker } from "@ui/ThemePicker";
 
 interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
@@ -32,26 +31,26 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
             <button
               type="button"
               onClick={() => navigate("/workspaces")}
-              className="focus-ring inline-flex items-center gap-3 rounded-xl border border-transparent bg-card px-3 py-2 text-left text-sm font-semibold text-foreground shadow-sm transition hover:border-border"
+              className="focus-ring inline-flex items-center gap-3 rounded-xl border border-header-border/40 bg-header/20 px-3 py-2 text-left text-sm font-semibold text-header-foreground transition hover:border-header-border/70 hover:bg-header/30"
             >
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-on-brand shadow-sm">
                 <DirectoryIcon className="h-5 w-5" aria-hidden />
               </span>
               <span className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-foreground">Workspace directory</span>
-                <span className="text-xs text-muted-foreground">Automatic Data Extractor</span>
+                <span className="text-sm font-semibold text-header-foreground">Workspace directory</span>
+                <span className="text-xs text-header-muted">Automatic Data Extractor</span>
               </span>
             </button>
           }
           search={search}
-          actions={actions ? <div className="flex items-center gap-2">{actions}</div> : undefined}
+          actions={actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : undefined}
           trailing={
-            <div className="flex items-center gap-2">
-              <ModeToggle />
-              <ThemePicker />
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <AppearanceMenu tone="header" />
               <ProfileDropdown
                 displayName={displayName}
                 email={email}
+                tone="header"
                 actions={[
                   {
                     id: "about-versions",

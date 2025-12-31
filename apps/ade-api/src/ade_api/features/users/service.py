@@ -254,7 +254,7 @@ class UsersService:
         user.locked_until = now + LOCKOUT_HORIZON
         user.failed_login_count = 0
         await self._session.flush()
-        await self._api_keys.revoke_all_for_owner(owner_user_id=user.id)
+        await self._api_keys.revoke_all_for_user(user_id=user.id)
         logger.info(
             "users.deactivate",
             extra=log_context(
@@ -313,10 +313,12 @@ class UsersService:
         try:
             user = await self._repo.create(
                 email=canonical_email,
-                password_hash=password_hash,
+                hashed_password=password_hash,
                 display_name=cleaned_display_name,
                 is_active=True,
                 is_service_account=False,
+                is_superuser=True,
+                is_verified=True,
             )
         except IntegrityError as exc:  # pragma: no cover - defensive double check
             logger.warning(

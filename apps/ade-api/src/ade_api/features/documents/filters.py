@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import HTTPException
 from pydantic import AliasChoices, Field, field_validator, model_validator
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
@@ -14,7 +14,6 @@ from ade_api.common.ids import UUIDStr
 from ade_api.common.validators import normalize_utc, parse_csv_or_repeated
 from ade_api.models import (
     DOCUMENT_SOURCE_VALUES,
-    DOCUMENT_STATUS_VALUES,
     Document,
     DocumentSource,
     DocumentStatus,
@@ -25,6 +24,9 @@ from ade_api.models import (
 )
 from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
 
+from .schemas import DocumentDisplayStatus
+
+DOCUMENT_DISPLAY_STATUS_VALUES = tuple(status.value for status in DocumentDisplayStatus)
 from .tags import TagValidationError, normalize_tag_set
 
 
@@ -37,10 +39,10 @@ class DocumentFilters(FilterBase):
         max_length=MAX_SEARCH_LEN,
         description="Free text search applied to document name, tags, and uploader info.",
     )
-    status: set[DocumentStatus] | None = Field(
+    display_status: set[DocumentDisplayStatus] | None = Field(
         None,
-        validation_alias=AliasChoices("status", "status_in"),
-        description="Filter by one or more document statuses.",
+        validation_alias=AliasChoices("display_status", "display_status_in", "status", "status_in"),
+        description="Filter by one or more display statuses.",
     )
     run_status: set[RunStatus] | None = Field(
         None,
@@ -82,6 +84,15 @@ class DocumentFilters(FilterBase):
         None,
         description="Filter by one or more uploader email addresses.",
     )
+    assignee_user_id: set[UUIDStr] | None = Field(
+        None,
+        validation_alias=AliasChoices("assignee_user_id", "assignee_user_id_in"),
+        description="Filter by one or more assignee user identifiers.",
+    )
+    assignee_unassigned: bool | None = Field(
+        None,
+        description="When true, return only documents without an assignee.",
+    )
     folder_id: str | None = Field(
         None,
         description="Filter by folder identifier (use null to match unassigned).",
@@ -103,6 +114,16 @@ class DocumentFilters(FilterBase):
     updated_before: datetime | None = Field(
         None,
         description="Return documents updated before this timestamp (UTC).",
+    )
+    activity_after: datetime | None = Field(
+        None,
+        validation_alias=AliasChoices("activity_after", "activity_at_from"),
+        description="Return documents with activity on or after this timestamp (UTC).",
+    )
+    activity_before: datetime | None = Field(
+        None,
+        validation_alias=AliasChoices("activity_before", "activity_at_to"),
+        description="Return documents with activity before this timestamp (UTC).",
     )
     last_run_from: datetime | None = Field(
         None,
@@ -139,18 +160,18 @@ class DocumentFilters(FilterBase):
         candidate = value.strip()
         return candidate or None
 
-    @field_validator("status", mode="before")
+    @field_validator("display_status", mode="before")
     @classmethod
-    def _parse_statuses(cls, value):
+    def _parse_display_statuses(cls, value):
         parsed = parse_csv_or_repeated(value)
         if parsed and len(parsed) > MAX_SET_SIZE:
             raise HTTPException(422, f"Too many status values; max {MAX_SET_SIZE}.")
         if not parsed:
             return None
         try:
-            return {DocumentStatus(item) for item in parsed}
+            return {DocumentDisplayStatus(item) for item in parsed}
         except ValueError as exc:  # pragma: no cover - validation guard
-            raise HTTPException(422, "Invalid status value") from exc
+            raise HTTPException(422, "Invalid display status value") from exc
 
     @field_validator("run_status", mode="before")
     @classmethod
@@ -192,12 +213,12 @@ class DocumentFilters(FilterBase):
             raise HTTPException(422, str(exc)) from exc
         return normalized or None
 
-    @field_validator("uploader_id", mode="before")
+    @field_validator("uploader_id", "assignee_user_id", mode="before")
     @classmethod
     def _parse_uploader_ids(cls, value):
         parsed = parse_csv_or_repeated(value)
         if parsed and len(parsed) > MAX_SET_SIZE:
-            raise HTTPException(422, f"Too many uploader IDs; max {MAX_SET_SIZE}.")
+            raise HTTPException(422, f"Too many IDs; max {MAX_SET_SIZE}.")
         return parsed or None
 
     @field_validator("uploader_email", mode="before")
@@ -235,6 +256,8 @@ class DocumentFilters(FilterBase):
         "updated_before",
         "last_run_from",
         "last_run_to",
+        "activity_after",
+        "activity_before",
         mode="before",
     )
     @classmethod
@@ -285,6 +308,17 @@ class DocumentFilters(FilterBase):
             )
         return value
 
+    @field_validator("activity_before")
+    @classmethod
+    def _validate_activity_range(cls, value, info):
+        activity_after = info.data.get("activity_after")
+        if value is not None and activity_after is not None and value <= activity_after:
+            raise HTTPException(
+                422,
+                "activity_before must be greater than activity_after",
+            )
+        return value
+
     @field_validator("file_type", mode="before")
     @classmethod
     def _parse_file_types(cls, value):
@@ -307,6 +341,15 @@ class DocumentFilters(FilterBase):
         return self
 
 
+def _activity_at_expr():
+    return case(
+        (Document.last_run_at.is_(None), Document.updated_at),
+        (Document.updated_at.is_(None), Document.last_run_at),
+        (Document.last_run_at > Document.updated_at, Document.last_run_at),
+        else_=Document.updated_at,
+    )
+
+
 def apply_document_filters(
     stmt: Select,
     filters: DocumentFilters,
@@ -317,12 +360,20 @@ def apply_document_filters(
 
     predicates = []
 
-    if filters.status:
-        status_values = sorted(
-            status.value if isinstance(status, DocumentStatus) else str(status)
-            for status in filters.status
-        )
-        predicates.append(Document.status.in_(status_values))
+    if filters.display_status:
+        status_values: set[str] = set()
+        for status in filters.display_status:
+            if status == DocumentDisplayStatus.ARCHIVED:
+                status_values.add(DocumentStatus.ARCHIVED.value)
+            elif status == DocumentDisplayStatus.FAILED:
+                status_values.add(DocumentStatus.FAILED.value)
+            elif status == DocumentDisplayStatus.READY:
+                status_values.add(DocumentStatus.PROCESSED.value)
+            elif status == DocumentDisplayStatus.PROCESSING:
+                status_values.add(DocumentStatus.PROCESSING.value)
+            else:
+                status_values.add(DocumentStatus.UPLOADED.value)
+        predicates.append(Document.status.in_(sorted(status_values)))
     if filters.run_status:
         run_status_values = sorted(
             status.value if isinstance(status, RunStatus) else str(status)
@@ -388,6 +439,17 @@ def apply_document_filters(
         else:
             predicates.append(or_(*uploader_predicates))
 
+    assignee_predicates = []
+    if filters.assignee_user_id:
+        assignee_predicates.append(Document.assignee_user_id.in_(sorted(filters.assignee_user_id)))
+    if filters.assignee_unassigned:
+        assignee_predicates.append(Document.assignee_user_id.is_(None))
+    if assignee_predicates:
+        if len(assignee_predicates) == 1:
+            predicates.append(assignee_predicates[0])
+        else:
+            predicates.append(or_(*assignee_predicates))
+
     if filters.created_after is not None:
         predicates.append(Document.created_at >= filters.created_after)
     if filters.created_before is not None:
@@ -396,6 +458,13 @@ def apply_document_filters(
         predicates.append(Document.updated_at >= filters.updated_after)
     if filters.updated_before is not None:
         predicates.append(Document.updated_at < filters.updated_before)
+
+    if filters.activity_after is not None or filters.activity_before is not None:
+        activity_expr = _activity_at_expr()
+        if filters.activity_after is not None:
+            predicates.append(activity_expr >= filters.activity_after)
+        if filters.activity_before is not None:
+            predicates.append(activity_expr < filters.activity_before)
 
     if filters.last_run_from is not None:
         predicates.append(Document.last_run_at.is_not(None))
@@ -475,8 +544,8 @@ def apply_document_filters(
 
 
 __all__ = [
+    "DOCUMENT_DISPLAY_STATUS_VALUES",
     "DOCUMENT_SOURCE_VALUES",
-    "DOCUMENT_STATUS_VALUES",
     "DocumentFilters",
     "DocumentSource",
     "DocumentStatus",

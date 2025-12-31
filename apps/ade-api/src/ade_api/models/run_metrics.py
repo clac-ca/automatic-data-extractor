@@ -41,12 +41,11 @@ class RunMetrics(Base):
     column_count_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     column_count_empty: Mapped[int | None] = mapped_column(Integer, nullable=True)
     column_count_mapped: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    column_count_ambiguous: Mapped[int | None] = mapped_column(Integer, nullable=True)
     column_count_unmapped: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    column_count_passthrough: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     field_count_expected: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    field_count_mapped: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    field_count_detected: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    field_count_not_detected: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     cell_count_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cell_count_non_empty: Mapped[int | None] = mapped_column(Integer, nullable=True)

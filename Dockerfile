@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-
 # Base versions (override at build time if needed)
 ARG PYTHON_VERSION=3.14
 ARG NODE_VERSION=20
@@ -14,13 +12,12 @@ WORKDIR /app/apps/ade-web
 ARG FRONTEND_BUILD_SHA=dev
 
 COPY apps/ade-web/package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --no-audit --no-fund
+RUN if [ ! -x /usr/bin/npm ]; then ln -s "$(command -v npm)" /usr/bin/npm; fi
+RUN /usr/bin/npm ci --no-audit --no-fund
 
 COPY apps/ade-web/ ./
-RUN --mount=type=cache,target=/root/.npm \
-    echo "frontend build ${FRONTEND_BUILD_SHA}" >/dev/null && \
-    npm run build
+RUN echo "frontend build ${FRONTEND_BUILD_SHA}" >/dev/null && \
+    /usr/bin/npm run build
 
 # =============================================================================
 # Stage 2: Backend build (install Python packages)
@@ -52,15 +49,15 @@ COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
 COPY apps/ade-engine/pyproject.toml apps/ade-engine/
 COPY apps/ade-api/pyproject.toml    apps/ade-api/
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install -U pip
+RUN python -m pip install -U pip
 
 # Now copy full sources
 COPY apps ./apps
+COPY --from=frontend-build /app/apps/ade-web/dist \
+    ./apps/ade-api/src/ade_api/web/static
 
 # Install CLI, engine, and API into an isolated prefix (/install)
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --prefix=/install \
+RUN python -m pip install --prefix=/install \
         ./apps/ade-cli \
         ./apps/ade-engine \
         ./apps/ade-api
@@ -72,10 +69,6 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    API_ROOT=/app/apps/ade-api \
-    ALEMBIC_INI_PATH=/app/apps/ade-api/alembic.ini \
-    ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations \
     ACCEPT_EULA=Y
 
 WORKDIR /app
@@ -108,10 +101,6 @@ COPY --from=backend-build /install /usr/local
 
 # Copy app source tree (migrations, templates, etc.)
 COPY apps ./apps
-
-# Copy built SPA into FastAPI's static directory
-COPY --from=frontend-build /app/apps/ade-web/dist \
-    ./apps/ade-api/src/ade_api/web/static
 
 # Non-root user + persistent data dir
 RUN set -eux; \

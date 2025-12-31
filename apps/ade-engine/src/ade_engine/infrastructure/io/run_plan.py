@@ -71,6 +71,7 @@ def plan_run(request: RunRequest, *, log_format: str) -> RunPlan:
         config_package=config_package,
         input_file=input_file,
         input_sheets=list(request.input_sheets) if request.input_sheets else None,
+        active_sheet_only=request.active_sheet_only,
         output_dir=output_dir,
         output_path=output_path,
         logs_dir=logs_dir,

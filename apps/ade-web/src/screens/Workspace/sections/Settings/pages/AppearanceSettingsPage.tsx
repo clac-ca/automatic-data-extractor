@@ -2,6 +2,7 @@ import clsx from "clsx";
 
 import { MODE_OPTIONS, useTheme } from "@shared/theme";
 import { ThemeSelect } from "@ui/ThemeSelect";
+import { CheckIcon } from "@ui/Icons";
 
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
@@ -45,7 +46,7 @@ export function AppearanceSettingsPage() {
                     <span className="truncate text-sm font-semibold">{option.label}</span>
                     <span className="truncate text-xs text-muted-foreground">{option.description}</span>
                   </span>
-                  {isSelected ? <CheckIcon className="h-4 w-4 text-brand-500" /> : null}
+              {isSelected ? <CheckIcon className="h-4 w-4 text-brand-500" /> : null}
                 </button>
               );
             })}
@@ -57,19 +58,5 @@ export function AppearanceSettingsPage() {
         </section>
       </div>
     </div>
-  );
-}
-
-function CheckIcon({ className }: { readonly className?: string }) {
-  return (
-    <svg className={clsx("h-4 w-4", className)} viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M5 10.5l3 3 7-7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

@@ -158,6 +158,36 @@ DOCUMENT_SOURCE = sa.Enum(
     length=50,
 )
 
+DOCUMENT_CHANGE_TYPE = sa.Enum(
+    "upsert",
+    "deleted",
+    name="document_change_type",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
+DOCUMENT_UPLOAD_CONFLICT_BEHAVIOR = sa.Enum(
+    "rename",
+    "replace",
+    "fail",
+    name="document_upload_conflict_behavior",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
+DOCUMENT_UPLOAD_SESSION_STATUS = sa.Enum(
+    "active",
+    "complete",
+    "committed",
+    "cancelled",
+    name="document_upload_session_status",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
 PERMISSION_SCOPE = sa.Enum(
     "global",
     "workspace",
@@ -167,16 +197,6 @@ PERMISSION_SCOPE = sa.Enum(
     length=20,
 )
 
-RBAC_SCOPE = sa.Enum(
-    "global",
-    "workspace",
-    name="rbac_scope",
-    native_enum=False,
-    create_constraint=True,
-    length=20,
-)
-
-
 # ---------------------------------------------------------------------------
 # Entry points
 # ---------------------------------------------------------------------------
@@ -185,8 +205,8 @@ RBAC_SCOPE = sa.Enum(
 def upgrade() -> None:
     # Identity & auth
     _create_users()
-    _create_user_credentials()
-    _create_user_identities()
+    _create_oauth_accounts()
+    _create_access_tokens()
     _create_workspaces()
     _create_workspace_memberships()
 
@@ -205,6 +225,8 @@ def upgrade() -> None:
     # Content
     _create_documents()
     _create_document_tags()
+    _create_document_changes()
+    _create_document_upload_sessions()
 
     # Runtime
     _create_runs()
@@ -241,12 +263,8 @@ def _create_users() -> None:
         "users",
         _uuid_pk(),
         sa.Column("email", sa.String(length=320), nullable=False, unique=True),
-        sa.Column(
-            "email_canonical",
-            sa.String(length=320),
-            nullable=False,
-            unique=True,
-        ),
+        sa.Column("email_normalized", sa.String(length=320), nullable=False, unique=True),
+        sa.Column("hashed_password", sa.String(length=255), nullable=False),
         sa.Column("display_name", sa.String(length=255), nullable=True),
         sa.Column(
             "is_service_account",
@@ -260,6 +278,18 @@ def _create_users() -> None:
             nullable=False,
             server_default=sa.true(),
         ),
+        sa.Column(
+            "is_superuser",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+        sa.Column(
+            "is_verified",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "failed_login_count",
@@ -272,9 +302,9 @@ def _create_users() -> None:
     )
 
 
-def _create_user_credentials() -> None:
+def _create_oauth_accounts() -> None:
     op.create_table(
-        "user_credentials",
+        "oauth_accounts",
         _uuid_pk(),
         sa.Column(
             "user_id",
@@ -282,22 +312,30 @@ def _create_user_credentials() -> None:
             sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
-        sa.Column("password_hash", sa.String(length=255), nullable=False),
-        sa.Column("last_rotated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("oauth_name", sa.String(length=100), nullable=False),
+        sa.Column("account_id", sa.String(length=255), nullable=False),
+        sa.Column("account_email", sa.String(length=320), nullable=True),
+        sa.Column("access_token", sa.Text(), nullable=False),
+        sa.Column("refresh_token", sa.Text(), nullable=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         *_timestamps(),
-        sa.UniqueConstraint("user_id", name="uq_user_credentials_user"),
+        sa.UniqueConstraint(
+            "oauth_name",
+            "account_id",
+            name="uq_oauth_accounts_name_account",
+        ),
     )
     op.create_index(
-        "ix_user_credentials_user_id",
-        "user_credentials",
+        "ix_oauth_accounts_user_id",
+        "oauth_accounts",
         ["user_id"],
         unique=False,
     )
 
 
-def _create_user_identities() -> None:
+def _create_access_tokens() -> None:
     op.create_table(
-        "user_identities",
+        "access_tokens",
         _uuid_pk(),
         sa.Column(
             "user_id",
@@ -305,19 +343,18 @@ def _create_user_identities() -> None:
             sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
-        sa.Column("provider", sa.String(length=100), nullable=False),
-        sa.Column("subject", sa.String(length=255), nullable=False),
-        sa.Column("last_authenticated_at", sa.DateTime(timezone=True), nullable=True),
-        *_timestamps(),
-        sa.UniqueConstraint(
-            "provider",
-            "subject",
-            name="uq_user_identities_provider_subject",
+        sa.Column("token", sa.String(length=255), nullable=False, unique=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
         ),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_index(
-        "ix_user_identities_user_id",
-        "user_identities",
+        "ix_access_tokens_user_id",
+        "access_tokens",
         ["user_id"],
         unique=False,
     )
@@ -476,37 +513,30 @@ def _create_user_role_assignments() -> None:
             sa.ForeignKey("roles.id", ondelete="NO ACTION"),
             nullable=False,
         ),
-        sa.Column("scope_type", RBAC_SCOPE, nullable=False),
         sa.Column(
-            "scope_id",
+            "workspace_id",
             UUIDType(),
             sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         *_timestamps(),
-        sa.CheckConstraint(
-            "(scope_type = 'global' AND scope_id IS NULL) OR "
-            "(scope_type = 'workspace' AND scope_id IS NOT NULL)",
-            name="chk_user_role_scope",
-        ),
         sa.UniqueConstraint(
             "user_id",
             "role_id",
-            "scope_type",
-            "scope_id",
-            name="uq_user_role_scope",
+            "workspace_id",
+            name="uq_user_role_assignment_scope",
         ),
     )
     op.create_index(
-        "ix_user_scope",
+        "ix_user_role_assignments_user_id",
         "user_role_assignments",
-        ["user_id", "scope_type", "scope_id"],
+        ["user_id"],
         unique=False,
     )
     op.create_index(
-        "ix_role_scope",
+        "ix_user_role_assignments_workspace_id",
         "user_role_assignments",
-        ["role_id", "scope_type", "scope_id"],
+        ["workspace_id"],
         unique=False,
     )
 
@@ -516,43 +546,23 @@ def _create_api_keys() -> None:
         "api_keys",
         _uuid_pk(),
         sa.Column(
-            "owner_user_id",
+            "user_id",
             UUIDType(),
             sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
-        sa.Column(
-            "created_by_user_id",
-            UUIDType(),
-            sa.ForeignKey("users.id", ondelete="NO ACTION"),
-            nullable=True,
-        ),
-        sa.Column("scope_type", RBAC_SCOPE, nullable=False, server_default="global"),
-        sa.Column(
-            "scope_id",
-            UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
-            nullable=True,
-        ),
-        sa.Column("token_prefix", sa.String(length=32), nullable=False, unique=True),
-        sa.Column("token_hash", sa.String(length=128), nullable=False, unique=True),
-        sa.Column("label", sa.String(length=100), nullable=True),
+        sa.Column("name", sa.String(length=100), nullable=True),
+        sa.Column("prefix", sa.String(length=32), nullable=False, unique=True),
+        sa.Column("hashed_secret", sa.String(length=128), nullable=False, unique=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_used_ip", sa.String(length=45), nullable=True),
-        sa.Column("last_used_user_agent", sa.String(length=255), nullable=True),
         *_timestamps(),
-        sa.CheckConstraint(
-            "(scope_type = 'global' AND scope_id IS NULL) OR "
-            "(scope_type = 'workspace' AND scope_id IS NOT NULL)",
-            name="chk_api_key_scope",
-        ),
     )
     op.create_index(
-        "ix_api_keys_owner_scope",
+        "ix_api_keys_user_id",
         "api_keys",
-        ["owner_user_id", "scope_type", "scope_id"],
+        ["user_id"],
         unique=False,
     )
 
@@ -808,11 +818,10 @@ def _create_run_metrics() -> None:
         sa.Column("column_count_total", sa.Integer(), nullable=True),
         sa.Column("column_count_empty", sa.Integer(), nullable=True),
         sa.Column("column_count_mapped", sa.Integer(), nullable=True),
-        sa.Column("column_count_ambiguous", sa.Integer(), nullable=True),
         sa.Column("column_count_unmapped", sa.Integer(), nullable=True),
-        sa.Column("column_count_passthrough", sa.Integer(), nullable=True),
         sa.Column("field_count_expected", sa.Integer(), nullable=True),
-        sa.Column("field_count_mapped", sa.Integer(), nullable=True),
+        sa.Column("field_count_detected", sa.Integer(), nullable=True),
+        sa.Column("field_count_not_detected", sa.Integer(), nullable=True),
         sa.Column("cell_count_total", sa.Integer(), nullable=True),
         sa.Column("cell_count_non_empty", sa.Integer(), nullable=True),
     )
@@ -830,7 +839,7 @@ def _create_run_fields() -> None:
         ),
         sa.Column("field", sa.String(length=128), primary_key=True, nullable=False),
         sa.Column("label", sa.String(length=255), nullable=True),
-        sa.Column("mapped", sa.Boolean(), nullable=False),
+        sa.Column("detected", sa.Boolean(), nullable=False),
         sa.Column("best_mapping_score", sa.Float(), nullable=True),
         sa.Column("occurrences_tables", sa.Integer(), nullable=False),
         sa.Column("occurrences_columns", sa.Integer(), nullable=False),
@@ -909,6 +918,12 @@ def _create_documents() -> None:
         ),
         sa.Column(
             "uploaded_by_user_id",
+            UUIDType(),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
+            nullable=True,
+        ),
+        sa.Column(
+            "assignee_user_id",
             UUIDType(),
             sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
@@ -996,6 +1011,12 @@ def _create_documents() -> None:
         ["workspace_id", "uploaded_by_user_id"],
         unique=False,
     )
+    op.create_index(
+        "ix_documents_workspace_assignee",
+        "documents",
+        ["workspace_id", "assignee_user_id"],
+        unique=False,
+    )
 
 
 def _create_document_tags() -> None:
@@ -1026,5 +1047,134 @@ def _create_document_tags() -> None:
         "document_tags_tag_document_id_idx",
         "document_tags",
         ["tag", "document_id"],
+        unique=False,
+    )
+
+
+def _create_document_changes() -> None:
+    op.create_table(
+        "document_changes",
+        sa.Column(
+            "cursor",
+            sa.BigInteger().with_variant(sa.Integer(), "sqlite"),
+            primary_key=True,
+            autoincrement=True,
+            nullable=False,
+        ),
+        sa.Column(
+            "workspace_id",
+            UUIDType(),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
+            nullable=False,
+        ),
+        sa.Column(
+            "document_id",
+            UUIDType(),
+            sa.ForeignKey("documents.id", ondelete="NO ACTION"),
+            nullable=True,
+        ),
+        sa.Column(
+            "type",
+            DOCUMENT_CHANGE_TYPE,
+            nullable=False,
+        ),
+        sa.Column(
+            "payload",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
+        sa.Column(
+            "occurred_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
+    op.create_index(
+        "ix_document_changes_workspace_cursor",
+        "document_changes",
+        ["workspace_id", "cursor"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_changes_workspace_document",
+        "document_changes",
+        ["workspace_id", "document_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_changes_workspace_occurred",
+        "document_changes",
+        ["workspace_id", "occurred_at"],
+        unique=False,
+    )
+
+
+def _create_document_upload_sessions() -> None:
+    op.create_table(
+        "document_upload_sessions",
+        _uuid_pk(),
+        sa.Column(
+            "workspace_id",
+            UUIDType(),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_by_user_id",
+            UUIDType(),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
+            nullable=True,
+        ),
+        sa.Column("filename", sa.String(length=255), nullable=False),
+        sa.Column("content_type", sa.String(length=255), nullable=True),
+        sa.Column("byte_size", sa.Integer(), nullable=False),
+        sa.Column(
+            "metadata",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
+        sa.Column(
+            "conflict_behavior",
+            DOCUMENT_UPLOAD_CONFLICT_BEHAVIOR,
+            nullable=False,
+            server_default="rename",
+        ),
+        sa.Column("folder_id", sa.String(length=255), nullable=True),
+        sa.Column("temp_stored_uri", sa.String(length=512), nullable=False),
+        sa.Column("received_bytes", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "received_ranges",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'[]'"),
+        ),
+        sa.Column(
+            "status",
+            DOCUMENT_UPLOAD_SESSION_STATUS,
+            nullable=False,
+            server_default="active",
+        ),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        *_timestamps(),
+    )
+    op.create_index(
+        "ix_document_upload_sessions_workspace",
+        "document_upload_sessions",
+        ["workspace_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_upload_sessions_expires",
+        "document_upload_sessions",
+        ["expires_at"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_upload_sessions_status",
+        "document_upload_sessions",
+        ["status"],
         unique=False,
     )

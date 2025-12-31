@@ -28,7 +28,12 @@ describe("RequireSession", () => {
     mockUseSetupStatusQuery.mockReset();
 
     mockUseSetupStatusQuery.mockReturnValue({
-      data: { requires_setup: false, has_users: true },
+      data: {
+        setup_required: false,
+        registration_mode: "closed",
+        oidc_configured: false,
+        providers: [],
+      },
       isPending: false,
       isSuccess: true,
       isError: false,
@@ -88,7 +93,12 @@ describe("RequireSession", () => {
     });
 
     mockUseSetupStatusQuery.mockReturnValue({
-      data: { requires_setup: true, has_users: false },
+      data: {
+        setup_required: true,
+        registration_mode: "setup-only",
+        oidc_configured: false,
+        providers: [],
+      },
       isPending: false,
       isSuccess: true,
       isError: false,
@@ -161,10 +171,7 @@ describe("RequireSession", () => {
       },
       roles: [],
       permissions: ["workspaces.create"],
-      expires_at: new Date(Date.now() + 120_000).toISOString(),
-      refresh_expires_at: new Date(Date.now() + 300_000).toISOString(),
       return_to: null,
-      state: null,
     };
 
     mockUseSessionQuery.mockReturnValue({

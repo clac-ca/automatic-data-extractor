@@ -5,10 +5,8 @@ import type { RunsFilters } from "./types";
 export const DEFAULT_RUNS_FILTERS: RunsFilters = {
   search: "",
   status: "all",
-  result: "all",
   dateRange: "14d",
-  config: "any",
-  owner: "all",
+  configurationId: null,
 };
 
 export const DATE_RANGE_OPTIONS: { value: RunsFilters["dateRange"]; label: string }[] = [

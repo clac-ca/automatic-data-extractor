@@ -13,16 +13,15 @@ async def login(
     email: str,
     password: str,
 ) -> tuple[str, dict[str, Any]]:
-    """Authenticate ``email``/``password`` returning (session_cookie, payload)."""
+    """Authenticate ``email``/``password`` returning (access_token, payload)."""
 
     response = await client.post(
-        "/api/v1/auth/session",
-        json={"email": email, "password": password},
+        "/api/v1/auth/jwt/login",
+        data={"username": email, "password": password},
     )
     assert response.status_code == 200, response.text
     payload = response.json()
-    session = payload.get("session") or {}
-    token = session.get("access_token")
+    token = payload.get("access_token")
     assert token, "Access token missing"
     return token, payload
 

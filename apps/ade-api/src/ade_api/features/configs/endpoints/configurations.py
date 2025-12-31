@@ -20,13 +20,14 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.api.deps import get_builds_service, get_configurations_service
+from ade_api.api.deps import SettingsDep, get_builds_service, get_configurations_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.pagination import PageParams, paginate_sequence
 from ade_api.core.http import require_csrf, require_workspace
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildDecision, BuildsService
 from ade_api.features.builds.tasks import execute_build_background
+from ade_api.features.runs.tasks import enqueue_pending_runs_background
 from ade_api.models import User
 
 from ..etag import format_etag
@@ -294,6 +295,8 @@ async def publish_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    background_tasks: BackgroundTasks,
+    settings: SettingsDep,
     _actor: Annotated[
         User,
         Security(
@@ -324,6 +327,13 @@ async def publish_configuration_endpoint(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        enqueue_pending_runs_background,
+        workspace_id=workspace_id,
+        configuration_id=record.id,
+        settings_payload=settings.model_dump(mode="python"),
+    )
 
     return ConfigurationRecord.model_validate(record)
 

@@ -20,7 +20,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/safe-mode",
+    "/safeMode",
     response_model=SafeModeStatus,
     status_code=status.HTTP_200_OK,
     summary="Read ADE safe mode status",
@@ -34,7 +34,7 @@ async def read_safe_mode(
 
 
 @router.put(
-    "/safe-mode",
+    "/safeMode",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Toggle ADE safe mode",
     dependencies=[Security(require_csrf)],

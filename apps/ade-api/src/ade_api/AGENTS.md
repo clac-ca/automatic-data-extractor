@@ -30,4 +30,5 @@ Layering guidelines:
 
 ## Auth
 
-- `POST /auth/session/refresh` prefers a JSON ``refresh_token`` payload for API/CLI callers and falls back to the refresh cookie; Authorization headers are ignored for refresh rotation.
+- Auth uses fastapi-users cookie sessions (`POST /auth/cookie/login` + `/auth/cookie/logout`) and optional JWT login (`POST /auth/jwt/login`).
+- There is no refresh-token or `/auth/session/refresh` flow in the current auth stack.

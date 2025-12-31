@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import clsx from "clsx";
+import { CloseIcon, SearchIcon, SpinnerIcon } from "@ui/Icons";
 
 export interface GlobalSearchSuggestion {
   readonly id: string;
@@ -24,7 +25,7 @@ export interface GlobalSearchFilter {
   readonly active?: boolean;
 }
 
-export type GlobalSearchFieldVariant = "default" | "minimal";
+export type GlobalSearchFieldVariant = "default" | "minimal" | "header";
 
 export interface GlobalSearchFieldProps {
   readonly id?: string;
@@ -217,8 +218,14 @@ export function GlobalSearchField({
     }
   };
 
-  const variantClasses =
-    variant === "minimal"
+  const isHeaderVariant = variant === "header";
+  const variantClasses = isHeaderVariant
+    ? clsx(
+        "rounded-2xl border border-header-border/40 bg-header/20 text-header-foreground backdrop-blur-sm",
+        "shadow-none ring-1 ring-inset ring-header-border/30 transition",
+        "focus-within:border-header-ring focus-within:bg-header/30 focus-within:ring-header-ring/40",
+      )
+    : variant === "minimal"
       ? clsx(
           "rounded-xl border border-border bg-card/90 shadow-sm ring-1 ring-inset ring-border/40",
           "transition focus-within:border-brand-400 focus-within:shadow-[0_18px_45px_-35px_rgb(var(--sys-color-shadow)/0.4)]",
@@ -228,6 +235,21 @@ export function GlobalSearchField({
           "shadow-[0_20px_45px_-30px_rgb(var(--sys-color-shadow)/0.6)] ring-1 ring-inset ring-border/30 transition",
           "focus-within:border-brand-400 focus-within:shadow-[0_25px_55px_-35px_rgb(var(--sys-color-shadow)/0.55)] sm:rounded-2xl",
         );
+
+  const formTextClass = isHeaderVariant ? "text-header-muted" : "text-muted-foreground";
+  const inputTextClass = isHeaderVariant
+    ? "text-header-foreground placeholder:text-header-muted"
+    : "text-foreground placeholder:text-muted-foreground";
+  const shortcutClass = isHeaderVariant
+    ? "border-header-border/40 bg-header/30 text-header-foreground"
+    : "border-border/70 bg-card/80 text-muted-foreground";
+  const shortcutVisibilityClass = isHeaderVariant ? "lg:inline-flex" : "md:inline-flex";
+  const clearButtonClass = isHeaderVariant
+    ? "text-header-muted hover:border-header-border/50 hover:bg-header/20"
+    : "text-muted-foreground hover:border-border hover:bg-card";
+  const leadingIconClass = isHeaderVariant
+    ? "bg-header/30 text-header-foreground ring-header-border/40"
+    : "bg-card text-brand-600 ring-border/40";
 
   return (
     <div
@@ -262,11 +284,13 @@ export function GlobalSearchField({
         className={clsx(
           "group/search overflow-hidden",
           variantClasses,
-          showDropdown && variant === "default" && "focus-within:shadow-[0_35px_80px_-40px_rgb(var(--sys-color-shadow)/0.55)]",
+          showDropdown &&
+            variant === "default" &&
+            "focus-within:shadow-[0_35px_80px_-40px_rgb(var(--sys-color-shadow)/0.55)]",
         )}
       >
         <form
-          className="flex w-full items-center gap-3 px-4 py-2 text-sm text-muted-foreground sm:px-5 sm:py-2.5"
+          className={clsx("flex w-full items-center gap-3 px-4 py-2 text-sm sm:px-5 sm:py-2.5", formTextClass)}
           role="search"
           aria-label={searchAriaLabel}
           onSubmit={handleSearchSubmit}
@@ -276,14 +300,24 @@ export function GlobalSearchField({
           </label>
 
           {leadingIcon ?? (
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-card text-brand-600 shadow-inner shadow-white/10 ring-1 ring-inset ring-border/40 sm:h-10 sm:w-10">
-              <SearchIcon className="h-4 w-4 flex-shrink-0 text-brand-600" />
+            <span
+              className={clsx(
+                "inline-flex h-9 w-9 items-center justify-center rounded-xl shadow-inner shadow-white/10 ring-1 ring-inset sm:h-10 sm:w-10",
+                leadingIconClass,
+              )}
+            >
+              <SearchIcon className={clsx("h-4 w-4 flex-shrink-0", isHeaderVariant ? "text-header-foreground" : "text-brand-600")} />
             </span>
           )}
 
           <div className="flex min-w-0 flex-1 flex-col">
             {scopeLabel ? (
-              <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground sm:text-[0.65rem]">
+              <span
+                className={clsx(
+                  "text-[0.6rem] font-semibold uppercase tracking-wide sm:text-[0.65rem]",
+                  isHeaderVariant ? "text-header-muted" : "text-muted-foreground",
+                )}
+              >
                 {scopeLabel}
               </span>
             ) : null}
@@ -299,7 +333,7 @@ export function GlobalSearchField({
               aria-haspopup="listbox"
               onKeyDown={handleSearchKeyDown}
               placeholder={placeholder}
-              className="w-full border-0 bg-transparent text-base font-medium text-foreground placeholder:text-muted-foreground focus:outline-none"
+              className={clsx("w-full border-0 bg-transparent text-base font-medium focus:outline-none", inputTextClass)}
               aria-expanded={showDropdown}
               aria-controls={showDropdown ? suggestionsListId : undefined}
               aria-activedescendant={
@@ -314,7 +348,10 @@ export function GlobalSearchField({
                 type="button"
                 onClick={handleClear}
                 aria-label="Clear search"
-                className="focus-ring inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-muted-foreground hover:border-border hover:bg-card"
+                className={clsx(
+                  "focus-ring inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent",
+                  clearButtonClass,
+                )}
               >
                 <CloseIcon className="h-3.5 w-3.5" />
               </button>
@@ -326,14 +363,20 @@ export function GlobalSearchField({
                 aria-live="polite"
                 aria-label={loadingLabel}
               >
-                <SpinnerIcon className="h-4 w-4 text-brand-600" />
+                <SpinnerIcon className="h-4 w-4 animate-spin text-brand-600" />
               </span>
             ) : null}
 
             {trailingIcon}
 
             {shortcutLabel ? (
-              <span className="hidden items-center gap-1 rounded-full border border-border/70 bg-card/80 px-2 py-1 text-xs font-semibold text-muted-foreground shadow-inner shadow-white/10 md:inline-flex">
+              <span
+                className={clsx(
+                  "hidden items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold shadow-inner shadow-white/10",
+                  shortcutClass,
+                  shortcutVisibilityClass,
+                )}
+              >
                 {shortcutLabel}
               </span>
             ) : null}
@@ -430,33 +473,6 @@ function DefaultSuggestion({ suggestion, active }: { suggestion: GlobalSearchSug
         ) : null}
       </span>
     </div>
-  );
-}
-
-function SearchIcon({ className = "h-4 w-4 flex-shrink-0 text-muted-foreground" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <circle cx="9" cy="9" r="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m13.5 13.5 3 3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CloseIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M6 6l8 8" strokeLinecap="round" />
-      <path d="M14 6l-8 8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={clsx("animate-spin", className)} viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-      <path className="opacity-70" d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-    </svg>
   );
 }
 

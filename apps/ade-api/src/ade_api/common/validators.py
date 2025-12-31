@@ -23,11 +23,23 @@ def parse_csv_or_repeated(value: object) -> set[str] | None:
     return {str(value)}
 
 
-def normalize_utc(dt: datetime | None) -> datetime | None:
+def normalize_utc(dt: datetime | str | None) -> datetime | None:
     """Return ``dt`` coerced to UTC, treating naive datetimes as UTC."""
 
     if dt is None:
         return None
+    if isinstance(dt, str):
+        candidate = dt.strip()
+        if not candidate:
+            return None
+        if candidate.endswith("Z"):
+            candidate = f"{candidate[:-1]}+00:00"
+        try:
+            dt = datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError("Invalid datetime format") from exc
+    if not isinstance(dt, datetime):
+        raise ValueError("Invalid datetime value")
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)

@@ -18,6 +18,7 @@ class AuthVia(str, enum.Enum):
     """Transport used to authenticate the request."""
 
     SESSION = "session"
+    BEARER = "bearer"
     API_KEY = "api_key"
     DEV = "dev"
 

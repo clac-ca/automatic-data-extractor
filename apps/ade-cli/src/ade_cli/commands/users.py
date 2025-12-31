@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -140,6 +141,17 @@ def _scope_label(scope, workspace_id: UUID | None) -> str:
     return "global"
 
 
+def _workspace_id_for_scope(scope, workspace_id: UUID | None) -> UUID | None:
+    scope_value = scope.value if hasattr(scope, "value") else str(scope)
+    return workspace_id if scope_value == "workspace" else None
+
+
+def _assignment_scope(assignment: "UserRoleAssignment") -> tuple[str, UUID | None]:
+    workspace_id = assignment.workspace_id
+    scope = "workspace" if workspace_id else "global"
+    return scope, workspace_id
+
+
 def _echo_error(message: str) -> None:
     typer.echo(f"Error: {message}", err=True)
 
@@ -219,6 +231,7 @@ async def _create_user(
     is_active: bool,
     roles: Iterable[str],
     assign_admin: bool,
+    is_superuser: bool,
     json_output: bool,
 ) -> None:
     from ade_api.core.security.hashing import hash_password
@@ -237,14 +250,18 @@ async def _create_user(
             _echo_error("Email already in use.")
             raise typer.Exit(code=1)
 
-        password_hash = hash_password(password) if password else None
+        if password:
+            password_hash = hash_password(password)
+        else:
+            password_hash = hash_password(secrets.token_urlsafe(32))
         try:
             user = await ctx.repo.create(
                 email=email_clean,
-                password_hash=password_hash,
+                hashed_password=password_hash,
                 display_name=display_name.strip() if display_name else None,
                 is_active=is_active,
                 is_service_account=service_account,
+                is_superuser=is_superuser,
             )
         except ValueError as exc:
             _echo_error(str(exc))
@@ -281,8 +298,7 @@ async def _create_user(
                 assignment = await ctx.rbac.assign_role_if_missing(
                     user_id=user.id,
                     role_id=role.id,
-                    scope_type="global",
-                    scope_id=None,
+                    workspace_id=None,
                 )
                 assignments.append(assignment)
 
@@ -295,8 +311,8 @@ async def _create_user(
                 "id": str(a.id),
                 "role_id": str(a.role_id),
                 "role_slug": a.role.slug if a.role else "",
-                "scope_type": a.scope_type,
-                "scope_id": str(a.scope_id) if a.scope_id else None,
+                "scope": _assignment_scope(a)[0],
+                "workspace_id": str(a.workspace_id) if a.workspace_id else None,
             }
             for a in assignments
         ]
@@ -312,7 +328,10 @@ async def _create_user(
         typer.echo("  roles:")
         for assignment in assignments:
             role_slug = assignment.role.slug if assignment.role else ""
-            typer.echo(f"    - {role_slug} ({assignment.role_id}) @ {_scope_label(assignment.scope_type, assignment.scope_id)}")
+            scope, workspace_id = _assignment_scope(assignment)
+            typer.echo(
+                f"    - {role_slug} ({assignment.role_id}) @ {_scope_label(scope, workspace_id)}"
+            )
 
 
 async def _show_user(*, user_ref: str, json_output: bool) -> None:
@@ -339,8 +358,8 @@ async def _show_user(*, user_ref: str, json_output: bool) -> None:
                 "id": str(a.id),
                 "role_id": str(a.role_id),
                 "role_slug": a.role.slug if a.role else "",
-                "scope_type": a.scope_type,
-                "scope_id": str(a.scope_id) if a.scope_id else None,
+                "scope": _assignment_scope(a)[0],
+                "workspace_id": str(a.workspace_id) if a.workspace_id else None,
                 "created_at": _render_datetime(a.created_at),
             }
             for a in assignments
@@ -360,9 +379,10 @@ async def _show_user(*, user_ref: str, json_output: bool) -> None:
         typer.echo("Assignments:")
         for assignment in assignments:
             role_slug = assignment.role.slug if assignment.role else ""
+            scope, workspace_id = _assignment_scope(assignment)
             typer.echo(
                 f"  - {role_slug} ({assignment.role_id}) "
-                f"@ {_scope_label(assignment.scope_type, assignment.scope_id)} "
+                f"@ {_scope_label(scope, workspace_id)} "
                 f"[{assignment.id}]"
             )
 
@@ -452,9 +472,9 @@ async def _list_roles(
     async with _user_context() as ctx:
         user = await ctx.resolve_user(user_ref)
         user_label = user.email or str(user.id)
+        workspace_filter = _workspace_id_for_scope(scope_value, workspace_uuid)
         page = await ctx.rbac.list_assignments(
-            scope_type=scope_value,
-            scope_id=workspace_uuid,
+            workspace_id=workspace_filter,
             user_id=user.id,
             role_id=None,
             page=1,
@@ -470,8 +490,8 @@ async def _list_roles(
                 "id": str(a.id),
                 "role_id": str(a.role_id),
                 "role_slug": a.role.slug if a.role else "",
-                "scope_type": a.scope_type,
-                "scope_id": str(a.scope_id) if a.scope_id else None,
+                "scope": _assignment_scope(a)[0],
+                "workspace_id": str(a.workspace_id) if a.workspace_id else None,
                 "created_at": _render_datetime(a.created_at),
             }
             for a in assignments
@@ -514,20 +534,19 @@ async def _assign_role(
         role = await ctx.resolve_role(role_ref)
         user_label = user.email or str(user.id)
         role_label = role.slug
+        workspace_target = _workspace_id_for_scope(scope_value, workspace_uuid)
         try:
             if if_missing:
                 assignment = await ctx.rbac.assign_role_if_missing(
                     user_id=user.id,
                     role_id=role.id,
-                    scope_type=scope_value,
-                    scope_id=workspace_uuid,
+                    workspace_id=workspace_target,
                 )
             else:
                 assignment = await ctx.rbac.assign_role(
                     user_id=user.id,
                     role_id=role.id,
-                    scope_type=scope_value,
-                    scope_id=workspace_uuid,
+                    workspace_id=workspace_target,
                 )
         except (AssignmentError, RoleConflictError, ScopeMismatchError) as exc:
             _echo_error(str(exc))
@@ -561,8 +580,7 @@ async def _remove_role(
             if assignment is None:
                 _echo_error("Role assignment not found.")
                 raise typer.Exit(code=1)
-            scope_value = assignment.scope_type
-            workspace_uuid = assignment.scope_id
+            scope_value, workspace_uuid = _assignment_scope(assignment)
         else:
             if not user_ref or not role_ref:
                 _echo_error("Provide --assignment-id or both --user and --role.")
@@ -572,13 +590,13 @@ async def _remove_role(
             except ValueError as exc:
                 _echo_error(str(exc))
                 raise typer.Exit(code=1) from exc
+            workspace_uuid = _workspace_id_for_scope(scope_value, workspace_uuid)
             user = await ctx.resolve_user(user_ref)
             role = await ctx.resolve_role(role_ref)
             assignment = await ctx.rbac.get_assignment_for_user_role(
                 user_id=user.id,
                 role_id=role.id,
-                scope_type=scope_value,
-                scope_id=workspace_uuid,
+                workspace_id=workspace_uuid,
             )
             if assignment is None:
                 _echo_error("No matching assignment found.")
@@ -587,8 +605,7 @@ async def _remove_role(
         try:
             await ctx.rbac.delete_assignment(
                 assignment_id=assignment.id,
-                scope_type=scope_value,
-                scope_id=workspace_uuid,
+                workspace_id=workspace_uuid,
             )
         except (AssignmentNotFoundError, ScopeMismatchError) as exc:
             _echo_error(str(exc))
@@ -679,6 +696,11 @@ def register(app: typer.Typer) -> None:
             "--admin",
             help="Assign the built-in global-admin role.",
         ),
+        superuser: bool = typer.Option(
+            False,
+            "--superuser",
+            help="Create as a superuser (bypasses RBAC checks).",
+        ),
         roles: list[str] = typer.Option(
             [],
             "--role",
@@ -711,9 +733,42 @@ def register(app: typer.Typer) -> None:
                 service_account=service_account,
                 is_active=not inactive,
                 roles=roles,
-                assign_admin=admin,
+                assign_admin=admin or superuser,
+                is_superuser=superuser,
                 json_output=json_output,
             )
+        )
+
+    @users_app.command(
+        "create-admin",
+        help="Create a superuser account (alias for users create --superuser).",
+    )
+    def create_admin(
+        email: str = typer.Argument(..., help="Email for the new administrator."),
+        display_name: str | None = typer.Option(
+            None,
+            "--display-name",
+            "--name",
+            help="Optional display name.",
+        ),
+        password: str | None = typer.Option(
+            None,
+            "--password",
+            help="Initial password. If omitted, you will be prompted.",
+        ),
+        json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
+    ) -> None:
+        create_user(
+            email=email,
+            display_name=display_name,
+            password=password,
+            no_password=False,
+            service_account=False,
+            inactive=False,
+            admin=True,
+            superuser=True,
+            roles=[],
+            json_output=json_output,
         )
 
     @users_app.command("update", help="Update display name or activation state for a user.")

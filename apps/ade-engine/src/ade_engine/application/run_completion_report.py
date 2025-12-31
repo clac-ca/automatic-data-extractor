@@ -350,9 +350,7 @@ class RunCompletionReportBuilder:
         columns: list[ColumnStructure] = []
 
         mapped_count = 0
-        ambiguous_count = 0
         unmapped_count = 0
-        passthrough_count = 0
 
         for col in source_cols:
             raw_header = None if col.header in (None, "") else str(col.header)
@@ -379,12 +377,8 @@ class RunCompletionReportBuilder:
 
             if status_bucket == "mapped":
                 mapped_count += 1
-            elif status_bucket == "ambiguous":
-                ambiguous_count += 1
-            elif status_bucket == "unmapped":
-                unmapped_count += 1
             else:
-                passthrough_count += 1
+                unmapped_count += 1
 
             columns.append(
                 ColumnStructure(
@@ -408,17 +402,23 @@ class RunCompletionReportBuilder:
 
         empty_rows = self._count_empty_rows(source_cols, data_row_count=source_row_count)
 
+        detected_fields = self._detected_fields_in_table(table, expected_fields)
+        detected_count = len(detected_fields)
+        not_detected_count = max(0, len(expected_fields) - detected_count)
+
         counts = Counts(
             rows=RowsCount(total=source_row_count, empty=empty_rows),
             columns=ColumnsCount(
                 total=col_total,
                 empty=empty_cols,
                 mapped=mapped_count,
-                ambiguous=ambiguous_count,
                 unmapped=unmapped_count,
-                passthrough=passthrough_count,
             ),
-            fields=FieldsCount(expected=len(expected_fields), mapped=len(self._mapped_fields_in_table(table, expected_fields))),
+            fields=FieldsCount(
+                expected=len(expected_fields),
+                detected=detected_count,
+                not_detected=not_detected_count,
+            ),
             cells=CellsCount(total=source_row_count * col_total, non_empty=non_empty_cells_total)
             if col_total and source_row_count
             else CellsCount(total=0, non_empty=0),
@@ -501,14 +501,6 @@ class RunCompletionReportBuilder:
                 "unmapped",
             )
 
-        # v1 default: columns without a selected field may be carried through as raw output.
-        if not self._settings.remove_unmapped_columns:
-            return (
-                Mapping(status="passthrough", candidates=candidates, unmapped_reason="passthrough_policy"),
-                "passthrough",
-            )
-
-        # If passthrough is disabled, include reason codes for analysis.
         reason: UnmappedReason = "below_threshold" if candidates else "no_signal"
         return (
             Mapping(status="unmapped", candidates=candidates, unmapped_reason=reason),
@@ -573,15 +565,15 @@ class RunCompletionReportBuilder:
     def _expected_field_names(self, expected_fields: list[Any]) -> list[str]:
         return [str(getattr(f, "name", "") or "") for f in expected_fields]
 
-    def _mapped_fields_in_table(self, table: TableResult, expected_fields: list[Any]) -> set[str]:
+    def _detected_fields_in_table(self, table: TableResult, expected_fields: list[Any]) -> set[str]:
         expected = set(self._expected_field_names(expected_fields))
-        mapped = {str(getattr(c, "field_name", "") or "") for c in (getattr(table, "mapped_columns", []) or [])}
-        return {f for f in mapped if f in expected}
+        detected = {str(getattr(c, "field_name", "") or "") for c in (getattr(table, "mapped_columns", []) or [])}
+        return {f for f in detected if f in expected}
 
     def _rollup_sheet(self, expected_fields: list[Any], tables: list[TableSummary]) -> tuple[Counts, Validation, list[FieldSummary]]:
         rows_total = rows_empty = 0
         cols_total = cols_empty = 0
-        cols_mapped = cols_ambiguous = cols_unmapped = cols_passthrough = 0
+        cols_mapped = cols_unmapped = 0
         cells_total = cells_non_empty = 0
 
         validation = self._zero_validation()
@@ -593,9 +585,7 @@ class RunCompletionReportBuilder:
             cols_total += t.counts.columns.total
             cols_empty += t.counts.columns.empty
             cols_mapped += t.counts.columns.mapped
-            cols_ambiguous += t.counts.columns.ambiguous
             cols_unmapped += t.counts.columns.unmapped
-            cols_passthrough += t.counts.columns.passthrough
             if t.counts.cells is not None:
                 cells_total += t.counts.cells.total
                 cells_non_empty += t.counts.cells.non_empty
@@ -608,6 +598,8 @@ class RunCompletionReportBuilder:
         self._accumulate_field_occurrences(field_occ, expected_fields, tables)
         validation.max_severity = _max_severity(validation.issues_by_severity)
         fields = self._field_summaries(expected_fields, field_occ)
+        detected_count = sum(1 for f in fields if f.detected)
+        not_detected_count = max(0, len(expected_fields) - detected_count)
 
         counts = Counts(
             tables=len(tables),
@@ -616,11 +608,13 @@ class RunCompletionReportBuilder:
                 total=cols_total,
                 empty=cols_empty,
                 mapped=cols_mapped,
-                ambiguous=cols_ambiguous,
                 unmapped=cols_unmapped,
-                passthrough=cols_passthrough,
             ),
-            fields=FieldsCount(expected=len(expected_fields), mapped=sum(1 for f in fields if f.mapped)),
+            fields=FieldsCount(
+                expected=len(expected_fields),
+                detected=detected_count,
+                not_detected=not_detected_count,
+            ),
             cells=CellsCount(total=cells_total, non_empty=cells_non_empty),
         )
         return counts, validation, fields
@@ -628,7 +622,7 @@ class RunCompletionReportBuilder:
     def _rollup_workbook(self, expected_fields: list[Any], sheets: list[SheetSummary]) -> tuple[Counts, Validation, list[FieldSummary]]:
         rows_total = rows_empty = 0
         cols_total = cols_empty = 0
-        cols_mapped = cols_ambiguous = cols_unmapped = cols_passthrough = 0
+        cols_mapped = cols_unmapped = 0
         cells_total = cells_non_empty = 0
         tables_total = 0
 
@@ -642,9 +636,7 @@ class RunCompletionReportBuilder:
             cols_total += s.counts.columns.total
             cols_empty += s.counts.columns.empty
             cols_mapped += s.counts.columns.mapped
-            cols_ambiguous += s.counts.columns.ambiguous
             cols_unmapped += s.counts.columns.unmapped
-            cols_passthrough += s.counts.columns.passthrough
             if s.counts.cells is not None:
                 cells_total += s.counts.cells.total
                 cells_non_empty += s.counts.cells.non_empty
@@ -656,7 +648,7 @@ class RunCompletionReportBuilder:
 
             for f in s.fields:
                 occ = field_occ.get(f.field)
-                if occ is None or not f.mapped:
+                if occ is None or not f.detected:
                     continue
                 occ["tables"] += f.occurrences.tables
                 occ["columns"] += f.occurrences.columns
@@ -664,6 +656,8 @@ class RunCompletionReportBuilder:
 
         validation.max_severity = _max_severity(validation.issues_by_severity)
         fields = self._field_summaries(expected_fields, field_occ)
+        detected_count = sum(1 for f in fields if f.detected)
+        not_detected_count = max(0, len(expected_fields) - detected_count)
 
         counts = Counts(
             sheets=len(sheets),
@@ -673,11 +667,13 @@ class RunCompletionReportBuilder:
                 total=cols_total,
                 empty=cols_empty,
                 mapped=cols_mapped,
-                ambiguous=cols_ambiguous,
                 unmapped=cols_unmapped,
-                passthrough=cols_passthrough,
             ),
-            fields=FieldsCount(expected=len(expected_fields), mapped=sum(1 for f in fields if f.mapped)),
+            fields=FieldsCount(
+                expected=len(expected_fields),
+                detected=detected_count,
+                not_detected=not_detected_count,
+            ),
             cells=CellsCount(total=cells_total, non_empty=cells_non_empty),
         )
         return counts, validation, fields
@@ -685,7 +681,7 @@ class RunCompletionReportBuilder:
     def _rollup_run(self, expected_fields: list[Any], workbooks: list[WorkbookSummary]) -> tuple[Counts, Validation, list[FieldSummary]]:
         rows_total = rows_empty = 0
         cols_total = cols_empty = 0
-        cols_mapped = cols_ambiguous = cols_unmapped = cols_passthrough = 0
+        cols_mapped = cols_unmapped = 0
         cells_total = cells_non_empty = 0
         sheets_total = 0
         tables_total = 0
@@ -701,9 +697,7 @@ class RunCompletionReportBuilder:
             cols_total += w.counts.columns.total
             cols_empty += w.counts.columns.empty
             cols_mapped += w.counts.columns.mapped
-            cols_ambiguous += w.counts.columns.ambiguous
             cols_unmapped += w.counts.columns.unmapped
-            cols_passthrough += w.counts.columns.passthrough
             if w.counts.cells is not None:
                 cells_total += w.counts.cells.total
                 cells_non_empty += w.counts.cells.non_empty
@@ -715,7 +709,7 @@ class RunCompletionReportBuilder:
 
             for f in w.fields:
                 occ = field_occ.get(f.field)
-                if occ is None or not f.mapped:
+                if occ is None or not f.detected:
                     continue
                 occ["tables"] += f.occurrences.tables
                 occ["columns"] += f.occurrences.columns
@@ -723,6 +717,8 @@ class RunCompletionReportBuilder:
 
         validation.max_severity = _max_severity(validation.issues_by_severity)
         fields = self._field_summaries(expected_fields, field_occ)
+        detected_count = sum(1 for f in fields if f.detected)
+        not_detected_count = max(0, len(expected_fields) - detected_count)
 
         counts = Counts(
             workbooks=len(workbooks),
@@ -733,11 +729,13 @@ class RunCompletionReportBuilder:
                 total=cols_total,
                 empty=cols_empty,
                 mapped=cols_mapped,
-                ambiguous=cols_ambiguous,
                 unmapped=cols_unmapped,
-                passthrough=cols_passthrough,
             ),
-            fields=FieldsCount(expected=len(expected_fields), mapped=sum(1 for f in fields if f.mapped)),
+            fields=FieldsCount(
+                expected=len(expected_fields),
+                detected=detected_count,
+                not_detected=not_detected_count,
+            ),
             cells=CellsCount(total=cells_total, non_empty=cells_non_empty),
         )
         return counts, validation, fields
@@ -779,13 +777,13 @@ class RunCompletionReportBuilder:
             name = str(getattr(f, "name", "") or "")
             label = getattr(f, "label", None)
             rec = occ.get(name) or {"tables": 0, "columns": 0, "best": 0.0}
-            mapped = bool(rec["tables"] > 0)
+            detected = bool(rec["tables"] > 0)
             out.append(
                 FieldSummary(
                     field=name,
                     label=str(label) if label is not None else None,
-                    mapped=mapped,
-                    best_mapping_score=float(rec["best"]) if mapped else None,
+                    detected=detected,
+                    best_mapping_score=float(rec["best"]) if detected else None,
                     occurrences=FieldOccurrences(tables=int(rec["tables"]), columns=int(rec["columns"])),
                 )
             )
@@ -799,7 +797,7 @@ class RunCompletionReportBuilder:
 
         tables = int(counts.tables or 0)
         expected = int(counts.fields.expected)
-        mapped_fields = int(counts.fields.mapped)
+        detected_fields = int(counts.fields.detected)
 
         if execution.status == "failed" and tables == 0:
             findings.append(Finding(code="execution_failed", severity="error", message="Execution failed"))
@@ -808,15 +806,17 @@ class RunCompletionReportBuilder:
         if tables == 0:
             findings.append(Finding(code="no_tables_detected", severity="error", message="No tables detected"))
             outcome: str = "failure"
-        elif mapped_fields == 0 and expected > 0:
-            findings.append(Finding(code="no_fields_mapped", severity="error", message="No expected fields mapped"))
+        elif detected_fields == 0 and expected > 0:
+            findings.append(
+                Finding(code="no_fields_detected", severity="error", message="No expected fields detected")
+            )
             outcome = "failure"
-        elif expected > 0 and mapped_fields < expected:
+        elif expected > 0 and detected_fields < expected:
             findings.append(
                 Finding(
-                    code="fields_unmapped",
+                    code="fields_not_detected",
                     severity="warning",
-                    message=f"Only {mapped_fields}/{expected} expected fields were mapped",
+                    message=f"Only {detected_fields}/{expected} expected fields were detected",
                 )
             )
             outcome = "partial"

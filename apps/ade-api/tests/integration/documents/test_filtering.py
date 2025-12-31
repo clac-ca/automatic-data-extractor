@@ -6,11 +6,11 @@ from fastapi import HTTPException
 
 from ade_api.common.sorting import parse_sort, resolve_sort
 from ade_api.features.documents.filters import (
+    DOCUMENT_DISPLAY_STATUS_VALUES,
     DOCUMENT_SOURCE_VALUES,
-    DOCUMENT_STATUS_VALUES,
     DocumentFilters,
     DocumentSource,
-    DocumentStatus,
+    DocumentDisplayStatus,
 )
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -19,7 +19,7 @@ def test_document_filters_normalise_sets_and_strings() -> None:
     uploader_one = str(uuid4())
     uploader_two = str(uuid4())
     filters = DocumentFilters(
-        status=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED.value],
+        status=[DocumentDisplayStatus.QUEUED.value, DocumentDisplayStatus.READY.value],
         source_in=[
             DocumentSource.MANUAL_UPLOAD.value,
             DocumentSource.MANUAL_UPLOAD.value,
@@ -33,9 +33,9 @@ def test_document_filters_normalise_sets_and_strings() -> None:
         q="  quarterly ",
     )
 
-    assert filters.status == {
-        DocumentStatus.UPLOADED,
-        DocumentStatus.PROCESSED,
+    assert filters.display_status == {
+        DocumentDisplayStatus.QUEUED,
+        DocumentDisplayStatus.READY,
     }
     assert filters.source_in == {DocumentSource.MANUAL_UPLOAD}
     assert filters.tags == {"alpha", "beta", "beta two"}
@@ -79,7 +79,7 @@ def test_document_filters_reject_invalid_tag_combinations() -> None:
 
 
 def test_document_filter_enums_export_expected_values() -> None:
-    assert set(DOCUMENT_STATUS_VALUES) == {status.value for status in DocumentStatus}
+    assert set(DOCUMENT_DISPLAY_STATUS_VALUES) == {status.value for status in DocumentDisplayStatus}
     assert set(DOCUMENT_SOURCE_VALUES) == {source.value for source in DocumentSource}
 
 

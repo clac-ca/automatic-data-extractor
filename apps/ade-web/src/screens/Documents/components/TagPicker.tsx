@@ -1,11 +1,12 @@
 import clsx from "clsx";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { client } from "@shared/api/client";
 import { Input } from "@ui/Input";
 
 import type { components } from "@schema";
+import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TagIcon } from "@ui/Icons";
 
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
@@ -15,16 +16,33 @@ export function TagPicker({
   onToggle,
   placeholder,
   disabled,
+  buttonClassName,
+  onOpenChange,
 }: {
   workspaceId: string;
   selected: string[];
   onToggle: (tag: string) => void;
   placeholder: string;
   disabled?: boolean;
+  buttonClassName?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const listId = useId();
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+  const toggleOpen = useCallback(() => {
+    setOpen((prev) => {
+      if (prev) setQuery("");
+      return !prev;
+    });
+  }, []);
 
   const effectiveQuery = query.trim();
   const canSearch = effectiveQuery.length >= 2;
@@ -63,67 +81,92 @@ export function TagPicker({
   }, [effectiveQuery, items]);
 
   useEffect(() => {
-    if (!open) return;
-
-    const onClick = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        setOpen(false);
-      }
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    window.addEventListener("mousedown", onClick);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("mousedown", onClick);
-      window.removeEventListener("keydown", onKeyDown);
-    };
+    if (open) {
+      inputRef.current?.focus();
+    }
   }, [open]);
 
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (containerRef.current?.contains(target)) return;
+      close();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [close, open]);
+
   return (
-    <div className="relative" ref={containerRef}>
+    <div
+      ref={containerRef}
+      className={clsx("relative", open ? "z-50" : "z-0")}
+      data-ignore-row-click="true"
+    >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         disabled={disabled}
+        ref={triggerRef}
         className={clsx(
-          "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
+          "inline-flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
           disabled
             ? "border-border bg-background text-muted-foreground"
             : "border-border bg-card text-foreground hover:bg-background dark:hover:bg-muted/40",
+          buttonClassName,
         )}
         aria-expanded={open}
-        aria-haspopup="dialog"
+        aria-haspopup="listbox"
+        aria-controls={open ? listId : undefined}
       >
+        <TagIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
         {selected.length === 0 ? (
-          <span className="text-muted-foreground">{placeholder}</span>
+          <span className="min-w-0 truncate text-muted-foreground">{placeholder}</span>
         ) : (
-          <span>
+          <span className="min-w-0 truncate">
             {selected.slice(0, 2).join(", ")}
             {selected.length > 2 ? ` +${selected.length - 2}` : ""}
           </span>
         )}
+        <ChevronDownIcon
+          className={clsx("h-3.5 w-3.5 text-muted-foreground transition", open && "rotate-180")}
+        />
       </button>
 
       {open ? (
         <div
-          className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-[18rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
+          className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-[20rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
           data-ignore-row-click="true"
+          role="listbox"
+          id={listId}
+          aria-multiselectable
         >
           <div className="mb-2">
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search or create tag…"
-              className="h-9"
-            />
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search or create tag…"
+                className="h-9 pl-9"
+              />
+            </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
               Type 2+ characters to search existing tags.
             </div>
@@ -136,10 +179,11 @@ export function TagPicker({
                   key={t}
                   type="button"
                   onClick={() => onToggle(t)}
-                  className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-foreground hover:text-danger-700"
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-foreground hover:text-danger-700"
                   title="Remove tag"
                 >
-                  {t} ×
+                  {t}
+                  <CloseIcon className="h-3 w-3" />
                 </button>
               ))}
             </div>
@@ -150,6 +194,8 @@ export function TagPicker({
               <button
                 type="button"
                 onClick={() => onToggle(createCandidate)}
+                role="option"
+                aria-selected={false}
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-foreground hover:bg-background dark:hover:bg-muted/40"
               >
                 <span>Create “{createCandidate}”</span>
@@ -171,6 +217,8 @@ export function TagPicker({
                     key={item.tag}
                     type="button"
                     onClick={() => onToggle(item.tag)}
+                    role="option"
+                    aria-selected={isSelected}
                     className={clsx(
                       "flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold transition",
                       isSelected
@@ -179,16 +227,17 @@ export function TagPicker({
                     )}
                   >
                     <span className="truncate">{item.tag}</span>
-                    <span className="ml-3 text-[11px] text-muted-foreground">{item.document_count}</span>
+                    <span className="ml-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      {item.document_count}
+                      {isSelected ? <CheckIcon className="h-3.5 w-3.5 text-brand-600" /> : null}
+                    </span>
                   </button>
                 );
               })
             )}
           </div>
 
-          <div className="mt-2 text-[11px] text-muted-foreground">
-            Click a tag to toggle it.
-          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground">Click a tag to toggle it.</div>
         </div>
       ) : null}
     </div>

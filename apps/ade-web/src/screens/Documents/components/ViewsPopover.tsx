@@ -1,9 +1,10 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { SavedView } from "../types";
+import { ChevronDownSmallIcon, EyeIcon, PlusIcon, TrashIcon } from "@ui/Icons";
 
-type BuiltInViewId = "all" | "mine" | "unassigned" | "ready" | "processing" | "failed";
+import type { SavedView } from "../types";
+import { buildBuiltInViews, type BuiltInViewCounts, type BuiltInViewId } from "../filters";
 type ActiveViewId = BuiltInViewId | "custom" | string;
 
 export function ViewsPopover({
@@ -21,14 +22,7 @@ export function ViewsPopover({
   onSelectSavedView: (viewId: string) => void;
   onDeleteSavedView: (viewId: string) => void;
   onOpenSaveDialog: () => void;
-  counts: {
-    total: number;
-    mine: number;
-    unassigned: number;
-    ready: number;
-    processing: number;
-    failed: number;
-  };
+  counts: BuiltInViewCounts;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -45,16 +39,7 @@ export function ViewsPopover({
     return () => window.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
-  const builtins = useMemo(() => {
-    return [
-      { id: "all", label: "All documents", count: counts.total },
-      { id: "mine", label: "Mine", count: counts.mine },
-      { id: "unassigned", label: "Unassigned", count: counts.unassigned },
-      { id: "ready", label: "Ready", count: counts.ready },
-      { id: "processing", label: "Processing", count: counts.processing },
-      { id: "failed", label: "Failed", count: counts.failed },
-    ] as const;
-  }, [counts.failed, counts.mine, counts.processing, counts.ready, counts.total, counts.unassigned]);
+  const builtins = useMemo(() => buildBuiltInViews(counts), [counts]);
 
   const activeLabel = useMemo(() => {
     if (activeViewId === "custom") return "Custom view";
@@ -69,15 +54,14 @@ export function ViewsPopover({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm hover:border-brand-300"
+        className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm hover:border-brand-300"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
+        <EyeIcon className="h-4 w-4" />
         <span>Views</span>
         <span className="max-w-[10rem] truncate text-[11px] font-medium text-muted-foreground">{activeLabel}</span>
-        <span className="text-muted-foreground" aria-hidden>
-          v
-        </span>
+        <ChevronDownSmallIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
       </button>
 
       {open ? (
@@ -93,8 +77,9 @@ export function ViewsPopover({
                 setOpen(false);
                 onOpenSaveDialog();
               }}
-              className="rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:border-brand-300"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:border-brand-300"
             >
+              <PlusIcon className="h-3.5 w-3.5" />
               Save current view
             </button>
           </div>
@@ -167,9 +152,10 @@ export function ViewsPopover({
                           event.stopPropagation();
                           onDeleteSavedView(view.id);
                         }}
-                        className="ml-2 hidden text-xs font-semibold text-muted-foreground hover:text-danger-600 group-hover:inline"
+                        className="ml-2 hidden items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-danger-600 group-hover:inline-flex"
                         aria-label={`Delete view ${view.name}`}
                       >
+                        <TrashIcon className="h-3.5 w-3.5" />
                         Delete
                       </button>
                     </div>

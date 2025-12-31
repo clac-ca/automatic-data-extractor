@@ -13,6 +13,7 @@ describe("settingsNav", () => {
     const links = navGroups.flatMap((group) => group.items.map((item) => item.href));
     expect(links).toEqual([
       "/workspaces/ws-123/settings/general",
+      "/workspaces/ws-123/settings/processing",
       "/workspaces/ws-123/settings/preferences/appearance",
       "/workspaces/ws-123/settings/access/members",
       "/workspaces/ws-123/settings/access/roles",
@@ -38,6 +39,7 @@ describe("settingsNav", () => {
   it("exposes all configured sections in the registry", () => {
     expect(workspaceSettingsSections.map((section) => section.id)).toEqual([
       "workspace.general",
+      "workspace.processing",
       "preferences.appearance",
       "access.members",
       "access.roles",

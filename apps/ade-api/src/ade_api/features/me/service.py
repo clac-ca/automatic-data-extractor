@@ -219,11 +219,10 @@ class MeService:
                 default_workspace_id = membership.workspace_id
 
         assignments_stmt = (
-            select(UserRoleAssignment.scope_id)
+            select(UserRoleAssignment.workspace_id)
             .where(
                 UserRoleAssignment.user_id == principal.user_id,
-                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-                UserRoleAssignment.scope_id.is_not(None),
+                UserRoleAssignment.workspace_id.is_not(None),
             )
             .distinct()
         )

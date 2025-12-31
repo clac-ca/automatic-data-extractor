@@ -4,17 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import (
-    Boolean,
-    CheckConstraint,
-    ForeignKey,
-    Index,
-    String,
-    Text,
-    UniqueConstraint,
-    false,
-    true,
-)
+from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint, false, true
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,14 +18,6 @@ from .workspace import Workspace
 permission_scope_enum = SAEnum(
     ScopeType,
     name="permission_scope",
-    native_enum=False,
-    length=20,
-    values_callable=enum_values,
-)
-
-assignment_scope_enum = SAEnum(
-    ScopeType,
-    name="rbac_scope",
     native_enum=False,
     length=20,
     values_callable=enum_values,
@@ -135,12 +117,10 @@ class UserRoleAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     role_id: Mapped[UUID] = mapped_column(
         UUIDType(), ForeignKey("roles.id", ondelete="NO ACTION"), nullable=False
     )
-    scope_type: Mapped[ScopeType] = mapped_column(
-        assignment_scope_enum,
-        nullable=False,
-    )
-    scope_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=True
+    workspace_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
+        nullable=True,
     )
 
     user: Mapped[User] = relationship("User")
@@ -151,17 +131,11 @@ class UserRoleAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "user_id",
             "role_id",
-            "scope_type",
-            "scope_id",
-            name="uq_user_role_scope",
+            "workspace_id",
+            name="uq_user_role_assignment_scope",
         ),
-        CheckConstraint(
-            "(scope_type = 'global' AND scope_id IS NULL) OR "
-            "(scope_type = 'workspace' AND scope_id IS NOT NULL)",
-            name="chk_user_role_scope",
-        ),
-        Index("ix_user_scope", "user_id", "scope_type", "scope_id"),
-        Index("ix_role_scope", "role_id", "scope_type", "scope_id"),
+        Index("ix_user_role_assignments_user_id", "user_id"),
+        Index("ix_user_role_assignments_workspace_id", "workspace_id"),
     )
 
 

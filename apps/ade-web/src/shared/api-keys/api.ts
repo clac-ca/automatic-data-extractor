@@ -1,5 +1,5 @@
 import { client } from "@shared/api/client";
-import type { ApiKeyCreateResponse, ApiKeyPage, ApiKeySummary, components, paths } from "@schema";
+import type { ApiKeyCreateResponse, ApiKeyPage, components, paths } from "@schema";
 
 export interface ListPageOptions {
   readonly page?: number;
@@ -9,32 +9,28 @@ export interface ListPageOptions {
   readonly signal?: AbortSignal;
 }
 
-export interface ListAdminApiKeysOptions extends ListPageOptions {
-  readonly ownerUserId?: string;
-}
-
-type ListMyApiKeysQuery = NonNullable<paths["/api/v1/me/api-keys"]["get"]["parameters"]["query"]>;
-type ListAdminApiKeysQuery = NonNullable<paths["/api/v1/api-keys"]["get"]["parameters"]["query"]>;
+type ListMyApiKeysQuery = NonNullable<paths["/api/v1/users/me/api-keys"]["get"]["parameters"]["query"]>;
 type ListUserApiKeysQuery = NonNullable<
   paths["/api/v1/users/{user_id}/api-keys"]["get"]["parameters"]["query"]
 >;
 type ListQuery = ListMyApiKeysQuery;
 
-type CreateMyApiKeyRequest = components["schemas"]["ApiKeyCreateRequest"];
-type CreateUserApiKeyRequest = components["schemas"]["ApiKeyCreateRequest"];
-type CreateAdminApiKeyRequest = components["schemas"]["ApiKeyIssueRequest"];
+type CreateApiKeyRequest = components["schemas"]["ApiKeyCreateRequest"];
 
 export async function listMyApiKeys(options: ListPageOptions = {}): Promise<ApiKeyPage> {
   const query = buildListQuery(options);
-  const { data } = await client.GET("/api/v1/me/api-keys", { params: { query }, signal: options.signal });
+  const { data } = await client.GET("/api/v1/users/me/api-keys", {
+    params: { query },
+    signal: options.signal,
+  });
   if (!data) {
     throw new Error("Expected API key page payload.");
   }
   return data;
 }
 
-export async function createMyApiKey(payload: CreateMyApiKeyRequest): Promise<ApiKeyCreateResponse> {
-  const { data } = await client.POST("/api/v1/me/api-keys", { body: payload });
+export async function createMyApiKey(payload: CreateApiKeyRequest): Promise<ApiKeyCreateResponse> {
+  const { data } = await client.POST("/api/v1/users/me/api-keys", { body: payload });
   if (!data) {
     throw new Error("Expected API key creation payload.");
   }
@@ -42,43 +38,7 @@ export async function createMyApiKey(payload: CreateMyApiKeyRequest): Promise<Ap
 }
 
 export async function revokeMyApiKey(apiKeyId: string): Promise<void> {
-  await client.DELETE("/api/v1/me/api-keys/{api_key_id}", {
-    params: { path: { api_key_id: apiKeyId } },
-  });
-}
-
-export async function listApiKeys(options: ListAdminApiKeysOptions = {}): Promise<ApiKeyPage> {
-  const query: ListAdminApiKeysQuery = buildListQuery(options);
-  if (options.ownerUserId) {
-    query.owner_user_id = options.ownerUserId;
-  }
-  const { data } = await client.GET("/api/v1/api-keys", { params: { query }, signal: options.signal });
-  if (!data) {
-    throw new Error("Expected API key page payload.");
-  }
-  return data;
-}
-
-export async function getApiKey(apiKeyId: string): Promise<ApiKeySummary> {
-  const { data } = await client.GET("/api/v1/api-keys/{api_key_id}", {
-    params: { path: { api_key_id: apiKeyId } },
-  });
-  if (!data) {
-    throw new Error("Expected API key summary payload.");
-  }
-  return data;
-}
-
-export async function createApiKey(payload: CreateAdminApiKeyRequest): Promise<ApiKeyCreateResponse> {
-  const { data } = await client.POST("/api/v1/api-keys", { body: payload });
-  if (!data) {
-    throw new Error("Expected API key creation payload.");
-  }
-  return data;
-}
-
-export async function revokeApiKey(apiKeyId: string): Promise<void> {
-  await client.DELETE("/api/v1/api-keys/{api_key_id}", {
+  await client.DELETE("/api/v1/users/me/api-keys/{api_key_id}", {
     params: { path: { api_key_id: apiKeyId } },
   });
 }
@@ -97,7 +57,7 @@ export async function listUserApiKeys(userId: string, options: ListPageOptions =
 
 export async function createUserApiKey(
   userId: string,
-  payload: CreateUserApiKeyRequest,
+  payload: CreateApiKeyRequest,
 ): Promise<ApiKeyCreateResponse> {
   const { data } = await client.POST("/api/v1/users/{user_id}/api-keys", {
     params: { path: { user_id: userId } },

@@ -16,6 +16,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: clac-ca/automatic-data-extractor
+  PYTHON_VERSION: "3.14"
+  NODE_VERSION: "20"
 
 jobs:
   changelog-release:
@@ -163,6 +165,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          build-args: |
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            FRONTEND_BUILD_SHA=${{ github.run_id }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

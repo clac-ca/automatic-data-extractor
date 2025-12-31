@@ -2,31 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockClient = {
   POST: vi.fn(),
-  DELETE: vi.fn(),
   GET: vi.fn(),
 };
 
+const mockApiFetch = vi.fn();
+
 vi.mock("@shared/api/client", () => ({
   client: mockClient,
+  apiFetch: mockApiFetch,
 }));
-
-function createMockStorage() {
-  const store = new Map<string, string>();
-  return {
-    getItem(key: string) {
-      return store.get(key) ?? null;
-    },
-    setItem(key: string, value: string) {
-      store.set(key, value);
-    },
-    removeItem(key: string) {
-      store.delete(key);
-    },
-    clear() {
-      store.clear();
-    },
-  };
-}
 
 const meBootstrap = {
   user: {
@@ -49,101 +33,48 @@ const meBootstrap = {
   permissions: [],
 };
 
-async function loadApi(initialStorage?: Record<string, unknown>) {
-  vi.resetModules();
-  const storage = createMockStorage();
-  if (initialStorage) {
-    storage.setItem("ade.auth.tokens", JSON.stringify(initialStorage));
-  }
-  (globalThis as unknown as { window: unknown }).window = { localStorage: storage };
-  (globalThis as unknown as { localStorage: unknown }).localStorage = storage;
-
-  mockClient.POST.mockReset();
-  mockClient.DELETE.mockReset();
-  mockClient.GET.mockReset();
-
-  mockClient.POST.mockResolvedValue({ data: null });
-  mockClient.DELETE.mockResolvedValue({ data: null });
-  mockClient.GET.mockResolvedValue({ data: meBootstrap });
-
-  return {
-    storage,
-    api: await import("../api"),
-  };
-}
-
 beforeEach(() => {
   mockClient.POST.mockResolvedValue({ data: null });
-  mockClient.DELETE.mockResolvedValue({ data: null });
   mockClient.GET.mockResolvedValue({ data: meBootstrap });
+  mockApiFetch.mockResolvedValue(new Response(null, { status: 204 }));
 });
 
 afterEach(() => {
   vi.resetModules();
-  // @ts-expect-error reset test globals
-  delete globalThis.window;
-  // @ts-expect-error reset test globals
-  delete globalThis.localStorage;
 });
 
 describe("auth api", () => {
-  it("refreshes using the cookie flow without persisting a refresh token", async () => {
-    const { api, storage } = await loadApi();
+  it("creates a cookie session and bootstraps profile data", async () => {
+    const { createSession } = await import("../api");
 
-    const expiresAt = new Date(Date.now() + 120_000).toISOString();
-    const refreshExpiresAt = new Date(Date.now() + 300_000).toISOString();
-    const issued = {
-      session: {
-        access_token: "new-access",
-        refresh_token: "new-refresh",
-        token_type: "bearer",
-        expires_in: 120,
-        refresh_expires_in: 300,
-        expires_at: expiresAt,
-        refresh_expires_at: refreshExpiresAt,
-      },
-      csrf_token: "csrf",
-    };
+    const session = await createSession({ email: "user@example.com", password: "pass" });
 
-    mockClient.POST.mockResolvedValueOnce({ data: issued });
-    mockClient.GET.mockResolvedValueOnce({ data: meBootstrap });
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      "/api/v1/auth/cookie/login",
+      expect.objectContaining({ method: "POST" }),
+    );
 
-    await api.refreshSession();
+    const loginCall = mockApiFetch.mock.calls[0]?.[1];
+    const body = loginCall?.body as URLSearchParams | undefined;
+    expect(body?.get("username")).toBe("user@example.com");
+    expect(body?.get("password")).toBe("pass");
 
-    expect(mockClient.POST).toHaveBeenCalledWith("/api/v1/auth/session/refresh", {
-      body: undefined,
-      signal: undefined,
-    });
     expect(mockClient.GET).toHaveBeenCalledWith("/api/v1/me/bootstrap", {
-      headers: { Authorization: "bearer new-access" },
       params: { query: { include_total: false, page: 1, page_size: 200 } },
       signal: undefined,
     });
 
-    const stored = JSON.parse(storage.getItem("ade.auth.tokens") ?? "{}") as Record<string, unknown>;
-    expect(stored).toMatchObject({
-      access_token: "new-access",
-      token_type: "bearer",
-    });
-    expect(stored.refresh_token).toBeUndefined();
+    expect(session.user.email).toBe("user@example.com");
   });
 
-  it("logs out without a refresh token payload and clears stored tokens", async () => {
-    const initial = {
-      access_token: "existing-access",
-      token_type: "bearer",
-      expires_at: Date.now() + 60_000,
-      refresh_expires_at: Date.now() + 300_000,
-    };
+  it("logs out using the cookie logout route", async () => {
+    const { performLogout } = await import("../api");
 
-    const { api, storage } = await loadApi(initial);
+    await performLogout();
 
-    await api.performLogout();
-
-    expect(mockClient.DELETE).toHaveBeenCalledWith("/api/v1/auth/session", {
+    expect(mockClient.POST).toHaveBeenCalledWith("/api/v1/auth/cookie/logout", {
       body: undefined,
       signal: undefined,
     });
-    expect(storage.getItem("ade.auth.tokens")).toBeNull();
   });
 });

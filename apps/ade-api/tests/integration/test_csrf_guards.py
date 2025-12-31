@@ -15,13 +15,9 @@ app = create_app()
 MUTATING_METHODS: set[str] = {"POST", "PUT", "PATCH", "DELETE"}
 CSRF_ROUTE_ALLOWLIST: set[tuple[str, str]] = {
     ("/api/v1/auth/setup", "POST"),
-    ("/api/v1/auth/session", "POST"),
-    ("/api/v1/auth/session/refresh", "POST"),
-    ("/api/v1/auth/session", "DELETE"),
-    ("/api/v1/auth/login", "POST"),  # backward compatibility
-    ("/api/v1/auth/refresh", "POST"),  # backward compatibility
-    ("/api/v1/auth/logout", "POST"),  # backward compatibility
-    ("/api/v1/me/permissions/check", "POST"),
+    ("/api/v1/auth/cookie/login", "POST"),
+    ("/api/v1/auth/jwt/login", "POST"),
+    ("/api/v1/auth/register", "POST"),
 }
 
 

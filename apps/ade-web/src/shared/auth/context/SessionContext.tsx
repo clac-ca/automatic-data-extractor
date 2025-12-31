@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
-import { refreshSession, type SessionEnvelope } from "../api";
+import type { SessionEnvelope } from "../api";
 
 type RefetchSession = () => Promise<unknown>;
 
@@ -11,10 +11,6 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
-
 interface SessionProviderProps {
   readonly session: SessionEnvelope;
   readonly refetch: RefetchSession;
@@ -22,8 +18,6 @@ interface SessionProviderProps {
 }
 
 export function SessionProvider({ session, refetch, children }: SessionProviderProps) {
-  useSessionAutoRefresh(session, refetch);
-
   return (
     <SessionContext.Provider value={{ session, refetch }}>
       {children}
@@ -41,59 +35,4 @@ function useSessionContext(): SessionContextValue {
 
 export function useSession() {
   return useSessionContext().session;
-}
-
-const REFRESH_BUFFER_MS = 60_000;
-
-function useSessionAutoRefresh(session: SessionEnvelope, refetch: RefetchSession) {
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-
-    const expiresAt = typeof session.expires_at === "string" ? Date.parse(session.expires_at) : NaN;
-    const refreshExpiresAt =
-      typeof session.refresh_expires_at === "string" ? Date.parse(session.refresh_expires_at) : NaN;
-
-    if (Number.isNaN(expiresAt) || Number.isNaN(refreshExpiresAt)) {
-      return undefined;
-    }
-
-    const now = Date.now();
-    if (refreshExpiresAt <= now) {
-      void refetch().catch((error: unknown) => {
-        console.warn("Failed to refetch session after refresh expiry", toError(error));
-      });
-      return undefined;
-    }
-
-    const targetTime = Math.min(expiresAt, refreshExpiresAt) - REFRESH_BUFFER_MS;
-    const delay = Math.max(targetTime - now, 0);
-    let cancelled = false;
-
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        await refreshSession();
-        if (cancelled) {
-          return;
-        }
-        await refetch().catch((refetchError: unknown) => {
-          console.warn("Failed to refetch session after refresh", toError(refetchError));
-        });
-      } catch (error: unknown) {
-        if (cancelled) {
-          return;
-        }
-        console.warn("Failed to refresh session", toError(error));
-        await refetch().catch((refetchError: unknown) => {
-          console.warn("Failed to refetch session after refresh failure", toError(refetchError));
-        });
-      }
-    }, delay);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [refetch, session.expires_at, session.refresh_expires_at]);
 }

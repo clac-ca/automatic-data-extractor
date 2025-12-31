@@ -19,14 +19,15 @@ Future versions will follow the same resource model. When breaking changes are r
 
 ## Authentication and RBAC
 
-- **Session + bearer tokens**: `POST /api/v1/auth/session` (and `/session/refresh`) return a `SessionEnvelope` with tokens and
-  session context. Browser callers also receive `httponly` cookies; API/CLI callers use the `Authorization: Bearer <token>`
-  header.
-- **API keys**: Issue long-lived credentials via `/api/v1/me/api-keys` for self-service or `/api/v1/users/{user_id}/api-keys`
-  for admins. Submit them via `X-API-Key` (or `Authorization: Bearer <token>`).
+- **Session cookies**: `POST /api/v1/auth/cookie/login` sets the `ade_session` cookie for browser clients. Use
+  `POST /api/v1/auth/cookie/logout` to terminate the session.
+- **Bearer tokens**: `POST /api/v1/auth/jwt/login` returns a JWT for non-browser clients; send it via
+  `Authorization: Bearer <token>`.
+- **API keys**: Issue long-lived credentials via `/api/v1/users/me/api-keys` for self-service or
+  `/api/v1/users/{user_id}/api-keys` for admins. Submit them via `X-API-Key` or `Authorization: Api-Key <token>`.
 - **Permissions**: Every route enforces RBAC. Global permissions (for example `users.read_all`) apply across the tenant; workspace
   permissions (for example `workspace.documents.manage`) apply to the workspace ID in the URL path.
-- **CSRF**: Not enforced yet. The dependency is wired for future use but currently no-ops.
+- **CSRF**: Enforced for cookie-authenticated unsafe methods via `X-CSRF-Token` + `ade_csrf` cookie.
 
 Requests without valid credentials receive HTTP `401 Unauthorized`. If the token is valid but lacks permissions for a resource you
 will receive `403 Forbidden`.
@@ -47,19 +48,34 @@ will receive `403 Forbidden`.
 - `GET /rbac/permissions` – list permission definitions by scope.
 - `GET/POST /rbac/roles` – list or create roles (scope via query parameter).
 - `GET/PATCH/DELETE /rbac/roles/{role_id}` – manage a specific role.
-- `GET /rbac/role-assignments` – admin view of assignments across users.
+- `GET /rbac/roleAssignments` – admin view of assignments across users.
 - Workspace membership and role bindings live under `/workspaces/{workspace_id}/members` (list/create/update/delete) and are scoped by workspace permissions.
 
 ### Documents
 
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
-- `GET /workspaces/{workspace_id}/documents` – list documents with pagination, sorting, and filters.
+- `GET /workspaces/{workspace_id}/documents` – list documents with pagination, sorting, and filters; includes a `changes_cursor`
+  watermark in the response body and `X-Ade-Changes-Cursor` header.
 - `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand).
 - `GET /workspaces/{workspace_id}/documents/{document_id}` – fetch metadata, including upload timestamps and submitter.
 - `GET /workspaces/{workspace_id}/documents/{document_id}/download` – download the stored file with a safe `Content-Disposition` header.
 - `GET /workspaces/{workspace_id}/documents/{document_id}/sheets` – enumerate worksheets for spreadsheet uploads by inspecting the stored file (falls back to a single-sheet descriptor for other file types; returns `422` when parsing fails).
 - `DELETE /workspaces/{workspace_id}/documents/{document_id}` – remove a document, if permitted.
+
+**Change feed + streaming**
+
+- `GET /workspaces/{workspace_id}/documents/changes?cursor=latest` – delta-style change feed (use the returned `next_cursor` as the new cursor).
+- `GET /workspaces/{workspace_id}/documents/changes/stream` – SSE stream of the same feed; honors `Last-Event-ID` or `cursor`.
+- When a cursor is too old the API returns `410` with `{"error": "resync_required", "latest_cursor": "..."}`.
+
+**Resumable upload sessions (large files)**
+
+- `POST /workspaces/{workspace_id}/documents/uploadSessions` – create a resumable upload session.
+- `PUT /workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}` – upload a `Content-Range` chunk.
+- `GET /workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}` – poll session status and `next_expected_ranges`.
+- `POST /workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}/commit` – finalize the document record.
+- `DELETE /workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}` – cancel and clean up the session.
 
 ### Runs
 

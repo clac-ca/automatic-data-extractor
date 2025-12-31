@@ -6,6 +6,7 @@ import pytest
 from ade_api.common.sorting import resolve_sort
 from ade_api.db import generate_uuid7
 from ade_api.features.documents.filters import DocumentFilters
+from ade_api.features.documents.schemas import DocumentDisplayStatus
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_api.models import (
@@ -197,7 +198,7 @@ async def test_list_documents_applies_filters_and_sorting(session, settings) -> 
     service = DocumentsService(session=session, settings=settings)
 
     filters = DocumentFilters(
-        status_in={DocumentStatus.PROCESSED},
+        status_in={DocumentDisplayStatus.READY},
         tags={"finance"},
         uploader="me",
         q="Uploader",

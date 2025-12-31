@@ -1,5 +1,5 @@
 """Authentication feature package."""
 
-from .router import router
+from .router import create_auth_router
 
-__all__ = ["router"]
+__all__ = ["create_auth_router"]

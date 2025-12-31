@@ -54,7 +54,7 @@ All RBAC administration lives under `/api/v1`:
 - Permission catalog: `GET /rbac/permissions`.
 - Role catalog and CRUD (global or workspace-scoped via query params):
   `GET/POST /rbac/roles`, `GET/PATCH/DELETE /rbac/roles/{role_id}`.
-- Global role assignments (admin listing/upserts): `GET /rbac/role-assignments`.
+- Global role assignments (admin listing/upserts): `GET /rbac/roleAssignments`.
 - Global roles for a specific user: `GET /users/{user_id}/roles`,
   `PUT/DELETE /users/{user_id}/roles/{role_id}`.
 - Workspace membership + role bindings:

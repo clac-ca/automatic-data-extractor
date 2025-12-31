@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ChevronDownSmallIcon, PlusIcon, StarIcon } from "@ui/Icons";
+
 import type { BoardOption } from "../types";
 import { DEFAULT_BOARD_ID, DEFAULT_BOARD_LABEL, formatBoardLabel, normalizeBoardId } from "../utils";
 
@@ -83,7 +85,7 @@ export function BoardPicker({
           disabled ? "opacity-60" : "hover:border-brand-300",
           buttonClassName,
         )}
-      >
+        >
         <span
           className={clsx(
             "min-w-0 truncate",
@@ -92,9 +94,7 @@ export function BoardPicker({
         >
           {buttonText}
         </span>
-        <span className="text-muted-foreground" aria-hidden>
-          v
-        </span>
+        <ChevronDownSmallIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
       </button>
 
       {open ? (
@@ -118,7 +118,10 @@ export function BoardPicker({
                 }}
                 className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-background"
               >
-                <span className="min-w-0 truncate font-semibold text-foreground">Create “{createCandidate}”</span>
+                <span className="inline-flex min-w-0 items-center gap-2 truncate font-semibold text-foreground">
+                  <PlusIcon className="h-4 w-4 text-muted-foreground" />
+                  Create “{createCandidate}”
+                </span>
                 <span className="text-xs font-semibold text-muted-foreground">new</span>
               </button>
             ) : null}
@@ -144,7 +147,10 @@ export function BoardPicker({
                   >
                     <span className="min-w-0 truncate font-semibold text-foreground">{board.label}</span>
                     {board.isDefault ? (
-                      <span className="text-xs font-semibold text-muted-foreground">Default</span>
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                        <StarIcon className="h-3.5 w-3.5" />
+                        Default
+                      </span>
                     ) : null}
                   </button>
                 );

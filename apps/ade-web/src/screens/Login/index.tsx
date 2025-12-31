@@ -24,6 +24,18 @@ const loginSchema = z.object({
   password: z.string().min(1, "Enter your password."),
 });
 
+function buildSsoHref(startUrl: string | null | undefined, returnTo: string | null) {
+  const base = (startUrl ?? "").trim();
+  if (!base) {
+    return "#";
+  }
+  if (!returnTo) {
+    return base;
+  }
+  const joiner = base.includes("?") ? "&" : "?";
+  return `${base}${joiner}return_to=${encodeURIComponent(returnTo)}`;
+}
+
 export default function LoginScreen() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -36,6 +48,7 @@ export default function LoginScreen() {
 
   const providersQuery = useAuthProvidersQuery();
   const providers: AuthProvider[] = providersQuery.data?.providers ?? [];
+  const ssoProviders = providers.filter((provider) => provider.type !== "password");
   const forceSso = providersQuery.data?.force_sso ?? false;
   const providersError =
     providersQuery.isError && !providersQuery.isFetching
@@ -61,10 +74,10 @@ export default function LoginScreen() {
     if (setupQuery.isPending || setupQuery.isError) {
       return;
     }
-    if (setupQuery.data?.requires_setup) {
+    if (setupQuery.data?.setup_required) {
       navigate(buildSetupRedirect(redirectTo), { replace: true });
     }
-  }, [navigate, redirectTo, setupQuery.data?.requires_setup, setupQuery.isError, setupQuery.isPending, shouldCheckSetup]);
+  }, [navigate, redirectTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending, shouldCheckSetup]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -165,12 +178,12 @@ export default function LoginScreen() {
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
           </div>
-        ) : providers.length > 0 ? (
+        ) : ssoProviders.length > 0 ? (
           <div className="mt-6 space-y-3">
-            {providers.map((provider) => (
+            {ssoProviders.map((provider) => (
               <a
                 key={provider.id}
-                href={provider.start_url ?? "#"}
+                href={buildSsoHref(provider.start_url, redirectTo)}
                 className="flex w-full items-center justify-center rounded-lg border border-border-strong bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Continue with {provider.label}

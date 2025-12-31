@@ -8,10 +8,13 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.db.session import get_session as get_db_session
-from ade_api.models.user import User
+from ade_api.db.session import get_websocket_session
+from ade_api.common.time import utc_now
+from ade_api.models import AccessToken, User
 from ade_api.settings import Settings, get_settings
 
 from ..auth import (
@@ -20,10 +23,13 @@ from ..auth import (
     PermissionDeniedError,
     authenticate_request,
 )
-from ..auth.pipeline import ApiKeyAuthenticator, SessionAuthenticator
+from ..auth.principal import AuthVia, PrincipalType
+from ..auth.pipeline import ApiKeyAuthenticator, BearerAuthenticator, CookieAuthenticator
 from ..rbac.service_interface import RbacService as RbacServiceInterface
+from ..security.tokens import decode_token
 
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+WebSocketSessionDep = Annotated[AsyncSession, Depends(get_websocket_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 PermissionDependency = Callable[..., Awaitable[User]]
@@ -130,34 +136,106 @@ def get_api_key_authenticator(
     return ApiKeyService(session=db, settings=settings)
 
 
-def get_session_authenticator(
+def get_api_key_authenticator_websocket(
+    db: WebSocketSessionDep,
+    settings: SettingsDep,
+) -> ApiKeyAuthenticator:
+    """Provide the API key authenticator for WebSocket endpoints."""
+
+    from ade_api.features.api_keys.service import ApiKeyService
+
+    return ApiKeyService(session=db, settings=settings)
+
+
+def get_cookie_authenticator(
     db: SessionDep,
     settings: SettingsDep,
-) -> SessionAuthenticator:
-    """Authenticate bearer tokens issued by the auth feature."""
+) -> CookieAuthenticator:
+    """Authenticate cookie session tokens against the access_tokens table."""
 
-    from ade_api.features.auth.service import AuthService
-
-    class _BearerSessionAuthenticator:
-        async def authenticate(self, request: Request) -> AuthenticatedPrincipal | None:
-            header = request.headers.get("authorization") or ""
-            scheme, _, token = header.partition(" ")
-            candidate = token.strip() if scheme.lower() == "bearer" else ""
-            if not candidate:
-                cookie_token = request.cookies.get(settings.session_cookie_name)
-                candidate = (cookie_token or "").strip()
+    class _CookieAuthenticator:
+        async def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
+            candidate = (token or "").strip()
             if not candidate:
                 return None
 
-            service = AuthService(session=db, settings=settings)
+            stmt = select(AccessToken).where(AccessToken.token == candidate).limit(1)
+            result = await db.execute(stmt)
+            access_token = result.scalar_one_or_none()
+            if access_token is None:
+                return None
+
+            now = utc_now()
+            expires_at = access_token.expires_at
+            if expires_at is None:
+                expires_at = access_token.created_at + settings.session_access_ttl
+            if expires_at <= now:
+                await db.delete(access_token)
+                await db.flush()
+                return None
+
+            user = await db.get(User, access_token.user_id)
+            if user is None:
+                return None
+
+            principal_type = (
+                PrincipalType.SERVICE_ACCOUNT if user.is_service_account else PrincipalType.USER
+            )
+            return AuthenticatedPrincipal(
+                user_id=user.id,
+                principal_type=principal_type,
+                auth_via=AuthVia.SESSION,
+                api_key_id=None,
+            )
+
+    return _CookieAuthenticator()
+
+
+def get_bearer_authenticator(
+    db: SessionDep,
+    settings: SettingsDep,
+) -> BearerAuthenticator:
+    """Authenticate JWT bearer tokens for non-browser clients."""
+
+    class _BearerAuthenticator:
+        async def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
+            candidate = (token or "").strip()
+            if not candidate:
+                return None
+
             try:
-                return await service.resolve_principal_from_access_token(candidate)
-            except AuthenticationError:
-                raise
+                payload = decode_token(
+                    token=candidate,
+                    secret=settings.jwt_secret_value,
+                    algorithms=[settings.jwt_algorithm],
+                )
             except Exception:
                 return None
 
-    return _BearerSessionAuthenticator()
+            subject = str(payload.get("sub") or "").strip()
+            if not subject:
+                return None
+
+            try:
+                user_id = UUID(subject)
+            except ValueError:
+                return None
+
+            user = await db.get(User, user_id)
+            if user is None:
+                return None
+
+            principal_type = (
+                PrincipalType.SERVICE_ACCOUNT if user.is_service_account else PrincipalType.USER
+            )
+            return AuthenticatedPrincipal(
+                user_id=user.id,
+                principal_type=principal_type,
+                auth_via=AuthVia.BEARER,
+                api_key_id=None,
+            )
+
+    return _BearerAuthenticator()
 
 
 def get_rbac_service(
@@ -176,9 +254,13 @@ async def get_current_principal(
         ApiKeyAuthenticator,
         Depends(get_api_key_authenticator),
     ],
-    session_service: Annotated[
-        SessionAuthenticator,
-        Depends(get_session_authenticator),
+    cookie_service: Annotated[
+        CookieAuthenticator,
+        Depends(get_cookie_authenticator),
+    ],
+    bearer_service: Annotated[
+        BearerAuthenticator,
+        Depends(get_bearer_authenticator),
     ],
 ) -> AuthenticatedPrincipal:
     """Authenticate the incoming request and return the current principal."""
@@ -188,7 +270,8 @@ async def get_current_principal(
         _db=db,
         settings=settings,
         api_key_service=api_key_service,
-        session_service=session_service,
+        cookie_service=cookie_service,
+        bearer_service=bearer_service,
     )
 
 
@@ -264,6 +347,7 @@ _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 async def require_csrf(
     request: Request,
     settings: SettingsDep,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
 ) -> None:
     """Enforce double-submit CSRF protection for cookie-authenticated requests.
@@ -275,16 +359,7 @@ async def require_csrf(
     if request.method.upper() in _SAFE_METHODS:
         return
 
-    auth_header = request.headers.get("authorization") or ""
-    scheme, _, token = auth_header.partition(" ")
-    if scheme.lower() == "bearer" and token.strip():
-        return
-
-    if (request.headers.get("x-api-key") or "").strip():
-        return
-
-    session_cookie = (request.cookies.get(settings.session_cookie_name) or "").strip()
-    if not session_cookie:
+    if principal.auth_via in {AuthVia.API_KEY, AuthVia.BEARER, AuthVia.DEV}:
         return
 
     cookie_csrf = (request.cookies.get(settings.session_csrf_cookie_name) or "").strip()

@@ -61,132 +61,19 @@
         ]
       }
     },
-    "/api/v1/auth/providers": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "List configured authentication providers",
-        "operationId": "list_auth_providers_api_v1_auth_providers_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthProviderListResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/setup": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Return whether initial administrator setup is required",
-        "operationId": "read_setup_status_api_v1_auth_setup_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthSetupStatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      },
+    "/api/v1/auth/cookie/login": {
       "post": {
         "tags": [
+          "auth",
           "auth"
         ],
-        "summary": "Create the first administrator account and start a session",
-        "operationId": "complete_setup_api_v1_auth_setup_post",
+        "summary": "Auth:Cookie.Login",
+        "operationId": "auth_cookie_login_api_v1_auth_cookie_login_post",
         "requestBody": {
           "content": {
-            "application/json": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/AuthSetupRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/session": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Return the current session snapshot",
-        "operationId": "read_session_api_v1_auth_session_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionStatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Create a session via email/password",
-        "operationId": "create_session_api_v1_auth_session_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthLoginRequest"
+                "$ref": "#/components/schemas/Body_auth_cookie_login_api_v1_auth_cookie_login_post"
               }
             }
           },
@@ -197,51 +84,36 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
-                }
+                "schema": {}
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      },
-      "delete": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Terminate the current session",
-        "operationId": "end_session_api_v1_auth_session_delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AuthRefreshRequest"
+                  "$ref": "#/components/schemas/ErrorModel"
+                },
+                "examples": {
+                  "LOGIN_BAD_CREDENTIALS": {
+                    "summary": "Bad credentials or the user is inactive.",
+                    "value": {
+                      "detail": "LOGIN_BAD_CREDENTIALS"
+                    }
                   },
-                  {
-                    "type": "null"
+                  "LOGIN_USER_NOT_VERIFIED": {
+                    "summary": "The user is not verified.",
+                    "value": {
+                      "detail": "LOGIN_USER_NOT_VERIFIED"
+                    }
                   }
-                ],
-                "title": "Payload"
+                }
               }
             }
-          }
-        },
-        "responses": {
+          },
           "204": {
-            "description": "Successful Response"
+            "description": "No Content"
           },
           "422": {
             "description": "Validation Error",
@@ -254,42 +126,88 @@
             }
           }
         },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        "security": []
       }
     },
-    "/api/v1/auth/session/refresh": {
+    "/api/v1/auth/cookie/logout": {
       "post": {
         "tags": [
+          "auth",
           "auth"
         ],
-        "summary": "Refresh an existing session using a refresh token",
-        "operationId": "refresh_session_api_v1_auth_session_refresh_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AuthRefreshRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
+        "summary": "Auth:Cookie.Logout",
+        "operationId": "auth_cookie_logout_api_v1_auth_cookie_logout_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing token or inactive user."
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/auth/jwt/login": {
+      "post": {
+        "tags": [
+          "auth",
+          "auth"
+        ],
+        "summary": "Auth:Jwt.Login",
+        "operationId": "auth_jwt_login_api_v1_auth_jwt_login_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_auth_jwt_login_api_v1_auth_jwt_login_post"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -297,7 +215,35 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
+                  "$ref": "#/components/schemas/BearerResponse"
+                },
+                "example": {
+                  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiOTIyMWZmYzktNjQwZi00MzcyLTg2ZDMtY2U2NDJjYmE1NjAzIiwiYXVkIjoiZmFzdGFwaS11c2VyczphdXRoIiwiZXhwIjoxNTcxNTA0MTkzfQ.M10bjOe45I5Ncu_uXvOmVV8QxnL-nZfcH96U90JaocI",
+                  "token_type": "bearer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                },
+                "examples": {
+                  "LOGIN_BAD_CREDENTIALS": {
+                    "summary": "Bad credentials or the user is inactive.",
+                    "value": {
+                      "detail": "LOGIN_BAD_CREDENTIALS"
+                    }
+                  },
+                  "LOGIN_USER_NOT_VERIFIED": {
+                    "summary": "The user is not verified.",
+                    "value": {
+                      "detail": "LOGIN_USER_NOT_VERIFIED"
+                    }
+                  }
                 }
               }
             }
@@ -313,26 +259,77 @@
             }
           }
         },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        "security": []
       }
     },
-    "/api/v1/auth/sso/{provider}/authorize": {
-      "get": {
+    "/api/v1/auth/jwt/logout": {
+      "post": {
         "tags": [
+          "auth",
           "auth"
         ],
-        "summary": "Initiate the SSO login flow",
-        "operationId": "start_sso_login_api_v1_auth_sso__provider__authorize_get",
+        "summary": "Auth:Jwt.Logout",
+        "operationId": "auth_jwt_logout_api_v1_auth_jwt_logout_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing token or inactive user."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{provider}/authorize": {
+      "get": {
+        "tags": [
+          "auth",
+          "auth",
+          "auth"
+        ],
+        "summary": "Authorize Oidc",
+        "operationId": "authorize_oidc_api_v1_auth_oidc__provider__authorize_get",
         "parameters": [
           {
             "name": "provider",
@@ -344,7 +341,7 @@
             }
           },
           {
-            "name": "next_path",
+            "name": "return_to",
             "in": "query",
             "required": false,
             "schema": {
@@ -356,12 +353,12 @@
                   "type": "null"
                 }
               ],
-              "title": "Next Path"
+              "title": "Return To"
             }
           }
         ],
         "responses": {
-          "302": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -383,13 +380,15 @@
         "security": []
       }
     },
-    "/api/v1/auth/sso/{provider}/callback": {
+    "/api/v1/auth/oidc/{provider}/callback": {
       "get": {
         "tags": [
+          "auth",
+          "auth",
           "auth"
         ],
-        "summary": "Handle the SSO callback and issue tokens",
-        "operationId": "finish_sso_login_api_v1_auth_sso__provider__callback_get",
+        "summary": "Callback Oidc",
+        "operationId": "callback_oidc_api_v1_auth_oidc__provider__callback_get",
         "parameters": [
           {
             "name": "provider",
@@ -401,48 +400,12 @@
             }
           },
           {
-            "name": "code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Code"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "State"
-            }
-          },
-          {
             "name": "response_mode",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "json",
-                    "redirect"
-                  ],
                   "type": "string"
                 },
                 {
@@ -458,14 +421,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
-                }
+                "schema": {}
               }
             }
-          },
-          "302": {
-            "description": "Redirect to the frontend after establishing a browser session. Includes session cookies."
           },
           "422": {
             "description": "Validation Error",
@@ -481,13 +439,160 @@
         "security": []
       }
     },
-    "/api/v1/me/api-keys": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "auth",
+          "auth"
+        ],
+        "summary": "Register:Register",
+        "operationId": "register_register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                },
+                "examples": {
+                  "REGISTER_USER_ALREADY_EXISTS": {
+                    "summary": "A user with this email already exists.",
+                    "value": {
+                      "detail": "REGISTER_USER_ALREADY_EXISTS"
+                    }
+                  },
+                  "REGISTER_INVALID_PASSWORD": {
+                    "summary": "Password validation failed.",
+                    "value": {
+                      "detail": {
+                        "code": "REGISTER_INVALID_PASSWORD",
+                        "reason": "Password should beat least 3 characters"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/setup": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Return setup status for the first admin user",
+        "operationId": "get_setup_status_api_v1_auth_setup_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSetupStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create the first admin user and log them in",
+        "operationId": "complete_setup_api_v1_auth_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Return configured authentication providers",
+        "operationId": "list_auth_providers_api_v1_auth_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthProviderListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/users/me/api-keys": {
       "get": {
         "tags": [
           "api-keys"
         ],
         "summary": "List API keys for the current user",
-        "operationId": "list_my_api_keys_api_v1_me_api_keys_get",
+        "operationId": "list_my_api_keys_api_v1_users_me_api_keys_get",
         "parameters": [
           {
             "name": "include_revoked",
@@ -518,7 +623,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -577,7 +682,7 @@
           "api-keys"
         ],
         "summary": "Create an API key for the current user",
-        "operationId": "create_my_api_key_api_v1_me_api_keys_post",
+        "operationId": "create_my_api_key_api_v1_users_me_api_keys_post",
         "parameters": [
           {
             "name": "X-CSRF-Token",
@@ -647,13 +752,13 @@
         ]
       }
     },
-    "/api/v1/me/api-keys/{api_key_id}": {
+    "/api/v1/users/me/api-keys/{api_key_id}": {
       "delete": {
         "tags": [
           "api-keys"
         ],
         "summary": "Revoke one of the current user's API keys",
-        "operationId": "revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete",
+        "operationId": "revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete",
         "parameters": [
           {
             "name": "api_key_id",
@@ -694,330 +799,6 @@
           },
           "403": {
             "description": "API key not owned by caller."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/api-keys": {
-      "get": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "List API keys across the tenant (admin)",
-        "operationId": "list_api_keys_api_v1_api_keys_get",
-        "parameters": [
-          {
-            "name": "include_revoked",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include revoked keys in the response.",
-              "default": false,
-              "title": "Include Revoked"
-            },
-            "description": "Include revoked keys in the response."
-          },
-          {
-            "name": "owner_user_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional filter by owner user id.",
-              "title": "Owner User Id"
-            },
-            "description": "Optional filter by owner user id."
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1,
-              "title": "Page"
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 25,
-              "title": "Page Size"
-            }
-          },
-          {
-            "name": "include_total",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Total"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeyPage"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.read_all global permission."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Create an API key for a user (admin)",
-        "operationId": "create_api_key_api_v1_api_keys_post",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApiKeyIssueRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeyCreateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.manage_all global permission."
-          },
-          "400": {
-            "description": "Invalid API key payload."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/api-keys/{api_key_id}": {
-      "get": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Retrieve a single API key (admin)",
-        "operationId": "get_api_key_api_v1_api_keys__api_key_id__get",
-        "parameters": [
-          {
-            "name": "api_key_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Api Key Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeySummary"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.read_all global permission."
-          },
-          "404": {
-            "description": "API key not found."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Revoke an API key (admin)",
-        "operationId": "revoke_api_key_api_v1_api_keys__api_key_id__delete",
-        "parameters": [
-          {
-            "name": "api_key_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Api Key Id"
-            }
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.manage_all global permission."
-          },
-          "404": {
-            "description": "API key not found."
           },
           "422": {
             "description": "Validation Error",
@@ -1090,7 +871,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1342,7 +1123,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1727,7 +1508,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1815,7 +1596,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -2134,13 +1915,13 @@
         ]
       }
     },
-    "/api/v1/rbac/role-assignments": {
+    "/api/v1/rbac/roleAssignments": {
       "get": {
         "tags": [
           "rbac"
         ],
         "summary": "List role assignments (admin view)",
-        "operationId": "list_assignments_api_v1_rbac_role_assignments_get",
+        "operationId": "list_assignments_api_v1_rbac_roleAssignments_get",
         "parameters": [
           {
             "name": "scope",
@@ -2239,7 +2020,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -2682,15 +2463,33 @@
         "summary": "Check whether the caller has specific permissions",
         "description": "Evaluate a set of permission keys for the current principal.",
         "operationId": "check_permissions_api_v1_me_permissions_check_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PermissionCheckRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -2824,7 +2623,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -3243,7 +3042,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -3673,7 +3472,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -3690,244 +3489,6 @@
             }
           },
           {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 2,
-                  "maxLength": 128
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "tag_mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "any",
-                    "all"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tag Mode"
-            }
-          },
-          {
-            "name": "tags_empty",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tags Empty"
-            }
-          },
-          {
-            "name": "uploader",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Uploader"
-            }
-          },
-          {
-            "name": "folder_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Folder Id"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "updated_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Updated After"
-            }
-          },
-          {
-            "name": "updated_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Updated Before"
-            }
-          },
-          {
-            "name": "last_run_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Last Run From"
-            }
-          },
-          {
-            "name": "last_run_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Last Run To"
-            }
-          },
-          {
-            "name": "byte_size_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Byte Size From"
-            }
-          },
-          {
-            "name": "byte_size_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Byte Size To"
-            }
-          },
-          {
-            "name": "has_output",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Output"
-            }
-          },
-          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -3940,28 +3501,19 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name",
+              "description": "CSV; prefix '-' for DESC. Allowed: activity_at, byte_size, created_at, display_status, id, last_run_at, name, source, status. Example: -created_at,name",
               "title": "Sort"
             },
-            "description": "CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name"
+            "description": "CSV; prefix '-' for DESC. Allowed: activity_at, byte_size, created_at, display_status, id, last_run_at, name, source, status. Example: -created_at,name"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentPage"
+                  "$ref": "#/components/schemas/DocumentListPage"
                 }
               }
             }
@@ -3974,6 +3526,1297 @@
           },
           "400": {
             "description": "Query parameters are invalid or unsupported."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/changes": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List document changes",
+        "operationId": "list_document_changes_api_v1_workspaces__workspace_id__documents_changes_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cursor token or 'latest'.",
+              "title": "Cursor"
+            },
+            "description": "Cursor token or 'latest'."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentChangesPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/changes/stream": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Stream Document Changes",
+        "operationId": "stream_document_changes_api_v1_workspaces__workspace_id__documents_changes_stream_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cursor token or 'latest'.",
+              "title": "Cursor"
+            },
+            "description": "Cursor token or 'latest'."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Create a resumable upload session",
+        "operationId": "create_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentUploadSessionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUploadSessionCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}": {
+      "put": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Upload a byte range to a session",
+        "operationId": "upload_session_range_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "upload_session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Upload session identifier",
+              "title": "Upload Session Id"
+            },
+            "description": "Upload session identifier"
+          },
+          {
+            "name": "Content-Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content-Range"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUploadSessionUploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get upload session status",
+        "operationId": "get_upload_session_status_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "upload_session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Upload session identifier",
+              "title": "Upload Session Id"
+            },
+            "description": "Upload session identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUploadSessionStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Cancel an upload session",
+        "operationId": "cancel_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__delete",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "upload_session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Upload session identifier",
+              "title": "Upload Session Id"
+            },
+            "description": "Upload session identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}/commit": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Commit an upload session",
+        "operationId": "commit_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__commit_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "upload_session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Upload session identifier",
+              "title": "Upload Session Id"
+            },
+            "description": "Upload session identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update document metadata or assignment",
+        "operationId": "update_document_api_v1_workspaces__workspace_id__documents__document_id__patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Retrieve document metadata",
+        "operationId": "read_document_api_v1_workspaces__workspace_id__documents__document_id__get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to access documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document access."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Soft delete a document",
+        "operationId": "delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentication required to delete documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document deletion."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update tags on multiple documents",
+        "operationId": "patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchTagsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchTagsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/archive": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Archive multiple documents",
+        "operationId": "archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/restore": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Restore multiple documents from the archive",
+        "operationId": "restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/archive": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Archive a document",
+        "operationId": "archive_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__archive_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Restore a document from the archive",
+        "operationId": "restore_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__restore_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
           },
           "422": {
             "description": "Validation Error",
@@ -4189,97 +5032,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Update tags on multiple documents",
-        "operationId": "patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentBatchTagsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchTagsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update tags."
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates."
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace."
-          },
-          "422": {
-            "description": "Tag payload is invalid."
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/listRow": {
       "get": {
         "tags": [
           "documents"
         ],
-        "summary": "Retrieve document metadata",
-        "operationId": "read_document_api_v1_workspaces__workspace_id__documents__document_id__get",
+        "summary": "Retrieve document list row",
+        "operationId": "read_document_list_row_api_v1_workspaces__workspace_id__documents__document_id__listRow_get",
         "parameters": [
           {
             "name": "workspace_id",
@@ -4312,7 +5071,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentOut"
+                  "$ref": "#/components/schemas/DocumentListRow"
                 }
               }
             }
@@ -4322,90 +5081,6 @@
           },
           "403": {
             "description": "Workspace permissions do not allow document access."
-          },
-          "404": {
-            "description": "Document not found within the workspace."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Soft delete a document",
-        "operationId": "delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "document_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Document identifier",
-              "title": "Document Id"
-            },
-            "description": "Document identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "401": {
-            "description": "Authentication required to delete documents."
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document deletion."
           },
           "404": {
             "description": "Document not found within the workspace."
@@ -4737,7 +5412,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -4825,7 +5500,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -6451,7 +7126,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "maximum": 100,
+                  "maximum": 2000,
                   "minimum": 1
                 },
                 {
@@ -6469,7 +7144,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "maximum": 100,
+                  "maximum": 2000,
                   "minimum": 1
                 },
                 {
@@ -6982,7 +7657,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -6996,92 +7671,6 @@
               "type": "boolean",
               "default": false,
               "title": "Include Total"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 2,
-                  "maxLength": 128
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "input_document_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Input Document Id"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "has_output",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Output"
             }
           },
           {
@@ -7103,15 +7692,6 @@
             "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7348,7 +7928,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -7362,92 +7942,6 @@
               "type": "boolean",
               "default": false,
               "title": "Include Total"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 2,
-                  "maxLength": 128
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "input_document_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Input Document Id"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "has_output",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Output"
             }
           },
           {
@@ -7469,15 +7963,6 @@
             "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -7863,9 +8348,7 @@
                 {
                   "enum": [
                     "mapped",
-                    "ambiguous",
-                    "unmapped",
-                    "passthrough"
+                    "unmapped"
                   ],
                   "type": "string"
                 },
@@ -8362,14 +8845,14 @@
         ]
       }
     },
-    "/api/v1/system/safe-mode": {
+    "/api/v1/system/safeMode": {
       "get": {
         "tags": [
           "system"
         ],
         "summary": "Read ADE safe mode status",
         "description": "Return the current ADE safe mode status.",
-        "operationId": "read_safe_mode_api_v1_system_safe_mode_get",
+        "operationId": "read_safe_mode_api_v1_system_safeMode_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -8400,7 +8883,7 @@
         ],
         "summary": "Toggle ADE safe mode",
         "description": "Persist and broadcast an updated ADE safe mode state.",
-        "operationId": "update_safe_mode_api_v1_system_safe_mode_put",
+        "operationId": "update_safe_mode_api_v1_system_safeMode_put",
         "parameters": [
           {
             "name": "X-CSRF-Token",
@@ -8462,7 +8945,7 @@
     "schemas": {
       "ApiKeyCreateRequest": {
         "properties": {
-          "label": {
+          "name": {
             "anyOf": [
               {
                 "type": "string",
@@ -8472,8 +8955,8 @@
                 "type": "null"
               }
             ],
-            "title": "Label",
-            "description": "Optional human-friendly label (e.g. 'CLI on laptop')."
+            "title": "Name",
+            "description": "Optional human-friendly name (e.g. 'CLI on laptop')."
           },
           "expires_in_days": {
             "anyOf": [
@@ -8488,25 +8971,6 @@
             ],
             "title": "Expires In Days",
             "description": "Optional TTL in days; omit for a non-expiring key."
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType",
-            "description": "Scope of the key: global or workspace.",
-            "default": "global"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id",
-            "description": "Workspace identifier when scope_type=workspace. Must be null for global keys."
           }
         },
         "additionalProperties": false,
@@ -8522,37 +8986,23 @@
             "title": "Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "owner_user_id": {
+          "user_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Owner User Id",
+            "title": "User Id",
             "description": "User that this key authenticates as."
-          },
-          "created_by_user_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By User Id",
-            "description": "User who created the key (may equal owner for self-service)."
           },
           "secret": {
             "type": "string",
             "title": "Secret",
             "description": "Full API key secret, returned once at creation time."
           },
-          "token_prefix": {
+          "prefix": {
             "type": "string",
-            "title": "Token Prefix",
+            "title": "Prefix",
             "description": "Prefix used for identification in logs/UI."
           },
-          "label": {
+          "name": {
             "anyOf": [
               {
                 "type": "string"
@@ -8561,23 +9011,7 @@
                 "type": "null"
               }
             ],
-            "title": "Label"
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id"
+            "title": "Name"
           },
           "created_at": {
             "type": "string",
@@ -8601,95 +9035,13 @@
         "type": "object",
         "required": [
           "id",
-          "owner_user_id",
+          "user_id",
           "secret",
-          "token_prefix",
-          "scope_type",
+          "prefix",
           "created_at"
         ],
         "title": "ApiKeyCreateResponse",
         "description": "Response returned when a new API key is created."
-      },
-      "ApiKeyIssueRequest": {
-        "properties": {
-          "label": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label",
-            "description": "Optional human-friendly label (e.g. 'CLI on laptop')."
-          },
-          "expires_in_days": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 3650.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires In Days",
-            "description": "Optional TTL in days; omit for a non-expiring key."
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType",
-            "description": "Scope of the key: global or workspace.",
-            "default": "global"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id",
-            "description": "Workspace identifier when scope_type=workspace. Must be null for global keys."
-          },
-          "user_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Id",
-            "description": "Target user id; provide exactly one of user_id or email."
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "email"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email",
-            "description": "Target user email; provide exactly one of user_id or email."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ApiKeyIssueRequest",
-        "description": "Admin payload to issue a key by user id or email."
       },
       "ApiKeyPage": {
         "properties": {
@@ -8748,30 +9100,17 @@
             "title": "Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "owner_user_id": {
+          "user_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Owner User Id",
+            "title": "User Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "created_by_user_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By User Id"
-          },
-          "token_prefix": {
+          "prefix": {
             "type": "string",
-            "title": "Token Prefix"
+            "title": "Prefix"
           },
-          "label": {
+          "name": {
             "anyOf": [
               {
                 "type": "string"
@@ -8780,23 +9119,7 @@
                 "type": "null"
               }
             ],
-            "title": "Label"
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id"
+            "title": "Name"
           },
           "created_at": {
             "type": "string",
@@ -8844,45 +9167,19 @@
         "type": "object",
         "required": [
           "id",
-          "owner_user_id",
-          "token_prefix",
-          "scope_type",
+          "user_id",
+          "prefix",
           "created_at"
         ],
         "title": "ApiKeySummary",
         "description": "Metadata describing an API key without exposing the secret."
-      },
-      "AuthLoginRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email",
-            "description": "User email address."
-          },
-          "password": {
-            "type": "string",
-            "format": "password",
-            "title": "Password",
-            "description": "User password.",
-            "writeOnly": true
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "AuthLoginRequest",
-        "description": "Credentials submitted when performing a password login."
       },
       "AuthProvider": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id",
-            "description": "Provider identifier, e.g. 'password' or 'sso'."
+            "description": "Provider identifier, e.g. 'password' or 'oidc'."
           },
           "label": {
             "type": "string",
@@ -8957,26 +9254,6 @@
         "title": "AuthProviderListResponse",
         "description": "Response payload returned by /auth/providers."
       },
-      "AuthRefreshRequest": {
-        "properties": {
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token",
-            "description": "Refresh token to rotate. Optional when using the refresh cookie."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "AuthRefreshRequest",
-        "description": "Optional payload for refresh / logout.\n\nBrowser clients typically rely on the refresh cookie; API clients can\nsupply the token in the request body instead."
-      },
       "AuthSetupRequest": {
         "properties": {
           "email": {
@@ -9017,25 +9294,177 @@
       },
       "AuthSetupStatusResponse": {
         "properties": {
-          "requires_setup": {
+          "setup_required": {
             "type": "boolean",
-            "title": "Requires Setup",
-            "description": "True when no users exist and an initial admin must be created."
+            "title": "Setup Required"
           },
-          "has_users": {
+          "registration_mode": {
+            "type": "string",
+            "enum": [
+              "setup-only",
+              "closed",
+              "open"
+            ],
+            "title": "Registration Mode"
+          },
+          "oidc_configured": {
             "type": "boolean",
-            "title": "Has Users",
-            "description": "True when at least one user already exists."
+            "title": "Oidc Configured"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/AuthProvider"
+            },
+            "type": "array",
+            "title": "Providers"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "requires_setup",
-          "has_users"
+          "setup_required",
+          "registration_mode",
+          "oidc_configured",
+          "providers"
         ],
         "title": "AuthSetupStatusResponse",
-        "description": "Describes whether initial administrator setup is required."
+        "description": "Setup status response returned by /auth/setup."
+      },
+      "BearerResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type"
+        ],
+        "title": "BearerResponse"
+      },
+      "Body_auth_cookie_login_api_v1_auth_cookie_login_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_auth_cookie_login_api_v1_auth_cookie_login_post"
+      },
+      "Body_auth_jwt_login_api_v1_auth_jwt_login_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_auth_jwt_login_api_v1_auth_jwt_login_post"
       },
       "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post": {
         "properties": {
@@ -9056,224 +9485,6 @@
           "file"
         ],
         "title": "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
-      },
-      "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get": {
-        "properties": {
-          "status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RunStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "file_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "xlsx",
-                    "xls",
-                    "csv",
-                    "pdf"
-                  ]
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Type"
-          }
-        },
-        "type": "object",
-        "title": "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
-      },
-      "Body_list_documents_api_v1_workspaces__workspace_id__documents_get": {
-        "properties": {
-          "status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/DocumentStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "run_status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RunStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Status"
-          },
-          "source_in": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/DocumentSource"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source In"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags"
-          },
-          "tags_not": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags Not"
-          },
-          "uploader_id": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Uploader Id"
-          },
-          "uploader_email": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Uploader Email"
-          },
-          "file_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "xlsx",
-                    "xls",
-                    "csv",
-                    "pdf"
-                  ]
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Type"
-          }
-        },
-        "type": "object",
-        "title": "Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
-      },
-      "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get": {
-        "properties": {
-          "status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RunStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "file_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "xlsx",
-                    "xls",
-                    "csv",
-                    "pdf"
-                  ]
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Type"
-          }
-        },
-        "type": "object",
-        "title": "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
       },
       "Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put": {
         "properties": {
@@ -9317,6 +9528,17 @@
               }
             ],
             "title": "Expires At"
+          },
+          "run_options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Options"
           }
         },
         "type": "object",
@@ -9868,6 +10090,43 @@
         ],
         "title": "DirectoryWriteResponse"
       },
+      "DocumentBatchArchiveRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to archive or restore (all-or-nothing)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "DocumentBatchArchiveRequest",
+        "description": "Payload for archiving or restoring multiple documents."
+      },
+      "DocumentBatchArchiveResponse": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentBatchArchiveResponse",
+        "description": "Response envelope for batch archive or restore operations."
+      },
       "DocumentBatchDeleteRequest": {
         "properties": {
           "document_ids": {
@@ -9974,6 +10233,105 @@
         "title": "DocumentBatchTagsResponse",
         "description": "Response envelope for batch tag updates."
       },
+      "DocumentChangeEntry": {
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "title": "Cursor"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "document.upsert",
+              "document.deleted"
+            ],
+            "title": "Type"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentListRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cursor",
+          "type",
+          "occurred_at"
+        ],
+        "title": "DocumentChangeEntry",
+        "description": "Single entry from the documents change feed."
+      },
+      "DocumentChangesPage": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentChangeEntry"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "next_cursor": {
+            "type": "string",
+            "title": "Next Cursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "next_cursor"
+        ],
+        "title": "DocumentChangesPage",
+        "description": "Envelope for cursor-based change feed results."
+      },
+      "DocumentDisplayStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "processing",
+          "ready",
+          "failed",
+          "archived"
+        ],
+        "title": "DocumentDisplayStatus",
+        "description": "UI-friendly status derived from document + run state."
+      },
+      "DocumentFileType": {
+        "type": "string",
+        "enum": [
+          "xlsx",
+          "xls",
+          "csv",
+          "pdf",
+          "unknown"
+        ],
+        "title": "DocumentFileType",
+        "description": "Normalized file types for documents."
+      },
       "DocumentLastRun": {
         "properties": {
           "run_id": {
@@ -10020,6 +10378,257 @@
         "title": "DocumentLastRun",
         "description": "Minimal representation of the last engine execution for a document."
       },
+      "DocumentListPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentListRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "changes_cursor": {
+            "type": "string",
+            "title": "Changes Cursor",
+            "description": "Watermark cursor for the documents change feed at response time."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous",
+          "changes_cursor"
+        ],
+        "title": "DocumentListPage",
+        "description": "Paginated envelope of document list rows."
+      },
+      "DocumentListRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Document UUIDv7 (RFC 9562)."
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display name mapped from the original filename."
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/DocumentFileType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentDisplayStatus"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "uploader_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploader Label"
+          },
+          "assignee_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee User Id"
+          },
+          "assignee_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Key"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "byte_size": {
+            "type": "integer",
+            "title": "Byte Size"
+          },
+          "size_label": {
+            "type": "string",
+            "title": "Size Label"
+          },
+          "queue_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentQueueState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queue_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentQueueReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mapping_health": {
+            "$ref": "#/components/schemas/DocumentMappingHealth"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "activity_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activity At"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_successful_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "file_type",
+          "status",
+          "byte_size",
+          "size_label",
+          "mapping_health",
+          "created_at",
+          "updated_at",
+          "activity_at"
+        ],
+        "title": "DocumentListRow",
+        "description": "Table-ready projection for document list rows."
+      },
+      "DocumentMappingHealth": {
+        "properties": {
+          "attention": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Attention"
+          },
+          "unmapped": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unmapped"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attention",
+          "unmapped"
+        ],
+        "title": "DocumentMappingHealth",
+        "description": "Mapping health summary for a document."
+      },
       "DocumentOut": {
         "properties": {
           "id": {
@@ -10062,6 +10671,30 @@
           "status": {
             "$ref": "#/components/schemas/DocumentStatus"
           },
+          "display_status": {
+            "$ref": "#/components/schemas/DocumentDisplayStatus",
+            "default": "queued"
+          },
+          "queue_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentQueueState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queue_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentQueueReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source": {
             "$ref": "#/components/schemas/DocumentSource"
           },
@@ -10081,6 +10714,18 @@
               }
             ],
             "title": "Last Run At"
+          },
+          "activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activity At"
           },
           "created_at": {
             "type": "string",
@@ -10103,6 +10748,19 @@
               }
             ],
             "title": "Deleted At"
+          },
+          "assignee_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee User Id"
           },
           "deleted_by": {
             "anyOf": [
@@ -10175,54 +10833,24 @@
         "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
       },
-      "DocumentPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentOut"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "page": {
-            "type": "integer",
-            "title": "Page"
-          },
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          },
-          "has_next": {
-            "type": "boolean",
-            "title": "Has Next"
-          },
-          "has_previous": {
-            "type": "boolean",
-            "title": "Has Previous"
-          },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "page",
-          "page_size",
-          "has_next",
-          "has_previous"
+      "DocumentQueueReason": {
+        "type": "string",
+        "enum": [
+          "no_active_configuration",
+          "queue_full",
+          "processing_paused"
         ],
-        "title": "DocumentPage",
-        "description": "Paginated envelope of document records."
+        "title": "DocumentQueueReason",
+        "description": "Reason for documents waiting to enter the run queue."
+      },
+      "DocumentQueueState": {
+        "type": "string",
+        "enum": [
+          "waiting",
+          "queued"
+        ],
+        "title": "DocumentQueueState",
+        "description": "Queue lifecycle for documents that are not yet processing."
       },
       "DocumentSheet": {
         "properties": {
@@ -10336,6 +10964,274 @@
         "title": "DocumentTagsReplace",
         "description": "Payload for replacing tags on a document."
       },
+      "DocumentUpdateRequest": {
+        "properties": {
+          "assignee_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee User Id",
+            "description": "Assign the document to a user (null clears assignment)."
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Replace the document metadata payload."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentUpdateRequest",
+        "description": "Payload for updating document metadata or assignment."
+      },
+      "DocumentUploadConflictBehavior": {
+        "type": "string",
+        "enum": [
+          "rename",
+          "replace",
+          "fail"
+        ],
+        "title": "DocumentUploadConflictBehavior",
+        "description": "Conflict handling modes for upload sessions."
+      },
+      "DocumentUploadRunOptions": {
+        "properties": {
+          "input_sheet_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Names",
+            "description": "Optional worksheet names to ingest when processing XLSX files."
+          },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentUploadRunOptions",
+        "description": "Run-specific options captured at upload time."
+      },
+      "DocumentUploadSessionCreateRequest": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Byte Size"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "conflict_behavior": {
+            "$ref": "#/components/schemas/DocumentUploadConflictBehavior",
+            "default": "rename"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "run_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentUploadRunOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "filename",
+          "byte_size"
+        ],
+        "title": "DocumentUploadSessionCreateRequest",
+        "description": "Create a resumable upload session for a document."
+      },
+      "DocumentUploadSessionCreateResponse": {
+        "properties": {
+          "upload_session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Upload Session Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "chunk_size_bytes": {
+            "type": "integer",
+            "title": "Chunk Size Bytes"
+          },
+          "next_expected_ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Expected Ranges"
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "upload_session_id",
+          "expires_at",
+          "chunk_size_bytes",
+          "next_expected_ranges",
+          "upload_url"
+        ],
+        "title": "DocumentUploadSessionCreateResponse",
+        "description": "Response payload for a new upload session."
+      },
+      "DocumentUploadSessionStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "complete",
+          "committed",
+          "cancelled"
+        ],
+        "title": "DocumentUploadSessionStatus",
+        "description": "Lifecycle states for document upload sessions."
+      },
+      "DocumentUploadSessionStatusResponse": {
+        "properties": {
+          "upload_session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Upload Session Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "byte_size": {
+            "type": "integer",
+            "title": "Byte Size"
+          },
+          "received_bytes": {
+            "type": "integer",
+            "title": "Received Bytes"
+          },
+          "next_expected_ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Expected Ranges"
+          },
+          "upload_complete": {
+            "type": "boolean",
+            "title": "Upload Complete",
+            "default": false
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentUploadSessionStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "upload_session_id",
+          "expires_at",
+          "byte_size",
+          "received_bytes",
+          "next_expected_ranges",
+          "status"
+        ],
+        "title": "DocumentUploadSessionStatusResponse",
+        "description": "Status payload for an upload session."
+      },
+      "DocumentUploadSessionUploadResponse": {
+        "properties": {
+          "next_expected_ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Expected Ranges"
+          },
+          "upload_complete": {
+            "type": "boolean",
+            "title": "Upload Complete",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "next_expected_ranges"
+        ],
+        "title": "DocumentUploadSessionUploadResponse",
+        "description": "Response payload after uploading a range."
+      },
       "EffectivePermissions": {
         "properties": {
           "global": {
@@ -10366,6 +11262,29 @@
         "type": "object",
         "title": "EffectivePermissions",
         "description": "Effective permission sets for the current principal."
+      },
+      "ErrorModel": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorModel"
       },
       "FileCapabilities": {
         "properties": {
@@ -11531,6 +12450,12 @@
             "title": "Log Level",
             "description": "Engine log level passed as --log-level to ade_engine."
           },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          },
           "metadata": {
             "anyOf": [
               {
@@ -11649,6 +12574,10 @@
           },
           "mapping_status": {
             "type": "string",
+            "enum": [
+              "mapped",
+              "unmapped"
+            ],
             "title": "Mapping Status"
           },
           "mapped_field": {
@@ -11762,6 +12691,12 @@
             "title": "Input Sheet Names",
             "description": "Optional worksheet names to ingest when processing XLSX files."
           },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          },
           "metadata": {
             "anyOf": [
               {
@@ -11843,6 +12778,12 @@
             "title": "Input Sheet Names",
             "description": "Optional worksheet names to ingest when processing XLSX files."
           },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          },
           "metadata": {
             "anyOf": [
               {
@@ -11922,9 +12863,9 @@
             ],
             "title": "Label"
           },
-          "mapped": {
+          "detected": {
             "type": "boolean",
-            "title": "Mapped"
+            "title": "Detected"
           },
           "best_mapping_score": {
             "anyOf": [
@@ -11950,12 +12891,12 @@
         "type": "object",
         "required": [
           "field",
-          "mapped",
+          "detected",
           "occurrences_tables",
           "occurrences_columns"
         ],
         "title": "RunFieldResource",
-        "description": "Field-level mapping summary for a run."
+        "description": "Field-level detection summary for a run."
       },
       "RunInput": {
         "properties": {
@@ -12318,17 +13259,6 @@
             ],
             "title": "Column Count Mapped"
           },
-          "column_count_ambiguous": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Column Count Ambiguous"
-          },
           "column_count_unmapped": {
             "anyOf": [
               {
@@ -12339,17 +13269,6 @@
               }
             ],
             "title": "Column Count Unmapped"
-          },
-          "column_count_passthrough": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Column Count Passthrough"
           },
           "field_count_expected": {
             "anyOf": [
@@ -12362,7 +13281,7 @@
             ],
             "title": "Field Count Expected"
           },
-          "field_count_mapped": {
+          "field_count_detected": {
             "anyOf": [
               {
                 "type": "integer"
@@ -12371,7 +13290,18 @@
                 "type": "null"
               }
             ],
-            "title": "Field Count Mapped"
+            "title": "Field Count Detected"
+          },
+          "field_count_not_detected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Count Not Detected"
           },
           "cell_count_total": {
             "anyOf": [
@@ -12561,10 +13491,17 @@
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "build_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Build Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Id"
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -12746,7 +13683,6 @@
           "id",
           "workspace_id",
           "configuration_id",
-          "build_id",
           "status",
           "created_at",
           "links"
@@ -12896,169 +13832,6 @@
         "title": "ScopeType",
         "description": "Scopes supported by RBAC-aware resources."
       },
-      "SessionEnvelope": {
-        "properties": {
-          "session": {
-            "$ref": "#/components/schemas/SessionTokens",
-            "description": "Issued session token pair."
-          },
-          "csrf_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Csrf Token",
-            "description": "CSRF token mirrored in the ade_csrf cookie for double-submit."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "session"
-        ],
-        "title": "SessionEnvelope",
-        "description": "Wrapper around issued session tokens."
-      },
-      "SessionSnapshot": {
-        "properties": {
-          "user_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "User Id",
-            "description": "Subject of the session."
-          },
-          "principal_type": {
-            "type": "string",
-            "enum": [
-              "user",
-              "service_account"
-            ],
-            "title": "Principal Type",
-            "description": "Type of principal represented by the session."
-          },
-          "issued_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issued At",
-            "description": "When the session was issued (UTC), if known."
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expires At",
-            "description": "When the session expires (UTC)."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "user_id",
-          "principal_type",
-          "expires_at"
-        ],
-        "title": "SessionSnapshot",
-        "description": "Minimal view of the current session."
-      },
-      "SessionStatusResponse": {
-        "properties": {
-          "session": {
-            "$ref": "#/components/schemas/SessionSnapshot",
-            "description": "Details about the currently authenticated session."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "session"
-        ],
-        "title": "SessionStatusResponse",
-        "description": "Snapshot response for GET /auth/session."
-      },
-      "SessionTokens": {
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token",
-            "description": "JWT access token."
-          },
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token",
-            "description": "Refresh token, if one is issued."
-          },
-          "token_type": {
-            "type": "string",
-            "title": "Token Type",
-            "description": "Token type, usually 'bearer'.",
-            "default": "bearer"
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expires At",
-            "description": "When the access token expires (UTC)."
-          },
-          "refresh_expires_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Expires At",
-            "description": "When the refresh token expires (UTC), if applicable."
-          },
-          "expires_in": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expires In",
-            "description": "Seconds until the access token expires."
-          },
-          "refresh_expires_in": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Expires In",
-            "description": "Seconds until the refresh token expires, if applicable."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "access_token",
-          "expires_at",
-          "expires_in"
-        ],
-        "title": "SessionTokens",
-        "description": "Session token pair issued to a client."
-      },
       "TagCatalogItem": {
         "properties": {
           "tag": {
@@ -13163,6 +13936,72 @@
         ],
         "title": "UploaderOut",
         "description": "Minimal representation of the user who uploaded the document."
+      },
+      "UserCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "default": true
+          },
+          "is_superuser": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Superuser",
+            "default": false
+          },
+          "is_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Verified",
+            "default": false
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UserCreate"
       },
       "UserOut": {
         "properties": {
@@ -13294,6 +14133,57 @@
         ],
         "title": "UserPage",
         "description": "Paginated collection of users."
+      },
+      "UserRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "is_superuser": {
+            "type": "boolean",
+            "title": "Is Superuser",
+            "default": false
+          },
+          "is_verified": {
+            "type": "boolean",
+            "title": "Is Verified",
+            "default": false
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "is_service_account": {
+            "type": "boolean",
+            "title": "Is Service Account",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "UserRead"
       },
       "UserRoleSummary": {
         "properties": {
@@ -13478,6 +14368,18 @@
               }
             ],
             "title": "Settings"
+          },
+          "processing_paused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Paused",
+            "description": "Optional processing pause state for the workspace."
           }
         },
         "additionalProperties": false,
@@ -13658,6 +14560,12 @@
           "is_default": {
             "type": "boolean",
             "title": "Is Default"
+          },
+          "processing_paused": {
+            "type": "boolean",
+            "title": "Processing Paused",
+            "description": "Whether document processing is paused for the workspace.",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -13761,6 +14669,18 @@
               }
             ],
             "title": "Settings"
+          },
+          "processing_paused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Paused",
+            "description": "Optional processing pause state for the workspace."
           }
         },
         "additionalProperties": false,
@@ -13770,6 +14690,20 @@
       }
     },
     "securitySchemes": {
+      "APIKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ade_session"
+      },
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/api/v1/auth/jwt/login"
+          }
+        }
+      },
       "SessionCookie": {
         "type": "apiKey",
         "in": "cookie",

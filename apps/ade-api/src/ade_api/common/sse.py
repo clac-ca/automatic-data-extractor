@@ -1,18 +1,29 @@
 """Server-Sent Events (SSE) encoding helpers.
 
-This module intentionally keeps the API small and "standard SSE":
-- `id:` is used for monotonic sequencing.
-- `event:` carries the event name/type (so clients can use `EventSource.addEventListener`).
-- `data:` contains UTF-8 text (often JSON, sometimes plain text).
-
-Multi-line payloads are split across multiple `data:` lines per the SSE spec.
+These helpers emit EventSource-compatible payload dictionaries for
+``EventSourceResponse``. The ``data`` field should always be text, so we
+serialize JSON to a compact string instead of raw bytes.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from ade_api.common.encoding import json_bytes
+from ade_api.common.encoding import json_dumps
+
+
+def _build_event(
+    data: str,
+    *,
+    event: str | None = None,
+    event_id: str | int | None = None,
+) -> dict[str, str]:
+    message = {"data": data}
+    if event is not None:
+        message["event"] = event
+    if event_id is not None:
+        message["id"] = str(event_id)
+    return message
 
 
 def sse_bytes(
@@ -20,20 +31,14 @@ def sse_bytes(
     *,
     event: str | None = None,
     event_id: str | int | None = None,
-) -> bytes:
-    """Format raw bytes as an SSE message."""
+) -> dict[str, str]:
+    """Format raw bytes as an SSE message dict."""
 
-    parts: list[bytes] = []
-    if event_id is not None:
-        parts.append(f"id: {event_id}\n".encode())
-    if event is not None:
-        parts.append(f"event: {event}\n".encode())
-    for line in payload.split(b"\n"):
-        parts.append(b"data: ")
-        parts.append(line)
-        parts.append(b"\n")
-    parts.append(b"\n")
-    return b"".join(parts)
+    return _build_event(
+        payload.decode("utf-8", errors="replace"),
+        event=event,
+        event_id=event_id,
+    )
 
 
 def sse_text(
@@ -41,10 +46,10 @@ def sse_text(
     text: str,
     *,
     event_id: str | int | None = None,
-) -> bytes:
-    """Encode UTF-8 text as an SSE message."""
+) -> dict[str, str]:
+    """Encode UTF-8 text as an SSE message dict."""
 
-    return sse_bytes(text.encode("utf-8"), event=event, event_id=event_id)
+    return _build_event(text, event=event, event_id=event_id)
 
 
 def sse_json(
@@ -52,10 +57,10 @@ def sse_json(
     data: Any,
     *,
     event_id: str | int | None = None,
-) -> bytes:
-    """Encode an object as compact JSON and wrap it as an SSE message."""
+) -> dict[str, str]:
+    """Encode an object as compact JSON and wrap it as an SSE message dict."""
 
-    return sse_bytes(json_bytes(data), event=event, event_id=event_id)
+    return _build_event(json_dumps(data), event=event, event_id=event_id)
 
 
 __all__ = ["sse_bytes", "sse_json", "sse_text"]

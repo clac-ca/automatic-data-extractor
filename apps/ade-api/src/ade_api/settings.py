@@ -74,7 +74,7 @@ DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_BUILD_TIMEOUT = 600
 
 DEFAULT_PAGE_SIZE = 25
-MAX_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 2000
 MAX_SORT_FIELDS = 3
 MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
@@ -291,6 +291,9 @@ class Settings(BaseSettings):
     pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
+    documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
+    documents_upload_session_ttl: timedelta = Field(default=timedelta(minutes=10))
+    documents_upload_session_chunk_bytes: int = Field(5 * 1024 * 1024, gt=0)
 
     # Builds
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
@@ -317,21 +320,20 @@ class Settings(BaseSettings):
     )
     jwt_algorithm: str = "HS256"
     jwt_access_ttl: timedelta = Field(default=timedelta(hours=1))
-    jwt_refresh_ttl: timedelta = Field(default=timedelta(days=14))
 
     # Sessions
     session_cookie_name: str = "ade_session"
-    session_refresh_cookie_name: str = "ade_refresh"
     session_csrf_cookie_name: str = "ade_csrf"
     session_cookie_domain: str | None = None
     session_cookie_path: str = "/"
-    session_last_seen_interval: timedelta = Field(default=timedelta(minutes=5))
+    session_access_ttl: timedelta = Field(default=timedelta(days=14))
 
     # Auth policy
     api_key_prefix_length: int = Field(12, ge=6, le=32)
     api_key_secret_bytes: int = Field(32, ge=16, le=128)
     failed_login_lock_threshold: int = Field(5, ge=1)
     failed_login_lock_duration: timedelta = Field(default=timedelta(minutes=5))
+    allow_public_registration: bool = False
     auth_disabled: bool = False
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
@@ -340,6 +342,8 @@ class Settings(BaseSettings):
     max_concurrency: int = Field(default=2, ge=1)
     queue_size: int | None = Field(default=None, ge=1)
     run_worker_poll_interval: timedelta = Field(default=timedelta(seconds=2))
+    run_lease_seconds: int = Field(default=900, ge=1)
+    run_max_attempts: int = Field(default=3, ge=1)
     run_timeout_seconds: int | None = Field(default=None, ge=1)
     worker_cpu_seconds: int | None = Field(default=None, ge=1)  # plain seconds
     worker_mem_mb: int | None = Field(default=None, ge=1)
@@ -427,10 +431,11 @@ class Settings(BaseSettings):
 
     @field_validator(
         "jwt_access_ttl",
-        "jwt_refresh_ttl",
-        "session_last_seen_interval",
+        "session_access_ttl",
         "failed_login_lock_duration",
         "storage_document_retention_period",
+        "documents_change_feed_retention_period",
+        "documents_upload_session_ttl",
         "run_worker_poll_interval",
         mode="before",
     )

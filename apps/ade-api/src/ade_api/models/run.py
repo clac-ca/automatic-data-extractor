@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +15,7 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.db import Base, UUIDType
 from ade_api.db.enums import enum_values
+from ade_api.db.types import UTCDateTime
 
 
 class RunStatus(str, Enum):
@@ -39,12 +41,20 @@ class Run(Base):
         UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
     build_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=False
+        UUIDType(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True
     )
     input_document_id: Mapped[UUID] = mapped_column(
         UUIDType(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False
     )
+    run_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    available_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    claimed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     status: Mapped[RunStatus] = mapped_column(
         SAEnum(
@@ -64,11 +74,11 @@ class Run(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utc_now
+        UTCDateTime(), nullable=False, default=utc_now
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    cancelled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -77,6 +87,17 @@ class Run(Base):
         Index("ix_runs_workspace", "workspace_id"),
         Index("ix_runs_status", "status"),
         Index("ix_runs_input_document", "input_document_id"),
+        Index("ix_runs_claim", "status", "available_at", "created_at"),
+        Index(
+            "uq_runs_active_job",
+            "workspace_id",
+            "input_document_id",
+            "configuration_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued','running')"),
+            mssql_where=text("status IN ('queued','running')"),
+            postgresql_where=text("status IN ('queued','running')"),
+        ),
         Index(
             "ix_runs_workspace_input_finished",
             "workspace_id",

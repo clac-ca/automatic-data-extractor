@@ -3,6 +3,7 @@ import clsx from "clsx";
 
 import { BUILTIN_THEMES, useTheme } from "@shared/theme";
 import { ContextMenu } from "@ui/ContextMenu";
+import { CheckIcon, ChevronDownIcon } from "@ui/Icons";
 
 const MENU_OFFSET = 6;
 
@@ -49,7 +50,7 @@ export function ThemePicker({ className }: { readonly className?: string }) {
           setOpen(false);
         },
         onHover: () => setPreviewTheme(entry.id),
-        icon: entry.id === theme ? <CheckIcon /> : undefined,
+        icon: entry.id === theme ? <CheckIcon className="h-3.5 w-3.5 text-brand-500" /> : undefined,
       })),
     [setPreviewTheme, setTheme, theme],
   );
@@ -81,7 +82,7 @@ export function ThemePicker({ className }: { readonly className?: string }) {
           aria-hidden
         />
         <span className="hidden md:inline">Theme</span>
-        <ChevronIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
+        <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
       </button>
 
       <ContextMenu
@@ -96,27 +97,5 @@ export function ThemePicker({ className }: { readonly className?: string }) {
         onPointerLeave={() => setPreviewTheme(null)}
       />
     </div>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg className="h-3.5 w-3.5 text-brand-500" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M5 10.5l3 3 7-7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { readonly className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, WebSocket
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -49,8 +49,18 @@ def _get_sessionmaker_from_request(
     return get_sessionmaker(settings=settings)
 
 
+def _get_sessionmaker_from_websocket(
+    websocket: WebSocket,
+) -> async_sessionmaker[AsyncSession]:
+    settings = getattr(websocket.app.state, "settings", None) or get_settings()
+    return get_sessionmaker(settings=settings)
+
+
 SessionFactoryDependency = Annotated[
     async_sessionmaker[AsyncSession], Depends(_get_sessionmaker_from_request)
+]
+WebSocketSessionFactoryDependency = Annotated[
+    async_sessionmaker[AsyncSession], Depends(_get_sessionmaker_from_websocket)
 ]
 
 
@@ -70,7 +80,7 @@ async def get_session(
         raise
     finally:
         try:
-            if session.in_transaction():
+            if session.in_transaction() or session.new or session.dirty or session.deleted:
                 commit_on_error = session.info.pop("force_commit_on_error", False)
                 if error is None or commit_on_error:
                     try:
@@ -86,4 +96,41 @@ async def get_session(
             await session.close()
 
 
-__all__ = ["get_session", "get_sessionmaker", "reset_session_state"]
+async def get_websocket_session(
+    websocket: WebSocket,
+    session_factory: WebSocketSessionFactoryDependency,
+) -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency that yields an ``AsyncSession`` for a WebSocket."""
+
+    session = session_factory()
+    websocket.state.db_session = session
+    error: BaseException | None = None
+    try:
+        yield session
+    except BaseException as exc:
+        error = exc
+        raise
+    finally:
+        try:
+            if session.in_transaction() or session.new or session.dirty or session.deleted:
+                commit_on_error = session.info.pop("force_commit_on_error", False)
+                if error is None or commit_on_error:
+                    try:
+                        await session.commit()
+                    except SQLAlchemyError:
+                        await session.rollback()
+                        raise
+                else:
+                    await session.rollback()
+        finally:
+            if getattr(websocket.state, "db_session", None) is session:
+                websocket.state.db_session = None
+            await session.close()
+
+
+__all__ = [
+    "get_session",
+    "get_sessionmaker",
+    "get_websocket_session",
+    "reset_session_state",
+]

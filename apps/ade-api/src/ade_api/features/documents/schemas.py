@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -11,7 +12,60 @@ from pydantic import Field, field_validator, model_validator
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
 from ade_api.common.schema import BaseSchema
-from ade_api.models import DocumentSource, DocumentStatus, RunStatus
+from ade_api.models import (
+    DocumentSource,
+    DocumentStatus,
+    DocumentUploadConflictBehavior,
+    DocumentUploadSessionStatus,
+    RunStatus,
+)
+
+
+class DocumentDisplayStatus(str, Enum):
+    """UI-friendly status derived from document + run state."""
+
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
+    ARCHIVED = "archived"
+
+
+class DocumentQueueState(str, Enum):
+    """Queue lifecycle for documents that are not yet processing."""
+
+    WAITING = "waiting"
+    QUEUED = "queued"
+
+
+class DocumentQueueReason(str, Enum):
+    """Reason for documents waiting to enter the run queue."""
+
+    NO_ACTIVE_CONFIGURATION = "no_active_configuration"
+    QUEUE_FULL = "queue_full"
+    PROCESSING_PAUSED = "processing_paused"
+
+
+class DocumentFileType(str, Enum):
+    """Normalized file types for documents."""
+
+    XLSX = "xlsx"
+    XLS = "xls"
+    CSV = "csv"
+    PDF = "pdf"
+    UNKNOWN = "unknown"
+
+
+def _fallback_display_status(status: DocumentStatus) -> DocumentDisplayStatus:
+    if status == DocumentStatus.ARCHIVED:
+        return DocumentDisplayStatus.ARCHIVED
+    if status == DocumentStatus.FAILED:
+        return DocumentDisplayStatus.FAILED
+    if status == DocumentStatus.PROCESSED:
+        return DocumentDisplayStatus.READY
+    if status == DocumentStatus.PROCESSING:
+        return DocumentDisplayStatus.PROCESSING
+    return DocumentDisplayStatus.QUEUED
 
 
 class UploaderOut(BaseSchema):
@@ -47,12 +101,17 @@ class DocumentOut(BaseSchema):
         serialization_alias="metadata",
     )
     status: DocumentStatus
+    display_status: DocumentDisplayStatus = DocumentDisplayStatus.QUEUED
+    queue_state: DocumentQueueState | None = None
+    queue_reason: DocumentQueueReason | None = None
     source: DocumentSource
     expires_at: datetime
     last_run_at: datetime | None = None
+    activity_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    assignee_user_id: UUIDStr | None = None
     deleted_by: UUIDStr | None = Field(
         default=None,
         alias="deleted_by_user_id",
@@ -96,7 +155,19 @@ class DocumentOut(BaseSchema):
         else:
             data = {}
         data.pop("worksheets", None)
+        data.pop("__ade_run_options", None)
         return data
+
+    @model_validator(mode="after")
+    def _derive_defaults(self) -> "DocumentOut":
+        if self.activity_at is None:
+            candidate = self.updated_at
+            if self.last_run_at is not None and self.last_run_at > candidate:
+                candidate = self.last_run_at
+            self.activity_at = candidate
+        if self.display_status is None:
+            self.display_status = _fallback_display_status(self.status)
+        return self
 
 
 class DocumentTagsReplace(BaseSchema):
@@ -124,6 +195,26 @@ class DocumentTagsPatch(BaseSchema):
     def _ensure_changes(self) -> DocumentTagsPatch:
         if not (self.add or self.remove):
             raise ValueError("add or remove is required")
+        return self
+
+
+class DocumentUpdateRequest(BaseSchema):
+    """Payload for updating document metadata or assignment."""
+
+    assignee_user_id: UUIDStr | None = Field(
+        default=None,
+        description="Assign the document to a user (null clears assignment).",
+    )
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Replace the document metadata payload.",
+    )
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "DocumentUpdateRequest":
+        assignee_set = "assignee_user_id" in self.model_fields_set
+        if not assignee_set and self.metadata is None:
+            raise ValueError("assignee_user_id or metadata is required")
         return self
 
 
@@ -173,6 +264,22 @@ class DocumentBatchDeleteResponse(BaseSchema):
     document_ids: list[UUIDStr] = Field(default_factory=list)
 
 
+class DocumentBatchArchiveRequest(BaseSchema):
+    """Payload for archiving or restoring multiple documents."""
+
+    document_ids: list[UUIDStr] = Field(
+        ...,
+        min_length=1,
+        description="Documents to archive or restore (all-or-nothing).",
+    )
+
+
+class DocumentBatchArchiveResponse(BaseSchema):
+    """Response envelope for batch archive or restore operations."""
+
+    documents: list[DocumentOut] = Field(default_factory=list)
+
+
 class TagCatalogItem(BaseSchema):
     """Tag entry with document counts."""
 
@@ -199,8 +306,130 @@ class DocumentLastRun(BaseSchema):
     )
 
 
-class DocumentPage(Page[DocumentOut]):
-    """Paginated envelope of document records."""
+class DocumentMappingHealth(BaseSchema):
+    """Mapping health summary for a document."""
+
+    attention: int = Field(ge=0)
+    unmapped: int = Field(ge=0)
+    pending: bool | None = None
+
+
+class DocumentListRow(BaseSchema):
+    """Table-ready projection for document list rows."""
+
+    id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
+    workspace_id: UUIDStr
+    name: str = Field(description="Display name mapped from the original filename.")
+    file_type: DocumentFileType
+    status: DocumentDisplayStatus
+    stage: str | None = None
+    uploader_label: str | None = None
+    assignee_user_id: UUIDStr | None = None
+    assignee_key: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    byte_size: int
+    size_label: str
+    queue_state: DocumentQueueState | None = None
+    queue_reason: DocumentQueueReason | None = None
+    mapping_health: DocumentMappingHealth
+    created_at: datetime
+    updated_at: datetime
+    activity_at: datetime
+    last_run: DocumentLastRun | None = None
+    last_successful_run: DocumentLastRun | None = None
+
+
+class DocumentListPage(Page[DocumentListRow]):
+    """Paginated envelope of document list rows."""
+
+    changes_cursor: str = Field(
+        description="Watermark cursor for the documents change feed at response time.",
+    )
+
+
+class DocumentChangeEntry(BaseSchema):
+    """Single entry from the documents change feed."""
+
+    cursor: str
+    type: Literal["document.upsert", "document.deleted"]
+    row: DocumentListRow | None = None
+    document_id: UUIDStr | None = None
+    occurred_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_payload(self) -> "DocumentChangeEntry":
+        if self.type == "document.deleted" and not self.document_id:
+            raise ValueError("document_id is required for document.deleted changes")
+        if self.type == "document.upsert" and self.row is None:
+            raise ValueError("row is required for document.upsert changes")
+        return self
+
+
+class DocumentChangesPage(BaseSchema):
+    """Envelope for cursor-based change feed results."""
+
+    changes: list[DocumentChangeEntry] = Field(default_factory=list)
+    next_cursor: str
+
+
+class DocumentUploadRunOptions(BaseSchema):
+    """Run-specific options captured at upload time."""
+
+    input_sheet_names: list[str] | None = Field(
+        default=None,
+        description="Optional worksheet names to ingest when processing XLSX files.",
+    )
+    active_sheet_only: bool = Field(
+        default=False,
+        description="If true, process only the active worksheet when ingesting XLSX files.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_sheet_options(self) -> "DocumentUploadRunOptions":
+        if self.active_sheet_only and self.input_sheet_names:
+            raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
+        return self
+
+
+class DocumentUploadSessionCreateRequest(BaseSchema):
+    """Create a resumable upload session for a document."""
+
+    filename: str
+    byte_size: int = Field(ge=1)
+    content_type: str | None = None
+    conflict_behavior: DocumentUploadConflictBehavior = DocumentUploadConflictBehavior.RENAME
+    folder_id: str | None = None
+    metadata: dict[str, Any] | None = None
+    run_options: DocumentUploadRunOptions | None = None
+
+
+class DocumentUploadSessionCreateResponse(BaseSchema):
+    """Response payload for a new upload session."""
+
+    upload_session_id: UUIDStr
+    expires_at: datetime
+    chunk_size_bytes: int
+    next_expected_ranges: list[str]
+    upload_url: str
+
+
+class DocumentUploadSessionStatusResponse(BaseSchema):
+    """Status payload for an upload session."""
+
+    upload_session_id: UUIDStr
+    expires_at: datetime
+    byte_size: int
+    received_bytes: int
+    next_expected_ranges: list[str]
+    upload_complete: bool = False
+    status: DocumentUploadSessionStatus
+
+
+class DocumentUploadSessionUploadResponse(BaseSchema):
+    """Response payload after uploading a range."""
+
+    next_expected_ranges: list[str]
+    upload_complete: bool = False
 
 
 class DocumentSheet(BaseSchema):
@@ -213,16 +442,32 @@ class DocumentSheet(BaseSchema):
 
 
 __all__ = [
+    "DocumentBatchArchiveRequest",
+    "DocumentBatchArchiveResponse",
     "DocumentBatchDeleteRequest",
     "DocumentBatchDeleteResponse",
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
+    "DocumentChangeEntry",
+    "DocumentChangesPage",
+    "DocumentDisplayStatus",
+    "DocumentFileType",
+    "DocumentListPage",
+    "DocumentListRow",
+    "DocumentMappingHealth",
+    "DocumentQueueReason",
+    "DocumentQueueState",
     "DocumentLastRun",
     "DocumentOut",
-    "DocumentPage",
     "DocumentSheet",
     "DocumentTagsPatch",
     "DocumentTagsReplace",
+    "DocumentUpdateRequest",
+    "DocumentUploadRunOptions",
+    "DocumentUploadSessionCreateRequest",
+    "DocumentUploadSessionCreateResponse",
+    "DocumentUploadSessionStatusResponse",
+    "DocumentUploadSessionUploadResponse",
     "TagCatalogItem",
     "TagCatalogPage",
     "UploaderOut",

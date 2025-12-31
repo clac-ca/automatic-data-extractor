@@ -6,13 +6,23 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
 from ade_api.db.enums import enum_values
+from ade_api.db.types import UTCDateTime
 
 from .user import User
 from .workspace import Workspace
@@ -34,8 +44,35 @@ class DocumentSource(str, Enum):
     MANUAL_UPLOAD = "manual_upload"
 
 
+class DocumentChangeType(str, Enum):
+    """Persistent change feed types for documents."""
+
+    UPSERT = "upsert"
+    DELETED = "deleted"
+
+
+class DocumentUploadConflictBehavior(str, Enum):
+    """Conflict handling modes for upload sessions."""
+
+    RENAME = "rename"
+    REPLACE = "replace"
+    FAIL = "fail"
+
+
+class DocumentUploadSessionStatus(str, Enum):
+    """Lifecycle states for document upload sessions."""
+
+    ACTIVE = "active"
+    COMPLETE = "complete"
+    COMMITTED = "committed"
+    CANCELLED = "cancelled"
+
+
 DOCUMENT_STATUS_VALUES = tuple(status.value for status in DocumentStatus)
 DOCUMENT_SOURCE_VALUES = tuple(source.value for source in DocumentSource)
+DOCUMENT_CHANGE_TYPE_VALUES = tuple(change.value for change in DocumentChangeType)
+DOCUMENT_UPLOAD_CONFLICT_VALUES = tuple(mode.value for mode in DocumentUploadConflictBehavior)
+DOCUMENT_UPLOAD_SESSION_STATUS_VALUES = tuple(status.value for status in DocumentUploadSessionStatus)
 
 
 class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -68,6 +105,14 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
         foreign_keys=[uploaded_by_user_id],
     )
+    assignee_user_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+    )
+    assignee_user: Mapped[User | None] = relationship(
+        "User",
+        lazy="selectin",
+        foreign_keys=[assignee_user_id],
+    )
     status: Mapped[DocumentStatus] = mapped_column(
         SAEnum(
             DocumentStatus,
@@ -92,9 +137,9 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=DocumentSource.MANUAL_UPLOAD,
         server_default=DocumentSource.MANUAL_UPLOAD.value,
     )
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_by_user_id: Mapped[UUID | None] = mapped_column(
         UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
@@ -133,6 +178,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         Index("ix_documents_workspace_source", "workspace_id", "source"),
         Index("ix_documents_workspace_uploader", "workspace_id", "uploaded_by_user_id"),
+        Index("ix_documents_workspace_assignee", "workspace_id", "assignee_user_id"),
     )
 
     @property
@@ -168,11 +214,134 @@ class DocumentTag(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class DocumentChange(Base):
+    """Durable change feed entry for documents."""
+
+    __tablename__ = "document_changes"
+
+    cursor: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    document_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(),
+        ForeignKey("documents.id", ondelete="NO ACTION"),
+        nullable=True,
+    )
+    type: Mapped[DocumentChangeType] = mapped_column(
+        SAEnum(
+            DocumentChangeType,
+            name="document_change_type",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
+        nullable=False,
+    )
+    payload: Mapped[dict[str, object]] = mapped_column(
+        MutableDict.as_mutable(JSON),
+        nullable=False,
+        default=dict,
+    )
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_document_changes_workspace_cursor", "workspace_id", "cursor"),
+        Index("ix_document_changes_workspace_document", "workspace_id", "document_id"),
+        Index("ix_document_changes_workspace_occurred", "workspace_id", "occurred_at"),
+    )
+
+
+class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Resumable upload session metadata for large document uploads."""
+
+    __tablename__ = "document_upload_sessions"
+
+    workspace_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(),
+        ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    # "metadata" is reserved by SQLAlchemy declarative base.
+    upload_metadata: Mapped[dict[str, object]] = mapped_column(
+        "metadata",
+        MutableDict.as_mutable(JSON),
+        nullable=False,
+        default=dict,
+    )
+    conflict_behavior: Mapped[DocumentUploadConflictBehavior] = mapped_column(
+        SAEnum(
+            DocumentUploadConflictBehavior,
+            name="document_upload_conflict_behavior",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=DocumentUploadConflictBehavior.RENAME,
+        server_default=DocumentUploadConflictBehavior.RENAME.value,
+    )
+    folder_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    temp_stored_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    received_bytes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    received_ranges: Mapped[list[str]] = mapped_column(
+        MutableList.as_mutable(JSON),
+        nullable=False,
+        default=list,
+    )
+    status: Mapped[DocumentUploadSessionStatus] = mapped_column(
+        SAEnum(
+            DocumentUploadSessionStatus,
+            name="document_upload_session_status",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=DocumentUploadSessionStatus.ACTIVE,
+        server_default=DocumentUploadSessionStatus.ACTIVE.value,
+    )
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_document_upload_sessions_workspace", "workspace_id"),
+        Index("ix_document_upload_sessions_expires", "expires_at"),
+        Index("ix_document_upload_sessions_status", "status"),
+    )
+
+
 __all__ = [
+    "DOCUMENT_CHANGE_TYPE_VALUES",
     "DOCUMENT_SOURCE_VALUES",
     "DOCUMENT_STATUS_VALUES",
+    "DOCUMENT_UPLOAD_CONFLICT_VALUES",
+    "DOCUMENT_UPLOAD_SESSION_STATUS_VALUES",
+    "DocumentChange",
+    "DocumentChangeType",
     "Document",
     "DocumentSource",
     "DocumentStatus",
     "DocumentTag",
+    "DocumentUploadConflictBehavior",
+    "DocumentUploadSession",
+    "DocumentUploadSessionStatus",
 ]

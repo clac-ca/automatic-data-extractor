@@ -18,7 +18,18 @@ import type {
   WorkbookSheet,
 } from "../types";
 import { columnLabel, formatRelativeTime, shortId } from "../utils";
-import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, MoreIcon, OpenInNewIcon, RefreshIcon, UserIcon } from "./icons";
+import {
+  ChatIcon,
+  CloseIcon,
+  DownloadIcon,
+  FolderMinusIcon,
+  FolderOpenIcon,
+  LinkIcon,
+  MoreIcon,
+  OpenInNewIcon,
+  RefreshIcon,
+  UserIcon,
+} from "@ui/Icons";
 import { CommentsPanel } from "./CommentsPanel";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { TagPicker } from "./TagPicker";
@@ -44,6 +55,9 @@ export function DocumentsPreviewPane({
   onDownloadOutput,
   onDownloadOriginal,
   onReprocess,
+  onArchive,
+  onRestore,
+  processingPaused,
 
   people,
   currentUserKey,
@@ -85,6 +99,9 @@ export function DocumentsPreviewPane({
   onDownloadOutput: (doc: DocumentEntry | null) => void;
   onDownloadOriginal: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry | null) => void;
+  onArchive: (doc: DocumentEntry | null) => void;
+  onRestore: (doc: DocumentEntry | null) => void;
+  processingPaused: boolean;
 
   people: WorkspacePerson[];
   currentUserKey: string;
@@ -150,7 +167,7 @@ export function DocumentsPreviewPane({
 
   const canDownloadOutput = Boolean(document?.record && outputUrl);
   const canDownloadOriginal = Boolean(document?.record);
-  const canReprocess = Boolean(document?.record && activeRun?.configuration_id);
+  const canReprocess = Boolean(document?.record && activeRun?.configuration_id && !processingPaused);
 
   const openDetails = (tab: DetailsPanelTab) => {
     setDetailsTab(tab);
@@ -247,6 +264,8 @@ export function DocumentsPreviewPane({
                     onDownloadOriginal={onDownloadOriginal}
                     onCopyLink={onCopyLink}
                     onReprocess={onReprocess}
+                    onArchive={onArchive}
+                    onRestore={onRestore}
                     onOpenDetails={() => openDetails("details")}
                     onOpenNotes={() => openDetails("notes")}
                     onClosePreview={onClose}
@@ -317,7 +336,7 @@ export function DocumentsPreviewPane({
                   Fetching the latest run status.
                 </PreviewMessage>
               ) : (
-                <PreviewMessage title="Processing output">
+                <PreviewMessage title={resolvePreviewTitle(document)}>
                   {document.stage ?? "Preparing normalized output"}
                 </PreviewMessage>
               )}
@@ -358,6 +377,16 @@ function PreviewMessage({ title, children }: { title: string; children: string }
       <p>{children}</p>
     </div>
   );
+}
+
+function resolvePreviewTitle(document: DocumentEntry) {
+  if (document.queue_state === "waiting" && document.queue_reason === "processing_paused") {
+    return "Processing paused";
+  }
+  if (document.queue_state === "waiting") return "Waiting to start";
+  if (document.queue_state === "queued" || document.status === "queued") return "Queued for processing";
+  if (document.status === "processing") return "Processing output";
+  return "Processing output";
 }
 
 const METRICS_NUMBER_FORMATTER = new Intl.NumberFormat();
@@ -550,6 +579,8 @@ function PreviewActionsMenu({
   onDownloadOriginal,
   onCopyLink,
   onReprocess,
+  onArchive,
+  onRestore,
   onOpenDetails,
   onOpenNotes,
   onClosePreview,
@@ -562,12 +593,16 @@ function PreviewActionsMenu({
   onDownloadOriginal: (doc: DocumentEntry | null) => void;
   onCopyLink: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry | null) => void;
+  onArchive: (doc: DocumentEntry | null) => void;
+  onRestore: (doc: DocumentEntry | null) => void;
   onOpenDetails: () => void;
   onOpenNotes: () => void;
   onClosePreview: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const isArchived = document.status === "archived";
+  const canArchive = Boolean(document.record);
 
   return (
     <>
@@ -632,11 +667,19 @@ function PreviewActionsMenu({
             icon: <RefreshIcon className="h-4 w-4" />,
           },
           {
+            id: isArchived ? "restore" : "archive",
+            label: isArchived ? "Restore document" : "Archive document",
+            onSelect: () => (isArchived ? onRestore(document) : onArchive(document)),
+            disabled: !canArchive,
+            icon: isArchived ? <FolderOpenIcon className="h-4 w-4" /> : <FolderMinusIcon className="h-4 w-4" />,
+            dividerAbove: true,
+          },
+          {
             id: "close-preview",
             label: "Close preview",
             onSelect: onClosePreview,
             icon: <CloseIcon className="h-4 w-4" />,
-            dividerAbove: true,
+            dividerAbove: false,
           },
         ]}
       />
@@ -726,7 +769,9 @@ function DetailsDrawer({
                 )}
                 aria-pressed={tab === key}
               >
-                {key === "details" ? "Details" : `Notes${document.commentCount ? ` (${document.commentCount})` : ""}`}
+                {key === "details"
+                  ? "Details"
+                  : `Notes${document.comment_count ? ` (${document.comment_count})` : ""}`}
               </button>
             ))}
           </div>
@@ -743,17 +788,17 @@ function DetailsDrawer({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Assignee</p>
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {document.assigneeLabel ?? "Unassigned"}
+                      {document.assignee_label ?? "Unassigned"}
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {!document.assigneeKey ? (
+                  {!document.assignee_key ? (
                     <Button type="button" size="sm" onClick={() => onPickUp(document.id)} className="text-xs">
                       Pick up
                     </Button>
-                  ) : document.assigneeKey !== currentUserKey ? (
+                  ) : document.assignee_key !== currentUserKey ? (
                     <Button
                       type="button"
                       size="sm"
@@ -767,7 +812,7 @@ function DetailsDrawer({
 
                   <PeoplePicker
                     people={people}
-                    value={[document.assigneeKey ?? unassignedKey()]}
+                    value={[document.assignee_key ?? unassignedKey()]}
                     onChange={(keys) => onAssign(document.id, normalizeSingleAssignee(keys))}
                     placeholder="Assign…"
                     includeUnassigned
@@ -779,17 +824,19 @@ function DetailsDrawer({
               <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Metadata</h3>
-                  <span className="text-[11px] text-muted-foreground">Updated {formatRelativeTime(now, document.updatedAt)}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Updated {formatRelativeTime(now, document.updated_at)}
+                  </span>
                 </div>
 
                 <dl className="mt-4 grid gap-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted-foreground">Uploader</dt>
-                    <dd className="font-semibold text-foreground">{document.uploader ?? "Unassigned"}</dd>
+                    <dd className="font-semibold text-foreground">{document.uploader_label ?? "Unassigned"}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted-foreground">Size</dt>
-                    <dd className="font-semibold text-foreground">{document.size}</dd>
+                    <dd className="font-semibold text-foreground">{document.size_label}</dd>
                   </div>
                 </dl>
               </section>

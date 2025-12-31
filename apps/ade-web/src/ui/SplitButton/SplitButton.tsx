@@ -2,6 +2,8 @@ import clsx from "clsx";
 import { useRef } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
+import { ChevronDownIcon } from "@ui/Icons";
+
 const BASE_PRIMARY =
   "inline-flex items-center gap-2 rounded-l-md px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:cursor-not-allowed";
 const BASE_MENU =
@@ -35,7 +37,7 @@ export function SplitButton({
   menuClassName,
   title,
   menuAriaLabel = "Open menu",
-  menuIcon = <SplitButtonChevronIcon />,
+  menuIcon = <ChevronDownIcon className="h-4 w-4" />,
   onPrimaryClick,
   onOpenMenu,
   onContextMenu,
@@ -94,13 +96,5 @@ export function SplitButton({
         {menuIcon}
       </button>
     </div>
-  );
-}
-
-function SplitButtonChevronIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

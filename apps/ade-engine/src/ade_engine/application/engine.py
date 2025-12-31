@@ -150,7 +150,11 @@ class Engine:
                         logger=run_logger,
                     )
 
-                    sheet_names = resolve_sheet_names(source_wb, plan.request.input_sheets)
+                    sheet_names = resolve_sheet_names(
+                        source_wb,
+                        plan.request.input_sheets,
+                        active_only=plan.request.active_sheet_only,
+                    )
                     for sheet_index, sheet_name in enumerate(sheet_names):
                         sheet = source_wb[sheet_name]
                         out_sheet = output_wb.create_sheet(title=sheet_name)

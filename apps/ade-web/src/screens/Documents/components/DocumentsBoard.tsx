@@ -1,10 +1,13 @@
 import clsx from "clsx";
 
-import type { BoardColumn, BoardGroup, WorkspacePerson } from "../types";
+import type { BoardColumn, BoardGroup, ListDensity, WorkspacePerson } from "../types";
 import { formatRelativeTime } from "../utils";
+import type { PresenceParticipant } from "@shared/presence";
+import { AvatarStack, type AvatarStackItem } from "@ui/AvatarStack";
 import { EmptyState } from "./EmptyState";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
+import { UploadProgress } from "./UploadProgress";
 
 const STATUS_DOT: Record<string, string> = {
   queued: "bg-muted-foreground",
@@ -20,6 +23,7 @@ export function DocumentsBoard({
   onGroupByChange,
   activeId,
   onActivate,
+  density,
   now,
   isLoading,
   isError,
@@ -32,6 +36,7 @@ export function DocumentsBoard({
   onClearFilters,
   showNoDocuments,
   showNoResults,
+  presenceByDocument,
 
   people,
   onAssign,
@@ -42,6 +47,7 @@ export function DocumentsBoard({
   onGroupByChange: (value: BoardGroup) => void;
   activeId: string | null;
   onActivate: (id: string) => void;
+  density: ListDensity;
   now: number;
   isLoading: boolean;
   isError: boolean;
@@ -54,6 +60,7 @@ export function DocumentsBoard({
   onClearFilters: () => void;
   showNoDocuments: boolean;
   showNoResults: boolean;
+  presenceByDocument?: Record<string, PresenceParticipant[]>;
 
   people: WorkspacePerson[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
@@ -62,6 +69,11 @@ export function DocumentsBoard({
   const totalItems = columns.reduce((sum, column) => sum + column.items.length, 0);
   const showLoading = isLoading && totalItems === 0;
   const showError = isError && totalItems === 0;
+  const isCompact = density === "compact";
+  const columnGap = isCompact ? "gap-2" : "gap-3";
+  const columnPadding = isCompact ? "px-2.5 py-2.5" : "px-3 py-3";
+  const cardGap = isCompact ? "gap-2" : "gap-3";
+  const cardPadding = isCompact ? "px-2.5 py-2.5" : "px-3 py-3";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -122,81 +134,111 @@ export function DocumentsBoard({
                   </div>
                 </div>
 
-                <div className="flex min-h-[12rem] flex-1 flex-col gap-3 rounded-2xl border border-dashed border-border bg-card px-3 py-3">
+                <div
+                  className={clsx(
+                    "flex min-h-[12rem] flex-1 flex-col rounded-2xl border border-dashed border-border bg-card",
+                    columnGap,
+                    columnPadding,
+                  )}
+                >
                   {column.items.length === 0 ? (
                     <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                       <p>No items yet</p>
                     </div>
                   ) : (
-                    column.items.map((doc) => (
-                      <div
-                        key={doc.id}
-                        onClick={() => onActivate(doc.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            onActivate(doc.id);
-                          }
-                        }}
-                        className={clsx(
-                          "flex cursor-pointer flex-col gap-3 rounded-2xl border bg-card px-3 py-3 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                          activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
-                        )}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Open ${doc.name}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
-                            <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, doc.updatedAt)}</p>
-                          </div>
-                          <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[doc.status])} aria-hidden />
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="font-semibold">Assignee: {doc.assigneeLabel ?? "Unassigned"}</span>
-                          {!doc.assigneeKey ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onPickUp(doc.id);
-                              }}
-                              className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/20 dark:text-brand-200"
-                            >
-                              Pick up
-                            </button>
-                          ) : null}
-                          <div
-                            onPointerDown={(event) => event.stopPropagation()}
-                            className="min-w-0 rounded-full border border-border bg-background px-1 py-0.5"
-                          >
-                            <PeoplePicker
-                              people={people}
-                              value={[doc.assigneeKey ?? unassignedKey()]}
-                              onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
-                              placeholder="Assign..."
-                              includeUnassigned
-                              buttonClassName="min-w-0 max-w-[11rem] border-0 bg-transparent px-2 py-0 text-[11px] shadow-none"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="font-semibold">{doc.uploader ?? "Unassigned"}</span>
-                          {doc.tags.length > 0 ? (
-                            <span className="rounded-full border border-border bg-background px-2 py-0.5">
-                              {doc.tags[0]}
-                              {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">No tags</span>
+                    column.items.map((doc) => {
+                      const rowPresence = presenceByDocument?.[doc.id] ?? [];
+                      const hasPresence = rowPresence.length > 0;
+                      const presenceItems: AvatarStackItem[] = rowPresence.map((participant) => ({
+                        id: participant.client_id,
+                        name: participant.display_name,
+                        email: participant.email,
+                      }));
+                      return (
+                        <div
+                          key={doc.id}
+                          onClick={() => onActivate(doc.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onActivate(doc.id);
+                            }
+                          }}
+                          className={clsx(
+                            "flex cursor-pointer flex-col rounded-2xl border bg-card shadow-sm transition-colors duration-150 ease-out motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            cardGap,
+                            cardPadding,
+                            activeId === doc.id
+                              ? "border-brand-400"
+                              : "border-border hover:border-brand-300 hover:bg-background/40",
+                            hasPresence && activeId !== doc.id ? "ring-1 ring-brand-200/60 ring-inset" : null,
                           )}
-                          <MappingBadge mapping={doc.mapping} />
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open ${doc.name}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Updated {formatRelativeTime(now, doc.activity_at ?? doc.updated_at)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {hasPresence ? <AvatarStack items={presenceItems} size="xs" max={3} /> : null}
+                              <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[doc.status])} aria-hidden />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold">Assignee: {doc.assignee_label ?? "Unassigned"}</span>
+                            {!doc.assignee_key ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onPickUp(doc.id);
+                                }}
+                                className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/20 dark:text-brand-200"
+                              >
+                                Pick up
+                              </button>
+                            ) : null}
+                            <div
+                              onPointerDown={(event) => event.stopPropagation()}
+                              className="min-w-0 rounded-full border border-border bg-background px-1 py-0.5"
+                            >
+                              <PeoplePicker
+                                people={people}
+                                value={[doc.assignee_key ?? unassignedKey()]}
+                                onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                                placeholder="Assign..."
+                                includeUnassigned
+                                buttonClassName="min-w-0 max-w-[11rem] border-0 bg-transparent px-2 py-0 text-[11px] shadow-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold">{doc.uploader_label ?? "Unassigned"}</span>
+                            {doc.tags.length > 0 ? (
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                                {doc.tags[0]}
+                                {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">No tags</span>
+                            )}
+                            <MappingBadge mapping={doc.mapping_health} />
+                          </div>
+                          {doc.upload && doc.upload.status !== "succeeded" ? (
+                            <div className="pt-1">
+                              <UploadProgress upload={doc.upload} />
+                            </div>
+                          ) : null}
                         </div>
-                      </div>
-                    ))
+                      );
+                  })
                   )}
                 </div>
               </div>

@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { ChevronDownSmallIcon, FilterIcon } from "@ui/Icons";
+
 import type { DocumentsFilters, DocumentStatus, FileType, TagMode, WorkspacePerson } from "../types";
 import { fileTypeLabel } from "../utils";
 import { PeoplePicker } from "./PeoplePicker";
@@ -9,7 +11,7 @@ import { TagPicker } from "./TagPicker";
 const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
   { value: "queued", label: "Queued" },
   { value: "processing", label: "Processing" },
-  { value: "ready", label: "Ready" },
+  { value: "ready", label: "Processed" },
   { value: "failed", label: "Failed" },
   { value: "archived", label: "Archived" },
 ];
@@ -55,19 +57,18 @@ export function FiltersPopover({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm hover:border-brand-300"
+        className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm hover:border-brand-300"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
+        <FilterIcon className="h-4 w-4" />
         Filters
         {activeCount > 0 ? (
           <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
             {activeCount}
           </span>
         ) : null}
-        <span className="text-muted-foreground" aria-hidden>
-          v
-        </span>
+        <ChevronDownSmallIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
       </button>
 
       {open ? (

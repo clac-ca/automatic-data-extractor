@@ -7,6 +7,7 @@ import {
   type WorkspaceNavigationItem,
 } from "@screens/Workspace/components/workspace-navigation";
 import type { WorkspaceProfile } from "@shared/workspaces";
+import { GearIcon, PinIcon, UnpinIcon } from "@ui/Icons";
 
 const NAV_RAIL_WIDTH = "4.5rem";
 const NAV_DRAWER_WIDTH = "16rem";
@@ -90,7 +91,6 @@ export function WorkspaceNav({
 
   React.useEffect(() => clearTimers, [clearTimers]);
 
-  // Global shortcut: Ctrl/⌘B toggles pin (common in app shells, e.g. IDEs).
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -99,18 +99,11 @@ export function WorkspaceNav({
       if (key === "tab" || key.startsWith("arrow")) {
         setInputMode("keyboard");
       }
-
-      if ((e.metaKey || e.ctrlKey) && key === "b") {
-        const target = e.target as EventTarget | null;
-        if (isEditableTarget(target)) return;
-        e.preventDefault();
-        onTogglePinned();
-      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onTogglePinned]);
+  }, []);
 
   const panelExpanded = isPinned || isPeekOpen;
 
@@ -345,7 +338,7 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
             )}
             aria-hidden
           >
-            <GearIcon />
+            <GearIcon className="h-5 w-5" />
           </span>
 
           <span
@@ -376,7 +369,6 @@ function NavPinButton({
   readonly onToggle: () => void;
 }) {
   const label = isPinned ? "Unpin sidebar" : "Pin sidebar";
-  const shortcutHint = "Ctrl/⌘B";
 
   return (
     <button
@@ -384,7 +376,7 @@ function NavPinButton({
       onClick={onToggle}
       aria-label={label}
       aria-pressed={isPinned}
-      title={!expanded ? `${label} (${shortcutHint})` : `${label} (${shortcutHint})`}
+      title={label}
       className={clsx(
         "group relative flex w-full items-center rounded-lg",
         "transition-colors duration-150 motion-reduce:transition-none",
@@ -399,7 +391,7 @@ function NavPinButton({
         )}
         aria-hidden
       >
-        {isPinned ? <UnpinIcon /> : <PinIcon />}
+        {isPinned ? <UnpinIcon className="h-4 w-4" /> : <PinIcon className="h-4 w-4" />}
       </span>
 
       <span
@@ -412,7 +404,6 @@ function NavPinButton({
         aria-hidden={!expanded}
       >
         {isPinned ? "Pinned" : "Pin sidebar"}
-        <span className="ml-2 text-[0.7rem] font-semibold text-sidebar-foreground">{shortcutHint}</span>
       </span>
 
     </button>
@@ -421,18 +412,6 @@ function NavPinButton({
 
 function isPlainLeftClick(e: React.MouseEvent) {
   return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
-}
-
-function isEditableTarget(target: EventTarget | null) {
-  if (!target) return false;
-  if (!(target instanceof HTMLElement)) return false;
-
-  const tag = target.tagName.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select") return true;
-  if (target.isContentEditable) return true;
-  if (target.closest?.("[contenteditable='true']")) return true;
-
-  return false;
 }
 
 function pickWorkspaceSettingsItem(items: readonly WorkspaceNavigationItem[]) {
@@ -449,39 +428,4 @@ function pickWorkspaceSettingsItem(items: readonly WorkspaceNavigationItem[]) {
 
   const byLabel = items.find((item) => /settings|preferences/i.test(item.label));
   return byLabel;
-}
-
-function GearIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path
-        d="M10 12.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16.6 10.3a7 7 0 0 0 0-.6l1.4-1.1a.8.8 0 0 0 .2-1l-1.3-2.2a.8.8 0 0 0-1-.3l-1.6.6c-.2-.2-.6-.4-.9-.5l-.2-1.7a.8.8 0 0 0-.8-.7H8.7a.8.8 0 0 0-.8.7l-.2 1.7c-.3.1-.6.3-.9.5l-1.6-.6a.8.8 0 0 0-1 .3L2.9 7.6a.8.8 0 0 0 .2 1L4.5 9.7a7 7 0 0 0 0 .6l-1.4 1.1a.8.8 0 0 0-.2 1l1.3 2.2a.8.8 0 0 0 1 .3l1.6-.6c.3.2.6.4.9.5l.2 1.7a.8.8 0 0 0 .8.7h2.6a.8.8 0 0 0 .8-.7l.2-1.7c.3-.1.6-.3.9-.5l1.6.6a.8.8 0 0 0 1-.3l1.3-2.2a.8.8 0 0 0-.2-1l-1.4-1.1Z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PinIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="M7 3h6l-1 6 3 3H5l3-3-1-6Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 12v5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function UnpinIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="M7 3h6l-1 6 3 3H5l3-3-1-6Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 16 14 8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }

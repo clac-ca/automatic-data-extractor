@@ -3,17 +3,27 @@ import { Button } from "@ui/Button";
 export function BulkActionBar({
   count,
   outputReadyCount,
+  archiveCount,
+  restoreCount,
+  onArchive,
+  onRestore,
   onClear,
   onAddTag,
   onDownloadOriginals,
   onDownloadOutputs,
+  onDelete,
 }: {
   count: number;
   outputReadyCount: number;
+  archiveCount: number;
+  restoreCount: number;
+  onArchive: () => void;
+  onRestore: () => void;
   onClear: () => void;
   onAddTag: () => void;
   onDownloadOriginals: () => void;
   onDownloadOutputs: () => void;
+  onDelete: () => void;
 }) {
   if (count <= 0) return null;
 
@@ -27,16 +37,25 @@ export function BulkActionBar({
           <Button size="sm" type="button" variant="secondary" onClick={onAddTag}>
             Add tags
           </Button>
+          <Button size="sm" type="button" variant="secondary" onClick={onArchive} disabled={archiveCount <= 0}>
+            Archive ({archiveCount})
+          </Button>
+          <Button size="sm" type="button" variant="secondary" onClick={onRestore} disabled={restoreCount <= 0}>
+            Restore ({restoreCount})
+          </Button>
           <div className="flex items-center gap-2">
             <Button size="sm" type="button" variant="secondary" onClick={onDownloadOutputs}>
               Download outputs
             </Button>
             <span className="text-[11px] font-semibold text-muted-foreground">
-              {outputReadyCount}/{count} ready
+              {outputReadyCount}/{count} processed
             </span>
           </div>
           <Button size="sm" type="button" variant="secondary" onClick={onDownloadOriginals}>
             Download originals
+          </Button>
+          <Button size="sm" type="button" variant="danger" onClick={onDelete}>
+            Delete
           </Button>
           <Button size="sm" type="button" variant="ghost" onClick={onClear}>
             Clear

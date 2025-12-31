@@ -5,7 +5,6 @@ import { ApiError } from "./errors";
 import type { paths } from "@schema";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
-const AUTH_TOKEN_STORAGE_KEY = "ade.auth.tokens";
 
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
 const baseUrl = rawBaseUrl.endsWith("/api/v1") ? rawBaseUrl.slice(0, -"/api/v1".length) : rawBaseUrl;
@@ -20,12 +19,6 @@ export function resolveApiUrl(path: string) {
 export function buildApiHeaders(method: string, init?: HeadersInit) {
   const headers = new Headers(init ?? {});
   headers.set("X-Requested-With", "fetch");
-  if (!headers.has("Authorization")) {
-    const token = readStoredAccessToken();
-    if (token) {
-      headers.set("Authorization", `${token.token_type} ${token.access_token}`);
-    }
-  }
   const normalizedMethod = method.toUpperCase();
   if (!SAFE_METHODS.has(normalizedMethod)) {
     const token = readCsrfToken();
@@ -69,18 +62,6 @@ const csrfMiddleware: Middleware = {
   },
 };
 
-const authMiddleware: Middleware = {
-  onRequest({ request }) {
-    if (!request.headers.has("Authorization")) {
-      const token = readStoredAccessToken();
-      if (token) {
-        request.headers.set("Authorization", `${token.token_type} ${token.access_token}`);
-      }
-    }
-    return request;
-  },
-};
-
 const throwOnError: Middleware = {
   async onResponse({ response }) {
     if (response.ok) {
@@ -94,35 +75,7 @@ const throwOnError: Middleware = {
 };
 
 client.use(csrfMiddleware);
-client.use(authMiddleware);
 client.use(throwOnError);
-
-function readStoredAccessToken():
-  | { access_token: string; token_type: string }
-  | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const raw = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as Partial<{
-      access_token: string;
-      token_type: string;
-    }>;
-    if (parsed && typeof parsed.access_token === "string") {
-      return {
-        access_token: parsed.access_token,
-        token_type: parsed.token_type ?? "bearer",
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
 
 async function tryParseProblem(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";

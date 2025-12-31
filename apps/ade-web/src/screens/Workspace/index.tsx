@@ -12,15 +12,15 @@ import { WorkspaceProvider } from "@screens/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider, useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@shared/storage";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
+import { AppearanceMenu } from "@app/shell/AppearanceMenu";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
-import { ModeToggle } from "@ui/ModeToggle";
-import { ThemePicker } from "@ui/ThemePicker";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
 import { WorkspaceNav, WorkspaceNavList } from "@screens/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@screens/Workspace/components/workspace-navigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
+import { ChevronDownIcon, CloseIcon, MenuIcon } from "@ui/Icons";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { NotificationsProvider } from "@shared/notifications";
@@ -321,10 +321,14 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <button
         type="button"
         onClick={openMobileNav}
-        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground shadow-sm lg:hidden"
+        className={clsx(
+          "focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border lg:hidden",
+          "border-header-border/40 bg-header/20 text-header-muted transition",
+          "hover:border-header-border/70 hover:bg-header/30 hover:text-header-foreground",
+        )}
         aria-label="Open workspace navigation"
       >
-        <MenuIcon />
+        <MenuIcon className="h-4 w-4" />
       </button>
       <button
         type="button"
@@ -332,20 +336,21 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         aria-label={workspaceSwitcherLabel}
         title={workspaceSwitcherLabel}
         className={clsx(
-          "group inline-flex min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-card px-3 py-2 text-left shadow-sm transition",
-          "hover:border-border-strong hover:bg-background",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "group inline-flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+          "w-fit max-w-full sm:max-w-[16rem] lg:max-w-[18rem] sm:shrink-0",
+          "border-header-border/40 bg-header/20 text-header-foreground hover:border-header-border/70 hover:bg-header/30",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-header-ring focus-visible:ring-offset-2 focus-visible:ring-offset-header",
         )}
       >
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-on-brand shadow-sm transition-colors group-hover:bg-brand-600">
           {workspaceInitials}
         </span>
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
-          <span className="hidden text-xs text-muted-foreground sm:block">Switch workspace</span>
+          <span className="truncate text-sm font-semibold text-header-foreground">{workspace.name}</span>
+          <span className="hidden truncate text-xs text-header-muted sm:block">Switch workspace</span>
         </span>
-        <span className="hidden text-muted-foreground sm:inline-flex" aria-hidden>
-          <ChevronDownIcon />
+        <span className="hidden text-header-muted sm:inline-flex" aria-hidden>
+          <ChevronDownIcon className="h-4 w-4" />
         </span>
       </button>
     </div>
@@ -355,12 +360,12 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const email = session.user.email ?? "";
 
   const topBarTrailing = (
-    <div className="flex items-center gap-2">
-      <ModeToggle />
-      <ThemePicker />
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <AppearanceMenu tone="header" />
       <ProfileDropdown
         displayName={displayName}
         email={email}
+        tone="header"
         actions={[
           {
             id: "about-versions",
@@ -532,7 +537,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                       className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-item-hover text-sidebar-foreground/80 hover:bg-sidebar-item-active hover:text-sidebar-foreground"
                       aria-label="Close navigation"
                     >
-                      <CloseIcon />
+                      <CloseIcon className="h-4 w-4" />
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto px-3 py-4">
@@ -621,33 +626,6 @@ function getWorkspaceInitials(name: string) {
   if (parts.length === 0) return "WS";
   const initials = parts.slice(0, 2).map((part) => part[0] ?? "");
   return initials.join("").toUpperCase();
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M4 6h12" strokeLinecap="round" />
-      <path d="M4 10h12" strokeLinecap="round" />
-      <path d="M4 14h8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M6 6l8 8" strokeLinecap="round" />
-      <path d="M14 6l-8 8" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 export function resolveWorkspaceSection(

@@ -1,2 +1,2 @@
-export * from "./DirectoryIcon";
-
+export * from "./IconBase";
+export * from "./icons";

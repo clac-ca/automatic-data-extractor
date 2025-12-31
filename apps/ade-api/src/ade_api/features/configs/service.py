@@ -342,7 +342,9 @@ class ConfigurationsService:
         configuration.activated_at = utc_now()
         try:
             await self._session.flush()
+            await self._session.commit()
         except IntegrityError as exc:
+            await self._session.rollback()
             logger.warning(
                 "config.make_active.conflict",
                 extra=log_context(

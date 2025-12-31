@@ -5,12 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
-from ade_api.db.types import UUIDType
+from ade_api.db.types import UTCDateTime, UUIDType
 
 __all__ = ["TimestampMixin", "UUIDPrimaryKeyMixin", "generate_uuid7", "generate_ulid"]
 
@@ -36,12 +35,12 @@ class TimestampMixin:
         return utc_now()
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         nullable=False,
         default=_timestamp,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         nullable=False,
         default=_timestamp,
         onupdate=_timestamp,

@@ -10,8 +10,8 @@ import {
   runsKeys,
   RUNS_PAGE_SIZE,
 } from "../data";
-import { buildCounts, buildCreatedAtRange, filterRuns } from "../utils";
-import type { RunsFilters } from "../types";
+import { buildCounts, buildCreatedAtRange } from "../utils";
+import type { RunConfigOption, RunsFilters } from "../types";
 import { DEFAULT_RUNS_FILTERS } from "../constants";
 
 export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: string; initialFilters?: RunsFilters }) {
@@ -21,15 +21,18 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
 
   const query = useMemo(() => {
     const dateRange = buildCreatedAtRange(filters.dateRange);
+    const trimmedSearch = filters.search.trim();
     return {
       page: 1,
       page_size: RUNS_PAGE_SIZE,
       include_total: true,
-      q: filters.search || undefined,
+      q: trimmedSearch.length >= 2 ? trimmedSearch : undefined,
+      status: filters.status !== "all" ? filters.status : undefined,
+      configuration_id: filters.configurationId ?? undefined,
       sort: "-created_at",
       ...dateRange,
     };
-  }, [filters.dateRange, filters.search]);
+  }, [filters.configurationId, filters.dateRange, filters.search, filters.status]);
 
   const runsQuery = useQuery({
     queryKey: runsKeys.list(workspaceId, query),
@@ -42,26 +45,16 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
     () => (runsQuery.data?.items ?? []).map((run) => buildRunRecord(run)),
     [runsQuery.data?.items],
   );
-  const visibleRuns = useMemo(() => filterRuns(runs, filters), [filters, runs]);
   const counts = useMemo(() => buildCounts(runs), [runs]);
-  const configOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(runs.map((run) => run.configLabel).filter((value) => value && value !== "—")),
-      ).sort(),
-    [runs],
-  );
-  const ownerOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(runs.map((run) => run.ownerLabel).filter((value) => value && value !== "—")),
-      ).sort(),
-    [runs],
-  );
-  const supportsResultFilters = useMemo(
-    () => runs.some((run) => run.warnings !== null || run.errors !== null),
-    [runs],
-  );
+  const configOptions = useMemo<RunConfigOption[]>(() => {
+    const options = new Map<string, string>();
+    runs.forEach((run) => {
+      if (!run.configurationId) return;
+      const label = run.configLabel && run.configLabel !== "—" ? run.configLabel : run.configurationId;
+      options.set(run.configurationId, label);
+    });
+    return Array.from(options, ([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [runs]);
 
   const activeRun = useMemo(
     () => (activeId ? runs.find((run) => run.id === activeId) ?? null : null),
@@ -137,12 +130,10 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
     },
     derived: {
       runs,
-      visibleRuns,
+      visibleRuns: runs,
       counts,
       configOptions,
-      ownerOptions,
       activeRun,
-      supportsResultFilters,
       isLoading: runsQuery.isLoading,
       isError: runsQuery.isError,
       totalCount: runsQuery.data?.total ?? runsQuery.data?.items?.length ?? 0,

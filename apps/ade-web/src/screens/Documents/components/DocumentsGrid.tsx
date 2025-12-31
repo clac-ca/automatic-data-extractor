@@ -1,19 +1,37 @@
 import clsx from "clsx";
-import { useEffect, useRef } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 
-import type { DocumentEntry, WorkspacePerson } from "../types";
+import type { DocumentEntry, ListDensity, WorkspacePerson } from "../types";
+import type { PresenceParticipant } from "@shared/presence";
+import { AvatarStack, type AvatarStackItem } from "@ui/AvatarStack";
 import { getDocumentOutputRun } from "../data";
 import { fileTypeLabel, formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
-import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "./icons";
+import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "@ui/Icons";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { RowActionsMenu } from "./RowActionsMenu";
 import { StatusPill } from "./StatusPill";
+import { TagPicker } from "./TagPicker";
+import { UploadProgress } from "./UploadProgress";
 
 const INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
+
+type SelectionOptions = {
+  mode?: "toggle" | "range";
+  checked?: boolean;
+};
+
+type DensityStyles = {
+  rowGap: string;
+  rowPadding: string;
+  iconSize: string;
+  avatarSize: string;
+  pickerButtonClass: string;
+};
 
 function isInteractiveTarget(target: EventTarget | null, container?: Element | null) {
   if (!(target instanceof Element)) return false;
@@ -23,14 +41,38 @@ function isInteractiveTarget(target: EventTarget | null, container?: Element | n
   return true;
 }
 
+function isSelectionModifier(event: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean }) {
+  return Boolean(event.shiftKey || event.metaKey || event.ctrlKey);
+}
+
+function isRangeSelection(event: { shiftKey?: boolean }) {
+  return Boolean(event.shiftKey);
+}
+
+function getDensityStyles(density: ListDensity): DensityStyles {
+  const isCompact = density === "compact";
+  return {
+    rowGap: isCompact ? "gap-2" : "gap-3",
+    rowPadding: isCompact ? "py-2" : "py-3",
+    iconSize: isCompact ? "h-8 w-8" : "h-9 w-9",
+    avatarSize: isCompact ? "h-6 w-6" : "h-7 w-7",
+    pickerButtonClass: isCompact
+      ? "min-w-0 max-w-[12rem] bg-background px-2 py-0.5 text-[11px] shadow-none"
+      : "min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none",
+  };
+}
+
 export function DocumentsGrid({
+  workspaceId,
   documents,
+  density,
   activeId,
   selectedIds,
   onSelect,
   onSelectAll,
   onClearSelection,
   allVisibleSelected,
+  someVisibleSelected,
   onActivate,
   onUploadClick,
   onClearFilters,
@@ -44,28 +86,37 @@ export function DocumentsGrid({
   onRefresh,
   now,
   onKeyNavigate,
+  processingPaused,
 
   people,
   onAssign,
   onPickUp,
+  onTagsChange,
 
   onDownloadOriginal,
   onDownloadOutput,
   onCopyLink,
   onReprocess,
+  onDelete,
+  onArchive,
+  onRestore,
   onOpenDetails,
   onOpenNotes,
   onClosePreview,
   expandedId,
   expandedContent,
+  presenceByDocument,
 }: {
+  workspaceId: string;
   documents: DocumentEntry[];
+  density: ListDensity;
   activeId: string | null;
   selectedIds: Set<string>;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, options?: SelectionOptions) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   allVisibleSelected: boolean;
+  someVisibleSelected: boolean;
   onActivate: (id: string) => void;
   onUploadClick: () => void;
   onClearFilters: () => void;
@@ -79,47 +130,78 @@ export function DocumentsGrid({
   onRefresh: () => void;
   now: number;
   onKeyNavigate: (event: KeyboardEvent<HTMLDivElement>) => void;
+  processingPaused: boolean;
 
   people: WorkspacePerson[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
   onPickUp: (documentId: string) => void;
+  onTagsChange: (documentId: string, nextTags: string[]) => void;
 
   onDownloadOriginal: (doc: DocumentEntry | null) => void;
   onDownloadOutput: (doc: DocumentEntry) => void;
   onCopyLink: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry) => void;
+  onDelete: (doc: DocumentEntry) => void;
+  onArchive: (doc: DocumentEntry) => void;
+  onRestore: (doc: DocumentEntry) => void;
   onOpenDetails: (docId: string) => void;
   onOpenNotes: (docId: string) => void;
   onClosePreview: () => void;
   expandedId?: string | null;
   expandedContent?: ReactNode;
+  presenceByDocument?: Record<string, PresenceParticipant[]>;
 }) {
-  const hasSelectable = documents.some((doc) => doc.record);
+  const hasSelectableRows = useMemo(() => documents.some((doc) => Boolean(doc.record)), [documents]);
+
   const showLoading = isLoading && documents.length === 0;
   const showError = isError && documents.length === 0;
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+
+  const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const densityStyles = useMemo(() => getDensityStyles(density), [density]);
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
+
+  // Keep getItemKey stable; virtualizer notifies on option changes.
+  const getItemKey = useCallback((index: number) => documentsRef.current[index]?.id ?? index, []);
+  const estimateSize = useCallback(() => (density === "compact" ? 96 : 120), [density]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: documents.length,
+    getScrollElement: () => scrollRef.current,
+    // Keep this roughly stable; we still allow measuring because content can vary slightly.
+    estimateSize,
+    overscan: 10,
+    getItemKey,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
 
   useEffect(() => {
-    if (!activeId) return;
-    const container = listRef.current;
-    const row = rowRefs.current.get(activeId);
-    if (!container || !row) return;
-    const nextTop = row.offsetTop - container.offsetTop;
-    container.scrollTo({ top: Math.max(0, nextTop) });
-  }, [activeId]);
+    if (!headerCheckboxRef.current) return;
+    headerCheckboxRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [allVisibleSelected, someVisibleSelected]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
-      <div className="shrink-0 border-b border-border bg-background/40 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border/70 bg-background/60 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <div
+          className={clsx(
+            "grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center",
+            densityStyles.rowGap,
+          )}
+        >
           <div>
             <input
               type="checkbox"
+              ref={headerCheckboxRef}
               checked={allVisibleSelected}
               onChange={(event) => (event.target.checked ? onSelectAll() : onClearSelection())}
               aria-label="Select all visible documents"
-              disabled={!hasSelectable}
+              disabled={!hasSelectableRows}
+              className="h-4 w-4 rounded border-border-strong"
             />
           </div>
           <div>Document</div>
@@ -131,8 +213,9 @@ export function DocumentsGrid({
         </div>
       </div>
 
+      {/* Scroll region */}
       <div
-        ref={listRef}
+        ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
@@ -169,196 +252,278 @@ export function DocumentsGrid({
           </div>
         ) : (
           <div className="flex flex-col">
-            {documents.map((doc) => {
-              const isSelectable = Boolean(doc.record);
-              const outputRun = getDocumentOutputRun(doc.record);
-              const canDownloadOutput = Boolean(outputRun?.run_id);
-              const isUnassigned = !doc.assigneeKey;
-              const isExpanded = Boolean(expandedContent && expandedId === doc.id);
-              const isActive = Boolean(isExpanded && activeId === doc.id);
-              const previewId = `documents-preview-${doc.id}`;
-              const hasNotes = doc.commentCount > 0;
-              const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
+            <div className="relative" style={{ height: rowVirtualizer.getTotalSize() }}>
+              {virtualRows.map((virtualRow: VirtualItem) => {
+                const doc = documents[virtualRow.index];
+                if (!doc) return null;
 
-              return (
-                <div
-                  key={doc.id}
-                  ref={(node) => {
-                    if (node) rowRefs.current.set(doc.id, node);
-                    else rowRefs.current.delete(doc.id);
-                  }}
-                  className="border-b border-border/70"
-                >
+                const canSelectRow = Boolean(doc.record);
+                const canEditTags = canSelectRow;
+
+                const outputRun = getDocumentOutputRun(doc.record);
+                const canDownloadOutput = Boolean(outputRun?.run_id);
+
+                const isExpanded = Boolean(expandedContent && expandedId === doc.id);
+                const isActive = Boolean(isExpanded && activeId === doc.id);
+                const isSelected = selectedIds.has(doc.id);
+
+                const isUnassigned = !doc.assignee_key;
+                const isArchived = doc.status === "archived";
+
+                const rowPresence = presenceByDocument?.[doc.id] ?? [];
+                const hasPresence = rowPresence.length > 0;
+                const presenceItems: AvatarStackItem[] = rowPresence.map((participant) => ({
+                  id: participant.client_id,
+                  name: participant.display_name,
+                  email: participant.email,
+                }));
+
+                const previewId = `documents-preview-${doc.id}`;
+                const hasNotes = doc.comment_count > 0;
+
+                const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
+
+                const handleRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+                  if (isInteractiveTarget(event.target, event.currentTarget)) return;
+
+                  // Multi-select
+                  if (isSelectionModifier(event)) {
+                    if (!canSelectRow) return;
+                    const isRange = isRangeSelection(event);
+                    onSelect(doc.id, {
+                      mode: isRange ? "range" : "toggle",
+                      checked: isRange ? true : !isSelected,
+                    });
+                    return;
+                  }
+
+                  onActivate(doc.id);
+                };
+
+                const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  if (event.currentTarget !== event.target) return;
+                  event.preventDefault();
+                  onActivate(doc.id);
+                };
+
+                const handleSelectClick = (event: ReactMouseEvent<HTMLInputElement>) => {
+                  event.stopPropagation();
+                  if (!canSelectRow) return;
+                  const isRange = isRangeSelection(event);
+                  onSelect(doc.id, {
+                    mode: isRange ? "range" : "toggle",
+                    checked: isRange ? true : !isSelected,
+                  });
+                };
+
+                return (
                   <div
-                    role="button"
-                    onClick={(event) => {
-                      if (isInteractiveTarget(event.target, event.currentTarget)) return;
-                      onActivate(doc.id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      if (event.currentTarget !== event.target) return;
-                      event.preventDefault();
-                      onActivate(doc.id);
-                    }}
-                    className={clsx(
-                      "group grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                      isActive ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
-                    )}
-                    tabIndex={0}
-                    aria-expanded={isExpanded}
-                    aria-controls={isExpanded ? previewId : undefined}
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    className="absolute left-0 top-0 w-full border-b border-border/70"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    <div>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(doc.id)}
-                        onChange={() => {
-                          if (isSelectable) onSelect(doc.id);
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                        aria-label={`Select ${doc.name}`}
-                        disabled={!isSelectable}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">
-                        <DocumentIcon className="h-4 w-4 text-muted-foreground" />
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={handleRowClick}
+                      onKeyDown={handleRowKeyDown}
+                      aria-expanded={isExpanded}
+                      aria-controls={isExpanded ? previewId : undefined}
+                      className={clsx(
+                        "group grid cursor-pointer select-none grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center transition-colors duration-150 ease-out motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        densityStyles.rowGap,
+                        densityStyles.rowPadding,
+                        isActive
+                          ? "bg-brand-50 dark:bg-brand-500/20"
+                          : isSelected
+                            ? "bg-muted/40 dark:bg-muted/30"
+                            : "hover:bg-muted/20 dark:hover:bg-muted/40",
+                        hasPresence && !isActive ? "ring-1 ring-brand-200/50 ring-inset" : null,
+                      )}
+                    >
+                      <div>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => undefined}
+                          onClick={handleSelectClick}
+                          aria-label={`Select ${doc.name}`}
+                          disabled={!canSelectRow}
+                          className="h-4 w-4 rounded border-border-strong"
+                        />
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
-                        <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="text-[10px] font-semibold text-muted-foreground">
-                            {fileTypeLabel(doc.fileType)}
-                          </span>
-                          <span aria-hidden className="text-muted-foreground">·</span>
-                          <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
-                          <span aria-hidden className="text-muted-foreground">·</span>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onOpenNotes(doc.id);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
-                            title={hasNotes ? `${doc.commentCount} notes` : "No notes yet"}
-                          >
-                            <ChatIcon className="h-3 w-3" />
-                            <span className="tabular-nums">{doc.commentCount}</span>
-                          </button>
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <StatusPill status={doc.status} />
-                      <MappingBadge mapping={doc.mapping} />
-                    </div>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={clsx(
+                            "flex items-center justify-center rounded-xl border border-border bg-background",
+                            densityStyles.iconSize,
+                          )}
+                        >
+                          <DocumentIcon className="h-4 w-4 text-muted-foreground" />
+                        </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background">
-                        <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                      </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
 
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-foreground">
-                          {doc.assigneeLabel ?? "Unassigned"}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          {isUnassigned ? (
+                          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="text-[10px] font-semibold text-muted-foreground">
+                              {fileTypeLabel(doc.file_type)}
+                            </span>
+                            <span aria-hidden className="text-muted-foreground">
+                              ·
+                            </span>
+                            <span>Uploaded {formatRelativeTime(now, doc.created_at)}</span>
+                            <span aria-hidden className="text-muted-foreground">
+                              ·
+                            </span>
                             <button
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                onPickUp(doc.id);
+                                onOpenNotes(doc.id);
                               }}
-                              className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
+                              title={hasNotes ? `${doc.comment_count} notes` : "No notes yet"}
                             >
-                              Pick up
+                              <ChatIcon className="h-3 w-3" />
+                              <span className="tabular-nums">{doc.comment_count}</span>
                             </button>
-                          ) : null}
-                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <span className="font-semibold">Assign</span>
-                            <div data-ignore-row-click className="min-w-0">
-                              <PeoplePicker
-                                people={people}
-                                value={[doc.assigneeKey ?? unassignedKey()]}
-                                onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
-                                placeholder="Assignee..."
-                                includeUnassigned
-                                buttonClassName="min-w-0 max-w-[11rem] px-2 py-1 text-[11px]"
-                              />
+                          </p>
+
+                          {hasPresence ? (
+                            <div className="mt-1 flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
+                              <AvatarStack items={presenceItems} size="xs" max={3} />
+                              <span>Viewing</span>
                             </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <StatusPill status={doc.status} queueState={doc.queue_state} queueReason={doc.queue_reason} />
+                          <MappingBadge mapping={doc.mapping_health} />
+                        </div>
+                        {doc.upload && doc.upload.status !== "succeeded" ? <UploadProgress upload={doc.upload} /> : null}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={clsx(
+                            "inline-flex items-center justify-center rounded-full border border-border bg-background",
+                            densityStyles.avatarSize,
+                          )}
+                        >
+                          <UserIcon className="h-4 w-4 text-muted-foreground" />
+                        </span>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <PeoplePicker
+                              people={people}
+                              value={[doc.assignee_key ?? unassignedKey()]}
+                              onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                              placeholder="Assignee..."
+                              includeUnassigned
+                              buttonClassName={densityStyles.pickerButtonClass}
+                            />
+
+                            {isUnassigned ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onPickUp(doc.id);
+                                }}
+                                className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                              >
+                                Assign to me
+                              </button>
+                            ) : null}
                           </div>
+                        </div>
+                      </div>
+
+                      <div className="flex min-w-0 items-center">
+                        <TagPicker
+                          workspaceId={workspaceId}
+                          selected={doc.tags}
+                          onToggle={(tag) => {
+                            const nextTags = doc.tags.includes(tag)
+                              ? doc.tags.filter((t) => t !== tag)
+                              : [...doc.tags, tag];
+                            onTagsChange(doc.id, nextTags);
+                          }}
+                          placeholder="Add tags"
+                          disabled={!canEditTags}
+                          buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
+                        />
+                      </div>
+
+                      <div className="text-right text-xs text-muted-foreground">
+                        {formatRelativeTime(now, doc.activity_at ?? doc.updated_at)}
+                      </div>
+
+                      <div className="flex justify-end" data-ignore-row-click>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (canDownloadOutput) onDownloadOutput(doc);
+                            }}
+                            disabled={!canDownloadOutput}
+                            aria-label={downloadLabel}
+                            title={downloadLabel}
+                            className={clsx(
+                              "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition",
+                              "hover:bg-background hover:text-muted-foreground",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                              "disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card disabled:hover:text-muted-foreground",
+                            )}
+                          >
+                            <DownloadIcon className="h-4 w-4" />
+                          </button>
+
+                          <RowActionsMenu
+                            onOpenDetails={() => onOpenDetails(doc.id)}
+                            onReprocess={isExpanded ? () => onReprocess(doc) : undefined}
+                            reprocessDisabled={!doc.record || !isExpanded || processingPaused}
+                            showClosePreview={isExpanded}
+                            onClosePreview={onClosePreview}
+                            onDownloadOriginal={() => onDownloadOriginal(doc)}
+                            onCopyLink={() => onCopyLink(doc)}
+                            onDelete={() => onDelete(doc)}
+                            onArchive={() => onArchive(doc)}
+                            onRestore={() => onRestore(doc)}
+                            isArchived={isArchived}
+                            originalDisabled={!doc.record}
+                            copyDisabled={!doc.record}
+                            deleteDisabled={!doc.record}
+                            archiveDisabled={!doc.record}
+                          />
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
-                      {doc.tags.length > 0 ? (
-                        <span className="rounded-full border border-border bg-background px-2 py-0.5">
-                          {doc.tags[0]}
-                          {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
-                        </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                    </div>
-
-                    <div className="text-right text-xs text-muted-foreground">{formatRelativeTime(now, doc.updatedAt)}</div>
-
-                    <div className="flex justify-end" data-ignore-row-click>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (canDownloadOutput) onDownloadOutput(doc);
-                          }}
-                          disabled={!canDownloadOutput}
-                          aria-label={downloadLabel}
-                          title={downloadLabel}
-                          className={clsx(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition",
-                            "hover:bg-background hover:text-muted-foreground",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                            "disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card disabled:hover:text-muted-foreground",
-                          )}
-                        >
-                          <DownloadIcon className="h-4 w-4" />
-                        </button>
-
-                        <RowActionsMenu
-                          onOpenDetails={() => onOpenDetails(doc.id)}
-                          onReprocess={isExpanded ? () => onReprocess(doc) : undefined}
-                          reprocessDisabled={!doc.record || !isExpanded}
-                          showClosePreview={isExpanded}
-                          onClosePreview={onClosePreview}
-                          onDownloadOriginal={() => onDownloadOriginal(doc)}
-                          onCopyLink={() => onCopyLink(doc)}
-                          originalDisabled={!doc.record}
-                          copyDisabled={!doc.record}
-                        />
+                    {isExpanded ? (
+                      <div
+                        id={previewId}
+                        role="region"
+                        aria-label={`Preview details for ${doc.name}`}
+                        className="bg-background/60 px-6 pb-4 pt-2"
+                      >
+                        <div className="rounded-2xl border border-border bg-card shadow-sm">{expandedContent}</div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
-
-                  {isExpanded ? (
-                    <div
-                      id={previewId}
-                      role="region"
-                      aria-label={`Preview details for ${doc.name}`}
-                      className="bg-background/60 px-6 pb-4 pt-2"
-                    >
-                      <div className="rounded-2xl border border-border bg-card shadow-sm">
-                        {expandedContent}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
 
             {hasNextPage ? (
               <div className="flex justify-center py-4">

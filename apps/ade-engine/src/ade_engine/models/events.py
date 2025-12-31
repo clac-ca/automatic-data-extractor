@@ -94,9 +94,9 @@ class TableExtractedPayloadV1(StrictPayloadV1):
 class TableMappedPayloadV1(StrictPayloadV1):
     sheet_name: str
     table_index: NonNegativeInt
-    mapped_fields: NonNegativeInt
-    total_fields: NonNegativeInt
-    passthrough_fields: NonNegativeInt
+    detected_fields: NonNegativeInt
+    expected_fields: NonNegativeInt
+    not_detected_fields: NonNegativeInt
 
 
 class TableMappingPatchedPayloadV1(StrictPayloadV1):
@@ -176,7 +176,7 @@ ExecutionStatus = Literal["succeeded", "failed", "cancelled"]
 EvaluationOutcome = Literal["success", "partial", "failure", "unknown"]
 FindingSeverity = Literal["info", "warning", "error"]
 
-MappingStatus = Literal["mapped", "ambiguous", "unmapped", "passthrough"]
+MappingStatus = Literal["mapped", "unmapped"]
 MappingMethod = Literal["classifier", "rules", "patched"]
 
 
@@ -247,32 +247,33 @@ class ColumnsCount(StrictModel):
     empty: NonNegativeInt
 
     mapped: NonNegativeInt
-    ambiguous: NonNegativeInt
     unmapped: NonNegativeInt
-    passthrough: NonNegativeInt
 
     @model_validator(mode="after")
     def _cols_ok(self) -> "ColumnsCount":
         if self.empty > self.total:
             raise ValueError("columns.empty must be <= columns.total")
 
-        if any(x > self.total for x in (self.mapped, self.ambiguous, self.unmapped, self.passthrough)):
+        if any(x > self.total for x in (self.mapped, self.unmapped)):
             raise ValueError("column mapping counts must be <= columns.total")
 
-        if (self.mapped + self.ambiguous + self.unmapped + self.passthrough) != self.total:
-            raise ValueError("columns.(mapped+ambiguous+unmapped+passthrough) must equal columns.total")
+        if (self.mapped + self.unmapped) != self.total:
+            raise ValueError("columns.(mapped+unmapped) must equal columns.total")
 
         return self
 
 
 class FieldsCount(StrictModel):
     expected: NonNegativeInt
-    mapped: NonNegativeInt
+    detected: NonNegativeInt
+    not_detected: NonNegativeInt
 
     @model_validator(mode="after")
     def _fields_ok(self) -> "FieldsCount":
-        if self.mapped > self.expected:
-            raise ValueError("fields.mapped must be <= fields.expected")
+        if any(x > self.expected for x in (self.detected, self.not_detected)):
+            raise ValueError("fields.detected/not_detected must be <= fields.expected")
+        if (self.detected + self.not_detected) != self.expected:
+            raise ValueError("fields.(detected+not_detected) must equal fields.expected")
         return self
 
 
@@ -327,16 +328,16 @@ class FieldOccurrences(StrictModel):
 class FieldSummary(StrictModel):
     field: str
     label: str | None = None
-    mapped: bool
+    detected: bool
     best_mapping_score: NonNegativeFloat | None = None
     occurrences: FieldOccurrences
 
     @model_validator(mode="after")
     def _field_ok(self) -> "FieldSummary":
-        if self.mapped and self.best_mapping_score is None:
-            raise ValueError("best_mapping_score must be set when mapped==true")
-        if not self.mapped and self.best_mapping_score is not None:
-            raise ValueError("best_mapping_score must be null when mapped==false")
+        if self.detected and self.best_mapping_score is None:
+            raise ValueError("best_mapping_score must be set when detected==true")
+        if not self.detected and self.best_mapping_score is not None:
+            raise ValueError("best_mapping_score must be null when detected==false")
         return self
 
 
@@ -351,9 +352,9 @@ def _validate_fields_rollup(fields: list[FieldSummary], counts: Counts, *, scope
     if len(fields) != counts.fields.expected:
         raise ValueError(f"{scope}.fields must contain exactly counts.fields.expected entries when provided")
 
-    mapped = sum(1 for f in fields if f.mapped)
-    if mapped != counts.fields.mapped:
-        raise ValueError(f"{scope}.counts.fields.mapped must equal number of fields with mapped==true")
+    detected = sum(1 for f in fields if f.detected)
+    if detected != counts.fields.detected:
+        raise ValueError(f"{scope}.counts.fields.detected must equal number of fields with detected==true")
 
 
 class OutputsNormalized(StrictModel):
@@ -427,7 +428,6 @@ UnmappedReason = Literal[
     "ambiguous_top_candidates",
     "duplicate_field",
     "empty_or_placeholder_header",
-    "passthrough_policy",
 ]
 
 MAX_CANDIDATES = 3
@@ -460,25 +460,11 @@ class Mapping(StrictModel):
             if self.unmapped_reason is not None:
                 raise ValueError("unmapped_reason must be null when status == 'mapped'")
 
-        elif self.status == "ambiguous":
-            if self.field is not None or self.score is not None or self.method is not None:
-                raise ValueError("ambiguous mapping must not include field/score/method")
-            if not self.candidates:
-                raise ValueError("ambiguous mapping must include candidates")
-            if self.unmapped_reason is None:
-                raise ValueError("unmapped_reason must be provided when status == 'ambiguous'")
-
         elif self.status == "unmapped":
             if self.field is not None or self.score is not None or self.method is not None:
                 raise ValueError("unmapped mapping must not include field/score/method")
             if self.unmapped_reason is None:
                 raise ValueError("unmapped_reason must be provided when status == 'unmapped'")
-
-        else:  # passthrough
-            if self.field is not None or self.score is not None or self.method is not None:
-                raise ValueError("passthrough mapping must not include field/score/method")
-            if self.unmapped_reason != "passthrough_policy":
-                raise ValueError("passthrough mapping must set unmapped_reason == 'passthrough_policy'")
 
         return self
 

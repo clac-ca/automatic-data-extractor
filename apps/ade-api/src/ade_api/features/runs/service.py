@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.events import (
@@ -22,7 +23,6 @@ from ade_api.common.events import (
     coerce_event_record,
     new_event_record,
 )
-from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
@@ -33,6 +33,8 @@ from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.workspaces.repository import WorkspacesRepository
+from ade_api.features.workspaces.settings import read_processing_paused
 from ade_api.features.runs.event_stream import (
     RunEventContext,
     RunEventStream,
@@ -54,12 +56,14 @@ from ade_api.models import (
     Configuration,
     ConfigurationStatus,
     Document,
+    DocumentStatus,
     Run,
     RunField,
     RunMetrics,
     RunStatus,
     RunTableColumn,
 )
+from ade_api.features.documents.schemas import DocumentOut
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -101,6 +105,9 @@ logger = logging.getLogger(__name__)
 event_logger = logging.getLogger("ade_api.runs.events")
 
 DEFAULT_EVENTS_PAGE_LIMIT = 1000
+DEFAULT_REQUEUE_DELAY_SECONDS = 5
+DEFAULT_BACKOFF_BASE_SECONDS = 1
+DEFAULT_BACKOFF_MAX_SECONDS = 60
 
 
 # Stream frames include engine output frames consumed internally plus
@@ -175,6 +182,8 @@ class RunsService:
         build_event_streams: RunEventStreamRegistry | None = None,
     ) -> None:
         from ade_api.features.builds.service import BuildsService
+        from ade_api.features.documents.change_feed import DocumentChangesService
+        from ade_api.features.documents.service import DocumentsService
 
         self._session = session
         self._settings = settings
@@ -182,6 +191,7 @@ class RunsService:
         self._runs = RunsRepository(session)
         self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
+        self._workspaces = WorkspacesRepository(session)
         self._safe_mode_service = safe_mode_service
         self._storage = storage or ConfigStorage(
             settings=settings,
@@ -194,6 +204,8 @@ class RunsService:
             storage=self._storage,
             event_streams=self._build_event_streams,
         )
+        self._document_changes = DocumentChangesService(session=session, settings=settings)
+        self._documents_service = DocumentsService(session=session, settings=settings)
 
         if settings.documents_dir is None:
             raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
@@ -201,6 +213,11 @@ class RunsService:
             raise RuntimeError("ADE_RUNS_DIR is not configured")
 
         self._runs_dir = Path(settings.runs_dir)
+        lease_seconds = int(settings.run_lease_seconds)
+        if settings.run_timeout_seconds:
+            lease_seconds = max(lease_seconds, int(settings.run_timeout_seconds))
+        self._run_lease_seconds = lease_seconds
+        self._run_max_attempts = int(settings.run_max_attempts)
 
     # --------------------------------------------------------------------- #
     # Run lifecycle: creation and execution
@@ -235,44 +252,58 @@ class RunsService:
             document_id=input_document_id,
         )
 
-        run_id = self._generate_run_id()
-
-        build, _ = await self._builds_service.ensure_build_for_run(
-            workspace_id=configuration.workspace_id,
+        existing = await self._runs.list_active_for_documents(
             configuration_id=configuration.id,
-            force_rebuild=options.force_rebuild,
-            run_id=run_id,
-            reason="on_demand",
+            document_ids=[input_document_id],
         )
-        build_id = build.id
-        if build.status is not BuildStatus.READY:
-            await self._builds_service.launch_build_if_needed(
-                build=build,
-                reason="run_requested",
-                run_id=run_id,
+        if existing:
+            run = existing[0]
+            configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
+            await self._session.commit()
+            existing_options = await self.load_run_options(run)
+            mode_literal = "validate" if existing_options.validate_only else "execute"
+            await self._ensure_run_queued_event(
+                run=run,
+                mode_literal=mode_literal,
+                options=existing_options,
             )
+            logger.info(
+                "run.prepare.noop",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    input_document_id=input_document_id,
+                    status=run.status.value,
+                ),
+            )
+            return run
 
         await self._enforce_queue_capacity()
 
         selected_sheet_names = self._select_input_sheet_names(options)
-
-        run = Run(
-            id=run_id,
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            status=RunStatus.QUEUED,
-            input_document_id=input_document_id,
-            input_sheet_names=selected_sheet_names or None,
-            build_id=build_id,
+        run_options_payload = options.model_dump(mode="json", exclude_none=True)
+        await self._insert_runs_for_documents(
+            configuration=configuration,
+            document_ids=[input_document_id],
+            input_sheet_names_by_document_id={
+                input_document_id: selected_sheet_names or None,
+            },
+            run_options_by_document_id={
+                input_document_id: run_options_payload,
+            },
+            document_status=None,
+            existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
         )
-        self._session.add(run)
 
         # Touch configuration usage timestamp.
         configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-
-        await self._session.flush()
         await self._session.commit()
-        await self._session.refresh(run)
+
+        run = await self._require_active_run(
+            configuration_id=configuration.id,
+            document_id=input_document_id,
+        )
 
         mode_literal = "validate" if options.validate_only else "execute"
         await self._emit_api_event(
@@ -281,7 +312,7 @@ class RunsService:
             payload={
                 "status": "queued",
                 "mode": mode_literal,
-                "options": options.model_dump(exclude_none=True),
+                "options": run_options_payload,
             },
         )
 
@@ -328,6 +359,8 @@ class RunsService:
         configuration_id: UUID,
         document_ids: Sequence[UUID],
         options: RunBatchCreateOptions,
+        input_sheet_names_by_document_id: dict[UUID, list[str]] | None = None,
+        active_sheet_only_by_document_id: dict[UUID, bool] | None = None,
     ) -> list[Run]:
         """Create queued runs for each document id, enforcing all-or-nothing semantics."""
 
@@ -351,73 +384,88 @@ class RunsService:
             document_ids=document_ids,
         )
 
-        run_ids = [self._generate_run_id() for _ in document_ids]
+        batch_active_sheet_only = bool(getattr(options, "active_sheet_only", False))
+        normalized_sheet_names: dict[UUID, list[str] | None] = {}
+        active_sheet_only_lookup: dict[UUID, bool] = {}
+        run_options_by_document_id: dict[UUID, RunCreateOptions] = {}
 
-        build, _ = await self._builds_service.ensure_build_for_run(
-            workspace_id=configuration.workspace_id,
+        existing = await self._runs.list_active_for_documents(
             configuration_id=configuration.id,
-            force_rebuild=options.force_rebuild,
-            run_id=run_ids[0],
-            reason="on_demand",
+            document_ids=list(document_ids),
         )
-        if build.status is not BuildStatus.READY:
-            await self._builds_service.launch_build_if_needed(
-                build=build,
-                reason="run_requested",
-                run_id=run_ids[0],
-            )
+        existing_ids = {run.input_document_id for run in existing}
+        new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
 
-        await self._enforce_queue_capacity(requested=len(document_ids))
+        if new_document_ids:
+            await self._enforce_queue_capacity(requested=len(new_document_ids))
 
-        runs: list[Run] = []
-        for run_id, document_id in zip(run_ids, document_ids, strict=True):
-            run = Run(
-                id=run_id,
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                status=RunStatus.QUEUED,
-                input_document_id=document_id,
-                input_sheet_names=None,
-                build_id=build.id,
+            for document_id in new_document_ids:
+                input_sheet_names = None
+                if input_sheet_names_by_document_id and document_id in input_sheet_names_by_document_id:
+                    raw_names = input_sheet_names_by_document_id.get(document_id) or []
+                    normalized = self._select_input_sheet_names(
+                        RunCreateOptions(input_document_id=document_id, input_sheet_names=raw_names),
+                    )
+                    input_sheet_names = normalized or None
+                active_sheet_only = batch_active_sheet_only
+                if active_sheet_only_by_document_id and document_id in active_sheet_only_by_document_id:
+                    active_sheet_only = bool(active_sheet_only_by_document_id.get(document_id))
+                if input_sheet_names:
+                    active_sheet_only = False
+                normalized_sheet_names[document_id] = input_sheet_names
+                active_sheet_only_lookup[document_id] = active_sheet_only
+                run_options_by_document_id[document_id] = RunCreateOptions(
+                    dry_run=options.dry_run,
+                    validate_only=options.validate_only,
+                    force_rebuild=options.force_rebuild,
+                    log_level=options.log_level,
+                    input_document_id=document_id,
+                    input_sheet_names=input_sheet_names,
+                    active_sheet_only=active_sheet_only,
+                    metadata=options.metadata,
+                )
+
+            await self._insert_runs_for_documents(
+                configuration=configuration,
+                document_ids=new_document_ids,
+                input_sheet_names_by_document_id=normalized_sheet_names,
+                run_options_by_document_id={
+                    doc_id: run_options.model_dump(mode="json", exclude_none=True)
+                    for doc_id, run_options in run_options_by_document_id.items()
+                },
+                document_status=None,
+                existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
             )
-            self._session.add(run)
-            runs.append(run)
 
         configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-
-        await self._session.flush()
         await self._session.commit()
 
-        for run, document_id in zip(runs, document_ids, strict=True):
-            await self._session.refresh(run)
-            run_options = RunCreateOptions(
-                dry_run=options.dry_run,
-                validate_only=options.validate_only,
-                force_rebuild=options.force_rebuild,
-                log_level=options.log_level,
-                input_document_id=document_id,
-                input_sheet_names=None,
-                metadata=options.metadata,
-            )
-            mode_literal = "validate" if options.validate_only else "execute"
-            await self._emit_api_event(
+        runs = await self._runs.list_active_for_documents(
+            configuration_id=configuration.id,
+            document_ids=list(document_ids),
+        )
+
+        for run in runs:
+            document_id = run.input_document_id
+            run_options = run_options_by_document_id.get(document_id)
+            if run_options is None:
+                run_options = await self.load_run_options(run)
+            mode_literal = "validate" if run_options.validate_only else "execute"
+            await self._ensure_run_queued_event(
                 run=run,
-                type_="run.queued",
-                payload={
-                    "status": "queued",
-                    "mode": mode_literal,
-                    "options": run_options.model_dump(exclude_none=True),
-                },
+                mode_literal=mode_literal,
+                options=run_options,
             )
 
-        logger.info(
-            "run.prepare.batch.success",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                count=len(runs),
-            ),
-        )
+        if runs:
+            logger.info(
+                "run.prepare.batch.success",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    count=len(runs),
+                ),
+            )
         return runs
 
     async def prepare_runs_batch_for_workspace(
@@ -441,17 +489,9 @@ class RunsService:
         )
 
     async def load_run_options(self, run: Run) -> RunCreateOptions:
-        """Rehydrate run options from the persisted run.queued event."""
+        """Rehydrate run options from the run row."""
 
-        payload: dict[str, Any] = {}
-        stream = self._event_stream_for_run(run)
-        try:
-            for event in stream.iter_persisted(after_sequence=0):
-                if event.get("event") == "run.queued":
-                    payload = (event.get("data") or {}).get("options") or {}
-                    break
-        except Exception:
-            payload = {}
+        payload: dict[str, Any] = dict(run.run_options or {})
 
         if "input_document_id" not in payload and run.input_document_id:
             payload["input_document_id"] = str(run.input_document_id)
@@ -470,80 +510,490 @@ class RunsService:
                 input_sheet_names=list(run.input_sheet_names or []),
             )
 
-    async def claim_next_run(self) -> Run | None:
-        candidate = await self._runs.next_queued_with_terminal_build()
-        if candidate is None:
-            return None
-        run, build_status = candidate
-        if build_status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
-            build = await self._builds_service.get_build_or_raise(
-                run.build_id,
-                workspace_id=run.workspace_id,
+    async def claim_next_run(self, *, worker_id: str) -> Run | None:
+        now = utc_now()
+        lease_expires_at = now + timedelta(seconds=self._run_lease_seconds)
+        candidate = (
+            select(Run.id)
+            .where(
+                Run.status == RunStatus.QUEUED,
+                Run.available_at <= now,
+                Run.attempt_count < Run.max_attempts,
             )
-            async for _ in self._fail_run_due_to_build(run=run, build=build):
-                pass
+            .order_by(Run.created_at.asc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        # One statement claims a single queued run and sets a lease; races simply affect rowcount.
+        stmt = (
+            update(Run)
+            .where(
+                Run.id == candidate,
+                Run.status == RunStatus.QUEUED,
+            )
+            .values(
+                status=RunStatus.RUNNING,
+                claimed_by=worker_id,
+                claim_expires_at=lease_expires_at,
+                started_at=now,
+                attempt_count=Run.attempt_count + 1,
+                error_message=None,
+            )
+            .returning(Run.id)
+        )
+        result = await self._session.execute(stmt)
+        run_id = result.scalar_one_or_none()
+        await self._session.commit()
+        if run_id is None:
             return None
+        return await self._require_run(run_id)
 
-        claimed = await self._claim_run(run.id)
-        if not claimed:
-            return None
-        return await self._require_run(run.id)
+    async def enqueue_pending_runs_for_configuration(
+        self,
+        *,
+        configuration_id: UUID,
+        batch_size: int | None = None,
+    ) -> int:
+        """Queue runs for uploaded documents without runs using the active configuration."""
+
+        try:
+            configuration = await self._resolve_configuration(configuration_id)
+        except ConfigurationNotFoundError:
+            return 0
+        if await self._processing_paused(configuration.workspace_id):
+            logger.info(
+                "run.pending.enqueue.skip.processing_paused",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                ),
+            )
+            return 0
+        if configuration.status is not ConfigurationStatus.ACTIVE:
+            logger.info(
+                "run.pending.enqueue.skip.inactive_config",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    status=configuration.status.value,
+                ),
+            )
+            return 0
+
+        batch_size = batch_size or self._settings.queue_size or 100
+        if batch_size <= 0:
+            return 0
+
+        total = 0
+        while True:
+            remaining = await self._remaining_queue_capacity()
+            if remaining is not None and remaining <= 0:
+                break
+            limit = batch_size if remaining is None else min(batch_size, remaining)
+            documents = await self._pending_documents(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                limit=limit,
+            )
+            if not documents:
+                break
+            document_ids = [doc.id for doc in documents]
+            sheet_names_by_document_id: dict[UUID, list[str]] = {}
+            active_sheet_only_by_document_id: dict[UUID, bool] = {}
+            for document in documents:
+                run_options = self._documents_service.read_upload_run_options(document.attributes)
+                if run_options and run_options.input_sheet_names is not None:
+                    sheet_names_by_document_id[document.id] = list(run_options.input_sheet_names)
+                if run_options and run_options.active_sheet_only:
+                    active_sheet_only_by_document_id[document.id] = True
+            try:
+                runs = await self.prepare_runs_batch(
+                    configuration_id=configuration.id,
+                    document_ids=document_ids,
+                    options=RunBatchCreateOptions(),
+                    input_sheet_names_by_document_id=sheet_names_by_document_id or None,
+                    active_sheet_only_by_document_id=active_sheet_only_by_document_id or None,
+                )
+            except RunQueueFullError:
+                logger.warning(
+                    "run.pending.enqueue.queue_full",
+                    extra=log_context(
+                        workspace_id=configuration.workspace_id,
+                        configuration_id=configuration.id,
+                    ),
+                )
+                break
+            total += len(runs)
+            if len(document_ids) < limit:
+                break
+
+        if total:
+            logger.info(
+                "run.pending.enqueue.completed",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    count=total,
+                ),
+            )
+        return total
+
+    async def is_processing_paused(self, *, workspace_id: UUID) -> bool:
+        return await self._processing_paused(workspace_id)
+
+    async def _maybe_enqueue_pending_runs(self, *, workspace_id: UUID) -> None:
+        try:
+            configuration = await self._configs.get_active(workspace_id)
+        except Exception:  # pragma: no cover - defensive guard
+            logger.exception(
+                "run.pending.enqueue.auto.failed",
+                extra=log_context(workspace_id=workspace_id),
+            )
+            return
+        if configuration is None:
+            return
+        try:
+            await self.enqueue_pending_runs_for_configuration(configuration_id=configuration.id)
+        except Exception:  # pragma: no cover - defensive guard
+            logger.exception(
+                "run.pending.enqueue.auto.failed",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration.id,
+                ),
+            )
 
     async def expire_stuck_runs(self) -> int:
-        timeout_seconds = self._settings.run_timeout_seconds
-        if not timeout_seconds:
-            return 0
-        horizon = utc_now() - timedelta(seconds=timeout_seconds)
+        horizon = utc_now()
         stmt = (
             select(Run)
             .where(
                 Run.status == RunStatus.RUNNING,
-                Run.started_at.is_not(None),
-                Run.started_at < horizon,
+                Run.claim_expires_at.is_not(None),
+                Run.claim_expires_at < horizon,
             )
-            .order_by(Run.started_at.asc())
+            .order_by(Run.claim_expires_at.asc())
         )
         result = await self._session.execute(stmt)
         runs = list(result.scalars().all())
         if not runs:
             return 0
 
-        message = f"Run timed out after {timeout_seconds}s"
+        message = "Run lease expired"
         for run in runs:
-            run_dir = self._run_dir_for_run(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-            )
-            paths_snapshot = self._finalize_paths(
-                run_dir=run_dir,
-                default_paths=RunPathsSnapshot(),
-            )
-            completion = await self._complete_run(
-                run,
-                status=RunStatus.FAILED,
-                exit_code=1,
-                error_message=message,
-            )
-            await self._emit_api_event(
-                run=completion,
-                type_="run.complete",
-                payload=self._run_completed_payload(
+            if run.attempt_count >= run.max_attempts:
+                run_dir = self._run_dir_for_run(
+                    workspace_id=run.workspace_id,
+                    run_id=run.id,
+                )
+                paths_snapshot = self._finalize_paths(
+                    run_dir=run_dir,
+                    default_paths=RunPathsSnapshot(),
+                )
+                completion = await self._complete_run(
+                    run,
+                    status=RunStatus.FAILED,
+                    exit_code=1,
+                    error_message=message,
+                )
+                await self._emit_api_event(
                     run=completion,
-                    paths=paths_snapshot,
-                    failure_stage="run",
-                    failure_code="run_timeout",
-                    failure_message=message,
-                ),
+                    type_="run.complete",
+                    payload=self._run_completed_payload(
+                        run=completion,
+                        paths=paths_snapshot,
+                        failure_stage="run",
+                        failure_code="lease_expired",
+                        failure_message=message,
+                    ),
+                )
+                continue
+
+            delay_seconds = self._retry_delay_seconds(run.attempt_count)
+            run.status = RunStatus.QUEUED
+            run.started_at = None
+            run.completed_at = None
+            run.cancelled_at = None
+            run.exit_code = None
+            run.available_at = utc_now() + timedelta(seconds=delay_seconds)
+            run.error_message = message
+            run.claimed_by = None
+            run.claim_expires_at = None
+            await self._session.commit()
+
+            document = await self._touch_document_status(
+                run=run,
+                status=DocumentStatus.UPLOADED,
             )
+            if document is not None:
+                await self._session.commit()
+                await self._emit_document_upsert(document)
 
         logger.warning(
             "run.stuck.expired",
-            extra=log_context(count=len(runs), timeout_seconds=timeout_seconds),
+            extra=log_context(count=len(runs)),
         )
         return len(runs)
 
     async def expire_stuck_builds(self) -> int:
         return await self._builds_service.expire_stuck_builds()
+
+    async def _remaining_queue_capacity(self) -> int | None:
+        limit = self._settings.queue_size
+        if not limit:
+            return None
+        queued = await self._runs.count_queued()
+        return max(limit - queued, 0)
+
+    async def _pending_documents(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        limit: int,
+    ) -> list[Document]:
+        if limit <= 0:
+            return []
+        pending_run_exists = (
+            select(Run.id)
+            .where(
+                Run.input_document_id == Document.id,
+                Run.configuration_id == configuration_id,
+            )
+            .limit(1)
+            .exists()
+        )
+        stmt = (
+            select(Document)
+            .where(
+                Document.workspace_id == workspace_id,
+                Document.status == DocumentStatus.UPLOADED,
+                Document.deleted_at.is_(None),
+                ~pending_run_exists,
+            )
+            .order_by(Document.created_at.asc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def _require_active_run(
+        self,
+        *,
+        configuration_id: UUID,
+        document_id: UUID,
+    ) -> Run:
+        runs = await self._runs.list_active_for_documents(
+            configuration_id=configuration_id,
+            document_ids=[document_id],
+        )
+        if not runs:
+            raise RuntimeError(f"No active run found for document {document_id}")
+        return runs[0]
+
+    async def _insert_runs_for_documents(
+        self,
+        *,
+        configuration: Configuration,
+        document_ids: Sequence[UUID],
+        input_sheet_names_by_document_id: dict[UUID, list[str] | None] | None,
+        run_options_by_document_id: dict[UUID, dict[str, Any] | None] | None,
+        document_status: DocumentStatus | None,
+        existing_statuses: Sequence[RunStatus] | None,
+    ) -> None:
+        if not document_ids:
+            return
+
+        base_stmt = select(Document.id).where(
+            Document.workspace_id == configuration.workspace_id,
+            Document.deleted_at.is_(None),
+            Document.id.in_(document_ids),
+        )
+        if document_status is not None:
+            base_stmt = base_stmt.where(Document.status == document_status)
+        result = await self._session.execute(base_stmt)
+        eligible_ids = [doc_id for (doc_id,) in result.all()]
+        if not eligible_ids:
+            return
+
+        if existing_statuses:
+            existing_stmt = select(Run.input_document_id).where(
+                Run.configuration_id == configuration.id,
+                Run.input_document_id.in_(eligible_ids),
+                Run.status.in_(list(existing_statuses)),
+            )
+            existing_result = await self._session.execute(existing_stmt)
+            existing_ids = {doc_id for (doc_id,) in existing_result.all()}
+            eligible_ids = [doc_id for doc_id in eligible_ids if doc_id not in existing_ids]
+            if not eligible_ids:
+                return
+
+        def build_rows(ids: Sequence[UUID]) -> list[dict[str, Any]]:
+            now = utc_now()
+            return [
+                {
+                    "configuration_id": configuration.id,
+                    "workspace_id": configuration.workspace_id,
+                    "input_document_id": doc_id,
+                    "input_sheet_names": (
+                        input_sheet_names_by_document_id.get(doc_id)
+                        if input_sheet_names_by_document_id
+                        else None
+                    ),
+                    "run_options": (
+                        run_options_by_document_id.get(doc_id)
+                        if run_options_by_document_id
+                        else None
+                    ),
+                    "status": RunStatus.QUEUED,
+                    "available_at": now,
+                    "attempt_count": 0,
+                    "max_attempts": self._run_max_attempts,
+                }
+                for doc_id in ids
+            ]
+
+        rows = build_rows(eligible_ids)
+        for attempt in range(2):
+            try:
+                await self._session.execute(insert(Run), rows)
+                await self._session.commit()
+                return
+            except IntegrityError:
+                await self._session.rollback()
+                if attempt:
+                    raise
+                if existing_statuses:
+                    existing_stmt = select(Run.input_document_id).where(
+                        Run.configuration_id == configuration.id,
+                        Run.input_document_id.in_(eligible_ids),
+                        Run.status.in_(list(existing_statuses)),
+                    )
+                    existing_result = await self._session.execute(existing_stmt)
+                    existing_ids = {doc_id for (doc_id,) in existing_result.all()}
+                    remaining = [doc_id for doc_id in eligible_ids if doc_id not in existing_ids]
+                    if not remaining:
+                        return
+                    rows = build_rows(remaining)
+
+    def _retry_delay_seconds(self, attempt_count: int) -> int:
+        base = DEFAULT_BACKOFF_BASE_SECONDS
+        exponent = max(attempt_count - 1, 0)
+        delay = base * (2**exponent)
+        return min(DEFAULT_BACKOFF_MAX_SECONDS, delay)
+
+    async def _requeue_run(
+        self,
+        *,
+        run: Run,
+        reason: str,
+        worker_id: str,
+        delay_seconds: int,
+        attempt_delta: int = 0,
+        error_message: str | None = None,
+    ) -> Run | None:
+        now = utc_now()
+        available_at = now + timedelta(seconds=delay_seconds)
+        values: dict[str, Any] = {
+            "status": RunStatus.QUEUED,
+            "started_at": None,
+            "completed_at": None,
+            "cancelled_at": None,
+            "exit_code": None,
+            "available_at": available_at,
+            "claimed_by": None,
+            "claim_expires_at": None,
+        }
+        if attempt_delta:
+            values["attempt_count"] = max(run.attempt_count + attempt_delta, 0)
+        values["error_message"] = error_message
+
+        # CAS completion: only the current lease holder may finalize the run.
+        stmt = (
+            update(Run)
+            .where(
+                Run.id == run.id,
+                Run.status == RunStatus.RUNNING,
+                Run.claimed_by == worker_id,
+            )
+            .values(**values)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        if not result.rowcount:
+            logger.warning(
+                "run.requeue.claim_lost",
+                extra=log_context(run_id=run.id, reason=reason),
+            )
+            return None
+
+        document = await self._touch_document_status(
+            run=run,
+            status=DocumentStatus.UPLOADED,
+        )
+        if document is not None:
+            await self._session.commit()
+            await self._emit_document_upsert(document)
+
+        await self._session.refresh(run)
+        logger.info(
+            "run.requeued",
+            extra=log_context(run_id=run.id, reason=reason),
+        )
+        return run
+
+    async def _maybe_retry_run(
+        self,
+        *,
+        run: Run,
+        worker_id: str,
+        error_message: str | None,
+    ) -> bool:
+        if run.attempt_count >= run.max_attempts:
+            return False
+        delay_seconds = self._retry_delay_seconds(run.attempt_count)
+        requeued = await self._requeue_run(
+            run=run,
+            reason="run_failed",
+            worker_id=worker_id,
+            delay_seconds=delay_seconds,
+            error_message=error_message,
+        )
+        return requeued is not None
+
+    async def _ensure_run_build(
+        self,
+        *,
+        run: Run,
+        options: RunCreateOptions,
+    ) -> Build:
+        if run.build_id is not None:
+            return await self._builds_service.get_build_or_raise(
+                run.build_id,
+                workspace_id=run.workspace_id,
+            )
+
+        build, _ = await self._builds_service.ensure_build_for_run(
+            workspace_id=run.workspace_id,
+            configuration_id=run.configuration_id,
+            force_rebuild=options.force_rebuild,
+            run_id=run.id,
+            reason="run_claimed",
+        )
+        run.build_id = build.id
+        await self._session.commit()
+        await self._session.refresh(run)
+        return build
+
+    async def _mark_run_started(self, *, run: Run) -> None:
+        document = await self._touch_document_status(
+            run=run,
+            status=DocumentStatus.PROCESSING,
+        )
+        if document is None:
+            return
+        await self._session.commit()
+        await self._emit_document_upsert(document)
 
     async def _enforce_queue_capacity(self, *, requested: int = 1) -> None:
         limit = self._settings.queue_size
@@ -553,32 +1003,12 @@ class RunsService:
         if queued + requested > limit:
             raise RunQueueFullError(f"Run queue is full (limit {limit})")
 
-    async def _claim_run(self, run_id: UUID) -> bool:
-        stmt = (
-            update(Run)
-            .where(Run.id == run_id, Run.status == RunStatus.QUEUED)
-            .values(status=RunStatus.RUNNING, started_at=utc_now())
-        )
-        result = await self._session.execute(stmt)
-        await self._session.commit()
-        return bool(result.rowcount)
-
-    async def _requeue_run(self, run: Run, *, reason: str) -> Run:
-        run.status = RunStatus.QUEUED
-        run.started_at = None
-        await self._session.commit()
-        await self._session.refresh(run)
-        logger.info(
-            "run.requeued",
-            extra=log_context(run_id=run.id, reason=reason),
-        )
-        return run
-
     async def _fail_run_due_to_build(
         self,
         *,
         run: Run,
         build: Build,
+        worker_id: str,
     ) -> AsyncIterator[EventRecord]:
         failure_code = "build_failed" if build.status is BuildStatus.FAILED else "build_cancelled"
         error_message = build.error_message or (
@@ -602,12 +1032,15 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        completion = await self._complete_run(
-            run,
+        completion = await self._complete_run_if_owned(
+            run=run,
             status=RunStatus.FAILED,
             exit_code=1,
             error_message=error_message,
+            worker_id=worker_id,
         )
+        if completion is None:
+            return
         yield await self._emit_api_event(
             run=completion,
             type_="run.complete",
@@ -636,12 +1069,16 @@ class RunsService:
         *,
         run_id: UUID,
         options: RunCreateOptions | None = None,
+        worker_id: str,
     ) -> None:
         """Execute the run, exhausting the event stream."""
 
         if options is None:
             run = await self._require_run(run_id)
             options = await self.load_run_options(run)
+
+        if not worker_id:
+            raise ValueError("worker_id is required to execute runs")
 
         logger.info(
             "run.execute.start",
@@ -651,7 +1088,11 @@ class RunsService:
                 dry_run=options.dry_run,
             ),
         )
-        async for _ in self.stream_run(run_id=run_id, options=options):
+        async for _ in self.stream_run(
+            run_id=run_id,
+            options=options,
+            worker_id=worker_id,
+        ):
             pass
         logger.info(
             "run.execute.completed",
@@ -667,41 +1108,72 @@ class RunsService:
         *,
         run_id: UUID,
         options: RunCreateOptions,
+        worker_id: str,
     ) -> AsyncIterator[RunStreamFrame]:
         """Iterate through run events while executing the engine."""
 
-        context = await self._execution_context_for_run(run_id)
+        run = await self._require_run(run_id)
+        if run.status is not RunStatus.RUNNING or run.claimed_by != worker_id:
+            logger.warning(
+                "run.stream.claim.mismatch",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    status=run.status.value,
+                    claimed_by=run.claimed_by,
+                ),
+            )
+            return
         logger.debug(
             "run.stream.start",
             extra=log_context(
-                workspace_id=context.workspace_id,
-                configuration_id=context.configuration_id,
-                run_id=context.run_id,
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
         )
 
         try:
-            async for event in self._stream_run_steps(context=context, options=options):
+            async for event in self._stream_run_steps(
+                run=run,
+                options=options,
+                worker_id=worker_id,
+            ):
                 yield event
         except Exception as exc:  # pragma: no cover - defensive orchestration guard
             async for event in self._handle_stream_failure(
-                context=context,
+                run=run,
                 options=options,
                 error=exc,
+                worker_id=worker_id,
             ):
                 yield event
 
     async def _stream_run_steps(
         self,
         *,
-        context: RunExecutionContext,
+        run: Run,
         options: RunCreateOptions,
+        worker_id: str,
     ) -> AsyncIterator[RunStreamFrame]:
         """Orchestrate run execution and yield events; raised exceptions are handled upstream."""
 
-        run = await self._require_run(context.run_id)
+        if run.status is not RunStatus.RUNNING or run.claimed_by != worker_id:
+            logger.warning(
+                "run.stream.claim.lost",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    status=run.status.value,
+                    claimed_by=run.claimed_by,
+                ),
+            )
+            return
+
         mode_literal = "validate" if options.validate_only else "execute"
 
         queued_event = await self._ensure_run_queued_event(
@@ -712,19 +1184,31 @@ class RunsService:
         if queued_event:
             yield queued_event
 
-        build = await self._builds_service.get_build_or_raise(
-            context.build_id,
-            workspace_id=context.workspace_id,
-        )
+        build = await self._ensure_run_build(run=run, options=options)
         if build.status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
-            async for event in self._fail_run_due_to_build(run=run, build=build):
+            async for event in self._fail_run_due_to_build(
+                run=run,
+                build=build,
+                worker_id=worker_id,
+            ):
                 yield event
             return
         if build.status is not BuildStatus.READY:
-            await self._requeue_run(run, reason="build_not_ready")
+            await self._builds_service.launch_build_if_needed(
+                build=build,
+                reason="run_requested",
+                run_id=run.id,
+            )
+            await self._requeue_run(
+                run=run,
+                reason="build_not_ready",
+                worker_id=worker_id,
+                delay_seconds=DEFAULT_REQUEUE_DELAY_SECONDS,
+                attempt_delta=-1,
+            )
             return
 
-        run = await self._transition_status(run, RunStatus.RUNNING)
+        await self._mark_run_started(run=run)
         yield await self._emit_api_event(
             run=run,
             type_="run.start",
@@ -751,7 +1235,11 @@ class RunsService:
 
         # Validation-only short circuit: we never touch the engine.
         if options.validate_only:
-            async for event in self._stream_validate_only_run(run=run, mode_literal=mode_literal):
+            async for event in self._stream_validate_only_run(
+                run=run,
+                mode_literal=mode_literal,
+                worker_id=worker_id,
+            ):
                 yield event
             return
 
@@ -761,50 +1249,59 @@ class RunsService:
                 run=run,
                 mode_literal=mode_literal,
                 safe_mode=safe_mode,
+                worker_id=worker_id,
             ):
                 yield event
             return
 
         # Full engine execution: delegate to the process runner + supervisor.
+        context = RunExecutionContext(
+            run_id=run.id,
+            configuration_id=run.configuration_id,
+            workspace_id=run.workspace_id,
+            build_id=build.id,
+        )
         async for event in self._stream_engine_run(
             run=run,
             context=context,
             options=options,
             mode_literal=mode_literal,
             safe_mode_enabled=safe_mode.enabled,
+            worker_id=worker_id,
         ):
             yield event
 
     async def _handle_stream_failure(
         self,
         *,
-        context: RunExecutionContext,
+        run: Run,
         options: RunCreateOptions,
         error: Exception,
+        worker_id: str,
     ) -> AsyncIterator[RunStreamFrame]:
         """Emit console + completion events when unexpected orchestration errors occur."""
 
         logger.exception(
             "run.stream.unhandled_error",
             extra=log_context(
-                workspace_id=context.workspace_id,
-                configuration_id=context.configuration_id,
-                run_id=context.run_id,
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
             exc_info=error,
         )
 
-        run = await self._runs.get(context.run_id)
-        if run is None:
+        refreshed = await self._runs.get(run.id)
+        if refreshed is None:
             return
-        if run.status in (RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED):
+        if refreshed.status in (RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED):
             return
 
         message = f"ADE run orchestration failed: {error}"
         yield await self._emit_api_event(
-            run=run,
+            run=refreshed,
             type_="console.line",
             payload={
                 "scope": "run",
@@ -814,17 +1311,23 @@ class RunsService:
             },
         )
 
-        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+        run_dir = self._run_dir_for_run(
+            workspace_id=refreshed.workspace_id,
+            run_id=refreshed.id,
+        )
         paths_snapshot = self._finalize_paths(
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        completion = await self._complete_run(
-            run,
+        completion = await self._complete_run_if_owned(
+            run=refreshed,
             status=RunStatus.FAILED,
             exit_code=None,
             error_message=str(error),
+            worker_id=worker_id,
         )
+        if completion is None:
+            return
         yield await self._emit_api_event(
             run=completion,
             type_="run.complete",
@@ -846,15 +1349,15 @@ class RunsService:
     ) -> AsyncIterator[EventRecord]:
         """Surface background task failures via console + completion events."""
 
-        try:
-            context = await self._execution_context_for_run(run_id)
-        except Exception:
+        run = await self._runs.get(run_id)
+        if run is None or run.claimed_by is None:
             return
 
         async for event in self._handle_stream_failure(
-            context=context,
+            run=run,
             options=options,
             error=error,
+            worker_id=run.claimed_by,
         ):
             if isinstance(event, dict):
                 yield event
@@ -1640,8 +2143,9 @@ class RunsService:
         )
         venv_path = await self._builds_service.ensure_local_env(build=build)
         python = venv_python_path(venv_path)
+        active_sheet_only = bool(getattr(options, "active_sheet_only", False))
         selected_sheet_names = self._select_input_sheet_names(options)
-        if not selected_sheet_names and run.input_sheet_names:
+        if not active_sheet_only and not selected_sheet_names and run.input_sheet_names:
             selected_sheet_names = list(run.input_sheet_names)
 
         env = self._build_env(
@@ -1690,9 +2194,11 @@ class RunsService:
         command.extend(["--log-format", "ndjson"])
         log_level = getattr(options, "log_level", None) or "INFO"
         command.extend(["--log-level", str(log_level)])
-
-        for sheet_name in selected_sheet_names:
-            command.extend(["--input-sheet", sheet_name])
+        if active_sheet_only:
+            command.append("--active-sheet-only")
+        else:
+            for sheet_name in selected_sheet_names:
+                command.extend(["--input-sheet", sheet_name])
 
         runner = EngineSubprocessRunner(
             command=command,
@@ -1764,6 +2270,7 @@ class RunsService:
         *,
         run: Run,
         mode_literal: str,
+        worker_id: str,
     ) -> AsyncIterator[RunStreamFrame]:
         """Handle validate-only runs without invoking the engine."""
 
@@ -1780,11 +2287,14 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        completion = await self._complete_run(
-            run,
+        completion = await self._complete_run_if_owned(
+            run=run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
+            worker_id=worker_id,
         )
+        if completion is None:
+            return
         yield await self._emit_api_event(
             run=completion,
             type_="run.complete",
@@ -1809,6 +2319,7 @@ class RunsService:
         run: Run,
         mode_literal: str,
         safe_mode: SafeModeStatus,
+        worker_id: str,
     ) -> AsyncIterator[RunStreamFrame]:
         """Handle safe-mode runs by skipping engine execution."""
 
@@ -1829,11 +2340,14 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        completion = await self._complete_run(
-            run,
+        completion = await self._complete_run_if_owned(
+            run=run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
+            worker_id=worker_id,
         )
+        if completion is None:
+            return
 
         # Console notification
         yield await self._emit_api_event(
@@ -1875,6 +2389,7 @@ class RunsService:
         options: RunCreateOptions,
         mode_literal: str,
         safe_mode_enabled: bool,
+        worker_id: str,
     ) -> AsyncIterator[RunStreamFrame]:
         """Wrap `_execute_engine` with supervision and event translation."""
 
@@ -1908,12 +2423,33 @@ class RunsService:
                 if isinstance(frame, RunExecutionResult):
                     paths_snapshot = frame.paths_snapshot or RunPathsSnapshot()
 
-                    completion = await self._complete_run(
-                        run,
+                    if frame.status is RunStatus.FAILED:
+                        retried = await self._maybe_retry_run(
+                            run=run,
+                            worker_id=worker_id,
+                            error_message=frame.error_message,
+                        )
+                        if retried:
+                            logger.info(
+                                "run.retry.scheduled",
+                                extra=log_context(
+                                    workspace_id=run.workspace_id,
+                                    configuration_id=run.configuration_id,
+                                    run_id=run.id,
+                                    attempt_count=run.attempt_count + 1,
+                                ),
+                            )
+                            return
+
+                    completion = await self._complete_run_if_owned(
+                        run=run,
                         status=frame.status,
                         exit_code=frame.return_code,
                         error_message=frame.error_message,
+                        worker_id=worker_id,
                     )
+                    if completion is None:
+                        return
                     event = await self._emit_api_event(
                         run=completion,
                         type_="run.complete",
@@ -1965,25 +2501,27 @@ class RunsService:
                 run_dir=run_dir,
                 default_paths=RunPathsSnapshot(),
             )
-            completion = await self._complete_run(
-                run,
+            completion = await self._complete_run_if_owned(
+                run=run,
                 status=RunStatus.CANCELLED,
                 exit_code=None,
                 error_message="Run execution cancelled",
+                worker_id=worker_id,
             )
-            event = await self._emit_api_event(
-                run=completion,
-                type_="run.complete",
-                payload=self._run_completed_payload(
+            if completion is not None:
+                event = await self._emit_api_event(
                     run=completion,
-                    paths=paths_snapshot,
-                    failure_stage="run",
-                    failure_code="run_cancelled",
-                    failure_message=completion.error_message,
-                ),
-            )
-            self._log_event_debug(event, origin="api")
-            yield event
+                    type_="run.complete",
+                    payload=self._run_completed_payload(
+                        run=completion,
+                        paths=paths_snapshot,
+                        failure_stage="run",
+                        failure_code="run_cancelled",
+                        failure_message=completion.error_message,
+                    ),
+                )
+                self._log_event_debug(event, origin="api")
+                yield event
             raise
 
         except Exception as exc:  # pragma: no cover - defensive
@@ -2003,12 +2541,31 @@ class RunsService:
                 run_dir=run_dir,
                 default_paths=RunPathsSnapshot(),
             )
-            completion = await self._complete_run(
-                run,
+            retried = await self._maybe_retry_run(
+                run=run,
+                worker_id=worker_id,
+                error_message=str(exc),
+            )
+            if retried:
+                logger.info(
+                    "run.retry.scheduled",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        attempt_count=run.attempt_count + 1,
+                    ),
+                )
+                return
+            completion = await self._complete_run_if_owned(
+                run=run,
                 status=RunStatus.FAILED,
                 exit_code=None,
                 error_message=str(exc),
+                worker_id=worker_id,
             )
+            if completion is None:
+                return
             # Error console frame
             console_event = await self._emit_api_event(
                 run=run,
@@ -2142,6 +2699,12 @@ class RunsService:
             )
         return configuration
 
+    async def _processing_paused(self, workspace_id: UUID) -> bool:
+        workspace = await self._workspaces.get_workspace(workspace_id)
+        if workspace is None:
+            return False
+        return read_processing_paused(workspace.settings)
+
     async def _resolve_workspace_configuration(
         self,
         *,
@@ -2182,22 +2745,85 @@ class RunsService:
             )
         return configuration
 
-    async def _transition_status(self, run: Run, status: RunStatus) -> Run:
-        if status is RunStatus.RUNNING:
-            run.started_at = run.started_at or utc_now()
-        run.status = status
-        await self._session.commit()
-        await self._session.refresh(run)
-        logger.debug(
-            "run.status.transition",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                status=run.status.value,
-            ),
+    async def _emit_document_upsert(self, document: Document) -> None:
+        payload = DocumentOut.model_validate(document)
+        await self._documents_service._attach_last_runs(document.workspace_id, [payload])
+        queue_context = await self._documents_service.build_queue_context(
+            workspace_id=document.workspace_id,
         )
-        return run
+        self._documents_service._apply_derived_fields(payload, queue_context)
+        await self._document_changes.record_upsert(
+            workspace_id=document.workspace_id,
+            document_id=document.id,
+            payload=payload.model_dump(),
+        )
+        await self._session.commit()
+
+    async def _touch_document_status(
+        self,
+        *,
+        run: Run,
+        status: DocumentStatus,
+    ) -> Document | None:
+        if not run.input_document_id:
+            return None
+        document = await self._documents.get_document(
+            workspace_id=run.workspace_id,
+            document_id=run.input_document_id,
+            include_deleted=True,
+        )
+        if document is None or document.status == DocumentStatus.ARCHIVED:
+            return None
+        if document.status == status:
+            return document
+        document.status = status
+        await self._session.flush()
+        return document
+
+    async def _complete_run_if_owned(
+        self,
+        *,
+        run: Run,
+        status: RunStatus,
+        exit_code: int | None,
+        error_message: str | None,
+        worker_id: str,
+    ) -> Run | None:
+        now = utc_now()
+        values: dict[str, Any] = {
+            "status": status,
+            "exit_code": exit_code,
+            "completed_at": now,
+            "cancelled_at": now if status is RunStatus.CANCELLED else None,
+            "claimed_by": None,
+            "claim_expires_at": None,
+            "error_message": error_message,
+        }
+
+        stmt = (
+            update(Run)
+            .where(
+                Run.id == run.id,
+                Run.status == RunStatus.RUNNING,
+                Run.claimed_by == worker_id,
+            )
+            .values(**values)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        if not result.rowcount:
+            logger.warning(
+                "run.complete.claim_lost",
+                extra=log_context(run_id=run.id),
+            )
+            return None
+
+        refreshed = await self._runs.get(run.id)
+        if refreshed is None:
+            return None
+
+        await self._finalize_completion_side_effects(run=refreshed)
+        return refreshed
 
     async def _complete_run(
         self,
@@ -2209,14 +2835,35 @@ class RunsService:
     ) -> Run:
         run.status = status
         run.exit_code = exit_code
-        if error_message is not None:
-            run.error_message = error_message
+        run.error_message = error_message
         run.completed_at = utc_now()
         run.cancelled_at = utc_now() if status is RunStatus.CANCELLED else None
+        run.claimed_by = None
+        run.claim_expires_at = None
         await self._session.commit()
         await self._session.refresh(run)
 
+        await self._finalize_completion_side_effects(run=run)
+        return run
+
+    async def _finalize_completion_side_effects(self, *, run: Run) -> None:
+        document = None
+        if run.status is RunStatus.SUCCEEDED:
+            document = await self._touch_document_status(
+                run=run,
+                status=DocumentStatus.PROCESSED,
+            )
+        elif run.status is RunStatus.FAILED or run.status is RunStatus.CANCELLED:
+            document = await self._touch_document_status(
+                run=run,
+                status=DocumentStatus.FAILED,
+            )
+        if document is not None:
+            await self._session.commit()
+            await self._emit_document_upsert(document)
+
         await self._ensure_terminal_metrics_stub(run=run)
+        await self._maybe_enqueue_pending_runs(workspace_id=run.workspace_id)
 
         logger.info(
             "run.complete",
@@ -2229,7 +2876,6 @@ class RunsService:
                 has_error=bool(run.error_message),
             ),
         )
-        return run
 
     async def _ensure_terminal_metrics_stub(self, *, run: Run) -> None:
         if run.status not in {RunStatus.FAILED, RunStatus.CANCELLED}:
@@ -2281,10 +2927,6 @@ class RunsService:
         return candidate
 
     @staticmethod
-    def _generate_run_id() -> UUID:
-        return generate_uuid7()
-
-    @staticmethod
     def _epoch_seconds(dt: datetime | None) -> int | None:
         if dt is None:
             return None
@@ -2305,6 +2947,8 @@ class RunsService:
             modes.append("dry-run enabled")
         if options.validate_only:
             modes.append("validate-only mode")
+        if getattr(options, "active_sheet_only", False):
+            modes.append("active-sheet-only")
         if not modes:
             return None
         return "Run options: " + ", ".join(modes)
@@ -2330,6 +2974,8 @@ class RunsService:
     def _select_input_sheet_names(options: RunCreateOptions) -> list[str]:
         """Normalize requested sheet names into a unique, ordered list."""
 
+        if getattr(options, "active_sheet_only", False):
+            return []
         names: list[str] = []
         for name in getattr(options, "input_sheet_names", None) or []:
             if not isinstance(name, str):
@@ -2343,6 +2989,8 @@ class RunsService:
     def _select_input_sheet_name(options: RunCreateOptions) -> str | None:
         """Resolve the first selected sheet name from the run options, if any."""
 
+        if getattr(options, "active_sheet_only", False):
+            return None
         normalized = RunsService._select_input_sheet_names(options)
         return normalized[0] if normalized else None
 
@@ -2519,6 +3167,11 @@ class RunsService:
         fields = RunsService._as_dict(counts.get("fields"))
         cells = RunsService._as_dict(counts.get("cells"))
 
+        columns_mapped = RunsService._coerce_int(columns.get("mapped"))
+        columns_unmapped = RunsService._coerce_int(columns.get("unmapped"))
+        field_count_detected = RunsService._coerce_int(fields.get("detected"))
+        field_count_not_detected = RunsService._coerce_int(fields.get("not_detected"))
+
         return {
             "evaluation_outcome": RunsService._coerce_str(evaluation.get("outcome")),
             "evaluation_findings_total": findings_total,
@@ -2543,12 +3196,11 @@ class RunsService:
             "row_count_empty": RunsService._coerce_int(rows.get("empty")),
             "column_count_total": RunsService._coerce_int(columns.get("total")),
             "column_count_empty": RunsService._coerce_int(columns.get("empty")),
-            "column_count_mapped": RunsService._coerce_int(columns.get("mapped")),
-            "column_count_ambiguous": RunsService._coerce_int(columns.get("ambiguous")),
-            "column_count_unmapped": RunsService._coerce_int(columns.get("unmapped")),
-            "column_count_passthrough": RunsService._coerce_int(columns.get("passthrough")),
+            "column_count_mapped": columns_mapped,
+            "column_count_unmapped": columns_unmapped,
             "field_count_expected": RunsService._coerce_int(fields.get("expected")),
-            "field_count_mapped": RunsService._coerce_int(fields.get("mapped")),
+            "field_count_detected": field_count_detected,
+            "field_count_not_detected": field_count_not_detected,
             "cell_count_total": RunsService._coerce_int(cells.get("total")),
             "cell_count_non_empty": RunsService._coerce_int(cells.get("non_empty")),
         }
@@ -2574,7 +3226,7 @@ class RunsService:
                 {
                     "field": field_name,
                     "label": RunsService._coerce_str(entry.get("label")),
-                    "mapped": True if entry.get("mapped") is True else False,
+                    "detected": True if entry.get("detected") is True else False,
                     "best_mapping_score": RunsService._coerce_float(
                         entry.get("best_mapping_score")
                     ),
@@ -2666,6 +3318,9 @@ class RunsService:
                         mapping_status = RunsService._coerce_str(mapping.get("status"))
                         if mapping_status is None:
                             continue
+                        mapping_status = mapping_status.lower()
+                        if mapping_status not in {"mapped", "unmapped"}:
+                            continue
 
                         rows.append(
                             {
@@ -2682,9 +3337,7 @@ class RunsService:
                                 "mapped_field": RunsService._coerce_str(mapping.get("field")),
                                 "mapping_score": RunsService._coerce_float(mapping.get("score")),
                                 "mapping_method": RunsService._coerce_str(mapping.get("method")),
-                                "unmapped_reason": RunsService._coerce_str(
-                                    mapping.get("unmapped_reason")
-                                ),
+                                "unmapped_reason": RunsService._coerce_str(mapping.get("unmapped_reason")),
                             }
                         )
 
@@ -2780,7 +3433,7 @@ class RunsService:
             payload={
                 "status": "queued",
                 "mode": mode_literal,
-                "options": options.model_dump(exclude_none=True),
+                "options": options.model_dump(mode="json", exclude_none=True),
             },
         )
 

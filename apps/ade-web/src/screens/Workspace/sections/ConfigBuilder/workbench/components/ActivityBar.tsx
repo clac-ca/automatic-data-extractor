@@ -1,6 +1,8 @@
 import React from "react";
 import clsx from "clsx";
 
+import { ExtensionsIcon, ExplorerIcon, GearIcon, SearchIcon, SourceControlIcon } from "@ui/Icons";
+
 export type ActivityBarView = "explorer" | "search" | "scm" | "extensions";
 
 interface ActivityBarProps {
@@ -11,10 +13,10 @@ interface ActivityBarProps {
 }
 
 const ITEMS: Array<{ id: ActivityBarView; label: string; icon: React.ReactNode }> = [
-  { id: "explorer", label: "Explorer", icon: <ExplorerIcon /> },
-  { id: "search", label: "Search", icon: <SearchIcon /> },
-  { id: "scm", label: "Source Control", icon: <SourceControlIcon /> },
-  { id: "extensions", label: "Extensions", icon: <ExtensionsIcon /> },
+  { id: "explorer", label: "Explorer", icon: <ExplorerIcon className="h-5 w-5" /> },
+  { id: "search", label: "Search", icon: <SearchIcon className="h-5 w-5" /> },
+  { id: "scm", label: "Source Control", icon: <SourceControlIcon className="h-5 w-5" /> },
+  { id: "extensions", label: "Extensions", icon: <ExtensionsIcon className="h-5 w-5" /> },
 ];
 
 export function ActivityBar({ activeView, onSelectView, onOpenSettings, appearance: _appearance }: ActivityBarProps) {
@@ -71,75 +73,9 @@ export function ActivityBar({ activeView, onSelectView, onOpenSettings, appearan
           )}
           aria-label="Open settings"
         >
-          <GearIcon />
+          <GearIcon className="h-5 w-5" />
         </button>
       </div>
     </aside>
-  );
-}
-
-function ExplorerIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <rect x="4" y="4" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M4 8.25h12" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M8.25 4v12" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="9" cy="9" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M12.7 12.7l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SourceControlIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M6.5 4a1.75 1.75 0 1 1-1.5 0v12m9-8a1.75 1.75 0 1 1-1.5 0v8"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      <path d="M5 9.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ExtensionsIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M6 4.5h4l4 4v6.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-      />
-      <path d="M10 4.5v4h4" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M10 6.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M3 10h2m10 0h2M10 3v2m0 10v2M5.2 5.2l1.4 1.4m7 7 1.4 1.4M14.8 5.2l-1.4 1.4m-7 7-1.4 1.4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }

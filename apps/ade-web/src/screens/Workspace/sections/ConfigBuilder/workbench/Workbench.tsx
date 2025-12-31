@@ -37,6 +37,20 @@ import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { SplitButton } from "@ui/SplitButton";
 import { PageState } from "@ui/PageState";
+import {
+  ActionsIcon,
+  CheckIcon,
+  CloseIcon,
+  ConsoleIcon,
+  GridIcon,
+  MinimizeIcon,
+  RunIcon,
+  SaveIcon,
+  SidebarIcon,
+  SpinnerIcon,
+  WindowMaximizeIcon,
+  WindowRestoreIcon,
+} from "@ui/Icons";
 
 import {
   useConfigurationFilesQuery,
@@ -126,7 +140,7 @@ type WorkbenchUploadPlan = {
   readonly skipped: readonly { readonly relativePath: string; readonly reason: string }[];
 };
 
-type DocumentRecord = components["schemas"]["DocumentOut"];
+type DocumentRow = components["schemas"]["DocumentListRow"];
 type RunLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR";
 const RUN_LOG_LEVEL_OPTIONS: Array<{ value: RunLogLevel; label: string }> = [
   { value: "DEBUG", label: "Debug" },
@@ -522,6 +536,12 @@ export function Workbench({
     loadFile,
     persistence: tabPersistence ?? undefined,
   });
+  const handleContentChange = useCallback(
+    (tabId: string, value: string) => {
+      files.updateContent(tabId, value);
+    },
+    [files],
+  );
   const saveConfigFile = useSaveConfigurationFileMutation(workspaceId, configId);
   const reloadFileFromServer = useCallback(
     async (fileId: string) => {
@@ -930,7 +950,7 @@ export function Workbench({
     if (!ready) {
       return;
     }
-    let document: DocumentRecord | null = null;
+    let document: DocumentRow | null = null;
     try {
       const documents = await fetchRecentDocuments(workspaceId);
       document = documents[0] ?? null;
@@ -1696,13 +1716,13 @@ export function Workbench({
       {
         id: "toggle-explorer",
         label: explorer.collapsed ? "Show Explorer" : "Hide Explorer",
-        icon: explorer.collapsed ? blankIcon : <MenuIconCheck />,
+        icon: explorer.collapsed ? blankIcon : <CheckIcon className="h-4 w-4 text-brand-400" />,
         onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed })),
       },
       {
         id: "toggle-console",
         label: outputCollapsed ? "Show Console" : "Hide Console",
-        icon: outputCollapsed ? blankIcon : <MenuIconCheck />,
+        icon: outputCollapsed ? blankIcon : <CheckIcon className="h-4 w-4 text-brand-400" />,
         onSelect: handleToggleOutput,
       },
     ];
@@ -2009,7 +2029,7 @@ export function Workbench({
               onCloseOtherTabs={files.closeOtherTabs}
               onCloseTabsToRight={files.closeTabsToRight}
               onCloseAllTabs={files.closeAllTabs}
-              onContentChange={files.updateContent}
+              onContentChange={handleContentChange}
               onSaveTab={handleSaveTabShortcut}
               onSaveAllTabs={handleSaveAllTabs}
               onMoveTab={files.moveTab}
@@ -2370,14 +2390,6 @@ function SidePanelPlaceholder({ width, view, appearance: _appearance }: SidePane
   );
 }
 
-function MenuIconCheck() {
-  return (
-    <svg className="h-4 w-4 text-brand-400" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function WorkbenchChrome({
   configName,
   workspaceLabel,
@@ -2438,7 +2450,6 @@ function WorkbenchChrome({
   const runButtonClass =
     "bg-brand-600 text-on-brand hover:bg-brand-500 disabled:bg-muted disabled:text-muted-foreground";
   const isMaximized = windowState === "maximized";
-
   return (
     <div className={clsx("flex items-center justify-between border-b px-4 py-2", surfaceClass)}>
       <div className="flex min-w-0 items-center gap-3">
@@ -2467,7 +2478,7 @@ function WorkbenchChrome({
           )}
           title={`Save (${saveShortcutLabel})`}
         >
-          {isSavingFiles ? <SpinnerIcon /> : <SaveIcon />}
+          {isSavingFiles ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
           {isSavingFiles ? "Saving…" : "Save"}
         </button>
         <button
@@ -2479,12 +2490,12 @@ function WorkbenchChrome({
             runButtonClass,
           )}
         >
-          {isRunningValidation ? <SpinnerIcon /> : <RunIcon />}
+          {isRunningValidation ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
           {isRunningValidation ? "Running…" : "Run validation"}
         </button>
         <SplitButton
           label={isRunningExtraction ? "Running…" : "Test run"}
-          icon={isRunningExtraction ? <SpinnerIcon /> : <RunIcon />}
+          icon={isRunningExtraction ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
           disabled={!canRunExtraction}
           isLoading={isRunningExtraction}
           title="Run test run"
@@ -2511,14 +2522,14 @@ function WorkbenchChrome({
             onClick={onToggleExplorer}
             appearance={appearance}
             active={explorerVisible}
-            icon={<SidebarIcon active={explorerVisible} />}
+            icon={<SidebarIcon className={clsx("h-4 w-4", !explorerVisible && "opacity-60")} />}
           />
           <ChromeIconButton
             ariaLabel={consoleOpen ? "Hide console" : "Show console"}
             onClick={onToggleConsole}
             appearance={appearance}
             active={consoleOpen}
-            icon={<ConsoleIcon />}
+            icon={<ConsoleIcon className="h-3.5 w-3.5" />}
           />
         </div>
         <ChromeIconButton
@@ -2529,7 +2540,7 @@ function WorkbenchChrome({
           }}
           appearance={appearance}
           disabled={actionsBusy}
-          icon={<ActionsIcon />}
+          icon={<ActionsIcon className="h-4 w-4" />}
         />
         <div
           className={clsx(
@@ -2541,20 +2552,22 @@ function WorkbenchChrome({
             ariaLabel="Minimize workbench"
             onClick={onMinimizeWindow}
             appearance={appearance}
-            icon={<MinimizeIcon />}
+            icon={<MinimizeIcon className="h-3.5 w-3.5" />}
           />
           <ChromeIconButton
             ariaLabel={isMaximized ? "Restore workbench" : "Maximize workbench"}
             onClick={onToggleMaximize}
             appearance={appearance}
             active={isMaximized}
-            icon={isMaximized ? <WindowRestoreIcon /> : <WindowMaximizeIcon />}
+            icon={
+              isMaximized ? <WindowRestoreIcon className="h-3.5 w-3.5" /> : <WindowMaximizeIcon className="h-3.5 w-3.5" />
+            }
           />
           <ChromeIconButton
             ariaLabel="Close workbench"
             onClick={onCloseWindow}
             appearance={appearance}
-            icon={<CloseIcon />}
+            icon={<CloseIcon className="h-3.5 w-3.5" />}
           />
         </div>
       </div>
@@ -2581,7 +2594,7 @@ function RunExtractionDialog({
   onRun,
 }: RunExtractionDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const documentsQuery = useQuery<DocumentRecord[]>({
+  const documentsQuery = useQuery<DocumentRow[]>({
     queryKey: ["builder-documents", workspaceId],
     queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
     staleTime: 60_000,
@@ -2828,12 +2841,12 @@ function RunExtractionDialog({
   return typeof document === "undefined" ? null : createPortal(content, document.body);
 }
 
-async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRecord[]> {
+async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRow[]> {
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
     params: { path: { workspace_id: workspaceId }, query: { sort: "-created_at", page_size: 50 } },
     signal,
   });
-  return ((data as components["schemas"]["DocumentPage"] | undefined)?.items ?? []) as DocumentRecord[];
+  return data?.items ?? [];
 }
 
 function formatDocumentTimestamp(value: string | null | undefined): string {
@@ -2887,116 +2900,8 @@ function ChromeIconButton({
 function WorkbenchBadgeIcon() {
   return (
     <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 text-on-brand shadow-[0_12px_24px_rgb(var(--sys-color-shadow)/0.35)]">
-      <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none">
-        <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
+      <GridIcon className="h-4 w-4" />
     </span>
-  );
-}
-
-function SidebarIcon({ active }: { readonly active: boolean }) {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <rect
-        x="3"
-        y="4"
-        width="14"
-        height="12"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        opacity={active ? 1 : 0.6}
-      />
-      <path d="M7 4v12" stroke="currentColor" strokeWidth="1.4" opacity={active ? 1 : 0.6} />
-    </svg>
-  );
-}
-
-function ConsoleIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M3 10.5h10" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function WindowMaximizeIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function WindowRestoreIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M6 4h6v6" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function MinimizeIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4 11h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SpinnerIcon() {
-  return (
-    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" opacity="0.35" />
-      <path d="M20 12a8 8 0 0 0-8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function RunIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4.5 3.5v9l7-4.5-7-4.5Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ActionsIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <circle cx="3" cy="8" r="1.3" fill="currentColor" />
-      <circle cx="8" cy="8" r="1.3" fill="currentColor" />
-      <circle cx="13" cy="8" r="1.3" fill="currentColor" />
-    </svg>
-  );
-}
-
-function SaveIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M4 2.5h7.25L13.5 4.8v8.7H4z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path d="M6 2.5v4h4v-4" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M6 11h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
   );
 }
 

@@ -55,10 +55,10 @@ export default function SetupScreen() {
     if (setupQuery.isPending || setupQuery.isError) {
       return;
     }
-    if (!setupQuery.data?.requires_setup) {
+    if (!setupQuery.data?.setup_required) {
       navigate(buildLoginRedirect(redirectTo), { replace: true });
     }
-  }, [navigate, redirectTo, setupQuery.data?.requires_setup, setupQuery.isError, setupQuery.isPending]);
+  }, [navigate, redirectTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,7 +80,7 @@ export default function SetupScreen() {
     );
   }
 
-  if (!setupQuery.data?.requires_setup) {
+  if (!setupQuery.data?.setup_required) {
     return null;
   }
 

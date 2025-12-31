@@ -6,12 +6,13 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
 from ade_api.db.enums import enum_values
+from ade_api.db.types import UTCDateTime
 
 
 class ConfigurationStatus(str, Enum):
@@ -46,9 +47,9 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=ConfigurationStatus.DRAFT.value,
     )
     content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     activated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         nullable=True,
     )
     active_build_id: Mapped[UUID | None] = mapped_column(

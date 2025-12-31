@@ -66,8 +66,11 @@ export function GlobalTopBar({
     ? {
         ...search,
         // Default to a top-bar-friendly look unless caller overrides.
-        variant: search.variant ?? "minimal",
-        className: clsx("order-last w-full lg:order-none", search.className),
+        variant: search.variant ?? "header",
+        className: clsx(
+          "w-full col-span-2 row-start-2 xl:col-span-1 xl:row-start-1 xl:col-start-2 xl:justify-self-center xl:max-w-[42rem]",
+          search.className,
+        ),
       }
     : undefined;
 
@@ -99,21 +102,25 @@ export function GlobalTopBar({
       <div className="flex flex-col gap-3 px-4 py-3 sm:px-6 lg:px-10">
         <div
           className={clsx(
-            "flex min-h-[3.5rem] w-full flex-wrap items-center gap-3 sm:gap-4",
+            "grid min-h-[3.5rem] w-full items-center gap-3 sm:gap-4",
             showSearch
-              ? // Center search stays visually centered and stable.
-                "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,42rem)_minmax(0,1fr)] lg:items-center lg:gap-8"
-              : "justify-between",
+              ? "grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:gap-8"
+              : "grid-cols-[minmax(0,1fr)_auto]",
           )}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-3 lg:flex-none">
+          <div className="col-start-1 row-start-1 flex w-full min-w-0 items-center gap-3">
             {brand}
             {leading}
           </div>
 
           {searchProps ? <GlobalSearchField {...searchProps} /> : null}
 
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
+          <div
+            className={clsx(
+              "col-start-2 row-start-1 flex flex-wrap items-center justify-end gap-2",
+              showSearch && "xl:col-start-3 xl:row-start-1",
+            )}
+          >
             {actions}
             {trailing}
           </div>

@@ -91,7 +91,7 @@ Rules:
 * **403 (Forbidden)**
   Exposed to the UI as a permissions error; screens decide how to present it.
 
-The HTTP client itself does not refresh tokens; that logic lives in the auth/session layer and React Query hooks.
+The HTTP client itself does not manage sessions; the auth layer handles cookie login and bootstrap.
 
 ---
 
@@ -159,7 +159,7 @@ Example patterns:
 
 * System
 
-  * `['system', 'safe-mode']`
+  * `['system', 'safeMode']`
   * `['system', 'health']`
 
 Example helper:
@@ -225,21 +225,21 @@ You should be able to navigate from a backend route to its module and function w
 
 Setup:
 
-* `GET  /api/v1/setup/status` – initial setup status.
-* `POST /api/v1/setup`        – complete first admin setup.
+* `GET  /api/v1/auth/setup` – initial setup status.
+* `POST /api/v1/auth/setup` – complete first admin setup.
 
 Session:
 
-* `POST   /api/v1/auth/session`         – create session.
-* `POST   /api/v1/auth/session/refresh` – refresh session.
-* `DELETE /api/v1/auth/session`         – logout.
-* `GET    /api/v1/me/bootstrap`         – session bootstrap (profile, global roles/permissions, workspaces).
+* `POST /api/v1/auth/cookie/login`  – create session cookie.
+* `POST /api/v1/auth/cookie/logout` – logout (clears session cookie).
+* `POST /api/v1/auth/jwt/login`     – issue bearer token (non-browser clients).
+* `GET  /api/v1/me/bootstrap`       – session bootstrap (profile, global roles/permissions, workspaces).
 
 Auth providers:
 
-* `GET /api/v1/auth/providers`             – configured auth providers.
-* `GET /api/v1/auth/sso/{provider}/authorize` – start SSO login (302 redirect).
-* `GET /api/v1/auth/sso/{provider}/callback`  – finish SSO login.
+* `GET /api/v1/auth/providers`                – configured auth providers.
+* `GET /api/v1/auth/oidc/{provider}/authorize` – start SSO login (302 redirect).
+* `GET /api/v1/auth/oidc/{provider}/callback`  – finish SSO login.
 
 **Example functions**
 
@@ -247,7 +247,6 @@ Auth providers:
 * `completeSetup(payload)`
 * `listAuthProviders()`
 * `createSession(credentials)`
-* `refreshSession()`
 * `deleteSession()`
 * `fetchSession()` (wraps `/me/bootstrap`)
 
@@ -308,9 +307,9 @@ Roles:
 
 Assignments:
 
-* `GET    /api/v1/rbac/role-assignments`
-* `POST   /api/v1/rbac/role-assignments`
-* `DELETE /api/v1/rbac/role-assignments/{assignment_id}`
+* `GET    /api/v1/rbac/roleAssignments`
+* `POST   /api/v1/rbac/roleAssignments`
+* `DELETE /api/v1/rbac/roleAssignments/{assignment_id}`
 * `GET    /api/v1/users/{user_id}/roles`
 * `PUT    /api/v1/users/{user_id}/roles/{role_id}`
 * `DELETE /api/v1/users/{user_id}/roles/{role_id}`
@@ -591,8 +590,8 @@ Hooks:
 **Key routes**
 
 * `GET /api/v1/health`
-* `GET /api/v1/system/safe-mode`
-* `PUT /api/v1/system/safe-mode`
+* `GET /api/v1/system/safeMode`
+* `PUT /api/v1/system/safeMode`
 
 **Example functions**
 
@@ -622,15 +621,13 @@ Users:
 
 API keys:
 
-* Self-service: `GET /api/v1/me/api-keys`, `POST /api/v1/me/api-keys`, `DELETE /api/v1/me/api-keys/{api_key_id}`
-* Admin (global): `GET /api/v1/api-keys`, `POST /api/v1/api-keys`, `GET /api/v1/api-keys/{api_key_id}`, `DELETE /api/v1/api-keys/{api_key_id}`
+* Self-service: `GET /api/v1/users/me/api-keys`, `POST /api/v1/users/me/api-keys`, `DELETE /api/v1/users/me/api-keys/{api_key_id}`
 * Admin (per user): `GET /api/v1/users/{user_id}/api-keys`, `POST /api/v1/users/{user_id}/api-keys`, `DELETE /api/v1/users/{user_id}/api-keys/{api_key_id}`
 
 **Example functions**
 
 * Users: `listUsers(params?)`
 * API keys (self): `listMyApiKeys(params?)`, `createMyApiKey(payload)`, `revokeMyApiKey(apiKeyId)`
-* API keys (admin): `listApiKeys(params?)`, `getApiKey(apiKeyId)`, `createApiKey(payload)`, `revokeApiKey(apiKeyId)`
 * API keys (per user): `listUserApiKeys(userId, params?)`, `createUserApiKey(userId, payload)`, `revokeUserApiKey(userId, apiKeyId)`
 
 Hooks:

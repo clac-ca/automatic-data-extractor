@@ -78,13 +78,14 @@ def _serialize_user_role(assignment: UserRoleAssignment) -> UserRoleSummary:
 
 
 def _serialize_assignment(assignment: UserRoleAssignment) -> RoleAssignmentOut:
+    scope_type = ScopeType.WORKSPACE if assignment.workspace_id else ScopeType.GLOBAL
     return RoleAssignmentOut(
         id=assignment.id,
         user_id=assignment.user_id,
         role_id=assignment.role_id,
         role_slug=assignment.role.slug if assignment.role is not None else "",
-        scope_type=assignment.scope_type,
-        scope_id=assignment.scope_id,
+        scope_type=scope_type,
+        scope_id=assignment.workspace_id,
         created_at=assignment.created_at,
     )
 
@@ -387,7 +388,7 @@ async def delete_role(
 
 
 @router.get(
-    "/role-assignments",
+    "/roleAssignments",
     response_model=RoleAssignmentPage,
     response_model_exclude_none=True,
     summary="List role assignments (admin view)",
@@ -432,17 +433,18 @@ async def list_assignments(
         permission_key="roles.read_all",
     )
 
-    if scope == ScopeType.WORKSPACE and scope_id is None:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="scope_id is required when scope=workspace",
-        )
-    if scope == ScopeType.GLOBAL:
-        scope_id = None
+    if scope == ScopeType.WORKSPACE:
+        if scope_id is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="scope_id is required when scope=workspace",
+            )
+        workspace_id = scope_id
+    else:
+        workspace_id = None
 
     assignments = await service.list_assignments(
-        scope_type=scope,
-        scope_id=scope_id,
+        workspace_id=workspace_id,
         user_id=user_id,
         role_id=role_id,
         page=page.page,
@@ -471,8 +473,7 @@ async def _load_user_role_assignments(
     user_id: UUID,
 ) -> list[UserRoleAssignment]:
     assignments_page = await service.list_assignments(
-        scope_type=ScopeType.GLOBAL,
-        scope_id=None,
+        workspace_id=None,
         user_id=user_id,
         role_id=None,
         page=1,
@@ -530,8 +531,7 @@ async def assign_user_role(
         await service.assign_role_if_missing(
             user_id=user_id,
             role_id=role_id,
-            scope_type=ScopeType.GLOBAL,
-            scope_id=None,
+            workspace_id=None,
         )
     except (RoleNotFoundError, AssignmentError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -567,8 +567,7 @@ async def remove_user_role(
     assignment = await service.get_assignment_for_user_role(
         user_id=user_id,
         role_id=role_id,
-        scope_type=ScopeType.GLOBAL,
-        scope_id=None,
+        workspace_id=None,
     )
     if assignment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role assignment not found")
@@ -576,8 +575,7 @@ async def remove_user_role(
     try:
         await service.delete_assignment(
             assignment_id=assignment.id,
-            scope_type=ScopeType.GLOBAL,
-            scope_id=None,
+            workspace_id=None,
         )
     except ScopeMismatchError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc

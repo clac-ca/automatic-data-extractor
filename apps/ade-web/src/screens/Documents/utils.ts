@@ -1,9 +1,11 @@
 import type { FileType } from "./types";
 
 export const numberFormatter = new Intl.NumberFormat("en-US");
-
-export function formatRelativeTime(nowTimestamp: number, timestamp: number) {
-  const diff = Math.max(0, nowTimestamp - timestamp);
+export function formatRelativeTime(nowTimestamp: number, timestamp: number | string | null | undefined) {
+  const resolved =
+    typeof timestamp === "number" ? timestamp : typeof timestamp === "string" ? Date.parse(timestamp) : NaN;
+  const base = Number.isNaN(resolved) ? nowTimestamp : resolved;
+  const diff = Math.max(0, nowTimestamp - base);
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;

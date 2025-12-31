@@ -72,6 +72,11 @@ def process_file(
         "-s",
         help="Optional worksheet(s) to ingest; defaults to all visible sheets.",
     ),
+    active_sheet_only: bool = typer.Option(
+        False,
+        "--active-sheet-only",
+        help="Process only the active worksheet.",
+    ),
     log_format: Optional[LogFormat] = LOG_FORMAT_OPTION,
     log_level: Optional[str] = LOG_LEVEL_OPTION,
     debug: bool = DEBUG_OPTION,
@@ -82,6 +87,11 @@ def process_file(
 
     if output is not None and output_dir is not None:
         raise BadParameter("--output and --output-dir are mutually exclusive; choose one.", param_hint="output")
+    if active_sheet_only and input_sheet:
+        raise BadParameter(
+            "--active-sheet-only cannot be combined with --input-sheet.",
+            param_hint="active_sheet_only",
+        )
 
     bootstrap_settings = Settings.load()
     config_path = resolve_config_package(config_package, bootstrap_settings)
@@ -123,6 +133,7 @@ def process_file(
             config_package=config_path,
             input_file=resolved_input,
             input_sheets=input_sheet or None,
+            active_sheet_only=active_sheet_only,
             output_dir=request_output_dir,
             output_path=request_output_path,
             logs_dir=resolved_logs_dir,
@@ -170,6 +181,11 @@ def process_batch(
         "-s",
         help="Optional worksheet(s) to ingest for every file; defaults to all visible sheets.",
     ),
+    active_sheet_only: bool = typer.Option(
+        False,
+        "--active-sheet-only",
+        help="Process only the active worksheet for each file.",
+    ),
     logs_dir: Optional[Path] = LOGS_DIR_OPTION,
     log_format: Optional[LogFormat] = LOG_FORMAT_OPTION,
     log_level: Optional[str] = LOG_LEVEL_OPTION,
@@ -178,6 +194,12 @@ def process_batch(
     config_package: Optional[Path] = CONFIG_PACKAGE_OPTION,
 ) -> None:
     """Process a batch of files from a directory scan."""
+
+    if active_sheet_only and input_sheet:
+        raise BadParameter(
+            "--active-sheet-only cannot be combined with --input-sheet.",
+            param_hint="active_sheet_only",
+        )
 
     bootstrap_settings = Settings.load()
     config_path = resolve_config_package(config_package, bootstrap_settings)
@@ -214,6 +236,7 @@ def process_batch(
                 config_package=config_path,
                 input_file=path,
                 input_sheets=input_sheet or None,
+                active_sheet_only=active_sheet_only,
                 output_dir=resolved_output_dir,
                 logs_dir=resolved_logs_dir,
             )

@@ -1,43 +1,8 @@
 import clsx from "clsx";
 
+import { AlertTriangleIcon, ClockIcon } from "@ui/Icons";
+
 import type { MappingHealth } from "../types";
-
-function AlertIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M12 9v4" />
-      <path d="M12 17h.01" />
-      <path d="M10.3 3.6 2.5 18a1 1 0 0 0 .9 1.5h17.2a1 1 0 0 0 .9-1.5l-7.8-14.4a1 1 0 0 0-1.4 0Z" />
-    </svg>
-  );
-}
-
-function ClockIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v6l4 2" />
-    </svg>
-  );
-}
 
 export function MappingBadge({
   mapping,
@@ -73,7 +38,7 @@ export function MappingBadge({
         "border-warning-200 bg-warning-50 text-warning-700",
       )}
     >
-      <AlertIcon className="h-3 w-3" />
+      <AlertTriangleIcon className="h-3 w-3" />
       {mapping.attention > 0 ? `${mapping.attention} need attention` : `${mapping.unmapped} unmapped`}
     </span>
   );

@@ -19,6 +19,8 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+from pydantic import ValidationError
 
 from ade_api.api.deps import (
     get_runs_service,
@@ -81,6 +83,7 @@ get_sort_order = make_sort_dependency(
 _FILTER_KEYS = {
     "q",
     "status",
+    "configuration_id",
     "input_document_id",
     "created_after",
     "created_before",
@@ -99,7 +102,6 @@ _COLUMN_FILTER_KEYS = {
 
 def get_run_filters(
     request: Request,
-    filters: Annotated[RunFilters, Depends()],
 ) -> RunFilters:
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
@@ -115,7 +117,20 @@ def get_run_filters(
             for key in extras
         ]
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
-    return filters
+    data: dict[str, object] = {}
+    for key in allowed:
+        values = request.query_params.getlist(key)
+        if not values:
+            continue
+        data[key] = values if len(values) > 1 else values[0]
+
+    try:
+        return RunFilters.model_validate(data)
+    except ValidationError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.errors(),
+        ) from exc
 
 
 def get_run_column_filters(
@@ -496,7 +511,7 @@ async def stream_run_events_endpoint(
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: RunsService = runs_service_dependency,
-) -> StreamingResponse:
+) -> EventSourceResponse:
     run = await service.get_run(run_id)
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
@@ -512,7 +527,7 @@ async def stream_run_events_endpoint(
             start_sequence = None
     start_sequence = start_sequence or 0
 
-    async def event_stream() -> AsyncIterator[bytes]:
+    async def event_stream() -> AsyncIterator[dict[str, str]]:
         last_sequence = start_sequence
 
         async with service.subscribe_to_events(run) as subscription:
@@ -556,13 +571,13 @@ async def stream_run_events_endpoint(
                 if live_event.get("event") == "run.complete":
                     break
 
-    return StreamingResponse(
+    return EventSourceResponse(
         event_stream(),
-        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+        ping=15,
     )
 
 

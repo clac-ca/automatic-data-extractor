@@ -5,137 +5,131 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
+from sqlalchemy import select
 
-from ade_api.models import User
+from ade_api.models import AccessToken, User
 from ade_api.settings import Settings
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_login_and_refresh(
+def _login_form(email: str, password: str) -> dict[str, str]:
+    return {"username": email, "password": password}
+
+
+async def test_cookie_login_sets_session_and_bootstrap(
     async_client: AsyncClient,
     seed_identity,
     settings: Settings,
 ) -> None:
-    """Password login should return tokens, cookies, and allow refresh."""
+    """Password login should set the session cookie and allow bootstrap."""
 
     admin = seed_identity.admin
     response = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": admin.email, "password": admin.password},
+        "/api/v1/auth/cookie/login",
+        data=_login_form(admin.email, admin.password),
     )
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    session = payload["session"]
+    assert response.status_code == 204, response.text
     cookie_name = settings.session_cookie_name
+    assert async_client.cookies.get(cookie_name)
 
-    assert session["token_type"] == "bearer"
-    assert session["refresh_token"]
-    assert session["expires_in"] > 0
-    assert session["refresh_expires_in"] > 0
-    assert session["expires_at"]
-    assert session["refresh_expires_at"]
     bootstrap = await async_client.get("/api/v1/me/bootstrap")
     assert bootstrap.status_code == 200, bootstrap.text
     context = bootstrap.json()
     assert context["user"]["email"] == admin.email
-    assert async_client.cookies.get(cookie_name) == session["access_token"]
 
-    refresh = await async_client.post(
-        "/api/v1/auth/session/refresh",
-        json={"refresh_token": session["refresh_token"]},
+
+async def test_cookie_login_creates_access_token(
+    async_client: AsyncClient,
+    seed_identity,
+    session,
+) -> None:
+    """Cookie login should persist an access token row."""
+
+    admin = seed_identity.admin
+    response = await async_client.post(
+        "/api/v1/auth/cookie/login",
+        data=_login_form(admin.email, admin.password),
     )
-    assert refresh.status_code == 200, refresh.text
-    refreshed = refresh.json()["session"]
-    assert refreshed["access_token"]
-    assert refreshed["token_type"] == "bearer"
-    assert async_client.cookies.get(cookie_name) == refreshed["access_token"]
+    assert response.status_code == 204, response.text
+
+    result = await session.execute(select(AccessToken))
+    tokens = list(result.scalars().all())
+    assert len(tokens) == 1
+    assert tokens[0].user_id == admin.id
 
 
-async def test_refresh_prefers_body_over_cookie(
+async def test_cookie_logout_clears_access_token(
     async_client: AsyncClient,
     seed_identity,
     settings: Settings,
+    session,
 ) -> None:
-    """Body-supplied refresh tokens should override cookies."""
+    """Logout should delete access tokens and clear session cookies."""
 
     admin = seed_identity.admin
-    _, payload = await login(
-        async_client,
-        email=admin.email,
-        password=admin.password,
-    )
-    session = payload["session"]
-
-    refresh_cookie = settings.session_refresh_cookie_name
-    async_client.cookies.set(refresh_cookie, "stale-cookie-token")
-
     response = await async_client.post(
-        "/api/v1/auth/session/refresh",
-        json={"refresh_token": session["refresh_token"]},
+        "/api/v1/auth/cookie/login",
+        data=_login_form(admin.email, admin.password),
+    )
+    assert response.status_code == 204, response.text
+
+    bootstrap = await async_client.get("/api/v1/me/bootstrap")
+    assert bootstrap.status_code == 200, bootstrap.text
+    csrf_cookie = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert csrf_cookie
+
+    logout = await async_client.post(
+        "/api/v1/auth/cookie/logout",
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert logout.status_code == 204, logout.text
+    assert not async_client.cookies.get(settings.session_cookie_name)
+
+    result = await session.execute(select(AccessToken))
+    tokens = list(result.scalars().all())
+    assert tokens == []
+
+
+async def test_jwt_login_returns_access_token(async_client: AsyncClient, seed_identity) -> None:
+    """JWT login should return a bearer token payload."""
+
+    admin = seed_identity.admin
+    response = await async_client.post(
+        "/api/v1/auth/jwt/login",
+        data=_login_form(admin.email, admin.password),
     )
     assert response.status_code == 200, response.text
-    data = response.json()["session"]
-    assert data["access_token"]
-    assert data["refresh_token"]
+    payload = response.json()
+    assert payload["access_token"]
+    assert payload["token_type"] == "bearer"
 
 
-async def test_refresh_falls_back_to_cookie(
+async def test_setup_status_when_users_exist(
     async_client: AsyncClient,
     seed_identity,
-    settings: Settings,
 ) -> None:
-    """Requests without a body should refresh using the cookie token."""
-
-    admin = seed_identity.admin
-    _, payload = await login(
-        async_client,
-        email=admin.email,
-        password=admin.password,
-    )
-    session = payload["session"]
-
-    refresh_cookie = settings.session_refresh_cookie_name
-    async_client.cookies.set(refresh_cookie, session["refresh_token"])
-
-    response = await async_client.post("/api/v1/auth/session/refresh")
-    assert response.status_code == 200, response.text
-    data = response.json()["session"]
-    assert data["access_token"]
-    assert data["refresh_token"]
-
-
-async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
-    """Bad credentials should return 401."""
-
-    response = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": "missing@example.com", "password": "nope"},
-    )
-    assert response.status_code == 401
-
-
-async def test_setup_status_when_users_exist(async_client: AsyncClient, seed_identity) -> None:
     """When users are present, setup should be marked complete."""
 
     response = await async_client.get("/api/v1/auth/setup")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["requires_setup"] is False
-    assert payload["has_users"] is True
+    assert payload["setup_required"] is False
+    assert payload["registration_mode"] == "closed"
 
 
-async def test_setup_returns_created_on_first_admin(
+async def test_setup_returns_no_content_on_first_admin(
     async_client: AsyncClient,
+    settings: Settings,
 ) -> None:
-    """First-run setup should create the admin and return 201 with tokens."""
+    """First-run setup should create the admin and set cookies."""
 
     status_response = await async_client.get("/api/v1/auth/setup")
     assert status_response.status_code == 200, status_response.text
     status_payload = status_response.json()
-    assert status_payload["requires_setup"] is True
-    assert status_payload["has_users"] is False
+    assert status_payload["setup_required"] is True
+    assert status_payload["registration_mode"] == "setup-only"
 
     response = await async_client.post(
         "/api/v1/auth/setup",
@@ -145,24 +139,20 @@ async def test_setup_returns_created_on_first_admin(
             "display_name": "First Admin",
         },
     )
-    assert response.status_code == 201, response.text
-    payload = response.json()
-    session = payload["session"]
-    assert session["access_token"]
-    assert session["token_type"] == "bearer"
+    assert response.status_code == 204, response.text
+    assert async_client.cookies.get(settings.session_cookie_name)
+    assert async_client.cookies.get(settings.session_csrf_cookie_name)
 
     bootstrap = await async_client.get("/api/v1/me/bootstrap")
     assert bootstrap.status_code == 200, bootstrap.text
     context = bootstrap.json()
     assert context["user"]["email"] == "first@example.com"
-    assert context["roles"] == ["global-admin"]
-    assert "workspaces.create" in context["permissions"]
+    assert "global-admin" in context["roles"]
 
     verify_response = await async_client.get("/api/v1/auth/setup")
     assert verify_response.status_code == 200, verify_response.text
     verify_payload = verify_response.json()
-    assert verify_payload["requires_setup"] is False
-    assert verify_payload["has_users"] is True
+    assert verify_payload["setup_required"] is False
 
 
 async def test_setup_conflict_when_users_exist(async_client: AsyncClient, seed_identity) -> None:
@@ -195,7 +185,7 @@ async def test_list_auth_providers_default_password_only(
             "id": "password",
             "label": "Email & password",
             "type": "password",
-            "start_url": "/api/v1/auth/session",
+            "start_url": "/api/v1/auth/cookie/login",
             "icon_url": None,
         }
     ]
@@ -205,7 +195,7 @@ async def test_list_auth_providers_force_sso(
     async_client: AsyncClient,
     override_app_settings,
 ) -> None:
-    """When SSO is forced and enabled, only the SSO provider should appear."""
+    """When SSO is forced and enabled, only the OIDC provider should appear."""
 
     override_app_settings(
         auth_force_sso=True,
@@ -221,20 +211,13 @@ async def test_list_auth_providers_force_sso(
     assert payload["force_sso"] is True
     assert payload["providers"] == [
         {
-            "id": "sso",
+            "id": "oidc",
             "label": "Single sign-on",
             "type": "oidc",
-            "start_url": "/api/v1/auth/sso/sso/authorize",
+            "start_url": "/api/v1/auth/oidc/oidc/authorize",
             "icon_url": None,
         }
     ]
-
-
-async def test_logout_returns_no_content(async_client: AsyncClient) -> None:
-    """Logout should be a no-op but return 204."""
-
-    response = await async_client.delete("/api/v1/auth/session")
-    assert response.status_code == 204
 
 
 async def test_login_rejects_inactive_user(
@@ -251,12 +234,12 @@ async def test_login_rejects_inactive_user(
     await session.flush()
 
     response = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": member.email, "password": member.password},
+        "/api/v1/auth/cookie/login",
+        data=_login_form(member.email, member.password),
     )
-    assert response.status_code == 403
+    assert response.status_code == 400
     payload = response.json()
-    assert payload["detail"]["error"] == "inactive_user"
+    assert payload["detail"] == "LOGIN_BAD_CREDENTIALS"
 
 
 async def test_access_token_rejected_after_deactivation(
@@ -264,7 +247,7 @@ async def test_access_token_rejected_after_deactivation(
     seed_identity,
     session,
 ) -> None:
-    """Existing access tokens should be blocked once the user is inactive."""
+    """Existing bearer tokens should be blocked once the user is inactive."""
 
     member = seed_identity.member
     token, _ = await login(

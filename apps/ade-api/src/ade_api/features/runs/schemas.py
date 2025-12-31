@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
@@ -54,10 +54,20 @@ class RunCreateOptionsBase(BaseSchema):
         default=None,
         description="Optional worksheet names to ingest when processing XLSX files.",
     )
+    active_sheet_only: bool = Field(
+        default=False,
+        description="If true, process only the active worksheet when ingesting XLSX files.",
+    )
     metadata: dict[str, str] | None = Field(
         default=None,
         description="Opaque metadata to propagate with run telemetry.",
     )
+
+    @model_validator(mode="after")
+    def _validate_sheet_options(self) -> "RunCreateOptionsBase":
+        if self.active_sheet_only and self.input_sheet_names:
+            raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
+        return self
 
 
 class RunCreateOptions(RunCreateOptionsBase):
@@ -101,6 +111,10 @@ class RunBatchCreateOptions(BaseSchema):
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
+    )
+    active_sheet_only: bool = Field(
+        default=False,
+        description="If true, process only the active worksheet when ingesting XLSX files.",
     )
     metadata: dict[str, str] | None = Field(
         default=None,
@@ -206,23 +220,22 @@ class RunMetricsResource(BaseSchema):
     column_count_total: int | None = None
     column_count_empty: int | None = None
     column_count_mapped: int | None = None
-    column_count_ambiguous: int | None = None
     column_count_unmapped: int | None = None
-    column_count_passthrough: int | None = None
 
     field_count_expected: int | None = None
-    field_count_mapped: int | None = None
+    field_count_detected: int | None = None
+    field_count_not_detected: int | None = None
 
     cell_count_total: int | None = None
     cell_count_non_empty: int | None = None
 
 
 class RunFieldResource(BaseSchema):
-    """Field-level mapping summary for a run."""
+    """Field-level detection summary for a run."""
 
     field: str
     label: str | None = None
-    mapped: bool
+    detected: bool
     best_mapping_score: float | None = None
     occurrences_tables: int
     occurrences_columns: int
@@ -240,7 +253,7 @@ class RunColumnResource(BaseSchema):
     header_raw: str | None = None
     header_normalized: str | None = None
     non_empty_cells: int
-    mapping_status: str
+    mapping_status: Literal["mapped", "unmapped"]
     mapped_field: str | None = None
     mapping_score: float | None = None
     mapping_method: str | None = None
@@ -254,7 +267,7 @@ class RunResource(BaseSchema):
     object: RunObjectType = Field(default="ade.run", alias="object")
     workspace_id: UUIDStr
     configuration_id: UUIDStr
-    build_id: UUIDStr
+    build_id: UUIDStr | None = None
 
     status: RunStatus
     failure_code: str | None = None
