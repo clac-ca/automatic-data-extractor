@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 import { deleteWorkspace } from "@api/workspaces/api";
 import { workspacesKeys } from "@hooks/workspaces";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { Alert } from "@components/Alert";
-import { Button } from "@components/Button";
-import { ConfirmDialog } from "@components/ConfirmDialog";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
+import { Alert } from "@components/ui/alert";
+import { Button } from "@components/ui/button";
+import { ConfirmDialog } from "@components/ui/confirm-dialog";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
 export function DangerSettingsPage() {

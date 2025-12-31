@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 
-import { Button } from "@components/Button";
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/Tabs";
+import { Button } from "@components/ui/button";
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/ui/tabs";
 
 import { RUN_STATUS_META } from "../constants";
 import { computeMappingQuality, formatNumber, formatQuality, formatScore } from "../utils";

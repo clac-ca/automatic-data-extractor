@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 import { performLogout, sessionKeys } from "@api/auth/api";
 
 export default function LogoutScreen() {

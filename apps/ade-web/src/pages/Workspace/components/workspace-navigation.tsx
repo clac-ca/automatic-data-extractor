@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 
 import type { WorkspaceProfile } from "@schema/workspaces";
-import { ConfigureIcon, DocumentIcon, GearIcon, RunsIcon } from "@components/Icons";
+import { ConfigureIcon, DocumentIcon, GearIcon, RunsIcon } from "@components/icons";
 
 type WorkspaceSectionId =
   | "documents"

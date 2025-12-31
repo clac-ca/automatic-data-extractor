@@ -7,11 +7,11 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@hooks/workspaces";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
-import { Alert } from "@components/Alert";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
+import { Alert } from "@components/ui/alert";
 import { SaveBar } from "../components/SaveBar";
-import { Button } from "@components/Button";
+import { Button } from "@components/ui/button";
 
 const generalSchema = z.object({
   name: z.string().min(1, "Workspace name is required.").max(255, "Keep the name under 255 characters."),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@hooks/users/useUsersQuery";
 import { SettingsDrawer } from "../components/SettingsDrawer";
@@ -15,13 +15,13 @@ import {
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
 import type { RoleDefinition, WorkspaceMember } from "@schema/workspaces";
 import type { UserSummary } from "@api/users/api";
-import { Alert } from "@components/Alert";
-import { Avatar } from "@components/Avatar";
-import { Button } from "@components/Button";
-import { ConfirmDialog } from "@components/ConfirmDialog";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
-import { Select } from "@components/Select";
+import { Alert } from "@components/ui/alert";
+import { Avatar } from "@components/ui/avatar";
+import { Button } from "@components/ui/button";
+import { ConfirmDialog } from "@components/ui/confirm-dialog";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
+import { Select } from "@components/ui/select";
 
 type MemberWithUser = WorkspaceMember & { user?: UserSummary };
 

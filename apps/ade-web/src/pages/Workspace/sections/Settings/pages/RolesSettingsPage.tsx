@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
@@ -13,11 +13,11 @@ import {
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
 import type { PermissionDefinition, RoleDefinition } from "@schema/workspaces";
-import { Alert } from "@components/Alert";
-import { Button } from "@components/Button";
-import { ConfirmDialog } from "@components/ConfirmDialog";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
+import { Alert } from "@components/ui/alert";
+import { Button } from "@components/ui/button";
+import { ConfirmDialog } from "@components/ui/confirm-dialog";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
 
 type RoleFormValues = {
   readonly name: string;

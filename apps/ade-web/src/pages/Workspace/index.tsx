@@ -2,30 +2,29 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import clsx from "clsx";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { RequireSession } from "@components/auth/RequireSession";
-import { useSession } from "@components/auth/SessionContext";
+import { RequireSession } from "@components/providers/auth/RequireSession";
+import { useSession } from "@components/providers/auth/SessionContext";
 import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS } from "@hooks/workspaces";
 import { writePreferredWorkspaceId } from "@utils/workspaces";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { WorkspaceProvider } from "@pages/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider, useWorkbenchWindow } from "@pages/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@utils/storage";
-import { GlobalTopBar } from "@app/shell/GlobalTopBar";
-import { AppearanceMenu } from "@app/shell/AppearanceMenu";
-import { ProfileDropdown } from "@app/shell/ProfileDropdown";
-import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
+import { GlobalTopBar } from "@components/shell/GlobalTopBar";
+import { AppearanceMenu } from "@components/shell/AppearanceMenu";
+import { ProfileDropdown } from "@components/shell/ProfileDropdown";
+import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
 import { WorkspaceNav, WorkspaceNavList } from "@pages/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@pages/Workspace/components/workspace-navigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
-import { Alert } from "@components/Alert";
-import { PageState } from "@components/PageState";
-import { ChevronDownIcon, CloseIcon, MenuIcon } from "@components/Icons";
+import { Alert } from "@components/ui/alert";
+import { PageState } from "@components/layouts/page-state";
+import { ChevronDownIcon, CloseIcon, MenuIcon } from "@components/icons";
 import { useShortcutHint } from "@hooks/useShortcutHint";
-import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
-import { NotificationsProvider } from "@components/notifications";
+import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 
 import WorkspaceOverviewRoute from "@pages/Workspace/sections/Overview";
 import WorkspaceDocumentsRoute from "@pages/Workspace/sections/Documents";
@@ -147,11 +146,9 @@ interface WorkspaceShellProps {
 
 function WorkspaceShell({ workspace }: WorkspaceShellProps) {
   return (
-    <NotificationsProvider>
-      <WorkbenchWindowProvider workspaceId={workspace.id}>
-        <WorkspaceShellLayout workspace={workspace} />
-      </WorkbenchWindowProvider>
-    </NotificationsProvider>
+    <WorkbenchWindowProvider workspaceId={workspace.id}>
+      <WorkspaceShellLayout workspace={workspace} />
+    </WorkbenchWindowProvider>
   );
 }
 

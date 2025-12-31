@@ -208,6 +208,7 @@ def get_bearer_authenticator(
                     token=candidate,
                     secret=settings.jwt_secret_value,
                     algorithms=[settings.jwt_algorithm],
+                    audience=["fastapi-users:auth"],
                 )
             except Exception:
                 return None

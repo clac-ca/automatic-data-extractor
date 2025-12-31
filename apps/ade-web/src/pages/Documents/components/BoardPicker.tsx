@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ChevronDownSmallIcon, PlusIcon, StarIcon } from "@components/Icons";
+import { ChevronDownSmallIcon, PlusIcon, StarIcon } from "@components/icons";
 
 import type { BoardOption } from "../types";
 import { DEFAULT_BOARD_ID, DEFAULT_BOARD_LABEL, formatBoardLabel, normalizeBoardId } from "../utils";

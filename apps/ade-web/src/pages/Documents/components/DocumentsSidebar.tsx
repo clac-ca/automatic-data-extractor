@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-import { PlusIcon, TrashIcon } from "@components/Icons";
+import { PlusIcon, TrashIcon } from "@components/icons";
 
 import type { DocumentsFilters, SavedView } from "../types";
 import { buildBuiltInViews, buildFiltersForBuiltInView, type BuiltInViewCounts, type BuiltInViewId } from "../filters";

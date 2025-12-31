@@ -1,8 +1,8 @@
 import clsx from "clsx";
 
-import { MODE_OPTIONS, useTheme } from "@components/theme";
-import { ThemeSelect } from "@components/ThemeSelect";
-import { CheckIcon } from "@components/Icons";
+import { MODE_OPTIONS, useTheme } from "@components/providers/theme";
+import { ThemeSelect } from "@components/ui/theme-select";
+import { CheckIcon } from "@components/icons";
 
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 

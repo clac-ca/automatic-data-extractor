@@ -1,7 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 
-import { ExtensionsIcon, ExplorerIcon, GearIcon, SearchIcon, SourceControlIcon } from "@components/Icons";
+import { ExtensionsIcon, ExplorerIcon, GearIcon, SearchIcon, SourceControlIcon } from "@components/icons";
 
 export type ActivityBarView = "explorer" | "search" | "scm" | "extensions";
 

@@ -20,11 +20,11 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
-  Build URLs via helpers in `@app/nav`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
+  Build URLs via helpers in `@navigation`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
-  Do not import “upwards”: `api/`, `hooks/`, `utils/`, and `components/` must not depend on `pages/` or `app/`. ESLint enforces this.  
+  Do not import “upwards”: `api/`, `hooks/`, `utils/`, and `components/` must not depend on `pages/` or the app shell (`App.tsx`, `navigation/`). ESLint enforces this.  
   See: [`docs/02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)
 
 - **Reuse existing patterns**  
@@ -157,7 +157,7 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/settings`
 - Optional `/workspaces/:workspaceId/overview`
 
-Route helpers live in `@app/nav` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
+Route helpers live in `@navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
 
 See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)
 
@@ -182,7 +182,7 @@ Important UI state is encoded in **query parameters**, not local component state
 - Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
-Utilities for this live in `@app/nav/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
+Utilities for this live in `@navigation/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
 
 ---
 
@@ -225,7 +225,7 @@ Run creation, options (`RunOptions`), and event streaming (`ade.event/v1`) are d
 The **Configurations** section (Configuration Builder) is where workspace owners and engineers manage configuration packages.
 
 **Route:** `/workspaces/:workspaceId/config-builder`  
-**Folder:** `screens/workspace-shell/sections/config-builder`  
+**Folder:** `pages/Workspace/sections/ConfigBuilder`  
 **Nav label:** “Configuration Builder”
 
 Responsibilities:
@@ -285,12 +285,18 @@ ADE Web is a React + TypeScript SPA built with Vite and React Query.
 
 High-level layout (under `apps/ade-web/src`):
 
-- `app/` – application shell, providers, and top-level routing.
-- `screens/` (aliased as `@pages`) – feature/screen slices (auth, workspace directory, workspace shell, sections).
-- `ui/` – presentational component library (buttons, forms, top bar, search, tabs, context menus, code editor).
-- `shared/` – cross-cutting utilities and API modules (HTTP client, nav helpers, URL state, NDJSON streaming, permissions).
-- `types/` – handwritten domain models and mapping from generated types.
-- `types/` – OpenAPI-generated types.
+- `main.tsx` – Vite entry point.
+- `App.tsx` – application shell and top‑level routing.
+- `navigation/` – history-based navigation helpers and URL state.
+- `api/` – HTTP client + domain API calls.
+- `pages/` (aliased as `@pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
+- `components/` – shared UI primitives, layouts, providers, and shell chrome.
+- `hooks/` – shared React hooks (React Query + app hooks).
+- `utils/` – cross-cutting helpers (URL/auth helpers, storage, uploads).
+- `index.css` – global styles and theme tokens.
+- `types/` – curated domain models and re-exports.
+- `types/generated/` – OpenAPI-generated types.
+- `vite-env.d.ts` – Vite client typings + globals.
 - `test/` – Vitest setup and helpers.
 
 Data layer:

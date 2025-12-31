@@ -28,10 +28,10 @@ export default defineConfig({
   plugins: [tailwindcss(), react(), tsconfigPaths()],
   resolve: {
     alias: {
-      "@app": resolveSrc("app"),
       "@pages": resolveSrc("pages"),
       "@components": resolveSrc("components"),
       "@api": resolveSrc("api"),
+      "@navigation": resolveSrc("navigation"),
       "@hooks": resolveSrc("hooks"),
       "@utils": resolveSrc("utils"),
       "@schema": resolveSrc("types"),

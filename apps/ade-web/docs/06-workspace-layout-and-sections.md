@@ -16,7 +16,7 @@ It focuses on **layout and responsibilities**, not API details or low‑level co
 > - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Configuration Builder internals.
 > - [`10-ui-components-a11y-and-testing.md`](./10-ui-components-a11y-and-testing.md) – UI primitives, accessibility, and keyboard patterns.
 >
-> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `pages/Workspace/sections/{Documents|Runs|ConfigBuilder|Settings}` and route helpers in `@app/nav`. Section filters reuse the canonical query param helpers described in `docs/07`.
+> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `pages/Workspace/sections/{Documents|Runs|ConfigBuilder|Settings}` and section helpers in `pages/Workspace/components/workspace-navigation`. Section filters reuse the canonical query param helpers described in `docs/07`.
 
 ---
 
@@ -184,7 +184,7 @@ The Workspace shell renders everything inside a single workspace. It owns the fr
 - Host **section screens** inside the main content area.
 - Handle shell‑level loading/error states (e.g. workspace not found).
 
-The shell is implemented by a dedicated screen component, e.g. `WorkspaceShellScreen`.
+The shell is implemented by a dedicated screen component, e.g. `WorkspaceScreen`.
 
 ### 4.2 Route boundary
 
@@ -202,7 +202,7 @@ The shell:
 - Renders a **workspace‑level error state** if the workspace cannot be loaded (e.g. 404, permission denied).
 - Then resolves the section based on the first path segment after `:workspaceId`.
 
-If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the route helpers (e.g. `shared/nav/routes.ts`) and is consumed by `WorkspaceShellScreen`.
+If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the section helpers (e.g. `utils/workspacePaths.ts`) and is consumed by `WorkspaceScreen`.
 
 ### 4.3 Layout regions (desktop)
 
@@ -363,7 +363,7 @@ Responsibilities:
 - Host the **Configuration Builder workbench** for editing configuration code and manifest.
 - Manage the “return path” so users can exit the workbench back to where they came from.
 
-Naming stays consistent: the nav label is **Configuration Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder` (hosting the Configuration Builder workbench). The section always includes both the configurations list and the workbench editing surface.
+Naming stays consistent: the nav label is **Configuration Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder` (hosting the Configuration Builder workbench). The section always includes both the configurations list and the workbench editing surface.
 
 Shell integration:
 
@@ -481,7 +481,7 @@ Layout rules:
 
 ### 9.2 Workspace‑local “Section not found”
 
-The shell deliberately owns the “unknown section” experience. If the path segment after `/workspaces/:workspaceId/` does not map to a known section, `WorkspaceShellScreen` renders its **UnknownSection** state *inside the shell* instead of returning the global 404. This keeps the valid workspace context alive so the user can recover by choosing a known section (e.g. “Documents” or “Runs”) without being kicked back to the directory.
+The shell deliberately owns the “unknown section” experience. If the path segment after `/workspaces/:workspaceId/` does not map to a known section, `WorkspaceScreen` renders its **UnknownSection** state *inside the shell* instead of returning the global 404. This keeps the valid workspace context alive so the user can recover by choosing a known section (e.g. “Documents” or “Runs”) without being kicked back to the directory.
 
 ---
 
@@ -492,7 +492,7 @@ When adding new workspace sections, apply these rules:
 1. **Section lives under the shell**  
    - Route: `/workspaces/:workspaceId/<sectionSlug>`.  
    - Nav item in `WorkspaceNav`.  
-   - Screen component in `features/workspace-shell/<section>/`.
+   - Screen component in `pages/Workspace/sections/<Section>/`.
 
 2. **Use top bar slots rather than custom headers**  
    - `brand` and `leading` communicate where you are.  

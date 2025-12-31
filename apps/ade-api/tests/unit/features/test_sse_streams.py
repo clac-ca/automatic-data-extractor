@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import Request
+from sse_starlette.sse import ensure_bytes
 
 from ade_api.common.events import EventRecord, new_event_record
 from ade_api.features.builds.router import stream_build_events_endpoint
@@ -116,7 +117,13 @@ async def test_build_stream_formats_replayed_events_without_hanging() -> None:
     )
 
     chunks = [chunk async for chunk in response.body_iterator]
-    payload = b"".join(chunks).decode("utf-8").strip().split("\n\n")
+    separator = f"{response.sep}{response.sep}"
+    payload = (
+        b"".join(ensure_bytes(chunk, response.sep) for chunk in chunks)
+        .decode("utf-8")
+        .strip()
+        .split(separator)
+    )
 
     assert len(payload) == 2
     first_lines = payload[0].splitlines()
@@ -153,7 +160,13 @@ async def test_run_stream_respects_resume_cursor_header() -> None:
     )
 
     chunks = [chunk async for chunk in response.body_iterator]
-    payload = b"".join(chunks).decode("utf-8").strip().split("\n\n")
+    separator = f"{response.sep}{response.sep}"
+    payload = (
+        b"".join(ensure_bytes(chunk, response.sep) for chunk in chunks)
+        .decode("utf-8")
+        .strip()
+        .split(separator)
+    )
 
     assert len(payload) == 1  # resumed at id 1, so only the second event should stream
     lines = payload[0].splitlines()

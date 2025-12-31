@@ -23,8 +23,8 @@ Future versions will follow the same resource model. When breaking changes are r
   `POST /api/v1/auth/cookie/logout` to terminate the session.
 - **Bearer tokens**: `POST /api/v1/auth/jwt/login` returns a JWT for non-browser clients; send it via
   `Authorization: Bearer <token>`.
-- **API keys**: Issue long-lived credentials via `/api/v1/users/me/api-keys` for self-service or
-  `/api/v1/users/{user_id}/api-keys` for admins. Submit them via `X-API-Key` or `Authorization: Api-Key <token>`.
+- **API keys**: Issue long-lived credentials via `/api/v1/users/me/apiKeys` for self-service or
+  `/api/v1/users/{user_id}/apiKeys` for admins. Submit them via `X-API-Key` or `Authorization: Api-Key <token>`.
 - **Permissions**: Every route enforces RBAC. Global permissions (for example `users.read_all`) apply across the tenant; workspace
   permissions (for example `workspace.documents.manage`) apply to the workspace ID in the URL path.
 - **CSRF**: Enforced for cookie-authenticated unsafe methods via `X-CSRF-Token` + `ade_csrf` cookie.
@@ -40,7 +40,7 @@ will receive `403 Forbidden`.
 - `GET /users/{user_id}` – retrieve a single user's profile, including roles and permissions.
 - `PATCH /users/{user_id}` – update display name or activation (`users.manage_all`).
 - `GET /users/{user_id}/roles` – list global role assignments; `PUT`/`DELETE` manage assignments.
-- `GET /users/{user_id}/api-keys` – list user-owned API keys; `POST` issues, `DELETE /users/{user_id}/api-keys/{api_key_id}` revokes.
+- `GET /users/{user_id}/apiKeys` – list user-owned API keys; `POST` issues, `DELETE /users/{user_id}/apiKeys/{api_key_id}` revokes.
 - `/me` endpoints return the caller’s profile, effective permissions, and workspace list for bootstrap flows.
 
 ### RBAC catalog and assignments

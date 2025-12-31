@@ -13,7 +13,9 @@ mkdir -p "${generated_dir}"
 # App shell + navigation + bootstrap
 ade bundle apps/ade-web/README.md \
   apps/ade-web/src/main.tsx \
-  --dir apps/ade-web/src/app \
+  apps/ade-web/src/App.tsx \
+  apps/ade-web/src/components/providers/AppProviders.tsx \
+  --dir apps/ade-web/src/navigation \
   --ext ts --ext tsx --ext md \
   --out "${generated_dir}/ade-web-src-app.md" \
   --no-show
@@ -27,8 +29,9 @@ ade bundle apps/ade-web/README.md \
 
 # Shared auth + notifications + storage helpers
 ade bundle apps/ade-web/README.md \
-  --dir apps/ade-web/src/components/auth \
-  --dir apps/ade-web/src/components/notifications \
+  --dir apps/ade-web/src/components/providers/auth \
+  --dir apps/ade-web/src/components/providers/notifications \
+  --dir apps/ade-web/src/components/providers/theme \
   apps/ade-web/src/utils/storage.ts \
   --ext ts --ext tsx --ext md \
   --out "${generated_dir}/ade-web-src-shared-core.md" \

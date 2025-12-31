@@ -1,5 +1,5 @@
-import { Button } from "@components/Button";
-import { RunIcon } from "@components/Icons";
+import { Button } from "@components/ui/button";
+import { RunIcon } from "@components/icons";
 
 export function RunsHeader({ onExport }: { onExport: () => void }) {
   return (

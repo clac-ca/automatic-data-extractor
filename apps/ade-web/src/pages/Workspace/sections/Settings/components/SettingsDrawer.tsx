@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { CloseIcon } from "@components/Icons";
+import { CloseIcon } from "@components/icons";
 
 interface SettingsDrawerProps {
   readonly open: boolean;

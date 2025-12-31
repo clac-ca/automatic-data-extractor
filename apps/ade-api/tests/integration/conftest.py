@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import (
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
-from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.hashing import hash_password
 from ade_api.db.engine import ensure_database_ready, get_engine, reset_database_state
 from ade_api.db.session import get_session as get_session_dependency
@@ -340,8 +339,7 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
         await rbac_service.assign_role_if_missing(
             user_id=cast(UUID, admin.id),
             role_id=admin_role.id,
-            scope_type=ScopeType.GLOBAL,
-            scope_id=None,
+            workspace_id=None,
         )
 
     member_role = await rbac_service.get_role_by_slug(slug="global-user")
@@ -355,8 +353,7 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
             await rbac_service.assign_role_if_missing(
                 user_id=cast(UUID, candidate.id),
                 role_id=member_role.id,
-                scope_type=ScopeType.GLOBAL,
-                scope_id=None,
+                workspace_id=None,
             )
 
     workspace_owner_membership = WorkspaceMembership(
@@ -405,8 +402,7 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
         await rbac_service.assign_role_if_missing(
             user_id=cast(UUID, user.id),
             role_id=role.id,
-            scope_type=ScopeType.WORKSPACE,
-            scope_id=cast(UUID, membership.workspace_id),
+            workspace_id=cast(UUID, membership.workspace_id),
         )
 
     await _assign_workspace_role(workspace_owner_membership, workspace_owner, "workspace-owner")
@@ -419,8 +415,7 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
         await rbac_service.assign_role_if_missing(
             user_id=cast(UUID, admin.id),
             role_id=owner_role.id,
-            scope_type=ScopeType.WORKSPACE,
-            scope_id=cast(UUID, workspace.id),
+            workspace_id=cast(UUID, workspace.id),
         )
 
     await db_session.commit()

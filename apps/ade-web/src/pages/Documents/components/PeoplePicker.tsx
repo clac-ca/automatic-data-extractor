@@ -1,9 +1,9 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Input } from "@components/Input";
+import { Input } from "@components/ui/input";
 import type { WorkspacePerson } from "../types";
 import { UNASSIGNED_KEY } from "../filters";
-import { CheckIcon, ChevronDownIcon, SearchIcon } from "@components/Icons";
+import { CheckIcon, ChevronDownIcon, SearchIcon } from "@components/icons";
 
 export function PeoplePicker({
   people,

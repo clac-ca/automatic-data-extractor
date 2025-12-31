@@ -2291,6 +2291,7 @@ class RunsService:
             run=run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
+            error_message=None,
             worker_id=worker_id,
         )
         if completion is None:
@@ -2344,6 +2345,7 @@ class RunsService:
             run=run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
+            error_message=None,
             worker_id=worker_id,
         )
         if completion is None:

@@ -12,8 +12,8 @@ import {
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import clsx from "clsx";
 
-import { ContextMenu } from "@components/ContextMenu";
-import { TabsList } from "@components/Tabs";
+import { ContextMenu } from "@components/ui/context-menu";
+import { TabsList } from "@components/ui/tabs";
 
 import type { WorkbenchFileTab } from "../types";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "./EditorIcons";

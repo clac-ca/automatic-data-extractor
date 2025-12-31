@@ -622,8 +622,8 @@ Users:
 
 API keys:
 
-* Self-service: `GET /api/v1/users/me/api-keys`, `POST /api/v1/users/me/api-keys`, `DELETE /api/v1/users/me/api-keys/{api_key_id}`
-* Admin (per user): `GET /api/v1/users/{user_id}/api-keys`, `POST /api/v1/users/{user_id}/api-keys`, `DELETE /api/v1/users/{user_id}/api-keys/{api_key_id}`
+* Self-service: `GET /api/v1/users/me/apiKeys`, `POST /api/v1/users/me/apiKeys`, `DELETE /api/v1/users/me/apiKeys/{api_key_id}`
+* Admin (per user): `GET /api/v1/users/{user_id}/apiKeys`, `POST /api/v1/users/{user_id}/apiKeys`, `DELETE /api/v1/users/{user_id}/apiKeys/{api_key_id}`
 
 **Example functions**
 

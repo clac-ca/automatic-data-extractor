@@ -1,11 +1,11 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 
-import { Button } from "@components/Button";
-import { ContextMenu } from "@components/ContextMenu";
-import { Select } from "@components/Select";
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/Tabs";
+import { Button } from "@components/ui/button";
+import { ContextMenu } from "@components/ui/context-menu";
+import { Select } from "@components/ui/select";
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/ui/tabs";
 import type { RunResource } from "@schema";
 
 import { MAX_PREVIEW_ROWS } from "../data";
@@ -29,7 +29,7 @@ import {
   OpenInNewIcon,
   RefreshIcon,
   UserIcon,
-} from "@components/Icons";
+} from "@components/icons";
 import { CommentsPanel } from "./CommentsPanel";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { TagPicker } from "./TagPicker";

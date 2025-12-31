@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from urllib.parse import quote, urlparse
 
@@ -89,8 +89,20 @@ def _set_oidc_cookie(response: Response, settings: Settings, name: str, value: s
 
 
 def _clear_oidc_cookies(response: Response, settings: Settings) -> None:
-    response.delete_cookie("ade_oidc_state", path="/", domain=settings.session_cookie_domain)
-    response.delete_cookie("ade_oidc_return_to", path="/", domain=settings.session_cookie_domain)
+    params = _resolve_cookie_params(settings)
+    expired_at = utc_now() - timedelta(days=1)
+    for name in ("ade_oidc_state", "ade_oidc_return_to"):
+        response.set_cookie(
+            key=name,
+            value="",
+            max_age=0,
+            expires=expired_at,
+            path="/",
+            domain=settings.session_cookie_domain,
+            httponly=True,
+            secure=bool(params["secure"]),
+            samesite=str(params["samesite"]),
+        )
 
 
 def _redirect_error(settings: Settings, *, code: str) -> RedirectResponse:

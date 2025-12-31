@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { PageState } from "@components/PageState";
+import { PageState } from "@components/layouts/page-state";
 
 import { RunsFiltersBar } from "./components/RunsFiltersBar";
 import { RunsHeader } from "./components/RunsHeader";

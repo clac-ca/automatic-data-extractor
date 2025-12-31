@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 
-import { RequireSession } from "@components/auth/RequireSession";
-import { useSession } from "@components/auth/SessionContext";
+import { RequireSession } from "@components/providers/auth/RequireSession";
+import { useSession } from "@components/providers/auth/SessionContext";
 import { useWorkspacesQuery } from "@hooks/workspaces";
 import { getDefaultWorkspacePath, readPreferredWorkspaceId } from "@utils/workspaces";
 import type { WorkspaceProfile } from "@schema/workspaces";
-import { Button } from "@components/Button";
-import { PageState } from "@components/PageState";
-import { useLocation, useNavigate } from "@app/nav/history";
+import { Button } from "@components/ui/button";
+import { PageState } from "@components/layouts/page-state";
+import { useLocation, useNavigate } from "@navigation/history";
 
 export default function HomeScreen() {
   return (

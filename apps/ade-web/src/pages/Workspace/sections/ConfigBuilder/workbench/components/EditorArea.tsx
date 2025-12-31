@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
-import { TabsRoot } from "@components/Tabs";
+import { TabsRoot } from "@components/ui/tabs";
 
 import type { WorkbenchFileTab } from "../types";
 import { EditorKeybindings } from "./EditorKeybindings";

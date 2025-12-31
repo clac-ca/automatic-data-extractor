@@ -2,12 +2,12 @@ import { type ChangeEvent, type MutableRefObject } from "react";
 
 import type { DocumentUploadResponse } from "@api/documents";
 import type { UploadManagerItem, UploadManagerSummary } from "@hooks/documents/uploadManager";
-import { Button } from "@components/Button";
+import { Button } from "@components/ui/button";
 
 import { ConfigurationBanner } from "./ConfigurationBanner";
 import { ProcessingPausedBanner } from "./ProcessingPausedBanner";
 import { UploadManager } from "./UploadManager";
-import { DocumentIcon, UploadIcon } from "@components/Icons";
+import { DocumentIcon, UploadIcon } from "@components/icons";
 
 export function DocumentsHeader({
   onUploadClick,

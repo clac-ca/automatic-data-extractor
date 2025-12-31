@@ -60,7 +60,7 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
     payload = replay.json()
     assert payload["changes"], "Expected at least one change after the cursor."
     assert any(
-        entry["type"] == "document.upsert" and entry["document"]["id"] == document_id
+        entry["type"] == "document.upsert" and entry["row"]["id"] == document_id
         for entry in payload["changes"]
     )
 

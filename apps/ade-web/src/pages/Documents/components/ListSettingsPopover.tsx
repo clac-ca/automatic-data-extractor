@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Select } from "@components/Select";
+import { Select } from "@components/ui/select";
 
 import {
   DEFAULT_LIST_SETTINGS,
@@ -10,7 +10,7 @@ import {
   LIST_REFRESH_INTERVALS,
 } from "../listSettings";
 import type { ListPageSize, ListRefreshInterval, ListSettings } from "../types";
-import { ChevronDownIcon, SettingsIcon } from "@components/Icons";
+import { ChevronDownIcon, SettingsIcon } from "@components/icons";
 
 export function ListSettingsPopover({
   settings,

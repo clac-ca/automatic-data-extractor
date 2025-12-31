@@ -9,11 +9,11 @@
     "jsx": "react-jsx",
     "baseUrl": "src",
     "paths": {
-      "@app/*": ["app/*"],
       "@pages/*": ["pages/*"],
       "@components/*": ["components/*"],
       "@api": ["api/index.ts"],
       "@api/*": ["api/*"],
+      "@navigation/*": ["navigation/*"],
       "@hooks/*": ["hooks/*"],
       "@utils/*": ["utils/*"],
       "@schema": ["types"],

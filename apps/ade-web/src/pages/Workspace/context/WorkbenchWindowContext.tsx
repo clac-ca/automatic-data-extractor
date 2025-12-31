@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import clsx from "clsx";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 
 import { Workbench } from "@pages/Workspace/sections/ConfigBuilder/workbench/Workbench";
 import type { WorkbenchDataSeed } from "@pages/Workspace/sections/ConfigBuilder/workbench/types";
@@ -13,8 +13,8 @@ import {
   SearchParamsOverrideProvider,
   toURLSearchParams,
   type SetSearchParamsInit,
-} from "@app/nav/urlState";
-import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@components/Icons";
+} from "@navigation/urlState";
+import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@components/icons";
 
 type WorkbenchWindowState = "restored" | "maximized" | "minimized";
 

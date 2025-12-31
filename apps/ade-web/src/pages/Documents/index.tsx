@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
-import { useLocation, useNavigate } from "@app/nav/history";
-import { RequireSession } from "@components/auth/RequireSession";
-import { useSession } from "@components/auth/SessionContext";
+import { useLocation, useNavigate } from "@navigation/history";
+import { RequireSession } from "@components/providers/auth/RequireSession";
+import { useSession } from "@components/providers/auth/SessionContext";
 import { usePresenceChannel, type PresenceParticipant } from "@hooks/presence";
 import { useWorkspacesQuery } from "@hooks/workspaces";
 import { readPreferredWorkspaceId } from "@utils/workspaces";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { ConfirmDialog } from "@components/ConfirmDialog";
-import { PageState } from "@components/PageState";
+import { ConfirmDialog } from "@components/ui/confirm-dialog";
+import { PageState } from "@components/layouts/page-state";
 
 import { DocumentsBoard } from "./components/DocumentsBoard";
 import { BulkActionBar } from "./components/BulkActionBar";

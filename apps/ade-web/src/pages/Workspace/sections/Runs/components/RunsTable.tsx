@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-import { LogsIcon, OutputIcon } from "@components/Icons";
+import { LogsIcon, OutputIcon } from "@components/icons";
 import { useEffect, useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 

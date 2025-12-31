@@ -9,11 +9,11 @@ import WorkspacesIndexRoute from "..";
 const mockUseWorkspacesQuery = vi.fn();
 const mockUseSetDefaultWorkspaceMutation = vi.fn();
 
-vi.mock("@components/auth/RequireSession", () => ({
+vi.mock("@components/providers/auth/RequireSession", () => ({
   RequireSession: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("@components/auth/SessionContext", () => ({
+vi.mock("@components/providers/auth/SessionContext", () => ({
   useSession: () => ({
     user: { permissions: ["workspaces.manage_all"] },
   }),
@@ -35,7 +35,7 @@ vi.mock("@pages/Workspaces/components/WorkspaceDirectoryLayout", () => ({
   ),
 }));
 
-vi.mock("@app/shell/GlobalSearchField", () => ({
+vi.mock("@components/shell/GlobalSearchField", () => ({
   GlobalSearchField: (props: { className?: string }) => (
     <div data-testid="global-search" className={props.className} />
   ),

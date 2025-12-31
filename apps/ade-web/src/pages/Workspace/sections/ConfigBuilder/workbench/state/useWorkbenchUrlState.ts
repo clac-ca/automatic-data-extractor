@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 
-import { useSearchParams } from "@app/nav/urlState";
+import { useSearchParams } from "@navigation/urlState";
 import {
   DEFAULT_WORKBENCH_SEARCH,
   mergeWorkbenchSearchParams,

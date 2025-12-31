@@ -19,6 +19,16 @@ export default {
         muted: "rgb(var(--sys-color-surface-muted) / <alpha-value>)",
         "muted-foreground": "rgb(var(--sys-color-fg-muted) / <alpha-value>)",
 
+        primary: "rgb(var(--sys-color-accent) / <alpha-value>)",
+        "primary-foreground": "rgb(var(--sys-color-on-accent) / <alpha-value>)",
+        secondary: "rgb(var(--sys-color-surface-muted) / <alpha-value>)",
+        "secondary-foreground": "rgb(var(--sys-color-fg) / <alpha-value>)",
+        accent: "rgb(var(--sys-color-surface-muted) / <alpha-value>)",
+        "accent-foreground": "rgb(var(--sys-color-fg) / <alpha-value>)",
+        destructive: "rgb(var(--sys-color-danger) / <alpha-value>)",
+        "destructive-foreground": "rgb(var(--sys-color-on-danger) / <alpha-value>)",
+        input: "rgb(var(--sys-color-border) / <alpha-value>)",
+
         border: "rgb(var(--sys-color-border) / <alpha-value>)",
         "border-strong": "rgb(var(--sys-color-border-strong) / <alpha-value>)",
 

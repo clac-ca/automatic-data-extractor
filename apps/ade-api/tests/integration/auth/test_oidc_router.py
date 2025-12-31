@@ -68,7 +68,9 @@ async def test_oidc_authorize_sets_state_and_redirects(
     assert response.status_code in {302, 307}
     assert response.headers["location"] == client.authorization_url
     assert async_client.cookies.get("ade_oidc_state")
-    assert async_client.cookies.get("ade_oidc_return_to") == "/runs"
+    return_to = async_client.cookies.get("ade_oidc_return_to")
+    assert return_to is not None
+    assert return_to.strip('"') == "/runs"
     assert settings.oidc_redirect_url
 
 
@@ -90,12 +92,13 @@ async def test_oidc_callback_sets_session_and_redirects(
     )
 
     assert response.status_code in {302, 307}
-    expected = f"{settings.frontend_url or settings.server_public_url}/auth/callback?return_to=%2Fruns"
+    expected = f"{settings.frontend_url or settings.server_public_url}/auth/callback?return_to=/runs"
     assert response.headers["location"] == expected
     assert async_client.cookies.get(settings.session_cookie_name)
     assert async_client.cookies.get(settings.session_csrf_cookie_name)
-    assert async_client.cookies.get("ade_oidc_state") is None
-    assert async_client.cookies.get("ade_oidc_return_to") is None
+    set_cookies = [value.lower() for value in response.headers.get_list("set-cookie")]
+    assert any("ade_oidc_state=" in cookie and "max-age=0" in cookie for cookie in set_cookies)
+    assert any("ade_oidc_return_to=" in cookie and "max-age=0" in cookie for cookie in set_cookies)
 
 
 async def test_oidc_callback_json_mode_returns_ok(

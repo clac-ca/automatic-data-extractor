@@ -753,7 +753,7 @@ The workbench uses a shared Monaco wrapper component plus per‑configuration th
 
 ### 8.1 `CodeEditor` component
 
-`CodeEditor` lives under `src/components` and wraps the Monaco editor. Its props:
+`CodeEditor` lives under `src/components/ui/code-editor` and wraps the Monaco editor. Its props:
 
 ```ts
 interface CodeEditorProps {

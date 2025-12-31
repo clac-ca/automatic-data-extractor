@@ -90,6 +90,7 @@ def test_run_create_request_serializes_minimal_options() -> None:
             "dry_run": False,
             "validate_only": False,
             "force_rebuild": False,
+            "active_sheet_only": False,
             "input_document_id": request.options.input_document_id,
         }
     }

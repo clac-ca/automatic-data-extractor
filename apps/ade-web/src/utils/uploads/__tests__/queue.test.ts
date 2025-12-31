@@ -68,8 +68,12 @@ describe("useUploadQueue", () => {
   });
 
   it("retries failed uploads", async () => {
-    const deferred = createDeferred<{ data: string | null; status: number }>();
-    const startUpload = vi.fn(() => ({ promise: deferred.promise, abort: vi.fn() }));
+    const uploads: Array<Deferred<{ data: string | null; status: number }>> = [];
+    const startUpload = vi.fn(() => {
+      const attempt = createDeferred<{ data: string | null; status: number }>();
+      uploads.push(attempt);
+      return { promise: attempt.promise, abort: vi.fn() };
+    });
     const { result } = renderHook(() => useUploadQueue({ concurrency: 1, startUpload }));
 
     act(() => {
@@ -77,7 +81,7 @@ describe("useUploadQueue", () => {
     });
 
     await act(async () => {
-      deferred.reject(new Error("Upload failed."));
+      uploads[0].reject(new Error("Upload failed."));
     });
 
     await waitFor(() => {
@@ -91,7 +95,9 @@ describe("useUploadQueue", () => {
     await waitFor(() => {
       expect(startUpload).toHaveBeenCalledTimes(2);
     });
-    expect(result.current.items[0]?.status).toBe("uploading");
+    await waitFor(() => {
+      expect(result.current.items[0]?.status).toBe("uploading");
+    });
   });
 
   it("cancels in-flight uploads", async () => {

@@ -1,13 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 
 import { completeAuthCallback, sessionKeys } from "@api/auth/api";
-import { chooseDestination, resolveRedirectParam } from "@utils/auth/authNavigation";
+import { chooseDestination, resolveRedirectParam } from "@utils/authNavigation";
 import { ApiError } from "@api";
-import { Button } from "@components/Button";
-import { PageState } from "@components/PageState";
+import { Button } from "@components/ui/button";
+import { PageState } from "@components/layouts/page-state";
 
 export default function AuthCallbackScreen() {
   const navigate = useNavigate();

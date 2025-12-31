@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 import { ApiError } from "@api";
 import { sessionKeys } from "@api/auth/api";
 import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
@@ -11,12 +11,12 @@ import {
   buildLoginRedirect,
   chooseDestination,
   resolveRedirectParam,
-} from "@utils/auth/authNavigation";
+} from "@utils/authNavigation";
 import { completeSetup } from "@api/setup/api";
-import { Alert } from "@components/Alert";
-import { Button } from "@components/Button";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
+import { Alert } from "@components/ui/alert";
+import { Button } from "@components/ui/button";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
 
 const setupSchema = z
   .object({

@@ -33,7 +33,7 @@ We follow a few rules:
 
 ### Canonical sources and names
 
-- Build workspace routes via helpers in `@app/nav` instead of hand‑rolled strings so the route map below and the code stay in sync.
+- Build workspace routes via helpers in `@navigation` instead of hand‑rolled strings so the route map below and the code stay in sync.
 - Query parameter names for workspace sections are defined in the Documents/Runs filter helpers (`parseDocumentFilters` / `buildDocumentSearchParams`, `parseRunFilters` / `buildRunSearchParams`) described in `docs/06` and `docs/07`; add new keys there to keep deep links consistent.
 - Permission checks referenced in navigation (e.g. showing nav items) should use the keys from `@schema` and the workspace context helpers, not ad‑hoc strings.
 
@@ -86,17 +86,17 @@ Everything below `ScreenSwitch` (workspaces, documents, runs, Configuration Buil
 
 ```ts
 switch (true) {
-  case path === "/":                  return <EntryScreen />;
+  case path === "/":                  return <HomeScreen />;
   case path === "/login":             return <LoginScreen />;
   case path === "/auth/callback":     return <AuthCallbackScreen />;
   case path === "/setup":             return <SetupScreen />;
   case path === "/logout":            return <LogoutScreen />;
 
-  case path === "/workspaces":        return <WorkspaceDirectoryScreen />;
-  case path === "/workspaces/new":    return <CreateWorkspaceScreen />;
+  case path === "/workspaces":        return <WorkspacesScreen />;
+  case path === "/workspaces/new":    return <WorkspaceCreateScreen />;
 
   case path.startsWith("/workspaces/"):
-    return <WorkspaceShellScreen />;
+    return <WorkspaceScreen />;
 
   default:
     return <NotFoundScreen />;
@@ -138,25 +138,18 @@ Inside `/workspaces/:workspaceId`, the next path segment selects the section:
 
 * The `overview` section is optional; if not present, the shell can redirect to a default (e.g. Documents).
 
-Naming stays 1:1: the nav item reads **“Configuration Builder”**, the route segment is `config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder`. The Configuration Builder section always includes both the configurations list and the workbench editing mode.
+Naming stays 1:1: the nav item reads **“Configuration Builder”**, the route segment is `config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder`. The Configuration Builder section always includes both the configurations list and the workbench editing mode.
 
 If the workspace ID is valid but the section segment is unknown, the shell should render a **workspace‑local “Section not found”** state, not the global 404. This lets the user switch to another section without leaving the workspace.
 
-### 3.3 Route helpers (`shared/nav/routes.ts`)
+### 3.3 Route helpers
 
-Workspace routes are centralised in `shared/nav/routes.ts`:
+Workspace routes are derived from:
 
-```ts
-export const routes = {
-  workspaces: "/workspaces",
-  workspaceDocuments: (id: string) => `/workspaces/${id}/documents`,
-  workspaceRuns: (id: string) => `/workspaces/${id}/runs`,
-  workspaceConfigBuilder: (id: string) => `/workspaces/${id}/config-builder`,
-  workspaceSettings: (id: string) => `/workspaces/${id}/settings`,
-};
-```
+* `pages/Workspace/components/workspace-navigation.tsx` (section definitions + `getWorkspacePrimaryNavigation`)
+* `utils/workspacePaths.ts` (default section path)
 
-Use these helpers everywhere (links, navigation logic, tests) instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
+Use these helpers for nav links and redirects instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
 
 ---
 
@@ -226,7 +219,7 @@ type NavigationBlocker = (intent: NavigationIntent) => boolean;
 
 The result: back/forward, `Link` clicks, and `navigate()` all share one code path and one blocker mechanism.
 
-Because `new URL(to, window.location.origin)` assumes a root‑served app, if ADE Web ever needs to live under a sub‑path we will centralise the base path in `NavProvider` or `shared/nav/routes.ts` instead of sprinkling `/`‑prefixed strings through components.
+Because `new URL(to, window.location.origin)` assumes a root‑served app, if ADE Web ever needs to live under a sub‑path we will centralise the base path in `NavProvider` (or a dedicated routes module) instead of sprinkling `/`‑prefixed strings through components.
 
 ### 4.3 Reading the current location (`useLocation`)
 
@@ -613,17 +606,17 @@ When adding new routes or URL‑encoded state, follow this checklist:
 1. **Decide the owner and scope**
 
    * Global (auth, setup, workspace directory) vs workspace‑scoped (`/workspaces/:workspaceId/...`).
-   * Which feature folder will own the screen (`features/workspace-shell/runs`, etc.).
+   * Which feature folder will own the screen (`pages/Workspace/sections/Runs`, etc.).
 
 2. **Add a `Screen` component and hook it into `ScreenSwitch`**
 
    * Create `SomethingScreen.tsx` under the appropriate feature folder.
-   * Add a branch in `ScreenSwitch` (for top‑level) or in `WorkspaceShellScreen` (for sections).
+   * Add a branch in `ScreenSwitch` (for top‑level) or in `WorkspaceScreen` (for sections).
 
 3. **Define route helpers**
 
-   * Centralise URL construction in `shared/nav/routes.ts` (see §3.3), and add any new helpers there.
-   * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings. If we ever host under a sub‑path, this is where a base path would be defined.
+  * Centralise URL construction in `pages/Workspace/components/workspace-navigation.tsx` and `utils/workspacePaths.ts` (see §3.3).
+   * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
 
 4. **Register query parameters here**
 

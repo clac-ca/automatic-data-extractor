@@ -1,19 +1,19 @@
 import { useCallback, useMemo, useState } from "react";
 
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 
-import { RequireSession } from "@components/auth/RequireSession";
-import { useSession } from "@components/auth/SessionContext";
+import { RequireSession } from "@components/providers/auth/RequireSession";
+import { useSession } from "@components/providers/auth/SessionContext";
 import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@hooks/workspaces";
 import { getDefaultWorkspacePath, writePreferredWorkspaceId } from "@utils/workspaces";
 import type { WorkspaceProfile } from "@schema/workspaces";
-import { Button } from "@components/Button";
-import { PageState } from "@components/PageState";
+import { Button } from "@components/ui/button";
+import { PageState } from "@components/layouts/page-state";
 import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
 import { useShortcutHint } from "@hooks/useShortcutHint";
-import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
-import { GlobalSearchField } from "@app/shell/GlobalSearchField";
-import { Alert } from "@components/Alert";
+import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
+import { GlobalSearchField } from "@components/shell/GlobalSearchField";
+import { Alert } from "@components/ui/alert";
 
 export default function WorkspacesScreen() {
   return (

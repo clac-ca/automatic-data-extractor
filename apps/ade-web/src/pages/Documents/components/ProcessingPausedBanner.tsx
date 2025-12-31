@@ -1,5 +1,5 @@
-import { Button } from "@components/Button";
-import { AlertTriangleIcon } from "@components/Icons";
+import { Button } from "@components/ui/button";
+import { AlertTriangleIcon } from "@components/icons";
 
 export function ProcessingPausedBanner({
   canManageSettings,

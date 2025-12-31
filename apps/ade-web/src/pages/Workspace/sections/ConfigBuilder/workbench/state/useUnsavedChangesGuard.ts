@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 
-import { useLocation, useNavigationBlocker } from "@app/nav/history";
+import { useLocation, useNavigationBlocker } from "@navigation/history";
 
 const DEFAULT_PROMPT = "You have unsaved changes in the config editor. Are you sure you want to leave?";
 

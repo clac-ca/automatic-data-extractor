@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { ChevronDownSmallIcon, FilterIcon } from "@components/Icons";
+import { ChevronDownSmallIcon, FilterIcon } from "@components/icons";
 
 import type { DocumentsFilters, DocumentStatus, FileType, TagMode, WorkspacePerson } from "../types";
 import { fileTypeLabel } from "../utils";

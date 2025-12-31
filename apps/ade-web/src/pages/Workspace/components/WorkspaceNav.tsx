@@ -1,13 +1,13 @@
 import * as React from "react";
 import clsx from "clsx";
 
-import { NavLink } from "@app/nav/Link";
+import { NavLink } from "@navigation/Link";
 import {
   getWorkspacePrimaryNavigation,
   type WorkspaceNavigationItem,
 } from "@pages/Workspace/components/workspace-navigation";
 import type { WorkspaceProfile } from "@schema/workspaces";
-import { GearIcon, PinIcon, UnpinIcon } from "@components/Icons";
+import { GearIcon, PinIcon, UnpinIcon } from "@components/icons";
 
 const NAV_RAIL_WIDTH = "4.5rem";
 const NAV_DRAWER_WIDTH = "16rem";

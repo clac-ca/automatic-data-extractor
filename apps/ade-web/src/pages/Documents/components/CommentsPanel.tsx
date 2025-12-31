@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useMemo, useRef, useState } from "react";
 
-import { Button } from "@components/Button";
+import { Button } from "@components/ui/button";
 
 import type { DocumentComment, WorkspacePerson } from "../types";
 import { formatRelativeTime } from "../utils";

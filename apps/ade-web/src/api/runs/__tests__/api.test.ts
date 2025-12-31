@@ -144,6 +144,7 @@ describe("createRun", () => {
           validate_only: false,
           force_rebuild: false,
           log_level: "INFO",
+          active_sheet_only: false,
         },
       },
       signal: undefined,

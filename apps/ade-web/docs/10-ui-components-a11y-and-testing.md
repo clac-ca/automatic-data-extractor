@@ -27,7 +27,7 @@ All reusable UI components live in `src/components`. The layer has a narrow, int
   * No permission checks or business rules.
   * No direct `localStorage` or routing logic.
 
-If a component needs to know *which* run to start, *who* the user is, or *whether* an action is allowed, that logic belongs in `src/features`, not `src/components`.
+If a component needs to know *which* run to start, *who* the user is, or *whether* an action is allowed, that logic belongs in `src/pages`, not `src/components`.
 
 ---
 
@@ -37,30 +37,29 @@ The UI library is organised by function, not by domain:
 
 ```text
 src/components/
-  button/
-    Button.tsx
-    SplitButton.tsx
-  form/
-    Input.tsx
-    TextArea.tsx
-    Select.tsx
-    FormField.tsx
-  feedback/
-    Alert.tsx
-  identity/
-    Avatar.tsx
-    ProfileDropdown.tsx
-  navigation/
-    TabsRoot.tsx
-    TabsList.tsx
-    TabsTrigger.tsx
-    TabsContent.tsx
-    ContextMenu.tsx
+  ui/
+    button/
+    input/
+    select/
+    form-field/
+    alert/
+    context-menu/
+    tabs/
+    avatar/
+    avatar-stack/
+    code-editor/
+  layouts/
+    page-state/
+  providers/
+    auth/
+    notifications/
+    theme/
   shell/
     GlobalTopBar.tsx
     GlobalSearchField.tsx
-  code-editor/
-    CodeEditor.tsx
+    ProfileDropdown.tsx
+    AppearanceMenu.tsx
+  icons.tsx
   ...
 ```
 
@@ -685,7 +684,7 @@ Examples:
   * Simulate `Ctrl+S` and assert the save handler is called.
   * Simulate `Ctrl+W` and assert the active tab closes.
 
-These tests live under `src/features/.../__tests__/` and treat `src/components` components as black boxes.
+These tests live under `src/pages/.../__tests__/` and treat `src/components` components as black boxes.
 
 ### 8.4 Testing state persistence
 

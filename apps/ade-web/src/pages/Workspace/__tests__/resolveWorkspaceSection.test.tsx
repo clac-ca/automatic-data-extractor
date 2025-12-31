@@ -12,7 +12,7 @@ vi.mock("@pages/Workspace/sections/ConfigBuilder/detail", () => ({
 }));
 vi.mock("@pages/Workspace/sections/ConfigBuilder/workbench", () => ({ default: () => <div>editor</div> }));
 vi.mock("@pages/Workspace/sections/Settings", () => ({ default: () => <div>settings</div> }));
-vi.mock("@components/PageState", () => ({
+vi.mock("@components/layouts/page-state", () => ({
   PageState: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 

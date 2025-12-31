@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { UIEvent } from "react";
 import clsx from "clsx";
 
-import { DownloadIcon } from "@components/Icons";
+import { DownloadIcon } from "@components/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";

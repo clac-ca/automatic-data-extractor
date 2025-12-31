@@ -1,9 +1,9 @@
 import clsx from "clsx";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { NavLink } from "@app/nav/Link";
+import { NavLink } from "@navigation/Link";
 import type { WorkspaceSettingsNavGroup, WorkspaceSettingsRouteId } from "../settingsNav";
-import { Input } from "@components/Input";
+import { Input } from "@components/ui/input";
 
 interface SettingsLayoutProps {
   readonly workspaceName: string;

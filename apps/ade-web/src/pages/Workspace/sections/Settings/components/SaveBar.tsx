@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Button } from "@components/Button";
+import { Button } from "@components/ui/button";
 
 interface SaveBarProps {
   readonly isDirty: boolean;

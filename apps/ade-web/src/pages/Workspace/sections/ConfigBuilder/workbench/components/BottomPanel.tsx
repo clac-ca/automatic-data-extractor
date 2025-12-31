@@ -5,7 +5,7 @@ import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/Tabs";
+import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/ui/tabs";
 
 import { ConsoleTab } from "./ConsoleTab";
 import { ProblemsTab } from "./ProblemsTab";

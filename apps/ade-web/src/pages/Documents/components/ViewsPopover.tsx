@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ChevronDownSmallIcon, EyeIcon, PlusIcon, TrashIcon } from "@components/Icons";
+import { ChevronDownSmallIcon, EyeIcon, PlusIcon, TrashIcon } from "@components/icons";
 
 import type { SavedView } from "../types";
 import { buildBuiltInViews, type BuiltInViewCounts, type BuiltInViewId } from "../filters";

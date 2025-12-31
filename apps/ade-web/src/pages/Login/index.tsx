@@ -3,17 +3,17 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { useLocation, useNavigate } from "@app/nav/history";
+import { useLocation, useNavigate } from "@navigation/history";
 import { ApiError } from "@api";
 import { createSession, sessionKeys, type AuthProvider } from "@api/auth/api";
 import { useAuthProvidersQuery } from "@hooks/auth/useAuthProvidersQuery";
 import { useSessionQuery } from "@hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
-import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@utils/auth/authNavigation";
-import { Alert } from "@components/Alert";
-import { Button } from "@components/Button";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
+import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@utils/authNavigation";
+import { Alert } from "@components/ui/alert";
+import { Button } from "@components/ui/button";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
 
 const loginSchema = z.object({
   email: z

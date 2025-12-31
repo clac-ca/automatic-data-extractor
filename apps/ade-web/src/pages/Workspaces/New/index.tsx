@@ -1,22 +1,22 @@
 import { useEffect, useMemo } from "react";
 
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { ApiError } from "@api";
 import type { UserSummary } from "@api/users/api";
-import { RequireSession } from "@components/auth/RequireSession";
-import { useSession } from "@components/auth/SessionContext";
+import { RequireSession } from "@components/providers/auth/RequireSession";
+import { useSession } from "@components/providers/auth/SessionContext";
 import { useCreateWorkspaceMutation } from "@hooks/workspaces";
 import { getDefaultWorkspacePath } from "@utils/workspaces";
 import { useUsersQuery } from "@hooks/users/useUsersQuery";
 import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
-import { Alert } from "@components/Alert";
-import { Button } from "@components/Button";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
+import { Alert } from "@components/ui/alert";
+import { Button } from "@components/ui/button";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

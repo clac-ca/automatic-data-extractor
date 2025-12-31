@@ -9,9 +9,9 @@ export interface ListPageOptions {
   readonly signal?: AbortSignal;
 }
 
-type ListMyApiKeysQuery = NonNullable<paths["/api/v1/users/me/api-keys"]["get"]["parameters"]["query"]>;
+type ListMyApiKeysQuery = NonNullable<paths["/api/v1/users/me/apiKeys"]["get"]["parameters"]["query"]>;
 type ListUserApiKeysQuery = NonNullable<
-  paths["/api/v1/users/{user_id}/api-keys"]["get"]["parameters"]["query"]
+  paths["/api/v1/users/{user_id}/apiKeys"]["get"]["parameters"]["query"]
 >;
 type ListQuery = ListMyApiKeysQuery;
 
@@ -19,7 +19,7 @@ type CreateApiKeyRequest = components["schemas"]["ApiKeyCreateRequest"];
 
 export async function listMyApiKeys(options: ListPageOptions = {}): Promise<ApiKeyPage> {
   const query = buildListQuery(options);
-  const { data } = await client.GET("/api/v1/users/me/api-keys", {
+  const { data } = await client.GET("/api/v1/users/me/apiKeys", {
     params: { query },
     signal: options.signal,
   });
@@ -30,7 +30,7 @@ export async function listMyApiKeys(options: ListPageOptions = {}): Promise<ApiK
 }
 
 export async function createMyApiKey(payload: CreateApiKeyRequest): Promise<ApiKeyCreateResponse> {
-  const { data } = await client.POST("/api/v1/users/me/api-keys", { body: payload });
+  const { data } = await client.POST("/api/v1/users/me/apiKeys", { body: payload });
   if (!data) {
     throw new Error("Expected API key creation payload.");
   }
@@ -38,14 +38,14 @@ export async function createMyApiKey(payload: CreateApiKeyRequest): Promise<ApiK
 }
 
 export async function revokeMyApiKey(apiKeyId: string): Promise<void> {
-  await client.DELETE("/api/v1/users/me/api-keys/{api_key_id}", {
+  await client.DELETE("/api/v1/users/me/apiKeys/{api_key_id}", {
     params: { path: { api_key_id: apiKeyId } },
   });
 }
 
 export async function listUserApiKeys(userId: string, options: ListPageOptions = {}): Promise<ApiKeyPage> {
   const query: ListUserApiKeysQuery = buildListQuery(options);
-  const { data } = await client.GET("/api/v1/users/{user_id}/api-keys", {
+  const { data } = await client.GET("/api/v1/users/{user_id}/apiKeys", {
     params: { path: { user_id: userId }, query },
     signal: options.signal,
   });
@@ -59,7 +59,7 @@ export async function createUserApiKey(
   userId: string,
   payload: CreateApiKeyRequest,
 ): Promise<ApiKeyCreateResponse> {
-  const { data } = await client.POST("/api/v1/users/{user_id}/api-keys", {
+  const { data } = await client.POST("/api/v1/users/{user_id}/apiKeys", {
     params: { path: { user_id: userId } },
     body: payload,
   });
@@ -70,7 +70,7 @@ export async function createUserApiKey(
 }
 
 export async function revokeUserApiKey(userId: string, apiKeyId: string): Promise<void> {
-  await client.DELETE("/api/v1/users/{user_id}/api-keys/{api_key_id}", {
+  await client.DELETE("/api/v1/users/{user_id}/apiKeys/{api_key_id}", {
     params: { path: { user_id: userId, api_key_id: apiKeyId } },
   });
 }

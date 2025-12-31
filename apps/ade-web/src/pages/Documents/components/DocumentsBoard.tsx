@@ -3,7 +3,7 @@ import clsx from "clsx";
 import type { BoardColumn, BoardGroup, ListDensity, WorkspacePerson } from "../types";
 import { formatRelativeTime } from "../utils";
 import type { PresenceParticipant } from "@hooks/presence";
-import { AvatarStack, type AvatarStackItem } from "@components/AvatarStack";
+import { AvatarStack, type AvatarStackItem } from "@components/ui/avatar-stack";
 import { EmptyState } from "./EmptyState";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";

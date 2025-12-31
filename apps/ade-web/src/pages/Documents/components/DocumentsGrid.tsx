@@ -5,11 +5,11 @@ import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 
 import type { DocumentEntry, ListDensity, WorkspacePerson } from "../types";
 import type { PresenceParticipant } from "@hooks/presence";
-import { AvatarStack, type AvatarStackItem } from "@components/AvatarStack";
+import { AvatarStack, type AvatarStackItem } from "@components/ui/avatar-stack";
 import { getDocumentOutputRun } from "../data";
 import { fileTypeLabel, formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
-import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "@components/Icons";
+import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "@components/icons";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { RowActionsMenu } from "./RowActionsMenu";

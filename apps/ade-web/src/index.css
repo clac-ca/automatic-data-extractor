@@ -1,0 +1,647 @@
+@config "../tailwind.config.js";
+@import "tailwindcss";
+@import "tw-animate-css";
+/**
+ * ADE Theme Tokens (multi-theme + multi-mode)
+ *
+ * Token tiers:
+ *   --ref-*  = reference palettes (raw values; do NOT use directly in UI)
+ *   --sys-*  = semantic/system roles (what UI components should use)
+ *   --comp-* = component-specific tokens (editor/terminal/filetype)
+ *
+ * Axes:
+ *   data-theme = "default" | "ocean" | "forest" | "sunset" | "rose" | "grape" | "sand" | "carbon" | ...
+ *   data-mode  = "light" | "dark"
+ *
+ * Notes:
+ * - Keep 50 -> 900 ramps in the same direction in BOTH modes (do not reverse ramps).
+ * - Prefer theme-level overrides of --ref-* only; keep --sys-* stable for consistency.
+ * - Ensure accent fills + on-accent meet contrast targets for text (WCAG guidance).
+ * - Keep color-scheme in sync with mode for native controls rendering.
+ */
+
+/* -----------------------------------------------------------------------------
+   1) REFERENCE PALETTES (theme-specific, mode-agnostic)
+   -------------------------------------------------------------------------- */
+
+/* Default theme reference palettes (Slate-like neutrals + Indigo accent). */
+:root,
+:root[data-theme="default"] {
+  /* Neutral ramp (cool slate) */
+  --ref-neutral-0: 255 255 255;
+  --ref-neutral-50: 248 250 252;
+  --ref-neutral-100: 241 245 249;
+  --ref-neutral-200: 226 232 240;
+  --ref-neutral-300: 203 213 225;
+  --ref-neutral-400: 148 163 184;
+  --ref-neutral-500: 100 116 139;
+  --ref-neutral-600: 71 85 105;
+  --ref-neutral-700: 51 65 85;
+  --ref-neutral-800: 30 41 59;
+  --ref-neutral-900: 15 23 42;
+  --ref-neutral-950: 2 6 23;
+
+  /* Accent ramp (Indigo) */
+  --ref-accent-50: 238 242 255;
+  --ref-accent-100: 224 231 255;
+  --ref-accent-200: 199 210 254;
+  --ref-accent-300: 165 180 252;
+  --ref-accent-400: 129 140 248;
+  --ref-accent-500: 99 102 241;
+  --ref-accent-600: 79 70 229;
+  --ref-accent-700: 67 56 202;
+  --ref-accent-800: 55 48 163;
+  --ref-accent-900: 49 46 129;
+
+  /* Status ramps (consistent across themes; 50 lightest -> 900 darkest). */
+  --ref-success-50: 236 253 243;
+  --ref-success-100: 209 250 223;
+  --ref-success-200: 166 244 197;
+  --ref-success-300: 108 233 166;
+  --ref-success-400: 50 213 131;
+  --ref-success-500: 18 183 106;
+  --ref-success-600: 3 152 85;
+  --ref-success-700: 2 122 72;
+  --ref-success-800: 5 96 58;
+  --ref-success-900: 5 79 49;
+
+  --ref-warning-50: 255 251 235;
+  --ref-warning-100: 254 243 199;
+  --ref-warning-200: 253 230 138;
+  --ref-warning-300: 252 211 77;
+  --ref-warning-400: 251 191 36;
+  --ref-warning-500: 245 158 11;
+  --ref-warning-600: 217 119 6;
+  --ref-warning-700: 180 83 9;
+  --ref-warning-800: 146 64 14;
+  --ref-warning-900: 120 53 15;
+
+  --ref-danger-50: 254 242 242;
+  --ref-danger-100: 254 226 226;
+  --ref-danger-200: 254 202 202;
+  --ref-danger-300: 252 165 165;
+  --ref-danger-400: 248 113 113;
+  --ref-danger-500: 239 68 68;
+  --ref-danger-600: 220 38 38;
+  --ref-danger-700: 185 28 28;
+  --ref-danger-800: 153 27 27;
+  --ref-danger-900: 127 29 29;
+
+  --ref-info-50: 240 249 255;
+  --ref-info-100: 224 242 254;
+  --ref-info-200: 186 230 253;
+  --ref-info-300: 125 211 252;
+  --ref-info-400: 56 189 248;
+  --ref-info-500: 14 165 233;
+  --ref-info-600: 2 132 199;
+  --ref-info-700: 3 105 161;
+  --ref-info-800: 7 89 133;
+  --ref-info-900: 12 74 110;
+
+  /* Filetype colors (audit contrast against BOTH editor + terminal backgrounds). */
+  --ref-file-json: 241 208 107;
+  --ref-file-py: 81 154 186;
+  --ref-file-ts: 81 154 186;
+  --ref-file-tsx: 81 154 186;
+  --ref-file-js: 244 209 61;
+  --ref-file-jsx: 81 154 186;
+  --ref-file-md: 78 201 176;
+  --ref-file-env: 181 206 168;
+  --ref-file-txt: 156 220 254;
+  --ref-file-lock: 197 134 192;
+}
+
+/* -----------------------------------------------------------------------------
+   1b) THEME OVERRIDES (override ONLY --ref-*; modes map semantics)
+   -------------------------------------------------------------------------- */
+
+/* OCEAN - Cyan accent on Slate neutrals (crisp, modern, tech). */
+:root[data-theme="ocean"] {
+  --ref-accent-50: 236 254 255;
+  --ref-accent-100: 207 250 254;
+  --ref-accent-200: 165 243 252;
+  --ref-accent-300: 103 232 249;
+  --ref-accent-400: 34 211 238;
+  --ref-accent-500: 6 182 212;
+  --ref-accent-600: 8 145 178;
+  --ref-accent-700: 14 116 144;
+  --ref-accent-800: 21 94 117;
+  --ref-accent-900: 22 78 99;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* FOREST - Emerald accent on Slate neutrals (calm, success-forward). */
+:root[data-theme="forest"] {
+  --ref-accent-50: 236 253 245;
+  --ref-accent-100: 209 250 229;
+  --ref-accent-200: 167 243 208;
+  --ref-accent-300: 110 231 183;
+  --ref-accent-400: 52 211 153;
+  --ref-accent-500: 16 185 129;
+  --ref-accent-600: 5 150 105;
+  --ref-accent-700: 4 120 87;
+  --ref-accent-800: 6 95 70;
+  --ref-accent-900: 6 78 59;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* SUNSET - Orange accent on Slate neutrals (energetic, warm, friendly). */
+:root[data-theme="sunset"] {
+  --ref-accent-50: 255 247 237;
+  --ref-accent-100: 255 237 213;
+  --ref-accent-200: 254 215 170;
+  --ref-accent-300: 253 186 116;
+  --ref-accent-400: 251 146 60;
+  --ref-accent-500: 249 115 22;
+  --ref-accent-600: 234 88 12;
+  --ref-accent-700: 194 65 12;
+  --ref-accent-800: 154 52 18;
+  --ref-accent-900: 124 45 18;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* ROSE - Rose accent on Slate neutrals (bold, expressive). */
+:root[data-theme="rose"] {
+  --ref-accent-50: 255 241 242;
+  --ref-accent-100: 255 228 230;
+  --ref-accent-200: 254 205 211;
+  --ref-accent-300: 253 164 175;
+  --ref-accent-400: 251 113 133;
+  --ref-accent-500: 244 63 94;
+  --ref-accent-600: 225 29 72;
+  --ref-accent-700: 190 18 60;
+  --ref-accent-800: 159 18 57;
+  --ref-accent-900: 136 19 55;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* GRAPE - Violet accent on Slate neutrals (premium, creative pro). */
+:root[data-theme="grape"] {
+  --ref-accent-50: 245 243 255;
+  --ref-accent-100: 237 233 254;
+  --ref-accent-200: 221 214 254;
+  --ref-accent-300: 196 181 253;
+  --ref-accent-400: 167 139 250;
+  --ref-accent-500: 139 92 246;
+  --ref-accent-600: 124 58 237;
+  --ref-accent-700: 109 40 217;
+  --ref-accent-800: 91 33 182;
+  --ref-accent-900: 76 29 149;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* SAND - Warm Stone neutrals + Teal accent (editorial, paper and ink). */
+:root[data-theme="sand"] {
+  /* Neutral ramp: Tailwind Stone */
+  --ref-neutral-0: 255 255 255;
+  --ref-neutral-50: 250 250 249;
+  --ref-neutral-100: 245 245 244;
+  --ref-neutral-200: 231 229 228;
+  --ref-neutral-300: 214 211 209;
+  --ref-neutral-400: 168 162 158;
+  --ref-neutral-500: 120 113 108;
+  --ref-neutral-600: 87 83 78;
+  --ref-neutral-700: 68 64 60;
+  --ref-neutral-800: 41 37 36;
+  --ref-neutral-900: 28 25 23;
+  --ref-neutral-950: 12 10 9;
+
+  /* Accent ramp: Tailwind Teal */
+  --ref-accent-50: 240 253 250;
+  --ref-accent-100: 204 251 241;
+  --ref-accent-200: 153 246 228;
+  --ref-accent-300: 94 234 212;
+  --ref-accent-400: 45 212 191;
+  --ref-accent-500: 20 184 166;
+  --ref-accent-600: 13 148 136;
+  --ref-accent-700: 15 118 110;
+  --ref-accent-800: 17 94 89;
+  --ref-accent-900: 19 78 74;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* CARBON - Neutral Zinc + Blue accent (minimal, enterprise clean). */
+:root[data-theme="carbon"] {
+  /* Neutral ramp: Tailwind Zinc */
+  --ref-neutral-0: 255 255 255;
+  --ref-neutral-50: 250 250 250;
+  --ref-neutral-100: 244 244 245;
+  --ref-neutral-200: 228 228 231;
+  --ref-neutral-300: 212 212 216;
+  --ref-neutral-400: 161 161 170;
+  --ref-neutral-500: 113 113 122;
+  --ref-neutral-600: 82 82 91;
+  --ref-neutral-700: 63 63 70;
+  --ref-neutral-800: 39 39 42;
+  --ref-neutral-900: 24 24 27;
+  --ref-neutral-950: 9 9 11;
+
+  /* Accent ramp: Tailwind Blue */
+  --ref-accent-50: 239 246 255;
+  --ref-accent-100: 219 234 254;
+  --ref-accent-200: 191 219 254;
+  --ref-accent-300: 147 197 253;
+  --ref-accent-400: 96 165 250;
+  --ref-accent-500: 59 130 246;
+  --ref-accent-600: 37 99 235;
+  --ref-accent-700: 29 78 216;
+  --ref-accent-800: 30 64 175;
+  --ref-accent-900: 30 58 138;
+
+  /* Shell chrome (lighter in light mode, rich in dark mode) */
+  --ref-shell-bg-light: var(--ref-accent-50);
+  --ref-shell-fg-light: var(--ref-neutral-900);
+  --ref-shell-muted-light: var(--ref-neutral-600);
+  --ref-shell-border-light: var(--ref-accent-200);
+  --ref-shell-hover-light: var(--ref-accent-100);
+  --ref-shell-active-light: var(--ref-accent-200);
+  --ref-shell-indicator-light: var(--ref-accent-500);
+  --ref-shell-ring-light: var(--ref-accent-500);
+
+  --ref-shell-bg-dark: var(--ref-accent-900);
+  --ref-shell-fg-dark: var(--ref-neutral-0);
+  --ref-shell-muted-dark: var(--ref-accent-200);
+  --ref-shell-border-dark: var(--ref-accent-800);
+  --ref-shell-hover-dark: var(--ref-accent-800);
+  --ref-shell-active-dark: var(--ref-accent-700);
+  --ref-shell-indicator-dark: var(--ref-accent-400);
+  --ref-shell-ring-dark: var(--ref-neutral-0);
+}
+
+/* -----------------------------------------------------------------------------
+   2) SYSTEM TOKENS (mode-specific semantic mapping)
+   -------------------------------------------------------------------------- */
+
+/* LIGHT MODE */
+:root,
+:root[data-mode="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --sys-color-bg: var(--ref-neutral-50);               /* app canvas */
+  --sys-color-surface: var(--ref-neutral-0);           /* cards/panels */
+  --sys-color-surface-elevated: var(--ref-neutral-0);  /* popovers/menus */
+  --sys-color-surface-muted: var(--ref-neutral-100);   /* subtle fills, table zebra */
+
+  /* Text */
+  --sys-color-fg: var(--ref-neutral-900);
+  --sys-color-fg-muted: var(--ref-neutral-600);
+  --sys-color-fg-subtle: var(--ref-neutral-500);
+
+  /* Borders and focus */
+  --sys-color-border: var(--ref-neutral-200);
+  --sys-color-border-strong: var(--ref-neutral-300);
+  --sys-color-ring: var(--ref-accent-500);
+
+  /* Scrim/shadow colors (use with alpha at point of use) */
+  --sys-color-overlay: var(--ref-neutral-900);
+  --sys-color-shadow: var(--ref-neutral-900);
+
+  /* Primary action (accent)
+     Use a darker step so white text remains accessible across ALL bundled themes. */
+  --sys-color-accent: var(--ref-accent-700);
+  --sys-color-accent-hover: var(--ref-accent-800);
+  --sys-color-accent-active: var(--ref-accent-900);
+  --sys-color-on-accent: var(--ref-neutral-0);
+
+  /* Status (solid fills) */
+  --sys-color-success: var(--ref-success-700);
+  --sys-color-on-success: var(--ref-neutral-0);
+
+  --sys-color-warning: var(--ref-warning-500);
+  --sys-color-on-warning: var(--ref-neutral-900);
+
+  --sys-color-danger: var(--ref-danger-600);
+  --sys-color-on-danger: var(--ref-neutral-0);
+
+  --sys-color-info: var(--ref-info-700);
+  --sys-color-on-info: var(--ref-neutral-0);
+
+  /* Chrome: header + sidebar (default = neutral) */
+  --sys-color-header-bg: var(--ref-neutral-0);
+  --sys-color-header-fg: var(--ref-neutral-900);
+  --sys-color-header-fg-muted: var(--ref-neutral-600);
+  --sys-color-header-border: var(--ref-neutral-200);
+  --sys-color-header-ring: var(--ref-accent-500);
+
+  --sys-color-sidebar-bg: var(--ref-neutral-0);
+  --sys-color-sidebar-fg: var(--ref-neutral-900);
+  --sys-color-sidebar-fg-muted: var(--ref-neutral-600);
+  --sys-color-sidebar-border: var(--ref-neutral-200);
+  --sys-color-sidebar-ring: var(--ref-accent-500);
+  --sys-color-sidebar-item-bg: var(--ref-neutral-0);
+  --sys-color-sidebar-item-hover: var(--ref-neutral-100);
+  --sys-color-sidebar-item-active: var(--ref-neutral-100);
+  --sys-color-sidebar-item-indicator: var(--ref-accent-600);
+
+  /* Legacy shell tokens (alias to header) */
+  --sys-color-shell-bg: var(--sys-color-header-bg);
+  --sys-color-shell-fg: var(--sys-color-header-fg);
+  --sys-color-shell-muted: var(--sys-color-header-fg-muted);
+  --sys-color-shell-border: var(--sys-color-header-border);
+  --sys-color-shell-hover: var(--sys-color-header-border);
+  --sys-color-shell-active: var(--sys-color-header-border);
+  --sys-color-shell-active-indicator: var(--sys-color-sidebar-item-indicator);
+  --sys-color-shell-ring: var(--sys-color-header-ring);
+
+  /* Component: Editor (kept neutral + accent-driven selection) */
+  --comp-editor-bg: var(--sys-color-bg);
+  --comp-editor-fg: var(--sys-color-fg);
+  --comp-editor-cursor: var(--sys-color-ring);
+  --comp-editor-line-highlight: var(--ref-neutral-200);
+  --comp-editor-line-number: var(--ref-neutral-500);
+  --comp-editor-selection: var(--ref-accent-100);
+  --comp-editor-selection-inactive: var(--ref-neutral-200);
+  --comp-editor-gutter: var(--ref-neutral-100);
+
+  /* Component: Terminal (dark even in light mode; consistent dev feel) */
+  --comp-terminal-bg: var(--ref-neutral-900);
+  --comp-terminal-fg: var(--ref-neutral-200);
+  --comp-terminal-muted: var(--ref-neutral-400);
+  --comp-terminal-border: var(--ref-neutral-700);
+
+  /* Component: Filetypes */
+  --comp-file-json: var(--ref-file-json);
+  --comp-file-py: var(--ref-file-py);
+  --comp-file-ts: var(--ref-file-ts);
+  --comp-file-tsx: var(--ref-file-tsx);
+  --comp-file-js: var(--ref-file-js);
+  --comp-file-jsx: var(--ref-file-jsx);
+  --comp-file-md: var(--ref-file-md);
+  --comp-file-env: var(--ref-file-env);
+  --comp-file-txt: var(--ref-file-txt);
+  --comp-file-lock: var(--ref-file-lock);
+}
+
+/* DARK MODE */
+:root[data-mode="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --sys-color-bg: var(--ref-neutral-900);
+  --sys-color-surface: var(--ref-neutral-800);
+  --sys-color-surface-elevated: var(--ref-neutral-800);
+  --sys-color-surface-muted: var(--ref-neutral-700);
+
+  /* Text */
+  --sys-color-fg: var(--ref-neutral-200);
+  --sys-color-fg-muted: var(--ref-neutral-400);
+  --sys-color-fg-subtle: var(--ref-neutral-500);
+
+  /* Borders and focus */
+  --sys-color-border: var(--ref-neutral-700);
+  --sys-color-border-strong: var(--ref-neutral-600);
+
+  /* Brighter ring in dark mode so focus is obvious on low-luminance surfaces */
+  --sys-color-ring: var(--ref-accent-400);
+
+  --sys-color-overlay: var(--ref-neutral-950);
+  --sys-color-shadow: var(--ref-neutral-950);
+
+  /* Primary action (accent) - keep accessible with white text */
+  --sys-color-accent: var(--ref-accent-700);
+  --sys-color-accent-hover: var(--ref-accent-800);
+  --sys-color-accent-active: var(--ref-accent-900);
+  --sys-color-on-accent: var(--ref-neutral-0);
+
+  /* Status (solid fills) */
+  --sys-color-success: var(--ref-success-700);
+  --sys-color-on-success: var(--ref-neutral-0);
+
+  --sys-color-warning: var(--ref-warning-400);
+  --sys-color-on-warning: var(--ref-neutral-950);
+
+  --sys-color-danger: var(--ref-danger-600);
+  --sys-color-on-danger: var(--ref-neutral-0);
+
+  --sys-color-info: var(--ref-info-700);
+  --sys-color-on-info: var(--ref-neutral-0);
+
+  /* Chrome: header + sidebar (default = neutral) */
+  --sys-color-header-bg: var(--ref-neutral-950);
+  --sys-color-header-fg: var(--ref-neutral-200);
+  --sys-color-header-fg-muted: var(--ref-neutral-400);
+  --sys-color-header-border: var(--ref-neutral-800);
+  --sys-color-header-ring: var(--ref-accent-400);
+
+  --sys-color-sidebar-bg: var(--ref-neutral-900);
+  --sys-color-sidebar-fg: var(--ref-neutral-0);
+  --sys-color-sidebar-fg-muted: var(--ref-neutral-0);
+  --sys-color-sidebar-border: var(--ref-neutral-800);
+  --sys-color-sidebar-ring: var(--ref-accent-400);
+  --sys-color-sidebar-item-bg: var(--ref-neutral-900);
+  --sys-color-sidebar-item-hover: var(--ref-neutral-800);
+  --sys-color-sidebar-item-active: var(--ref-neutral-800);
+  --sys-color-sidebar-item-indicator: var(--ref-accent-400);
+
+  /* Legacy shell tokens (alias to header) */
+  --sys-color-shell-bg: var(--sys-color-header-bg);
+  --sys-color-shell-fg: var(--sys-color-header-fg);
+  --sys-color-shell-muted: var(--sys-color-header-fg-muted);
+  --sys-color-shell-border: var(--sys-color-header-border);
+  --sys-color-shell-hover: var(--sys-color-header-border);
+  --sys-color-shell-active: var(--sys-color-header-border);
+  --sys-color-shell-active-indicator: var(--sys-color-sidebar-item-indicator);
+  --sys-color-shell-ring: var(--sys-color-header-ring);
+
+  /* Editor
+     Dark-mode selection uses an accent-dark step so it belongs to the theme,
+     without relying on alpha blending (important for non-alpha token usage). */
+  --comp-editor-bg: var(--ref-neutral-900);
+  --comp-editor-fg: var(--sys-color-fg);
+  --comp-editor-cursor: var(--sys-color-ring);
+  --comp-editor-line-highlight: var(--ref-neutral-800);
+  --comp-editor-line-number: var(--ref-neutral-500);
+  --comp-editor-selection: var(--ref-accent-900);
+  --comp-editor-selection-inactive: var(--ref-neutral-800);
+  --comp-editor-gutter: var(--ref-neutral-900);
+
+  /* Terminal */
+  --comp-terminal-bg: var(--ref-neutral-950);
+  --comp-terminal-fg: var(--ref-neutral-200);
+  --comp-terminal-muted: var(--ref-neutral-400);
+  --comp-terminal-border: var(--ref-neutral-800);
+
+  /* Filetypes unchanged (validate contrast vs terminal/editor backgrounds) */
+}
+
+/* ---------------------------------------------------------------------------
+   3) THEMED CHROME OVERRIDES (non-default themes)
+   ------------------------------------------------------------------------ */
+
+/* Non-default themes: bold header, lighter sidebar (light mode + unspecified) */
+:root[data-theme]:not([data-theme="default"]):not([data-mode="dark"]) {
+  --sys-color-header-bg: var(--ref-accent-900);
+  --sys-color-header-fg: var(--ref-neutral-0);
+  --sys-color-header-fg-muted: var(--ref-neutral-200);
+  --sys-color-header-border: var(--ref-accent-800);
+  --sys-color-header-ring: var(--ref-neutral-0);
+
+  --sys-color-sidebar-bg: var(--ref-accent-800);
+  --sys-color-sidebar-fg: var(--ref-neutral-0);
+  --sys-color-sidebar-fg-muted: var(--ref-neutral-0);
+  --sys-color-sidebar-border: var(--ref-accent-700);
+  --sys-color-sidebar-ring: var(--ref-neutral-0);
+  --sys-color-sidebar-item-bg: var(--ref-accent-800);
+  --sys-color-sidebar-item-hover: var(--ref-accent-700);
+  --sys-color-sidebar-item-active: var(--ref-accent-700);
+  --sys-color-sidebar-item-indicator: var(--ref-accent-300);
+}
+
+/* Non-default themes: dark mode chrome */
+:root[data-theme]:not([data-theme="default"])[data-mode="dark"] {
+  --sys-color-header-bg: var(--ref-accent-900);
+  --sys-color-header-fg: var(--ref-neutral-0);
+  --sys-color-header-fg-muted: var(--ref-neutral-200);
+  --sys-color-header-border: var(--ref-accent-800);
+  --sys-color-header-ring: var(--ref-neutral-0);
+
+  --sys-color-sidebar-bg: var(--ref-accent-800);
+  --sys-color-sidebar-fg: var(--ref-neutral-0);
+  --sys-color-sidebar-fg-muted: var(--ref-neutral-0);
+  --sys-color-sidebar-border: var(--ref-accent-700);
+  --sys-color-sidebar-ring: var(--ref-neutral-0);
+  --sys-color-sidebar-item-bg: var(--ref-accent-800);
+  --sys-color-sidebar-item-hover: var(--ref-accent-700);
+  --sys-color-sidebar-item-active: var(--ref-accent-700);
+  --sys-color-sidebar-item-indicator: var(--ref-accent-300);
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply min-h-screen bg-background text-foreground antialiased;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+a {
+  @apply text-brand-600 transition-colors hover:text-brand-700;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.focus-ring {
+  --focus-ring-offset: rgb(var(--sys-color-bg) / 1);
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  --tw-ring-offset-color: var(--focus-ring-offset);
+}

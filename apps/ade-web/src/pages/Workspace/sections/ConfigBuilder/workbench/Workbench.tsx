@@ -14,7 +14,7 @@ import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";
@@ -33,10 +33,10 @@ import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./u
 import { hasFileDrag } from "./utils/fileDrop";
 import { isAssetsWorkbenchPath, isSafeWorkbenchPath, joinWorkbenchPath, normalizeWorkbenchPath } from "./utils/paths";
 
-import { ContextMenu, type ContextMenuItem } from "@components/ContextMenu";
-import { ConfirmDialog } from "@components/ConfirmDialog";
-import { SplitButton } from "@components/SplitButton";
-import { PageState } from "@components/PageState";
+import { ContextMenu, type ContextMenuItem } from "@components/ui/context-menu";
+import { ConfirmDialog } from "@components/ui/confirm-dialog";
+import { SplitButton } from "@components/ui/split-button";
+import { PageState } from "@components/layouts/page-state";
 import {
   ActionsIcon,
   CheckIcon,
@@ -50,7 +50,7 @@ import {
   SpinnerIcon,
   WindowMaximizeIcon,
   WindowRestoreIcon,
-} from "@components/Icons";
+} from "@components/icons";
 
 import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@api/configurations/api";
 import {
@@ -67,18 +67,18 @@ import {
 } from "@hooks/configurations";
 import type { FileReadJson } from "@schema/configurations";
 import { createScopedStorage } from "@utils/storage";
-import { isDarkMode, useTheme } from "@components/theme";
+import { isDarkMode, useTheme } from "@components/providers/theme";
 import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@api";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@api/documents";
 import { client } from "@api/client";
-import { useNotifications, type NotificationIntent } from "@components/notifications";
-import { Select } from "@components/Select";
-import { Button } from "@components/Button";
-import { Alert } from "@components/Alert";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
+import { useNotifications, type NotificationIntent } from "@components/providers/notifications";
+import { Select } from "@components/ui/select";
+import { Button } from "@components/ui/button";
+import { Alert } from "@components/ui/alert";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
 import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";
 import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";

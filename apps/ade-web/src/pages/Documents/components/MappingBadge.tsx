@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-import { AlertTriangleIcon, ClockIcon } from "@components/Icons";
+import { AlertTriangleIcon, ClockIcon } from "@components/icons";
 
 import type { MappingHealth } from "../types";
 

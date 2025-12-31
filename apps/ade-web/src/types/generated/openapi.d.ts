@@ -3,7 +3,7 @@
  * Do not make direct changes to the file.
  */
 
-export interface paths {
+export type paths = {
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -198,7 +198,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/me/api-keys": {
+    "/api/v1/users/me/apiKeys": {
         parameters: {
             query?: never;
             header?: never;
@@ -206,17 +206,17 @@ export interface paths {
             cookie?: never;
         };
         /** List API keys for the current user */
-        get: operations["list_my_api_keys_api_v1_users_me_api_keys_get"];
+        get: operations["list_my_api_keys_api_v1_users_me_apiKeys_get"];
         put?: never;
         /** Create an API key for the current user */
-        post: operations["create_my_api_key_api_v1_users_me_api_keys_post"];
+        post: operations["create_my_api_key_api_v1_users_me_apiKeys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/me/api-keys/{api_key_id}": {
+    "/api/v1/users/me/apiKeys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -227,13 +227,13 @@ export interface paths {
         put?: never;
         post?: never;
         /** Revoke one of the current user's API keys */
-        delete: operations["revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete"];
+        delete: operations["revoke_my_api_key_api_v1_users_me_apiKeys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{user_id}/api-keys": {
+    "/api/v1/users/{user_id}/apiKeys": {
         parameters: {
             query?: never;
             header?: never;
@@ -241,17 +241,17 @@ export interface paths {
             cookie?: never;
         };
         /** List API keys for a specific user (admin) */
-        get: operations["list_user_api_keys_api_v1_users__user_id__api_keys_get"];
+        get: operations["list_user_api_keys_api_v1_users__user_id__apiKeys_get"];
         put?: never;
         /** Create an API key for a specific user (admin) */
-        post: operations["create_user_api_key_api_v1_users__user_id__api_keys_post"];
+        post: operations["create_user_api_key_api_v1_users__user_id__apiKeys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{user_id}/api-keys/{api_key_id}": {
+    "/api/v1/users/{user_id}/apiKeys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -262,7 +262,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** Revoke an API key for a specific user (admin) */
-        delete: operations["revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete"];
+        delete: operations["revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1463,9 +1463,9 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-}
+};
 export type webhooks = Record<string, never>;
-export interface components {
+export type components = {
     schemas: {
         /**
          * ApiKeyCreateRequest
@@ -3983,7 +3983,7 @@ export interface components {
     requestBodies: never;
     headers: never;
     pathItems: never;
-}
+};
 export type $defs = Record<string, never>;
 export interface operations {
     read_health_api_v1_health_get: {
@@ -4385,7 +4385,7 @@ export interface operations {
             };
         };
     };
-    list_my_api_keys_api_v1_users_me_api_keys_get: {
+    list_my_api_keys_api_v1_users_me_apiKeys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -4427,7 +4427,7 @@ export interface operations {
             };
         };
     };
-    create_my_api_key_api_v1_users_me_api_keys_post: {
+    create_my_api_key_api_v1_users_me_apiKeys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4476,7 +4476,7 @@ export interface operations {
             };
         };
     };
-    revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete: {
+    revoke_my_api_key_api_v1_users_me_apiKeys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4528,7 +4528,7 @@ export interface operations {
             };
         };
     };
-    list_user_api_keys_api_v1_users__user_id__api_keys_get: {
+    list_user_api_keys_api_v1_users__user_id__apiKeys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -4579,7 +4579,7 @@ export interface operations {
             };
         };
     };
-    create_user_api_key_api_v1_users__user_id__api_keys_post: {
+    create_user_api_key_api_v1_users__user_id__apiKeys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4637,7 +4637,7 @@ export interface operations {
             };
         };
     };
-    revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete: {
+    revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {

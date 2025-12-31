@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { PageState } from "@components/PageState";
+import { PageState } from "@components/layouts/page-state";
 
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useWorkbenchWindow } from "@pages/Workspace/context/WorkbenchWindowContext";

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, MouseEvent as ReactMouseEvent } from "react";
 
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 
-import { Button } from "@components/Button";
-import { ConfirmDialog } from "@components/ConfirmDialog";
-import { ContextMenu, type ContextMenuItem } from "@components/ContextMenu";
-import { FormField } from "@components/FormField";
-import { Input } from "@components/Input";
-import { PageState } from "@components/PageState";
+import { Button } from "@components/ui/button";
+import { ConfirmDialog } from "@components/ui/confirm-dialog";
+import { ContextMenu, type ContextMenuItem } from "@components/ui/context-menu";
+import { FormField } from "@components/ui/form-field";
+import { Input } from "@components/ui/input";
+import { PageState } from "@components/layouts/page-state";
 
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { exportConfiguration, validateConfiguration } from "@api/configurations/api";
@@ -21,7 +21,7 @@ import {
   useMakeActiveConfigurationMutation,
 } from "@hooks/configurations";
 import type { ConfigurationRecord } from "@schema/configurations";
-import { useNotifications } from "@components/notifications";
+import { useNotifications } from "@components/providers/notifications";
 import { buildLastSelectionStorageKey, createLastSelectionStorage, persistLastSelection, type LastSelection } from "./storage";
 import { StatusPill } from "./components/StatusPill";
 import { normalizeConfigStatus, sortByUpdatedDesc, suggestDuplicateName } from "./utils/configs";

@@ -59,12 +59,12 @@ def _map_page(page: GenericPage[ApiKey]) -> ApiKeyPage:
 
 
 # ---------------------------------------------------------------------------
-# Self-service: /users/me/api-keys
+# Self-service: /users/me/apiKeys
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/users/me/api-keys",
+    "/users/me/apiKeys",
     response_model=ApiKeyPage,
     summary="List API keys for the current user",
     responses={
@@ -94,7 +94,7 @@ async def list_my_api_keys(
 
 
 @router.post(
-    "/users/me/api-keys",
+    "/users/me/apiKeys",
     dependencies=[Security(require_csrf)],
     response_model=ApiKeyCreateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -125,7 +125,7 @@ async def create_my_api_key(
 
 
 @router.delete(
-    "/users/me/api-keys/{api_key_id}",
+    "/users/me/apiKeys/{api_key_id}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke one of the current user's API keys",
@@ -160,12 +160,12 @@ async def revoke_my_api_key(
 
 
 # ---------------------------------------------------------------------------
-# Admin: per-user /users/{user_id}/api-keys
+# Admin: per-user /users/{user_id}/apiKeys
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/users/{user_id}/api-keys",
+    "/users/{user_id}/apiKeys",
     response_model=ApiKeyPage,
     summary="List API keys for a specific user (admin)",
     responses={
@@ -196,7 +196,7 @@ async def list_user_api_keys(
 
 
 @router.post(
-    "/users/{user_id}/api-keys",
+    "/users/{user_id}/apiKeys",
     dependencies=[Security(require_csrf)],
     response_model=ApiKeyCreateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -231,7 +231,7 @@ async def create_user_api_key(
 
 
 @router.delete(
-    "/users/{user_id}/api-keys/{api_key_id}",
+    "/users/{user_id}/apiKeys/{api_key_id}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke an API key for a specific user (admin)",

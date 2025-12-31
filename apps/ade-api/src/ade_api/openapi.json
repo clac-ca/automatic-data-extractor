@@ -586,13 +586,13 @@
         "security": []
       }
     },
-    "/api/v1/users/me/api-keys": {
+    "/api/v1/users/me/apiKeys": {
       "get": {
         "tags": [
           "api-keys"
         ],
         "summary": "List API keys for the current user",
-        "operationId": "list_my_api_keys_api_v1_users_me_api_keys_get",
+        "operationId": "list_my_api_keys_api_v1_users_me_apiKeys_get",
         "parameters": [
           {
             "name": "include_revoked",
@@ -682,7 +682,7 @@
           "api-keys"
         ],
         "summary": "Create an API key for the current user",
-        "operationId": "create_my_api_key_api_v1_users_me_api_keys_post",
+        "operationId": "create_my_api_key_api_v1_users_me_apiKeys_post",
         "parameters": [
           {
             "name": "X-CSRF-Token",
@@ -752,13 +752,13 @@
         ]
       }
     },
-    "/api/v1/users/me/api-keys/{api_key_id}": {
+    "/api/v1/users/me/apiKeys/{api_key_id}": {
       "delete": {
         "tags": [
           "api-keys"
         ],
         "summary": "Revoke one of the current user's API keys",
-        "operationId": "revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete",
+        "operationId": "revoke_my_api_key_api_v1_users_me_apiKeys__api_key_id__delete",
         "parameters": [
           {
             "name": "api_key_id",
@@ -824,13 +824,13 @@
         ]
       }
     },
-    "/api/v1/users/{user_id}/api-keys": {
+    "/api/v1/users/{user_id}/apiKeys": {
       "get": {
         "tags": [
           "api-keys"
         ],
         "summary": "List API keys for a specific user (admin)",
-        "operationId": "list_user_api_keys_api_v1_users__user_id__api_keys_get",
+        "operationId": "list_user_api_keys_api_v1_users__user_id__apiKeys_get",
         "parameters": [
           {
             "name": "user_id",
@@ -933,7 +933,7 @@
           "api-keys"
         ],
         "summary": "Create an API key for a specific user (admin)",
-        "operationId": "create_user_api_key_api_v1_users__user_id__api_keys_post",
+        "operationId": "create_user_api_key_api_v1_users__user_id__apiKeys_post",
         "parameters": [
           {
             "name": "user_id",
@@ -1016,13 +1016,13 @@
         ]
       }
     },
-    "/api/v1/users/{user_id}/api-keys/{api_key_id}": {
+    "/api/v1/users/{user_id}/apiKeys/{api_key_id}": {
       "delete": {
         "tags": [
           "api-keys"
         ],
         "summary": "Revoke an API key for a specific user (admin)",
-        "operationId": "revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete",
+        "operationId": "revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete",
         "parameters": [
           {
             "name": "user_id",

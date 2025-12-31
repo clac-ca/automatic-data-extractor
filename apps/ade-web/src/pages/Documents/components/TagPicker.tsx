@@ -3,10 +3,10 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query";
 
 import { client } from "@api/client";
-import { Input } from "@components/Input";
+import { Input } from "@components/ui/input";
 
 import type { components } from "@schema";
-import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TagIcon } from "@components/Icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TagIcon } from "@components/icons";
 
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 

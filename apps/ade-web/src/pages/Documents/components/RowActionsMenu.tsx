@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ContextMenu, type ContextMenuItem } from "@components/ContextMenu";
+import { ContextMenu, type ContextMenuItem } from "@components/ui/context-menu";
 
 import {
   CloseIcon,
@@ -11,7 +11,7 @@ import {
   MoreIcon,
   RefreshIcon,
   TrashIcon,
-} from "@components/Icons";
+} from "@components/icons";
 
 export function RowActionsMenu({
   onOpenDetails,

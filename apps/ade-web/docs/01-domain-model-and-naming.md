@@ -42,11 +42,11 @@ When you add or touch code, copy, or routes, keep these aligned:
 **Feature folders**
 
 ```text
-features/workspace-shell/sections/
-  documents
-  runs
-  config-builder
-  settings
+pages/Workspace/sections/
+  Documents
+  Runs
+  ConfigBuilder
+  Settings
 ```
 
 **API modules**
@@ -67,7 +67,7 @@ Keep these three in lockstep:
 
 * **Nav label**: `Configuration Builder`
 * **Route segment**: `/config-builder`
-* **Folder**: `features/workspace-shell/sections/config-builder`
+* **Folder**: `pages/Workspace/sections/ConfigBuilder`
 
 If these disagree, the app becomes much harder to reason about.
 
@@ -593,7 +593,7 @@ interface RunRef {
 
 **Routes**
 
-* Use nav helpers from `@app/nav` (`useNavigate`, `useLocation`, `Link`, `NavLink`).
+* Use nav helpers from `@navigation` (`useNavigate`, `useLocation`, `Link`, `NavLink`).
 * Match route param names to the `<entity>Id` convention:
 
   ```text

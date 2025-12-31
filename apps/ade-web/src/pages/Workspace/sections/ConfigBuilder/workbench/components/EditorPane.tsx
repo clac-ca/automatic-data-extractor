@@ -2,8 +2,8 @@ import { useMemo } from "react";
 
 import clsx from "clsx";
 
-import { CodeEditor } from "@components/CodeEditor";
-import { TabsContent } from "@components/Tabs";
+import { CodeEditor } from "@components/ui/code-editor";
+import { TabsContent } from "@components/ui/tabs";
 
 import type { WorkbenchFileTab } from "../types";
 

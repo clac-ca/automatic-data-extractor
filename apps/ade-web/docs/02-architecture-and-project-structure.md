@@ -11,7 +11,7 @@ If **01‑domain‑model‑and‑naming** tells you *what* the app talks about (
 The architecture is intentionally boring and predictable:
 
 - **Layer‑based** – code is grouped by technical layer (pages, components, api, hooks, utils, types), with features composed at the page level.
-- **Layered** – app shell → pages → components/api/hooks/utils → types.
+- **Layered** – app shell (`App.tsx` + `navigation/`) → pages → components/api/hooks/utils → types.
 - **One‑way dependencies** – each layer imports “downwards” only, which keeps cycles and hidden couplings out.
 - **Obvious naming** – given a route or concept name, you should know what file to search for.
 
@@ -20,7 +20,7 @@ Everything below exists to make those goals explicit.
 ### Instant understanding defaults
 
 - **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `pages/Workspace/sections/...`).
-- **One canonical home per concept:** navigation helpers live under `@app/nav`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
+- **One canonical home per concept:** navigation helpers live under `@navigation`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
 - **Reuse patterns:** new list/detail flows should copy Documents/Runs; new URL‑backed filters should reuse the existing filter helpers rather than inventing new query names; NDJSON streaming should go through the helper in `api/ndjson`.
 - **Respect the layers:** never import “upwards” (e.g. `api/` → `pages/`); linting enforces the boundaries.
 
@@ -35,14 +35,18 @@ All relevant code lives under `apps/ade-web/src`:
 ```text
 apps/ade-web/
   src/
-    app/              # App shell: providers, global layout, top-level routing
-    pages/            # Route-level pages (aliased as "@pages")
-    components/       # Reusable presentational components + providers
+    App.tsx           # App shell + top-level routing
+    main.tsx          # Vite entry point
+    navigation/       # History-based navigation helpers
     api/              # HTTP client + domain API calls
+    pages/            # Route-level pages (aliased as "@pages")
+    components/       # Shared UI primitives, layouts, providers, shell
     hooks/            # Shared React hooks (React Query + app hooks)
-    utils/            # Cross-cutting utilities (storage, url helpers, etc.)
+    utils/            # Cross-cutting utilities (URL/auth helpers, storage, uploads)
+    index.css         # Global styles and theme tokens
+    vite-env.d.ts     # Vite client typings + globals
     types/            # Hand-written domain models / schemas
-    types/  # Types generated from backend schemas
+      generated/      # Types generated from backend schemas
     test/             # Vitest setup and shared testing helpers
 ````
 
@@ -50,11 +54,11 @@ apps/ade-web/
 
 At a high level:
 
-* `app/` is the **composition root**.
+* `App.tsx` + `navigation/` are the **composition root**.
 * `pages/` contains **route‑level pages/features**.
 * `components/` contains **UI primitives** with no domain knowledge (plus shared providers).
 * `api/`, `hooks/`, `utils/` contain **infrastructure** and **cross‑cutting logic**.
-* `types/` and `types/` define **types**.
+* `types/` and `types/generated/` define **types**.
 * `test/` holds **test infrastructure**.
 
 ---
@@ -64,32 +68,32 @@ At a high level:
 We treat the codebase as layered, with imports flowing “down” only:
 
 ```text
-        app
-        ↑
+        App.tsx
+          ↑
       pages (@pages)
-   ↑    ↑    ↑    ↑
-components api hooks utils
+   ↑    ↑    ↑     ↑     ↑
+components api hooks navigation utils
         ↑
       types
         ↑
-  types
+  types/generated
         ↑
        test (can see everything)
 ```
 
 Allowed dependencies:
 
-* `app/` → may import from `pages/`, `components/`, `api/`, `hooks/`, `utils/`, `types/`, `types/`.
-* `pages/` → may import from `components/`, `api/`, `hooks/`, `utils/`, `types/`, `types/`.
-* `components/`, `api/`, `hooks/`, `utils/` → may import from `types/`, `types/`.
-* `types/` → may import from `types/` (if needed).
-* `types/` → must not import from anywhere else.
+* `App.tsx` → may import from `pages/`, `components/`, `navigation/`, `api/`, `hooks/`, `utils/`, `types/`, `types/generated/`.
+* `pages/` → may import from `components/`, `navigation/`, `api/`, `hooks/`, `utils/`, `types/`, `types/generated/`.
+* `components/`, `navigation/`, `api/`, `hooks/`, `utils/` → may import from `types/`, `types/generated/`.
+* `types/` → may import from `types/generated/` (if needed).
+* `types/generated/` → must not import from anywhere else.
 * `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@test`.
 
 Forbidden dependencies:
 
-* `components/`, `api/`, `hooks/`, `utils/` **must not** import from `pages/` or `app/`.
-* `pages/` **must not** import from `app/`.
+* `components/`, `navigation/`, `api/`, `hooks/`, `utils/` **must not** import from `pages/` or `App.tsx`.
+* `pages/` **must not** import from `App.tsx`.
 
 If you ever want to import “upwards” (e.g. from `api/` to `pages/`), that’s a sign the code should be moved into a smaller module at the right layer.
 
@@ -97,34 +101,31 @@ We lint these boundaries (module‑boundary rules in ESLint) so you get a fast f
 
 ---
 
-## 4. `app/` – application shell
+## 4. App shell (`App.tsx` + `navigation/`)
 
 **Responsibility:** Compose the entire app: providers, navigation, top‑level layout, and page selection.
 
 Typical structure:
 
 ```text
-src/app/
+src/
   App.tsx
-  ScreenSwitch.tsx
-  NavProvider/
-    NavProvider.tsx
+  main.tsx
+  navigation/
+    history.tsx
     Link.tsx
-    NavLink.tsx
-  AppProviders/
+    urlState.ts
+    paths.ts
+  components/providers/
     AppProviders.tsx
-  layout/
-    GlobalLayout.tsx
-    WorkspaceShellLayout.tsx
 ```
 
 What belongs here:
 
 * `<App>` – root component used in `main.tsx`.
-* `NavProvider` – custom navigation context built on `window.history`.
-* `AppProviders` – React Query client and other global providers.
-* `ScreenSwitch` – top‑level route switch that decides which feature page to show.
-* High‑level layout wrappers (e.g. global error boundary, shell frame).
+* `NavProvider` – custom navigation context built on `window.history` (see `navigation/`).
+* `AppProviders` – React Query client and other global providers (in `components/providers/`).
+* `ScreenSwitch` – top‑level route switch (lives in `App.tsx`).
 
 What does **not** belong here:
 
@@ -132,7 +133,7 @@ What does **not** belong here:
 * Direct API calls to `/api/v1/...`.
 * Reusable UI primitives (those go in `components/`).
 
-`app/` is glue and composition only.
+The app shell is glue and composition only.
 
 ---
 
@@ -144,48 +145,51 @@ Example structure:
 
 ```text
 src/pages/
-  auth/
-    LoginScreen.tsx
-    AuthCallbackScreen.tsx
-    LogoutScreen.tsx
-    useLoginMutation.ts
-  workspace-directory/
-    WorkspaceDirectoryScreen.tsx
-    WorkspaceCard.tsx
-    useWorkspaceDirectoryQuery.ts
-  workspace-shell/
-    WorkspaceShellScreen.tsx
-    nav/
+  Home/
+    index.tsx
+  Login/
+    index.tsx
+  AuthCallback/
+    index.tsx
+  Logout/
+    index.tsx
+  Setup/
+    index.tsx
+  Workspaces/
+    index.tsx
+    New/
+      index.tsx
+    components/
+      WorkspaceDirectoryLayout.tsx
+  Workspace/
+    index.tsx
+    components/
       WorkspaceNav.tsx
-      useWorkspaceNavItems.ts
+      workspace-navigation.tsx
+    context/
+      WorkspaceContext.tsx
     sections/
-      documents/
-        DocumentsScreen.tsx
-        DocumentsTable.tsx
-        DocumentsFilters.tsx
-        useDocumentsQuery.ts
-        useUploadDocumentMutation.ts
-      runs/
-        RunsScreen.tsx
-        RunsTable.tsx
-        RunsFilters.tsx
-        useRunsQuery.ts
-        useStartRunMutation.ts
-      config-builder/
-        ConfigBuilderScreen.tsx
-        ConfigList.tsx
+      Documents/
+        index.tsx
+        components/
+        hooks/
+      Runs/
+        index.tsx
+        components/
+      ConfigBuilder/
+        index.tsx
+        detail/
+          index.tsx
         workbench/
-          WorkbenchWindow.tsx
-          WorkbenchExplorer.tsx
-          WorkbenchTabs.tsx
-          useWorkbenchFiles.ts
-          useWorkbenchUrlState.ts
-      settings/
-        WorkspaceSettingsScreen.tsx
-        MembersTab.tsx
-        RolesTab.tsx
-      overview/
-        WorkspaceOverviewScreen.tsx
+          Workbench.tsx
+          components/
+          state/
+      Settings/
+        WorkspaceSettingsRoute.tsx
+        components/
+        pages/
+      Overview/
+        index.tsx
 ```
 
 Keep section naming 1:1 across the UI: the nav item is **Configuration Builder**, the route segment is `config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder`. That folder owns both the configurations list and the workbench editing mode.
@@ -224,35 +228,29 @@ Example structure:
 
 ```text
 src/components/
-  button/
-    Button.tsx
-    SplitButton.tsx
-  form/
-    Input.tsx
-    TextArea.tsx
-    Select.tsx
-    FormField.tsx
-  feedback/
-    Alert.tsx
-    ToastContainer.tsx
-  nav/
-    Tabs/
-      TabsRoot.tsx
-      TabsList.tsx
-      TabsTrigger.tsx
-      TabsContent.tsx
-    ContextMenu.tsx
-  identity/
-    Avatar.tsx
-    ProfileDropdown.tsx
-  layout/
-    Page.tsx
-    SidebarLayout.tsx
-  global/
+  ui/
+    button/
+    input/
+    select/
+    form-field/
+    alert/
+    context-menu/
+    tabs/
+    avatar/
+    avatar-stack/
+    code-editor/
+  layouts/
+    page-state/
+  providers/
+    auth/
+    notifications/
+    theme/
+  shell/
     GlobalTopBar.tsx
     GlobalSearchField.tsx
-  code/
-    CodeEditor.tsx
+    ProfileDropdown.tsx
+    AppearanceMenu.tsx
+  icons.tsx
 ```
 
 What belongs here:
@@ -262,8 +260,8 @@ What belongs here:
 * Alerts, banners, toasts.
 * Tabs, context menus, dropdowns.
 * Avatars and profile menus.
-* Global top bar and search field components.
-* Monaco editor wrapper (`CodeEditor`).
+* Global top bar and search field components (under `components/shell/`).
+* Monaco editor wrapper (`components/ui/code-editor`).
 
 What does **not** belong here:
 
@@ -305,18 +303,19 @@ src/hooks/
     useWorkspacesQuery.ts
 
 src/utils/
-  storage.ts
+  authNavigation.ts
+  workspacePaths.ts
   uploads/
     xhr.ts
-  auth/
-    authNavigation.ts
+  storage.ts
 ```
 
 What belongs here:
 
 * **API modules** wrapping `/api/v1/...` (no React).
 * **React Query + shared hooks** used by multiple pages.
-* **URL helpers, storage helpers, streaming helpers**, and other cross‑cutting utilities.
+* **URL helpers, streaming helpers**, and other cross‑cutting utilities.
+* **Storage and upload helpers** in `utils/`.
 
 What does **not** belong here:
 
@@ -327,9 +326,9 @@ Rule of thumb: if the logic only makes sense inside a single page/section, keep 
 
 ---
 
-## 8. `types/` and `types/` – types and models
+## 8. `types/` and `types/generated/` – types and models
 
-### 8.1 `types/`
+### 8.1 `types/generated/`
 
 **Responsibility:** Contain types generated directly from backend schemas (e.g. OpenAPI codegen).
 
@@ -360,7 +359,7 @@ Typical content:
 
 The curated types already use wire shapes, so mapping helpers are only needed when you introduce UI‑specific view models.
 
-Features import types from `@schema`, not from `@schema`, to keep the rest of the code insulated from backend schema churn.
+Features import types from `@schema`, not from `@schema/generated`, to keep the rest of the code insulated from backend schema churn.
 
 ---
 
@@ -389,14 +388,14 @@ Tests for a specific component or hook live alongside that code (e.g. `RunsScree
 
 We use a small set of TS/Vite aliases to keep imports readable:
 
-* `@app` → `src/app`
 * `@pages` → `src/pages`
 * `@components` → `src/components`
 * `@api` → `src/api`
+* `@navigation` → `src/navigation`
 * `@hooks` → `src/hooks`
 * `@utils` → `src/utils`
 * `@schema` → `src/types`
-* `@schema` → `src/types`
+* `@schema/generated` → `src/types/generated`
 * `@test` → `src/test` (tests only)
 
 Guidelines:
@@ -405,8 +404,8 @@ Guidelines:
 
   ```ts
   // Good
-  import { WorkspaceShellScreen } from "@pages/workspace-shell/WorkspaceShellScreen";
-  import { GlobalTopBar } from "@components/global/GlobalTopBar";
+  import WorkspaceScreen from "@pages/Workspace";
+  import { GlobalTopBar } from "@components/shell/GlobalTopBar";
   import { createRun } from "@api/runs/api";
   import type { RunResource } from "@schema";
 
@@ -504,10 +503,13 @@ To make the structure concrete, here’s how the **Documents** section of the wo
 
 ```text
 src/
-  app/
-    ScreenSwitch.tsx              # Routes /workspaces/:id/documents → DocumentsScreen
-    nav/
-      urlState.ts                 # useSearchParams helpers
+  App.tsx                         # ScreenSwitch lives here
+  navigation/
+    urlState.ts                   # useSearchParams helpers
+  api/
+    documents/
+      index.ts                    # listWorkspaceDocuments, uploadDocument, deleteDocument...
+      uploads.ts
   pages/
     Workspace/
       sections/
@@ -516,13 +518,10 @@ src/
           components/
           hooks/
   components/
-    Button/
-    Input/
-    Alert/
-  api/
-    documents/
-      index.ts                    # listWorkspaceDocuments, uploadDocument, deleteDocument...
-      uploads.ts
+    ui/
+      button/
+      input/
+      alert/
   types/
     documents.ts                  # DocumentSummary, DocumentDetail, DocumentStatus
 ```
@@ -531,22 +530,22 @@ Flow:
 
 1. **Routing**
 
-   * `ScreenSwitch` examines the current location.
+   * `ScreenSwitch` (inside `App.tsx`) examines the current location.
    * `/workspaces/:workspaceId/documents` is mapped to `DocumentsScreen`.
 
 2. **Screen logic**
 
    * `DocumentsScreen`:
 
-     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@app/nav/urlState`.
+     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@navigation/urlState`.
      * Calls `useDocumentsQuery(workspaceId, filters)` to fetch data.
      * Renders the page layout.
      * Composes `DocumentsFilters`, `DocumentsTable`, and `RunExtractionDialog`.
 
 3. **Data fetching**
 
-   * `useDocumentsQuery` uses React Query and `api/documents` under the hood.
-   * `api/documents` builds the `/api/v1/workspaces/{workspace_id}/documents` URL and parses the JSON response.
+   * `useDocumentsQuery` uses React Query and `@api/documents` under the hood.
+   * `@api/documents` builds the `/api/v1/workspaces/{workspace_id}/documents` URL and parses the JSON response.
    * The response is mapped into `DocumentSummary[]` using types from `@schema/documents`.
 
 4. **Presentation**
@@ -554,7 +553,7 @@ Flow:
    * `DocumentsTable` and `DocumentsFilters` are presentational components:
 
      * They receive data and callbacks via props.
-     * They use `components` primitives (`Button`, `Input`, `Alert`) for consistent look and accessibility.
+     * They use `components/ui` primitives (`Button`, `Input`, `Alert`) for consistent look and accessibility.
 
 The **Runs** section follows the same pattern, with:
 
@@ -563,4 +562,4 @@ The **Runs** section follows the same pattern, with:
 * `api/runs/api.ts`.
 * Domain types in `types/runs.ts`.
 
-If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/ScreenSwitch.tsx`, use `api/`, `hooks/`, and `utils/` for cross‑cutting logic, and build the UI out of `components/` primitives.
+If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `App.tsx`, use `api/`, `hooks/`, and `utils/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.

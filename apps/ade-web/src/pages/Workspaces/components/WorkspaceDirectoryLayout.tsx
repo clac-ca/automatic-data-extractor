@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "@app/nav/history";
+import { useNavigate } from "@navigation/history";
 
-import { useSession } from "@components/auth/SessionContext";
-import { AppearanceMenu } from "@app/shell/AppearanceMenu";
-import { GlobalTopBar, type GlobalTopBarSearchProps } from "@app/shell/GlobalTopBar";
-import { ProfileDropdown } from "@app/shell/ProfileDropdown";
-import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
-import { DirectoryIcon } from "@components/Icons";
+import { useSession } from "@components/providers/auth/SessionContext";
+import { AppearanceMenu } from "@components/shell/AppearanceMenu";
+import { GlobalTopBar, type GlobalTopBarSearchProps } from "@components/shell/GlobalTopBar";
+import { ProfileDropdown } from "@components/shell/ProfileDropdown";
+import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
+import { DirectoryIcon } from "@components/icons";
 
 interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;

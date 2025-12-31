@@ -12,7 +12,7 @@ import type { InfiniteData } from "@tanstack/react-query";
 
 import { ApiError } from "@api";
 import { useConfigurationsQuery } from "@hooks/configurations";
-import { useNotifications } from "@components/notifications";
+import { useNotifications } from "@components/providers/notifications";
 import { documentChangesStreamUrl, streamDocumentChanges, type DocumentUploadResponse } from "@api/documents";
 import {
   useUploadManager,
