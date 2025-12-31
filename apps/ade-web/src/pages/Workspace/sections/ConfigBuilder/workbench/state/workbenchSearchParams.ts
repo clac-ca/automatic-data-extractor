@@ -21,7 +21,6 @@ export const DEFAULT_WORKBENCH_SEARCH: WorkbenchSearchState = {
 };
 
 const WORKBENCH_PARAM_KEYS = ["pane", "console", "file"] as const;
-const LEGACY_WORKBENCH_PARAM_KEYS = ["tab", "view", "runId"] as const;
 
 function normalizeConsole(value: string | null): WorkbenchConsoleState {
   return value === "open" ? "open" : "closed";
@@ -69,10 +68,6 @@ export function mergeWorkbenchSearchParams(
   for (const key of WORKBENCH_PARAM_KEYS) {
     next.delete(key);
   }
-  for (const key of LEGACY_WORKBENCH_PARAM_KEYS) {
-    next.delete(key);
-  }
-
   if (nextState.pane !== DEFAULT_WORKBENCH_SEARCH.pane) {
     next.set("pane", nextState.pane);
   }

@@ -73,29 +73,17 @@ function normalizeSectionSegments(
   search: string,
   hash: string,
 ) {
-  const legacyMap: Record<string, string> = {
-    members: "access/members",
-    roles: "access/roles",
-    danger: "lifecycle/danger",
-  };
-
   const initialSegments = sectionSegments.length > 0 ? [...sectionSegments] : defaultSettingsSection.path.split("/");
-  const mappedFirst = legacyMap[initialSegments[0]];
-  const effectiveSegments = mappedFirst ? [...mappedFirst.split("/"), ...initialSegments.slice(1)] : initialSegments;
-
+  const effectiveSegments = initialSegments;
   const joined = effectiveSegments.join("/");
-  const target =
-    mappedFirst && joined
-      ? `/workspaces/${workspaceId}/settings/${joined}${search}${hash}`
-      : undefined;
   const needsDefaultRedirect = sectionSegments.length === 0;
-  const isKnownPath =
-    workspaceSettingsSections.some((section) => joined === section.path || joined.startsWith(`${section.path}/`)) ||
-    mappedFirst !== undefined;
+  const isKnownPath = workspaceSettingsSections.some(
+    (section) => joined === section.path || joined.startsWith(`${section.path}/`),
+  );
   const fallback = `/workspaces/${workspaceId}/settings/${defaultSettingsSection.path}${search}${hash}`;
 
   return {
     effectiveSegments: isKnownPath ? effectiveSegments : defaultSettingsSection.path.split("/"),
-    redirectTo: needsDefaultRedirect || !isKnownPath || mappedFirst ? target ?? fallback : null,
+    redirectTo: needsDefaultRedirect || !isKnownPath ? fallback : null,
   };
 }

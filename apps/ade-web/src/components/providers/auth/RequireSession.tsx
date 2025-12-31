@@ -107,14 +107,6 @@ export function RequireSession({ children }: RequireSessionProps) {
     return null;
   }
 
-  if (children) {
-    return (
-      <SessionProvider session={session} refetch={refetch}>
-        {children}
-      </SessionProvider>
-    );
-  }
-
   return (
     <SessionProvider session={session} refetch={refetch}>
       {children ?? null}

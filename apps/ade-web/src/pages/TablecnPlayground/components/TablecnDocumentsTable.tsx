@@ -5,8 +5,8 @@ import { DataTable } from "@components/tablecn/data-table/data-table";
 import { DataTableColumnHeader } from "@components/tablecn/data-table/data-table-column-header";
 import { useDataTable } from "@components/tablecn/hooks/use-data-table";
 import { Badge } from "@components/tablecn/ui/badge";
-import type { DocumentListRow } from "@pages/Documents/types";
-import { fileTypeLabel } from "@pages/Documents/utils";
+import type { DocumentListRow } from "@pages/Workspace/sections/Documents/types";
+import { fileTypeLabel } from "@pages/Workspace/sections/Documents/utils";
 import { DEFAULT_PAGE_SIZE, formatTimestamp } from "../utils";
 
 interface TablecnDocumentsTableProps {

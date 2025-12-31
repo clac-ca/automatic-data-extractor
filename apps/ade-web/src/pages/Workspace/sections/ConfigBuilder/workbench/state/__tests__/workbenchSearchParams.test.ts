@@ -4,7 +4,7 @@ import { DEFAULT_WORKBENCH_SEARCH, mergeWorkbenchSearchParams, readWorkbenchSear
 
 describe("workbenchSearchParams", () => {
   it("parses defaults and presence flags", () => {
-    const snapshot = readWorkbenchSearchParams("file=/src/app.ts&console=open&pane=problems&runId=run-123&view=split");
+    const snapshot = readWorkbenchSearchParams("file=/src/app.ts&console=open&pane=problems");
 
     expect(snapshot.fileId).toBe("/src/app.ts");
     expect(snapshot.console).toBe("open");
@@ -32,8 +32,8 @@ describe("workbenchSearchParams", () => {
     expect(snapshot.present.fileId).toBe(false);
   });
 
-  it("merges patches, removes defaults, and strips legacy keys", () => {
-    const base = new URLSearchParams("file=/one.ts&console=open&pane=terminal&runId=run-123&view=split");
+  it("merges patches and removes defaults", () => {
+    const base = new URLSearchParams("file=/one.ts&console=open&pane=terminal");
     const next = mergeWorkbenchSearchParams(base, {
       fileId: undefined,
       pane: "problems",
@@ -42,8 +42,6 @@ describe("workbenchSearchParams", () => {
     expect(next.get("console")).toBe("open");
     expect(next.get("pane")).toBe("problems");
     expect(next.has("file")).toBe(false);
-    expect(next.has("runId")).toBe(false);
-    expect(next.has("view")).toBe(false);
 
     const reset = mergeWorkbenchSearchParams(next, { pane: DEFAULT_WORKBENCH_SEARCH.pane, console: "closed" });
     expect(reset.has("pane")).toBe(false);

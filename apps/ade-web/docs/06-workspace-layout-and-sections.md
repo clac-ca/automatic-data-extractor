@@ -16,7 +16,7 @@ It focuses on **layout and responsibilities**, not API details or low‑level co
 > - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Configuration Builder internals.
 > - [`10-ui-components-a11y-and-testing.md`](./10-ui-components-a11y-and-testing.md) – UI primitives, accessibility, and keyboard patterns.
 >
-> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `pages/Workspace/sections/{Documents|Runs|ConfigBuilder|Settings}` and section helpers in `pages/Workspace/components/workspace-navigation`. Section filters reuse the canonical query param helpers described in `docs/07`.
+> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `pages/Workspace/sections/{Documents|Runs|ConfigBuilder|Settings}` and section helpers in `pages/Workspace/components/workspaceNavigation`. Section filters reuse the canonical query param helpers described in `docs/07`.
 
 ---
 

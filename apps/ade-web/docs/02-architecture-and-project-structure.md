@@ -165,7 +165,7 @@ src/pages/
     index.tsx
     components/
       WorkspaceNav.tsx
-      workspace-navigation.tsx
+      workspaceNavigation.tsx
     context/
       WorkspaceContext.tsx
     sections/

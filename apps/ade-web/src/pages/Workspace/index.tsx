@@ -18,7 +18,7 @@ import { AppearanceMenu } from "@components/shell/AppearanceMenu";
 import { ProfileDropdown } from "@components/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
 import { WorkspaceNav, WorkspaceNavList } from "@pages/Workspace/components/WorkspaceNav";
-import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@pages/Workspace/components/workspace-navigation";
+import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@pages/Workspace/components/workspaceNavigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
 import { Alert } from "@components/ui/alert";
 import { PageState } from "@components/layouts/page-state";

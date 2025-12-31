@@ -5,7 +5,7 @@ import { NavLink } from "@app/navigation/Link";
 import {
   getWorkspacePrimaryNavigation,
   type WorkspaceNavigationItem,
-} from "@pages/Workspace/components/workspace-navigation";
+} from "@pages/Workspace/components/workspaceNavigation";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { GearIcon, PinIcon, UnpinIcon } from "@components/icons";
 

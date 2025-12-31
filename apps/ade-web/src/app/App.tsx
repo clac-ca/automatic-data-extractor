@@ -9,7 +9,6 @@ import SetupScreen from "@pages/Setup";
 import WorkspacesScreen from "@pages/Workspaces";
 import WorkspaceCreateScreen from "@pages/Workspaces/New";
 import WorkspaceScreen from "@pages/Workspace";
-import DocumentsScreen from "@pages/Documents";
 import TablecnPlaygroundScreen from "@pages/TablecnPlayground";
 import LogoutScreen from "@pages/Logout";
 import NotFoundScreen from "@pages/NotFound";
@@ -55,8 +54,6 @@ export function ScreenSwitch() {
         return <WorkspaceCreateScreen />;
       }
       return <WorkspaceScreen />;
-    case "documents":
-      return <DocumentsScreen />;
     case "playground":
       if (second === "tablecn") {
         return <TablecnPlaygroundScreen />;

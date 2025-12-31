@@ -146,7 +146,7 @@ If the workspace ID is valid but the section segment is unknown, the shell shoul
 
 Workspace routes are derived from:
 
-* `pages/Workspace/components/workspace-navigation.tsx` (section definitions + `getWorkspacePrimaryNavigation`)
+* `pages/Workspace/components/workspaceNavigation.tsx` (section definitions + `getWorkspacePrimaryNavigation`)
 * `utils/workspacePaths.ts` (default section path)
 
 Use these helpers for nav links and redirects instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
@@ -615,7 +615,7 @@ When adding new routes or URL‑encoded state, follow this checklist:
 
 3. **Define route helpers**
 
-  * Centralise URL construction in `pages/Workspace/components/workspace-navigation.tsx` and `utils/workspacePaths.ts` (see §3.3).
+  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.tsx` and `utils/workspacePaths.ts` (see §3.3).
    * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
 
 4. **Register query parameters here**
