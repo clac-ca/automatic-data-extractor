@@ -124,12 +124,50 @@ function normalizeDateValue(value: unknown): string | null {
   return null;
 }
 
+function normalizeNumberValue(value: unknown) {
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = Number(trimmed);
+    return Number.isNaN(numeric) ? value : numeric;
+  }
+  return value;
+}
+
+function normalizeBooleanValue(value: unknown) {
+  if (value == null) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return value;
+}
+
 function normalizeFilterValue(filter: { id: string; variant: string; value: unknown }) {
   if (filter.variant === "date" || filter.variant === "dateRange") {
     if (Array.isArray(filter.value)) {
       return filter.value.map((entry) => normalizeDateValue(entry)).filter(Boolean);
     }
     return normalizeDateValue(filter.value);
+  }
+
+  if (filter.variant === "number" || filter.variant === "range") {
+    if (Array.isArray(filter.value)) {
+      return filter.value.map((entry) => normalizeNumberValue(entry)).filter((value) => value !== null);
+    }
+    return normalizeNumberValue(filter.value);
+  }
+
+  if (filter.variant === "boolean") {
+    if (Array.isArray(filter.value)) {
+      return filter.value.map((entry) => normalizeBooleanValue(entry)).filter((value) => value !== null);
+    }
+    return normalizeBooleanValue(filter.value);
   }
 
   if (filter.id === "assigneeId") {
@@ -216,7 +254,6 @@ export function normalizeDocumentsFilters(value: string | null): FilterItem[] {
 
 export function buildDocumentsListQuery(params: DocumentsListParams) {
   const query = new URLSearchParams();
-  query.set("page", String(params.page));
   query.set("perPage", String(params.perPage));
 
   const sort = normalizeDocumentsSort(params.sort);

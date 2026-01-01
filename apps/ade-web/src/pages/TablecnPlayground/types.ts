@@ -7,7 +7,6 @@ export type DocumentListResponse = components["schemas"]["DocumentListPage"] & {
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 
 export type DocumentsListParams = {
-  page: number;
   perPage: number;
   sort: string | null;
   filters: string | null;

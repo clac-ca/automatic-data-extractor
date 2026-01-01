@@ -1,16 +1,20 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { useSearchParams } from "@app/navigation/urlState";
 import { DEFAULT_PAGE_SIZE, parseNumberParam } from "../utils";
 import type { DocumentsListParams } from "../types";
 
 export function useDocumentsListParams(): DocumentsListParams {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const page = useMemo(
-    () => parseNumberParam(searchParams.get("page"), 1),
-    [searchParams],
-  );
+  useEffect(() => {
+    if (!searchParams.has("page")) return;
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.delete("page");
+      return params;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
   const perPage = useMemo(
     () => parseNumberParam(searchParams.get("perPage"), DEFAULT_PAGE_SIZE),
     [searchParams],
@@ -28,7 +32,6 @@ export function useDocumentsListParams(): DocumentsListParams {
   }, [searchParams]);
 
   return {
-    page,
     perPage,
     sort,
     filters,

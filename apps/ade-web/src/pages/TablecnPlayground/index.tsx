@@ -139,7 +139,7 @@ function TablecnDocumentsContainer({
   const lastCursorRef = useRef<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  const { page, perPage, sort, filters, joinOperator, q } =
+  const { perPage, sort, filters, joinOperator, q } =
     useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
   const normalizedFilters = useMemo(
@@ -159,14 +159,13 @@ function TablecnDocumentsContainer({
       filtersKey,
       joinOperator,
       q,
-      page,
     ],
-    [workspaceId, perPage, normalizedSort, filtersKey, joinOperator, q, page],
+    [workspaceId, perPage, normalizedSort, filtersKey, joinOperator, q],
   );
 
   const documentsQuery = useInfiniteQuery<DocumentPageResult>({
     queryKey,
-    initialPageParam: page > 0 ? page : 1,
+    initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
       fetchWorkspaceDocuments(
         workspaceId,
@@ -342,7 +341,7 @@ function TablecnDocumentsContainer({
   useEffect(() => {
     setUpdatesAvailable(false);
     lastCursorRef.current = changesCursor;
-  }, [changesCursor, filtersKey, joinOperator, page, perPage, q, normalizedSort, workspaceId]);
+  }, [changesCursor, filtersKey, joinOperator, perPage, q, normalizedSort, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !changesCursor) return;

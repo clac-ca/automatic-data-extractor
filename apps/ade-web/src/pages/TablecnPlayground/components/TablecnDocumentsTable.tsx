@@ -148,7 +148,10 @@ export function TablecnDocumentsTable({
           <DataTableColumnHeader column={column} label="Document" />
         ),
         cell: ({ row }) => (
-          <div className="min-w-[220px] font-medium">
+          <div
+            className="min-w-0 max-w-full truncate font-medium"
+            title={row.getValue<string>("name")}
+          >
             {row.getValue<string>("name")}
           </div>
         ),
@@ -480,17 +483,22 @@ export function TablecnDocumentsTable({
     <DataTable
       table={table}
       showPagination={false}
+      className="w-full [&_[data-slot=table]]:w-full [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full"
       onRowClick={onRowClick}
       isRowExpanded={isRowExpanded}
+      expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-hidden"
       renderExpandedRow={(row) => {
-        if (!PREVIEWABLE_FILE_TYPES.has(row.original.fileType)) {
-          return (
-            <div className="p-3 text-muted-foreground text-sm">
-              Preview not available for this file type.
-            </div>
-          );
-        }
-        return <TablecnDocumentPreviewGrid document={row.original} />;
+        return (
+          <div className="min-w-0 max-w-full">
+            {!PREVIEWABLE_FILE_TYPES.has(row.original.fileType) ? (
+              <div className="p-2 text-muted-foreground text-sm">
+                Preview not available for this file type.
+              </div>
+            ) : (
+              <TablecnDocumentPreviewGrid document={row.original} />
+            )}
+          </div>
+        );
       }}
     >
       <DataTableAdvancedToolbar table={table}>
@@ -544,9 +552,9 @@ function renderRunSummary(run: DocumentListRow["latestRun"] | null | undefined) 
   const timestamp = run.completedAt ?? run.startedAt;
   const statusLabel = formatRunStatus(String(run.status));
   return (
-    <div className="flex flex-col gap-0.5" title={run.errorSummary ?? undefined}>
-      <span className="capitalize">{statusLabel}</span>
-      <span className="text-xs text-muted-foreground">
+    <div className="flex min-w-0 flex-col gap-0.5" title={run.errorSummary ?? undefined}>
+      <span className="truncate capitalize">{statusLabel}</span>
+      <span className="truncate text-xs text-muted-foreground">
         {timestamp ? formatTimestamp(timestamp) : "-"}
       </span>
     </div>
@@ -562,10 +570,10 @@ function renderUserSummary(user: DocumentListRow["uploader"]) {
   const secondary = user.name ? user.email : null;
 
   return (
-    <div className="flex flex-col gap-0.5">
-      <span>{primary}</span>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="truncate">{primary}</span>
       {secondary ? (
-        <span className="text-xs text-muted-foreground">{secondary}</span>
+        <span className="truncate text-xs text-muted-foreground">{secondary}</span>
       ) : null}
     </div>
   );

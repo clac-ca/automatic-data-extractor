@@ -20,6 +20,7 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   onRowClick?: (row: Row<TData>, event: React.MouseEvent<HTMLTableRowElement>) => void;
   isRowExpanded?: (row: Row<TData>) => boolean;
   renderExpandedRow?: (row: Row<TData>) => React.ReactNode;
+  expandedRowCellClassName?: string;
 }
 
 export function DataTable<TData>({
@@ -29,15 +30,19 @@ export function DataTable<TData>({
   onRowClick,
   isRowExpanded,
   renderExpandedRow,
+  expandedRowCellClassName,
   children,
   className,
   ...props
 }: DataTableProps<TData>) {
+  const rows = showPagination
+    ? table.getRowModel().rows
+    : table.getPrePaginationRowModel().rows;
   const visibleColumnCount = Math.max(1, table.getVisibleLeafColumns().length);
 
   return (
     <div
-      className={cn("flex w-full flex-col gap-2.5 overflow-auto", className)}
+      className={cn("flex min-w-0 w-full flex-col gap-2.5 overflow-auto", className)}
       {...props}
     >
       {children}
@@ -66,8 +71,8 @@ export function DataTable<TData>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => {
+            {rows?.length ? (
+              rows.map((row) => {
                 const expanded = isRowExpanded?.(row) ?? false;
                 return (
                 <React.Fragment key={row.id}>
@@ -96,7 +101,7 @@ export function DataTable<TData>({
                     <TableRow>
                       <TableCell
                         colSpan={visibleColumnCount}
-                        className="bg-muted/20"
+                        className={cn("bg-muted/20", expandedRowCellClassName)}
                       >
                         {renderExpandedRow(row)}
                       </TableCell>

@@ -1,9 +1,8 @@
 import { useMemo } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { DataGrid } from "@components/tablecn/data-grid/data-grid";
-import { useDataGrid } from "@components/tablecn/hooks/use-data-grid";
+import { DataTable } from "@components/tablecn/data-table/data-table";
 import { apiFetch } from "@api/client";
 import { ApiError } from "@api/errors";
 import { Button } from "@components/ui/button";
@@ -69,24 +68,36 @@ export function TablecnDocumentPreviewGrid({
   });
 
   const sheet = previewQuery.data?.sheets?.[0] ?? null;
+  const columnCount = useMemo(() => {
+    if (!sheet) return 0;
+    const maxRowLength = sheet.rows.reduce(
+      (max, row) => Math.max(max, row.length),
+      0,
+    );
+    const requestedCount = Math.max(sheet.headers.length, maxRowLength);
+    return Math.min(PREVIEW_MAX_COLUMNS, requestedCount);
+  }, [sheet]);
   const columnIds = useMemo(
-    () => (sheet ? sheet.headers.map((_, index) => `col_${index}`) : []),
-    [sheet],
+    () => Array.from({ length: columnCount }, (_, index) => `col_${index}`),
+    [columnCount],
   );
 
   const columns = useMemo<ColumnDef<PreviewRow>[]>(() => {
     if (!sheet) return [];
-    return sheet.headers.map((header, index) => {
-      const id = columnIds[index] ?? `col_${index}`;
-      const label = header?.trim() || columnLabel(index);
+    return columnIds.map((id, index) => {
+      const header = sheet.headers[index] ?? "";
+      const label = header.trim() || columnLabel(index);
       return {
         id,
         accessorKey: id,
         header: label,
-        minSize: 120,
-        meta: {
-          label,
-          cell: { variant: "short-text" },
+        cell: ({ getValue }) => {
+          const value = getValue<string>() ?? "";
+          return (
+            <div className="w-full truncate" title={value}>
+              {value}
+            </div>
+          );
         },
       };
     });
@@ -96,19 +107,22 @@ export function TablecnDocumentPreviewGrid({
     if (!sheet) return [];
     return sheet.rows.map((row) => {
       const record: PreviewRow = {};
-      columnIds.forEach((columnId, index) => {
-        record[columnId] = row[index] ?? "";
-      });
+      for (let index = 0; index < columnCount; index += 1) {
+        record[columnIds[index]] = row[index] ?? "";
+      }
       return record;
     });
-  }, [columnIds, sheet]);
+  }, [columnCount, columnIds, sheet]);
 
-  const { table, ...dataGridProps } = useDataGrid({
+  const table = useReactTable({
     data,
     columns,
-    readOnly: true,
-    enableSearch: false,
-    enablePaste: false,
+    getCoreRowModel: getCoreRowModel(),
+    defaultColumn: {
+      size: 140,
+      minSize: 100,
+      maxSize: 240,
+    },
   });
 
   if (previewQuery.isLoading) {
@@ -144,16 +158,15 @@ export function TablecnDocumentPreviewGrid({
   const sheetMeta = formatSheetMeta(sheet, previewQuery.data?.sheets?.length ?? 0);
 
   return (
-    <div className="flex flex-col gap-3 p-3">
+    <div className="flex min-w-0 flex-col gap-2 p-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <span>Previewing {doc.name}</span>
         {sheetMeta ? <span>{sheetMeta}</span> : null}
       </div>
-      <DataGrid
-        {...dataGridProps}
+      <DataTable
         table={table}
-        height={260}
-        stretchColumns
+        showPagination={false}
+        className="max-w-full min-w-0 [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table-cell]]:truncate [&_[data-slot=table-head]]:truncate"
       />
     </div>
   );
