@@ -110,6 +110,8 @@ export default function DocumentsScreen() {
           <TablecnDocumentsView
             workspaceId={workspace.id}
             currentUser={currentUser}
+            configMissing={configMissing}
+            processingPaused={processingPaused}
             toolbarActions={toolbarActions}
           />
         </section>

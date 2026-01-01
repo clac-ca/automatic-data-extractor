@@ -40,7 +40,6 @@ export default function WorkspaceSettingsScreen({ sectionSegments = [] }: Worksp
   const navGroups = useMemo(() => buildSettingsNav(workspace.id, hasPermission), [workspace.id, hasPermission]);
   const flatNavItems = navGroups.flatMap((group) => group.items);
   const activeNavItem = flatNavItems.find((item) => item.id === activeSection.id);
-  const activeGroupLabel = navGroups.find((group) => group.items.some((item) => item.id === activeSection.id))?.label;
   const isRestricted = activeNavItem?.disabled;
 
   const content = isRestricted ? (
@@ -60,7 +59,6 @@ export default function WorkspaceSettingsScreen({ sectionSegments = [] }: Worksp
       activeSectionId={activeSection.id}
       activeSectionLabel={activeSection.label}
       activeSectionDescription={activeSection.description}
-      activeGroupLabel={activeGroupLabel ?? "Settings"}
     >
       <SettingsSectionProvider value={{ sectionId: activeSection.id, params: sectionParams }}>{content}</SettingsSectionProvider>
     </SettingsLayout>

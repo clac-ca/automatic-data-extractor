@@ -5,6 +5,7 @@ import { fetchWorkspaceDocuments, patchWorkspaceDocument, type DocumentPageResul
 import { documentChangesStreamUrl, streamDocumentChanges } from "@api/documents/changes";
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { ApiError } from "@api/errors";
+import { Link } from "@app/navigation/Link";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@components/tablecn/ui/button";
 import { useNotifications } from "@components/providers/notifications";
@@ -43,10 +44,14 @@ function sleep(duration: number, signal: AbortSignal): Promise<void> {
 export function TablecnDocumentsView({
   workspaceId,
   currentUser,
+  configMissing = false,
+  processingPaused = false,
   toolbarActions,
 }: {
   workspaceId: string;
   currentUser: CurrentUser;
+  configMissing?: boolean;
+  processingPaused?: boolean;
   toolbarActions?: ReactNode;
 }) {
   const queryClient = useQueryClient();
@@ -366,8 +371,35 @@ export function TablecnDocumentsView({
     void documentsQuery.refetch();
   };
 
+  const configBuilderPath = `/workspaces/${workspaceId}/config-builder`;
+  const processingSettingsPath = `/workspaces/${workspaceId}/settings/processing`;
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      {configMissing ? (
+        <TablecnInlineBanner
+          title="No active configuration"
+          description="Uploads will be stored, but runs won't start until you activate a configuration."
+          className="border-warning-200 bg-warning-50/60 text-warning-900 dark:border-warning-500/40 dark:bg-warning-500/10 dark:text-warning-100"
+          actions={
+            <Button asChild variant="outline" size="sm">
+              <Link to={configBuilderPath}>Open config builder</Link>
+            </Button>
+          }
+        />
+      ) : null}
+      {processingPaused ? (
+        <TablecnInlineBanner
+          title="Processing paused"
+          description="Uploads are queued and won't start until processing is resumed."
+          className="border-warning-200 bg-warning-50/60 text-warning-900 dark:border-warning-500/40 dark:bg-warning-500/10 dark:text-warning-100"
+          actions={
+            <Button asChild variant="outline" size="sm">
+              <Link to={processingSettingsPath}>Open processing settings</Link>
+            </Button>
+          }
+        />
+      ) : null}
       {updatesAvailable ? (
         <TablecnInlineBanner
           title="Updates available"
@@ -389,27 +421,27 @@ export function TablecnDocumentsView({
           }
         />
       ) : null}
-      <div
-        ref={scrollContainerRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col items-start gap-3 overflow-auto"
-      >
-        <TablecnDocumentsTable
-          data={documents}
-          pageCount={pageCount}
-          workspaceId={workspaceId}
-          people={people}
-          tagOptions={tagOptions}
-          onAssign={onAssign}
-          onToggleTag={onToggleTag}
-          toolbarActions={toolbarActions}
-        />
-        {hasNextPage ? (
-          <div className="flex w-full items-center justify-center py-2 text-xs text-muted-foreground">
-            {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
-          </div>
-        ) : null}
-        <div ref={loadMoreRef} className="h-1 w-full" />
-      </div>
+      <TablecnDocumentsTable
+        data={documents}
+        pageCount={pageCount}
+        workspaceId={workspaceId}
+        people={people}
+        tagOptions={tagOptions}
+        onAssign={onAssign}
+        onToggleTag={onToggleTag}
+        toolbarActions={toolbarActions}
+        scrollContainerRef={scrollContainerRef}
+        scrollFooter={
+          <>
+            {hasNextPage ? (
+              <div className="flex w-full items-center justify-center py-2 text-xs text-muted-foreground">
+                {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
+              </div>
+            ) : null}
+            <div ref={loadMoreRef} className="h-1 w-full" />
+          </>
+        }
+      />
     </div>
   );
 }
