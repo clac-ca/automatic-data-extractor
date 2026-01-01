@@ -128,11 +128,16 @@ describe("createRun", () => {
     } as unknown as CreateRunPostResponse;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    const run = await createRun("workspace-123", {
-      dry_run: true,
-      input_document_id: "doc-123",
-      configuration_id: "config-123",
-    });
+    const run = await createRun(
+      "workspace-123",
+      {
+        dry_run: true,
+        input_document_id: "doc-123",
+        configuration_id: "config-123",
+      },
+      undefined,
+      "idem-run-1",
+    );
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs", {
       params: { path: { workspaceId: "workspace-123" } },
@@ -147,6 +152,7 @@ describe("createRun", () => {
           active_sheet_only: false,
         },
       },
+      headers: { "Idempotency-Key": "idem-run-1" },
       signal: undefined,
     });
     expect(run).toEqual(sampleRunResource);
@@ -159,9 +165,9 @@ describe("createRun", () => {
     } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    await expect(createRun("workspace-123", { input_document_id: "doc-123" })).rejects.toThrow(
-      "Expected run creation response.",
-    );
+    await expect(
+      createRun("workspace-123", { input_document_id: "doc-123" }, undefined, "idem-run-2"),
+    ).rejects.toThrow("Expected run creation response.");
   });
 });
 

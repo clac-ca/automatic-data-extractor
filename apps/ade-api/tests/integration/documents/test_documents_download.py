@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -28,6 +28,7 @@ async def test_download_missing_file_returns_404(
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
+        "Idempotency-Key": f"idem-{uuid4().hex}",
     }
 
     upload = await async_client.post(

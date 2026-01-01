@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from starlette.requests import Request
@@ -90,7 +91,7 @@ def test_unhandled_exception_handler_logs_with_correlation():
 
         response = asyncio.run(unhandled_exception_handler(request=request, exc=RuntimeError("boom")))
         assert response.status_code == 500
-        payload = response.json()
+        payload = json.loads(response.body.decode())
         assert payload["type"] == "internal_error"
         assert payload["title"] == "Internal server error"
         assert payload["status"] == 500

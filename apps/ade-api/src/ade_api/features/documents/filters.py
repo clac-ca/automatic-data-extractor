@@ -303,6 +303,19 @@ def apply_document_filters(
             predicates.append(predicate)
             continue
 
+        if filter_id == "assigneeId" and parsed.operator == FilterOperator.IN:
+            values = parsed.value if isinstance(parsed.value, list) else [parsed.value]
+            include_unassigned = any(value is None for value in values)
+            ids = [value for value in values if value is not None]
+            predicates_for_filter = []
+            if ids:
+                predicates_for_filter.append(Document.assignee_user_id.in_(ids))
+            if include_unassigned:
+                predicates_for_filter.append(Document.assignee_user_id.is_(None))
+            if predicates_for_filter:
+                predicates.append(or_(*predicates_for_filter))
+            continue
+
         if filter_id == "hasOutput":
             if parsed.value is None:
                 raise HTTPException(
@@ -421,8 +434,12 @@ def evaluate_document_filters(
                 results.append(assignee_id is not None)
                 continue
             values = value if isinstance(value, list) else [value]
-            assignee_ids = {str(item) for item in values}
-            match = assignee_id is not None and str(assignee_id) in assignee_ids
+            include_unassigned = any(item is None for item in values)
+            assignee_ids = {str(item) for item in values if item is not None}
+            if assignee_id is None:
+                match = include_unassigned
+            else:
+                match = str(assignee_id) in assignee_ids
             if operator == FilterOperator.NOT_IN:
                 match = not match
             results.append(match)

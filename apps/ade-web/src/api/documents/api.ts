@@ -102,15 +102,15 @@ export async function fetchWorkspaceDocumentRowById(
 export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  payload: { assigneeUserId?: string | null; metadata?: Record<string, unknown> | null },
+  payload: { assigneeId?: string | null; metadata?: Record<string, unknown> | null },
   options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body: {
-    assignee_user_id?: string | null;
+    assigneeId?: string | null;
     metadata?: Record<string, unknown> | null;
   } = {};
-  if ("assigneeUserId" in payload) {
-    body.assignee_user_id = payload.assigneeUserId ?? null;
+  if ("assigneeId" in payload) {
+    body.assigneeId = payload.assigneeId ?? null;
   }
   if ("metadata" in payload) {
     body.metadata = payload.metadata ?? null;
@@ -140,11 +140,11 @@ export async function deleteWorkspaceDocument(
 export async function deleteWorkspaceDocumentsBatch(workspaceId: string, documentIds: string[]): Promise<string[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/delete", {
     params: { path: { workspaceId } },
-    body: { document_ids: documentIds },
+    body: { documentIds },
   });
 
   if (!data) throw new Error("Expected delete response.");
-  return data.document_ids ?? [];
+  return data.documentIds ?? [];
 }
 
 export async function archiveWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
@@ -171,7 +171,7 @@ export async function archiveWorkspaceDocumentsBatch(
 ): Promise<DocumentRecord[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
     params: { path: { workspaceId } },
-    body: { document_ids: documentIds },
+    body: { documentIds },
   });
 
   if (!data) throw new Error("Expected updated document records.");
@@ -184,7 +184,7 @@ export async function restoreWorkspaceDocumentsBatch(
 ): Promise<DocumentRecord[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
     params: { path: { workspaceId } },
-    body: { document_ids: documentIds },
+    body: { documentIds },
   });
 
   if (!data) throw new Error("Expected updated document records.");

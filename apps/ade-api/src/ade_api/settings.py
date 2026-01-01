@@ -277,6 +277,7 @@ class Settings(BaseSettings):
     server_public_url: str = DEFAULT_PUBLIC_URL
     frontend_url: str | None = None
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
+    idempotency_key_ttl: timedelta = Field(default=timedelta(hours=24))
 
     # Paths
     api_root: Path = Field(default=DEFAULT_API_ROOT)
@@ -438,6 +439,7 @@ class Settings(BaseSettings):
         "storage_document_retention_period",
         "documents_change_feed_retention_period",
         "documents_upload_session_ttl",
+        "idempotency_key_ttl",
         "run_worker_poll_interval",
         mode="before",
     )

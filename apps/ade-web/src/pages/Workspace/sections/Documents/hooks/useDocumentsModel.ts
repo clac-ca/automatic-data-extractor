@@ -1613,7 +1613,7 @@ export function useDocumentsModel({
 
   const downloadOutputFromRow = useCallback(
     (doc: DocumentEntry) => {
-      const runId = getDocumentOutputRun(doc.record)?.runId ?? null;
+      const runId = getDocumentOutputRun(doc.record)?.id ?? null;
       if (!doc.record || !runId) {
         notifyToast({
           title: "Output not ready",
@@ -1940,7 +1940,7 @@ export function useDocumentsModel({
 
     let triggered = 0;
     docs.forEach((d) => {
-      const runId = getDocumentOutputRun(d.record)?.runId ?? null;
+      const runId = getDocumentOutputRun(d.record)?.id ?? null;
       if (!runId) return;
       triggered += 1;
       void downloadRunOutputById(runId, d.name).catch(() => undefined);

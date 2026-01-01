@@ -105,30 +105,44 @@ Backend payloads use **snake_case** equivalents:
 Frontend view for document lists:
 
 ```ts
-export interface DocumentSummary {
+export interface DocumentListRow {
   id: string;
   workspaceId: string;
 
   name: string;           // Usually original filename
-  contentType: string;    // e.g. "application/vnd.ms-excel"
-  sizeBytes: number;
+  fileType: "xlsx" | "xls" | "csv" | "pdf" | "unknown";
+  byteSize: number;
 
   status: DocumentStatus; // uploaded | processing | processed | failed | archived
   createdAt: string;      // ISO 8601 string
-  uploadedBy: UserSummary;
+  updatedAt: string;
+  activityAt: string;
 
-  lastRun?: DocumentLastRun | null;
+  uploader?: UserSummary | null;
+  assignee?: UserSummary | null;
+  tags: string[];
+
+  latestRun?: DocumentRunSummary | null;
+  latestSuccessfulRun?: DocumentRunSummary | null;
+  latestResult?: DocumentResultSummary | null;
 }
 
-export interface DocumentLastRun {
-  runId: string;
+export interface DocumentRunSummary {
+  id: string;
   status: RunStatus;
-  runAt?: string | null;
-  message?: string | null; // Optional status or error message
+  startedAt?: string | null;
+  completedAt?: string | null;
+  errorSummary?: string | null; // Optional status or error message
+}
+
+export interface DocumentResultSummary {
+  attention: number;
+  unmapped: number;
+  pending?: boolean | null;
 }
 ```
 
-A more detailed `DocumentDetail` type can extend this when the detail endpoint returns extra metadata.
+A more detailed `DocumentRecord` (from `DocumentOut`) can extend this when the detail endpoint returns extra metadata.
 
 **Immutability rules**
 
@@ -158,7 +172,7 @@ Typical transitions:
 UI behaviour:
 
 * The `status` field is rendered as a badge in the Documents list.
-* `lastRun` is shown as a secondary indicator (e.g. “Last run: succeeded 2 hours ago”).
+* `latestRun` is shown as a secondary indicator (e.g. “Latest run: succeeded 2 hours ago”).
 * The UI **never infers** document status from run history; it only displays what the backend returns.
 
 ---
@@ -206,7 +220,7 @@ Documents URL state is encoded in query parameters:
 * `sort` – sort key, e.g.:
 
   * `-createdAt` (newest first)
-  * `-lastRunAt` (most recently run first)
+  * `-latestRunAt` (most recently run first)
 * `view` – optional preset (e.g. `all`, `mine`, `attention`, `recent`).
 
 Rules:
@@ -767,7 +781,7 @@ To keep Documents and Runs predictable (for both humans and agents), ADE Web rel
 2. **Run semantics are consistent everywhere.**
    `RunStatus`, `RunOptions` (`dryRun`, `validateOnly`, `inputSheetNames`, `mode`), and timestamps mean the same thing in:
 
-   * Document `lastRun` summaries,
+   * Document `latestRun` summaries,
    * The Runs ledger,
    * Configuration‑scoped runs.
 

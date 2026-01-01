@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
@@ -26,7 +27,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sse_starlette.sse import EventSourceResponse
-from ade_api.api.deps import get_documents_service, get_runs_service
+from ade_api.api.deps import get_documents_service, get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
@@ -42,6 +43,12 @@ from ade_api.common.workbook_preview import (
     WorkbookPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.features.idempotency import (
+    IdempotencyService,
+    build_request_hash,
+    build_scope_key,
+    require_idempotency_key,
+)
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.exceptions import RunQueueFullError
@@ -54,15 +61,15 @@ from .exceptions import (
     DocumentNotFoundError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
-    DocumentPreviewUnsupportedError,
-    DocumentTooLargeError,
+DocumentPreviewUnsupportedError,
+DocumentTooLargeError,
     DocumentUploadRangeError,
     DocumentUploadSessionExpiredError,
     DocumentUploadSessionNotFoundError,
     DocumentUploadSessionNotReadyError,
     DocumentWorksheetParseError,
-    InvalidDocumentExpirationError,
-    InvalidDocumentTagsError,
+InvalidDocumentExpirationError,
+InvalidDocumentTagsError,
 )
 from .filters import evaluate_document_filters
 from .schemas import (
@@ -103,6 +110,8 @@ tags_router = APIRouter(
 )
 
 logger = logging.getLogger(__name__)
+
+_UPLOAD_HASH_CHUNK_SIZE = 1024 * 1024
 
 
 WorkspacePath = Annotated[
@@ -274,6 +283,20 @@ async def _try_enqueue_run(
         )
 
 
+async def _hash_upload_file(upload: UploadFile) -> tuple[str, int]:
+    hasher = hashlib.sha256()
+    total = 0
+    await upload.seek(0)
+    while True:
+        chunk = await upload.read(_UPLOAD_HASH_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        hasher.update(chunk)
+    await upload.seek(0)
+    return hasher.hexdigest(), total
+
+
 @router.post(
     "",
     dependencies=[Security(require_csrf)],
@@ -300,6 +323,9 @@ async def upload_document(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
     runs_service: RunsServiceDep,
+    request: Request,
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     _actor: DocumentManager,
     *,
     file: Annotated[UploadFile, File(...)],
@@ -310,6 +336,31 @@ async def upload_document(
     payload = _parse_metadata(metadata)
     upload_run_options = _parse_run_options(run_options)
     metadata_payload = service.build_upload_metadata(payload, upload_run_options)
+    file_sha256, file_size = await _hash_upload_file(file)
+    scope_key = build_scope_key(
+        principal_id=str(_actor.id),
+        workspace_id=str(workspace_id),
+    )
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload={
+            "metadata": metadata_payload,
+            "expires_at": expires_at,
+            "run_options": upload_run_options.model_dump() if upload_run_options else None,
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "file_sha256": file_sha256,
+            "file_size": file_size,
+        },
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
     try:
         document = await service.create_document(
             workspace_id=workspace_id,
@@ -330,6 +381,13 @@ async def upload_document(
         run_options=upload_run_options,
     )
 
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=document,
+    )
     return document
 
 
@@ -623,10 +681,29 @@ async def get_upload_session_status(
 async def commit_upload_session(
     workspace_id: WorkspacePath,
     upload_session_id: UploadSessionPath,
+    request: Request,
     service: DocumentsServiceDep,
     runs_service: RunsServiceDep,
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     actor: DocumentManager,
 ) -> DocumentOut:
+    scope_key = build_scope_key(
+        principal_id=str(actor.id),
+        workspace_id=str(workspace_id),
+    )
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload={"upload_session_id": str(upload_session_id)},
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
     try:
         document, upload_run_options = await service.commit_upload_session(
             workspace_id=workspace_id,
@@ -647,6 +724,13 @@ async def commit_upload_session(
         run_options=upload_run_options,
     )
 
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=document,
+    )
     return document
 
 

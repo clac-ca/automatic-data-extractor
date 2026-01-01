@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
 from tests.utils import login
@@ -63,7 +65,7 @@ async def test_upload_session_resume_and_commit(async_client, seed_identity) -> 
 
     commit = await async_client.post(
         f"{workspace_base}/documents/uploadsessions/{session_id}/commit",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
     )
     assert commit.status_code == 201, commit.text
     payload = commit.json()

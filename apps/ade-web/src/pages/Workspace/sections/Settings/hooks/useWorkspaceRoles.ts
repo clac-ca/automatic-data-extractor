@@ -85,6 +85,7 @@ export function useCreateWorkspaceRoleMutation(workspaceId: string) {
 interface UpdateRoleInput {
   readonly roleId: string;
   readonly payload: RoleUpdatePayload;
+  readonly ifMatch?: string | null;
 }
 
 export function useUpdateWorkspaceRoleMutation(workspaceId: string) {
@@ -92,7 +93,8 @@ export function useUpdateWorkspaceRoleMutation(workspaceId: string) {
   const queryKey = workspacesKeys.roles(workspaceId, roleListParams);
 
   return useMutation<RoleDefinition, Error, UpdateRoleInput>({
-    mutationFn: ({ roleId, payload }: UpdateRoleInput) => updateWorkspaceRole(workspaceId, roleId, payload),
+    mutationFn: ({ roleId, payload, ifMatch }: UpdateRoleInput) =>
+      updateWorkspaceRole(workspaceId, roleId, payload, { ifMatch }),
     onSuccess: (role) => {
       queryClient.setQueryData<RoleListPage>(queryKey, (current) => {
         if (!current) {
@@ -114,9 +116,9 @@ export function useDeleteWorkspaceRoleMutation(workspaceId: string) {
   const queryClient = useQueryClient();
   const queryKey = workspacesKeys.roles(workspaceId, roleListParams);
 
-  return useMutation<void, Error, string>({
-    mutationFn: (roleId: string) => deleteWorkspaceRole(workspaceId, roleId),
-    onSuccess: (_data, roleId) => {
+  return useMutation<void, Error, { roleId: string; ifMatch?: string | null }>({
+    mutationFn: ({ roleId, ifMatch }) => deleteWorkspaceRole(workspaceId, roleId, { ifMatch }),
+    onSuccess: (_data, { roleId }) => {
       queryClient.setQueryData<RoleListPage>(queryKey, (current) => {
         if (!current) {
           return current;

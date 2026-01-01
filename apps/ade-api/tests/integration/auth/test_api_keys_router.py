@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
-
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -37,7 +38,7 @@ async def test_admin_can_issue_api_key_for_user(
 
     response = await async_client.post(
         f"/api/v1/users/{target.id}/apikeys",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={
             "name": "Integration key",
             "expires_in_days": 30,
@@ -74,7 +75,7 @@ async def test_me_api_keys_filters_and_paginate(
 
     first = await async_client.post(
         "/api/v1/users/me/apikeys",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={"name": "First key"},
     )
     assert first.status_code == 201, first.text
@@ -82,22 +83,35 @@ async def test_me_api_keys_filters_and_paginate(
 
     second = await async_client.post(
         "/api/v1/users/me/apikeys",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={"name": "Second key"},
     )
     assert second.status_code == 201, second.text
     second_id = second.json()["id"]
 
-    revoke = await async_client.delete(
+    first_read = await async_client.get(
         f"/api/v1/users/me/apikeys/{first_id}",
         headers=headers,
+    )
+    assert first_read.status_code == 200, first_read.text
+    etag = first_read.headers.get("ETag")
+    assert etag is not None
+    revoke = await async_client.delete(
+        f"/api/v1/users/me/apikeys/{first_id}",
+        headers={**headers, "If-Match": etag},
     )
     assert revoke.status_code == 204, revoke.text
 
     # Idempotent revoke should still return 204 when already revoked.
-    revoke_repeat = await async_client.delete(
+    reread = await async_client.get(
         f"/api/v1/users/me/apikeys/{first_id}",
         headers=headers,
+    )
+    assert reread.status_code == 200, reread.text
+    reread_etag = reread.headers.get("ETag")
+    revoke_repeat = await async_client.delete(
+        f"/api/v1/users/me/apikeys/{first_id}",
+        headers={**headers, "If-Match": reread_etag or ""},
     )
     assert revoke_repeat.status_code == 204, revoke_repeat.text
 

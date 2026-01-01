@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 
@@ -26,7 +27,10 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
         password=manager.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": f"idem-{uuid4().hex}",
+    }
 
     upload = await async_client.post(
         f"{workspace_base}/documents",

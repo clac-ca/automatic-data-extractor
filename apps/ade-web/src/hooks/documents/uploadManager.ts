@@ -405,6 +405,7 @@ async function runSimpleUpload(
 ) {
   const handle = uploadWorkspaceDocument(options.workspaceId, item.file, {
     onProgress: options.onProgress,
+    idempotencyKey: item.id,
     runOptions: item.runOptions,
   });
   options.controller.signal.addEventListener("abort", () => handle.abort(), { once: true });
@@ -518,6 +519,7 @@ async function runSessionUpload(
   const committed = await commitDocumentUploadSession(
     options.workspaceId,
     sessionId,
+    item.id,
     options.controller.signal,
   );
   return committed;

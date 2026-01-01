@@ -260,7 +260,7 @@ export function DocumentsGrid({
                 const canEditTags = canSelectRow;
 
                 const outputRun = getDocumentOutputRun(doc.record);
-                const canDownloadOutput = Boolean(outputRun?.runId);
+                const canDownloadOutput = Boolean(outputRun?.id);
 
                 const isExpanded = Boolean(expandedContent && expandedId === doc.id);
                 const isActive = Boolean(isExpanded && activeId === doc.id);

@@ -30,17 +30,17 @@ export function TablecnDocumentsTable({
 
   const statusOptions = useMemo(
     () =>
-      (["queued", "processing", "ready", "failed", "archived"] as DocumentStatus[])
+      (["uploaded", "processing", "processed", "failed", "archived"] as DocumentStatus[])
         .map((value) => ({
           value,
-          label: value === "ready" ? "Processed" : value[0]?.toUpperCase() + value.slice(1),
+          label: value[0]?.toUpperCase() + value.slice(1),
         })),
     [],
   );
 
   const fileTypeOptions = useMemo(
     () =>
-      (["xlsx", "xls", "csv", "pdf", "unknown"] as FileType[]).map((value) => ({
+      (["xlsx", "xls", "csv", "pdf"] as FileType[]).map((value) => ({
         value,
         label: fileTypeLabel(value),
       })),
@@ -121,16 +121,6 @@ export function TablecnDocumentsTable({
         enableHiding: false,
       },
       {
-        id: "stage",
-        accessorKey: "stage",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Stage" />
-        ),
-        cell: ({ row }) => row.getValue<string | null>("stage") ?? "-",
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
         id: "fileType",
         accessorKey: "fileType",
         header: ({ column }) => (
@@ -147,8 +137,8 @@ export function TablecnDocumentsTable({
         enableSorting: false,
       },
       {
-        id: "uploader",
-        accessorKey: "uploader",
+        id: "uploaderId",
+        accessorFn: (row) => row.uploader?.id ?? null,
         header: ({ column }) => (
           <DataTableColumnHeader column={column} label="Uploader" />
         ),
@@ -157,30 +147,12 @@ export function TablecnDocumentsTable({
         enableHiding: true,
       },
       {
-        id: "uploaderId",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Uploader ID" />
-        ),
-        cell: ({ row }) => renderUserId(row.original.uploader?.id ?? null),
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
-        id: "assignee",
-        accessorKey: "assignee",
+        id: "assigneeId",
+        accessorFn: (row) => row.assignee?.id ?? null,
         header: ({ column }) => (
           <DataTableColumnHeader column={column} label="Assignee" />
         ),
         cell: ({ row }) => renderUserSummary(row.original.assignee),
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
-        id: "assigneeId",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Assignee ID" />
-        ),
-        cell: ({ row }) => renderUserId(row.original.assignee?.id ?? null),
         enableSorting: false,
         enableHiding: true,
       },
@@ -198,47 +170,18 @@ export function TablecnDocumentsTable({
         id: "byteSize",
         accessorKey: "byteSize",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Bytes" />
+          <DataTableColumnHeader column={column} label="Size" />
         ),
         cell: ({ row }) => formatBytes(row.getValue<number>("byteSize")),
         enableHiding: true,
       },
       {
-        id: "sizeLabel",
-        accessorKey: "sizeLabel",
+        id: "latestResult",
+        accessorKey: "latestResult",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Size" />
+          <DataTableColumnHeader column={column} label="Result" />
         ),
-        cell: ({ row }) => row.getValue<string>("sizeLabel") || "-",
-        enableSorting: false,
-      },
-      {
-        id: "queueState",
-        accessorKey: "queueState",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Queue State" />
-        ),
-        cell: ({ row }) => row.getValue<string | null>("queueState") ?? "-",
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
-        id: "queueReason",
-        accessorKey: "queueReason",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Queue Reason" />
-        ),
-        cell: ({ row }) => row.getValue<string | null>("queueReason") ?? "-",
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
-        id: "mappingHealth",
-        accessorKey: "mappingHealth",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Mapping" />
-        ),
-        cell: ({ row }) => renderMappingHealth(row.original.mappingHealth),
+        cell: ({ row }) => renderLatestResult(row.original.latestResult),
         enableSorting: false,
         enableHiding: true,
       },
@@ -272,25 +215,30 @@ export function TablecnDocumentsTable({
           <DataTableColumnHeader column={column} label="Activity" />
         ),
         cell: ({ row }) => formatTimestamp(row.getValue<string>("activityAt")),
+        meta: {
+          label: "Activity",
+          variant: "date",
+        },
+        enableColumnFilter: true,
         enableHiding: true,
       },
       {
-        id: "lastRun",
-        accessorKey: "lastRun",
+        id: "latestRunAt",
+        accessorFn: (row) => row.latestRun?.completedAt ?? row.latestRun?.startedAt ?? null,
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Last Run" />
+          <DataTableColumnHeader column={column} label="Latest Run" />
         ),
-        cell: ({ row }) => renderRunSummary(row.original.lastRun),
-        enableSorting: false,
+        cell: ({ row }) => renderRunSummary(row.original.latestRun),
         enableHiding: true,
       },
       {
-        id: "lastSuccessfulRun",
-        accessorKey: "lastSuccessfulRun",
+        id: "latestSuccessfulRun",
+        accessorFn: (row) =>
+          row.latestSuccessfulRun?.completedAt ?? row.latestSuccessfulRun?.startedAt ?? null,
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} label="Last Success" />
+          <DataTableColumnHeader column={column} label="Latest Success" />
         ),
-        cell: ({ row }) => renderRunSummary(row.original.lastSuccessfulRun),
+        cell: ({ row }) => renderRunSummary(row.original.latestSuccessfulRun),
         enableSorting: false,
         enableHiding: true,
       },
@@ -381,25 +329,36 @@ function renderTags(tags?: string[]) {
   );
 }
 
-function renderMappingHealth(mapping: DocumentListRow["mappingHealth"]) {
-  const pendingOnly =
-    Boolean(mapping.pending) && mapping.attention === 0 && mapping.unmapped === 0;
-  if (!pendingOnly && mapping.attention === 0 && mapping.unmapped === 0) {
+function renderLatestResult(result: DocumentListRow["latestResult"]) {
+  if (!result) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+  const pendingOnly = Boolean(result.pending) && result.attention === 0 && result.unmapped === 0;
+  if (!pendingOnly && result.attention === 0 && result.unmapped === 0) {
     return <span className="text-muted-foreground">OK</span>;
   }
-  return <MappingBadge mapping={mapping} showPending />;
+  return <MappingBadge mapping={result} showPending />;
 }
 
-function renderRunSummary(run: DocumentListRow["lastRun"] | null | undefined) {
+function formatRunStatus(value: string) {
+  if (!value) return "-";
+  const normalized = value.replace(/_/g, " ");
+  return normalized[0]?.toUpperCase() + normalized.slice(1);
+}
+
+function renderRunSummary(run: DocumentListRow["latestRun"] | null | undefined) {
   if (!run) {
     return <span className="text-muted-foreground">-</span>;
   }
 
-  const timestamp = run.runAt ? formatTimestamp(run.runAt) : "-";
+  const timestamp = run.completedAt ?? run.startedAt;
+  const statusLabel = formatRunStatus(String(run.status));
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="capitalize">{run.status}</span>
-      <span className="text-xs text-muted-foreground">{timestamp}</span>
+    <div className="flex flex-col gap-0.5" title={run.errorSummary ?? undefined}>
+      <span className="capitalize">{statusLabel}</span>
+      <span className="text-xs text-muted-foreground">
+        {timestamp ? formatTimestamp(timestamp) : "-"}
+      </span>
     </div>
   );
 }
@@ -419,16 +378,5 @@ function renderUserSummary(user: DocumentListRow["uploader"]) {
         <span className="text-xs text-muted-foreground">{secondary}</span>
       ) : null}
     </div>
-  );
-}
-
-function renderUserId(value: string | null) {
-  if (!value) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-  return (
-    <span className="font-mono text-xs text-muted-foreground" title={value}>
-      {shortId(value)}
-    </span>
   );
 }

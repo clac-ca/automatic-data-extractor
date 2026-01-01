@@ -33,12 +33,12 @@ const FILE_TYPE_VALUES = new Set<FileType>(["xlsx", "xls", "csv", "pdf"]);
 function parseFiltersFromSearch(search: string): DocumentsFilters {
   const params = new URLSearchParams(search);
   const statuses = filterAllowed(readParamList(params, ["status"]), STATUS_VALUES);
-  const fileTypes = filterAllowed(readParamList(params, ["file_type"]), FILE_TYPE_VALUES);
+  const fileTypes = filterAllowed(readParamList(params, ["fileType"]), FILE_TYPE_VALUES);
   const tags = readParamList(params, ["tags"]);
-  const rawTagMode = coerceTagMode(params.get("tag_mode"));
+  const rawTagMode = coerceTagMode(params.get("tagMode"));
   const tagMode = tags.length > 0 ? rawTagMode : "any";
-  const assigneeIds = readParamList(params, ["assignee_user_id"]);
-  const includeUnassigned = parseBooleanParam(params.get("assignee_unassigned"));
+  const assigneeIds = readParamList(params, ["assigneeId"]);
+  const includeUnassigned = parseBooleanParam(params.get("assigneeUnassigned"));
   const assignees = assigneeKeysFromIds(assigneeIds, includeUnassigned);
 
   return {
@@ -58,16 +58,16 @@ function buildDocumentsSearchParams(filters: DocumentsFilters, search: string, d
   if (docId) params.set("doc", docId);
 
   filters.statuses.forEach((status) => params.append("status", status));
-  filters.fileTypes.forEach((type) => params.append("file_type", type));
+  filters.fileTypes.forEach((type) => params.append("fileType", type));
   filters.tags.forEach((tag) => params.append("tags", tag));
   if (filters.tags.length > 0 && filters.tagMode !== "any") {
-    params.set("tag_mode", filters.tagMode);
+    params.set("tagMode", filters.tagMode);
   }
 
   const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
-  assigneeIds.forEach((id) => params.append("assignee_user_id", id));
+  assigneeIds.forEach((id) => params.append("assigneeId", id));
   if (includeUnassigned) {
-    params.set("assignee_unassigned", "true");
+    params.set("assigneeUnassigned", "true");
   }
 
   return params.toString();

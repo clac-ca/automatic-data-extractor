@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
 
@@ -49,7 +51,7 @@ async def test_background_build_executes_to_completion(
     workspace_id = seed_identity.workspace_id
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={},
     )
     assert response.status_code == 201

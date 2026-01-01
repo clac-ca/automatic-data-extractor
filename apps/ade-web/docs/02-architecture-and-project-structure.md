@@ -495,7 +495,7 @@ Feature hooks wrap these functions into React Query calls.
 * Domain types are singular, PascalCase:
 
   * `WorkspaceSummary`, `WorkspaceDetail`.
-  * `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
+  * `DocumentListRow`, `DocumentRecord`, `DocumentStatus`.
   * `RunResource`, `RunStatus`.
   * `Configuration`.
 
@@ -530,7 +530,7 @@ src/
       input/
       alert/
   types/
-    documents.ts                  # DocumentSummary, DocumentDetail, DocumentStatus
+    documents.ts                  # DocumentListRow, DocumentRecord, DocumentStatus
 ```
 
 Flow:
@@ -553,7 +553,7 @@ Flow:
 
    * `useDocumentsQuery` uses React Query and `@api/documents` under the hood.
    * `@api/documents` builds the `/api/v1/workspaces/{workspaceId}/documents` URL and parses the JSON response.
-   * The response is mapped into `DocumentSummary[]` using types from `@schema/documents`.
+   * The response is mapped into `DocumentListRow[]` using types from `@schema`.
 
 4. **Presentation**
 

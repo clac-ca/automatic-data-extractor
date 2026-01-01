@@ -61,7 +61,7 @@ export async function patchDocumentTagsBatch(
   signal?: AbortSignal,
 ): Promise<DocumentRecord[]> {
   const body = {
-    document_ids: documentIds,
+    documentIds,
     add: payload.add ? [...payload.add] : payload.add,
     remove: payload.remove ? [...payload.remove] : payload.remove,
   };

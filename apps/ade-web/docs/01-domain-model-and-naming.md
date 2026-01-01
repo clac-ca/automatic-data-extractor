@@ -418,9 +418,10 @@ type Run = RunEnvelope;
   * `workspaceId`
 * Typical fields:
 
-  * `filename`, `contentType`, `sizeBytes`
-  * `uploadedAt`, `uploadedBy`
-  * Optional derived fields like `lastRunId`, `lastRunStatus` (view-model level)
+  * `name`, `fileType`, `byteSize`
+  * `createdAt`, `updatedAt`, `activityAt`
+  * `uploader`, `assignee`, `tags`
+  * Optional derived fields like `latestRun`, `latestResult` (list projection)
 
 **Frontend conventions**
 

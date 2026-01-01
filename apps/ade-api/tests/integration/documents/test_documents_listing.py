@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -73,7 +74,7 @@ async def test_list_documents_uploader_me_filters(
 
     upload_one = await async_client.post(
         f"{workspace_base}/documents",
-        headers=member_headers,
+        headers={**member_headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         files={"file": ("member.txt", b"member", "text/plain")},
     )
     assert upload_one.status_code == 201, upload_one.text
@@ -87,7 +88,7 @@ async def test_list_documents_uploader_me_filters(
 
     upload_two = await async_client.post(
         f"{workspace_base}/documents",
-        headers=owner_headers,
+        headers={**owner_headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         files={"file": ("owner.txt", b"owner", "text/plain")},
     )
     assert upload_two.status_code == 201, upload_two.text

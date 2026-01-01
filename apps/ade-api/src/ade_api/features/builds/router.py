@@ -20,7 +20,7 @@ from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
-from ade_api.api.deps import get_builds_service
+from ade_api.api.deps import get_builds_service, get_idempotency_service
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import strip_sequence
 from ade_api.common.listing import (
@@ -30,7 +30,14 @@ from ade_api.common.listing import (
 )
 from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import sse_json
-from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.core.auth import AuthenticatedPrincipal
+from ade_api.core.http import get_current_principal, require_authenticated, require_csrf, require_workspace
+from ade_api.features.idempotency import (
+    IdempotencyService,
+    build_request_hash,
+    build_scope_key,
+    require_idempotency_key,
+)
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import BuildStatus
 
@@ -122,6 +129,10 @@ async def create_build_endpoint(
     configuration_id: ConfigurationPath,
     payload: BuildCreateRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     _actor: Annotated[
         object,
         Security(
@@ -131,6 +142,22 @@ async def create_build_endpoint(
     ],
     service: BuildsService = builds_service_dependency,
 ) -> BuildResource:
+    scope_key = build_scope_key(
+        principal_id=str(principal.user_id),
+        workspace_id=str(workspace_id),
+    )
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload=payload,
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
     try:
         build, context = await service.prepare_build(
             workspace_id=workspace_id,
@@ -142,6 +169,13 @@ async def create_build_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     resource = service.to_resource(build)
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=resource,
+    )
     background_tasks.add_task(
         execute_build_background,
         context.as_dict(),

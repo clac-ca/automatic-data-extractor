@@ -5,6 +5,7 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useSettingsSection } from "../sectionContext";
+import { buildWeakEtag } from "@api/etag";
 import {
   useCreateWorkspaceRoleMutation,
   useDeleteWorkspaceRoleMutation,
@@ -92,6 +93,7 @@ export function RolesSettingsPage() {
 
   const handleUpdateRole = async (roleId: string, values: RoleFormValues) => {
     setFeedbackMessage(null);
+    const ifMatch = buildWeakEtag(roleId, selectedRole?.updatedAt ?? selectedRole?.createdAt ?? null);
     await updateRole.mutateAsync({
       roleId,
       payload: {
@@ -99,6 +101,7 @@ export function RolesSettingsPage() {
         description: values.description.trim() || undefined,
         permissions: values.permissions,
       },
+      ifMatch,
     });
     setFeedbackMessage({ tone: "success", message: "Role updated." });
     closeDrawer();
@@ -106,7 +109,8 @@ export function RolesSettingsPage() {
 
   const handleDeleteRole = async (role: RoleDefinition) => {
     setFeedbackMessage(null);
-    await deleteRole.mutateAsync(role.id);
+    const ifMatch = buildWeakEtag(role.id, role.updatedAt ?? role.createdAt ?? null);
+    await deleteRole.mutateAsync({ roleId: role.id, ifMatch });
     setFeedbackMessage({ tone: "success", message: `Deleted role "${role.name}".` });
     closeDrawer();
   };

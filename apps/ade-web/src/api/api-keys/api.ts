@@ -1,4 +1,5 @@
 import { client } from "@api/client";
+import { createIdempotencyKey } from "@api/idempotency";
 import { buildListQuery, type FilterItem } from "@api/listing";
 import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@schema";
 
@@ -25,17 +26,26 @@ export async function listMyApiKeys(options: ListPageOptions = {}): Promise<ApiK
   return data;
 }
 
-export async function createMyApiKey(payload: CreateApiKeyRequest): Promise<ApiKeyCreateResponse> {
-  const { data } = await client.POST("/api/v1/users/me/apikeys", { body: payload });
+export async function createMyApiKey(
+  payload: CreateApiKeyRequest,
+  idempotencyKey?: string,
+): Promise<ApiKeyCreateResponse> {
+  const { data } = await client.POST("/api/v1/users/me/apikeys", {
+    body: payload,
+    headers: {
+      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("api-key"),
+    },
+  });
   if (!data) {
     throw new Error("Expected API key creation payload.");
   }
   return data;
 }
 
-export async function revokeMyApiKey(apiKeyId: string): Promise<void> {
+export async function revokeMyApiKey(apiKeyId: string, options: { ifMatch?: string | null } = {}): Promise<void> {
   await client.DELETE("/api/v1/users/me/apikeys/{apiKeyId}", {
     params: { path: { apiKeyId: apiKeyId } },
+    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 }
 
@@ -54,10 +64,14 @@ export async function listUserApiKeys(userId: string, options: ListPageOptions =
 export async function createUserApiKey(
   userId: string,
   payload: CreateApiKeyRequest,
+  idempotencyKey?: string,
 ): Promise<ApiKeyCreateResponse> {
   const { data } = await client.POST("/api/v1/users/{userId}/apikeys", {
     params: { path: { userId } },
     body: payload,
+    headers: {
+      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("api-key"),
+    },
   });
   if (!data) {
     throw new Error("Expected API key creation payload.");
@@ -65,9 +79,14 @@ export async function createUserApiKey(
   return data;
 }
 
-export async function revokeUserApiKey(userId: string, apiKeyId: string): Promise<void> {
+export async function revokeUserApiKey(
+  userId: string,
+  apiKeyId: string,
+  options: { ifMatch?: string | null } = {},
+): Promise<void> {
   await client.DELETE("/api/v1/users/{userId}/apikeys/{apiKeyId}", {
     params: { path: { userId, apiKeyId } },
+    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 }
 

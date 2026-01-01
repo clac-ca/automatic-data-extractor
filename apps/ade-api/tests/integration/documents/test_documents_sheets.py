@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
 
@@ -69,6 +71,7 @@ async def test_list_document_sheets_reports_parse_failures(
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
+        "Idempotency-Key": f"idem-{uuid4().hex}",
     }
 
     upload = await async_client.post(

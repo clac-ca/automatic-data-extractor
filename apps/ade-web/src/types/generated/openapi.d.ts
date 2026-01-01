@@ -24,6 +24,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Build/runtime metadata */
+        get: operations["read_info_api_v1_info_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/meta/versions": {
         parameters: {
             query?: never;
@@ -223,7 +240,8 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Retrieve one of the current user's API keys */
+        get: operations["read_my_api_key_api_v1_users_me_apikeys__apiKeyId__get"];
         put?: never;
         post?: never;
         /** Revoke one of the current user's API keys */
@@ -258,7 +276,8 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Retrieve an API key for a specific user (admin) */
+        get: operations["read_user_api_key_api_v1_users__userId__apikeys__apiKeyId__get"];
         put?: never;
         post?: never;
         /** Revoke an API key for a specific user (admin) */
@@ -383,6 +402,23 @@ export type paths = {
         };
         /** List role assignments (admin view) */
         get: operations["list_assignments_api_v1_roleassignments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roleassignments/{assignmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve a role assignment */
+        get: operations["read_assignment_api_v1_roleassignments__assignmentId__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -591,6 +627,23 @@ export type paths = {
         post?: never;
         /** Remove a workspace member */
         delete: operations["remove_workspace_member_api_v1_workspaces__workspaceId__members__userId__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document tags */
+        get: operations["list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -902,23 +955,6 @@ export type paths = {
         put?: never;
         /** Soft delete multiple documents */
         post: operations["delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/tags": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List document tags */
-        get: operations["list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2150,40 +2186,11 @@ export type components = {
             nextCursor: string;
         };
         /**
-         * DocumentDisplayStatus
-         * @description UI-friendly status derived from document + run state.
-         * @enum {string}
-         */
-        DocumentDisplayStatus: "queued" | "processing" | "ready" | "failed" | "archived";
-        /**
          * DocumentFileType
          * @description Normalized file types for documents.
          * @enum {string}
          */
         DocumentFileType: "xlsx" | "xls" | "csv" | "pdf" | "unknown";
-        /**
-         * DocumentLastRun
-         * @description Minimal representation of the last engine execution for a document.
-         */
-        DocumentLastRun: {
-            /**
-             * Runid
-             * Format: uuid
-             * @description Latest run identifier for the execution.
-             */
-            runId: string;
-            status: components["schemas"]["RunStatus"];
-            /**
-             * Runat
-             * @description Timestamp for the latest run event (completion/start).
-             */
-            runAt?: string | null;
-            /**
-             * Message
-             * @description Optional status or error message associated with the execution.
-             */
-            message?: string | null;
-        };
         /**
          * DocumentListPage
          * @description Paginated envelope of document list rows.
@@ -2228,20 +2235,13 @@ export type components = {
              */
             name: string;
             fileType: components["schemas"]["DocumentFileType"];
-            status: components["schemas"]["DocumentDisplayStatus"];
-            /** Stage */
-            stage?: string | null;
+            status: components["schemas"]["DocumentStatus"];
             uploader?: components["schemas"]["UserSummary"] | null;
             assignee?: components["schemas"]["UserSummary"] | null;
             /** Tags */
             tags?: string[];
             /** Bytesize */
             byteSize: number;
-            /** Sizelabel */
-            sizeLabel: string;
-            queueState?: components["schemas"]["DocumentQueueState"] | null;
-            queueReason?: components["schemas"]["DocumentQueueReason"] | null;
-            mappingHealth: components["schemas"]["DocumentMappingHealth"];
             /**
              * Createdat
              * Format: date-time
@@ -2257,20 +2257,9 @@ export type components = {
              * Format: date-time
              */
             activityAt: string;
-            lastRun?: components["schemas"]["DocumentLastRun"] | null;
-            lastSuccessfulRun?: components["schemas"]["DocumentLastRun"] | null;
-        };
-        /**
-         * DocumentMappingHealth
-         * @description Mapping health summary for a document.
-         */
-        DocumentMappingHealth: {
-            /** Attention */
-            attention: number;
-            /** Unmapped */
-            unmapped: number;
-            /** Pending */
-            pending?: boolean | null;
+            latestRun?: components["schemas"]["DocumentRunSummary"] | null;
+            latestSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
+            latestResult?: components["schemas"]["DocumentResultSummary"] | null;
         };
         /**
          * DocumentOut
@@ -2303,18 +2292,12 @@ export type components = {
                 [key: string]: unknown;
             };
             status: components["schemas"]["DocumentStatus"];
-            /** @default queued */
-            displayStatus: components["schemas"]["DocumentDisplayStatus"];
-            queueState?: components["schemas"]["DocumentQueueState"] | null;
-            queueReason?: components["schemas"]["DocumentQueueReason"] | null;
             source: components["schemas"]["DocumentSource"];
             /**
              * Expiresat
              * Format: date-time
              */
             expiresAt: string;
-            /** Lastrunat */
-            lastRunAt?: string | null;
             /** Activityat */
             activityAt?: string | null;
             /**
@@ -2343,22 +2326,52 @@ export type components = {
             /** @description Summary of the assigned user when available. */
             assignee?: components["schemas"]["UserSummary"] | null;
             /** @description Latest run execution associated with the document when available. */
-            lastRun?: components["schemas"]["DocumentLastRun"] | null;
+            latestRun?: components["schemas"]["DocumentRunSummary"] | null;
             /** @description Latest successful run execution associated with the document when available. */
-            lastSuccessfulRun?: components["schemas"]["DocumentLastRun"] | null;
+            latestSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
+            /** @description Summary of the latest result metadata, when available. */
+            latestResult?: components["schemas"]["DocumentResultSummary"] | null;
         };
         /**
-         * DocumentQueueReason
-         * @description Reason for documents waiting to enter the run queue.
-         * @enum {string}
+         * DocumentResultSummary
+         * @description Summary of the latest document result metadata.
          */
-        DocumentQueueReason: "no_active_configuration" | "queue_full" | "processing_paused";
+        DocumentResultSummary: {
+            /** Attention */
+            attention: number;
+            /** Unmapped */
+            unmapped: number;
+            /** Pending */
+            pending?: boolean | null;
+        };
         /**
-         * DocumentQueueState
-         * @description Queue lifecycle for documents that are not yet processing.
-         * @enum {string}
+         * DocumentRunSummary
+         * @description Minimal representation of a run associated with a document.
          */
-        DocumentQueueState: "waiting" | "queued";
+        DocumentRunSummary: {
+            /**
+             * Id
+             * Format: uuid
+             * @description Run identifier.
+             */
+            id: string;
+            status: components["schemas"]["RunStatus"];
+            /**
+             * Startedat
+             * @description Timestamp for when the run started, if available.
+             */
+            startedAt?: string | null;
+            /**
+             * Completedat
+             * @description Timestamp for when the run completed, if available.
+             */
+            completedAt?: string | null;
+            /**
+             * Errorsummary
+             * @description Optional error summary from the run.
+             */
+            errorSummary?: string | null;
+        };
         /**
          * DocumentSheet
          * @description Descriptor for a worksheet or single-sheet document.
@@ -2776,6 +2789,23 @@ export type components = {
              * @description Optional human-readable note about the component state.
              */
             detail?: string | null;
+        };
+        /**
+         * InfoResponse
+         * @description Runtime/build metadata for ADE API.
+         */
+        InfoResponse: {
+            /** Version */
+            version: string;
+            /** Commitsha */
+            commitSha: string;
+            /** Environment */
+            environment: string;
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
         };
         /**
          * MeContext
@@ -4046,6 +4076,26 @@ export interface operations {
             };
         };
     };
+    read_info_api_v1_info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InfoResponse"];
+                };
+            };
+        };
+    };
     read_versions_api_v1_meta_versions_get: {
         parameters: {
             query?: never;
@@ -4523,6 +4573,59 @@ export interface operations {
             };
         };
     };
+    read_my_api_key_api_v1_users_me_apikeys__apiKeyId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description API key identifier */
+                apiKeyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeySummary"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not owned by caller. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     revoke_my_api_key_api_v1_users_me_apikeys__apiKeyId__delete: {
         parameters: {
             query?: never;
@@ -4678,6 +4781,61 @@ export interface operations {
             };
             /** @description Requires api_keys.manage_all global permission. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_user_api_key_api_v1_users__userId__apikeys__apiKeyId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier */
+                userId: string;
+                /** @description API key identifier */
+                apiKeyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeySummary"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.read_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5206,6 +5364,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleAssignmentPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_assignment_api_v1_roleassignments__assignmentId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Role assignment identifier */
+                assignmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleAssignmentOut"];
                 };
             };
             /** @description Validation Error */
@@ -5957,6 +6147,63 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number */
+                page?: number;
+                /** @description Items per page (max 200) */
+                perPage?: number;
+                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                sort?: string | null;
+                /** @description URL-encoded JSON array of filter objects. */
+                filters?: string | null;
+                /** @description Logical operator to join filters (and/or). */
+                joinOperator?: components["schemas"]["FilterJoinOperator"];
+                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
+                q?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCatalogPage"];
+                };
+            };
+            /** @description Authentication required to list tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow tag access. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag search parameters are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7196,63 +7443,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
-            };
-        };
-    };
-    list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get: {
-        parameters: {
-            query?: {
-                /** @description 1-based page number */
-                page?: number;
-                /** @description Items per page (max 200) */
-                perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
-                sort?: string | null;
-                /** @description URL-encoded JSON array of filter objects. */
-                filters?: string | null;
-                /** @description Logical operator to join filters (and/or). */
-                joinOperator?: components["schemas"]["FilterJoinOperator"];
-                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
-                q?: string | null;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TagCatalogPage"];
-                };
-            };
-            /** @description Authentication required to list tags. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow tag access. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Tag search parameters are invalid. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

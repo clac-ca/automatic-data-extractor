@@ -17,6 +17,12 @@ Future versions will follow the same resource model. When breaking changes are r
 - `GET /api/v1/meta/versions` returns the installed backend package versions (`ade-api` and `ade-engine`).
 - In the web UI, open the profile menu and pick **About / Versions** to see the built `ade-web` version alongside the backend versions.
 
+## Operational endpoints
+
+- `GET /health` returns `200` when the process is running (no database check).
+- `GET /ready` verifies database connectivity and returns `200` when ready (else `503`).
+- `GET /api/v1/info` returns build/runtime metadata (`version`, `commitSha`, `environment`, `startedAt`).
+
 ## Authentication and RBAC
 
 - **Session cookies**: `POST /api/v1/auth/cookie/login` sets the `ade_session` cookie for browser clients. Use
@@ -31,6 +37,55 @@ Future versions will follow the same resource model. When breaking changes are r
 
 Requests without valid credentials receive HTTP `401 Unauthorized`. If the token is valid but lacks permissions for a resource you
 will receive `403 Forbidden`.
+
+## Platform conventions
+
+### Request IDs
+
+- The API accepts `X-Request-Id` on inbound requests and always echoes it back.
+- Every response includes `X-Request-Id`; error responses also include `requestId` in the body.
+- Provide request IDs when contacting support to speed up debugging.
+
+### Error format (Problem Details)
+
+All non-2xx responses use `application/problem+json` with a consistent schema:
+
+```json
+{
+  "type": "validation_error",
+  "title": "Validation error",
+  "status": 422,
+  "detail": "Invalid request",
+  "instance": "/api/v1/workspaces/ws_123/documents",
+  "requestId": "req_abc123",
+  "errors": [
+    { "path": "filters[0].operator", "message": "Unsupported operator", "code": "invalid_operator" }
+  ]
+}
+```
+
+### Optimistic concurrency
+
+- `GET` item endpoints return an `ETag` header.
+- `PATCH` and `DELETE` require `If-Match` with that ETag.
+  - Missing `If-Match` returns `428 precondition_required`.
+  - Mismatched `If-Match` returns `412 precondition_failed`.
+
+Example:
+
+```http
+GET /api/v1/workspaces/ws_123/documents/doc_123
+ETag: W/"doc_123:1700000000"
+
+PATCH /api/v1/workspaces/ws_123/documents/doc_123
+If-Match: W/"doc_123:1700000000"
+```
+
+### Idempotent POSTs
+
+- Creating documents, runs, builds, and API keys requires `Idempotency-Key`.
+- Replaying the same key + payload returns the original response.
+- Reusing a key with a different payload returns `409 idempotency_key_conflict`.
 
 ## Core resources
 
@@ -163,12 +218,9 @@ Provision isolated virtual environments for configurations. Builds are configura
 
 ## Error handling
 
-ADE follows standard HTTP semantics and FastAPI's default error envelope. Every non-2xx response returns a JSON document with a `detail` field:
+ADE follows standard HTTP semantics and returns Problem Details (`application/problem+json`) for every non-2xx response. The payload includes a stable `type`, `title`, `status`, `detail`, and `requestId`, plus optional `errors` for validation-style issues.
 
-- For most validation, authentication, and permission failures the `detail` value is a string describing the problem (for example `"Authentication required"` or `"Workspace slug already in use"`).
-- Some operations include structured details for easier automation. Run submission failures return `{"detail": {"error": {"code": "run_queue_full", "message": "..."}}}`.
-
-Use the HTTP status code to drive retry behaviour—`5xx` and `429` responses merit exponential backoff, whereas `4xx` errors require user action before retrying. Validation errors (`422`) and conflict responses (`409`) intentionally provide enough context in the `detail` payload to help clients resolve the issue.
+Use the HTTP status code to drive retry behaviour—`5xx` and `429` responses merit exponential backoff, whereas `4xx` errors require user action before retrying. Validation errors (`422`), conflicts (`409`), and precondition failures (`412`/`428`) include structured detail to help clients resolve the issue. Always log `requestId` when reporting problems.
 
 ## Webhooks and callbacks
 

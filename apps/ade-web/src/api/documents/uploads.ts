@@ -1,6 +1,7 @@
 import type { components } from "@schema";
 import { apiFetch, client } from "@api/client";
 import { ApiError, type ProblemDetails } from "@api/errors";
+import { createIdempotencyKey } from "@api/idempotency";
 import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
@@ -16,6 +17,7 @@ export type DocumentUploadSessionUploadResponse =
 
 interface UploadDocumentOptions {
   readonly onProgress?: (progress: UploadProgress) => void;
+  readonly idempotencyKey?: string;
   readonly runOptions?: DocumentUploadRunOptions;
 }
 
@@ -33,6 +35,9 @@ export function uploadWorkspaceDocument(
     `/api/v1/workspaces/${workspaceId}/documents`,
     formData,
     {
+      headers: {
+        "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey("document-upload"),
+      },
       onProgress: options.onProgress,
     },
   );
@@ -112,12 +117,16 @@ export async function getDocumentUploadSessionStatus(
 export async function commitDocumentUploadSession(
   workspaceId: string,
   sessionId: string,
+  idempotencyKey?: string,
   signal?: AbortSignal,
 ): Promise<DocumentUploadResponse> {
   const { data } = await client.POST(
     "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}/commit",
     {
       params: { path: { workspaceId, uploadSessionId: sessionId } },
+      headers: {
+        "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("document-commit"),
+      },
       signal,
     },
   );

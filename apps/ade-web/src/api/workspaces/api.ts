@@ -219,10 +219,16 @@ export async function createWorkspaceRole(_workspaceId: string, payload: RoleCre
   return data;
 }
 
-export async function updateWorkspaceRole(_workspaceId: string, roleId: string, payload: RoleUpdatePayload) {
+export async function updateWorkspaceRole(
+  _workspaceId: string,
+  roleId: string,
+  payload: RoleUpdatePayload,
+  options: { ifMatch?: string | null } = {},
+) {
   const { data } = await client.PATCH("/api/v1/roles/{roleId}", {
     params: { path: { roleId } },
     body: payload,
+    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 
   if (!data) {
@@ -232,9 +238,14 @@ export async function updateWorkspaceRole(_workspaceId: string, roleId: string, 
   return data;
 }
 
-export async function deleteWorkspaceRole(_workspaceId: string, roleId: string) {
+export async function deleteWorkspaceRole(
+  _workspaceId: string,
+  roleId: string,
+  options: { ifMatch?: string | null } = {},
+) {
   await client.DELETE("/api/v1/roles/{roleId}", {
     params: { path: { roleId } },
+    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 }
 

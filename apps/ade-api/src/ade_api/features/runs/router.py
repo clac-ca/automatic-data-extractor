@@ -21,9 +21,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
-from ade_api.api.deps import (
-    get_runs_service,
-)
+from ade_api.api.deps import get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord, strip_sequence
@@ -41,7 +39,14 @@ from ade_api.common.workbook_preview import (
     MAX_PREVIEW_ROWS,
     WorkbookPreview,
 )
-from ade_api.core.http import require_authenticated, require_csrf
+from ade_api.core.auth import AuthenticatedPrincipal
+from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
+from ade_api.features.idempotency import (
+    IdempotencyService,
+    build_request_hash,
+    build_scope_key,
+    require_idempotency_key,
+)
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import RunStatus
 
@@ -152,9 +157,27 @@ async def create_run_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunCreateRequest,
+    request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     """Create a run for ``configuration_id`` and enqueue execution."""
+
+    scope_key = build_scope_key(principal_id=str(principal.user_id))
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload=payload,
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
 
     try:
         run = await service.prepare_run(
@@ -179,6 +202,13 @@ async def create_run_endpoint(
         ) from exc
 
     resource = await service.to_resource(run)
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=resource,
+    )
     return resource
 
 
@@ -192,9 +222,27 @@ async def create_runs_batch_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunBatchCreateRequest,
+    request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``configuration_id`` and enqueue execution."""
+
+    scope_key = build_scope_key(principal_id=str(principal.user_id))
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload=payload,
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
 
     try:
         runs = await service.prepare_runs_batch(
@@ -218,7 +266,15 @@ async def create_runs_batch_endpoint(
         ) from exc
 
     resources = [await service.to_resource(run) for run in runs]
-    return RunBatchCreateResponse(runs=resources)
+    response_payload = RunBatchCreateResponse(runs=resources)
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=response_payload,
+    )
+    return response_payload
 
 
 @router.post(
@@ -231,9 +287,30 @@ async def create_workspace_run_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceCreateRequest,
+    request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     """Create a run for ``workspace_id`` and enqueue execution."""
+
+    scope_key = build_scope_key(
+        principal_id=str(principal.user_id),
+        workspace_id=str(workspace_id),
+    )
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload=payload,
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
 
     try:
         run = await service.prepare_run_for_workspace(
@@ -260,6 +337,13 @@ async def create_workspace_run_endpoint(
         ) from exc
 
     resource = await service.to_resource(run)
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=resource,
+    )
     return resource
 
 
@@ -273,9 +357,30 @@ async def create_workspace_runs_batch_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceBatchCreateRequest,
+    request: Request,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``workspace_id`` and enqueue execution."""
+
+    scope_key = build_scope_key(
+        principal_id=str(principal.user_id),
+        workspace_id=str(workspace_id),
+    )
+    request_hash = build_request_hash(
+        method=request.method,
+        path=request.url.path,
+        payload=payload,
+    )
+    replay = await idempotency.resolve_replay(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+    )
+    if replay:
+        return replay.to_response()
 
     try:
         runs = await service.prepare_runs_batch_for_workspace(
@@ -300,7 +405,15 @@ async def create_workspace_runs_batch_endpoint(
         ) from exc
 
     resources = [await service.to_resource(run) for run in runs]
-    return RunBatchCreateResponse(runs=resources)
+    response_payload = RunBatchCreateResponse(runs=resources)
+    await idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=response_payload,
+    )
+    return response_payload
 
 
 @router.get(

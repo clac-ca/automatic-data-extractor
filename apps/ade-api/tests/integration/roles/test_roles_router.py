@@ -84,6 +84,14 @@ async def test_roles_crud_and_delete(
     assert created["slug"] == "data-steward"
     assert created["permissions"] == ["users.read_all"]
 
+    read_response = await async_client.get(
+        f"/api/v1/roles/{role_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert read_response.status_code == 200, read_response.text
+    role_etag = read_response.headers.get("ETag")
+    assert role_etag is not None
+
     update_response = await async_client.patch(
         f"/api/v1/roles/{role_id}",
         json={
@@ -91,16 +99,24 @@ async def test_roles_crud_and_delete(
             "description": "Manages user directory",
             "permissions": ["users.read_all", "roles.read_all"],
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "If-Match": role_etag,
+        },
     )
     assert update_response.status_code == 200, update_response.text
     updated = update_response.json()
     assert sorted(updated["permissions"]) == ["roles.read_all", "users.read_all"]
     assert updated["description"] == "Manages user directory"
+    updated_etag = update_response.headers.get("ETag")
+    assert updated_etag is not None
 
     delete_response = await async_client.delete(
         f"/api/v1/roles/{role_id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "If-Match": updated_etag,
+        },
     )
     assert delete_response.status_code == 204
 

@@ -20,6 +20,7 @@ from .document import (
     DocumentUploadSession,
     DocumentUploadSessionStatus,
 )
+from .idempotency import IdempotencyRecord
 from .rbac import Permission, Role, RolePermission, ScopeType, UserRoleAssignment
 from .run import Run, RunStatus
 from .run_field import RunField
@@ -49,6 +50,7 @@ __all__ = [
     "DocumentUploadConflictBehavior",
     "DocumentUploadSession",
     "DocumentUploadSessionStatus",
+    "IdempotencyRecord",
     "Permission",
     "Role",
     "RolePermission",

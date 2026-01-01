@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
 
@@ -21,7 +23,7 @@ async def test_document_tags_replace_and_patch(
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         files={"file": ("tags.txt", b"tag payload", "text/plain")},
     )
     assert upload.status_code == 201, upload.text
@@ -70,7 +72,7 @@ async def test_tag_catalog_counts_and_excludes_deleted(
 
     upload_one = await async_client.post(
         f"{workspace_base}/documents",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         files={"file": ("catalog-one.txt", b"one", "text/plain")},
     )
     assert upload_one.status_code == 201, upload_one.text
@@ -78,7 +80,7 @@ async def test_tag_catalog_counts_and_excludes_deleted(
 
     upload_two = await async_client.post(
         f"{workspace_base}/documents",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         files={"file": ("catalog-two.txt", b"two", "text/plain")},
     )
     assert upload_two.status_code == 201, upload_two.text
@@ -110,9 +112,17 @@ async def test_tag_catalog_counts_and_excludes_deleted(
     assert items[1]["tag"] == "priority"
     assert items[1]["document_count"] == 1
 
-    deleted = await async_client.delete(
+    detail = await async_client.get(
         f"{workspace_base}/documents/{document_one}",
         headers=headers,
+    )
+    assert detail.status_code == 200, detail.text
+    etag = detail.headers.get("ETag")
+    assert etag is not None
+
+    deleted = await async_client.delete(
+        f"{workspace_base}/documents/{document_one}",
+        headers={**headers, "If-Match": etag},
     )
     assert deleted.status_code == 204, deleted.text
 
