@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@hooks/workspaces";
-import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
 import { FormField } from "@components/ui/form-field";
 import { Input } from "@components/ui/input";
@@ -75,11 +74,6 @@ export function GeneralSettingsPage() {
   return (
     <div className="space-y-6">
       <UnsavedChangesPrompt when={isDirty && !updateWorkspace.isPending} />
-      <SettingsSectionHeader
-        title="General"
-        description="Manage the workspace identity and your default workspace preference."
-      />
-
       {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
 
       <form

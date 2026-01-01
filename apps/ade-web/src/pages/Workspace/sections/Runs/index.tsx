@@ -5,7 +5,6 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { PageState } from "@components/layouts/page-state";
 
 import { RunsFiltersBar } from "./components/RunsFiltersBar";
-import { RunsHeader } from "./components/RunsHeader";
 import { RunsMetrics } from "./components/RunsMetrics";
 import { RunPreviewPanel } from "./components/RunPreviewPanel";
 import { RunsTable } from "./components/RunsTable";
@@ -99,12 +98,6 @@ export default function RunsScreen() {
 
   return (
     <div className="runs flex min-h-0 flex-1 flex-col bg-background text-foreground">
-      <RunsHeader
-        onExport={() => {
-          // TODO: Wire to export endpoint
-        }}
-      />
-
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <RunsMetrics counts={model.derived.counts} rangeLabel={resolveRangeLabel(model.state.filters.dateRange)} />

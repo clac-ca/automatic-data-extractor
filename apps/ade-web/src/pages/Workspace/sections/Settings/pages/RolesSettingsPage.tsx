@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "@app/navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { SettingsDrawer } from "../components/SettingsDrawer";
-import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useSettingsSection } from "../sectionContext";
 import { buildWeakEtag } from "@api/etag";
 import {
@@ -117,15 +116,6 @@ export function RolesSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsSectionHeader
-        title="Roles"
-        description="Workspace roles group permissions so you can safely delegate access."
-        actions={
-          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">
-            {roleCount} role{roleCount === 1 ? "" : "s"}
-          </span>
-        }
-      />
       {feedbackMessage ? <Alert tone={feedbackMessage.tone}>{feedbackMessage.message}</Alert> : null}
       {rolesQuery.isError ? (
         <Alert tone="danger">

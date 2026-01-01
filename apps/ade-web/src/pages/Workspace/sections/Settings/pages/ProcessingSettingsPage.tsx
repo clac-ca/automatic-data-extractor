@@ -4,7 +4,6 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useUpdateWorkspaceMutation } from "@hooks/workspaces";
 import { Alert } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
-import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
 export function ProcessingSettingsPage() {
   const { workspace, hasPermission } = useWorkspaceContext();
@@ -36,11 +35,6 @@ export function ProcessingSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsSectionHeader
-        title="Processing"
-        description="Pause or resume automatic document processing for this workspace."
-      />
-
       {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
 
       <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">

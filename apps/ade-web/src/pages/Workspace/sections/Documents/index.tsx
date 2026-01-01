@@ -10,7 +10,6 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 
 import { UploadManager } from "./components/UploadManager";
 import { UploadPreflightDialog } from "./components/UploadPreflightDialog";
-import { TablecnDocumentsHeader } from "./components/TablecnDocumentsHeader";
 import { TablecnDocumentsView } from "./tablecn/components/TablecnDocumentsView";
 
 export default function DocumentsScreen() {
@@ -78,7 +77,7 @@ export default function DocumentsScreen() {
     setUploadPreflightFiles([]);
   }, []);
 
-  const headerActions = (
+  const toolbarActions = (
     <>
       <UploadManager
         items={uploadManager.items}
@@ -106,10 +105,13 @@ export default function DocumentsScreen() {
 
   return (
     <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
-      <TablecnDocumentsHeader actions={headerActions} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-6 py-4">
-          <TablecnDocumentsView workspaceId={workspace.id} currentUser={currentUser} />
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-4">
+          <TablecnDocumentsView
+            workspaceId={workspace.id}
+            currentUser={currentUser}
+            toolbarActions={toolbarActions}
+          />
         </section>
       </div>
       <UploadPreflightDialog

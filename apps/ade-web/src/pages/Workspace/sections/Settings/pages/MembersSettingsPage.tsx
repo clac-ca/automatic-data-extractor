@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from "@app/navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@hooks/users/useUsersQuery";
 import { SettingsDrawer } from "../components/SettingsDrawer";
-import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useSettingsSection } from "../sectionContext";
 import {
   useAddWorkspaceMemberMutation,
@@ -118,16 +117,6 @@ export function MembersSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsSectionHeader
-        title="Members"
-        description="Add members, adjust workspace roles, or remove access."
-        actions={
-          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">
-            {memberCount} member{memberCount === 1 ? "" : "s"}
-          </span>
-        }
-      />
-
       {feedbackMessage ? <Alert tone={feedbackMessage.tone}>{feedbackMessage.message}</Alert> : null}
       {membersQuery.isError ? (
         <Alert tone="danger">

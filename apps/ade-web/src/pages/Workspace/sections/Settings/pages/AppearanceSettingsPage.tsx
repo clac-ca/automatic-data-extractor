@@ -4,18 +4,12 @@ import { MODE_OPTIONS, useTheme } from "@components/providers/theme";
 import { ThemeSelect } from "@components/ui/theme-select";
 import { CheckIcon } from "@components/icons";
 
-import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
 export function AppearanceSettingsPage() {
   const { modePreference, setModePreference, theme, setTheme } = useTheme();
 
   return (
     <div className="space-y-6">
-      <SettingsSectionHeader
-        title="Appearance"
-        description="Choose your color mode and theme. These preferences follow your account."
-      />
-
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <div className="space-y-1">

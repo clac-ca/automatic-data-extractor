@@ -1,8 +1,9 @@
 import clsx from "clsx";
 
-import type { DocumentEntry } from "../types";
+import type { DocumentUploadResponse } from "@api/documents";
+import type { UploadManagerItem } from "@hooks/documents/uploadManager";
 
-type UploadItem = NonNullable<DocumentEntry["upload"]>;
+type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 
 export function UploadProgress({ upload }: { upload: UploadItem }) {
   const percent = Math.max(0, Math.min(100, upload.progress.percent ?? 0));

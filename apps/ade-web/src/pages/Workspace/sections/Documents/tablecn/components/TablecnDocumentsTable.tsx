@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import type { ColumnDef, Row } from "@tanstack/react-table";
 
 import { DataTable } from "@components/tablecn/data-table/data-table";
@@ -29,6 +29,7 @@ interface TablecnDocumentsTableProps {
   tagOptions: string[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
+  toolbarActions?: ReactNode;
 }
 
 const PREVIEWABLE_FILE_TYPES = new Set<FileType>(["xlsx", "csv"]);
@@ -41,6 +42,7 @@ export function TablecnDocumentsTable({
   tagOptions,
   onAssign,
   onToggleTag,
+  toolbarActions,
 }: TablecnDocumentsTableProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -483,7 +485,7 @@ export function TablecnDocumentsTable({
     <DataTable
       table={table}
       showPagination={false}
-      className="w-full overflow-visible [&_[data-slot=table]]:w-full [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full"
+      className="inline-flex min-w-full w-max overflow-visible [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible"
       onRowClick={onRowClick}
       isRowExpanded={isRowExpanded}
       expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-hidden"
@@ -522,6 +524,11 @@ export function TablecnDocumentsTable({
           history={history}
           startTransition={startTransition}
         />
+        {toolbarActions ? (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {toolbarActions}
+          </div>
+        ) : null}
       </DataTableAdvancedToolbar>
     </DataTable>
   );

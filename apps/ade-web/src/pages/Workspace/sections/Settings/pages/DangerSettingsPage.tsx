@@ -10,7 +10,6 @@ import { Button } from "@components/ui/button";
 import { ConfirmDialog } from "@components/ui/confirm-dialog";
 import { FormField } from "@components/ui/form-field";
 import { Input } from "@components/ui/input";
-import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
 export function DangerSettingsPage() {
   const { workspace, hasPermission } = useWorkspaceContext();
@@ -39,11 +38,6 @@ export function DangerSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsSectionHeader
-        title="Danger zone"
-        description="Delete this workspace when it is no longer needed."
-      />
-
       <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">

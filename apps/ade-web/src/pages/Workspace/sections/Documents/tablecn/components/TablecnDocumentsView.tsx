@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchWorkspaceDocuments, patchWorkspaceDocument, type DocumentPageResult } from "@api/documents";
@@ -43,15 +43,18 @@ function sleep(duration: number, signal: AbortSignal): Promise<void> {
 export function TablecnDocumentsView({
   workspaceId,
   currentUser,
+  toolbarActions,
 }: {
   workspaceId: string;
   currentUser: CurrentUser;
+  toolbarActions?: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const { notifyToast } = useNotifications();
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
   const lastCursorRef = useRef<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
@@ -324,7 +327,10 @@ export function TablecnDocumentsView({
         if (isFetchingNextPage) return;
         void fetchNextPage();
       },
-      { rootMargin: "200px" },
+      {
+        root: scrollContainerRef.current,
+        rootMargin: "200px",
+      },
     );
 
     observer.observe(loadMoreRef.current);
@@ -383,21 +389,27 @@ export function TablecnDocumentsView({
           }
         />
       ) : null}
-      <TablecnDocumentsTable
-        data={documents}
-        pageCount={pageCount}
-        workspaceId={workspaceId}
-        people={people}
-        tagOptions={tagOptions}
-        onAssign={onAssign}
-        onToggleTag={onToggleTag}
-      />
-      {hasNextPage ? (
-        <div className="flex items-center justify-center py-2 text-xs text-muted-foreground">
-          {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
-        </div>
-      ) : null}
-      <div ref={loadMoreRef} className="h-1" />
+      <div
+        ref={scrollContainerRef}
+        className="flex min-h-0 min-w-0 flex-1 flex-col items-start gap-3 overflow-auto"
+      >
+        <TablecnDocumentsTable
+          data={documents}
+          pageCount={pageCount}
+          workspaceId={workspaceId}
+          people={people}
+          tagOptions={tagOptions}
+          onAssign={onAssign}
+          onToggleTag={onToggleTag}
+          toolbarActions={toolbarActions}
+        />
+        {hasNextPage ? (
+          <div className="flex w-full items-center justify-center py-2 text-xs text-muted-foreground">
+            {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
+          </div>
+        ) : null}
+        <div ref={loadMoreRef} className="h-1 w-full" />
+      </div>
     </div>
   );
 }

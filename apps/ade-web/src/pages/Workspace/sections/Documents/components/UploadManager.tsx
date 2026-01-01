@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DocumentUploadResponse } from "@api/documents";
 import type { UploadManagerItem, UploadManagerSummary } from "@hooks/documents/uploadManager";
 import { CloseIcon, RefreshIcon, UploadIcon } from "@components/icons";
+import { Button } from "@components/tablecn/ui/button";
 
 import { formatBytes } from "../utils";
 import { UploadProgress } from "./UploadProgress";
@@ -58,11 +59,13 @@ export function UploadManager({
 
   return (
     <div ref={containerRef} className="relative">
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         onClick={() => setOpen((value) => !value)}
         className={clsx(
-          "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-sm transition",
+          "rounded-full px-3 py-1.5 text-xs font-semibold",
           open ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         )}
         aria-haspopup="dialog"
@@ -73,7 +76,7 @@ export function UploadManager({
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {summary.totalCount}
         </span>
-      </button>
+      </Button>
 
       {open ? (
         <div className="absolute right-0 z-30 mt-2 w-[22rem] rounded-2xl border border-border bg-card p-4 shadow-lg">
@@ -85,13 +88,15 @@ export function UploadManager({
               </p>
             </div>
             {completedCount > 0 ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => onClearCompleted()}
-                className="text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                className="h-7 px-2 text-[11px]"
               >
                 Clear completed
-              </button>
+              </Button>
             ) : null}
           </div>
 
@@ -170,14 +175,16 @@ function ActionButton({
   children: ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       onClick={onClick}
-      className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-card px-2 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
+      className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground"
       aria-label={label}
       title={label}
     >
       {children}
-    </button>
+    </Button>
   );
 }
