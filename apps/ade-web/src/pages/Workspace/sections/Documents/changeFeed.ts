@@ -8,9 +8,23 @@ export type MergeChangeResult = {
   applied: boolean;
 };
 
+export type MergeChangeOptions = {
+  sortTokens?: string[];
+};
+
+const DEFAULT_SORT_TOKENS = ["-createdAt"];
+
+function resolveInsertPosition(sortTokens?: string[]) {
+  const tokens = sortTokens && sortTokens.length > 0 ? sortTokens : DEFAULT_SORT_TOKENS;
+  const primary = tokens[0] ?? DEFAULT_SORT_TOKENS[0];
+  const descending = primary.startsWith("-");
+  return descending ? "start" : "end";
+}
+
 export function mergeDocumentChangeIntoPages(
   existing: InfiniteData<DocumentPageResult>,
   change: DocumentChangeEntry,
+  options: MergeChangeOptions = {},
 ): MergeChangeResult {
   const id = change.documentId ?? change.row?.id;
   if (!id) {
@@ -56,7 +70,25 @@ export function mergeDocumentChangeIntoPages(
   });
 
   if (!found && change.type === "document.upsert" && change.row) {
-    if (change.matchesFilters) {
+    if (change.matchesFilters && !change.requiresRefresh) {
+      const nextPages = existing.pages.slice();
+      const firstPage = nextPages[0];
+      if (firstPage) {
+        const items = firstPage.items ?? [];
+        const insertPosition = resolveInsertPosition(options.sortTokens);
+        const nextItems =
+          insertPosition === "start"
+            ? [change.row, ...items]
+            : [...items, change.row];
+        nextPages[0] = { ...firstPage, items: nextItems };
+        return {
+          data: { ...existing, pages: nextPages },
+          updatesAvailable,
+          applied: true,
+        };
+      }
+      updatesAvailable = true;
+    } else if (change.matchesFilters) {
       updatesAvailable = true;
     }
   }

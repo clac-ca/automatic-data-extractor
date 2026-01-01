@@ -27,7 +27,7 @@ export function SettingsShell({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8">
       <div className="flex flex-col gap-8 lg:flex-row">
-        <aside className="w-full lg:w-64 lg:shrink-0">
+        <aside className="w-full lg:sticky lg:top-6 lg:w-64 lg:shrink-0">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
               Settings
@@ -66,9 +66,8 @@ export function SettingsShell({
                       return (
                         <li key={item.id} className="w-full">
                           <div className={baseClasses} aria-disabled>
-                            <div className="flex min-w-0 flex-col gap-1">
+                            <div className="flex min-w-0 flex-col">
                               <span className="font-semibold">{item.label}</span>
-                              <span className="text-xs text-muted-foreground">{item.description}</span>
                             </div>
                           </div>
                         </li>
@@ -78,9 +77,8 @@ export function SettingsShell({
                     return (
                       <li key={item.id} className="w-full">
                         <NavLink to={item.href} className={baseClasses}>
-                          <div className="flex min-w-0 flex-col gap-1">
+                          <div className="flex min-w-0 flex-col">
                             <span className="font-semibold">{item.label}</span>
-                            <span className="text-xs text-muted-foreground">{item.description}</span>
                           </div>
                         </NavLink>
                       </li>

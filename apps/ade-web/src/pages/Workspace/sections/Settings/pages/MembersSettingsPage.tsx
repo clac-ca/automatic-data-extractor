@@ -291,19 +291,30 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
       });
   }, [memberIds, usersQuery.users]);
 
+  const selectableUsers = useMemo(() => {
+    if (!selectedUserId) {
+      return availableUsers;
+    }
+    if (availableUsers.some((user) => user.id === selectedUserId)) {
+      return availableUsers;
+    }
+    const fallback = usersQuery.users.find((user) => user.id === selectedUserId);
+    return fallback ? [fallback, ...availableUsers] : availableUsers;
+  }, [availableUsers, selectedUserId, usersQuery.users]);
+
   const selectedUser = useMemo(
-    () => availableUsers.find((user) => user.id === selectedUserId),
-    [availableUsers, selectedUserId],
+    () => selectableUsers.find((user) => user.id === selectedUserId),
+    [selectableUsers, selectedUserId],
   );
 
-  const canSubmitAdd = Boolean(selectedUserId) && selectedRoleIds.length > 0 && !isSubmitting;
+  const canSubmitAdd = Boolean(selectedUser) && selectedRoleIds.length > 0 && !isSubmitting;
   const searchTooShort = userSearch.trim().length > 0 && userSearch.trim().length < 2;
   const usersLoading = usersQuery.isPending && usersQuery.users.length === 0;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFeedback(null);
-    const user = availableUsers.find((candidate) => candidate.id === selectedUserId);
+    const user = selectedUser;
     if (!user) {
       setFeedback("Select a user to add.");
       return;
@@ -363,14 +374,7 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
             required
           >
             <option value="">Select a user</option>
-            {selectedUser && !availableUsers.some((user) => user.id === selectedUser.id) ? (
-              <option value={selectedUser.id}>
-                {selectedUser.display_name
-                  ? `${selectedUser.display_name} (${selectedUser.email})`
-                  : selectedUser.email}
-              </option>
-            ) : null}
-            {availableUsers.map((user) => (
+            {selectableUsers.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.display_name ? `${user.display_name} (${user.email})` : user.email}
               </option>

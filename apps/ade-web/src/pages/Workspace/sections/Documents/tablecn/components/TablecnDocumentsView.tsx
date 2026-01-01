@@ -64,6 +64,13 @@ export function TablecnDocumentsView({
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
   const normalizedFilters = useMemo(() => normalizeDocumentsFilters(filters), [filters]);
+  const sortTokens = useMemo(
+    () =>
+      normalizedSort
+        ? normalizedSort.split(",").map((token) => token.trim()).filter(Boolean)
+        : [],
+    [normalizedSort],
+  );
   const filtersKey = useMemo(
     () => (normalizedFilters.length > 0 ? JSON.stringify(normalizedFilters) : ""),
     [normalizedFilters],
@@ -238,22 +245,42 @@ export function TablecnDocumentsView({
 
   const applyChange = useCallback(
     (change: DocumentChangeEntry) => {
+      const id = change.documentId ?? change.row?.id ?? null;
+      const isVisible = id ? documentsById.has(id) : false;
+      const canInsert =
+        change.type === "document.upsert" &&
+        Boolean(change.row) &&
+        Boolean(change.matchesFilters) &&
+        !change.requiresRefresh;
+      const shouldPromptForNew =
+        change.type === "document.upsert" &&
+        Boolean(change.matchesFilters) &&
+        !isVisible &&
+        !canInsert;
+
+      if (!isVisible && !canInsert) {
+        if (change.requiresRefresh || shouldPromptForNew) {
+          setUpdatesAvailable((current) => current || true);
+        }
+        return;
+      }
+
       let shouldPrompt = Boolean(change.requiresRefresh);
 
       queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
         if (!existing) {
           return existing;
         }
-        const result = mergeDocumentChangeIntoPages(existing, change);
+        const result = mergeDocumentChangeIntoPages(existing, change, { sortTokens });
         shouldPrompt = shouldPrompt || result.updatesAvailable;
         return result.data;
       });
 
       if (shouldPrompt) {
-        setUpdatesAvailable((current) => current || shouldPrompt);
+        setUpdatesAvailable((current) => current || true);
       }
     },
-    [queryClient, queryKey],
+    [documentsById, queryClient, queryKey, sortTokens],
   );
 
   useEffect(() => {

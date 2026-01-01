@@ -28,11 +28,12 @@ const generalSchema = z.object({
 type GeneralSettingsFormValues = z.infer<typeof generalSchema>;
 
 export function GeneralSettingsPage() {
-  const { workspace } = useWorkspaceContext();
+  const { workspace, hasPermission } = useWorkspaceContext();
   const updateWorkspace = useUpdateWorkspaceMutation(workspace.id);
   const setDefaultWorkspace = useSetDefaultWorkspaceMutation();
   const { modePreference, setModePreference, theme, setTheme } = useTheme();
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
+  const canManageWorkspace = hasPermission("workspace.settings.manage");
 
   const {
     register,
@@ -55,6 +56,10 @@ export function GeneralSettingsPage() {
   }, [reset, workspace.name, workspace.slug]);
 
   const submit = handleSubmit((values) => {
+    if (!canManageWorkspace) {
+      setFeedback({ tone: "danger", message: "You do not have permission to update workspace details." });
+      return;
+    }
     setFeedback(null);
     updateWorkspace.mutate(
       {
@@ -88,7 +93,11 @@ export function GeneralSettingsPage() {
         >
           <div className="space-y-4">
             <FormField label="Workspace name" required error={errors.name?.message}>
-              <Input {...register("name")} placeholder="Finance Operations" disabled={updateWorkspace.isPending} />
+              <Input
+                {...register("name")}
+                placeholder="Finance Operations"
+                disabled={updateWorkspace.isPending || !canManageWorkspace}
+              />
             </FormField>
             <FormField
               label="Workspace slug"
@@ -96,19 +105,19 @@ export function GeneralSettingsPage() {
               required
               error={errors.slug?.message}
             >
-              <Input {...register("slug")} placeholder="finance-ops" disabled={updateWorkspace.isPending} />
+              <Input
+                {...register("slug")}
+                placeholder="finance-ops"
+                disabled={updateWorkspace.isPending || !canManageWorkspace}
+              />
             </FormField>
           </div>
 
-          {updateWorkspace.isError ? (
-            <Alert tone="danger">
-              {updateWorkspace.error instanceof Error
-                ? updateWorkspace.error.message
-                : "Unable to save workspace details."}
-            </Alert>
+          {!canManageWorkspace ? (
+            <Alert tone="warning">You do not have permission to edit workspace identity.</Alert>
           ) : null}
 
-          {isDirty ? (
+          {isDirty && canManageWorkspace ? (
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
               <Button
                 type="button"

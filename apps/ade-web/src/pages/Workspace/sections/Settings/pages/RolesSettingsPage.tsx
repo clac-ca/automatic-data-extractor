@@ -289,6 +289,7 @@ function RoleDrawer({
   }, [mode, open, role]);
 
   const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const roleMissing = mode === "edit" && !role;
   const canEditRole = mode === "create" || (role?.is_editable ?? false);
   const canDeleteRole = mode === "edit" && role && role.is_editable && !role.is_system && onDelete;
 
@@ -314,6 +315,10 @@ function RoleDrawer({
 
   const handleSave = async () => {
     setFeedback(null);
+    if (roleMissing) {
+      setFeedback("This role could not be found.");
+      return;
+    }
     if (!values.name.trim()) {
       setFeedback("Role name is required.");
       return;
@@ -369,7 +374,7 @@ function RoleDrawer({
             {isDeleting ? "Deleting..." : "Delete"}
           </Button>
         ) : null}
-        <Button type="button" onClick={handleSave} disabled={!canEditRole || isSaving}>
+        <Button type="button" onClick={handleSave} disabled={roleMissing || !canEditRole || isSaving}>
           {isSaving ? "Saving..." : mode === "create" ? "Create role" : "Save changes"}
         </Button>
       </div>
@@ -392,88 +397,92 @@ function RoleDrawer({
           <Alert tone="warning">This role is locked and cannot be modified.</Alert>
         ) : null}
 
-        <div className="space-y-4">
-          <FormField label="Role name" required>
-            <Input
-              value={values.name}
-              onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Data reviewer"
-              disabled={isSaving || !canEditRole}
-            />
-          </FormField>
-
-          {mode === "create" ? (
-            <FormField label="Role slug" hint="Lowercase, URL-friendly identifier. Leave blank to auto-generate.">
+        {roleMissing ? (
+          <Alert tone="warning">This role could not be found.</Alert>
+        ) : (
+          <div className="space-y-4">
+            <FormField label="Role name" required>
               <Input
-                value={values.slug}
-                onChange={(event) => setValues((current) => ({ ...current, slug: event.target.value }))}
-                placeholder="data-reviewer"
+                value={values.name}
+                onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Data reviewer"
                 disabled={isSaving || !canEditRole}
               />
             </FormField>
-          ) : (
-            <FormField label="Role slug">
-              <Input value={role?.slug ?? ""} disabled />
-            </FormField>
-          )}
 
-          <FormField label="Description" hint="Optional context about what this role controls.">
-            <Input
-              value={values.description}
-              onChange={(event) => setValues((current) => ({ ...current, description: event.target.value }))}
-              placeholder="What does this role control?"
-              disabled={isSaving || !canEditRole}
-            />
-          </FormField>
+            {mode === "create" ? (
+              <FormField label="Role slug" hint="Lowercase, URL-friendly identifier. Leave blank to auto-generate.">
+                <Input
+                  value={values.slug}
+                  onChange={(event) => setValues((current) => ({ ...current, slug: event.target.value }))}
+                  placeholder="data-reviewer"
+                  disabled={isSaving || !canEditRole}
+                />
+              </FormField>
+            ) : (
+              <FormField label="Role slug">
+                <Input value={role?.slug ?? ""} disabled />
+              </FormField>
+            )}
 
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Permissions</p>
-                <p className="text-xs text-muted-foreground">
-                  Select the permissions included with this role. {values.permissions.length} selected.
-                </p>
-              </div>
+            <FormField label="Description" hint="Optional context about what this role controls.">
               <Input
-                value={permissionFilter}
-                onChange={(event) => setPermissionFilter(event.target.value)}
-                placeholder="Filter permissions"
-                disabled={isSaving}
+                value={values.description}
+                onChange={(event) => setValues((current) => ({ ...current, description: event.target.value }))}
+                placeholder="What does this role control?"
+                disabled={isSaving || !canEditRole}
               />
-            </div>
+            </FormField>
 
-            <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
-              {filteredPermissions.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No permissions match this filter.</p>
-              ) : (
-                filteredPermissions.map((permission) => {
-                  const checkboxId = `permission-${permission.key.replaceAll(".", "-")}`;
-                  return (
-                    <label
-                      key={permission.key}
-                      htmlFor={checkboxId}
-                      aria-label={permission.label}
-                      className="flex items-start gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                    >
-                      <input
-                        id={checkboxId}
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-border-strong"
-                        checked={values.permissions.includes(permission.key)}
-                        onChange={(event) => togglePermission(permission.key, event.target.checked)}
-                        disabled={isSaving || !canEditRole}
-                      />
-                      <span>
-                        <span className="block font-semibold">{permission.label}</span>
-                        <span className="block text-xs text-muted-foreground">{permission.description}</span>
-                      </span>
-                    </label>
-                  );
-                })
-              )}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Permissions</p>
+                  <p className="text-xs text-muted-foreground">
+                    Select the permissions included with this role. {values.permissions.length} selected.
+                  </p>
+                </div>
+                <Input
+                  value={permissionFilter}
+                  onChange={(event) => setPermissionFilter(event.target.value)}
+                  placeholder="Filter permissions"
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
+                {filteredPermissions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No permissions match this filter.</p>
+                ) : (
+                  filteredPermissions.map((permission) => {
+                    const checkboxId = `permission-${permission.key.replaceAll(".", "-")}`;
+                    return (
+                      <label
+                        key={permission.key}
+                        htmlFor={checkboxId}
+                        aria-label={permission.label}
+                        className="flex items-start gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      >
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-border-strong"
+                          checked={values.permissions.includes(permission.key)}
+                          onChange={(event) => togglePermission(permission.key, event.target.checked)}
+                          disabled={isSaving || !canEditRole}
+                        />
+                        <span>
+                          <span className="block font-semibold">{permission.label}</span>
+                          <span className="block text-xs text-muted-foreground">{permission.description}</span>
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </SettingsDrawer>
 
       <ConfirmDialog

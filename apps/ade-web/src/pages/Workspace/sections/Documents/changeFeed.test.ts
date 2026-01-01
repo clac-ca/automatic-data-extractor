@@ -66,7 +66,7 @@ describe("mergeDocumentChangeIntoPages", () => {
     expect(result.data.pages[0].items?.[0].activityAt).toBe("2024-01-02T00:00:00.000Z");
   });
 
-  it("flags updates for off-page upserts that match filters", () => {
+  it("inserts new rows when the change can be applied safely", () => {
     const doc = makeRow({ id: "doc-1" });
     const data = makeData([makePage([doc])]);
 
@@ -78,6 +78,28 @@ describe("mergeDocumentChangeIntoPages", () => {
       occurredAt: "2024-01-02T00:00:00.000Z",
       matchesFilters: true,
       requiresRefresh: false,
+    };
+
+    const result = mergeDocumentChangeIntoPages(data, change);
+
+    expect(result.applied).toBe(true);
+    expect(result.updatesAvailable).toBe(false);
+    expect(result.data.pages[0].items?.[0].id).toBe("doc-2");
+    expect(result.data.pages[0].items?.length).toBe(2);
+  });
+
+  it("flags updates when the server requires a refresh", () => {
+    const doc = makeRow({ id: "doc-1" });
+    const data = makeData([makePage([doc])]);
+
+    const change: DocumentChangeEntry = {
+      cursor: "12",
+      type: "document.upsert",
+      row: makeRow({ id: "doc-3", name: "Refresh.xlsx" }),
+      documentId: "doc-3",
+      occurredAt: "2024-01-02T00:00:00.000Z",
+      matchesFilters: true,
+      requiresRefresh: true,
     };
 
     const result = mergeDocumentChangeIntoPages(data, change);
