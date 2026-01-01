@@ -14,7 +14,6 @@ describe("settingsNav", () => {
     expect(links).toEqual([
       "/workspaces/ws-123/settings/general",
       "/workspaces/ws-123/settings/processing",
-      "/workspaces/ws-123/settings/preferences/appearance",
       "/workspaces/ws-123/settings/access/members",
       "/workspaces/ws-123/settings/access/roles",
       "/workspaces/ws-123/settings/lifecycle/danger",
@@ -40,7 +39,6 @@ describe("settingsNav", () => {
     expect(workspaceSettingsSections.map((section) => section.id)).toEqual([
       "workspace.general",
       "workspace.processing",
-      "preferences.appearance",
       "access.members",
       "access.roles",
       "lifecycle.danger",

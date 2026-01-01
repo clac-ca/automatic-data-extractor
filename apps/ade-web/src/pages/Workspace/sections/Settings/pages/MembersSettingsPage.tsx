@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@components/tablecn/ui/table";
 import { Badge } from "@components/tablecn/ui/badge";
-import { SettingsPanel } from "../components/SettingsPanel";
+import { SettingsSection } from "../components/SettingsSection";
 
 type MemberWithUser = WorkspaceMember & { user?: UserSummary };
 
@@ -49,7 +49,6 @@ export function MembersSettingsPage() {
   const updateMemberRoles = useUpdateWorkspaceMemberRolesMutation(workspace.id);
   const removeMember = useRemoveWorkspaceMemberMutation(workspace.id);
 
-  const [memberSearch, setMemberSearch] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
 
   const members = useMemo<MemberWithUser[]>(() => {
@@ -64,22 +63,6 @@ export function MembersSettingsPage() {
 
   const memberIds = useMemo(() => new Set(members.map((member) => member.user_id)), [members]);
   const memberCount = membersQuery.total ?? members.length;
-  const normalizedMemberSearch = memberSearch.trim().toLowerCase();
-  const filteredMembers = useMemo(() => {
-    if (!normalizedMemberSearch) {
-      return members;
-    }
-    return members.filter((member) => {
-      const name = member.user?.display_name ?? "";
-      const email = member.user?.email ?? "";
-      return (
-        name.toLowerCase().includes(normalizedMemberSearch) ||
-        email.toLowerCase().includes(normalizedMemberSearch) ||
-        member.user_id.toLowerCase().includes(normalizedMemberSearch)
-      );
-    });
-  }, [members, normalizedMemberSearch]);
-
   const hasMoreMembers = Boolean(membersQuery.hasNextPage);
   const isMembersLoading = membersQuery.isLoading;
   const isMembersFetchingMore = membersQuery.isFetchingNextPage;
@@ -139,7 +122,7 @@ export function MembersSettingsPage() {
         </Alert>
       ) : null}
 
-      <SettingsPanel
+      <SettingsSection
         title="Workspace members"
         description={
           isMembersLoading ? "Loading members…" : `${memberCount} member${memberCount === 1 ? "" : "s"} total`
@@ -152,20 +135,11 @@ export function MembersSettingsPage() {
           ) : null
         }
       >
-        <FormField label="Search members" className="max-w-xs">
-          <Input
-            value={memberSearch}
-            onChange={(event) => setMemberSearch(event.target.value)}
-            placeholder="Search by name, email, or ID"
-            disabled={isMembersLoading}
-          />
-        </FormField>
-
         {isMembersLoading ? (
           <p className="text-sm text-muted-foreground">Loading members…</p>
-        ) : filteredMembers.length === 0 ? (
+        ) : members.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-            {memberSearch ? `No members match "${memberSearch}".` : "No members yet. Add teammates to collaborate."}
+            No members yet. Add teammates to collaborate.
           </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
@@ -178,7 +152,7 @@ export function MembersSettingsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredMembers.map((member) => {
+                {members.map((member) => {
                   const roleChips = member.role_ids
                     .map((roleId) => availableRoles.find((role) => role.id === roleId)?.name ?? roleId)
                     .sort((a, b) => a.localeCompare(b));
@@ -245,7 +219,7 @@ export function MembersSettingsPage() {
         {!canManageMembers ? (
           <Alert tone="info">You do not have permission to manage workspace members.</Alert>
         ) : null}
-      </SettingsPanel>
+      </SettingsSection>
 
       <AddMemberDrawer
         open={isAddMemberOpen && canManageMembers}

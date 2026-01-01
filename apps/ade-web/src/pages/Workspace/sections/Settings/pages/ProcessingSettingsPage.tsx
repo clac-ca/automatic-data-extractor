@@ -4,7 +4,7 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useUpdateWorkspaceMutation } from "@hooks/workspaces";
 import { Alert } from "@components/ui/alert";
 import { Button } from "@components/tablecn/ui/button";
-import { SettingsPanel } from "../components/SettingsPanel";
+import { SettingsSection } from "../components/SettingsSection";
 
 export function ProcessingSettingsPage() {
   const { workspace, hasPermission } = useWorkspaceContext();
@@ -38,7 +38,7 @@ export function ProcessingSettingsPage() {
     <div className="space-y-6">
       {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
 
-      <SettingsPanel
+      <SettingsSection
         title="Processing queue"
         description={
           isPaused
@@ -69,7 +69,7 @@ export function ProcessingSettingsPage() {
             Processing is paused. Pending documents will remain in a waiting state.
           </div>
         ) : null}
-      </SettingsPanel>
+      </SettingsSection>
     </div>
   );
 }

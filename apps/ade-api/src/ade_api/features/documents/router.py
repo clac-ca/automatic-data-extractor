@@ -1223,6 +1223,20 @@ async def preview_document(
             description="Maximum columns per sheet to include in the preview.",
         ),
     ] = DEFAULT_PREVIEW_COLUMNS,
+    trim_empty_columns: Annotated[
+        bool,
+        Query(
+            alias="trimEmptyColumns",
+            description="If true, trims columns with no data within the preview window.",
+        ),
+    ] = False,
+    trim_empty_rows: Annotated[
+        bool,
+        Query(
+            alias="trimEmptyRows",
+            description="If true, trims rows with no data within the preview window.",
+        ),
+    ] = False,
     sheet_name: Annotated[
         str | None,
         Query(alias="sheetName", description="Optional worksheet name to preview."),
@@ -1247,6 +1261,8 @@ async def preview_document(
             document_id=document_id,
             max_rows=max_rows,
             max_columns=max_columns,
+            trim_empty_columns=trim_empty_columns,
+            trim_empty_rows=trim_empty_rows,
             sheet_name=sheet_name,
             sheet_index=sheet_index,
         )

@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@components/tablecn/ui/table";
 import { Badge } from "@components/tablecn/ui/badge";
-import { SettingsPanel } from "../components/SettingsPanel";
+import { SettingsSection } from "../components/SettingsSection";
 
 type RoleFormValues = {
   readonly name: string;
@@ -51,7 +51,6 @@ export function RolesSettingsPage() {
   const updateRole = useUpdateWorkspaceRoleMutation(workspace.id);
   const deleteRole = useDeleteWorkspaceRoleMutation(workspace.id);
 
-  const [roleSearch, setRoleSearch] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
 
   const permissions = useMemo(
@@ -65,17 +64,6 @@ export function RolesSettingsPage() {
   }, [rolesQuery.data]);
 
   const roleCount = rolesQuery.data?.total ?? roles.length;
-  const normalizedRoleSearch = roleSearch.trim().toLowerCase();
-  const filteredRoles = useMemo(() => {
-    if (!normalizedRoleSearch) {
-      return roles;
-    }
-    return roles.filter((role) => {
-      const haystack = `${role.name} ${role.slug ?? ""}`.toLowerCase();
-      return haystack.includes(normalizedRoleSearch);
-    });
-  }, [normalizedRoleSearch, roles]);
-
   const selectedParam = params[0];
   const isCreateOpen = selectedParam === "new";
   const selectedRoleId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
@@ -138,7 +126,7 @@ export function RolesSettingsPage() {
         </Alert>
       ) : null}
 
-      <SettingsPanel
+      <SettingsSection
         title="Workspace roles"
         description={rolesQuery.isLoading ? "Loading roles…" : `${roleCount} role${roleCount === 1 ? "" : "s"} total`}
         actions={
@@ -149,20 +137,11 @@ export function RolesSettingsPage() {
           ) : null
         }
       >
-        <FormField label="Search roles" className="max-w-xs">
-          <Input
-            value={roleSearch}
-            onChange={(event) => setRoleSearch(event.target.value)}
-            placeholder="Search by name or slug"
-            disabled={rolesQuery.isLoading}
-          />
-        </FormField>
-
         {rolesQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading roles…</p>
-        ) : filteredRoles.length === 0 ? (
+        ) : roles.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-            {roleSearch ? `No roles match "${roleSearch}".` : "No workspace roles yet. Create one to tailor permissions."}
+            No workspace roles yet. Create one to tailor permissions.
           </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
@@ -176,7 +155,7 @@ export function RolesSettingsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRoles.map((role) => (
+                {roles.map((role) => (
                   <TableRow key={role.id} className="text-sm text-foreground">
                     <TableCell className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -221,7 +200,7 @@ export function RolesSettingsPage() {
         {!canManageRoles ? (
           <Alert tone="info">You do not have permission to manage workspace roles.</Alert>
         ) : null}
-      </SettingsPanel>
+      </SettingsSection>
 
       <RoleDrawer
         open={isCreateOpen && canManageRoles}

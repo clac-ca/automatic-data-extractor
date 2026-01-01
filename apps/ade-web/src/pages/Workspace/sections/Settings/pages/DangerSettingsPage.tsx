@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@components/ui/confirm-dialog";
 import { FormField } from "@components/ui/form-field";
 import { Button } from "@components/tablecn/ui/button";
 import { Input } from "@components/tablecn/ui/input";
-import { SettingsPanel } from "../components/SettingsPanel";
+import { SettingsSection } from "../components/SettingsSection";
 
 export function DangerSettingsPage() {
   const { workspace, hasPermission } = useWorkspaceContext();
@@ -39,7 +39,7 @@ export function DangerSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsPanel
+      <SettingsSection
         title="Delete workspace"
         description="Permanently remove this workspace and all associated data. This action cannot be undone."
         tone="danger"
@@ -62,12 +62,7 @@ export function DangerSettingsPage() {
         <p className="text-sm text-warning-700">
           All workspace configurations, documents, runs, and history will be removed.
         </p>
-      </SettingsPanel>
-
-      <SettingsPanel
-        title="Safe mode"
-        description="Safe mode is a system-wide control. Manage it from the system settings area instead of workspace settings."
-      />
+      </SettingsSection>
 
       <ConfirmDialog
         open={confirmOpen}

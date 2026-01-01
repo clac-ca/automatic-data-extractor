@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "@app/navigation/history";
 import { PageState } from "@components/layouts/page-state";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { SettingsLayout } from "./components/SettingsLayout";
+import { SettingsShell } from "./components/SettingsShell";
 import { SettingsSectionProvider } from "./sectionContext";
 import {
   buildSettingsNav,
@@ -53,7 +53,7 @@ export default function WorkspaceSettingsScreen({ sectionSegments = [] }: Worksp
   );
 
   return (
-    <SettingsLayout
+    <SettingsShell
       workspaceName={workspace.name}
       navGroups={navGroups}
       activeSectionId={activeSection.id}
@@ -61,7 +61,7 @@ export default function WorkspaceSettingsScreen({ sectionSegments = [] }: Worksp
       activeSectionDescription={activeSection.description}
     >
       <SettingsSectionProvider value={{ sectionId: activeSection.id, params: sectionParams }}>{content}</SettingsSectionProvider>
-    </SettingsLayout>
+    </SettingsShell>
   );
 }
 

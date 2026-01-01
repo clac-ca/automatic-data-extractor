@@ -1,7 +1,6 @@
 import type { ReactElement } from "react";
 
 import { DangerSettingsPage } from "./pages/DangerSettingsPage";
-import { AppearanceSettingsPage } from "./pages/AppearanceSettingsPage";
 import { GeneralSettingsPage } from "./pages/GeneralSettingsPage";
 import { MembersSettingsPage } from "./pages/MembersSettingsPage";
 import { ProcessingSettingsPage } from "./pages/ProcessingSettingsPage";
@@ -10,12 +9,11 @@ import { RolesSettingsPage } from "./pages/RolesSettingsPage";
 export type WorkspaceSettingsRouteId =
   | "workspace.general"
   | "workspace.processing"
-  | "preferences.appearance"
   | "access.members"
   | "access.roles"
   | "lifecycle.danger";
 
-export type SettingsGroupId = "workspace" | "preferences" | "access" | "lifecycle";
+export type SettingsGroupId = "workspace" | "access" | "lifecycle";
 
 export type SettingsSection = {
   readonly id: WorkspaceSettingsRouteId;
@@ -45,7 +43,6 @@ export interface WorkspaceSettingsNavGroup {
 
 const GROUP_LABELS: Record<SettingsGroupId, string> = {
   workspace: "Workspace",
-  preferences: "Preferences",
   access: "Access",
   lifecycle: "Lifecycle",
 };
@@ -67,14 +64,6 @@ export const workspaceSettingsSections: SettingsSection[] = [
     path: "processing",
     required: { view: ["workspace.settings.manage"], edit: ["workspace.settings.manage"] },
     element: <ProcessingSettingsPage />,
-  },
-  {
-    id: "preferences.appearance",
-    group: "preferences",
-    label: "Appearance",
-    description: "Theme and color mode preferences.",
-    path: "preferences/appearance",
-    element: <AppearanceSettingsPage />,
   },
   {
     id: "access.members",

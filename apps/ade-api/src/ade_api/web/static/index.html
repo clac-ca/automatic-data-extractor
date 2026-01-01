@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ADE</title>
+    <script>
+      (function () {
+        try {
+          var theme = window.localStorage ? window.localStorage.getItem("ade.theme") : null;
+          var modePref = window.localStorage ? window.localStorage.getItem("ade.mode") : null;
+          var resolvedTheme = theme && theme.length > 0 ? theme : "default";
+          var resolvedPref =
+            modePref === "light" || modePref === "dark" || modePref === "system" ? modePref : "system";
+          var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolvedMode = resolvedPref === "system" ? (prefersDark ? "dark" : "light") : resolvedPref;
+          var root = document.documentElement;
+          root.dataset.theme = resolvedTheme;
+          root.dataset.mode = resolvedMode;
+          root.style.colorScheme = resolvedMode;
+        } catch (error) {
+          // no-op: allow app to hydrate and handle errors gracefully
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <script type="module" crossorigin src="/assets/index-DiSzAA3g.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BqzATukq.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

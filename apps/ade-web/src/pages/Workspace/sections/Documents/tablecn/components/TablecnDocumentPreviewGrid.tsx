@@ -22,6 +22,8 @@ async function fetchDocumentPreview(
 ): Promise<WorkbookPreview> {
   const params = new URLSearchParams({
     maxRows: String(PREVIEW_MAX_ROWS),
+    trimEmptyColumns: "true",
+    trimEmptyRows: "true",
   });
   const response = await apiFetch(
     `/api/v1/workspaces/${workspaceId}/documents/${documentId}/preview?${params.toString()}`,

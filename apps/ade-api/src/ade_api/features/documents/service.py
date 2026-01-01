@@ -810,6 +810,8 @@ class DocumentsService:
         document_id: UUID,
         max_rows: int,
         max_columns: int,
+        trim_empty_columns: bool = False,
+        trim_empty_rows: bool = False,
         sheet_name: str | None = None,
         sheet_index: int | None = None,
     ) -> WorkbookPreview:
@@ -844,6 +846,8 @@ class DocumentsService:
                     path,
                     max_rows=max_rows,
                     max_columns=max_columns,
+                    trim_empty_columns=trim_empty_columns,
+                    trim_empty_rows=trim_empty_rows,
                     sheet_name=sheet_name,
                     sheet_index=sheet_index,
                 )
@@ -853,6 +857,8 @@ class DocumentsService:
                     path,
                     max_rows=max_rows,
                     max_columns=max_columns,
+                    trim_empty_columns=trim_empty_columns,
+                    trim_empty_rows=trim_empty_rows,
                     sheet_name=sheet_name,
                     sheet_index=sheet_index,
                 )

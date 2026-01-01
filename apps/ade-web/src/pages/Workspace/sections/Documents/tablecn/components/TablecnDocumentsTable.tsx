@@ -466,6 +466,28 @@ export function TablecnDocumentsTable({
 
   const debouncedSetSearch = useDebouncedCallback(setSearchParamsSafe, debounceMs);
 
+  useEffect(() => {
+    const container = scrollContainerRef?.current;
+    if (!container) return;
+
+    const updateWidth = () => {
+      container.style.setProperty(
+        "--documents-preview-width",
+        `${container.clientWidth}px`,
+      );
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => updateWidth());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [scrollContainerRef]);
+
   const isRowExpanded = useCallback(
     (row: Row<DocumentListRow>) => row.id === expandedRowId,
     [expandedRowId],
@@ -524,17 +546,25 @@ export function TablecnDocumentsTable({
           className="inline-flex min-w-full w-max overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-20 [&_[data-slot=table-head]]:bg-background/95 [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))]"
           onRowClick={onRowClick}
           isRowExpanded={isRowExpanded}
-          expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-hidden"
+          expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-visible"
           renderExpandedRow={(row) => {
             return (
               <div className="min-w-0 max-w-full">
-                {!PREVIEWABLE_FILE_TYPES.has(row.original.fileType) ? (
-                  <div className="p-2 text-muted-foreground text-sm">
-                    Preview not available for this file type.
-                  </div>
-                ) : (
-                  <TablecnDocumentPreviewGrid document={row.original} />
-                )}
+                <div
+                  className="sticky left-0 min-w-0 max-w-full"
+                  style={{
+                    width: "var(--documents-preview-width, 100%)",
+                    maxWidth: "var(--documents-preview-width, 100%)",
+                  }}
+                >
+                  {!PREVIEWABLE_FILE_TYPES.has(row.original.fileType) ? (
+                    <div className="p-2 text-muted-foreground text-sm">
+                      Preview not available for this file type.
+                    </div>
+                  ) : (
+                    <TablecnDocumentPreviewGrid document={row.original} />
+                  )}
+                </div>
               </div>
             );
           }}
