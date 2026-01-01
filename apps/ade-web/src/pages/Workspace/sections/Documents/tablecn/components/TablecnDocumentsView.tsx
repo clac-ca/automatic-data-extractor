@@ -1,13 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { fetchWorkspaceDocuments, patchWorkspaceDocument, type DocumentPageResult } from "@api/documents";
+import {
+  archiveWorkspaceDocument,
+  deleteWorkspaceDocument,
+  fetchWorkspaceDocuments,
+  patchWorkspaceDocument,
+  restoreWorkspaceDocument,
+  type DocumentPageResult,
+  type DocumentRecord,
+} from "@api/documents";
 import { documentChangesStreamUrl, streamDocumentChanges } from "@api/documents/changes";
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { ApiError } from "@api/errors";
 import { Link } from "@app/navigation/Link";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@components/tablecn/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@components/tablecn/ui/dialog";
 import { useNotifications } from "@components/providers/notifications";
 import { shortId } from "@pages/Workspace/sections/Documents/utils";
 import { mergeDocumentChangeIntoPages } from "@pages/Workspace/sections/Documents/changeFeed";
@@ -16,7 +32,7 @@ import type { WorkspacePerson } from "@pages/Workspace/sections/Documents/types"
 import { TablecnDocumentsTable } from "./TablecnDocumentsTable";
 import { TablecnEmptyState, TablecnInlineBanner } from "./TablecnEmptyState";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
-import type { DocumentChangeEntry } from "../types";
+import type { DocumentChangeEntry, DocumentListRow } from "../types";
 import { normalizeDocumentsFilters, normalizeDocumentsSort } from "../utils";
 
 type CurrentUser = {
@@ -60,6 +76,8 @@ export function TablecnDocumentsView({
   const lastCursorRef = useRef<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DocumentListRow | null>(null);
+  const [pendingActions, setPendingActions] = useState<Record<string, "archive" | "restore" | "delete">>({});
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
@@ -193,6 +211,73 @@ export function TablecnDocumentsView({
     [queryClient, queryKey, documentsQuery.data],
   );
 
+  const removeDocumentRow = useCallback(
+    (documentId: string) => {
+      queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
+        if (!existing?.pages) return existing;
+        return {
+          ...existing,
+          pages: existing.pages.map((page) => ({
+            ...page,
+            items: (page.items ?? []).filter((item) => item.id !== documentId),
+          })),
+        };
+      });
+    },
+    [queryClient, queryKey, documentsQuery.data],
+  );
+
+  const applyDocumentUpdate = useCallback(
+    (documentId: string, updated: DocumentRecord) => {
+      const updates: Partial<DocumentPageResult["items"][number]> = {
+        status: updated.status,
+        updatedAt: updated.updatedAt,
+      };
+      const activityAt = updated.activityAt ?? updated.updatedAt;
+      if (activityAt) {
+        updates.activityAt = activityAt;
+      }
+      if (updated.tags !== undefined) {
+        updates.tags = updated.tags;
+      }
+      if (updated.assignee !== undefined) {
+        updates.assignee = updated.assignee ?? null;
+      }
+      if (updated.uploader !== undefined) {
+        updates.uploader = updated.uploader ?? null;
+      }
+      if (updated.latestRun !== undefined) {
+        updates.latestRun = updated.latestRun ?? null;
+      }
+      if (updated.latestSuccessfulRun !== undefined) {
+        updates.latestSuccessfulRun = updated.latestSuccessfulRun ?? null;
+      }
+      if (updated.latestResult !== undefined) {
+        updates.latestResult = updated.latestResult ?? null;
+      }
+      updateDocumentRow(documentId, updates);
+    },
+    [updateDocumentRow],
+  );
+
+  const markActionPending = useCallback((documentId: string, action: "archive" | "restore" | "delete") => {
+    setPendingActions((current) => ({ ...current, [documentId]: action }));
+  }, []);
+
+  const clearActionPending = useCallback((documentId: string) => {
+    setPendingActions((current) => {
+      if (!current[documentId]) return current;
+      const next = { ...current };
+      delete next[documentId];
+      return next;
+    });
+  }, []);
+
+  const isRowActionPending = useCallback(
+    (documentId: string) => Boolean(pendingActions[documentId]),
+    [pendingActions],
+  );
+
   const onAssign = useCallback(
     async (documentId: string, assigneeKey: string | null) => {
       const assigneeId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
@@ -237,6 +322,77 @@ export function TablecnDocumentsView({
     },
     [documentsById, notifyToast, updateDocumentRow, workspaceId],
   );
+
+  const onArchive = useCallback(
+    async (documentId: string) => {
+      markActionPending(documentId, "archive");
+      try {
+        const updated = await archiveWorkspaceDocument(workspaceId, documentId);
+        applyDocumentUpdate(documentId, updated);
+        notifyToast({ title: "Document archived.", intent: "success", duration: 4000 });
+      } catch (error) {
+        notifyToast({
+          title: error instanceof Error ? error.message : "Unable to archive document.",
+          intent: "danger",
+        });
+      } finally {
+        clearActionPending(documentId);
+      }
+    },
+    [applyDocumentUpdate, clearActionPending, markActionPending, notifyToast, workspaceId],
+  );
+
+  const onRestore = useCallback(
+    async (documentId: string) => {
+      markActionPending(documentId, "restore");
+      try {
+        const updated = await restoreWorkspaceDocument(workspaceId, documentId);
+        applyDocumentUpdate(documentId, updated);
+        notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
+      } catch (error) {
+        notifyToast({
+          title: error instanceof Error ? error.message : "Unable to restore document.",
+          intent: "danger",
+        });
+      } finally {
+        clearActionPending(documentId);
+      }
+    },
+    [applyDocumentUpdate, clearActionPending, markActionPending, notifyToast, workspaceId],
+  );
+
+  const onDeleteRequest = useCallback((document: DocumentListRow) => {
+    setDeleteTarget(document);
+  }, []);
+
+  const onDeleteCancel = useCallback(() => {
+    setDeleteTarget(null);
+  }, []);
+
+  const onDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    markActionPending(deleteTarget.id, "delete");
+    try {
+      await deleteWorkspaceDocument(workspaceId, deleteTarget.id);
+      removeDocumentRow(deleteTarget.id);
+      notifyToast({ title: "Document deleted.", intent: "success", duration: 4000 });
+      setDeleteTarget(null);
+    } catch (error) {
+      notifyToast({
+        title: error instanceof Error ? error.message : "Unable to delete document.",
+        intent: "danger",
+      });
+    } finally {
+      clearActionPending(deleteTarget.id);
+    }
+  }, [
+    clearActionPending,
+    deleteTarget,
+    markActionPending,
+    notifyToast,
+    removeDocumentRow,
+    workspaceId,
+  ]);
 
   const changesCursor =
     documentsQuery.data?.pages[0]?.changesCursor ??
@@ -380,6 +536,8 @@ export function TablecnDocumentsView({
 
   const configBuilderPath = `/workspaces/${workspaceId}/config-builder`;
   const processingSettingsPath = `/workspaces/${workspaceId}/settings/processing`;
+  const deletePending =
+    deleteTarget ? pendingActions[deleteTarget.id] === "delete" : false;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
@@ -436,6 +594,10 @@ export function TablecnDocumentsView({
         tagOptions={tagOptions}
         onAssign={onAssign}
         onToggleTag={onToggleTag}
+        onArchive={onArchive}
+        onRestore={onRestore}
+        onDeleteRequest={onDeleteRequest}
+        isRowActionPending={isRowActionPending}
         toolbarActions={toolbarActions}
         scrollContainerRef={scrollContainerRef}
         scrollFooter={
@@ -449,6 +611,26 @@ export function TablecnDocumentsView({
           </>
         }
       />
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => (!open ? onDeleteCancel() : undefined)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete document?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `This permanently deletes “${deleteTarget.name}”. This action cannot be undone.`
+                : "This permanently deletes the document. This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={onDeleteCancel} disabled={deletePending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={onDeleteConfirm} disabled={deletePending}>
+              {deletePending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

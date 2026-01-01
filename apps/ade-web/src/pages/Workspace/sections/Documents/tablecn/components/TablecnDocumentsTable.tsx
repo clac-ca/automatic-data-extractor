@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { ColumnDef, Row } from "@tanstack/react-table";
+import { Ellipsis } from "lucide-react";
 
 import { DataTable } from "@components/tablecn/data-table/data-table";
 import { DataTableAdvancedToolbar } from "@components/tablecn/data-table/data-table-advanced-toolbar";
@@ -9,6 +10,14 @@ import { DataTableSortList } from "@components/tablecn/data-table/data-table-sor
 import { useDataTable } from "@components/tablecn/hooks/use-data-table";
 import { useDebouncedCallback } from "@components/tablecn/hooks/use-debounced-callback";
 import { Badge } from "@components/tablecn/ui/badge";
+import { Button } from "@components/tablecn/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@components/tablecn/ui/dropdown-menu";
 import { Input } from "@components/tablecn/ui/input";
 import { useSearchParams } from "@app/navigation/urlState";
 import type { DocumentStatus, FileType, WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
@@ -29,6 +38,10 @@ interface TablecnDocumentsTableProps {
   tagOptions: string[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
+  onArchive: (documentId: string) => void;
+  onRestore: (documentId: string) => void;
+  onDeleteRequest: (document: DocumentListRow) => void;
+  isRowActionPending?: (documentId: string) => boolean;
   toolbarActions?: ReactNode;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   scrollFooter?: ReactNode;
@@ -44,6 +57,10 @@ export function TablecnDocumentsTable({
   tagOptions,
   onAssign,
   onToggleTag,
+  onArchive,
+  onRestore,
+  onDeleteRequest,
+  isRowActionPending,
   toolbarActions,
   scrollContainerRef,
   scrollFooter,
@@ -112,6 +129,10 @@ export function TablecnDocumentsTable({
     [],
   );
 
+  const togglePreview = useCallback((rowId: string) => {
+    setExpandedRowId((current) => (current === rowId ? null : rowId));
+  }, []);
+
   const columns = useMemo<ColumnDef<DocumentListRow>[]>(
     () => [
       {
@@ -128,6 +149,9 @@ export function TablecnDocumentsTable({
             {shortId(row.getValue<string>("id"))}
           </span>
         ),
+        meta: {
+          label: "ID",
+        },
         enableHiding: true,
       },
       {
@@ -144,6 +168,9 @@ export function TablecnDocumentsTable({
             {shortId(row.getValue<string>("workspaceId"))}
           </span>
         ),
+        meta: {
+          label: "Workspace",
+        },
         enableSorting: false,
         enableHiding: true,
       },
@@ -291,6 +318,9 @@ export function TablecnDocumentsTable({
           <DataTableColumnHeader column={column} label="Result" />
         ),
         cell: ({ row }) => renderLatestResult(row.original.latestResult),
+        meta: {
+          label: "Result",
+        },
         enableSorting: false,
         enableHiding: true,
       },
@@ -392,6 +422,9 @@ export function TablecnDocumentsTable({
           <DataTableColumnHeader column={column} label="Latest Run" />
         ),
         cell: ({ row }) => renderRunSummary(row.original.latestRun),
+        meta: {
+          label: "Latest Run",
+        },
         enableHiding: true,
       },
       {
@@ -402,21 +435,89 @@ export function TablecnDocumentsTable({
           <DataTableColumnHeader column={column} label="Latest Success" />
         ),
         cell: ({ row }) => renderRunSummary(row.original.latestSuccessfulRun),
+        meta: {
+          label: "Latest Success",
+        },
         enableSorting: false,
         enableHiding: true,
+      },
+      {
+        id: "actions",
+        cell: ({ row }) => {
+          const isArchived = row.original.status === "archived";
+          const isPreviewable = PREVIEWABLE_FILE_TYPES.has(row.original.fileType);
+          const isExpanded = row.id === expandedRowId;
+          const isBusy = isRowActionPending?.(row.original.id) ?? false;
+
+          return (
+            <div className="flex justify-end" data-ignore-row-click>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    aria-label="Open menu"
+                    variant="ghost"
+                    className="flex size-8 p-0 data-[state=open]:bg-muted"
+                  >
+                    <Ellipsis className="size-4" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem
+                    onSelect={() => togglePreview(row.id)}
+                    disabled={!isPreviewable}
+                  >
+                    {isExpanded ? "Hide preview" : "Show preview"}
+                  </DropdownMenuItem>
+                  {isArchived ? (
+                    <DropdownMenuItem
+                      onSelect={() => onRestore(row.original.id)}
+                      disabled={isBusy}
+                    >
+                      Restore
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onSelect={() => onArchive(row.original.id)}
+                      disabled={isBusy}
+                    >
+                      Archive
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => onDeleteRequest(row.original)}
+                    disabled={isBusy}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+        size: 40,
+        enableSorting: false,
+        enableHiding: false,
       },
     ],
     [
       assigneeOptions,
       fileTypeOptions,
+      expandedRowId,
+      isRowActionPending,
       memberOptions,
       onAssign,
+      onArchive,
+      onDeleteRequest,
+      onRestore,
       onToggleTag,
       people,
       runStatusOptions,
       sourceOptions,
       statusOptions,
       tagFilterOptions,
+      togglePreview,
       workspaceId,
     ],
   );
@@ -433,6 +534,7 @@ export function TablecnDocumentsTable({
         hasOutput: false,
         source: false,
       },
+      columnPinning: { right: ["actions"] },
     },
     getRowId: (row) => row.id,
     enableAdvancedFilter: true,
@@ -496,15 +598,16 @@ export function TablecnDocumentsTable({
   const onRowClick = useCallback(
     (row: Row<DocumentListRow>, event: MouseEvent<HTMLTableRowElement>) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("[data-ignore-row-click='true'], [data-ignore-row-click]")) {
+      if (
+        target?.closest(
+          "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true'], [data-ignore-row-click]",
+        )
+      ) {
         return;
       }
-      if (target?.closest("button, a, input, [role='button']")) {
-        return;
-      }
-      setExpandedRowId((current) => (current === row.id ? null : row.id));
+      togglePreview(row.id);
     },
-    [],
+    [togglePreview],
   );
 
   return (
