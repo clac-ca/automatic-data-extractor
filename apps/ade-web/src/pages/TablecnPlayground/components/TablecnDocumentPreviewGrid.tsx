@@ -65,6 +65,7 @@ export function TablecnDocumentPreviewGrid({
     queryKey: ["tablecn-document-preview", doc.workspaceId, doc.id],
     queryFn: ({ signal }) => fetchDocumentPreview(doc.workspaceId, doc.id, signal),
     staleTime: 30_000,
+    enabled: Boolean(doc.workspaceId && doc.id),
   });
 
   const sheet = previewQuery.data?.sheets?.[0] ?? null;

@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { fetchWorkspaceDocuments } from "@api/documents";
+import { fetchWorkspaceDocuments, patchWorkspaceDocument, type DocumentPageResult } from "@api/documents";
 import { documentChangesStreamUrl, streamDocumentChanges } from "@api/documents/changes";
+import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { ApiError } from "@api/errors";
+import { listWorkspaceMembers } from "@api/workspaces/api";
 import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
+import { useNotifications } from "@components/providers/notifications";
 import { PageState } from "@components/layouts/page-state";
 import { Button } from "@components/ui/button";
 import { useWorkspacesQuery } from "@hooks/workspaces";
 import { useNavigate } from "@app/navigation/history";
 import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
+import { shortId } from "@pages/Workspace/sections/Documents/utils";
+import { mergeDocumentChangeIntoPages } from "@pages/Workspace/sections/Documents/changeFeed";
+import type { WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
 import { TablecnDocumentsTable } from "./components/TablecnDocumentsTable";
 import { TablecnPlaygroundLayout } from "./components/TablecnPlaygroundLayout";
 import { useDocumentsListParams } from "./hooks/useDocumentsListParams";
-import type { DocumentChangeEntry, DocumentListResponse } from "./types";
+import type { DocumentChangeEntry } from "./types";
 import { normalizeDocumentsFilters, normalizeDocumentsSort } from "./utils";
 
 export default function TablecnPlaygroundScreen() {
@@ -23,60 +29,6 @@ export default function TablecnPlaygroundScreen() {
       <TablecnDocumentsPlayground />
     </RequireSession>
   );
-}
-
-type MergeChangeResult = {
-  data: DocumentListResponse;
-  updatesAvailable: boolean;
-};
-
-function mergeDocumentChange(
-  existing: DocumentListResponse,
-  change: DocumentChangeEntry,
-): MergeChangeResult {
-  const id = change.documentId ?? change.row?.id;
-  if (!id) {
-    return {
-      data: existing,
-      updatesAvailable: Boolean(change.requiresRefresh),
-    };
-  }
-
-  const items = existing.items ?? [];
-  const index = items.findIndex((item) => item.id === id);
-  let updatesAvailable = Boolean(change.requiresRefresh);
-  if (index === -1) {
-    if (change.type === "document.upsert" && change.row && change.matchesFilters) {
-      updatesAvailable = true;
-    }
-    return { data: existing, updatesAvailable };
-  }
-
-  if (change.type === "document.deleted") {
-    return {
-      data: { ...existing, items: items.filter((item) => item.id !== id) },
-      updatesAvailable,
-    };
-  }
-
-  if (change.type === "document.upsert" && change.row) {
-    if (change.matchesFilters === false) {
-      updatesAvailable = true;
-      return {
-        data: { ...existing, items: items.filter((item) => item.id !== id) },
-        updatesAvailable,
-      };
-    }
-
-    const nextItems = items.slice();
-    nextItems[index] = change.row;
-    if (change.matchesFilters !== true) {
-      updatesAvailable = true;
-    }
-    return { data: { ...existing, items: nextItems }, updatesAvailable };
-  }
-
-  return { data: existing, updatesAvailable };
 }
 
 function sleep(duration: number, signal: AbortSignal): Promise<void> {
@@ -122,6 +74,14 @@ function TablecnDocumentsPlayground() {
   );
 
   const workspace = preferredWorkspace ?? workspaces[0] ?? null;
+  const currentUser = useMemo(
+    () => ({
+      id: session.user.id,
+      email: session.user.email,
+      label: session.user.display_name || session.user.email || "You",
+    }),
+    [session.user.display_name, session.user.email, session.user.id],
+  );
 
   if (workspacesQuery.isLoading) {
     return <PageState title="Loading documents" variant="loading" />;
@@ -157,13 +117,27 @@ function TablecnDocumentsPlayground() {
     );
   }
 
-  return <TablecnDocumentsContainer workspaceId={workspace.id} />;
+  return <TablecnDocumentsContainer workspaceId={workspace.id} currentUser={currentUser} />;
 }
 
-function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
+type CurrentUser = {
+  id: string;
+  email: string;
+  label: string;
+};
+
+function TablecnDocumentsContainer({
+  workspaceId,
+  currentUser,
+}: {
+  workspaceId: string;
+  currentUser: CurrentUser;
+}) {
   const queryClient = useQueryClient();
+  const { notifyToast } = useNotifications();
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
   const lastCursorRef = useRef<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const { page, perPage, sort, filters, joinOperator, q } =
     useDocumentsListParams();
@@ -172,26 +146,32 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
     () => normalizeDocumentsFilters(filters),
     [filters],
   );
+  const filtersKey = useMemo(
+    () => (normalizedFilters.length > 0 ? JSON.stringify(normalizedFilters) : ""),
+    [normalizedFilters],
+  );
   const queryKey = useMemo(
     () => [
       "tablecn-documents",
       workspaceId,
-      page,
       perPage,
-      sort,
-      filters,
+      normalizedSort,
+      filtersKey,
       joinOperator,
       q,
+      page,
     ],
-    [workspaceId, page, perPage, sort, filters, joinOperator, q],
+    [workspaceId, perPage, normalizedSort, filtersKey, joinOperator, q, page],
   );
-  const documentsQuery = useQuery({
+
+  const documentsQuery = useInfiniteQuery<DocumentPageResult>({
     queryKey,
-    queryFn: ({ signal }) =>
+    initialPageParam: page > 0 ? page : 1,
+    queryFn: ({ pageParam, signal }) =>
       fetchWorkspaceDocuments(
         workspaceId,
         {
-          page,
+          page: typeof pageParam === "number" ? pageParam : 1,
           perPage,
           sort: normalizedSort,
           filters: normalizedFilters.length > 0 ? normalizedFilters : undefined,
@@ -200,21 +180,154 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
         },
         signal,
       ),
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
     enabled: Boolean(workspaceId),
+    staleTime: 15_000,
   });
-  const { refetch: refetchDocuments } = documentsQuery;
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch: refetchDocuments,
+  } = documentsQuery;
+
+  const documents = useMemo(
+    () => documentsQuery.data?.pages.flatMap((page) => page.items ?? []) ?? [],
+    [documentsQuery.data?.pages],
+  );
+  const documentsById = useMemo(
+    () => new Map(documents.map((doc) => [doc.id, doc])),
+    [documents],
+  );
+
+  const membersQuery = useQuery({
+    queryKey: ["tablecn-documents-members", workspaceId],
+    queryFn: ({ signal }) =>
+      listWorkspaceMembers(workspaceId, { page: 1, pageSize: 200, signal }),
+    enabled: Boolean(workspaceId),
+    staleTime: 60_000,
+  });
+
+  const people = useMemo<WorkspacePerson[]>(() => {
+    const set = new Map<string, WorkspacePerson>();
+    const currentUserKey = `user:${currentUser.id}`;
+    set.set(currentUserKey, {
+      key: currentUserKey,
+      label: currentUser.label,
+      kind: "user",
+      userId: currentUser.id,
+    });
+
+    const members = membersQuery.data?.items ?? [];
+    members.forEach((member) => {
+      const key = `user:${member.user_id}`;
+      const label =
+        member.user_id === currentUser.id
+          ? currentUser.label
+          : `Member ${shortId(member.user_id)}`;
+      if (!set.has(key)) {
+        set.set(key, { key, label, kind: "user", userId: member.user_id });
+      }
+    });
+
+    return Array.from(set.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [currentUser.id, currentUser.label, membersQuery.data?.items]);
+
+  const tagsQuery = useQuery({
+    queryKey: ["tablecn-documents-tags", workspaceId],
+    queryFn: ({ signal }) =>
+      fetchTagCatalog(
+        workspaceId,
+        { page: 1, perPage: 200, sort: "-count" },
+        signal,
+      ),
+    enabled: Boolean(workspaceId),
+    staleTime: 60_000,
+  });
+
+  const tagOptions = useMemo(
+    () => tagsQuery.data?.items?.map((item) => item.tag) ?? [],
+    [tagsQuery.data?.items],
+  );
+
+  const updateDocumentRow = useCallback(
+    (documentId: string, updates: Partial<DocumentPageResult["items"][number]>) => {
+      queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
+        if (!existing?.pages) return existing;
+        return {
+          ...existing,
+          pages: existing.pages.map((page) => ({
+            ...page,
+            items: (page.items ?? []).map((item) =>
+              item.id === documentId ? { ...item, ...updates } : item,
+            ),
+          })),
+        };
+      });
+    },
+    [queryClient, queryKey],
+  );
+
+  const onAssign = useCallback(
+    async (documentId: string, assigneeKey: string | null) => {
+      const assigneeId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
+      const assigneeLabel = assigneeKey
+        ? people.find((person) => person.key === assigneeKey)?.label ?? assigneeKey
+        : null;
+      const assigneeEmail = assigneeLabel && assigneeLabel.includes("@") ? assigneeLabel : "";
+
+      try {
+        const updated = await patchWorkspaceDocument(workspaceId, documentId, { assigneeId });
+        updateDocumentRow(documentId, {
+          assignee: updated.assignee ?? (assigneeId ? { id: assigneeId, name: assigneeLabel, email: assigneeEmail } : null),
+        });
+      } catch (error) {
+        notifyToast({
+          title: "Unable to update assignee",
+          description: error instanceof Error ? error.message : "Please try again.",
+          intent: "danger",
+        });
+      }
+    },
+    [notifyToast, people, updateDocumentRow, workspaceId],
+  );
+
+  const onToggleTag = useCallback(
+    async (documentId: string, tag: string) => {
+      const current = documentsById.get(documentId);
+      if (!current) return;
+      const tags = current.tags ?? [];
+      const hasTag = tags.includes(tag);
+      try {
+        await patchDocumentTags(workspaceId, documentId, hasTag ? { remove: [tag] } : { add: [tag] });
+        const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
+        updateDocumentRow(documentId, { tags: nextTags });
+      } catch (error) {
+        notifyToast({
+          title: "Unable to update tags",
+          description: error instanceof Error ? error.message : "Please try again.",
+          intent: "danger",
+        });
+      }
+    },
+    [documentsById, notifyToast, updateDocumentRow, workspaceId],
+  );
+
   const changesCursor =
-    documentsQuery.data?.changesCursor ?? documentsQuery.data?.changesCursorHeader ?? null;
+    documentsQuery.data?.pages[0]?.changesCursor ??
+    documentsQuery.data?.pages[0]?.changesCursorHeader ??
+    null;
 
   const applyChange = useCallback(
     (change: DocumentChangeEntry) => {
       let shouldPrompt = Boolean(change.requiresRefresh);
 
-      queryClient.setQueryData<DocumentListResponse>(queryKey, (existing) => {
+      queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
         if (!existing) {
           return existing;
         }
-        const result = mergeDocumentChange(existing, change);
+        const result = mergeDocumentChangeIntoPages(existing, change);
         shouldPrompt = shouldPrompt || result.updatesAvailable;
         return result.data;
       });
@@ -229,7 +342,7 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
   useEffect(() => {
     setUpdatesAvailable(false);
     lastCursorRef.current = changesCursor;
-  }, [changesCursor, filters, joinOperator, page, perPage, q, sort, workspaceId]);
+  }, [changesCursor, filtersKey, joinOperator, page, perPage, q, normalizedSort, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !changesCursor) return;
@@ -291,6 +404,24 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
     workspaceId,
   ]);
 
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    if (!hasNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        if (isFetchingNextPage) return;
+        void fetchNextPage();
+      },
+      { rootMargin: "200px" },
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
   if (documentsQuery.isLoading) {
     return <PageState title="Loading documents" variant="loading" />;
   }
@@ -310,10 +441,10 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
     );
   }
 
-  const pageCount = documentsQuery.data?.pageCount ?? 1;
+  const pageCount = documentsQuery.data?.pages[0]?.pageCount ?? 1;
   const handleRefresh = () => {
     setUpdatesAvailable(false);
-    void refetchDocuments();
+    void documentsQuery.refetch();
   };
 
   return (
@@ -342,9 +473,20 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
         </div>
       ) : null}
       <TablecnDocumentsTable
-        data={documentsQuery.data?.items ?? []}
+        data={documents}
         pageCount={pageCount}
+        workspaceId={workspaceId}
+        people={people}
+        tagOptions={tagOptions}
+        onAssign={onAssign}
+        onToggleTag={onToggleTag}
       />
+      {hasNextPage ? (
+        <div className="flex items-center justify-center py-2 text-xs text-muted-foreground">
+          {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
+        </div>
+      ) : null}
+      <div ref={loadMoreRef} className="h-1" />
     </TablecnPlaygroundLayout>
   );
 }

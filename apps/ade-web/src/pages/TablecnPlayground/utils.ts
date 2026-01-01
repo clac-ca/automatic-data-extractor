@@ -1,4 +1,5 @@
 import { encodeFilters, type FilterItem } from "@api/listing";
+import { UNASSIGNED_KEY } from "@pages/Workspace/sections/Documents/filters";
 import { getValidFilters } from "@components/tablecn/lib/data-table";
 import { parseFiltersState } from "@components/tablecn/lib/parsers";
 
@@ -46,12 +47,16 @@ function addDays(date: Date, amount: number) {
   return next;
 }
 
+function toIsoString(value: number): string {
+  return new Date(value).toISOString();
+}
+
 function rangeForTimestamp(value: number): [string, string] | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   const start = startOfDay(date);
   const end = endOfDay(date);
-  return [String(start.getTime()), String(end.getTime())];
+  return [toIsoString(start.getTime()), toIsoString(end.getTime())];
 }
 
 function resolveRelativeDateRange(value: unknown): [string, string] | null {
@@ -94,7 +99,7 @@ function resolveRelativeDateRange(value: unknown): [string, string] | null {
         return null;
     }
 
-    return [String(startDate.getTime()), String(endDate.getTime())];
+    return [toIsoString(startDate.getTime()), toIsoString(endDate.getTime())];
   }
 
   const timestamp = Number(trimmed);
@@ -103,6 +108,47 @@ function resolveRelativeDateRange(value: unknown): [string, string] | null {
   }
 
   return null;
+}
+
+function normalizeDateValue(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === "number") return toIsoString(value);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) return toIsoString(numeric);
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) return toIsoString(parsed);
+  }
+  return null;
+}
+
+function normalizeFilterValue(filter: { id: string; variant: string; value: unknown }) {
+  if (filter.variant === "date" || filter.variant === "dateRange") {
+    if (Array.isArray(filter.value)) {
+      return filter.value.map((entry) => normalizeDateValue(entry)).filter(Boolean);
+    }
+    return normalizeDateValue(filter.value);
+  }
+
+  if (filter.id === "assigneeId") {
+    const values = Array.isArray(filter.value) ? filter.value : [filter.value];
+    const includeUnassigned = values.includes(UNASSIGNED_KEY);
+    const cleaned = values.filter((item) => item != null && item !== UNASSIGNED_KEY);
+    return includeUnassigned ? [...cleaned, null] : cleaned;
+  }
+
+  if (filter.id === "hasOutput") {
+    if (Array.isArray(filter.value)) {
+      return filter.value.map((item) => String(item).toLowerCase() === "true");
+    }
+    if (typeof filter.value === "string") {
+      return filter.value.toLowerCase() === "true";
+    }
+  }
+
+  return filter.value;
 }
 
 export function normalizeDocumentsSort(value: string | null) {
@@ -151,12 +197,13 @@ export function normalizeDocumentsFilters(value: string | null): FilterItem[] {
 
       const mappedOperator =
         FILTER_OPERATOR_MAP[filter.operator] ?? filter.operator;
+      const normalizedValue = normalizeFilterValue(filter);
       const base: FilterItem = {
         id: filter.id,
         operator: mappedOperator as FilterItem["operator"],
       };
       if (mappedOperator !== "isEmpty" && mappedOperator !== "isNotEmpty") {
-        base.value = filter.value;
+        base.value = normalizedValue;
       }
       return {
         ...base,

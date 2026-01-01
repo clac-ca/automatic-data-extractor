@@ -42,20 +42,21 @@ def build_workbook_preview_from_xlsx(
     sheet_name: str | None = None,
     sheet_index: int | None = None,
 ) -> WorkbookPreview:
-    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    try:
-        sheets = _select_xlsx_sheets(workbook, sheet_name, sheet_index)
-        previews = [
-            _preview_xlsx_sheet(
-                sheet,
-                max_rows=max_rows,
-                max_columns=max_columns,
-            )
-            for sheet in sheets
-        ]
-        return WorkbookPreview(sheets=previews)
-    finally:
-        workbook.close()
+    with path.open("rb") as handle:
+        workbook = openpyxl.load_workbook(handle, read_only=True, data_only=True)
+        try:
+            sheets = _select_xlsx_sheets(workbook, sheet_name, sheet_index)
+            previews = [
+                _preview_xlsx_sheet(
+                    sheet,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                )
+                for sheet in sheets
+            ]
+            return WorkbookPreview(sheets=previews)
+        finally:
+            workbook.close()
 
 
 def build_workbook_preview_from_csv(

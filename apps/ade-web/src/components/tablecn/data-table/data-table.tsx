@@ -16,6 +16,7 @@ import { cn } from "@components/tablecn/lib/utils";
 interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   table: TanstackTable<TData>;
   actionBar?: React.ReactNode;
+  showPagination?: boolean;
   onRowClick?: (row: Row<TData>, event: React.MouseEvent<HTMLTableRowElement>) => void;
   isRowExpanded?: (row: Row<TData>) => boolean;
   renderExpandedRow?: (row: Row<TData>) => React.ReactNode;
@@ -24,6 +25,7 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
 export function DataTable<TData>({
   table,
   actionBar,
+  showPagination = true,
   onRowClick,
   isRowExpanded,
   renderExpandedRow,
@@ -31,6 +33,8 @@ export function DataTable<TData>({
   className,
   ...props
 }: DataTableProps<TData>) {
+  const visibleColumnCount = Math.max(1, table.getVisibleLeafColumns().length);
+
   return (
     <div
       className={cn("flex w-full flex-col gap-2.5 overflow-auto", className)}
@@ -91,7 +95,7 @@ export function DataTable<TData>({
                   {renderExpandedRow && expanded && (
                     <TableRow>
                       <TableCell
-                        colSpan={table.getAllColumns().length}
+                        colSpan={visibleColumnCount}
                         className="bg-muted/20"
                       >
                         {renderExpandedRow(row)}
@@ -104,7 +108,7 @@ export function DataTable<TData>({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={table.getAllColumns().length}
+                  colSpan={visibleColumnCount}
                   className="h-24 text-center"
                 >
                   No results.
@@ -114,12 +118,14 @@ export function DataTable<TData>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex flex-col gap-2.5">
-        <DataTablePagination table={table} />
-        {actionBar &&
-          table.getFilteredSelectedRowModel().rows.length > 0 &&
-          actionBar}
-      </div>
+      {(showPagination || actionBar) && (
+        <div className="flex flex-col gap-2.5">
+          {showPagination ? <DataTablePagination table={table} /> : null}
+          {actionBar &&
+            table.getFilteredSelectedRowModel().rows.length > 0 &&
+            actionBar}
+        </div>
+      )}
     </div>
   );
 }

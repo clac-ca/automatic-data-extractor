@@ -190,11 +190,18 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             ("/api/v1/users/{userId}/apikeys", "POST"),
         }
 
-        def _add_parameter(operation: dict[str, Any], ref: str) -> None:
+        def _add_parameter(operation: dict[str, Any], ref: str, name: str | None = None) -> None:
             params = operation.setdefault("parameters", [])
             if not isinstance(params, list):
                 return
             if any(isinstance(item, dict) and item.get("$ref") == ref for item in params):
+                return
+            if name and any(
+                isinstance(item, dict)
+                and item.get("name") == name
+                and item.get("in") == "header"
+                for item in params
+            ):
                 return
             params.append({"$ref": ref})
 
@@ -232,10 +239,10 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                             headers.setdefault("ETag", {"$ref": "#/components/headers/ETag"})
 
                 if (path, method_upper) in if_match_routes:
-                    _add_parameter(operation, "#/components/parameters/IfMatch")
+                    _add_parameter(operation, "#/components/parameters/IfMatch", "If-Match")
 
                 if (path, method_upper) in idempotency_routes:
-                    _add_parameter(operation, "#/components/parameters/IdempotencyKey")
+                    _add_parameter(operation, "#/components/parameters/IdempotencyKey", "Idempotency-Key")
 
         app.openapi_schema = schema
         return schema
