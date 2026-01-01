@@ -1,7 +1,7 @@
 import type {
-  DocumentLastRun,
   DocumentListRow,
   DocumentRecord,
+  DocumentRunSummary,
   FileType,
   RunResource,
   WorkbookPreview,
@@ -270,9 +270,11 @@ export function runHasDownloadableOutput(run: RunResource | null) {
   return Boolean(runOutputDownloadUrl(run));
 }
 
-export function getDocumentOutputRun(document: DocumentListRow | DocumentRecord | null | undefined): DocumentLastRun | null {
+export function getDocumentOutputRun(
+  document: DocumentListRow | DocumentRecord | null | undefined,
+): DocumentRunSummary | null {
   if (!document) return null;
-  if (document.last_successful_run) return document.last_successful_run;
-  if (document.last_run?.status === "succeeded") return document.last_run;
+  if (document.latestSuccessfulRun) return document.latestSuccessfulRun;
+  if (document.latestRun?.status === "succeeded") return document.latestRun;
   return null;
 }

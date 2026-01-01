@@ -139,9 +139,9 @@ export function buildRunRecord(run: RunResource): RunRecord {
   };
 }
 
-export function buildCreatedAtRange(range: RunsDateRange, now = new Date()) {
+export function buildCreatedAtRange(range: RunsDateRange, now = new Date()): [string, string] | null {
   if (range === "custom") {
-    return {};
+    return null;
   }
   const end = new Date(now);
   const start = new Date(now);
@@ -155,8 +155,5 @@ export function buildCreatedAtRange(range: RunsDateRange, now = new Date()) {
     start.setDate(start.getDate() - 14);
   }
 
-  return {
-    created_after: start.toISOString(),
-    created_before: end.toISOString(),
-  };
+  return [start.toISOString(), end.toISOString()];
 }

@@ -24,14 +24,12 @@ const PERMISSION_PAGE_SIZE = MAX_PAGE_SIZE;
 const roleListParams = {
   page: 1,
   pageSize: ROLE_PAGE_SIZE,
-  includeTotal: true,
 } as const;
 
 const permissionListParams = {
   scope: "workspace" as const,
   page: 1,
   pageSize: PERMISSION_PAGE_SIZE,
-  includeTotal: false,
 } as const;
 
 export function useWorkspaceRolesQuery(workspaceId: string) {
@@ -42,7 +40,6 @@ export function useWorkspaceRolesQuery(workspaceId: string) {
         listWorkspaceRoles({
           page,
           pageSize: ROLE_PAGE_SIZE,
-          includeTotal: page === 1,
           signal,
         }),
       ),
@@ -62,7 +59,6 @@ export function usePermissionsQuery(scope: "workspace" | "global" = "workspace")
           scope,
           page,
           pageSize: params.pageSize,
-          includeTotal: page === 1,
           signal,
         }),
       ),
@@ -144,17 +140,16 @@ function appendRole(page: RoleListPage | undefined, role: RoleDefinition): RoleL
     return {
       items: [role],
       page: 1,
-      page_size: ROLE_PAGE_SIZE,
-      has_next: false,
-      has_previous: false,
+      perPage: ROLE_PAGE_SIZE,
+      pageCount: 1,
       total: 1,
+      changesCursor: "0",
     };
   }
   return {
     ...page,
     items: [role, ...page.items],
-    total: typeof page.total === "number" ? page.total + 1 : page.total,
-    has_next: false,
-    has_previous: false,
+    total: page.total + 1,
+    pageCount: 1,
   };
 }

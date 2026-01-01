@@ -12,7 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.logging import log_context
-from ade_api.common.pagination import paginate_sql
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import paginate_query
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
 from ade_api.core.security.hashing import hash_password
@@ -21,7 +22,7 @@ from ade_api.features.rbac import RbacService
 from ade_api.models import User
 from ade_api.settings import Settings
 
-from .filters import UserFilters, apply_user_filters
+from .filters import apply_user_filters
 from .repository import UsersRepository
 from .schemas import UserOut, UserPage, UserProfile, UserUpdate
 
@@ -78,10 +79,11 @@ class UsersService:
         self,
         *,
         page: int,
-        page_size: int,
-        include_total: bool,
+        per_page: int,
         order_by: OrderBy,
-        filters: UserFilters,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
     ) -> UserPage:
         """Return paginated users according to the supplied parameters."""
 
@@ -89,21 +91,26 @@ class UsersService:
             "users.list.start",
             extra=log_context(
                 page=page,
-                page_size=page_size,
-                include_total=include_total,
+                per_page=per_page,
                 order_by=str(order_by),
+                q=q,
             ),
         )
 
         stmt = select(User)
-        stmt = apply_user_filters(stmt, filters)
-        page_result = await paginate_sql(
+        stmt = apply_user_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
+        page_result = await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
+            per_page=per_page,
             order_by=order_by,
-            include_total=include_total,
+            changes_cursor="0",
         )
 
         items: list[UserOut] = []
@@ -113,17 +120,17 @@ class UsersService:
         result = UserPage(
             items=items,
             page=page_result.page,
-            page_size=page_result.page_size,
-            has_next=page_result.has_next,
-            has_previous=page_result.has_previous,
+            per_page=page_result.per_page,
+            page_count=page_result.page_count,
             total=page_result.total,
+            changes_cursor=page_result.changes_cursor,
         )
 
         logger.info(
             "users.list.success",
             extra=log_context(
                 page=result.page,
-                page_size=result.page_size,
+                per_page=result.per_page,
                 count=len(result.items),
                 total=result.total,
             ),

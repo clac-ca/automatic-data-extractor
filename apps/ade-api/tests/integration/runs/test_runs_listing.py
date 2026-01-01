@@ -1,3 +1,4 @@
+import json
 import pytest
 
 from ade_api.models import BuildStatus, ConfigurationStatus, RunStatus
@@ -80,16 +81,18 @@ async def test_workspace_run_listing_filters_by_status(
     all_runs = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        params={"include_total": "true"},
     )
     assert all_runs.status_code == 200
     payload = all_runs.json()
     assert payload["total"] == 2
 
+    status_filters = json.dumps(
+        [{"id": "status", "operator": "eq", "value": RunStatus.SUCCEEDED.value}]
+    )
     filtered = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        params={"status": RunStatus.SUCCEEDED.value, "include_total": "true"},
+        params={"filters": status_filters},
     )
     assert filtered.status_code == 200
     filtered_payload = filtered.json()

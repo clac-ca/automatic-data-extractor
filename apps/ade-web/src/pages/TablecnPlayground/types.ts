@@ -1,23 +1,10 @@
-import type { DocumentStatus, FileType } from "@pages/Workspace/sections/Documents/types";
+import type { components } from "@schema";
 
-export type DocumentListRow = {
-  id: string;
-  workspaceId: string;
-  name: string;
-  status: DocumentStatus;
-  fileType: FileType;
-  sizeLabel: string;
-  createdAt: string;
+export type DocumentListRow = components["schemas"]["DocumentListRow"];
+export type DocumentListResponse = components["schemas"]["DocumentListPage"] & {
+  changesCursorHeader?: string | null;
 };
-
-export type DocumentListResponse = {
-  items: DocumentListRow[];
-  page: number;
-  perPage: number;
-  pageCount: number;
-  total: number;
-  changesCursor: string;
-};
+export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 
 export type DocumentsListParams = {
   page: number;

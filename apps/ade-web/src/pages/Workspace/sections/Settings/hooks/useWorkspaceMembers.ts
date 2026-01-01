@@ -12,7 +12,6 @@ const MEMBERS_PAGE_SIZE = MAX_PAGE_SIZE;
 const memberListParams = {
   page: 1,
   pageSize: MEMBERS_PAGE_SIZE,
-  includeTotal: true,
 } as const;
 
 export function useWorkspaceMembersQuery(workspaceId: string) {
@@ -23,10 +22,10 @@ export function useWorkspaceMembersQuery(workspaceId: string) {
       listWorkspaceMembers(workspaceId, {
         page: typeof pageParam === "number" ? pageParam : 1,
         pageSize: MEMBERS_PAGE_SIZE,
-        includeTotal: pageParam === 1,
         signal,
       }),
-    getNextPageParam: (lastPage) => (lastPage.has_next ? lastPage.page + 1 : undefined),
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
     enabled: workspaceId.length > 0,
     staleTime: 15_000,
     placeholderData: (previous) => previous,

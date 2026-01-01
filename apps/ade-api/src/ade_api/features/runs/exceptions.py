@@ -8,6 +8,9 @@ __all__ = [
     "RunLogsFileMissingError",
     "RunOutputMissingError",
     "RunOutputNotReadyError",
+    "RunOutputPreviewUnsupportedError",
+    "RunOutputPreviewSheetNotFoundError",
+    "RunOutputPreviewParseError",
     "RunInputMissingError",
     "RunQueueFullError",
 ]
@@ -31,6 +34,18 @@ class RunOutputMissingError(RuntimeError):
 
 class RunOutputNotReadyError(RuntimeError):
     """Raised when a run output is not yet ready to be downloaded."""
+
+
+class RunOutputPreviewUnsupportedError(RuntimeError):
+    """Raised when a run output preview is requested for an unsupported file type."""
+
+
+class RunOutputPreviewSheetNotFoundError(RuntimeError):
+    """Raised when a requested worksheet is not present in the run output."""
+
+
+class RunOutputPreviewParseError(RuntimeError):
+    """Raised when a run output preview cannot be generated."""
 
 
 class RunInputMissingError(RuntimeError):

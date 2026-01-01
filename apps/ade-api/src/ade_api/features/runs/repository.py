@@ -7,11 +7,12 @@ from uuid import UUID
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.pagination import Page, paginate_sql
+from ade_api.common.listing import ListPage, paginate_query
 from ade_api.common.types import OrderBy
 from ade_api.models import Run, RunField, RunMetrics, RunStatus, RunTableColumn
 
-from .filters import RunColumnFilters, RunFilters, apply_run_column_filters, apply_run_filters
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from .filters import RunColumnFilters, apply_run_column_filters, apply_run_filters
 
 __all__ = ["RunsRepository"]
 
@@ -32,26 +33,32 @@ class RunsRepository:
         *,
         workspace_id: UUID,
         configuration_id: UUID | None,
-        filters: RunFilters,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
         order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[Run]:
+        per_page: int,
+    ) -> ListPage[Run]:
         """Return paginated runs for ``workspace_id`` filtered by config, status, or document."""
 
         stmt: Select = select(Run).where(Run.workspace_id == workspace_id)
         if configuration_id:
             stmt = stmt.where(Run.configuration_id == configuration_id)
-        stmt = apply_run_filters(stmt, filters)
+        stmt = apply_run_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
 
-        return await paginate_sql(
+        return await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
+            per_page=per_page,
             order_by=order_by,
+            changes_cursor="0",
         )
 
     async def count_queued(self) -> int:

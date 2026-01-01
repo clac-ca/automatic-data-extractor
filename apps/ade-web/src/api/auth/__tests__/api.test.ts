@@ -21,14 +21,7 @@ const meBootstrap = {
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
   },
-  workspaces: {
-    items: [],
-    page: 1,
-    page_size: 50,
-    total: 0,
-    has_next: false,
-    has_previous: false,
-  },
+  workspaces: [],
   roles: [],
   permissions: [],
 };
@@ -59,10 +52,7 @@ describe("auth api", () => {
     expect(body?.get("username")).toBe("user@example.com");
     expect(body?.get("password")).toBe("pass");
 
-    expect(mockClient.GET).toHaveBeenCalledWith("/api/v1/me/bootstrap", {
-      params: { query: { include_total: false, page: 1, page_size: 200 } },
-      signal: undefined,
-    });
+    expect(mockClient.GET).toHaveBeenCalledWith("/api/v1/me/bootstrap", { signal: undefined });
 
     expect(session.user.email).toBe("user@example.com");
   });

@@ -8,7 +8,7 @@ import { Select } from "@components/ui/select";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/ui/tabs";
 import type { RunResource } from "@schema";
 
-import { MAX_PREVIEW_ROWS } from "../utils";
+import { MAX_PREVIEW_ROWS, formatBytes } from "../utils";
 import type {
   DocumentComment,
   DocumentEntry,
@@ -336,8 +336,8 @@ export function DocumentsPreviewPane({
                   Fetching the latest run status.
                 </PreviewMessage>
               ) : (
-                <PreviewMessage title={resolvePreviewTitle(document)}>
-                  {document.stage ?? "Preparing normalized output"}
+                <PreviewMessage title={resolvePreviewTitle(document, processingPaused)}>
+                  {resolvePreviewMessage(document, processingPaused)}
                 </PreviewMessage>
               )}
             </div>
@@ -379,14 +379,26 @@ function PreviewMessage({ title, children }: { title: string; children: string }
   );
 }
 
-function resolvePreviewTitle(document: DocumentEntry) {
-  if (document.queue_state === "waiting" && document.queue_reason === "processing_paused") {
+function resolvePreviewTitle(document: DocumentEntry, processingPaused: boolean) {
+  if (processingPaused && document.status === "uploaded") {
     return "Processing paused";
   }
-  if (document.queue_state === "waiting") return "Waiting to start";
-  if (document.queue_state === "queued" || document.status === "queued") return "Queued for processing";
+  if (document.status === "uploaded") return "Uploaded";
   if (document.status === "processing") return "Processing output";
+  if (document.status === "failed") return "Processing failed";
+  if (document.status === "archived") return "Archived";
   return "Processing output";
+}
+
+function resolvePreviewMessage(document: DocumentEntry, processingPaused: boolean) {
+  if (processingPaused && document.status === "uploaded") {
+    return "Processing is paused for this workspace.";
+  }
+  if (document.status === "uploaded") return "Waiting to start processing.";
+  if (document.status === "processing") return "Processing output.";
+  if (document.status === "failed") return "We could not complete normalization for this file.";
+  if (document.status === "archived") return "This document is archived.";
+  return "Preparing normalized output.";
 }
 
 const METRICS_NUMBER_FORMATTER = new Intl.NumberFormat();
@@ -771,7 +783,7 @@ function DetailsDrawer({
               >
                 {key === "details"
                   ? "Details"
-                  : `Notes${document.comment_count ? ` (${document.comment_count})` : ""}`}
+                  : `Notes${document.commentCount ? ` (${document.commentCount})` : ""}`}
               </button>
             ))}
           </div>
@@ -788,17 +800,17 @@ function DetailsDrawer({
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Assignee</p>
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {document.assignee_label ?? "Unassigned"}
+                      {document.assigneeLabel ?? "Unassigned"}
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {!document.assignee_key ? (
+                  {!document.assigneeKey ? (
                     <Button type="button" size="sm" onClick={() => onPickUp(document.id)} className="text-xs">
                       Pick up
                     </Button>
-                  ) : document.assignee_key !== currentUserKey ? (
+                  ) : document.assigneeKey !== currentUserKey ? (
                     <Button
                       type="button"
                       size="sm"
@@ -812,7 +824,7 @@ function DetailsDrawer({
 
                   <PeoplePicker
                     people={people}
-                    value={[document.assignee_key ?? unassignedKey()]}
+                    value={[document.assigneeKey ?? unassignedKey()]}
                     onChange={(keys) => onAssign(document.id, normalizeSingleAssignee(keys))}
                     placeholder="Assign…"
                     includeUnassigned
@@ -825,18 +837,18 @@ function DetailsDrawer({
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Metadata</h3>
                   <span className="text-[11px] text-muted-foreground">
-                    Updated {formatRelativeTime(now, document.updated_at)}
+                    Updated {formatRelativeTime(now, document.updatedAt)}
                   </span>
                 </div>
 
                 <dl className="mt-4 grid gap-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted-foreground">Uploader</dt>
-                    <dd className="font-semibold text-foreground">{document.uploader_label ?? "Unassigned"}</dd>
+                    <dd className="font-semibold text-foreground">{document.uploaderLabel ?? "Unassigned"}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted-foreground">Size</dt>
-                    <dd className="font-semibold text-foreground">{document.size_label}</dd>
+                    <dd className="font-semibold text-foreground">{formatBytes(document.byteSize)}</dd>
                   </div>
                 </dl>
               </section>

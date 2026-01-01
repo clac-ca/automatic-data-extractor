@@ -3,33 +3,32 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse
 
 from ..auth.errors import AuthenticationError, PermissionDeniedError
+from ade_api.common.exceptions import api_error_handler
+from ade_api.common.problem_details import ApiError
 
 
-def _handle_authentication_error(_request, exc: AuthenticationError) -> JSONResponse:
+async def _handle_authentication_error(request, exc: AuthenticationError):
     """Translate auth failures into HTTP 401 responses."""
 
-    return JSONResponse(
+    error = ApiError(
+        error_type="unauthorized",
         status_code=status.HTTP_401_UNAUTHORIZED,
-        content={"detail": str(exc) or "Authentication required"},
+        detail=str(exc) or "Authentication required",
     )
+    return await api_error_handler(request, error)
 
 
-def _handle_permission_error(_request, exc: PermissionDeniedError) -> JSONResponse:
+async def _handle_permission_error(request, exc: PermissionDeniedError):
     """Translate permission denials into HTTP 403 responses."""
 
-    detail = {
-        "error": "forbidden",
-        "permission": exc.permission_key,
-        "scope_type": exc.scope_type,
-        "scope_id": str(exc.scope_id) if exc.scope_id is not None else None,
-    }
-    return JSONResponse(
+    error = ApiError(
+        error_type="forbidden",
         status_code=status.HTTP_403_FORBIDDEN,
-        content={"detail": detail},
+        detail=str(exc) or "Forbidden",
     )
+    return await api_error_handler(request, error)
 
 
 def register_auth_exception_handlers(app: FastAPI) -> None:

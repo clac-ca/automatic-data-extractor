@@ -18,39 +18,33 @@ const WORKSPACE_SCOPE: ScopeType = "workspace";
 type WorkspaceListParams = {
   readonly page: number;
   readonly pageSize: number;
-  readonly includeTotal?: boolean;
 };
 
 type PermissionListParams = {
   readonly scope: ScopeType;
   readonly page: number;
   readonly pageSize: number;
-  readonly includeTotal?: boolean;
 };
 
 const defaultWorkspaceListParams: WorkspaceListParams = {
   page: 1,
   pageSize: DEFAULT_WORKSPACE_PAGE_SIZE,
-  includeTotal: false,
 };
 
 const defaultMemberListParams: WorkspaceListParams = {
   page: 1,
   pageSize: DEFAULT_MEMBER_PAGE_SIZE,
-  includeTotal: false,
 };
 
 const defaultRoleListParams: WorkspaceListParams = {
   page: 1,
   pageSize: DEFAULT_ROLE_PAGE_SIZE,
-  includeTotal: false,
 };
 
 const defaultPermissionListParams: PermissionListParams = {
   scope: WORKSPACE_SCOPE,
   page: 1,
   pageSize: DEFAULT_PERMISSION_PAGE_SIZE,
-  includeTotal: false,
 };
 
 export const workspacesKeys = {
@@ -68,5 +62,4 @@ export const workspacesKeys = {
 export const WORKSPACE_LIST_DEFAULT_PARAMS = {
   page: defaultWorkspaceListParams.page,
   pageSize: defaultWorkspaceListParams.pageSize,
-  includeTotal: defaultWorkspaceListParams.includeTotal,
 } as const;

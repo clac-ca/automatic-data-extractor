@@ -56,6 +56,17 @@ function isSortingEqual<TData>(
   );
 }
 
+function isExplicitEmptySort(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[")) return false;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) && parsed.length === 0;
+  } catch {
+    return false;
+  }
+}
+
 interface UseDataTableProps<TData>
   extends Omit<
       TableOptions<TData>,
@@ -202,7 +213,11 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     if (!rawSort) {
       return initialState?.sorting ?? [];
     }
-    return parseSortingState<TData>(rawSort, columnIds);
+    const parsed = parseSortingState<TData>(rawSort, columnIds);
+    if (parsed.length > 0 || isExplicitEmptySort(rawSort)) {
+      return parsed;
+    }
+    return initialState?.sorting ?? [];
   }, [searchParams, sortKey, columnIds, initialState?.sorting]);
 
   const setSorting = React.useCallback(
@@ -400,5 +415,5 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     },
   });
 
-  return { table, shallow, debounceMs, throttleMs };
+  return { table, shallow, debounceMs, throttleMs, history, startTransition };
 }

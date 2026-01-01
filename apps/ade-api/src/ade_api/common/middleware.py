@@ -17,6 +17,7 @@ from ade_api.settings import Settings
 from .logging import bind_request_context, clear_request_context, log_context
 
 _REQUEST_LOGGER = logging.getLogger("ade_api.request")
+_REQUEST_ID_HEADER = "X-Request-Id"
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -31,9 +32,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
 
-        correlation_id = request.headers.get("X-Request-ID", str(uuid4()))
-        request.state.correlation_id = correlation_id
-        bind_request_context(correlation_id)
+        request_id = request.headers.get(_REQUEST_ID_HEADER) or f"req_{uuid4().hex}"
+        request.state.request_id = request_id
+        request.state.correlation_id = request_id
+        bind_request_context(request_id)
 
         start = time.perf_counter()
         response: Response | None = None
@@ -65,7 +67,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if response is None:  # pragma: no cover - defensive guard
             raise RuntimeError("Request handler returned no response")
 
-        response.headers["X-Request-ID"] = correlation_id
+        response.headers[_REQUEST_ID_HEADER] = request_id
+        response.headers["X-Response-Time-Ms"] = f"{round(duration_ms, 2):.2f}"
         return response
 
 

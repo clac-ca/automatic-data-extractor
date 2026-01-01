@@ -20,7 +20,6 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
-from pydantic import ValidationError
 
 from ade_api.api.deps import (
     get_runs_service,
@@ -28,10 +27,20 @@ from ade_api.api.deps import (
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord, strip_sequence
-from ade_api.common.pagination import PageParams
-from ade_api.common.sorting import make_sort_dependency
+from ade_api.common.listing import (
+    ListQueryParams,
+    list_query_params,
+    strict_list_query_guard,
+)
+from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import sse_json
-from ade_api.common.types import OrderBy
+from ade_api.common.workbook_preview import (
+    DEFAULT_PREVIEW_COLUMNS,
+    DEFAULT_PREVIEW_ROWS,
+    MAX_PREVIEW_COLUMNS,
+    MAX_PREVIEW_ROWS,
+    WorkbookPreview,
+)
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import RunStatus
@@ -43,9 +52,12 @@ from .exceptions import (
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
+    RunOutputPreviewParseError,
+    RunOutputPreviewSheetNotFoundError,
+    RunOutputPreviewUnsupportedError,
     RunQueueFullError,
 )
-from .filters import RunColumnFilters, RunFilters
+from .filters import RunColumnFilters
 from .schemas import (
     RunBatchCreateRequest,
     RunBatchCreateResponse,
@@ -74,22 +86,27 @@ router = APIRouter(
 runs_service_dependency = Depends(get_runs_service)
 logger = logging.getLogger(__name__)
 
-get_sort_order = make_sort_dependency(
-    allowed=SORT_FIELDS,
-    default=DEFAULT_SORT,
-    id_field=ID_FIELD,
-)
-
-_FILTER_KEYS = {
-    "q",
-    "status",
-    "configuration_id",
-    "input_document_id",
-    "created_after",
-    "created_before",
-    "file_type",
-    "has_output",
-}
+WorkspacePath = Annotated[
+    UUID,
+    Path(
+        description="Workspace identifier",
+        alias="workspaceId",
+    ),
+]
+ConfigurationPath = Annotated[
+    UUID,
+    Path(
+        description="Configuration identifier",
+        alias="configurationId",
+    ),
+]
+RunPath = Annotated[
+    UUID,
+    Path(
+        description="Run identifier",
+        alias="runId",
+    ),
+]
 
 _COLUMN_FILTER_KEYS = {
     "sheet_name",
@@ -98,39 +115,6 @@ _COLUMN_FILTER_KEYS = {
     "mapped_field",
     "mapping_status",
 }
-
-
-def get_run_filters(
-    request: Request,
-) -> RunFilters:
-    allowed = _FILTER_KEYS
-    allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
-    extras = sorted({key for key in request.query_params.keys() if key not in allowed_with_shared})
-    if extras:
-        detail = [
-            {
-                "type": "extra_forbidden",
-                "loc": ["query", key],
-                "msg": "Extra inputs are not permitted",
-                "input": request.query_params.get(key),
-            }
-            for key in extras
-        ]
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
-    data: dict[str, object] = {}
-    for key in allowed:
-        values = request.query_params.getlist(key)
-        if not values:
-            continue
-        data[key] = values if len(values) > 1 else values[0]
-
-    try:
-        return RunFilters.model_validate(data)
-    except ValidationError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=exc.errors(),
-        ) from exc
 
 
 def get_run_column_filters(
@@ -159,14 +143,14 @@ def _event_bytes(event: EventRecord) -> bytes:
 
 
 @router.post(
-    "/configurations/{configuration_id}/runs",
+    "/configurations/{configurationId}/runs",
     response_model=RunResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_run_endpoint(
     *,
-    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
+    configuration_id: ConfigurationPath,
     payload: RunCreateRequest,
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
@@ -199,14 +183,14 @@ async def create_run_endpoint(
 
 
 @router.post(
-    "/configurations/{configuration_id}/runs/batch",
+    "/configurations/{configurationId}/runs/batch",
     response_model=RunBatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_runs_batch_endpoint(
     *,
-    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
+    configuration_id: ConfigurationPath,
     payload: RunBatchCreateRequest,
     service: RunsService = runs_service_dependency,
 ) -> RunBatchCreateResponse:
@@ -238,14 +222,14 @@ async def create_runs_batch_endpoint(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/runs",
+    "/workspaces/{workspaceId}/runs",
     response_model=RunResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_workspace_run_endpoint(
     *,
-    workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
+    workspace_id: WorkspacePath,
     payload: RunWorkspaceCreateRequest,
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
@@ -280,14 +264,14 @@ async def create_workspace_run_endpoint(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/runs/batch",
+    "/workspaces/{workspaceId}/runs/batch",
     response_model=RunBatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_workspace_runs_batch_endpoint(
     *,
-    workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
+    workspace_id: WorkspacePath,
     payload: RunWorkspaceBatchCreateRequest,
     service: RunsService = runs_service_dependency,
 ) -> RunBatchCreateResponse:
@@ -320,55 +304,67 @@ async def create_workspace_runs_batch_endpoint(
 
 
 @router.get(
-    "/configurations/{configuration_id}/runs",
+    "/configurations/{configurationId}/runs",
     response_model=RunPage,
     response_model_exclude_none=True,
 )
 async def list_configuration_runs_endpoint(
-    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
-    page: Annotated[PageParams, Depends()],
-    filters: Annotated[RunFilters, Depends(get_run_filters)],
-    order_by: Annotated[OrderBy, Depends(get_sort_order)],
+    configuration_id: ConfigurationPath,
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
     try:
+        order_by = resolve_sort(
+            list_query.sort,
+            allowed=SORT_FIELDS,
+            default=DEFAULT_SORT,
+            id_field=ID_FIELD,
+        )
         return await service.list_runs_for_configuration(
             configuration_id=configuration_id,
-            filters=filters,
+            filters=list_query.filters,
+            join_operator=list_query.join_operator,
+            q=list_query.q,
             order_by=order_by,
-            page=page.page,
-            page_size=page.page_size,
-            include_total=page.include_total,
+            page=list_query.page,
+            per_page=list_query.per_page,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(
-    "/workspaces/{workspace_id}/runs",
+    "/workspaces/{workspaceId}/runs",
     response_model=RunPage,
     response_model_exclude_none=True,
 )
 async def list_workspace_runs_endpoint(
-    workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
-    page: Annotated[PageParams, Depends()],
-    filters: Annotated[RunFilters, Depends(get_run_filters)],
-    order_by: Annotated[OrderBy, Depends(get_sort_order)],
+    workspace_id: WorkspacePath,
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
+    order_by = resolve_sort(
+        list_query.sort,
+        allowed=SORT_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
+    )
     return await service.list_runs(
         workspace_id=workspace_id,
-        filters=filters,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
         order_by=order_by,
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
+        page=list_query.page,
+        per_page=list_query.per_page,
     )
 
 
-@router.get("/runs/{run_id}", response_model=RunResource)
+@router.get("/runs/{runId}", response_model=RunResource)
 async def get_run_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     run = await service.get_run(run_id)
@@ -378,12 +374,12 @@ async def get_run_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/metrics",
+    "/runs/{runId}/metrics",
     response_model=RunMetricsResource,
     response_model_exclude_none=True,
 )
 async def get_run_metrics_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunMetricsResource:
     try:
@@ -396,12 +392,12 @@ async def get_run_metrics_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/fields",
+    "/runs/{runId}/fields",
     response_model=list[RunFieldResource],
     response_model_exclude_none=True,
 )
 async def list_run_fields_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> list[RunFieldResource]:
     try:
@@ -412,12 +408,12 @@ async def list_run_fields_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/columns",
+    "/runs/{runId}/columns",
     response_model=list[RunColumnResource],
     response_model_exclude_none=True,
 )
 async def list_run_columns_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     filters: Annotated[RunColumnFilters, Depends(get_run_column_filters)],
     service: RunsService = runs_service_dependency,
 ) -> list[RunColumnResource]:
@@ -429,13 +425,13 @@ async def list_run_columns_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/input",
+    "/runs/{runId}/input",
     response_model=RunInput,
     response_model_exclude_none=True,
     summary="Get run input metadata",
 )
 async def get_run_input_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunInput:
     try:
@@ -449,11 +445,11 @@ async def get_run_input_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/input/download",
+    "/runs/{runId}/input/download",
     summary="Download run input file",
 )
 async def download_run_input_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> StreamingResponse:
     try:
@@ -471,12 +467,12 @@ async def download_run_input_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/events",
+    "/runs/{runId}/events",
     response_model=RunEventsPage,
     response_model_exclude_none=True,
 )
 async def get_run_events_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     format: Literal["json", "ndjson"] = Query(default="json"),
     after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
@@ -505,9 +501,9 @@ async def get_run_events_endpoint(
     )
 
 
-@router.get("/runs/{run_id}/events/stream")
+@router.get("/runs/{runId}/events/stream")
 async def stream_run_events_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: RunsService = runs_service_dependency,
@@ -582,13 +578,13 @@ async def stream_run_events_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/events/download",
+    "/runs/{runId}/events/download",
     response_class=FileResponse,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Events unavailable"}},
     summary="Download run events (NDJSON log)",
 )
 async def download_run_events_file_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ):
     try:
@@ -604,7 +600,7 @@ async def download_run_events_file_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/output",
+    "/runs/{runId}/output",
     response_model=RunOutput,
     response_model_exclude_none=True,
     responses={
@@ -613,7 +609,7 @@ async def download_run_events_file_endpoint(
     summary="Get run output metadata",
 )
 async def get_run_output_metadata_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunOutput:
     try:
@@ -623,7 +619,7 @@ async def get_run_output_metadata_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/output/download",
+    "/runs/{runId}/output/download",
     response_class=FileResponse,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Output not found"},
@@ -632,7 +628,7 @@ async def get_run_output_metadata_endpoint(
     summary="Download run output file",
 )
 async def download_run_output_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
+    run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ):
     try:
@@ -670,3 +666,101 @@ async def download_run_output_endpoint(
         filename=path.name,
         headers={"Content-Disposition": build_content_disposition(path.name)},
     )
+
+
+@router.get(
+    "/runs/{runId}/output/preview",
+    response_model=WorkbookPreview,
+    response_model_exclude_none=True,
+    summary="Preview run output workbook",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
+        status.HTTP_409_CONFLICT: {"description": "Output not ready"},
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: {
+            "description": "Preview is not supported for this file type.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "The output exists but could not be parsed for preview.",
+        },
+    },
+)
+async def preview_run_output_endpoint(
+    run_id: RunPath,
+    service: RunsService = runs_service_dependency,
+    *,
+    max_rows: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PREVIEW_ROWS,
+            alias="maxRows",
+            description="Maximum rows per sheet to include in the preview.",
+        ),
+    ] = DEFAULT_PREVIEW_ROWS,
+    max_columns: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PREVIEW_COLUMNS,
+            alias="maxColumns",
+            description="Maximum columns per sheet to include in the preview.",
+        ),
+    ] = DEFAULT_PREVIEW_COLUMNS,
+    sheet_name: Annotated[
+        str | None,
+        Query(alias="sheetName", description="Optional worksheet name to preview."),
+    ] = None,
+    sheet_index: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            alias="sheetIndex",
+            description="Optional worksheet index to preview (0-based).",
+        ),
+    ] = None,
+) -> WorkbookPreview:
+    if sheet_name and sheet_index is not None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="sheetName and sheetIndex are mutually exclusive",
+        )
+    try:
+        return await service.get_run_output_preview(
+            run_id=run_id,
+            max_rows=max_rows,
+            max_columns=max_columns,
+            sheet_name=sheet_name,
+            sheet_index=sheet_index,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunOutputNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "OUTPUT_NOT_READY",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+    except RunOutputMissingError as exc:
+        status_code = status.HTTP_404_NOT_FOUND
+        run_record = await service.get_run(run_id)  # type: ignore[arg-type]
+        if run_record and run_record.status is RunStatus.FAILED:
+            detail = {
+                "error": {
+                    "code": "RUN_FAILED_NO_OUTPUT",
+                    "message": str(exc),
+                }
+            }
+        else:
+            detail = str(exc)
+        raise HTTPException(status_code, detail=detail) from exc
+    except RunOutputPreviewUnsupportedError as exc:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except (RunOutputPreviewParseError, RunOutputPreviewSheetNotFoundError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc

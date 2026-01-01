@@ -9,11 +9,8 @@ export type DocumentListRow = components["schemas"]["DocumentListRow"];
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
 export type ApiDocumentStatus = components["schemas"]["DocumentStatus"];
-export type ApiDocumentDisplayStatus = components["schemas"]["DocumentDisplayStatus"];
-export type DocumentMappingHealth = components["schemas"]["DocumentMappingHealth"];
-export type DocumentQueueState = components["schemas"]["DocumentQueueState"];
-export type DocumentQueueReason = components["schemas"]["DocumentQueueReason"];
-export type DocumentLastRun = components["schemas"]["DocumentLastRun"];
+export type DocumentResultSummary = components["schemas"]["DocumentResultSummary"];
+export type DocumentRunSummary = components["schemas"]["DocumentRunSummary"];
 
 export type WorkspaceMemberOut = components["schemas"]["WorkspaceMemberOut"];
 export type WorkspaceMemberPage = components["schemas"]["WorkspaceMemberPage"];
@@ -26,13 +23,13 @@ export type RunMetricsResource = components["schemas"]["RunMetricsResource"];
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
 
-export type DocumentStatus = components["schemas"]["DocumentDisplayStatus"];
+export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type ViewMode = "grid" | "board";
 export type BoardGroup = "status" | "tag" | "uploader";
 
 export type ListDensity = "comfortable" | "compact";
 export type ListRefreshInterval = "auto" | "off" | "30s" | "1m" | "5m";
-export type ListPageSize = 50 | 100 | 200 | 1000 | 2000;
+export type ListPageSize = 50 | 100 | 200;
 export type ListSettings = {
   pageSize: ListPageSize;
   refreshInterval: ListRefreshInterval;
@@ -63,7 +60,7 @@ export type SavedView = {
   filters: DocumentsFilters;
 };
 
-export type MappingHealth = DocumentMappingHealth;
+export type MappingHealth = DocumentResultSummary;
 
 export type DocumentError = {
   summary: string;
@@ -94,8 +91,10 @@ export type DocumentComment = {
 export type DocumentEntry = Omit<DocumentListRow, "tags"> & {
   tags: string[];
   /** Local-only UI fields. */
-  assignee_label: string | null;
-  comment_count: number;
+  assigneeKey: string | null;
+  assigneeLabel: string | null;
+  uploaderLabel: string | null;
+  commentCount: number;
   progress?: number;
   error?: DocumentError;
   upload?: UploadManagerItem<DocumentUploadResponse>;

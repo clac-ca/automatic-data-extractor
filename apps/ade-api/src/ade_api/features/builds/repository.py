@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from ade_api.common.pagination import Page, paginate_sql
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import ListPage, paginate_query
+from ade_api.common.types import OrderBy
 from ade_api.models import Build, BuildStatus
+
+from .filters import apply_build_filters
 
 __all__ = [
     "BuildsRepository",
@@ -35,27 +38,33 @@ class BuildsRepository:
         *,
         workspace_id: UUID,
         configuration_id: UUID,
-        statuses: Sequence[BuildStatus] | None,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[Build]:
+        per_page: int,
+    ) -> ListPage[Build]:
         """Return paginated builds for ``configuration_id``."""
 
         stmt: Select = select(Build).where(
             Build.workspace_id == workspace_id,
             Build.configuration_id == configuration_id,
         )
-        if statuses:
-            stmt = stmt.where(Build.status.in_(statuses))
+        stmt = apply_build_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
 
-        return await paginate_sql(
+        return await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
-            order_by=[desc(Build.created_at)],
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
         )
 
     async def get_ready_by_fingerprint(

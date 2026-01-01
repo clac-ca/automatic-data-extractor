@@ -337,7 +337,7 @@ def require_global(permission_key: str) -> PermissionDependency:
 
 
 def require_workspace(
-    permission_key: str, workspace_param: str = "workspace_id"
+    permission_key: str, workspace_param: str = "workspaceId"
 ) -> PermissionDependency:
     return require_permission(permission_key, workspace_param=workspace_param)
 

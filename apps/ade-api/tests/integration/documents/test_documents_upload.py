@@ -42,7 +42,7 @@ async def test_upload_list_download_document(
     assert upload.status_code == 201, upload.text
     payload = upload.json()
     document_id = payload["id"]
-    assert payload["byte_size"] == len(b"hello world")
+    assert payload["byteSize"] == len(b"hello world")
     assert payload["metadata"] == {"source": "tests"}
     assert payload["tags"] == []
 
@@ -50,9 +50,10 @@ async def test_upload_list_download_document(
     assert listing.status_code == 200
     payload = listing.json()
     assert payload["page"] == 1
-    assert payload["page_size"] == 25
-    assert payload["has_next"] is False
-    assert "total" not in payload
+    assert payload["perPage"] == 50
+    assert payload["pageCount"] >= 1
+    assert payload["total"] >= 1
+    assert "changesCursor" in payload
     assert any(item["id"] == document_id for item in payload["items"])
     assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 
@@ -90,6 +91,26 @@ async def test_upload_document_ignores_blank_metadata(
     assert upload.status_code == 201, upload.text
     payload = upload.json()
     assert payload["metadata"] == {}
+
+
+async def test_list_documents_rejects_unknown_query_params(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    """List endpoints should reject unknown query params."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.get(
+        f"{workspace_base}/documents",
+        headers=headers,
+        params={"unknown": "1"},
+    )
+
+    assert response.status_code == 422
 
 
 async def test_upload_document_does_not_cache_worksheets(

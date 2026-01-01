@@ -59,6 +59,8 @@ interface DataTableFilterMenuProps<TData>
   debounceMs?: number;
   throttleMs?: number;
   shallow?: boolean;
+  history?: "push" | "replace";
+  startTransition?: React.TransitionStartFunction;
   disabled?: boolean;
 }
 
@@ -67,11 +69,30 @@ export function DataTableFilterMenu<TData>({
   debounceMs = DEBOUNCE_MS,
   throttleMs: _throttleMs = THROTTLE_MS,
   shallow: _shallow = true,
+  history = "replace",
+  startTransition,
   disabled,
   ...props
 }: DataTableFilterMenuProps<TData>) {
   const id = React.useId();
   const [searchParams, setSearchParams] = useSearchParams();
+  const replace = history !== "push";
+
+  const setParams = React.useCallback(
+    (updater: (params: URLSearchParams) => URLSearchParams) => {
+      const applyUpdate = () =>
+        setSearchParams((prev) => updater(new URLSearchParams(prev)), {
+          replace,
+        });
+
+      if (startTransition) {
+        startTransition(() => applyUpdate());
+      } else {
+        applyUpdate();
+      }
+    },
+    [replace, setSearchParams, startTransition],
+  );
 
   const columns = React.useMemo(() => {
     return table
@@ -123,28 +144,24 @@ export function DataTableFilterMenu<TData>({
 
   const setFilters = React.useCallback(
     (updater: FiltersUpdater<TData>) => {
-      setSearchParams(
-        (prevParams) => {
-          const params = new URLSearchParams(prevParams);
-          const current = parseFiltersState<TData>(
-            params.get(filtersKey),
-            columnIds,
-          );
-          const nextFilters =
-            typeof updater === "function" ? updater(current) : updater;
+      setParams((params) => {
+        const current = parseFiltersState<TData>(
+          params.get(filtersKey),
+          columnIds,
+        );
+        const nextFilters =
+          typeof updater === "function" ? updater(current) : updater;
 
-          if (nextFilters.length === 0) {
-            params.delete(filtersKey);
-          } else {
-            params.set(filtersKey, serializeFiltersState(nextFilters));
-          }
+        if (nextFilters.length === 0) {
+          params.delete(filtersKey);
+        } else {
+          params.set(filtersKey, serializeFiltersState(nextFilters));
+        }
 
-          return params;
-        },
-        { replace: true },
-      );
+        return params;
+      });
     },
-    [setSearchParams, filtersKey, columnIds],
+    [setParams, filtersKey, columnIds],
   );
   const debouncedSetFilters = useDebouncedCallback(setFilters, debounceMs);
 

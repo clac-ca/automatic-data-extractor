@@ -80,10 +80,10 @@ describe("WorkspacesScreen", () => {
       data: {
         items: workspaces,
         page: 1,
-        page_size: 2,
-        has_next: false,
-        has_previous: false,
+        perPage: 2,
+        pageCount: 1,
         total: 2,
+        changesCursor: "0",
       },
       isLoading: false,
       isError: false,

@@ -1,24 +1,36 @@
 import { ApiError, type ProblemDetails } from "@api/errors";
 import { buildApiHeaders, client, resolveApiUrl } from "@api/client";
+import type { FilterItem, FilterJoinOperator } from "@api/listing";
+import { encodeFilters } from "@api/listing";
 
-import type { components, paths } from "@schema";
+import type { components } from "@schema";
 
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
-type DocumentChangesQuery =
-  paths["/api/v1/workspaces/{workspace_id}/documents/changes"]["get"]["parameters"]["query"];
+type DocumentChangesQuery = {
+  cursor: string;
+  limit?: number;
+  sort?: string;
+  filters?: FilterItem[];
+  joinOperator?: FilterJoinOperator;
+  q?: string;
+};
 
 export async function listDocumentChanges(
   workspaceId: string,
-  options: { cursor: string; limit?: number },
+  options: DocumentChangesQuery,
   signal?: AbortSignal,
 ): Promise<DocumentChangesPage> {
-  const query: DocumentChangesQuery = {
+  const query = {
     cursor: options.cursor,
     limit: options.limit,
+    sort: options.sort,
+    q: options.q,
+    joinOperator: options.joinOperator,
+    filters: encodeFilters(options.filters),
   };
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents/changes", {
-    params: { path: { workspace_id: workspaceId }, query },
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/changes", {
+    params: { path: { workspaceId }, query },
     signal,
   });
   if (!data) {
@@ -29,11 +41,16 @@ export async function listDocumentChanges(
 
 export function documentChangesStreamUrl(
   workspaceId: string,
-  options: { cursor?: string; limit?: number } = {},
+  options: Omit<DocumentChangesQuery, "cursor"> & { cursor?: string } = {},
 ): string {
   const params = new URLSearchParams();
   if (options.cursor) params.set("cursor", options.cursor);
   if (typeof options.limit === "number") params.set("limit", String(options.limit));
+  if (options.sort) params.set("sort", options.sort);
+  if (options.q) params.set("q", options.q);
+  if (options.joinOperator) params.set("joinOperator", options.joinOperator);
+  const encodedFilters = encodeFilters(options.filters);
+  if (encodedFilters) params.set("filters", encodedFilters);
   const query = params.toString();
   return resolveApiUrl(
     `/api/v1/workspaces/${workspaceId}/documents/changes/stream${query ? `?${query}` : ""}`,

@@ -1,86 +1,50 @@
-from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from datetime import UTC
 
 import pytest
 from fastapi import HTTPException
 
-from ade_api.common.sorting import parse_sort, resolve_sort
-from ade_api.features.documents.filters import (
-    DOCUMENT_DISPLAY_STATUS_VALUES,
-    DOCUMENT_SOURCE_VALUES,
-    DocumentFilters,
-    DocumentSource,
-    DocumentDisplayStatus,
+from ade_api.common.list_filters import (
+    FilterItem,
+    FilterOperator,
+    parse_filter_items,
+    prepare_filters,
 )
+from ade_api.common.sorting import parse_sort, resolve_sort
+from ade_api.features.documents.filters import DOCUMENT_FILTER_REGISTRY
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from ade_api.models import DocumentStatus
 
 
-def test_document_filters_normalise_sets_and_strings() -> None:
-    uploader_one = str(uuid4())
-    uploader_two = str(uuid4())
-    filters = DocumentFilters(
-        status=[DocumentDisplayStatus.QUEUED.value, DocumentDisplayStatus.READY.value],
-        source_in=[
-            DocumentSource.MANUAL_UPLOAD.value,
-            DocumentSource.MANUAL_UPLOAD.value,
-        ],
-        tags=[" Alpha ", "beta", "ALPHA", "beta   two"],
-        uploader_id=[
-            uploader_one,
-            uploader_one,
-            uploader_two,
-        ],
-        q="  quarterly ",
-    )
-
-    assert filters.display_status == {
-        DocumentDisplayStatus.QUEUED,
-        DocumentDisplayStatus.READY,
-    }
-    assert filters.source_in == {DocumentSource.MANUAL_UPLOAD}
-    assert filters.tags == {"alpha", "beta", "beta two"}
-    assert filters.uploader_id == {
-        UUID(uploader_one),
-        UUID(uploader_two),
-    }
-    assert filters.q == "quarterly"
-
-
-def test_document_filters_normalise_datetimes_to_utc() -> None:
-    filters = DocumentFilters(
-        created_after=datetime(2024, 5, 1, 8, 30),
-        last_run_to=datetime(2024, 5, 3, 12, 0, tzinfo=UTC),
-    )
-
-    assert filters.created_after.tzinfo is UTC
-    assert filters.last_run_to.tzinfo is UTC
-
-
-def test_document_filters_reject_invalid_ranges() -> None:
+def test_parse_filters_rejects_invalid_json() -> None:
     with pytest.raises(HTTPException):
-        DocumentFilters(
-            created_after=datetime(2024, 5, 2),
-            created_before=datetime(2024, 5, 2),
-        )
+        parse_filter_items("{invalid", max_filters=5, max_raw_length=100)
 
+
+def test_parse_filters_rejects_invalid_value_shapes() -> None:
+    raw = '[{"id":"status","operator":"in","value":"processed"}]'
     with pytest.raises(HTTPException):
-        DocumentFilters(
-            last_run_from=datetime(2024, 4, 10, tzinfo=UTC),
-            last_run_to=datetime(2024, 4, 10, tzinfo=UTC),
-        )
+        parse_filter_items(raw, max_filters=5, max_raw_length=200)
 
+
+def test_prepare_filters_coerces_enum_and_datetime() -> None:
+    items = [
+        FilterItem(id="status", operator=FilterOperator.EQ, value="processed"),
+        FilterItem(
+            id="createdAt",
+            operator=FilterOperator.GTE,
+            value="2024-05-01T08:30:00Z",
+        ),
+    ]
+    parsed = prepare_filters(items, DOCUMENT_FILTER_REGISTRY)
+
+    assert parsed[0].value == DocumentStatus.PROCESSED
+    assert getattr(parsed[1].value, "tzinfo", None) is UTC
+
+
+def test_prepare_filters_rejects_unknown_ids() -> None:
+    items = [FilterItem(id="unknown", operator=FilterOperator.EQ, value="x")]
     with pytest.raises(HTTPException):
-        DocumentFilters(byte_size_from=100, byte_size_to=50)
-
-
-def test_document_filters_reject_invalid_tag_combinations() -> None:
-    with pytest.raises(HTTPException):
-        DocumentFilters(tags_empty=True, tags={"finance"})
-
-
-def test_document_filter_enums_export_expected_values() -> None:
-    assert set(DOCUMENT_DISPLAY_STATUS_VALUES) == {status.value for status in DocumentDisplayStatus}
-    assert set(DOCUMENT_SOURCE_VALUES) == {source.value for source in DocumentSource}
+        prepare_filters(items, DOCUMENT_FILTER_REGISTRY)
 
 
 def test_sort_helpers_apply_defaults_and_tie_breakers() -> None:
@@ -91,7 +55,7 @@ def test_sort_helpers_apply_defaults_and_tie_breakers() -> None:
         id_field=ID_FIELD,
     )
 
-    assert order[0] is SORT_FIELDS["created_at"][1]
+    assert order[0] is SORT_FIELDS["createdAt"][1]
     assert order[-1] is ID_FIELD[1]
 
 

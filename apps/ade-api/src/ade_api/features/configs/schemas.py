@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.pagination import Page
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import ConfigurationStatus
 
@@ -74,7 +74,7 @@ class ConfigValidationIssue(BaseSchema):
     message: str
 
 
-class ConfigurationPage(Page[ConfigurationRecord]):
+class ConfigurationPage(ListPage[ConfigurationRecord]):
     """Paginated configuration listing."""
 
 
@@ -143,7 +143,7 @@ class FileListing(BaseSchema):
     summary: FileListingSummary
     limits: FileSizeLimits
     count: int
-    next_token: str | None = None
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
     entries: list[FileEntry]
 
 

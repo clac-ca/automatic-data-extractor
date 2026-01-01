@@ -1,8 +1,9 @@
+import type { FilterItem } from "@api/listing";
 import type { DocumentStatus, DocumentsFilters, SavedView } from "./types";
 
 export const UNASSIGNED_KEY = "__unassigned__";
 
-export const ACTIVE_DOCUMENT_STATUSES: DocumentStatus[] = ["queued", "processing", "ready", "failed"];
+export const ACTIVE_DOCUMENT_STATUSES: DocumentStatus[] = ["uploaded", "processing", "processed", "failed"];
 
 export const DEFAULT_DOCUMENT_FILTERS: DocumentsFilters = {
   statuses: [],
@@ -11,6 +12,41 @@ export const DEFAULT_DOCUMENT_FILTERS: DocumentsFilters = {
   tagMode: "any",
   assignees: [],
 };
+
+export function buildDocumentFilterItems(filters: DocumentsFilters): FilterItem[] {
+  const items: FilterItem[] = [];
+
+  if (filters.statuses.length > 0) {
+    items.push({ id: "status", operator: "in", value: filters.statuses });
+  }
+
+  if (filters.fileTypes.length > 0) {
+    const fileTypes = filters.fileTypes.filter((type) => type !== "unknown");
+    if (fileTypes.length > 0) {
+      items.push({ id: "fileType", operator: "in", value: fileTypes });
+    }
+  }
+
+  if (filters.tags.length > 0) {
+    if (filters.tagMode === "all") {
+      filters.tags.forEach((tag) => {
+        items.push({ id: "tags", operator: "eq", value: tag });
+      });
+    } else {
+      items.push({ id: "tags", operator: "in", value: filters.tags });
+    }
+  }
+
+  if (filters.assignees.length > 0) {
+    const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
+    if (assigneeIds.length > 0 || includeUnassigned) {
+      const values = includeUnassigned ? [...assigneeIds, null] : assigneeIds;
+      items.push({ id: "assigneeId", operator: "in", value: values });
+    }
+  }
+
+  return items;
+}
 
 export type BuiltInViewId =
   | "all_documents"
@@ -66,9 +102,9 @@ export function buildFiltersForBuiltInView(id: BuiltInViewId, currentUserKey: st
     case "unassigned":
       return { ...cleared, assignees: [UNASSIGNED_KEY] };
     case "processed":
-      return { ...cleared, statuses: ["ready"] };
+      return { ...cleared, statuses: ["processed"] };
     case "processing":
-      return { ...cleared, statuses: ["queued", "processing"] };
+      return { ...cleared, statuses: ["uploaded", "processing"] };
     case "failed":
       return { ...cleared, statuses: ["failed"] };
     case "archived":

@@ -99,7 +99,7 @@ async def test_tag_catalog_counts_and_excludes_deleted(
     assert replace_two.status_code == 200, replace_two.text
 
     catalog = await async_client.get(
-        f"{workspace_base}/tags",
+        f"{workspace_base}/documents/tags",
         headers=headers,
         params={"sort": "-count"},
     )
@@ -117,7 +117,7 @@ async def test_tag_catalog_counts_and_excludes_deleted(
     assert deleted.status_code == 204, deleted.text
 
     catalog_after = await async_client.get(
-        f"{workspace_base}/tags",
+        f"{workspace_base}/documents/tags",
         headers=headers,
     )
     assert catalog_after.status_code == 200, catalog_after.text
@@ -135,7 +135,7 @@ async def test_tag_catalog_rejects_short_query(
     headers = {"Authorization": f"Bearer {token}"}
 
     response = await async_client.get(
-        f"{workspace_base}/tags",
+        f"{workspace_base}/documents/tags",
         headers=headers,
         params={"q": "a"},
     )

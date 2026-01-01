@@ -18,7 +18,6 @@ from .schemas import (
     EffectivePermissions,
     MeContext,
     MeProfile,
-    MeWorkspacePage,
     MeWorkspaceSummary,
     PermissionCheckRequest,
     PermissionCheckResponse,
@@ -55,21 +54,12 @@ class MeService:
     async def get_context(
         self,
         principal: AuthenticatedPrincipal,
-        *,
-        page: int,
-        page_size: int,
-        include_total: bool = True,
     ) -> MeContext:
         """Return a consolidated bootstrap/context payload for the SPA."""
 
         user, roles, permissions, access = await self._load_principal_state(principal)
 
-        workspaces_page = self._build_workspace_page(
-            access=access,
-            page=page,
-            page_size=page_size,
-            include_total=include_total,
-        )
+        workspaces = self._build_workspace_list(access=access)
 
         profile = self._to_me_profile(
             user=user,
@@ -82,7 +72,7 @@ class MeService:
             user=profile,
             roles=roles,
             permissions=permissions,
-            workspaces=workspaces_page,
+            workspaces=workspaces,
         )
 
     async def get_effective_permissions(
@@ -247,22 +237,15 @@ class MeService:
             default_workspace_id=default_workspace_id,
         )
 
-    def _build_workspace_page(
+    def _build_workspace_list(
         self,
         *,
         access: WorkspaceAccess,
-        page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> MeWorkspacePage:
-        """Build workspace pagination metadata and summaries."""
-
-        total = len(access.workspaces) if include_total else None
-        offset = max(0, (page - 1) * page_size)
-        slice_items = access.workspaces[offset : offset + page_size]
+    ) -> list[MeWorkspaceSummary]:
+        """Build workspace summaries for the bootstrap payload."""
 
         summaries: list[MeWorkspaceSummary] = []
-        for workspace in slice_items:
+        for workspace in access.workspaces:
             membership = access.memberships.get(workspace.id)
             summaries.append(
                 MeWorkspaceSummary(
@@ -276,18 +259,7 @@ class MeService:
                     joined_at=membership.created_at if membership else None,
                 )
             )
-
-        has_previous = page > 1
-        has_next = (offset + len(slice_items)) < len(access.workspaces)
-
-        return MeWorkspacePage(
-            items=summaries,
-            page=page,
-            page_size=page_size,
-            total=total,
-            has_next=has_next,
-            has_previous=has_previous,
-        )
+        return summaries
 
     @staticmethod
     def _to_me_profile(

@@ -10,9 +10,9 @@ import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePi
 import { UploadProgress } from "./UploadProgress";
 
 const STATUS_DOT: Record<string, string> = {
-  queued: "bg-muted-foreground",
+  uploaded: "bg-muted-foreground",
   processing: "bg-warning-500",
-  ready: "bg-success-500",
+  processed: "bg-success-500",
   failed: "bg-danger-500",
   archived: "bg-muted",
 };
@@ -181,7 +181,7 @@ export function DocumentsBoard({
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
                               <p className="text-xs text-muted-foreground">
-                                Updated {formatRelativeTime(now, doc.activity_at ?? doc.updated_at)}
+                                Updated {formatRelativeTime(now, doc.activityAt ?? doc.updatedAt)}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -191,8 +191,8 @@ export function DocumentsBoard({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span className="font-semibold">Assignee: {doc.assignee_label ?? "Unassigned"}</span>
-                            {!doc.assignee_key ? (
+                            <span className="font-semibold">Assignee: {doc.assigneeLabel ?? "Unassigned"}</span>
+                            {!doc.assigneeKey ? (
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -210,7 +210,7 @@ export function DocumentsBoard({
                             >
                               <PeoplePicker
                                 people={people}
-                                value={[doc.assignee_key ?? unassignedKey()]}
+                                value={[doc.assigneeKey ?? unassignedKey()]}
                                 onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
                                 placeholder="Assign..."
                                 includeUnassigned
@@ -220,7 +220,7 @@ export function DocumentsBoard({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span className="font-semibold">{doc.uploader_label ?? "Unassigned"}</span>
+                            <span className="font-semibold">{doc.uploaderLabel ?? "Unassigned"}</span>
                             {doc.tags.length > 0 ? (
                               <span className="rounded-full border border-border bg-background px-2 py-0.5">
                                 {doc.tags[0]}
@@ -229,7 +229,7 @@ export function DocumentsBoard({
                             ) : (
                               <span className="text-muted-foreground">No tags</span>
                             )}
-                            <MappingBadge mapping={doc.mapping_health} />
+                            <MappingBadge mapping={doc.latestResult} />
                           </div>
                           {doc.upload && doc.upload.status !== "succeeded" ? (
                             <div className="pt-1">

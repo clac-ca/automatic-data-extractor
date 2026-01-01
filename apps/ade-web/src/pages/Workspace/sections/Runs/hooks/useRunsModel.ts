@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns, RUNS_PAGE_SIZE } from "@api/runs/api";
+import type { FilterItem } from "@api/listing";
 import { runsKeys } from "@hooks/runs/keys";
 import { buildCounts, buildCreatedAtRange, buildRunRecord } from "../utils";
 import type { RunConfigOption, RunsFilters } from "../types";
@@ -13,17 +14,26 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const query = useMemo(() => {
-    const dateRange = buildCreatedAtRange(filters.dateRange);
+    const items: FilterItem[] = [];
     const trimmedSearch = filters.search.trim();
+    const dateRange = buildCreatedAtRange(filters.dateRange);
+
+    if (filters.status !== "all") {
+      items.push({ id: "status", operator: "eq", value: filters.status });
+    }
+    if (filters.configurationId) {
+      items.push({ id: "configurationId", operator: "eq", value: filters.configurationId });
+    }
+    if (dateRange) {
+      items.push({ id: "createdAt", operator: "between", value: dateRange });
+    }
+
     return {
       page: 1,
-      page_size: RUNS_PAGE_SIZE,
-      include_total: true,
+      perPage: RUNS_PAGE_SIZE,
+      sort: "-createdAt",
       q: trimmedSearch.length >= 2 ? trimmedSearch : undefined,
-      status: filters.status !== "all" ? filters.status : undefined,
-      configuration_id: filters.configurationId ?? undefined,
-      sort: "-created_at",
-      ...dateRange,
+      filters: items.length > 0 ? items : undefined,
     };
   }, [filters.configurationId, filters.dateRange, filters.search, filters.status]);
 

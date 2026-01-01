@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 
+from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.models import Document
 from ade_api.settings import Settings
@@ -35,12 +36,14 @@ async def test_delete_document_marks_deleted(
         headers=headers,
         files={"file": ("delete.txt", b"temporary", "text/plain")},
     )
-    document_id = upload.json()["id"]
+    payload = upload.json()
+    document_id = payload["id"]
+    etag = format_weak_etag(build_etag_token(document_id, payload["updatedAt"]))
 
     delete_response = await async_client.request(
         "DELETE",
         f"{workspace_base}/documents/{document_id}",
-        headers=headers,
+        headers={**headers, "If-Match": etag or ""},
     )
     assert delete_response.status_code == 204, delete_response.text
 

@@ -134,8 +134,8 @@ describe("createRun", () => {
       configuration_id: "config-123",
     });
 
-    expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspace_id}/runs", {
-      params: { path: { workspace_id: "workspace-123" } },
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs", {
+      params: { path: { workspaceId: "workspace-123" } },
       body: {
         input_document_id: "doc-123",
         configuration_id: "config-123",

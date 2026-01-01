@@ -9,9 +9,9 @@ import { PeoplePicker } from "./PeoplePicker";
 import { TagPicker } from "./TagPicker";
 
 const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
-  { value: "queued", label: "Queued" },
+  { value: "uploaded", label: "Uploaded" },
   { value: "processing", label: "Processing" },
-  { value: "ready", label: "Processed" },
+  { value: "processed", label: "Processed" },
   { value: "failed", label: "Failed" },
   { value: "archived", label: "Archived" },
 ];

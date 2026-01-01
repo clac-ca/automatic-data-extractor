@@ -153,7 +153,7 @@ Each workspace is represented by a card that includes:
 - Name.
 - Slug or human‑friendly short ID.
 - Optional **environment label** (e.g. Production, Staging).
-- Optional indication that this is the user’s **default workspace** plus a “Set as default” action on non‑default cards (calls `PUT /api/v1/workspaces/{workspace_id}/default`).
+- Optional indication that this is the user’s **default workspace** plus a “Set as default” action on non‑default cards (calls `PUT /api/v1/workspaces/{workspaceId}/default`).
 - Compact summary of the user’s roles/permissions (e.g. “Owner”, “Editor”).
 
 Clicking a card:

@@ -8,9 +8,12 @@ export function MappingBadge({
   mapping,
   showPending = false,
 }: {
-  mapping: MappingHealth;
+  mapping: MappingHealth | null | undefined;
   showPending?: boolean;
 }) {
+  if (!mapping) {
+    return null;
+  }
   const isPendingOnly = Boolean(mapping.pending && mapping.attention === 0 && mapping.unmapped === 0);
 
   // Pending mapping is usually not actionable; keep it quiet unless explicitly requested.

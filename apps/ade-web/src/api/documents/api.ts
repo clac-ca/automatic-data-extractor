@@ -1,27 +1,24 @@
 import { client } from "@api/client";
-import type { components, paths } from "@schema";
+import type { FilterItem, FilterJoinOperator } from "@api/listing";
+import { encodeFilters } from "@api/listing";
+import type { components } from "@schema";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"];
 export type DocumentListRow = components["schemas"]["DocumentListRow"];
 export type DocumentListPage = components["schemas"]["DocumentListPage"];
 export type DocumentPageResult = DocumentListPage & { changesCursorHeader?: string | null };
-export type DocumentStatus = components["schemas"]["DocumentDisplayStatus"];
+export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
 
-type BaseListDocumentsQuery = NonNullable<
-  paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"]
->;
-
-export type ListDocumentsQuery = BaseListDocumentsQuery & {
-  q?: string;
-  display_status?: DocumentStatus[];
-  file_type?: FileType[];
-  tags?: string[];
-  tag_mode?: TagMode;
-  assignee_user_id?: string[];
-  assignee_unassigned?: boolean;
+export type ListDocumentsQuery = {
+  page: number;
+  perPage: number;
+  sort?: string | null;
+  filters?: FilterItem[];
+  joinOperator?: FilterJoinOperator;
+  q?: string | null;
 };
 
 const DEFAULT_DOCUMENTS_PAGE_SIZE = 50;
@@ -32,9 +29,9 @@ export async function fetchDocumentSheets(
   signal?: AbortSignal,
 ): Promise<DocumentSheet[]> {
   const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets",
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/sheets",
     {
-      params: { path: { workspace_id: workspaceId, document_id: documentId } },
+      params: { path: { workspaceId, documentId } },
       signal,
     },
   );
@@ -47,21 +44,24 @@ export async function fetchWorkspaceDocuments(
   options: {
     sort: string | null;
     page: number;
-    pageSize: number;
-    query?: Partial<ListDocumentsQuery>;
+    perPage: number;
+    filters?: FilterItem[];
+    joinOperator?: FilterJoinOperator;
+    q?: string | null;
   },
   signal?: AbortSignal,
 ): Promise<DocumentPageResult> {
-  const query: ListDocumentsQuery = {
+  const query = {
     sort: options.sort ?? undefined,
     page: options.page > 0 ? options.page : 1,
-    page_size: options.pageSize > 0 ? options.pageSize : DEFAULT_DOCUMENTS_PAGE_SIZE,
-    include_total: false,
-    ...(options.query ?? {}),
+    perPage: options.perPage > 0 ? options.perPage : DEFAULT_DOCUMENTS_PAGE_SIZE,
+    q: options.q ?? undefined,
+    filters: encodeFilters(options.filters),
+    joinOperator: options.joinOperator,
   };
 
-  const { data, response } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
-    params: { path: { workspace_id: workspaceId }, query },
+  const { data, response } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
+    params: { path: { workspaceId }, query },
     signal,
   });
 
@@ -78,8 +78,8 @@ export async function fetchWorkspaceDocumentById(
   documentId: string,
   signal?: AbortSignal,
 ): Promise<DocumentRecord> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
-    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
+    params: { path: { workspaceId, documentId } },
     signal,
   });
   if (!data) throw new Error("Expected document payload.");
@@ -91,8 +91,8 @@ export async function fetchWorkspaceDocumentRowById(
   documentId: string,
   signal?: AbortSignal,
 ): Promise<DocumentListRow> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents/{document_id}/listRow", {
-    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/{documentId}/listrow", {
+    params: { path: { workspaceId, documentId } },
     signal,
   });
   if (!data) throw new Error("Expected document list row payload.");
@@ -103,6 +103,7 @@ export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
   payload: { assigneeUserId?: string | null; metadata?: Record<string, unknown> | null },
+  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body: {
     assignee_user_id?: string | null;
@@ -115,24 +116,30 @@ export async function patchWorkspaceDocument(
     body.metadata = payload.metadata ?? null;
   }
 
-  const { data } = await client.PATCH("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
-    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  const { data } = await client.PATCH("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
+    params: { path: { workspaceId, documentId } },
     body,
+    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 
   if (!data) throw new Error("Expected updated document record.");
   return data;
 }
 
-export async function deleteWorkspaceDocument(workspaceId: string, documentId: string): Promise<void> {
-  await client.DELETE("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
-    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+export async function deleteWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+  options: { ifMatch?: string | null } = {},
+): Promise<void> {
+  await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
+    params: { path: { workspaceId, documentId } },
+    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 }
 
 export async function deleteWorkspaceDocumentsBatch(workspaceId: string, documentIds: string[]): Promise<string[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/delete", {
-    params: { path: { workspace_id: workspaceId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/delete", {
+    params: { path: { workspaceId } },
     body: { document_ids: documentIds },
   });
 
@@ -141,8 +148,8 @@ export async function deleteWorkspaceDocumentsBatch(workspaceId: string, documen
 }
 
 export async function archiveWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/{document_id}/archive", {
-    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
+    params: { path: { workspaceId, documentId } },
   });
 
   if (!data) throw new Error("Expected updated document record.");
@@ -150,8 +157,8 @@ export async function archiveWorkspaceDocument(workspaceId: string, documentId: 
 }
 
 export async function restoreWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore", {
-    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
+    params: { path: { workspaceId, documentId } },
   });
 
   if (!data) throw new Error("Expected updated document record.");
@@ -162,8 +169,8 @@ export async function archiveWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
 ): Promise<DocumentRecord[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/archive", {
-    params: { path: { workspace_id: workspaceId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
+    params: { path: { workspaceId } },
     body: { document_ids: documentIds },
   });
 
@@ -175,8 +182,8 @@ export async function restoreWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
 ): Promise<DocumentRecord[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/restore", {
-    params: { path: { workspace_id: workspaceId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
+    params: { path: { workspaceId } },
     body: { document_ids: documentIds },
   });
 

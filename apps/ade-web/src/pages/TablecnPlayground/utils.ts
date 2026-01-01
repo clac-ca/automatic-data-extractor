@@ -1,3 +1,4 @@
+import { encodeFilters, type FilterItem } from "@api/listing";
 import { getValidFilters } from "@components/tablecn/lib/data-table";
 import { parseFiltersState } from "@components/tablecn/lib/parsers";
 
@@ -25,7 +26,86 @@ const FILTER_OPERATOR_MAP: Record<string, string> = {
   isBetween: "between",
 };
 
-function normalizeSortParam(value: string | null) {
+const RELATIVE_RANGE_PATTERN = /^(-?\d+)\s*(days|weeks|months)$/i;
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function addDays(date: Date, amount: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function rangeForTimestamp(value: number): [string, string] | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const start = startOfDay(date);
+  const end = endOfDay(date);
+  return [String(start.getTime()), String(end.getTime())];
+}
+
+function resolveRelativeDateRange(value: unknown): [string, string] | null {
+  if (Array.isArray(value)) {
+    return resolveRelativeDateRange(value[0]);
+  }
+
+  if (typeof value === "number") {
+    return rangeForTimestamp(value);
+  }
+
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(RELATIVE_RANGE_PATTERN);
+  if (match) {
+    const amount = Number.parseInt(match[1] ?? "", 10);
+    const unit = match[2];
+    if (Number.isNaN(amount) || !unit) return null;
+
+    const today = new Date();
+    let startDate: Date;
+    let endDate: Date;
+
+    switch (unit) {
+      case "days":
+        startDate = startOfDay(addDays(today, amount));
+        endDate = endOfDay(startDate);
+        break;
+      case "weeks":
+        startDate = startOfDay(addDays(today, amount * 7));
+        endDate = endOfDay(addDays(startDate, 6));
+        break;
+      case "months":
+        startDate = startOfDay(addDays(today, amount * 30));
+        endDate = endOfDay(addDays(startDate, 29));
+        break;
+      default:
+        return null;
+    }
+
+    return [String(startDate.getTime()), String(endDate.getTime())];
+  }
+
+  const timestamp = Number(trimmed);
+  if (!Number.isNaN(timestamp)) {
+    return rangeForTimestamp(timestamp);
+  }
+
+  return null;
+}
+
+export function normalizeDocumentsSort(value: string | null) {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -51,25 +131,40 @@ function normalizeSortParam(value: string | null) {
   return trimmed;
 }
 
-function normalizeFiltersParam(value: string | null) {
-  if (!value) return null;
+export function normalizeDocumentsFilters(value: string | null): FilterItem[] {
+  if (!value) return [];
 
   const parsed = parseFiltersState(value);
-  if (parsed.length === 0) return null;
+  if (parsed.length === 0) return [];
 
-  const normalized = getValidFilters(parsed).map((filter) => {
-    const mappedOperator =
-      FILTER_OPERATOR_MAP[filter.operator] ?? filter.operator;
-    const next: Record<string, unknown> = {
-      ...filter,
-      operator: mappedOperator,
-    };
-    return next;
-  });
+  const normalized = getValidFilters(parsed)
+    .map((filter) => {
+      if (filter.operator === "isRelativeToToday") {
+        const range = resolveRelativeDateRange(filter.value);
+        if (!range) return null;
+        return {
+          id: filter.id,
+          operator: "between",
+          value: range,
+        } satisfies FilterItem;
+      }
 
-  if (normalized.length === 0) return null;
+      const mappedOperator =
+        FILTER_OPERATOR_MAP[filter.operator] ?? filter.operator;
+      const base: FilterItem = {
+        id: filter.id,
+        operator: mappedOperator as FilterItem["operator"],
+      };
+      if (mappedOperator !== "isEmpty" && mappedOperator !== "isNotEmpty") {
+        base.value = filter.value;
+      }
+      return {
+        ...base,
+      } satisfies FilterItem;
+    })
+    .filter((value): value is FilterItem => Boolean(value));
 
-  return JSON.stringify(normalized);
+  return normalized;
 }
 
 export function buildDocumentsListQuery(params: DocumentsListParams) {
@@ -77,14 +172,15 @@ export function buildDocumentsListQuery(params: DocumentsListParams) {
   query.set("page", String(params.page));
   query.set("perPage", String(params.perPage));
 
-  const sort = normalizeSortParam(params.sort);
+  const sort = normalizeDocumentsSort(params.sort);
   if (sort) {
     query.set("sort", sort);
   }
 
-  const filters = normalizeFiltersParam(params.filters);
-  if (filters) {
-    query.set("filters", filters);
+  const filters = normalizeDocumentsFilters(params.filters);
+  const encodedFilters = encodeFilters(filters);
+  if (encodedFilters) {
+    query.set("filters", encodedFilters);
   }
 
   if (params.joinOperator) {

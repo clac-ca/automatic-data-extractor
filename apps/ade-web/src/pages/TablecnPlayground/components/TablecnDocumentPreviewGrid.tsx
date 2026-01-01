@@ -7,6 +7,7 @@ import { useDataGrid } from "@components/tablecn/hooks/use-data-grid";
 import { apiFetch } from "@api/client";
 import { ApiError } from "@api/errors";
 import { Button } from "@components/ui/button";
+import { columnLabel } from "@pages/Workspace/sections/Documents/utils";
 
 import type { DocumentListRow } from "../types";
 import type { WorkbookPreview, WorkbookSheet } from "@pages/Workspace/sections/Documents/types";
@@ -76,7 +77,7 @@ export function TablecnDocumentPreviewGrid({
     if (!sheet) return [];
     return sheet.headers.map((header, index) => {
       const id = columnIds[index] ?? `col_${index}`;
-      const label = header?.trim() || `Column ${index + 1}`;
+      const label = header?.trim() || columnLabel(index);
       return {
         id,
         accessorKey: id,

@@ -30,7 +30,8 @@ export function useUsersQuery(options: UseUsersQueryOptions = {}) {
         search: effectiveSearch || undefined,
         signal,
       })),
-    getNextPageParam: (lastPage) => (lastPage.has_next ? lastPage.page + 1 : undefined),
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
     enabled,
     staleTime: 60_000,
   });

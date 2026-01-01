@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from httpx import AsyncClient
 
@@ -27,8 +29,10 @@ async def test_list_documents_unknown_param_returns_422(
 
     assert response.status_code == 422
     payload = response.json()
-    assert payload["detail"][0]["loc"] == ["query", "unexpected"]
-    assert payload["detail"][0]["type"] == "extra_forbidden"
+    assert payload["type"] == "validation_error"
+    errors = payload.get("errors") or []
+    assert errors[0]["path"] == "unexpected"
+    assert errors[0]["code"] == "extra_forbidden"
 
 
 async def test_list_documents_invalid_filter_returns_422(
@@ -43,12 +47,17 @@ async def test_list_documents_invalid_filter_returns_422(
     response = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"status": "bogus"},
+        params={
+            "filters": json.dumps(
+                [{"id": "status", "operator": "eq", "value": "bogus"}]
+            )
+        },
     )
 
     assert response.status_code == 422
     payload = response.json()
-    assert payload["detail"] == "Invalid display status value"
+    assert payload["type"] == "validation_error"
+    assert payload["detail"] == "Filter 'status' expects a supported enum value"
 
 
 async def test_list_documents_uploader_me_filters(
@@ -90,7 +99,11 @@ async def test_list_documents_uploader_me_filters(
     listing = await async_client.get(
         f"{workspace_base}/documents",
         headers=member_headers,
-        params={"uploader": "me"},
+        params={
+            "filters": json.dumps(
+                [{"id": "uploaderId", "operator": "eq", "value": str(member.id)}]
+            )
+        },
     )
 
     assert listing.status_code == 200, listing.text

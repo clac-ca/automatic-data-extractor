@@ -162,7 +162,7 @@ Build orchestration now mirrors the runs contract with dedicated build resources
 ### Create or rebuild (supports streaming)
 
 ```
-POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
+POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds
 ```
 
 Body:
@@ -183,15 +183,15 @@ Body:
 ### List build history
 
 ```
-GET /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds?status=failed&limit=20
+GET /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds?perPage=20&filters=[{"id":"status","operator":"eq","value":"failed"}]
 ```
 
-Returns a paged collection of builds (newest first). Filters support repeated `status` values. Pagination uses `page`, `page_size` (or `limit` alias), and `include_total`.
+Returns a paged collection of builds (newest first). Filtering uses the canonical DSL (`filters`, `joinOperator`, `q`) and pagination uses `page` + `perPage`.
 
 ### Get build status
 
 ```
-GET /api/v1/builds/{build_id}
+GET /api/v1/builds/{buildId}
 ```
 
 Returns the persisted `Build` resource including timestamps, status, and exit metadata.
@@ -201,12 +201,12 @@ Returns the persisted `Build` resource including timestamps, status, and exit me
 Build activity is part of the run stream. After creating a run, attach to:
 
 ```
-GET /api/v1/runs/{run_id}/events/stream?after_sequence=<cursor>
+GET /api/v1/runs/{runId}/events/stream?after_sequence=<cursor>
 ```
 
 This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `id:` counter per event (build lifecycle + `console.line scope=build` + subsequent run events). Use `after_sequence` or `Last-Event-ID` to resume; the cursor maps to the SSE `id` field.
 
-> **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configuration_id}/runs`. The server resolves the workspace, ensures the build, and records `build_id` at submit time.
+> **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configurationId}/runs`. The server resolves the workspace, ensures the build, and records `build_id` at submit time.
 
 ---
 
@@ -235,7 +235,7 @@ This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `
 
 ## Backend Architecture (Essentials)
 
-* **Router** — `POST /workspaces/{workspace_id}/configurations/{configuration_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
+* **Router** — `POST /workspaces/{workspaceId}/configurations/{configurationId}/builds` plus status/log polling endpoints under `/builds/{buildId}`.
 * **Service (`ensure_build_for_run`)** — computes the fingerprint, applies force rules, **get‑or‑creates by `(configuration_id, fingerprint)`**, and claims a build via status transitions before running the builder.
 * **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<configuration>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
 * **Runs** — resolve the build via fingerprint, then run the worker using the build‑scoped `venv_path`. Each run row stores the `build_id`.

@@ -11,9 +11,9 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.engine import URL, Connection, Engine, make_url
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -333,6 +333,19 @@ async def ensure_database_ready(settings: Settings | None = None) -> None:
         _BOOTSTRAPPED_URLS.add(bootstrap_key)
 
 
+async def check_database_ready(settings: Settings | None = None) -> None:
+    """Verify database connectivity without running migrations."""
+
+    resolved = settings or get_settings()
+    engine = get_engine(resolved)
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        logger.warning("database.readiness.failed", exc_info=exc)
+        raise
+
+
 def reset_bootstrap_state() -> None:
     """Clear cached bootstrap results (useful for tests)."""
 
@@ -360,6 +373,7 @@ def render_sync_url(database: Settings | str) -> str:
 __all__ = [
     "attach_managed_identity",
     "build_database_url",
+    "check_database_ready",
     "engine_cache_key",
     "ensure_database_ready",
     "ensure_sqlite_database_directory",

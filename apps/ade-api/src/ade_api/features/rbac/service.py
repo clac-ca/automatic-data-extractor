@@ -13,7 +13,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.common.pagination import Page, paginate_sequence, paginate_sql
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import paginate_query, paginate_sequence
+from ade_api.common.sorting import sort_sequence
 from ade_api.core.rbac.policy import GLOBAL_IMPLICATIONS, WORKSPACE_IMPLICATIONS
 from ade_api.core.rbac.registry import (
     PERMISSION_REGISTRY,
@@ -21,16 +23,27 @@ from ade_api.core.rbac.registry import (
     SYSTEM_ROLE_BY_SLUG,
     SYSTEM_ROLES,
     PermissionDef,
-    SystemRoleDef,
+    role_allows_scope,
 )
 from ade_api.core.rbac.types import ScopeType
-from ade_api.models import (
-    Permission,
-    Role,
-    RolePermission,
-    User,
-    UserRoleAssignment,
-    Workspace,
+from ade_api.models import Permission, Role, RolePermission, User, UserRoleAssignment, Workspace
+
+from .filters import (
+    apply_assignment_filters,
+    apply_permission_filters,
+    evaluate_role_filters,
+    parse_role_filters,
+)
+from .sorting import (
+    ASSIGNMENT_DEFAULT_SORT,
+    ASSIGNMENT_ID_FIELD,
+    ASSIGNMENT_SORT_FIELDS,
+    PERMISSION_DEFAULT_SORT,
+    PERMISSION_ID_FIELD,
+    PERMISSION_SORT_FIELDS,
+    ROLE_DEFAULT_SORT,
+    ROLE_SORT_FIELDS,
+    role_id_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,15 +182,6 @@ def _expand_implications(keys: frozenset[str], *, scope: ScopeType) -> frozenset
         expanded.add("workspace.read")
 
     return frozenset(expanded)
-
-
-def _role_allows_scope(role: Role, scope: ScopeType) -> bool:
-    """Return True if role is allowed to be used in the given scope."""
-    definition: SystemRoleDef | None = SYSTEM_ROLE_BY_SLUG.get(role.slug)
-    if definition is None:
-        # Custom roles are allowed in any scope
-        return True
-    return scope in definition.allowed_scopes
 
 
 def _role_permissions(role: Role) -> tuple[str, ...]:
@@ -321,38 +325,76 @@ class RbacService:
 
     # ------------- permission listing ------------
 
-    async def list_permissions(self, *, scope: ScopeType) -> list[Permission]:
-        stmt = select(Permission).where(Permission.scope_type == scope).order_by(Permission.key)
-        result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+    async def list_permissions(
+        self,
+        *,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by,
+        page: int,
+        per_page: int,
+    ):
+        stmt = select(Permission)
+        stmt = apply_permission_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
+        return await paginate_query(
+            self._session,
+            stmt,
+            page=page,
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
+        )
 
     # ------------- role CRUD ---------------------
 
-    async def list_roles_for_scope(
+    async def list_roles(
         self,
         *,
-        scope: ScopeType,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        sort: list[str],
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[Role]:
+        per_page: int,
+    ):
         stmt: Select[Role] = (
             select(Role)
             .options(
                 selectinload(Role.permissions).selectinload(RolePermission.permission),
             )
-            .order_by(Role.slug)
         )
         result = await self._session.execute(stmt)
         roles = list(result.scalars().all())
-        filtered = [role for role in roles if _role_allows_scope(role, scope)]
-        page_result = paginate_sequence(
+        parsed_filters = parse_role_filters(filters)
+        filtered = [
+            role
+            for role in roles
+            if evaluate_role_filters(
+                role,
+                parsed_filters,
+                join_operator=join_operator,
+                q=q,
+            )
+        ]
+        ordered = sort_sequence(
             filtered,
-            page=page,
-            page_size=page_size,
-            include_total=include_total,
+            sort,
+            allowed=ROLE_SORT_FIELDS,
+            default=ROLE_DEFAULT_SORT,
+            id_key=role_id_key,
         )
-        return page_result
+        return paginate_sequence(
+            ordered,
+            page=page,
+            per_page=per_page,
+            changes_cursor="0",
+        )
 
     async def get_role(self, role_id: UUID) -> Role | None:
         stmt = (
@@ -518,14 +560,14 @@ class RbacService:
     async def list_assignments(
         self,
         *,
-        workspace_id: UUID | None,
-        user_id: UUID | None,
-        role_id: UUID | None,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by,
         page: int,
-        page_size: int,
-        include_total: bool,
-        include_inactive: bool = False,
-    ) -> Page[UserRoleAssignment]:
+        per_page: int,
+        default_active_only: bool = True,
+    ):
         stmt: Select[UserRoleAssignment] = (
             select(UserRoleAssignment)
             .options(
@@ -534,23 +576,22 @@ class RbacService:
                 .selectinload(Role.permissions)
                 .selectinload(RolePermission.permission),
             )
-            .where(_assignment_scope_filter(workspace_id))
+        )
+        stmt = apply_assignment_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+            default_active_only=default_active_only,
         )
 
-        if user_id:
-            stmt = stmt.where(UserRoleAssignment.user_id == user_id)
-        if role_id:
-            stmt = stmt.where(UserRoleAssignment.role_id == role_id)
-        if not include_inactive:
-            stmt = stmt.join(User, UserRoleAssignment.user).where(User.is_active == true())
-
-        return await paginate_sql(
+        return await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
-            order_by=(UserRoleAssignment.created_at.desc(),),
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
         )
 
     async def get_assignment(self, *, assignment_id: UUID) -> UserRoleAssignment | None:
@@ -597,7 +638,7 @@ class RbacService:
         role = await self.get_role(role_id)
         if role is None:
             raise RoleNotFoundError("Role not found")
-        if not _role_allows_scope(role, scope_type):
+        if not role_allows_scope(role.slug, scope_type):
             raise ScopeMismatchError("Role cannot be assigned to this scope")
 
         user = await self._session.get(User, user_id)

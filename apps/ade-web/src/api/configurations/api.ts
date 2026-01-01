@@ -1,5 +1,5 @@
 import { apiFetch, client } from "@api/client";
-
+import type { ListQueryParams } from "@api/listing";
 import { ApiError } from "@api";
 
 import type {
@@ -14,20 +14,20 @@ import type {
 } from "@schema/configurations";
 import type { paths } from "@schema";
 
-type ListConfigurationsQuery = paths["/api/v1/workspaces/{workspace_id}/configurations"]["get"]["parameters"]["query"];
+type ListConfigurationsQuery = ListQueryParams;
 type DeleteDirectoryQuery =
-  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}"]["delete"]["parameters"]["query"];
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];
 type ImportConfigurationBody =
-  paths["/api/v1/workspaces/{workspace_id}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
+  paths["/api/v1/workspaces/{workspaceId}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
 type ReplaceConfigurationBody =
-  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
 type UpsertConfigurationFileQuery =
-  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}"]["put"]["parameters"]["query"];
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}"]["put"]["parameters"]["query"];
 
 export interface ListConfigurationsOptions {
   readonly page?: number;
   readonly pageSize?: number;
-  readonly includeTotal?: boolean;
+  readonly sort?: string;
   readonly signal?: AbortSignal;
 }
 
@@ -35,22 +35,22 @@ export async function listConfigurations(
   workspaceId: string,
   options: ListConfigurationsOptions = {},
 ): Promise<ConfigurationPage> {
-  const { signal, page, pageSize, includeTotal } = options;
+  const { signal, page, pageSize, sort } = options;
   const query: ListConfigurationsQuery = {};
 
   if (typeof page === "number" && page > 0) {
     query.page = page;
   }
   if (typeof pageSize === "number" && pageSize > 0) {
-    query.page_size = pageSize;
+    query.perPage = pageSize;
   }
-  if (includeTotal) {
-    query.include_total = true;
+  if (sort) {
+    query.sort = sort;
   }
 
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/configurations", {
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/configurations", {
     params: {
-      path: { workspace_id: workspaceId },
+      path: { workspaceId },
       query,
     },
     signal,
@@ -69,9 +69,9 @@ export async function readConfiguration(
   signal?: AbortSignal,
 ): Promise<ConfigurationRecord | null> {
   const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}",
     {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      params: { path: { workspaceId, configurationId: configId } },
       signal,
     },
   );
@@ -83,9 +83,9 @@ export async function validateConfiguration(
   configId: string,
 ): Promise<ConfigurationValidateResponse> {
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/validate",
     {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      params: { path: { workspaceId, configurationId: configId } },
     },
   );
   if (!data) {
@@ -96,9 +96,9 @@ export async function validateConfiguration(
 
 export async function makeActiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/publish",
     {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      params: { path: { workspaceId, configurationId: configId } },
       body: null,
     },
   );
@@ -110,9 +110,9 @@ export async function makeActiveConfiguration(workspaceId: string, configId: str
 
 export async function archiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive",
     {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      params: { path: { workspaceId, configurationId: configId } },
     },
   );
   if (!data) {
@@ -127,7 +127,7 @@ export interface ListConfigurationFilesOptions {
   readonly include?: readonly string[];
   readonly exclude?: readonly string[];
   readonly limit?: number;
-  readonly pageToken?: string | null;
+  readonly cursor?: string | null;
   readonly sort?: "path" | "name" | "mtime" | "size";
   readonly order?: "asc" | "desc";
   readonly signal?: AbortSignal;
@@ -138,19 +138,19 @@ export async function listConfigurationFiles(
   configId: string,
   options: ListConfigurationFilesOptions = {},
 ): Promise<FileListing> {
-  const { prefix, depth, include, exclude, limit, pageToken, sort, order, signal } = options;
+  const { prefix, depth, include, exclude, limit, cursor, sort, order, signal } = options;
   const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files",
     {
       params: {
-        path: { workspace_id: workspaceId, configuration_id: configId },
+        path: { workspaceId, configurationId: configId },
         query: {
           prefix: prefix ?? "",
           depth: depth ?? "infinity",
           include: include?.length ? [...include] : undefined,
           exclude: exclude?.length ? [...exclude] : undefined,
           limit,
-          page_token: pageToken ?? undefined,
+          cursor: cursor ?? undefined,
           sort,
           order,
         },
@@ -172,10 +172,10 @@ export async function readConfigurationFileJson(
   signal?: AbortSignal,
 ): Promise<FileReadJson> {
   const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}",
     {
       params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, file_path: filePath },
+        path: { workspaceId, configurationId: configId, filePath },
       },
       headers: {
         Accept: "application/json",
@@ -200,9 +200,9 @@ export async function exportConfiguration(
   configId: string,
 ): Promise<ExportConfigurationResult> {
   const { data, response } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/export",
     {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      params: { path: { workspaceId, configurationId: configId } },
       parseAs: "blob",
     },
   );
@@ -282,10 +282,10 @@ export async function renameConfigurationFile(
   payload: RenameConfigurationFilePayload,
 ): Promise<FileRenameResponse> {
   const { data } = await client.PATCH(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}",
     {
       params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, file_path: payload.fromPath },
+        path: { workspaceId, configurationId: configId, filePath: payload.fromPath },
       },
       body: {
         op: "move",
@@ -307,9 +307,9 @@ export async function deleteConfigurationFile(
   filePath: string,
   options: { etag?: string | null } = {},
 ): Promise<void> {
-  await client.DELETE("/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}", {
+  await client.DELETE("/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}", {
     params: {
-      path: { workspace_id: workspaceId, configuration_id: configId, file_path: filePath },
+      path: { workspaceId, configurationId: configId, filePath },
     },
     headers: options.etag ? { "If-Match": options.etag } : undefined,
   });
@@ -321,13 +321,13 @@ export async function createConfigurationDirectory(
   directoryPath: string,
 ): Promise<DirectoryWriteResponse> {
   const { data } = await client.PUT(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}",
     {
       params: {
         path: {
-          workspace_id: workspaceId,
-          configuration_id: configId,
-          directory_path: directoryPath,
+          workspaceId,
+          configurationId: configId,
+          directoryPath,
         },
       },
     },
@@ -349,13 +349,13 @@ export async function deleteConfigurationDirectory(
     query.recursive = true;
   }
   await client.DELETE(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}",
     {
       params: {
         path: {
-          workspace_id: workspaceId,
-          configuration_id: configId,
-          directory_path: directoryPath,
+          workspaceId,
+          configurationId: configId,
+          directoryPath,
         },
         query,
       },
@@ -376,8 +376,8 @@ export async function importConfiguration(
   formData.append("display_name", payload.displayName);
   formData.append("file", payload.file);
 
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/configurations/import", {
-    params: { path: { workspace_id: workspaceId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations/import", {
+    params: { path: { workspaceId } },
     body: formData as unknown as ImportConfigurationBody,
     bodySerializer: () => formData,
   });
@@ -401,9 +401,9 @@ export async function replaceConfigurationFromArchive(
   formData.append("file", payload.file);
 
   const { data } = await client.PUT(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import",
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import",
     {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      params: { path: { workspaceId, configurationId: configId } },
       headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
       body: formData as unknown as ReplaceConfigurationBody,
       bodySerializer: () => formData,
@@ -440,18 +440,15 @@ export async function createConfiguration(
   workspaceId: string,
   payload: CreateConfigurationPayload,
 ): Promise<ConfigurationRecord> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations",
-    {
-      params: {
-        path: { workspace_id: workspaceId },
-      },
-      body: {
-        display_name: payload.displayName.trim(),
-        source: serializeConfigurationSource(payload.source),
-      },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations", {
+    params: {
+      path: { workspaceId },
     },
-  );
+    body: {
+      display_name: payload.displayName.trim(),
+      source: serializeConfigurationSource(payload.source),
+    },
+  });
   if (!data) {
     throw new Error("Expected configuration payload.");
   }

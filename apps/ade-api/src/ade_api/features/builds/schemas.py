@@ -5,14 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AliasChoices, ConfigDict, Field, conint
+from pydantic import ConfigDict, Field
 
 from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
-from ade_api.common.pagination import Page, PageParams
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import BuildStatus
-from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 BuildObjectType = Literal["ade.build"]
 BuildEventObjectType = Literal["ade.build.event"]
@@ -23,8 +22,6 @@ __all__ = [
     "BuildLinks",
     "BuildEventsPage",
     "BuildEvent",
-    "BuildFilters",
-    "BuildListParams",
     "BuildPage",
     "BuildResource",
 ]
@@ -83,27 +80,7 @@ class BuildLinks(BaseSchema):
     events_stream: str
 
 
-class BuildFilters(BaseSchema):
-    """Query parameters for filtering build listings."""
-
-    status: list[BuildStatus] | None = Field(
-        default=None,
-        description="Optional build statuses to include (filters out others).",
-    )
-
-
-class BuildListParams(PageParams):
-    """Pagination parameters for build listings with limit alias."""
-
-    page_size: conint(ge=1, le=MAX_PAGE_SIZE) = Field(  # type: ignore[assignment]
-        DEFAULT_PAGE_SIZE,
-        description=f"Items per page (alias: limit, max {MAX_PAGE_SIZE})",
-        validation_alias=AliasChoices("page_size", "limit"),
-        serialization_alias="limit",
-    )
-
-
-class BuildPage(Page[BuildResource]):
+class BuildPage(ListPage[BuildResource]):
     """Paginated collection of ``BuildResource`` items."""
 
     items: list[BuildResource]

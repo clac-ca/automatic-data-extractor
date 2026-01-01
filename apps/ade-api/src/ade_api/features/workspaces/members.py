@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, Response, Security, status
+from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 from fastapi import Path as PathParam
 
 from ade_api.api.deps import get_workspaces_service
-from ade_api.common.pagination import PageParams
+from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.models import User
 
@@ -20,7 +20,7 @@ from .schemas import (
 from .service import WorkspacesService
 
 router = APIRouter(
-    prefix="/workspaces/{workspace_id}/members",
+    prefix="/workspaces/{workspaceId}/members",
     tags=["workspaces"],
     dependencies=[Security(require_authenticated)],
 )
@@ -28,6 +28,18 @@ workspaces_service_dependency = Depends(get_workspaces_service)
 
 WORKSPACE_MEMBER_CREATE_BODY = Body(...)
 WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
+
+WorkspacePath = Annotated[
+    UUID,
+    Path(
+        description="Workspace identifier",
+        alias="workspaceId",
+    ),
+]
+UserPath = Annotated[
+    UUID,
+    PathParam(description="User identifier", alias="userId"),
+]
 
 
 @router.get(
@@ -37,41 +49,26 @@ WORKSPACE_MEMBER_UPDATE_BODY = Body(...)
     summary="List workspace members with their roles",
 )
 async def list_workspace_members(
-    workspace_id: Annotated[
-        UUID,
-        PathParam(
-            description="Workspace identifier",
-        ),
-    ],
-    page: Annotated[PageParams, Depends()],
+    workspace_id: WorkspacePath,
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.members.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
-    user_id: Annotated[
-        UUID | None,
-        Query(
-            description="Optional filter by user id",
-        ),
-    ] = None,
-    include_inactive: Annotated[
-        bool,
-        Query(
-            description="Include inactive users in the response.",
-        ),
-    ] = False,
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspaceMemberPage:
     return await service.list_workspace_members(
         workspace_id=workspace_id,
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
-        user_id=user_id,
-        include_inactive=include_inactive,
+        sort=list_query.sort,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
+        page=list_query.page,
+        per_page=list_query.per_page,
     )
 
 
@@ -83,15 +80,12 @@ async def list_workspace_members(
     summary="Add a workspace member with roles",
 )
 async def add_workspace_member(
-    workspace_id: Annotated[
-        UUID,
-        PathParam(description="Workspace identifier"),
-    ],
+    workspace_id: WorkspacePath,
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.members.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: WorkspacesService = workspaces_service_dependency,
@@ -105,25 +99,19 @@ async def add_workspace_member(
 
 
 @router.put(
-    "/{user_id}",
+    "/{userId}",
     dependencies=[Security(require_csrf)],
     response_model=WorkspaceMemberOut,
     summary="Replace workspace member roles",
 )
 async def update_workspace_member(
-    workspace_id: Annotated[
-        UUID,
-        PathParam(description="Workspace identifier"),
-    ],
-    user_id: Annotated[
-        UUID,
-        PathParam(description="User identifier"),
-    ],
+    workspace_id: WorkspacePath,
+    user_id: UserPath,
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.members.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: WorkspacesService = workspaces_service_dependency,
@@ -138,25 +126,19 @@ async def update_workspace_member(
 
 
 @router.delete(
-    "/{user_id}",
+    "/{userId}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove a workspace member",
 )
 async def remove_workspace_member(
-    workspace_id: Annotated[
-        UUID,
-        PathParam(description="Workspace identifier"),
-    ],
-    user_id: Annotated[
-        UUID,
-        PathParam(description="User identifier"),
-    ],
+    workspace_id: WorkspacePath,
+    user_id: UserPath,
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.members.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: WorkspacesService = workspaces_service_dependency,

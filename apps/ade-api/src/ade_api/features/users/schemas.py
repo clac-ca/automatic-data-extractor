@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.pagination import Page
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 
 
@@ -21,7 +21,6 @@ class UserProfile(BaseSchema):
     display_name: str | None = None
     preferred_workspace_id: UUIDStr | None = Field(
         default=None,
-        validation_alias="preferred_workspace_id",
     )
     roles: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
@@ -63,7 +62,7 @@ class UserUpdate(BaseSchema):
         return self
 
 
-class UserPage(Page[UserOut]):
+class UserPage(ListPage[UserOut]):
     """Paginated collection of users."""
 
 

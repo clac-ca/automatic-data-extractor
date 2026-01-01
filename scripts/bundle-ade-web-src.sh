@@ -32,7 +32,7 @@ ade bundle apps/ade-web/README.md \
   --dir apps/ade-web/src/components/providers/auth \
   --dir apps/ade-web/src/components/providers/notifications \
   --dir apps/ade-web/src/components/providers/theme \
-  apps/ade-web/src/utils/storage.ts \
+  apps/ade-web/src/lib/storage.ts \
   --ext ts --ext tsx --ext md \
   --out "${generated_dir}/ade-web-src-shared-core.md" \
   --no-show
@@ -110,7 +110,7 @@ ade bundle apps/ade-web/README.md \
 ade bundle apps/ade-web/README.md \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/EditorArea.tsx \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/Explorer.tsx \
-  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/Inspector.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/EditorPane.tsx \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/PanelResizeHandle.tsx \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/ActivityBar.tsx \
   --out "${generated_dir}/ade-web-src-config-builder-workbench-editor.md" \
@@ -119,7 +119,7 @@ ade bundle apps/ade-web/README.md \
 # Configuration Builder workbench — console/bottom panel
 ade bundle apps/ade-web/README.md \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/BottomPanel.tsx \
-  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/utils/console.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/consoleFormatting.tsx \
   --out "${generated_dir}/ade-web-src-config-builder-workbench-console.md" \
   --no-show
 

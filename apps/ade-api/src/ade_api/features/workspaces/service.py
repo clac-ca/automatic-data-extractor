@@ -15,8 +15,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import paginate_sequence
 from ade_api.common.logging import log_context
-from ade_api.common.pagination import Page, paginate_sequence
+from ade_api.common.search import matches_tokens, parse_q
+from ade_api.common.sorting import sort_sequence
 from ade_api.features.rbac import (
     AssignmentError,
     RbacService,
@@ -36,6 +39,12 @@ from ade_api.models import (
 )
 
 from ..users.repository import UsersRepository
+from .filters import (
+    evaluate_member_filters,
+    evaluate_workspace_filters,
+    parse_workspace_filters,
+    parse_workspace_member_filters,
+)
 from .repository import WorkspacesRepository
 from .schemas import (
     WorkspaceDefaultSelectionOut,
@@ -44,8 +53,17 @@ from .schemas import (
     WorkspaceMemberPage,
     WorkspaceMemberUpdate,
     WorkspaceOut,
+    WorkspacePage,
 )
 from .settings import apply_processing_paused, read_processing_paused
+from .sorting import (
+    DEFAULT_SORT,
+    MEMBER_DEFAULT_SORT,
+    MEMBER_SORT_FIELDS,
+    SORT_FIELDS,
+    id_key,
+    member_id_key,
+)
 
 if TYPE_CHECKING:
     from ade_api.features.rbac.schemas import RoleCreate, RoleUpdate
@@ -305,22 +323,43 @@ class WorkspacesService:
         self,
         *,
         user: User,
+        sort: list[str],
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
         page: int,
-        page_size: int,
-        include_total: bool,
+        per_page: int,
         global_permissions: frozenset[str] | None = None,
-    ) -> Page[WorkspaceOut]:
+    ) -> WorkspacePage:
         memberships = await self.list_memberships(
             user=user,
             global_permissions=global_permissions,
         )
-        page_result = paginate_sequence(
-            memberships,
-            page=page,
-            page_size=page_size,
-            include_total=include_total,
+        parsed_filters = parse_workspace_filters(filters)
+        filtered = [
+            item
+            for item in memberships
+            if evaluate_workspace_filters(
+                item,
+                parsed_filters,
+                join_operator=join_operator,
+                q=q,
+            )
+        ]
+        ordered = sort_sequence(
+            filtered,
+            sort,
+            allowed=SORT_FIELDS,
+            default=DEFAULT_SORT,
+            id_key=id_key,
         )
-        return page_result
+        page_result = paginate_sequence(
+            ordered,
+            page=page,
+            per_page=per_page,
+            changes_cursor="0",
+        )
+        return WorkspacePage(**page_result.model_dump())
 
     # ------------------------------------------------------------------
     # CRUD
@@ -512,24 +551,53 @@ class WorkspacesService:
         self,
         *,
         workspace_id: UUID,
+        sort: list[str],
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
         page: int,
-        page_size: int,
-        include_total: bool,
-        user_id: UUID | None = None,
-        include_inactive: bool = False,
+        per_page: int,
     ) -> WorkspaceMemberPage:
         await self._ensure_workspace(workspace_id)
+        parsed_filters = parse_workspace_member_filters(filters)
+        include_inactive = any(
+            parsed.field.id == "isActive" for parsed in parsed_filters
+        )
         assignments = await self._get_workspace_assignments(
             workspace_id=workspace_id,
-            user_id=user_id,
+            user_id=None,
             include_inactive=include_inactive,
         )
-        members = self._group_members(assignments)
-        page_result = paginate_sequence(
+        grouped: dict[UUID, list[UserRoleAssignment]] = defaultdict(list)
+        for assignment in assignments:
+            grouped[assignment.user_id].append(assignment)
+        members = [
+            self._serialize_member(group)
+            for group in grouped.values()
+            if evaluate_member_filters(group, parsed_filters, join_operator=join_operator)
+        ]
+        if q:
+            tokens = parse_q(q).tokens
+            members = [
+                member
+                for member in members
+                if matches_tokens(
+                    tokens,
+                    [str(member.user_id), *member.role_slugs],
+                )
+            ]
+        ordered = sort_sequence(
             members,
+            sort,
+            allowed=MEMBER_SORT_FIELDS,
+            default=MEMBER_DEFAULT_SORT,
+            id_key=member_id_key,
+        )
+        page_result = paginate_sequence(
+            ordered,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
+            per_page=per_page,
+            changes_cursor="0",
         )
         return WorkspaceMemberPage(**page_result.model_dump())
 

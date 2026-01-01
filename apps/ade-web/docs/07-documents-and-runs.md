@@ -189,11 +189,11 @@ const uploadMutation = useUploadDocumentMutation(workspaceId);
 Underlying REST calls:
 
 * `useDocumentsQuery` →
-  `GET /api/v1/workspaces/{workspace_id}/documents`
+  `GET /api/v1/workspaces/{workspaceId}/documents`
 * `useUploadDocumentMutation` →
-  `POST /api/v1/workspaces/{workspace_id}/documents`
+  `POST /api/v1/workspaces/{workspaceId}/documents`
 * `useDocumentSheetsQuery` (lazy) →
-  `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets`
+  `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/sheets`
 
 The hooks live in the Documents feature and delegate HTTP details to shared API modules.
 
@@ -205,8 +205,8 @@ Documents URL state is encoded in query parameters:
 * `status` – comma‑separated list of document statuses.
 * `sort` – sort key, e.g.:
 
-  * `-created_at` (newest first)
-  * `-last_run_at` (most recently run first)
+  * `-createdAt` (newest first)
+  * `-lastRunAt` (most recently run first)
 * `view` – optional preset (e.g. `all`, `mine`, `attention`, `recent`).
 
 Rules:
@@ -250,7 +250,7 @@ Each `DocumentRow` typically provides:
 
 * **Download**
 
-  * Calls: `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/download`.
+  * Calls: `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/download`.
 
 * **Run extraction**
 
@@ -258,7 +258,7 @@ Each `DocumentRow` typically provides:
 
 * **Archive/Delete**
 
-  * Calls: `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+  * Calls: `DELETE /api/v1/workspaces/{workspaceId}/documents/{documentId}`
     (usually a soft delete / archive).
 
 Constraints:
@@ -277,7 +277,7 @@ For multi‑sheet spreadsheets, users can choose which worksheets to process in 
 Endpoint:
 
 ```text
-GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets
+GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/sheets
 ```
 
 Expected shape:
@@ -397,10 +397,10 @@ Semantics:
   * Runs started from the Runs screen,
   * Configuration‑scoped runs from Configuration Builder.
 * ADE Web **never infers** run status; it always displays what the backend reports.
-* Runs are created via `/configurations/{configuration_id}/runs`; once created, each run:
+* Runs are created via `/configurations/{configurationId}/runs`; once created, each run:
 
   * Has a globally unique `runId`.
-  * Is accessible as `/api/v1/runs/{run_id}`.
+  * Is accessible as `/api/v1/runs/{runId}`.
   * Appears in the workspace ledger.
 
 ---
@@ -424,7 +424,7 @@ Typical usage:
 ```ts
 const filters = parseRunFilters(searchParams);
 const runsQuery = useRunsQuery(workspaceId, filters);
-// Internally calls GET /api/v1/workspaces/{workspace_id}/runs
+// Internally calls GET /api/v1/workspaces/{workspaceId}/runs
 ```
 
 URL‑encoded filters:
@@ -482,9 +482,9 @@ The Run detail view composes several sections:
 
 Data hooks:
 
-* `useRunQuery(runId)` → `GET /api/v1/runs/{run_id}` (global; `runId` is unique).
-* `useRunOutputQuery(runId)` → `/api/v1/runs/{run_id}/output`.
-* `useJobLogsStream(jobId)` → `/api/v1/jobs/{job_id}/events/stream`:
+* `useRunQuery(runId)` → `GET /api/v1/runs/{runId}` (global; `runId` is unique).
+* `useRunOutputQuery(runId)` → `/api/v1/runs/{runId}/output`.
+* `useJobLogsStream(jobId)` → `/api/v1/jobs/{jobId}/events/stream`:
 
   * Live-only tail (no replay/resume).
   * Uses standard SSE `event:` dispatch where each SSE message contains a JSON `EventRecord`.
@@ -565,7 +565,7 @@ General UI rules:
 All run submissions target the configuration-scoped endpoint:
 
 ```text
-POST /api/v1/configurations/{configuration_id}/runs
+POST /api/v1/configurations/{configurationId}/runs
 ```
 
 Common payload fields:
@@ -582,10 +582,10 @@ Flows:
 * **Configuration Builder** – uses the same endpoint (typically with `stream: true`) for validation/test runs and streams events into the workbench console via:
 
   ```text
-  GET /api/v1/runs/{run_id}/events?stream=true
+  GET /api/v1/runs/{runId}/events?stream=true
   ```
 
-Responses include `run_id`; follow-up fetches/streams use the global run endpoints. Semantics (status transitions, options, output) are identical regardless of surface.
+Responses include the run `id`; follow-up fetches/streams use the global run endpoints. Semantics (status transitions, options, output) are identical regardless of surface.
 
 ---
 
@@ -676,52 +676,52 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 
 ### 9.1 Documents
 
-* `GET /api/v1/workspaces/{workspace_id}/documents`
-  List documents (supports `q`, `status`, `sort`, `view`).
+* `GET /api/v1/workspaces/{workspaceId}/documents`
+  List documents (supports `q`, `sort`, `filters`).
 
-* `POST /api/v1/workspaces/{workspace_id}/documents`
+* `POST /api/v1/workspaces/{workspaceId}/documents`
   Upload a new document.
 
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+* `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}`
   Retrieve document metadata.
 
-* `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}`
+* `DELETE /api/v1/workspaces/{workspaceId}/documents/{documentId}`
   Soft delete / archive a document.
 
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/download`
+* `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/download`
   Download the original file.
 
-* `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets`
+* `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/sheets`
   List worksheets (for spreadsheet‑like formats; optional).
 
 ### 9.2 Workspace runs (ledger)
 
-* `GET /api/v1/workspaces/{workspace_id}/runs`
+* `GET /api/v1/workspaces/{workspaceId}/runs`
   List runs in a workspace (filters by status, configuration, initiator, date).
 
 ### 9.3 Run detail & artifacts (global)
 
-* `GET /api/v1/runs/{run_id}`
+* `GET /api/v1/runs/{runId}`
   Global run detail.
 
-* `GET /api/v1/runs/{run_id}/events?stream=true`
-  Run event stream (NDJSON SSE); `GET /runs/{run_id}/events/download` downloads the NDJSON log.
+* `GET /api/v1/runs/{runId}/events?stream=true`
+  Run event stream (NDJSON SSE); `GET /runs/{runId}/events/download` downloads the NDJSON log.
 
-* `GET /api/v1/runs/{run_id}/input`
+* `GET /api/v1/runs/{runId}/input`
   Input metadata (document, content type, byte size).
 
-* `GET /api/v1/runs/{run_id}/input/download`
+* `GET /api/v1/runs/{runId}/input/download`
   Download the original input file.
 
-* `GET /api/v1/runs/{run_id}/output`
+* `GET /api/v1/runs/{runId}/output`
   Output metadata (ready flag, size, content type, download URL).
 
-* `GET /api/v1/runs/{run_id}/output/download`
+* `GET /api/v1/runs/{runId}/output/download`
   Download the normalized output (returns 409 until ready).
 
 ### 9.4 Run creation (configuration-scoped)
 
-* `POST /api/v1/configurations/{configuration_id}/runs`
+* `POST /api/v1/configurations/{configurationId}/runs`
   Start a run for a configuration (used by Documents, Runs, and Configuration Builder surfaces).
 
 All run endpoints share consistent `RunStatus` values and event semantics.

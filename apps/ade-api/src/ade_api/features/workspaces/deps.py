@@ -25,6 +25,7 @@ async def get_workspace_profile(
         UUID,
         Path(
             description="Workspace identifier",
+            alias="workspaceId",
         ),
     ],
 ) -> WorkspaceOut:

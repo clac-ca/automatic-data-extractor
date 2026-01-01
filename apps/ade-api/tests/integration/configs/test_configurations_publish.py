@@ -102,9 +102,8 @@ async def test_publish_returns_422_when_validation_fails(
     )
     assert response.status_code == 422
     problem = response.json()
-    detail = problem.get("detail") or {}
-    assert detail.get("error") == "validation_failed"
-    assert detail.get("issues")
+    assert problem["type"] == "validation_error"
+    assert problem.get("errors")
 
 
 async def test_publish_returns_409_when_configuration_not_draft(

@@ -4,6 +4,7 @@ from .base import NAMING_CONVENTION, Base, metadata
 from .engine import (
     attach_managed_identity,
     build_database_url,
+    check_database_ready,
     ensure_database_ready,
     get_engine,
     render_sync_url,
@@ -19,6 +20,7 @@ __all__ = [
     "metadata",
     "attach_managed_identity",
     "build_database_url",
+    "check_database_ready",
     "ensure_database_ready",
     "get_engine",
     "render_sync_url",

@@ -5,13 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import HTTPException, Path
+from fastapi import Path
+
+from ade_api.common.problem_details import ApiError, ProblemDetailsErrorItem, resolve_error_definition
 
 WorkspaceIdPath = Annotated[
     UUID,
     Path(
         ...,
         description="Workspace identifier",
+        alias="workspaceId",
     ),
 ]
 ConfigurationIdPath = Annotated[
@@ -19,6 +22,7 @@ ConfigurationIdPath = Annotated[
     Path(
         ...,
         description="Configuration identifier",
+        alias="configurationId",
     ),
 ]
 
@@ -31,18 +35,33 @@ def raise_problem(
     title: str | None = None,
     meta: dict | None = None,
 ) -> None:
-    """Raise a Problem Details-style HTTPException."""
+    """Raise a Problem Details-style API error."""
 
-    payload = {
-        "type": "about:blank",
-        "title": title or code.replace("_", " ").title(),
-        "status": status_code,
-        "detail": detail,
-        "code": code,
-    }
+    detail_text = detail
     if meta:
-        payload["meta"] = meta
-    raise HTTPException(status_code, detail=payload)
+        meta_bits = ", ".join(
+            f"{key}={value}" for key, value in meta.items() if value is not None
+        )
+        if meta_bits:
+            detail_text = f"{detail_text} ({meta_bits})" if detail_text else meta_bits
+
+    definition = resolve_error_definition(status_code)
+    error_type = code if code in {"precondition_required", "precondition_failed"} else definition.type
+    errors = None
+    if code not in {definition.type, "precondition_required", "precondition_failed"}:
+        errors = [
+            ProblemDetailsErrorItem(
+                message=detail_text or title or code.replace("_", " ").title(),
+                code=code,
+            )
+        ]
+    raise ApiError(
+        error_type=error_type,
+        status_code=status_code,
+        detail=detail_text,
+        title=title,
+        errors=errors,
+    )
 
 
 __all__ = ["ConfigurationIdPath", "WorkspaceIdPath", "raise_problem"]

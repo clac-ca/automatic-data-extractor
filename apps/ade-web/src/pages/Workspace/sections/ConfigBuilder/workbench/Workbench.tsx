@@ -2715,8 +2715,8 @@ function RunExtractionDialog({
               </Select>
               {selectedDocument ? (
                 <p className="text-xs text-muted-foreground">
-                  Uploaded {formatDocumentTimestamp(selectedDocument.created_at)} ·{" "}
-                  {(selectedDocument.byte_size ?? 0).toLocaleString()} bytes
+                  Uploaded {formatDocumentTimestamp(selectedDocument.createdAt)} ·{" "}
+                  {(selectedDocument.byteSize ?? 0).toLocaleString()} bytes
                 </p>
               ) : null}
             </div>
@@ -2843,8 +2843,8 @@ function RunExtractionDialog({
 }
 
 async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRow[]> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
-    params: { path: { workspace_id: workspaceId }, query: { sort: "-created_at", page_size: 50 } },
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
+    params: { path: { workspaceId }, query: { sort: "-createdAt", perPage: 50 } },
     signal,
   });
   return data?.items ?? [];

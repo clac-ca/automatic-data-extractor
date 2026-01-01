@@ -13,9 +13,7 @@ from .schemas import (
     BuildCreateRequest,
     BuildEvent,
     BuildEventsPage,
-    BuildFilters,
     BuildLinks,
-    BuildListParams,
     BuildPage,
     BuildResource,
 )
@@ -32,8 +30,6 @@ __all__ = [
     "BuildCreateRequest",
     "BuildLinks",
     "BuildEventsPage",
-    "BuildFilters",
-    "BuildListParams",
     "BuildPage",
     "BuildResource",
     "BuildEvent",

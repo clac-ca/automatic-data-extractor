@@ -18,7 +18,7 @@ from ade_api.settings import Settings
 
 @dataclass(slots=True)
 class ChangeFeedPage:
-    changes: list[DocumentChange]
+    items: list[DocumentChange]
     next_cursor: int
 
 
@@ -68,7 +68,7 @@ class DocumentChangesService:
             raise DocumentChangeCursorTooOld(latest_cursor=latest)
 
         if cursor >= latest:
-            return ChangeFeedPage(changes=[], next_cursor=latest)
+            return ChangeFeedPage(items=[], next_cursor=latest)
 
         stmt = (
             select(DocumentChange)
@@ -82,9 +82,9 @@ class DocumentChangesService:
         result = await self._session.execute(stmt)
         changes = list(result.scalars())
         if not changes:
-            return ChangeFeedPage(changes=[], next_cursor=latest)
+            return ChangeFeedPage(items=[], next_cursor=latest)
         next_cursor = int(changes[-1].cursor)
-        return ChangeFeedPage(changes=changes, next_cursor=next_cursor)
+        return ChangeFeedPage(items=changes, next_cursor=next_cursor)
 
     async def record_upsert(
         self,

@@ -1,10 +1,10 @@
 import { client } from "@api/client";
-import type { components, paths } from "@schema";
+import type { ListQueryParams } from "@api/listing";
+import type { components } from "@schema";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
-type TagCatalogQuery =
-  paths["/api/v1/workspaces/{workspace_id}/tags"]["get"]["parameters"]["query"];
+type TagCatalogQuery = Pick<ListQueryParams, "page" | "perPage" | "sort" | "q">;
 
 export async function replaceDocumentTags(
   workspaceId: string,
@@ -13,9 +13,9 @@ export async function replaceDocumentTags(
   signal?: AbortSignal,
 ): Promise<DocumentRecord> {
   const { data } = await client.PUT(
-    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/tags",
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags",
     {
-      params: { path: { workspace_id: workspaceId, document_id: documentId } },
+      params: { path: { workspaceId, documentId } },
       body: { tags: [...tags] },
       signal,
     },
@@ -39,9 +39,9 @@ export async function patchDocumentTags(
     remove: payload.remove ? [...payload.remove] : payload.remove,
   };
   const { data } = await client.PATCH(
-    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/tags",
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags",
     {
-      params: { path: { workspace_id: workspaceId, document_id: documentId } },
+      params: { path: { workspaceId, documentId } },
       body,
       signal,
     },
@@ -65,8 +65,8 @@ export async function patchDocumentTagsBatch(
     add: payload.add ? [...payload.add] : payload.add,
     remove: payload.remove ? [...payload.remove] : payload.remove,
   };
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/tags", {
-    params: { path: { workspace_id: workspaceId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/tags", {
+    params: { path: { workspaceId } },
     body,
     signal,
   });
@@ -83,9 +83,9 @@ export async function fetchTagCatalog(
   query: TagCatalogQuery = {},
   signal?: AbortSignal,
 ): Promise<TagCatalogPage> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/tags", {
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/tags", {
     params: {
-      path: { workspace_id: workspaceId },
+      path: { workspaceId },
       query,
     },
     signal,

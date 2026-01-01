@@ -10,32 +10,33 @@ describe("pagination helpers", () => {
     expect(clampPageSize(undefined)).toBeUndefined();
   });
 
-  it("collects items across pages until has_next is false", async () => {
+  it("collects items across pages until the final page", async () => {
     const fetchPage = vi
       .fn()
       .mockResolvedValueOnce({
         items: [1, 2],
         page: 1,
-        page_size: 2,
-        has_next: true,
-        has_previous: false,
+        perPage: 2,
+        pageCount: 2,
         total: 4,
+        changesCursor: "0",
       })
       .mockResolvedValueOnce({
         items: [3, 4],
         page: 2,
-        page_size: 2,
-        has_next: false,
-        has_previous: true,
+        perPage: 2,
+        pageCount: 2,
         total: 4,
+        changesCursor: "0",
       });
 
     const result = await collectAllPages(fetchPage);
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(result.items).toEqual([1, 2, 3, 4]);
-    expect(result.has_next).toBe(false);
     expect(result.page).toBe(1);
+    expect(result.pageCount).toBe(1);
+    expect(result.perPage).toBe(2);
     expect(result.total).toBe(4);
   });
 });

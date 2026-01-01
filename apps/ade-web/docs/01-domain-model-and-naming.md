@@ -161,7 +161,7 @@ The rest of this doc just pins down the **canonical names** for each box in this
 * ID:
 
   * `workspaceId` in TypeScript
-  * `workspace_id` in engine / API responses and URLs
+  * `workspace_id` in API JSON; URL path params use `{workspaceId}`
 * Storage / URL segments:
 
   * `workspaces/<workspace_id>/…`
@@ -228,7 +228,7 @@ Examples:
   * Optional version / status fields (see Configuration Version below)
 * Backend:
 
-  * `configuration_id` in JSON and URLs
+  * `configuration_id` in JSON; URL path params use `{configurationId}`
   * Canonical paths: `configurations/<configuration_id>/…`, `config_packages/<configuration_id>/…`
 
 **Frontend conventions**
@@ -352,8 +352,8 @@ Examples:
 
 **Code & API naming**
 
-* Backend field: `run_id`
-* Frontend field: **`runId`** — we translate snake_case → camelCase once in schema mapping helpers.
+* Backend field: `id` (run identifier)
+* Frontend field: **`runId`** — map the backend `id` to camelCase once in schema helpers.
 * If the engine exposes an additional low-level ID, name it `engineRunId` to avoid confusion with `runId`.
 
 Typical fields:
@@ -469,7 +469,8 @@ Examples:
 
 2. **Mirror backend identifiers, but adapt to JS/TS style**
 
-   * Backend (JSON / URLs): `workspace_id`, `configuration_id`, `run_id`, …
+   * Backend JSON: `workspace_id`, `configuration_id`, `build_id`, …
+   * Backend URLs (path params): `{workspaceId}`, `{configurationId}`, `{runId}`, …
    * Frontend (TS / React):
 
      * `workspaceId`, `configurationId`, `runId`, …
@@ -523,14 +524,14 @@ Always use `<entity>Id`:
 * `runId`
 * `documentId`
 
-If you need the raw engine ID in addition to `run_id`:
+If you need the raw engine ID in addition to the run id:
 
-* Map `run_id` to `runId` once.
+* Map backend `id` to `runId` once.
 * Add a separate field like `engineRunId` if that’s useful; don’t overload `runId`.
 
 **Where to do the mapping**
 
-* Do snake_case → camelCase **once** in schema mapping helpers (e.g. `fromApiRun`, `fromApiConfiguration`) so screens never see `run_id` / `configuration_id` directly.
+* Do snake_case → camelCase **once** in schema mapping helpers (e.g. `fromApiRun`, `fromApiConfiguration`) so screens never see `configuration_id` directly.
 
 **Relationship examples**
 
@@ -643,12 +644,12 @@ Putting it all together for a typical user interaction:
 1. The user selects a **Workspace**.
 
    * Route: `/workspaces/:workspaceId/documents`
-   * Code: `workspaceId` (TS), `workspace_id` (API)
+   * Code: `workspaceId` (TS); API JSON uses `workspace_id`
 
 2. They open a **Configuration** (`configurationId`) and click **Build**.
 
    * UI: “Trigger build”
-   * API: `POST /configurations/{configuration_id}/builds`
+   * API: `POST /workspaces/{workspaceId}/configurations/{configurationId}/builds`
 
 3. The system creates a **Build** for that Configuration (`buildId`) and shows its **Build status**.
 
@@ -662,7 +663,7 @@ Putting it all together for a typical user interaction:
 5. From the Configuration / Build context they click **Start run**.
 
    * Mutation hook: `useStartRun()`
-   * API returns a `run_id`, mapped to `runId`.
+   * API returns an `id`, mapped to `runId`.
 
 6. A **Run** appears in the run list (`/workspaces/:workspaceId/runs`).
 

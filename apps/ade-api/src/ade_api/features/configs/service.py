@@ -24,8 +24,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import paginate_query
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
+from ade_api.common.types import OrderBy
 from ade_api.models import Configuration, ConfigurationStatus
 
 from .etag import canonicalize_etag
@@ -36,8 +39,16 @@ from .exceptions import (
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
 )
+from .filters import apply_config_filters
 from .repository import ConfigurationsRepository
-from .schemas import ConfigSource, ConfigSourceClone, ConfigSourceTemplate, ConfigValidationIssue
+from .schemas import (
+    ConfigSource,
+    ConfigSourceClone,
+    ConfigSourceTemplate,
+    ConfigValidationIssue,
+    ConfigurationPage,
+    ConfigurationRecord,
+)
 from .storage import ConfigStorage
 
 logger = logging.getLogger(__name__)
@@ -76,17 +87,54 @@ class ConfigurationsService:
         self._repo = ConfigurationsRepository(session)
         self._storage = storage
 
-    async def list_configurations(self, *, workspace_id: UUID) -> list[Configuration]:
+    async def list_configurations(
+        self,
+        *,
+        workspace_id: UUID,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by: OrderBy,
+        page: int,
+        per_page: int,
+    ) -> ConfigurationPage:
         logger.debug(
             "config.list.start",
-            extra=log_context(workspace_id=workspace_id),
+            extra=log_context(
+                workspace_id=workspace_id,
+                page=page,
+                per_page=per_page,
+                q=q,
+            ),
         )
-        configs = list(await self._repo.list_for_workspace(workspace_id))
+        stmt = self._repo.base_query().where(Configuration.workspace_id == workspace_id)
+        stmt = apply_config_filters(stmt, filters, join_operator=join_operator, q=q)
+        page_result = await paginate_query(
+            self._session,
+            stmt,
+            page=page,
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
+        )
+        items = [ConfigurationRecord.model_validate(item) for item in page_result.items]
+        response = ConfigurationPage(
+            items=items,
+            page=page_result.page,
+            per_page=page_result.per_page,
+            page_count=page_result.page_count,
+            total=page_result.total,
+            changes_cursor=page_result.changes_cursor,
+        )
         logger.debug(
             "config.list.success",
-            extra=log_context(workspace_id=workspace_id, count=len(configs)),
+            extra=log_context(
+                workspace_id=workspace_id,
+                count=len(response.items),
+                total=response.total,
+            ),
         )
-        return configs
+        return response
 
     async def get_configuration(
         self,
@@ -473,7 +521,7 @@ class ConfigurationsService:
         include: list[str] | None,
         exclude: list[str] | None,
         limit: int,
-        page_token: str | None,
+        cursor: str | None,
         sort: str,
         order: str,
     ) -> dict:
@@ -503,7 +551,7 @@ class ConfigurationsService:
         )
 
         depth_limit = _coerce_depth(depth)
-        offset = _decode_page_token(page_token)
+        offset = _decode_page_token(cursor)
 
         filtered = _filter_entries(
             index["entries"],
@@ -520,9 +568,9 @@ class ConfigurationsService:
         sorted_entries = _sort_entries(filtered, sort, order)
         window = sorted_entries[offset : offset + limit]
 
-        next_token = None
+        next_cursor = None
         if offset + limit < len(sorted_entries):
-            next_token = _encode_page_token(offset + limit)
+            next_cursor = _encode_page_token(offset + limit)
 
         fileset_hash = _compute_fileset_hash(sorted_entries)
 
@@ -547,7 +595,7 @@ class ConfigurationsService:
                 "asset_max_bytes": _MAX_ASSET_FILE_SIZE,
             },
             "count": len(window),
-            "next_token": next_token,
+            "next_cursor": next_cursor,
             "entries": window,
         }
 

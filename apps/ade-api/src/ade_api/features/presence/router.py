@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Path, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.auth import AuthenticationError, authenticate_websocket
@@ -22,10 +22,17 @@ from ade_api.settings import Settings, get_settings
 
 from .registry import ChannelKey, PresenceParticipant, get_presence_registry
 
-router = APIRouter(prefix="/workspaces/{workspace_id}/presence", tags=["presence"])
+router = APIRouter(prefix="/workspaces/{workspaceId}/presence", tags=["presence"])
 
 WebSocketSessionDep = Annotated[AsyncSession, Depends(get_websocket_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+WorkspacePath = Annotated[
+    UUID,
+    Path(
+        description="Workspace identifier",
+        alias="workspaceId",
+    ),
+]
 
 PRESENCE_TTL_SECONDS = 60
 PRESENCE_HEARTBEAT_SECONDS = 15
@@ -85,7 +92,7 @@ async def _authorize_scope(
     *,
     principal: AuthenticatedPrincipal,
     db: AsyncSession,
-    workspace_id: UUID,
+    workspace_id: WorkspacePath,
     scope: str,
 ) -> bool:
     permission_key = _scope_permission(scope)
@@ -117,7 +124,7 @@ def _parse_hello(payload: dict[str, Any]) -> tuple[str, dict[str, Any], str | No
 @router.websocket("")
 async def presence_ws(
     websocket: WebSocket,
-    workspace_id: UUID,
+    workspace_id: WorkspacePath,
     db: WebSocketSessionDep,
     settings: SettingsDep,
     api_keys=Depends(get_api_key_authenticator_websocket),

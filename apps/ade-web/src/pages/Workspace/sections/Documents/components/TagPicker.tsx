@@ -2,13 +2,10 @@ import clsx from "clsx";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { client } from "@api/client";
+import { fetchTagCatalog } from "@api/documents/tags";
 import { Input } from "@components/ui/input";
 
-import type { components } from "@schema";
 import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TagIcon } from "@components/icons";
-
-type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
 export function TagPicker({
   workspaceId,
@@ -47,25 +44,19 @@ export function TagPicker({
   const effectiveQuery = query.trim();
   const canSearch = effectiveQuery.length >= 2;
 
-  const tagsQuery = useQuery<TagCatalogPage>({
+  const tagsQuery = useQuery({
     queryKey: ["documents", workspaceId, "tags", { q: canSearch ? effectiveQuery : "" }],
-    queryFn: async ({ signal }) => {
-      const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/tags", {
-        params: {
-          path: { workspace_id: workspaceId },
-          query: {
-            q: canSearch ? effectiveQuery : null,
-            sort: "-count",
-            page: 1,
-            page_size: 20,
-            include_total: false,
-          },
+    queryFn: ({ signal }) =>
+      fetchTagCatalog(
+        workspaceId,
+        {
+          page: 1,
+          perPage: 20,
+          sort: "-count",
+          q: canSearch ? effectiveQuery : undefined,
         },
         signal,
-      });
-      if (!data) throw new Error("Expected tag catalog page.");
-      return data;
-    },
+      ),
     enabled: open && workspaceId.length > 0,
     staleTime: 30_000,
   });

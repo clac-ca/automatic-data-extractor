@@ -1,117 +1,128 @@
 from __future__ import annotations
 
-from datetime import datetime
+from fastapi import HTTPException, status
 from typing import Literal
-
-from fastapi import HTTPException
 from pydantic import Field, field_validator
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.sql import Select
 
 from ade_api.common.filters import FilterBase
-from ade_api.common.ids import UUIDStr
-from ade_api.common.validators import normalize_utc, parse_csv_or_repeated
+from ade_api.common.list_filters import (
+    FilterField,
+    FilterItem,
+    FilterJoinOperator,
+    FilterOperator,
+    FilterRegistry,
+    FilterValueType,
+    build_predicate,
+    combine_predicates,
+    prepare_filters,
+)
+from ade_api.common.search import build_q_predicate
+from ade_api.features.search_registry import SEARCH_REGISTRY
 from ade_api.models import Document, Run, RunStatus, RunTableColumn
-from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
+from ade_api.settings import MAX_SET_SIZE
 
+ALLOWED_FILE_TYPES = {"xlsx", "xls", "csv", "pdf"}
 
-class RunFilters(FilterBase):
-    """Query parameters for filtering workspace-scoped run listings."""
-
-    q: str | None = Field(
-        None,
-        min_length=MIN_SEARCH_LEN,
-        max_length=MAX_SEARCH_LEN,
-        description="Free text search applied to document filenames.",
-    )
-    status: set[RunStatus] | None = Field(
-        default=None,
-        description="Optional run statuses to include (filters out others).",
-    )
-    configuration_id: set[UUIDStr] | None = Field(
-        default=None,
-        description="Limit runs to one or more configuration identifiers.",
-    )
-    input_document_id: UUIDStr | None = Field(
-        default=None,
-        description="Limit runs to those started for the given document.",
-    )
-    created_after: datetime | None = Field(
-        None,
-        description="Return runs created on or after this timestamp (UTC).",
-    )
-    created_before: datetime | None = Field(
-        None,
-        description="Return runs created before this timestamp (UTC).",
-    )
-    file_type: set[Literal["xlsx", "xls", "csv", "pdf"]] | None = Field(
-        None,
-        description="Filter by input document file extension (CSV or repeated params).",
-    )
-    has_output: bool | None = Field(
-        None,
-        description="When true, only return runs with a successful output.",
-    )
-
-    @field_validator("q")
-    @classmethod
-    def _trim_query(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        candidate = value.strip()
-        return candidate or None
-
-    @field_validator("status", mode="before")
-    @classmethod
-    def _parse_statuses(cls, value):
-        parsed = parse_csv_or_repeated(value)
-        if parsed and len(parsed) > MAX_SET_SIZE:
-            raise HTTPException(422, f"Too many status values; max {MAX_SET_SIZE}.")
-        if not parsed:
-            return None
-        try:
-            return {RunStatus(item) for item in parsed}
-        except ValueError as exc:  # pragma: no cover - validation guard
-            raise HTTPException(422, "Invalid status value") from exc
-
-    @field_validator("configuration_id", mode="before")
-    @classmethod
-    def _parse_configuration_ids(cls, value):
-        parsed = parse_csv_or_repeated(value)
-        if parsed and len(parsed) > MAX_SET_SIZE:
-            raise HTTPException(422, f"Too many configuration IDs; max {MAX_SET_SIZE}.")
-        return parsed or None
-
-    @field_validator("file_type", mode="before")
-    @classmethod
-    def _parse_file_types(cls, value):
-        parsed = parse_csv_or_repeated(value)
-        if parsed and len(parsed) > MAX_SET_SIZE:
-            raise HTTPException(422, f"Too many file types; max {MAX_SET_SIZE}.")
-        if not parsed:
-            return None
-        allowed = {"xlsx", "xls", "csv", "pdf"}
-        normalized = {item.strip().lower() for item in parsed if item.strip()}
-        invalid = sorted(value for value in normalized if value not in allowed)
-        if invalid:
-            raise HTTPException(422, f"Invalid file type value(s): {', '.join(invalid)}")
-        return normalized or None
-
-    @field_validator("created_after", "created_before", mode="before")
-    @classmethod
-    def _normalise_datetimes(cls, value):
-        return normalize_utc(value)
-
-    @field_validator("created_before")
-    @classmethod
-    def _validate_created_range(cls, value, info):
-        created_after = info.data.get("created_after")
-        if value is not None and created_after is not None and value <= created_after:
-            raise HTTPException(
-                422,
-                "created_before must be greater than created_after",
-            )
-        return value
+RUN_FILTER_REGISTRY = FilterRegistry(
+    [
+        FilterField(
+            id="status",
+            column=Run.status,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
+            value_type=FilterValueType.ENUM,
+            enum_type=RunStatus,
+        ),
+        FilterField(
+            id="configurationId",
+            column=Run.configuration_id,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
+            value_type=FilterValueType.UUID,
+        ),
+        FilterField(
+            id="inputDocumentId",
+            column=Run.input_document_id,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
+            value_type=FilterValueType.UUID,
+        ),
+        FilterField(
+            id="createdAt",
+            column=Run.created_at,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.LT,
+                FilterOperator.LTE,
+                FilterOperator.GT,
+                FilterOperator.GTE,
+                FilterOperator.BETWEEN,
+            },
+            value_type=FilterValueType.DATETIME,
+        ),
+        FilterField(
+            id="startedAt",
+            column=Run.started_at,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.LT,
+                FilterOperator.LTE,
+                FilterOperator.GT,
+                FilterOperator.GTE,
+                FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
+            value_type=FilterValueType.DATETIME,
+        ),
+        FilterField(
+            id="completedAt",
+            column=Run.completed_at,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.LT,
+                FilterOperator.LTE,
+                FilterOperator.GT,
+                FilterOperator.GTE,
+                FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
+            value_type=FilterValueType.DATETIME,
+        ),
+        FilterField(
+            id="fileType",
+            column=Document.original_filename,
+            operators={FilterOperator.EQ, FilterOperator.IN, FilterOperator.NOT_IN},
+            value_type=FilterValueType.STRING,
+        ),
+        FilterField(
+            id="hasOutput",
+            column=Run.status,
+            operators={FilterOperator.EQ, FilterOperator.NE},
+            value_type=FilterValueType.BOOL,
+        ),
+    ]
+)
 
 
 class RunColumnFilters(FilterBase):
@@ -158,59 +169,81 @@ class RunColumnFilters(FilterBase):
         return value
 
 
-def apply_run_filters(stmt: Select, filters: RunFilters) -> Select:
-    """Apply ``filters`` to a run query."""
+def apply_run_filters(
+    stmt: Select,
+    filters: list[FilterItem],
+    *,
+    join_operator: FilterJoinOperator,
+    q: str | None,
+) -> Select:
+    parsed_filters = prepare_filters(filters, RUN_FILTER_REGISTRY)
+    predicates: list = []
+    join_document = False
+    q_predicate = build_q_predicate(resource="runs", q=q, registry=SEARCH_REGISTRY)
+    if q_predicate is not None:
+        join_document = True
 
-    predicates = []
+    for parsed in parsed_filters:
+        filter_id = parsed.field.id
 
-    if filters.status:
-        status_values = sorted(
-            status.value if isinstance(status, RunStatus) else str(status)
-            for status in filters.status
-        )
-        predicates.append(Run.status.in_(status_values))
-
-    if filters.configuration_id:
-        predicates.append(Run.configuration_id.in_(sorted(filters.configuration_id)))
-
-    if filters.input_document_id:
-        predicates.append(Run.input_document_id == filters.input_document_id)
-
-    if filters.created_after is not None:
-        predicates.append(Run.created_at >= filters.created_after)
-    if filters.created_before is not None:
-        predicates.append(Run.created_at < filters.created_before)
-
-    if filters.has_output is not None:
-        predicate = Run.status == RunStatus.SUCCEEDED
-        predicates.append(predicate if filters.has_output else ~predicate)
-
-    if filters.q or filters.file_type:
-        stmt = stmt.join(Document, Run.input_document_id == Document.id)
-        if filters.q:
-            pattern = f"%{filters.q.lower()}%"
-            predicates.append(func.lower(Document.original_filename).like(pattern))
-        if filters.file_type:
+        if filter_id == "fileType":
+            join_document = True
+            values = parsed.value
+            types = values if isinstance(values, list) else [values]
+            normalized = {str(item).strip().lower() for item in types if str(item).strip()}
+            if len(normalized) > MAX_SET_SIZE:
+                raise HTTPException(422, f"Too many file types; max {MAX_SET_SIZE}.")
+            invalid = sorted(value for value in normalized if value not in ALLOWED_FILE_TYPES)
+            if invalid:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Invalid file type value(s): {', '.join(invalid)}",
+                )
             lower_name = func.lower(Document.original_filename)
             lower_type = func.lower(Document.content_type)
             type_predicates = []
-            if "xlsx" in filters.file_type:
+            if "xlsx" in normalized:
                 type_predicates.append(
                     or_(lower_name.like("%.xlsx"), lower_type.like("%spreadsheetml%"))
                 )
-            if "xls" in filters.file_type:
-                type_predicates.append(
-                    or_(lower_name.like("%.xls"), lower_type.like("%ms-excel%"))
-                )
-            if "csv" in filters.file_type:
+            if "xls" in normalized:
+                type_predicates.append(or_(lower_name.like("%.xls"), lower_type.like("%ms-excel%")))
+            if "csv" in normalized:
                 type_predicates.append(or_(lower_name.like("%.csv"), lower_type.like("%csv%")))
-            if "pdf" in filters.file_type:
+            if "pdf" in normalized:
                 type_predicates.append(or_(lower_name.like("%.pdf"), lower_type.like("%pdf%")))
-            if type_predicates:
-                predicates.append(or_(*type_predicates))
+            if not type_predicates:
+                continue
+            predicate = or_(*type_predicates)
+            if parsed.operator == FilterOperator.NOT_IN:
+                predicate = ~predicate
+            predicates.append(predicate)
+            continue
 
-    if predicates:
-        stmt = stmt.where(and_(*predicates))
+        if filter_id == "hasOutput":
+            if parsed.value is None:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="hasOutput requires a boolean value",
+                )
+            value = bool(parsed.value)
+            predicate = Run.status == RunStatus.SUCCEEDED
+            predicate = predicate if value else ~predicate
+            if parsed.operator == FilterOperator.NE:
+                predicate = ~predicate
+            predicates.append(predicate)
+            continue
+
+        predicates.append(build_predicate(parsed))
+
+    combined = combine_predicates(predicates, join_operator)
+    if combined is not None:
+        stmt = stmt.where(combined)
+
+    if join_document:
+        stmt = stmt.join(Document, Run.input_document_id == Document.id)
+    if q_predicate is not None:
+        stmt = stmt.where(q_predicate)
 
     return stmt
 
@@ -232,8 +265,8 @@ def apply_run_column_filters(stmt: Select, filters: RunColumnFilters) -> Select:
 
 
 __all__ = [
-    "RunFilters",
-    "apply_run_filters",
+    "RUN_FILTER_REGISTRY",
     "RunColumnFilters",
+    "apply_run_filters",
     "apply_run_column_filters",
 ]

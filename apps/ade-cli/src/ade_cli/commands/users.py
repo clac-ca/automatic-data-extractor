@@ -463,6 +463,14 @@ async def _list_roles(
     limit: int,
     json_output: bool,
 ) -> None:
+    from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
+    from ade_api.common.sorting import resolve_sort
+    from ade_api.features.rbac.sorting import (
+        ASSIGNMENT_DEFAULT_SORT,
+        ASSIGNMENT_ID_FIELD,
+        ASSIGNMENT_SORT_FIELDS,
+    )
+
     try:
         scope_value, workspace_uuid = _scope_and_workspace(scope, workspace_id)
     except ValueError as exc:
@@ -473,14 +481,32 @@ async def _list_roles(
         user = await ctx.resolve_user(user_ref)
         user_label = user.email or str(user.id)
         workspace_filter = _workspace_id_for_scope(scope_value, workspace_uuid)
+        filters = [
+            FilterItem(id="userId", operator=FilterOperator.EQ, value=str(user.id)),
+            FilterItem(
+                id="scopeId",
+                operator=(
+                    FilterOperator.IS_EMPTY
+                    if workspace_filter is None
+                    else FilterOperator.EQ
+                ),
+                value=None if workspace_filter is None else str(workspace_filter),
+            ),
+        ]
+        order_by = resolve_sort(
+            [],
+            allowed=ASSIGNMENT_SORT_FIELDS,
+            default=ASSIGNMENT_DEFAULT_SORT,
+            id_field=ASSIGNMENT_ID_FIELD,
+        )
         page = await ctx.rbac.list_assignments(
-            workspace_id=workspace_filter,
-            user_id=user.id,
-            role_id=None,
+            filters=filters,
+            join_operator=FilterJoinOperator.AND,
+            q=None,
+            order_by=order_by,
             page=1,
-            page_size=limit,
-            include_total=False,
-            include_inactive=True,
+            per_page=limit,
+            default_active_only=False,
         )
         assignments = list(page.items)
 

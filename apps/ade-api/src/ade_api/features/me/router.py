@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, Security, status
+from fastapi import APIRouter, Depends, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.auth.principal import AuthenticatedPrincipal
@@ -82,33 +82,12 @@ async def get_me_bootstrap(
     service: Annotated[MeService, Depends(get_me_service)],
     response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
-    page: Annotated[
-        int,
-        Query(ge=1, description="Workspace page number (1-based)."),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=200,
-            description="Number of workspaces to include in the page.",
-        ),
-    ] = 50,
-    include_total: Annotated[
-        bool,
-        Query(
-            description=("When true, includes the total workspace count in the response."),
-        ),
-    ] = True,
 ) -> MeContext:
     """Return a consolidated bootstrap payload for the current principal."""
 
     set_csrf_cookie(response, settings)
     return await service.get_context(
         principal,
-        page=page,
-        page_size=page_size,
-        include_total=include_total,
     )
 
 

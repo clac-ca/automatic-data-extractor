@@ -42,7 +42,7 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
         params={"cursor": "latest"},
     )
     assert baseline.status_code == 200, baseline.text
-    baseline_cursor = baseline.json()["next_cursor"]
+    baseline_cursor = baseline.json()["nextCursor"]
 
     patch = await async_client.patch(
         f"{workspace_base}/documents/{document_id}/tags",
@@ -58,10 +58,10 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
     )
     assert replay.status_code == 200, replay.text
     payload = replay.json()
-    assert payload["changes"], "Expected at least one change after the cursor."
+    assert payload["items"], "Expected at least one change after the cursor."
     assert any(
         entry["type"] == "document.upsert" and entry["row"]["id"] == document_id
-        for entry in payload["changes"]
+        for entry in payload["items"]
     )
 
 
@@ -120,6 +120,5 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
     )
     assert response.status_code == 410, response.text
     payload = response.json()
-    detail = payload.get("detail") or {}
-    assert detail.get("error") == "resync_required"
-    assert detail.get("latest_cursor") == str(fresh_change.cursor)
+    assert payload["type"] == "resync_required"
+    assert str(fresh_change.cursor) in (payload.get("detail") or "")

@@ -25,6 +25,7 @@ class DocumentsRepository:
             select(Document)
             .options(
                 selectinload(Document.uploaded_by_user),
+                selectinload(Document.assignee_user),
                 selectinload(Document.tags),
             )
             .where(Document.workspace_id == workspace_id)

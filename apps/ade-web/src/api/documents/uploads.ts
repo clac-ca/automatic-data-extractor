@@ -43,8 +43,8 @@ export async function createDocumentUploadSession(
   payload: DocumentUploadSessionCreateRequest,
   signal?: AbortSignal,
 ): Promise<DocumentUploadSessionCreateResponse> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/uploadSessions", {
-    params: { path: { workspace_id: workspaceId } },
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/uploadsessions", {
+    params: { path: { workspaceId } },
     body: payload,
     signal,
   });
@@ -66,7 +66,7 @@ export async function uploadDocumentUploadSessionRange(
   },
 ): Promise<DocumentUploadSessionUploadResponse> {
   const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/documents/uploadSessions/${sessionId}`,
+    `/api/v1/workspaces/${workspaceId}/documents/uploadsessions/${sessionId}`,
     {
       method: "PUT",
       body: options.body,
@@ -97,9 +97,9 @@ export async function getDocumentUploadSessionStatus(
   signal?: AbortSignal,
 ): Promise<DocumentUploadSessionStatusResponse> {
   const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}",
+    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}",
     {
-      params: { path: { workspace_id: workspaceId, upload_session_id: sessionId } },
+      params: { path: { workspaceId, uploadSessionId: sessionId } },
       signal,
     },
   );
@@ -115,9 +115,9 @@ export async function commitDocumentUploadSession(
   signal?: AbortSignal,
 ): Promise<DocumentUploadResponse> {
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}/commit",
+    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}/commit",
     {
-      params: { path: { workspace_id: workspaceId, upload_session_id: sessionId } },
+      params: { path: { workspaceId, uploadSessionId: sessionId } },
       signal,
     },
   );
@@ -133,9 +133,9 @@ export async function cancelDocumentUploadSession(
   signal?: AbortSignal,
 ): Promise<void> {
   await client.DELETE(
-    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}",
+    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}",
     {
-      params: { path: { workspace_id: workspaceId, upload_session_id: sessionId } },
+      params: { path: { workspaceId, uploadSessionId: sessionId } },
       signal,
     },
   );

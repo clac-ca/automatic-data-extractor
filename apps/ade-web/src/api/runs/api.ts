@@ -1,5 +1,6 @@
 import { ApiError } from "@api";
 import { client, resolveApiUrl } from "@api/client";
+import { encodeFilters, type FilterItem, type FilterJoinOperator } from "@api/listing";
 
 import type { components, paths } from "@schema";
 import type { RunStreamEvent } from "@schema/runs";
@@ -10,27 +11,21 @@ export type RunPage = components["schemas"]["RunPage"];
 export type RunMetricsResource = components["schemas"]["RunMetricsResource"];
 export type RunFieldResource = components["schemas"]["RunFieldResource"];
 export type RunColumnResource = components["schemas"]["RunColumnResource"];
-export type RunColumnsQuery = paths["/api/v1/runs/{run_id}/columns"]["get"]["parameters"]["query"];
+export type RunColumnsQuery = paths["/api/v1/runs/{runId}/columns"]["get"]["parameters"]["query"];
 
 export type RunsQuery = {
   page?: number;
-  page_size?: number;
-  include_total?: boolean;
+  perPage?: number;
   q?: string | null;
-  status?: RunStatus | RunStatus[] | null;
-  configuration_id?: string | null;
-  created_after?: string | null;
-  created_before?: string | null;
   sort?: string | null;
-  input_document_id?: string | null;
-  has_output?: boolean | null;
-  file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+  filters?: FilterItem[];
+  joinOperator?: FilterJoinOperator;
 };
 
 export type RunCreateOptions = components["schemas"]["RunCreateOptionsBase"];
 type RunCreateRequest = components["schemas"]["RunWorkspaceCreateRequest"];
 type RunCreatePathParams =
-  paths["/api/v1/workspaces/{workspace_id}/runs"]["post"]["parameters"]["path"];
+  paths["/api/v1/workspaces/{workspaceId}/runs"]["post"]["parameters"]["path"];
 
 export type RunStreamOptions = Partial<RunCreateOptions> & {
   input_document_id: RunCreateRequest["input_document_id"];
@@ -50,8 +45,16 @@ export async function fetchWorkspaceRuns(
   query: RunsQuery,
   signal?: AbortSignal,
 ): Promise<RunPage> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/runs", {
-    params: { path: { workspace_id: workspaceId }, query },
+  const requestQuery = {
+    page: query.page,
+    perPage: query.perPage,
+    sort: query.sort ?? undefined,
+    q: query.q ?? undefined,
+    joinOperator: query.joinOperator,
+    filters: encodeFilters(query.filters),
+  };
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/runs", {
+    params: { path: { workspaceId }, query: requestQuery },
     signal,
   });
   if (!data) throw new Error("Expected run page payload.");
@@ -63,10 +66,20 @@ export async function fetchWorkspaceRunsForDocument(
   documentId: string,
   signal?: AbortSignal,
 ): Promise<RunResource[]> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/runs", {
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/runs", {
     params: {
-      path: { workspace_id: workspaceId },
-      query: { page: 1, page_size: 25, include_total: false, input_document_id: documentId },
+      path: { workspaceId },
+      query: {
+        page: 1,
+        perPage: 25,
+        filters: encodeFilters([
+          {
+            id: "inputDocumentId",
+            operator: "eq",
+            value: documentId,
+          },
+        ]),
+      },
     },
     signal,
   });
@@ -77,8 +90,8 @@ export async function fetchWorkspaceRunsForDocument(
 
 export async function fetchRunMetrics(runId: string, signal?: AbortSignal): Promise<RunMetricsResource | null> {
   try {
-    const { data } = await client.GET("/api/v1/runs/{run_id}/metrics", {
-      params: { path: { run_id: runId } },
+    const { data } = await client.GET("/api/v1/runs/{runId}/metrics", {
+      params: { path: { runId } },
       signal,
     });
     if (!data) {
@@ -95,8 +108,8 @@ export async function fetchRunMetrics(runId: string, signal?: AbortSignal): Prom
 
 export async function fetchRunFields(runId: string, signal?: AbortSignal): Promise<RunFieldResource[] | null> {
   try {
-    const { data } = await client.GET("/api/v1/runs/{run_id}/fields", {
-      params: { path: { run_id: runId } },
+    const { data } = await client.GET("/api/v1/runs/{runId}/fields", {
+      params: { path: { runId } },
       signal,
     });
     if (!data) {
@@ -117,8 +130,8 @@ export async function fetchRunColumns(
   signal?: AbortSignal,
 ): Promise<RunColumnResource[] | null> {
   try {
-    const { data } = await client.GET("/api/v1/runs/{run_id}/columns", {
-      params: { path: { run_id: runId }, query: query ?? undefined },
+    const { data } = await client.GET("/api/v1/runs/{runId}/columns", {
+      params: { path: { runId }, query: query ?? undefined },
       signal,
     });
     if (!data) {
@@ -134,8 +147,8 @@ export async function fetchRunColumns(
 }
 
 export async function createRunForDocument(configurationId: string, documentId: string): Promise<RunResource> {
-  const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
-    params: { path: { configuration_id: configurationId } },
+  const { data } = await client.POST("/api/v1/configurations/{configurationId}/runs", {
+    params: { path: { configurationId } },
     body: {
       options: {
         dry_run: false,
@@ -156,7 +169,7 @@ export async function createRun(
   options: RunStreamOptions,
   signal?: AbortSignal,
 ): Promise<RunResource> {
-  const pathParams: RunCreatePathParams = { workspace_id: workspaceId };
+  const pathParams: RunCreatePathParams = { workspaceId };
   const { input_document_id, configuration_id, ...optionOverrides } = options;
   const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...optionOverrides };
   if (!input_document_id) {
@@ -168,7 +181,7 @@ export async function createRun(
     options: mergedOptions,
   };
 
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/runs", {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/runs", {
     params: { path: pathParams },
     body,
     signal,

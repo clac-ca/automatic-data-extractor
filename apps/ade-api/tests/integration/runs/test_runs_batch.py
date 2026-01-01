@@ -93,6 +93,8 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
     )
 
     assert response.status_code == 429, response.text
-    assert response.json()["detail"]["error"]["code"] == "run_queue_full"
+    payload = response.json()
+    assert payload["type"] == "rate_limited"
+    assert any(item.get("code") == "run_queue_full" for item in payload.get("errors", []))
     result = await session.execute(select(Run).where(Run.configuration_id == configuration.id))
     assert result.scalars().all() == []

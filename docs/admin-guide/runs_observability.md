@@ -19,8 +19,7 @@ http --stream POST :8000/api/v1/configurations/$CONFIG_ID/runs stream:=true \
 
 Key things to watch while streaming:
 
-- The first `run.queued` event confirms the database row exists and provides the final
-  `run_id` for follow-up queries; build events may follow before `run.start` while the build is prepared.
+- The first `run.queued` event confirms the database row exists and provides the run id for follow-up queries; build events may follow before `run.start` while the build is prepared.
 - `console.line` events include the ADE engine stdout; store the NDJSON output
   alongside ticket timelines when escalating to engineering.
 - `engine.run.completed` carries the full run payload (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine
@@ -33,9 +32,9 @@ non-streaming endpoints:
 
 1. Trigger the run with `stream: false`; the response body mirrors the
    `Run` schema documented in `docs/ade_runs_api_spec.md`.
-2. Poll `/api/v1/runs/{run_id}` until the `status` transitions from
+2. Poll `/api/v1/runs/{runId}` until the `status` transitions from
    `queued`/`running` to a terminal state.
-3. Retrieve the raw run event log via `/api/v1/runs/{run_id}/events/download`
+3. Retrieve the raw run event log via `/api/v1/runs/{runId}/events/download`
    to review console output and events captured during execution.
 
 ## 3. Direct database inspection
@@ -69,14 +68,14 @@ Build activity is emitted through the unified run event stream. Use the same
 troubleshooting workflow you use for runs:
 
 1. Trigger a build (or run with `stream: true`) using
-   `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
+   `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`
    or the run creation endpoint. Watch for `build.queued`,
    `build.start`, `build.phase.start`, `build.complete`, and `console.line`
    events (`payload.scope: "build"`).
-2. For status snapshots, hit `/api/v1/builds/{build_id}`. For history,
-   use `GET /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
-   with optional `status` filters. For live logs/events,
-   attach to `/api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>`
+2. For status snapshots, hit `/api/v1/builds/{buildId}`. For history,
+   use `GET /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`
+   with the canonical list contract (`filters`, `q`, `sort`). For live logs/events,
+   attach to `/api/v1/runs/{runId}/events?stream=true&after_sequence=<cursor>`
    (build + run + console output in one ordered stream).
 3. Database fallbacks mirror runs: inspect the `builds` table if the API is
    unavailable. Build log polling endpoints are deprecated in favor of the run

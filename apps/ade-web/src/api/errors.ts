@@ -1,9 +1,17 @@
+export interface ProblemDetailsErrorItem {
+  readonly path?: string;
+  readonly message: string;
+  readonly code?: string;
+}
+
 export interface ProblemDetails {
   readonly type?: string;
   readonly title?: string;
   readonly status?: number;
   readonly detail?: string;
-  readonly errors?: Record<string, string[]>;
+  readonly instance?: string;
+  readonly requestId?: string;
+  readonly errors?: ProblemDetailsErrorItem[];
 }
 
 export class ApiError extends Error {
@@ -17,4 +25,3 @@ export class ApiError extends Error {
     this.problem = problem;
   }
 }
-

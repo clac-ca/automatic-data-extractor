@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, Mapping, TypeVar
 
 from fastapi import HTTPException, Query
 
@@ -30,7 +31,7 @@ def parse_sort(raw: str | None) -> list[str]:
         if not token:
             continue
         descending = token.startswith("-")
-        name = (token[1:] if descending else token).strip().lower()
+        name = (token[1:] if descending else token).strip()
         if not name:
             continue
         tokens.append(f"-{name}" if descending else name)
@@ -88,11 +89,54 @@ def resolve_sort(
     return tuple(order)
 
 
+T = TypeVar("T")
+
+
+def sort_sequence(
+    items: Sequence[T],
+    tokens: Iterable[str],
+    *,
+    allowed: Mapping[str, Callable[[T], Any]],
+    default: Sequence[str],
+    id_key: Callable[[T], Any],
+) -> list[T]:
+    materialized = list(tokens) or list(default)
+    if not materialized:
+        raise HTTPException(status_code=422, detail="No sort tokens provided.")
+
+    parsed: list[tuple[Callable[[T], Any], bool]] = []
+    names: list[str] = []
+    first_desc: bool | None = None
+
+    for token in materialized:
+        descending = token.startswith("-")
+        name = token[1:] if descending else token
+        names.append(name)
+        key_fn = allowed.get(name)
+        if key_fn is None:
+            allowed_list = ", ".join(sorted(allowed.keys()))
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported sort field '{name}'. Allowed: {allowed_list}",
+            )
+        parsed.append((key_fn, descending))
+        if first_desc is None:
+            first_desc = descending
+
+    if "id" not in names:
+        parsed.append((id_key, bool(first_desc)))
+
+    ordered = list(items)
+    for key_fn, descending in reversed(parsed):
+        ordered.sort(key=key_fn, reverse=descending)
+    return ordered
+
+
 def make_sort_dependency(*, allowed: SortAllowedMap, default: Sequence[str], id_field):
     """Return a FastAPI dependency that parses and resolves sort tokens."""
 
     allowed_list = ", ".join(sorted(allowed.keys()))
-    doc = "CSV; prefix '-' for DESC. Allowed: " + allowed_list + ". Example: -created_at,name"
+    doc = "CSV; prefix '-' for DESC. Allowed: " + allowed_list + ". Example: -createdAt,name"
 
     def dependency(sort: str | None = Query(None, description=doc)) -> OrderBy:
         tokens = parse_sort(sort)
@@ -101,4 +145,4 @@ def make_sort_dependency(*, allowed: SortAllowedMap, default: Sequence[str], id_
     return dependency
 
 
-__all__ = ["make_sort_dependency", "parse_sort", "resolve_sort"]
+__all__ = ["make_sort_dependency", "parse_sort", "resolve_sort", "sort_sequence"]

@@ -1,3 +1,4 @@
+import json
 import pytest
 from httpx import AsyncClient
 
@@ -77,21 +78,25 @@ async def test_list_builds_with_filters_and_limits(
     assert failed_build["status"] == "failed"
     assert active_build_id == failed_build_id
 
+    failed_filters = json.dumps([{"id": "status", "operator": "eq", "value": "failed"}])
     failed_only = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
-        params={"status": ["failed"], "limit": 1},
+        params={"filters": failed_filters, "perPage": 1},
     )
     assert failed_only.status_code == 200
     failed_payload = failed_only.json()
-    assert failed_payload["page_size"] == 1
+    assert failed_payload["perPage"] == 1
+    assert failed_payload["pageCount"] == 1
+    assert failed_payload["total"] == 1
     assert [item["id"] for item in failed_payload["items"]] == [failed_build_id]
-    assert "total" not in failed_payload
 
     all_builds = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
     )
     assert all_builds.status_code == 200
-    build_ids = [item["id"] for item in all_builds.json()["items"]]
+    all_payload = all_builds.json()
+    build_ids = [item["id"] for item in all_payload["items"]]
+    assert all_payload["total"] == 1
     assert build_ids == [failed_build_id]

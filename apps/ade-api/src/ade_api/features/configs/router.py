@@ -11,7 +11,7 @@ from .endpoints.files import router as file_endpoints
 
 _AUTH_DEPENDENCIES = [Security(require_authenticated)]
 
-router = APIRouter(prefix="/workspaces/{workspace_id}")
+router = APIRouter(prefix="/workspaces/{workspaceId}")
 router.include_router(
     configuration_endpoints,
     tags=["configurations"],

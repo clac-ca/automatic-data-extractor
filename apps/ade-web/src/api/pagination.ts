@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-export const MAX_PAGE_SIZE = 100;
+export const MAX_PAGE_SIZE = 200;
 export const DEFAULT_PAGE_SIZE = 50;
 
 export function clampPageSize(size?: number): number | undefined {
@@ -10,32 +10,32 @@ export function clampPageSize(size?: number): number | undefined {
   return Math.min(size, MAX_PAGE_SIZE);
 }
 
-export type PaginatedPage<T> = {
+export type ListPage<T> = {
   readonly items: T[];
   readonly page: number;
-  readonly page_size: number;
-  readonly has_next: boolean;
-  readonly has_previous: boolean;
-  readonly total?: number | null;
+  readonly perPage: number;
+  readonly pageCount: number;
+  readonly total: number;
+  readonly changesCursor: string;
 };
 
 export async function collectAllPages<T>(
-  fetchPage: (page: number) => Promise<PaginatedPage<T>>,
+  fetchPage: (page: number) => Promise<ListPage<T>>,
   options: { readonly maxPages?: number } = {},
-): Promise<PaginatedPage<T>> {
+): Promise<ListPage<T>> {
   const { maxPages = 50 } = options;
-  const pages: PaginatedPage<T>[] = [];
+  const pages: ListPage<T>[] = [];
   let combined: T[] = [];
-  let total: number | null | undefined;
+  let total: number | undefined;
 
   for (let page = 1; page <= maxPages; page += 1) {
     const pageData = await fetchPage(page);
     pages.push(pageData);
     combined = combined.concat(pageData.items ?? []);
-    if (total === undefined && pageData.total !== undefined) {
-      total = pageData.total ?? null;
+    if (total === undefined) {
+      total = pageData.total;
     }
-    if (!pageData.has_next) {
+    if (pageData.pageCount === 0 || page >= pageData.pageCount) {
       break;
     }
   }
@@ -51,10 +51,10 @@ export async function collectAllPages<T>(
     ...last,
     items: combined,
     page: 1,
-    page_size: first.page_size,
-    has_next: false,
-    has_previous: false,
+    perPage: first.perPage,
+    pageCount: 1,
     total: total ?? last.total,
+    changesCursor: last.changesCursor,
   };
 }
 

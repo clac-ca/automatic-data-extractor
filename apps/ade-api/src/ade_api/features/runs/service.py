@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,9 +25,14 @@ from ade_api.common.events import (
     new_event_record,
 )
 from ade_api.common.logging import log_context
-from ade_api.common.pagination import Page
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
+from ade_api.common.workbook_preview import (
+    WorkbookPreview,
+    build_workbook_preview_from_csv,
+    build_workbook_preview_from_xlsx,
+)
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
@@ -73,9 +79,12 @@ from .exceptions import (
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
+    RunOutputPreviewParseError,
+    RunOutputPreviewSheetNotFoundError,
+    RunOutputPreviewUnsupportedError,
     RunQueueFullError,
 )
-from .filters import RunColumnFilters, RunFilters
+from .filters import RunColumnFilters
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
@@ -85,6 +94,7 @@ from .schemas import (
     RunInput,
     RunLinks,
     RunOutput,
+    RunPage,
     RunResource,
 )
 from .supervisor import RunExecutionSupervisor
@@ -1456,12 +1466,13 @@ class RunsService:
         *,
         workspace_id: UUID,
         configuration_id: UUID | None = None,
-        filters: RunFilters,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
         order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[RunResource]:
+        per_page: int,
+    ) -> RunPage:
         """Return paginated runs for ``workspace_id`` with optional filters."""
 
         logger.debug(
@@ -1469,11 +1480,11 @@ class RunsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                filters=filters.model_dump(exclude_none=True),
+                filters=[item.model_dump() for item in filters],
                 order_by=str(order_by),
                 page=page,
-                page_size=page_size,
-                include_total=include_total,
+                per_page=per_page,
+                q=q,
             ),
         )
 
@@ -1481,19 +1492,20 @@ class RunsService:
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             filters=filters,
+            join_operator=join_operator,
+            q=q,
             order_by=order_by,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
+            per_page=per_page,
         )
         resources = [await self.to_resource(run) for run in page_result.items]
-        response = Page(
+        response = RunPage(
             items=resources,
             page=page_result.page,
-            page_size=page_result.page_size,
-            has_next=page_result.has_next,
-            has_previous=page_result.has_previous,
+            per_page=page_result.per_page,
+            page_count=page_result.page_count,
             total=page_result.total,
+            changes_cursor=page_result.changes_cursor,
         )
 
         logger.info(
@@ -1502,7 +1514,7 @@ class RunsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 page=response.page,
-                page_size=response.page_size,
+                per_page=response.per_page,
                 count=len(response.items),
                 total=response.total,
             ),
@@ -1513,12 +1525,13 @@ class RunsService:
         self,
         *,
         configuration_id: UUID,
-        filters: RunFilters,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
         order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[RunResource]:
+        per_page: int,
+    ) -> RunPage:
         """Return paginated runs for ``configuration_id`` scoped to its workspace."""
 
         configuration = await self._resolve_configuration(configuration_id)
@@ -1526,10 +1539,11 @@ class RunsService:
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
             filters=filters,
+            join_operator=join_operator,
+            q=q,
             order_by=order_by,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
+            per_page=per_page,
         )
 
     async def to_resource(self, run: Run) -> RunResource:
@@ -1814,6 +1828,71 @@ class RunsService:
                 ) from err
             raise
         return run, path
+
+    async def get_run_output_preview(
+        self,
+        *,
+        run_id: UUID,
+        max_rows: int,
+        max_columns: int,
+        sheet_name: str | None = None,
+        sheet_index: int | None = None,
+    ) -> WorkbookPreview:
+        """Return a table-ready preview for a run output workbook."""
+
+        logger.debug(
+            "run.output.preview.start",
+            extra=log_context(run_id=run_id, sheet_name=sheet_name, sheet_index=sheet_index),
+        )
+
+        run, path = await self.resolve_output_for_download(run_id=run_id)
+        suffix = path.suffix.lower()
+
+        try:
+            if suffix == ".xlsx":
+                preview = await run_in_threadpool(
+                    build_workbook_preview_from_xlsx,
+                    path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    sheet_name=sheet_name,
+                    sheet_index=sheet_index,
+                )
+            elif suffix == ".csv":
+                preview = await run_in_threadpool(
+                    build_workbook_preview_from_csv,
+                    path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    sheet_name=sheet_name,
+                    sheet_index=sheet_index,
+                )
+            else:
+                raise RunOutputPreviewUnsupportedError(
+                    f"Preview is not supported for output file type {suffix!r}."
+                )
+        except (KeyError, IndexError) as exc:
+            requested = sheet_name if sheet_name is not None else str(sheet_index)
+            raise RunOutputPreviewSheetNotFoundError(
+                f"Sheet {requested!r} was not found in run {run_id!r} output."
+            ) from exc
+        except RunOutputPreviewUnsupportedError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            raise RunOutputPreviewParseError(
+                f"Preview generation failed for run {run_id!r} output ({type(exc).__name__})."
+            ) from exc
+
+        logger.info(
+            "run.output.preview.success",
+            extra=log_context(
+                run_id=run.id,
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                sheet_count=len(preview.sheets),
+            ),
+        )
+        return preview
 
     async def get_logs_file_path(self, *, run_id: UUID) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
@@ -2749,11 +2828,8 @@ class RunsService:
 
     async def _emit_document_upsert(self, document: Document) -> None:
         payload = DocumentOut.model_validate(document)
-        await self._documents_service._attach_last_runs(document.workspace_id, [payload])
-        queue_context = await self._documents_service.build_queue_context(
-            workspace_id=document.workspace_id,
-        )
-        self._documents_service._apply_derived_fields(payload, queue_context)
+        await self._documents_service._attach_latest_runs(document.workspace_id, [payload])
+        self._documents_service._apply_derived_fields(payload)
         await self._document_changes.record_upsert(
             workspace_id=document.workspace_id,
             document_id=document.id,

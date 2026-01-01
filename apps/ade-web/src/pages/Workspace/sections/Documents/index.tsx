@@ -27,7 +27,7 @@ import {
   type BuiltInViewId,
 } from "./filters";
 
-const STATUS_VALUES = new Set<DocumentStatus>(["queued", "processing", "ready", "failed", "archived"]);
+const STATUS_VALUES = new Set<DocumentStatus>(["uploaded", "processing", "processed", "failed", "archived"]);
 const FILE_TYPE_VALUES = new Set<FileType>(["xlsx", "xls", "csv", "pdf"]);
 
 function parseFiltersFromSearch(search: string): DocumentsFilters {
@@ -113,6 +113,7 @@ export default function DocumentsScreen() {
   const model = useDocumentsModel({
     currentUserLabel,
     currentUserId,
+    currentUserEmail: session.user.email,
     workspaceId: workspace.id,
     processingPaused: workspace.processing_paused ?? false,
     initialFilters: urlFilters,

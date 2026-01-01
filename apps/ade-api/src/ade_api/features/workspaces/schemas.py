@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import Field
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.pagination import Page
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 
 
@@ -59,7 +59,7 @@ class WorkspaceDefaultSelectionOut(BaseSchema):
     is_default: bool
 
 
-class WorkspacePage(Page[WorkspaceOut]):
+class WorkspacePage(ListPage[WorkspaceOut]):
     """Paginated workspace listing."""
 
 
@@ -85,7 +85,7 @@ class WorkspaceMemberUpdate(BaseSchema):
     role_ids: list[UUIDStr]
 
 
-class WorkspaceMemberPage(Page[WorkspaceMemberOut]):
+class WorkspaceMemberPage(ListPage[WorkspaceMemberOut]):
     """Paginated collection of workspace members."""
 
 

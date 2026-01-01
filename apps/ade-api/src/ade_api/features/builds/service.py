@@ -26,8 +26,9 @@ from ade_api.common.events import (
 )
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
-from ade_api.common.pagination import Page
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.time import utc_now
+from ade_api.common.types import OrderBy
 from ade_api.common.validators import normalize_utc
 from ade_api.features.builds.fingerprint import (
     compute_build_fingerprint,
@@ -59,7 +60,7 @@ from .builder import (
 )
 from .exceptions import BuildExecutionError, BuildNotFoundError, BuildWorkspaceMismatchError
 from .repository import BuildsRepository
-from .schemas import BuildCreateOptions, BuildLinks, BuildResource
+from .schemas import BuildCreateOptions, BuildLinks, BuildPage, BuildResource
 
 __all__ = [
     "BuildDecision",
@@ -601,11 +602,13 @@ class BuildsService:
         *,
         workspace_id: UUID,
         configuration_id: UUID,
-        statuses: Sequence[BuildStatus] | None,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[BuildResource]:
+        per_page: int,
+    ) -> BuildPage:
         """Return paginated builds for ``configuration_id``."""
 
         logger.debug(
@@ -613,10 +616,11 @@ class BuildsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                statuses=[status.value for status in statuses] if statuses else None,
+                filters=[item.model_dump() for item in filters],
+                join_operator=join_operator.value,
+                q=q,
                 page=page,
-                page_size=page_size,
-                include_total=include_total,
+                per_page=per_page,
             ),
         )
 
@@ -627,19 +631,21 @@ class BuildsService:
         page_result = await self._builds.list_by_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
-            statuses=statuses,
+            filters=filters,
+            join_operator=join_operator,
+            q=q,
+            order_by=order_by,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
+            per_page=per_page,
         )
         resources = [self.to_resource(build) for build in page_result.items]
-        response = Page(
+        response = BuildPage(
             items=resources,
             page=page_result.page,
-            page_size=page_result.page_size,
-            has_next=page_result.has_next,
-            has_previous=page_result.has_previous,
+            per_page=page_result.per_page,
+            page_count=page_result.page_count,
             total=page_result.total,
+            changes_cursor=page_result.changes_cursor,
         )
 
         logger.info(
@@ -648,7 +654,7 @@ class BuildsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 page=response.page,
-                page_size=response.page_size,
+                per_page=response.per_page,
                 count=len(response.items),
                 total=response.total,
             ),

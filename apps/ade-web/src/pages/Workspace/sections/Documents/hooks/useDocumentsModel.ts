@@ -29,13 +29,13 @@ import {
   streamDocumentChanges,
   type DocumentUploadResponse,
 } from "@api/documents";
+import { buildWeakEtag } from "@api/etag";
 import { createRunForDocument, fetchRunMetrics, fetchWorkspaceRunsForDocument } from "@api/runs/api";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import {
   useUploadManager,
   type UploadManagerItem,
   type UploadManagerQueueItem,
-  type UploadManagerStatus,
   type UploadManagerSummary,
 } from "@hooks/documents/uploadManager";
 import { documentsKeys } from "@hooks/documents/keys";
@@ -55,7 +55,6 @@ import type {
   DocumentsFilters,
   DocumentStatus,
   ListSettings,
-  ListDocumentsQuery,
   RunMetricsResource,
   SavedView,
   ViewMode,
@@ -69,7 +68,6 @@ import {
   downloadRunOutputById,
   fetchWorkbookPreview,
   fileTypeFromName,
-  formatBytes,
   getDocumentOutputRun,
   parseTimestamp,
   runHasDownloadableOutput,
@@ -81,8 +79,8 @@ import {
   type BuiltInViewId,
   DEFAULT_DOCUMENT_FILTERS,
   UNASSIGNED_KEY,
+  buildDocumentFilterItems,
   buildFiltersForBuiltInView,
-  normalizeAssignees,
   resolveActiveViewId,
 } from "../filters";
 
@@ -257,7 +255,7 @@ export type WorkbenchModel = {
   actions: WorkbenchActions;
 };
 
-const STATUS_ORDER: DocumentStatus[] = ["queued", "processing", "ready", "failed", "archived"];
+const STATUS_ORDER: DocumentStatus[] = ["uploaded", "processing", "processed", "failed", "archived"];
 
 const DOCUMENTS_STORAGE_KEYS = {
   views: (workspaceId: string) => `ade.documents.views.${workspaceId}`,
@@ -335,12 +333,14 @@ export function useDocumentsModel({
   workspaceId,
   currentUserLabel,
   currentUserId,
+  currentUserEmail,
   processingPaused,
   initialFilters,
 }: {
   workspaceId: string;
   currentUserLabel: string;
   currentUserId: string;
+  currentUserEmail: string;
   processingPaused: boolean;
   initialFilters?: DocumentsFilters;
 }): WorkbenchModel {
@@ -404,6 +404,7 @@ export function useDocumentsModel({
         row: DocumentListRow;
         assigneeKey: string | null;
         assigneeLabel: string | null;
+        uploaderLabel: string | null;
         commentCount: number;
         entry: DocumentEntry;
       }
@@ -467,7 +468,7 @@ export function useDocumentsModel({
   const configMissing = configurationsQuery.isSuccess && !activeConfiguration;
 
   // Query key
-  const sort = "-created_at";
+  const sort = "-createdAt";
   const listKey = useMemo(
     () =>
       documentsKeys.list(workspaceId, {
@@ -489,6 +490,10 @@ export function useDocumentsModel({
     return refreshInterval;
   }, [changeDetectionEnabled, refreshInterval]);
 
+  const searchValue = search.trim();
+  const q = searchValue.length >= 2 ? searchValue : null;
+  const filterItems = useMemo(() => buildDocumentFilterItems(filters), [filters]);
+
   // Documents query (server-projected list rows)
   const documentsQuery = useInfiniteQuery<DocumentPageResult>({
     queryKey: listKey,
@@ -499,12 +504,14 @@ export function useDocumentsModel({
         {
           sort,
           page: typeof pageParam === "number" ? pageParam : 1,
-          pageSize: listSettings.pageSize,
-          query: buildDocumentsQuery(filters, search),
+          perPage: listSettings.pageSize,
+          filters: filterItems,
+          q,
         },
         signal,
       ),
-    getNextPageParam: (lastPage) => (lastPage.has_next ? lastPage.page + 1 : undefined),
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
     enabled: workspaceId.length > 0,
     staleTime: 15_000,
     refetchInterval: queryRefetchInterval,
@@ -522,7 +529,7 @@ export function useDocumentsModel({
   // Establish baseline cursor from list responses
   useEffect(() => {
     const firstPage = documentsQuery.data?.pages[0];
-    const cursor = firstPage?.changes_cursor ?? firstPage?.changesCursorHeader ?? null;
+    const cursor = firstPage?.changesCursor ?? firstPage?.changesCursorHeader ?? null;
     if (!cursor) return;
     if (changesCursorRef.current === cursor) return;
     changesCursorRef.current = cursor;
@@ -575,8 +582,9 @@ export function useDocumentsModel({
       const page = await fetchWorkspaceDocuments(workspaceId, {
         sort,
         page: 1,
-        pageSize: listSettings.pageSize,
-        query: buildDocumentsQuery(filters, search),
+        perPage: listSettings.pageSize,
+        filters: filterItems,
+        q,
       });
 
       queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
@@ -596,7 +604,7 @@ export function useDocumentsModel({
         void refreshDocumentsFirstPage();
       }
     }
-  }, [filters, listKey, listSettings.pageSize, queryClient, search, sort, workspaceId]);
+  }, [filterItems, listKey, listSettings.pageSize, q, queryClient, sort, workspaceId]);
 
   const scheduleDocumentsRefresh = useCallback(() => {
     if (refreshTimerRef.current) return;
@@ -623,7 +631,7 @@ export function useDocumentsModel({
 
       let data = existing;
       for (const change of batch) {
-        const result = mergeDocumentChangeIntoPages(data, change, { filters, search, sort });
+        const result = mergeDocumentChangeIntoPages(data, change);
         data = result.data;
         if (result.updatesAvailable) shouldRefresh = true;
       }
@@ -635,13 +643,13 @@ export function useDocumentsModel({
       if (change.type === "document.upsert" && change.row) {
         queryClient.setQueryData(documentsKeys.document(workspaceId, change.row.id), change.row);
       }
-      if (change.type === "document.deleted" && change.document_id) {
-        queryClient.removeQueries({ queryKey: documentsKeys.document(workspaceId, change.document_id) });
+      if (change.type === "document.deleted" && change.documentId) {
+        queryClient.removeQueries({ queryKey: documentsKeys.document(workspaceId, change.documentId) });
       }
     }
 
     if (shouldRefresh) scheduleDocumentsRefresh();
-  }, [filters, listKey, queryClient, scheduleDocumentsRefresh, search, sort, workspaceId]);
+  }, [listKey, queryClient, scheduleDocumentsRefresh, workspaceId]);
 
   const enqueueChange = useCallback(
     (change: DocumentChangeEntry) => {
@@ -686,7 +694,12 @@ export function useDocumentsModel({
 
       while (!controller.signal.aborted) {
         const cursor = lastChangeCursorRef.current ?? changesCursor;
-        const streamUrl = documentChangesStreamUrl(workspaceId, { cursor });
+        const streamUrl = documentChangesStreamUrl(workspaceId, {
+          cursor,
+          sort,
+          q: q ?? undefined,
+          filters: filterItems,
+        });
 
         try {
           for await (const change of streamDocumentChanges(streamUrl, controller.signal)) {
@@ -719,7 +732,7 @@ export function useDocumentsModel({
     })();
 
     return () => controller.abort();
-  }, [changeDetectionEnabled, changesCursor, enqueueChange, refetchDocuments, workspaceId]);
+  }, [changeDetectionEnabled, changesCursor, enqueueChange, filterItems, q, refetchDocuments, sort, workspaceId]);
 
   // Upload notifications
   useEffect(() => {
@@ -791,31 +804,31 @@ export function useDocumentsModel({
       // If the upload succeeded and the server row is already present, hide the optimistic row.
       if (item.status === "succeeded" && item.response?.id && documentIdsSet.has(item.response.id)) return;
 
-      const status: DocumentStatus =
-        item.status === "failed" ? "failed" : item.status === "uploading" ? "processing" : "queued";
+      const status: DocumentStatus = item.status === "failed" ? "failed" : "uploaded";
       const timestamp = new Date(createdAt).toISOString();
 
       entries.push({
         id: item.id,
-        workspace_id: workspaceId,
+        workspaceId: workspaceId,
         name: fileName,
         status,
-        file_type: fileTypeFromName(fileName),
-        stage: buildUploadStageLabel(item.status),
-        uploader_label: currentUserLabel,
-        assignee_user_id: null,
-        assignee_key: null,
+        fileType: fileTypeFromName(fileName),
+        uploader: {
+          id: currentUserId,
+          name: currentUserLabel,
+          email: currentUserEmail,
+        },
+        assignee: null,
+        assigneeKey: null,
+        uploaderLabel: currentUserLabel,
         tags: [],
-        byte_size: item.file.size,
-        size_label: formatBytes(item.file.size),
-        queue_state: null,
-        queue_reason: null,
-        mapping_health: { attention: 0, unmapped: 0, pending: true },
-        created_at: timestamp,
-        updated_at: timestamp,
-        activity_at: timestamp,
-        last_run: null,
-        last_successful_run: null,
+        byteSize: item.file.size,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        activityAt: timestamp,
+        latestRun: null,
+        latestSuccessfulRun: null,
+        latestResult: { attention: 0, unmapped: 0, pending: true },
         progress: item.status === "uploading" ? item.progress.percent : undefined,
         error:
           item.status === "failed"
@@ -825,14 +838,14 @@ export function useDocumentsModel({
                 nextStep: "Retry now or remove the upload.",
               }
             : undefined,
-        assignee_label: null,
-        comment_count: (commentsByDocId[item.id] ?? []).length,
+        assigneeLabel: null,
+        commentCount: (commentsByDocId[item.id] ?? []).length,
         upload: item,
       });
     });
 
     return entries;
-  }, [commentsByDocId, currentUserLabel, documentIdsSet, uploadManager.items, workspaceId]);
+  }, [commentsByDocId, currentUserEmail, currentUserId, currentUserLabel, documentIdsSet, uploadManager.items, workspaceId]);
 
   const uploadIdsSet = useMemo(() => new Set(uploadManager.items.map((i) => i.id)), [uploadManager.items]);
   const activeIdIsUpload = useMemo(() => Boolean(activeId && uploadIdsSet.has(activeId)), [activeId, uploadIdsSet]);
@@ -896,9 +909,10 @@ export function useDocumentsModel({
     for (const row of documentsRaw) {
       keepIds.add(row.id);
 
-      const assigneeKey = row.assignee_key ?? null;
+      const assigneeKey = row.assignee?.id ? `user:${row.assignee.id}` : null;
       const commentCount = (commentsByDocId[row.id] ?? []).length;
       const assigneeLabel = assigneeLabelForKey(assigneeKey);
+      const uploaderLabel = row.uploader?.name || row.uploader?.email || null;
 
       const cached = cache.get(row.id);
       if (
@@ -906,7 +920,8 @@ export function useDocumentsModel({
         cached.row === row &&
         cached.assigneeKey === assigneeKey &&
         cached.commentCount === commentCount &&
-        cached.assigneeLabel === assigneeLabel
+        cached.assigneeLabel === assigneeLabel &&
+        cached.uploaderLabel === uploaderLabel
       ) {
         result.push(cached.entry);
         continue;
@@ -915,13 +930,14 @@ export function useDocumentsModel({
       const entry: DocumentEntry = {
         ...row,
         record: row,
-        assignee_key: assigneeKey,
-        assignee_label: assigneeLabel,
-        comment_count: commentCount,
+        assigneeKey: assigneeKey,
+        assigneeLabel: assigneeLabel,
+        uploaderLabel,
+        commentCount: commentCount,
         tags: row.tags ?? [],
       };
 
-      cache.set(row.id, { row, assigneeKey, assigneeLabel, commentCount, entry });
+      cache.set(row.id, { row, assigneeKey, assigneeLabel, uploaderLabel, commentCount, entry });
       result.push(entry);
     }
 
@@ -940,15 +956,17 @@ export function useDocumentsModel({
     if (!activeRowQuery.data) return null;
 
     const row = activeRowQuery.data;
-    const assigneeKey = row.assignee_key ?? null;
+    const assigneeKey = row.assignee?.id ? `user:${row.assignee.id}` : null;
     const commentCount = (commentsByDocId[row.id] ?? []).length;
+    const uploaderLabel = row.uploader?.name || row.uploader?.email || null;
 
     const entry: DocumentEntry = {
       ...row,
       record: row,
-      assignee_key: assigneeKey,
-      assignee_label: assigneeLabelForKey(assigneeKey),
-      comment_count: commentCount,
+      assigneeKey: assigneeKey,
+      assigneeLabel: assigneeLabelForKey(assigneeKey),
+      uploaderLabel,
+      commentCount: commentCount,
       tags: row.tags ?? [],
     };
 
@@ -1022,7 +1040,7 @@ export function useDocumentsModel({
 
     const uploaderSet = new Set<string>();
     visibleDocuments.forEach((doc) => {
-      if (doc.uploader_label) uploaderSet.add(doc.uploader_label);
+      if (doc.uploaderLabel) uploaderSet.add(doc.uploaderLabel);
     });
 
     const uploaders = Array.from(uploaderSet).sort((a, b) => a.localeCompare(b));
@@ -1030,13 +1048,13 @@ export function useDocumentsModel({
     const columns = uploaders.map((uploader) => ({
       id: uploader,
       label: uploader,
-      items: visibleDocuments.filter((doc) => doc.uploader_label === uploader),
+      items: visibleDocuments.filter((doc) => doc.uploaderLabel === uploader),
     }));
 
     columns.push({
       id: "__unassigned_uploader__",
       label: "Unassigned",
-      items: visibleDocuments.filter((doc) => !doc.uploader_label),
+      items: visibleDocuments.filter((doc) => !doc.uploaderLabel),
     });
 
     return columns;
@@ -1099,8 +1117,8 @@ export function useDocumentsModel({
     let archived = 0;
 
     for (const d of documents) {
-      const isMine = d.assignee_key === currentUserKey;
-      const isUnassigned = !d.assignee_key;
+      const isMine = d.assigneeKey === currentUserKey;
+      const isUnassigned = !d.assigneeKey;
 
       if (isMine) assignedToMe += 1;
       if (isUnassigned) unassigned += 1;
@@ -1108,8 +1126,8 @@ export function useDocumentsModel({
 
       if (ACTIVE_DOCUMENT_STATUSES.includes(d.status)) active += 1;
 
-      if (d.status === "ready") processed += 1;
-      if (d.status === "processing" || d.status === "queued") processing += 1;
+      if (d.status === "processed") processed += 1;
+      if (d.status === "processing" || d.status === "uploaded") processing += 1;
       if (d.status === "failed") failed += 1;
       if (d.status === "archived") archived += 1;
     }
@@ -1148,10 +1166,10 @@ export function useDocumentsModel({
 
   const runs = useMemo(() => {
     const items = runsQuery.data ?? [];
-    return items.slice().sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
+    return items.slice().sort((a, b) => parseTimestamp(b.createdAt) - parseTimestamp(a.createdAt));
   }, [runsQuery.data]);
 
-  const preferredRunId = activeDocument?.record?.last_run?.run_id ?? null;
+  const preferredRunId = activeDocument?.record?.latestRun?.id ?? null;
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -1451,9 +1469,19 @@ export function useDocumentsModel({
       const entry = documentsByEntryId.get(documentId);
       if (!entry?.record) return;
 
-      const assigneeUserId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
+      const assigneeId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
+      const assigneeLabel = assigneeKey ? (peopleByKey.get(assigneeKey)?.label ?? assigneeKey) : null;
+      const assigneeEmail = assigneeLabel && assigneeLabel.includes("@") ? assigneeLabel : "";
+      const assigneeSummary = assigneeId
+        ? {
+            id: assigneeId,
+            name: assigneeLabel ?? assigneeId,
+            email: assigneeEmail,
+          }
+        : null;
 
-      void patchWorkspaceDocument(workspaceId, entry.id, { assigneeUserId })
+      const ifMatch = buildWeakEtag(entry.id, entry.updatedAt);
+      void patchWorkspaceDocument(workspaceId, entry.id, { assigneeId }, { ifMatch })
         .then(() => {
           queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
             if (!existing?.pages) return existing;
@@ -1462,19 +1490,26 @@ export function useDocumentsModel({
               pages: existing.pages.map((page) => ({
                 ...page,
                 items: (page.items ?? []).map((item) =>
-                  item.id === entry.id ? { ...item, assignee_user_id: assigneeUserId, assignee_key: assigneeKey } : item,
+                  item.id === entry.id ? { ...item, assignee: assigneeSummary } : item,
                 ),
               })),
             };
           });
 
           queryClient.setQueryData(documentsKeys.document(workspaceId, entry.id), (existing: DocumentEntry | undefined) =>
-            existing ? { ...existing, assignee_user_id: assigneeUserId, assignee_key: assigneeKey } : existing,
+            existing
+              ? {
+                  ...existing,
+                  assignee: assigneeSummary,
+                  assigneeKey: assigneeKey,
+                  assigneeLabel: assigneeLabelForKey(assigneeKey),
+                }
+              : existing,
           );
 
           notifyToast({
             title: "Assignment updated",
-            description: assigneeKey ? (peopleByKey.get(assigneeKey)?.label ?? assigneeKey) : "Unassigned",
+            description: assigneeLabel ?? "Unassigned",
             intent: "success",
           });
         })
@@ -1486,7 +1521,7 @@ export function useDocumentsModel({
           });
         });
     },
-    [documentsByEntryId, listKey, notifyToast, peopleByKey, queryClient, workspaceId],
+    [assigneeLabelForKey, documentsByEntryId, listKey, notifyToast, peopleByKey, queryClient, workspaceId],
   );
 
   const pickUpDocument = useCallback((documentId: string) => assignDocument(documentId, currentUserKey), [assignDocument, currentUserKey]);
@@ -1578,7 +1613,7 @@ export function useDocumentsModel({
 
   const downloadOutputFromRow = useCallback(
     (doc: DocumentEntry) => {
-      const runId = getDocumentOutputRun(doc.record)?.run_id ?? null;
+      const runId = getDocumentOutputRun(doc.record)?.runId ?? null;
       if (!doc.record || !runId) {
         notifyToast({
           title: "Output not ready",
@@ -1704,7 +1739,8 @@ export function useDocumentsModel({
       const entry = documentsByEntryId.get(documentId);
       if (!entry?.record) return;
 
-      void deleteWorkspaceDocument(workspaceId, entry.id)
+      const ifMatch = buildWeakEtag(entry.id, entry.updatedAt);
+      void deleteWorkspaceDocument(workspaceId, entry.id, { ifMatch })
         .then(() => {
           notifyToast({ title: "Document deleted", description: entry.name, intent: "success" });
 
@@ -1904,7 +1940,7 @@ export function useDocumentsModel({
 
     let triggered = 0;
     docs.forEach((d) => {
-      const runId = getDocumentOutputRun(d.record)?.run_id ?? null;
+      const runId = getDocumentOutputRun(d.record)?.runId ?? null;
       if (!runId) return;
       triggered += 1;
       void downloadRunOutputById(runId, d.name).catch(() => undefined);
@@ -2057,33 +2093,6 @@ export function useDocumentsModel({
   };
 }
 
-function buildDocumentsQuery(filters: DocumentsFilters, search: string): Partial<ListDocumentsQuery> {
-  const query: Partial<ListDocumentsQuery> = {};
-  const trimmedSearch = search.trim();
-
-  if (trimmedSearch.length >= 2) query.q = trimmedSearch;
-
-  if (filters.statuses.length > 0) query.display_status = filters.statuses;
-
-  if (filters.fileTypes.length > 0) {
-    const fileTypes = filters.fileTypes.filter((type) => type !== "unknown");
-    if (fileTypes.length > 0) query.file_type = fileTypes;
-  }
-
-  if (filters.tags.length > 0) {
-    query.tags = filters.tags;
-    query.tag_mode = filters.tagMode;
-  }
-
-  if (filters.assignees.length > 0) {
-    const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
-    if (assigneeIds.length > 0) query.assignee_user_id = assigneeIds;
-    if (includeUnassigned) query.assignee_unassigned = true;
-  }
-
-  return query;
-}
-
 function filterUploadEntries(entries: DocumentEntry[], filters: DocumentsFilters, search: string): DocumentEntry[] {
   const searchValue = search.trim().toLowerCase();
   const hasSearch = searchValue.length >= 2;
@@ -2093,11 +2102,11 @@ function filterUploadEntries(entries: DocumentEntry[], filters: DocumentsFilters
     if (hasSearch) {
       const haystack = [
         doc.name,
-        doc.uploader_label ?? "",
+        doc.uploaderLabel ?? "",
         doc.tags.join(" "),
-        doc.assignee_label ?? "",
-        doc.assignee_key ?? "",
-        doc.file_type,
+        doc.assigneeLabel ?? "",
+        doc.assigneeKey ?? "",
+        doc.fileType,
       ]
         .join(" ")
         .toLowerCase();
@@ -2106,7 +2115,7 @@ function filterUploadEntries(entries: DocumentEntry[], filters: DocumentsFilters
     }
 
     if (statusFilters.length > 0 && !statusFilters.includes(doc.status)) return false;
-    if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.file_type)) return false;
+    if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.fileType)) return false;
 
     if (filters.tags.length > 0) {
       if (filters.tagMode === "all") {
@@ -2118,8 +2127,8 @@ function filterUploadEntries(entries: DocumentEntry[], filters: DocumentsFilters
 
     if (filters.assignees.length > 0) {
       const includeUnassigned = filters.assignees.includes(UNASSIGNED_KEY);
-      const assignedMatch = doc.assignee_key ? filters.assignees.includes(doc.assignee_key) : false;
-      const unassignedMatch = !doc.assignee_key && includeUnassigned;
+      const assignedMatch = doc.assigneeKey ? filters.assignees.includes(doc.assigneeKey) : false;
+      const unassignedMatch = !doc.assigneeKey && includeUnassigned;
       if (!assignedMatch && !unassignedMatch) return false;
     }
 
@@ -2139,7 +2148,7 @@ function compactDocumentChanges(changes: DocumentChangeEntry[]): DocumentChangeE
 
   for (let index = changes.length - 1; index >= 0; index -= 1) {
     const change = changes[index];
-    const id = change.document_id ?? change.row?.id;
+    const id = change.documentId ?? change.row?.id;
     if (!id || seen.has(id)) continue;
     seen.add(id);
     deduped.push(change);
@@ -2148,28 +2157,9 @@ function compactDocumentChanges(changes: DocumentChangeEntry[]): DocumentChangeE
   return deduped.reverse();
 }
 
-function buildUploadStageLabel(status: UploadManagerStatus) {
-  switch (status) {
-    case "paused":
-      return "Upload paused";
-    case "cancelled":
-      return "Upload cancelled";
-    case "failed":
-      return "Upload failed";
-    case "uploading":
-      return "Uploading";
-    case "queued":
-      return "Queued for upload";
-    case "succeeded":
-      return "Upload complete";
-    default:
-      return "Queued for upload";
-  }
-}
-
 function statusLabel(status: DocumentStatus) {
   switch (status) {
-    case "ready":
+    case "processed":
       return "Processed";
     case "processing":
       return "Processing";
@@ -2177,8 +2167,8 @@ function statusLabel(status: DocumentStatus) {
       return "Failed";
     case "archived":
       return "Archived";
-    case "queued":
-      return "Queued";
+    case "uploaded":
+      return "Uploaded";
     default:
       return status;
   }

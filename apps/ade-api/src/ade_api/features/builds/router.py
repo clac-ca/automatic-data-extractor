@@ -23,42 +23,47 @@ from sse_starlette.sse import EventSourceResponse
 from ade_api.api.deps import get_builds_service
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import strip_sequence
+from ade_api.common.listing import (
+    ListQueryParams,
+    list_query_params,
+    strict_list_query_guard,
+)
+from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import BuildStatus
-from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 from .exceptions import BuildNotFoundError
-from .schemas import (
-    BuildCreateRequest,
-    BuildEventsPage,
-    BuildFilters,
-    BuildListParams,
-    BuildPage,
-    BuildResource,
-)
+from .schemas import BuildCreateRequest, BuildEventsPage, BuildPage, BuildResource
 from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildsService
+from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from .tasks import execute_build_background
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
 builds_service_dependency = Depends(get_builds_service)
 
-
-async def resolve_build_list_params(
-    page: Annotated[int, Query(ge=1, description="1-based page number")] = 1,
-    page_size: Annotated[int | None, Query(ge=1, le=MAX_PAGE_SIZE, alias="page_size")] = None,
-    limit: Annotated[int | None, Query(ge=1, le=MAX_PAGE_SIZE)] = None,
-    include_total: Annotated[bool, Query(description="Include total item count")] = False,
-) -> BuildListParams:
-    page_size_value = limit if limit is not None else page_size or DEFAULT_PAGE_SIZE
-    return BuildListParams(page=page, page_size=page_size_value, include_total=include_total)
-
-
-async def resolve_build_filters(
-    status: Annotated[list[BuildStatus] | None, Query()] = None,
-) -> BuildFilters:
-    return BuildFilters(status=status)
+WorkspacePath = Annotated[
+    UUID,
+    PathParam(
+        description="Workspace identifier",
+        alias="workspaceId",
+    ),
+]
+ConfigurationPath = Annotated[
+    UUID,
+    PathParam(
+        description="Configuration identifier",
+        alias="configurationId",
+    ),
+]
+BuildPath = Annotated[
+    UUID,
+    PathParam(
+        description="Build identifier",
+        alias="buildId",
+    ),
+]
 
 
 def _event_bytes(event: Any) -> bytes:
@@ -66,67 +71,62 @@ def _event_bytes(event: Any) -> bytes:
 
 
 @router.get(
-    "/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
+    "/workspaces/{workspaceId}/configurations/{configurationId}/builds",
     response_model=BuildPage,
     response_model_exclude_none=True,
 )
 async def list_builds_endpoint(
-    workspace_id: Annotated[
-        UUID,
-        PathParam(description="Workspace identifier"),
-    ],
-    configuration_id: Annotated[
-        UUID,
-        PathParam(description="Configuration identifier"),
-    ],
-    page: Annotated[BuildListParams, Depends(resolve_build_list_params)],
-    filters: Annotated[BuildFilters, Depends(resolve_build_filters)],
+    workspace_id: WorkspacePath,
+    configuration_id: ConfigurationPath,
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     _actor: Annotated[
         object,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: BuildsService = builds_service_dependency,
 ) -> BuildPage:
-    statuses = [BuildStatus(status) for status in filters.status] if filters.status else None
     try:
+        order_by = resolve_sort(
+            list_query.sort,
+            allowed=SORT_FIELDS,
+            default=DEFAULT_SORT,
+            id_field=ID_FIELD,
+        )
         return await service.list_builds(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
-            statuses=statuses,
-            page=page.page,
-            page_size=page.page_size,
-            include_total=page.include_total,
+            filters=list_query.filters,
+            join_operator=list_query.join_operator,
+            q=list_query.q,
+            order_by=order_by,
+            page=list_query.page,
+            per_page=list_query.per_page,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post(
-    "/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
+    "/workspaces/{workspaceId}/configurations/{configurationId}/builds",
     response_model=BuildResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
 async def create_build_endpoint(
     *,
-    workspace_id: Annotated[
-        UUID,
-        PathParam(description="Workspace identifier"),
-    ],
-    configuration_id: Annotated[
-        UUID,
-        PathParam(description="Configuration identifier"),
-    ],
+    workspace_id: WorkspacePath,
+    configuration_id: ConfigurationPath,
     payload: BuildCreateRequest,
     background_tasks: BackgroundTasks,
     _actor: Annotated[
         object,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: BuildsService = builds_service_dependency,
@@ -151,9 +151,9 @@ async def create_build_endpoint(
     return resource
 
 
-@router.get("/builds/{build_id}", response_model=BuildResource)
+@router.get("/builds/{buildId}", response_model=BuildResource)
 async def get_build_endpoint(
-    build_id: Annotated[UUID, PathParam(description="Build identifier")],
+    build_id: BuildPath,
     service: BuildsService = builds_service_dependency,
 ) -> BuildResource:
     build = await service.get_build(build_id)
@@ -163,12 +163,12 @@ async def get_build_endpoint(
 
 
 @router.get(
-    "/builds/{build_id}/events",
+    "/builds/{buildId}/events",
     response_model=BuildEventsPage,
     response_model_exclude_none=True,
 )
 async def list_build_events_endpoint(
-    build_id: Annotated[UUID, PathParam(description="Build identifier")],
+    build_id: BuildPath,
     format: Literal["json", "ndjson"] = Query(default="json"),
     after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
@@ -194,9 +194,9 @@ async def list_build_events_endpoint(
     return BuildEventsPage(items=events, next_after_sequence=next_after_sequence)
 
 
-@router.get("/builds/{build_id}/events/stream")
+@router.get("/builds/{buildId}/events/stream")
 async def stream_build_events_endpoint(
-    build_id: Annotated[UUID, PathParam(description="Build identifier")],
+    build_id: BuildPath,
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: BuildsService = builds_service_dependency,

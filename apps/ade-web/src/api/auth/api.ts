@@ -12,7 +12,6 @@ export const sessionKeys = {
 export type AuthProvider = components["schemas"]["AuthProvider"];
 export type AuthProviderResponse = components["schemas"]["AuthProviderListResponse"];
 type MeContext = components["schemas"]["MeContext"];
-type MeWorkspacePage = MeContext["workspaces"];
 type MeWorkspaceSummary = components["schemas"]["MeWorkspaceSummary"];
 type MeProfile = components["schemas"]["MeProfile"];
 
@@ -30,7 +29,7 @@ export type SessionUser = Readonly<
   }
 >;
 
-type SessionWorkspaces = Omit<MeWorkspacePage, "items"> & { items: MeWorkspaceSummary[] };
+type SessionWorkspaces = MeWorkspaceSummary[];
 
 export type SessionEnvelope = Readonly<{
   user: SessionUser;
@@ -107,16 +106,7 @@ export async function bootstrapSession(
 async function fetchMeBootstrap(signal?: AbortSignal): Promise<MeContext | null> {
   const path = "/api/v1/me/bootstrap" as const;
   try {
-    const { data } = await client.GET(path, {
-      signal,
-      params: {
-        query: {
-          page: 1,
-          page_size: 200,
-          include_total: false,
-        },
-      },
-    });
+    const { data } = await client.GET(path, { signal });
     return data ?? null;
   } catch (error: unknown) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
@@ -150,7 +140,7 @@ async function submitPasswordLogin(payload: LoginPayload, signal?: AbortSignal):
 }
 
 function preferredWorkspaceId(workspaces: SessionWorkspaces): string | null {
-  const preferred = workspaces.items.find((workspace) => workspace.is_default);
+  const preferred = workspaces.find((workspace) => workspace.is_default);
   return preferred ? preferred.id : null;
 }
 
@@ -161,21 +151,11 @@ function normalizeStringList(values?: string[] | null): string[] {
   return values.filter((value) => typeof value === "string");
 }
 
-function normalizeWorkspaces(page: MeWorkspacePage | null | undefined): SessionWorkspaces {
-  if (!page) {
-    return {
-      items: [],
-      page: 1,
-      page_size: 0,
-      total: 0,
-      has_next: false,
-      has_previous: false,
-    };
+function normalizeWorkspaces(workspaces: MeContext["workspaces"] | null | undefined): SessionWorkspaces {
+  if (!Array.isArray(workspaces)) {
+    return [];
   }
-  return {
-    ...page,
-    items: page.items ?? [],
-  };
+  return workspaces;
 }
 
 function normalizeSessionEnvelope(

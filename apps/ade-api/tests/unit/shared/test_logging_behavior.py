@@ -88,11 +88,14 @@ def test_unhandled_exception_handler_logs_with_correlation():
         assert any(rec.getMessage() == "probe.error" for rec in handler.records)
         handler.records.clear()
 
-        response = asyncio.run(
-            unhandled_exception_handler(request=request, exc=RuntimeError("boom"))
-        )
+        response = asyncio.run(unhandled_exception_handler(request=request, exc=RuntimeError("boom")))
         assert response.status_code == 500
-        assert response.body == b'{"detail":"Internal server error"}'
+        payload = response.json()
+        assert payload["type"] == "internal_error"
+        assert payload["title"] == "Internal server error"
+        assert payload["status"] == 500
+        assert payload["detail"] == "Internal server error"
+        assert payload["instance"] == "/boom"
 
         error_logs = [record for record in handler.records if record.name == "ade_api.errors"]
         assert error_logs, "Unhandled exception log not captured"

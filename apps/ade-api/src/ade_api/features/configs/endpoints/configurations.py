@@ -14,6 +14,7 @@ from fastapi import (
     Form,
     HTTPException,
     Request,
+    Response,
     Security,
     UploadFile,
     status,
@@ -22,7 +23,8 @@ from fastapi.responses import StreamingResponse
 
 from ade_api.api.deps import SettingsDep, get_builds_service, get_configurations_service
 from ade_api.common.downloads import build_content_disposition
-from ade_api.common.pagination import PageParams, paginate_sequence
+from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
+from ade_api.common.sorting import resolve_sort
 from ade_api.core.http import require_csrf, require_workspace
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildDecision, BuildsService
@@ -30,6 +32,7 @@ from ade_api.features.builds.tasks import execute_build_background
 from ade_api.features.runs.tasks import enqueue_pending_runs_background
 from ade_api.models import User
 
+from ade_api.common.etag import build_etag_token, format_weak_etag
 from ..etag import format_etag
 from ..exceptions import (
     ConfigImportError,
@@ -48,6 +51,7 @@ from ..schemas import (
     ConfigurationRecord,
     ConfigurationValidateResponse,
 )
+from ..sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ..service import (
     ConfigurationsService,
     PreconditionFailedError,
@@ -77,28 +81,35 @@ MAKE_ACTIVE_BODY = Body(
 async def list_configurations(
     workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
-    page: Annotated[PageParams, Depends()],
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> ConfigurationPage:
-    records = await service.list_configurations(workspace_id=workspace_id)
-    items = [ConfigurationRecord.model_validate(record) for record in records]
-    page_result = paginate_sequence(
-        items,
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
+    order_by = resolve_sort(
+        list_query.sort,
+        allowed=SORT_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
     )
-    return ConfigurationPage(**page_result.model_dump())
+    return await service.list_configurations(
+        workspace_id=workspace_id,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
+        order_by=order_by,
+        page=list_query.page,
+        per_page=list_query.per_page,
+    )
 
 
 @router.get(
-    "/configurations/{configuration_id}",
+    "/configurations/{configurationId}",
     response_model=ConfigurationRecord,
     response_model_exclude_none=True,
     summary="Retrieve configuration metadata",
@@ -106,12 +117,13 @@ async def list_configurations(
 async def read_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
+    response: Response,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> ConfigurationRecord:
@@ -122,7 +134,11 @@ async def read_configuration(
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
-    return ConfigurationRecord.model_validate(record)
+    payload = ConfigurationRecord.model_validate(record)
+    etag = format_weak_etag(build_etag_token(payload.id, payload.updated_at))
+    if etag:
+        response.headers["ETag"] = etag
+    return payload
 
 
 @router.post(
@@ -140,7 +156,7 @@ async def create_configuration(
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     *,
@@ -187,7 +203,7 @@ async def import_configuration(
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     *,
@@ -224,7 +240,7 @@ async def import_configuration(
 
 
 @router.post(
-    "/configurations/{configuration_id}/validate",
+    "/configurations/{configurationId}/validate",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationValidateResponse,
     summary="Validate the configuration on disk",
@@ -240,7 +256,7 @@ async def validate_configuration(
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     ) -> ConfigurationValidateResponse:
@@ -285,7 +301,7 @@ async def validate_configuration(
 
 
 @router.post(
-    "/configurations/{configuration_id}/publish",
+    "/configurations/{configurationId}/publish",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     summary="Make a draft configuration active",
@@ -301,7 +317,7 @@ async def publish_configuration_endpoint(
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     payload: None = MAKE_ACTIVE_BODY,
@@ -339,7 +355,7 @@ async def publish_configuration_endpoint(
 
 
 @router.post(
-    "/configurations/{configuration_id}/archive",
+    "/configurations/{configurationId}/archive",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     summary="Archive the active configuration",
@@ -353,7 +369,7 @@ async def archive_configuration_endpoint(
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> ConfigurationRecord:
@@ -370,7 +386,7 @@ async def archive_configuration_endpoint(
 
 
 @router.get(
-    "/configurations/{configuration_id}/export",
+    "/configurations/{configurationId}/export",
     responses={
         status.HTTP_200_OK: {"content": {"application/zip": {}}},
     },
@@ -383,7 +399,7 @@ async def export_config(
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     format: str = "zip",
@@ -405,7 +421,7 @@ async def export_config(
 
 
 @router.put(
-    "/configurations/{configuration_id}/import",
+    "/configurations/{configurationId}/import",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
     summary="Replace a draft configuration from an uploaded archive",
@@ -420,7 +436,7 @@ async def replace_configuration_from_archive(
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     file: UploadFile = UPLOAD_ARCHIVE_FIELD,

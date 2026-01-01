@@ -6,7 +6,7 @@ import base64
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, Security, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -41,6 +41,9 @@ from ..service import (
 )
 
 router = APIRouter()
+
+FilePathParam = Annotated[str, Path(alias="filePath")]
+DirectoryPathParam = Annotated[str, Path(alias="directoryPath")]
 
 
 def _accepts_json(request: Request, override: str | None) -> bool:
@@ -99,7 +102,7 @@ def _upsert_response(
 
 
 @router.get(
-    "/configurations/{configuration_id}/files",
+    "/configurations/{configurationId}/files",
     response_model=FileListing,
     response_model_exclude_none=True,
     summary="List editable files and directories",
@@ -113,7 +116,7 @@ async def list_config_files(
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     prefix: str = "",
@@ -121,7 +124,7 @@ async def list_config_files(
     include: Annotated[list[str] | None, Query(alias="include")] = None,
     exclude: Annotated[list[str] | None, Query(alias="exclude")] = None,
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
-    page_token: str | None = None,
+    cursor: str | None = None,
     sort: Literal["path", "name", "mtime", "size"] = "path",
     order: Literal["asc", "desc"] = "asc",
 ) -> Response:
@@ -134,7 +137,7 @@ async def list_config_files(
             include=include or [],
             exclude=exclude or [],
             limit=limit,
-            page_token=page_token,
+            cursor=cursor,
             sort=sort,
             order=order,
         )
@@ -148,9 +151,9 @@ async def list_config_files(
         )
     except InvalidPageTokenError:
         raise_problem(
-            "invalid_page_token",
+            "invalid_cursor",
             status.HTTP_400_BAD_REQUEST,
-            detail="page_token is invalid",
+            detail="cursor is invalid",
         )
 
     weak_etag = format_weak_etag(listing["fileset_hash"])
@@ -170,7 +173,7 @@ async def list_config_files(
 
 
 @router.get(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     responses={
         status.HTTP_200_OK: {"content": {"application/octet-stream": {}}},
         status.HTTP_206_PARTIAL_CONTENT: {"content": {"application/octet-stream": {}}},
@@ -180,14 +183,14 @@ async def list_config_files(
 async def read_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     format: str | None = None,
@@ -274,19 +277,19 @@ async def read_config_file(
 
 
 @router.head(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     responses={status.HTTP_200_OK: {"model": None}},
 )
 async def head_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
@@ -320,7 +323,7 @@ async def head_config_file(
 
 
 @router.put(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileWriteResponse,
     responses={
@@ -331,14 +334,14 @@ async def head_config_file(
 async def upsert_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     parents: bool = False,
@@ -399,21 +402,21 @@ async def upsert_config_file(
 
 
 @router.delete(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
@@ -449,7 +452,7 @@ async def delete_config_file(
 
 
 @router.put(
-    "/configurations/{configuration_id}/directories/{directory_path:path}",
+    "/configurations/{configurationId}/directories/{directoryPath:path}",
     dependencies=[Security(require_csrf)],
     response_model=DirectoryWriteResponse,
     responses={
@@ -466,14 +469,14 @@ async def delete_config_file(
 async def create_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    directory_path: str,
+    directory_path: DirectoryPathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
@@ -498,20 +501,20 @@ async def create_config_directory(
 
 
 @router.delete(
-    "/configurations/{configuration_id}/directories/{directory_path:path}",
+    "/configurations/{configurationId}/directories/{directoryPath:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    directory_path: str,
+    directory_path: DirectoryPathParam,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     recursive: bool = False,
@@ -539,7 +542,7 @@ async def delete_config_directory(
 
 
 @router.patch(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileRenameResponse,
     summary="Rename or move a file",
@@ -547,14 +550,14 @@ async def delete_config_directory(
 async def rename_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     payload: FileRenameRequest,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:

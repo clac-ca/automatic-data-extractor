@@ -11,7 +11,9 @@ import sqlalchemy as sa
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.pagination import Page, paginate_sql
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import ListPage, paginate_query
+from ade_api.common.types import OrderBy
 from ade_api.common.time import utc_now
 from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
@@ -22,6 +24,8 @@ from ade_api.core.security.api_keys import (
 )
 from ade_api.models import ApiKey, User
 from ade_api.settings import Settings
+
+from .filters import apply_api_key_filters
 
 
 @dataclass(slots=True)
@@ -151,66 +155,69 @@ class ApiKeyService:
     def _base_query(self) -> Select[tuple[ApiKey]]:
         return select(ApiKey)
 
-    def _apply_revoked_filter(
-        self,
-        stmt: Select[tuple[ApiKey]],
-        *,
-        include_revoked: bool,
-    ) -> Select[tuple[ApiKey]]:
-        if not include_revoked:
-            stmt = stmt.where(ApiKey.revoked_at.is_(None))
-        return stmt
-
     async def list_for_user(
         self,
         *,
         user_id: UUID,
-        include_revoked: bool,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[ApiKey]:
+        per_page: int,
+    ) -> ListPage[ApiKey]:
         """List keys for a specific user (self-service and admin use)."""
 
         stmt = (
             self._base_query()
             .where(ApiKey.user_id == user_id)
-            .order_by(ApiKey.created_at.desc())
         )
-        stmt = self._apply_revoked_filter(stmt, include_revoked=include_revoked)
+        stmt = apply_api_key_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
 
-        return await paginate_sql(
+        return await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
-            order_by=(ApiKey.created_at.desc(), ApiKey.id.desc()),
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
         )
 
     async def list_all(
         self,
         *,
-        include_revoked: bool,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by: OrderBy,
         user_id: UUID | None,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[ApiKey]:
+        per_page: int,
+    ) -> ListPage[ApiKey]:
         """List keys across the tenant (admin use)."""
 
-        stmt = self._base_query().order_by(ApiKey.created_at.desc())
+        stmt = self._base_query()
         if user_id is not None:
             stmt = stmt.where(ApiKey.user_id == user_id)
-        stmt = self._apply_revoked_filter(stmt, include_revoked=include_revoked)
+        stmt = apply_api_key_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
 
-        return await paginate_sql(
+        return await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
-            order_by=(ApiKey.created_at.desc(), ApiKey.id.desc()),
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
         )
 
     # -- Read / revoke ----------------------------------------------------

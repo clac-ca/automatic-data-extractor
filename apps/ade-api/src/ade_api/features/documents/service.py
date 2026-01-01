@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -23,9 +23,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
-from ade_api.common.pagination import paginate_sql
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import paginate_query
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
+from ade_api.common.sorting import resolve_sort
+from ade_api.common.workbook_preview import (
+    WorkbookPreview,
+    build_workbook_preview_from_csv,
+    build_workbook_preview_from_xlsx,
+)
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.models import (
     Document,
@@ -52,30 +59,25 @@ from .exceptions import (
     DocumentUploadSessionExpiredError,
     DocumentUploadSessionNotFoundError,
     DocumentUploadSessionNotReadyError,
+    DocumentPreviewParseError,
+    DocumentPreviewSheetNotFoundError,
+    DocumentPreviewUnsupportedError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
 )
-from .filters import DocumentFilters, apply_document_filters
+from .filters import apply_document_filters
 from .schemas import DocumentUploadRunOptions
-from ade_api.features.configs.repository import ConfigurationsRepository
-from ade_api.features.runs.repository import RunsRepository
-from ade_api.features.workspaces.repository import WorkspacesRepository
-from ade_api.features.workspaces.settings import read_processing_paused
-
 from .repository import DocumentsRepository
 from .schemas import (
     DocumentChangeEntry,
     DocumentChangesPage,
     DocumentFileType,
-    DocumentLastRun,
     DocumentListPage,
     DocumentListRow,
-    DocumentMappingHealth,
-    DocumentDisplayStatus,
-    DocumentQueueReason,
-    DocumentQueueState,
     DocumentOut,
+    DocumentResultSummary,
+    DocumentRunSummary,
     DocumentSheet,
     DocumentUpdateRequest,
     DocumentUploadSessionCreateRequest,
@@ -103,12 +105,6 @@ _UPLOAD_SESSION_PREFIX = "upload_sessions"
 _CONTENT_RANGE_PATTERN = re.compile(r"^bytes (\d+)-(\d+)/(\d+)$")
 
 
-@dataclass(slots=True)
-class DocumentQueueContext:
-    has_active_configuration: bool
-    queue_has_capacity: bool
-    processing_paused: bool
-
 
 class DocumentsService:
     """Manage document metadata and backing file storage."""
@@ -123,9 +119,6 @@ class DocumentsService:
 
         self._repository = DocumentsRepository(session)
         self._changes = DocumentChangesService(session=session, settings=settings)
-        self._configs = ConfigurationsRepository(session)
-        self._runs = RunsRepository(session)
-        self._workspaces = WorkspacesRepository(session)
 
     @staticmethod
     def build_upload_metadata(
@@ -214,8 +207,7 @@ class DocumentsService:
         hydrated = result.scalar_one()
 
         payload = DocumentOut.model_validate(hydrated)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        self._apply_derived_fields(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -241,57 +233,55 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         page: int,
-        page_size: int,
-        include_total: bool,
+        per_page: int,
         order_by: OrderBy,
-        filters: DocumentFilters,
-        actor: User | None = None,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
     ) -> DocumentListPage:
         """Return paginated documents with the shared envelope."""
 
-        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.list.start",
             extra=log_context(
                 workspace_id=workspace_id,
-                user_id=actor_id,
                 page=page,
-                page_size=page_size,
-                include_total=include_total,
+                per_page=per_page,
                 order_by=str(order_by),
             ),
         )
 
         stmt = self._repository.base_query(workspace_id).where(Document.deleted_at.is_(None))
-        stmt = apply_document_filters(stmt, filters, actor=actor)
+        stmt = apply_document_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
 
         # Capture the cursor before listing to avoid skipping changes committed during the query.
         changes_cursor = await self._changes.current_cursor(workspace_id=workspace_id)
-        page_result = await paginate_sql(
+        page_result = await paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
+            per_page=per_page,
             order_by=order_by,
-            include_total=include_total,
+            changes_cursor=str(changes_cursor),
         )
         items = [DocumentOut.model_validate(item) for item in page_result.items]
-        await self._attach_last_runs(workspace_id, items)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
+        await self._attach_latest_runs(workspace_id, items)
         for item in items:
-            self._apply_derived_fields(item, queue_context)
+            self._apply_derived_fields(item)
 
         logger.info(
             "document.list.success",
             extra=log_context(
                 workspace_id=workspace_id,
-                user_id=actor_id,
                 page=page_result.page,
-                page_size=page_result.page_size,
+                per_page=page_result.per_page,
                 count=len(items),
-                has_next=page_result.has_next,
-                has_previous=page_result.has_previous,
-                total=page_result.total if include_total else None,
+                total=page_result.total,
             ),
         )
 
@@ -300,11 +290,10 @@ class DocumentsService:
         return DocumentListPage(
             items=rows,
             page=page_result.page,
-            page_size=page_result.page_size,
-            has_next=page_result.has_next,
-            has_previous=page_result.has_previous,
+            per_page=page_result.per_page,
+            page_count=page_result.page_count,
             total=page_result.total,
-            changes_cursor=str(changes_cursor),
+            changes_cursor=page_result.changes_cursor,
         )
 
     async def list_document_changes(
@@ -316,7 +305,7 @@ class DocumentsService:
     ) -> DocumentChangesPage:
         if cursor_token == "latest":
             latest = await self._changes.current_cursor(workspace_id=workspace_id)
-            return DocumentChangesPage(changes=[], next_cursor=str(latest))
+            return DocumentChangesPage(items=[], next_cursor=str(latest))
 
         try:
             cursor = int(cursor_token)
@@ -328,9 +317,8 @@ class DocumentsService:
             cursor=cursor,
             limit=limit,
         )
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        entries = [self._serialize_change(change, queue_context) for change in page.changes]
-        return DocumentChangesPage(changes=entries, next_cursor=str(page.next_cursor))
+        entries = [self._serialize_change(change) for change in page.items]
+        return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
 
     async def create_upload_session(
         self,
@@ -375,7 +363,7 @@ class DocumentsService:
             expires_at=expires_at,
             chunk_size_bytes=self._settings.documents_upload_session_chunk_bytes,
             next_expected_ranges=self._next_expected_ranges(session),
-            upload_url=f"/workspaces/{workspace_id}/documents/uploadSessions/{session_id}",
+            upload_url=f"/workspaces/{workspace_id}/documents/uploadsessions/{session_id}",
         )
 
     async def upload_session_range(
@@ -521,8 +509,7 @@ class DocumentsService:
         hydrated = result.scalar_one()
 
         payload = DocumentOut.model_validate(hydrated)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        self._apply_derived_fields(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -553,9 +540,8 @@ class DocumentsService:
         )
         document = await self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        await self._attach_last_runs(workspace_id, [payload])
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        await self._attach_latest_runs(workspace_id, [payload])
+        self._apply_derived_fields(payload)
 
         logger.info(
             "document.get.success",
@@ -577,9 +563,8 @@ class DocumentsService:
         )
         document = await self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        await self._attach_last_runs(workspace_id, [payload])
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        await self._attach_latest_runs(workspace_id, [payload])
+        self._apply_derived_fields(payload)
         row = self._build_list_row(payload)
 
         logger.info(
@@ -610,8 +595,7 @@ class DocumentsService:
         await self._session.flush()
 
         updated = DocumentOut.model_validate(document)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(updated, queue_context)
+        self._apply_derived_fields(updated)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -634,8 +618,7 @@ class DocumentsService:
             await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        self._apply_derived_fields(payload)
         if changed:
             await self._changes.record_upsert(
                 workspace_id=workspace_id,
@@ -672,11 +655,10 @@ class DocumentsService:
         if changed_ids:
             await self._session.flush()
 
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
         payloads: list[DocumentOut] = []
         for doc_id in ordered_ids:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
-            self._apply_derived_fields(payload, queue_context)
+            self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
                 await self._changes.record_upsert(
@@ -698,8 +680,7 @@ class DocumentsService:
         document = await self._get_document(workspace_id, document_id)
         if document.status != DocumentStatus.ARCHIVED:
             payload = DocumentOut.model_validate(document)
-            queue_context = await self.build_queue_context(workspace_id=workspace_id)
-            self._apply_derived_fields(payload, queue_context)
+            self._apply_derived_fields(payload)
             return payload
 
         status_map = await self._latest_run_statuses(
@@ -710,8 +691,7 @@ class DocumentsService:
         await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        self._apply_derived_fields(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -751,11 +731,10 @@ class DocumentsService:
         if changed_ids:
             await self._session.flush()
 
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
         payloads: list[DocumentOut] = []
         for doc_id in ordered_ids:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
-            self._apply_derived_fields(payload, queue_context)
+            self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
                 await self._changes.record_upsert(
@@ -824,6 +803,89 @@ class DocumentsService:
         )
         return sheets
 
+    async def get_document_preview(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        max_rows: int,
+        max_columns: int,
+        sheet_name: str | None = None,
+        sheet_index: int | None = None,
+    ) -> WorkbookPreview:
+        """Return a table-ready preview for a document workbook."""
+
+        logger.debug(
+            "document.preview.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                sheet_name=sheet_name,
+                sheet_index=sheet_index,
+            ),
+        )
+
+        document = await self._get_document(workspace_id, document_id)
+        storage = self._storage_for(workspace_id)
+        path = storage.path_for(document.stored_uri)
+
+        exists = await run_in_threadpool(path.exists)
+        if not exists:
+            raise DocumentFileMissingError(
+                document_id=document_id,
+                stored_uri=document.stored_uri,
+            )
+
+        suffix = Path(document.original_filename).suffix.lower()
+        try:
+            if suffix == ".xlsx":
+                preview = await run_in_threadpool(
+                    build_workbook_preview_from_xlsx,
+                    path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    sheet_name=sheet_name,
+                    sheet_index=sheet_index,
+                )
+            elif suffix == ".csv":
+                preview = await run_in_threadpool(
+                    build_workbook_preview_from_csv,
+                    path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    sheet_name=sheet_name,
+                    sheet_index=sheet_index,
+                )
+            else:
+                raise DocumentPreviewUnsupportedError(
+                    document_id=document_id,
+                    file_type=suffix or "unknown",
+                )
+        except (KeyError, IndexError) as exc:
+            requested = sheet_name if sheet_name is not None else str(sheet_index)
+            raise DocumentPreviewSheetNotFoundError(
+                document_id=document_id,
+                sheet=requested,
+            ) from exc
+        except DocumentPreviewUnsupportedError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            raise DocumentPreviewParseError(
+                document_id=document_id,
+                stored_uri=document.stored_uri,
+                reason=type(exc).__name__,
+            ) from exc
+
+        logger.info(
+            "document.preview.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                sheet_count=len(preview.sheets),
+            ),
+        )
+        return preview
+
     async def stream_document(
         self,
         *,
@@ -876,9 +938,8 @@ class DocumentsService:
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
-        await self._attach_last_runs(workspace_id, [payload])
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        await self._attach_latest_runs(workspace_id, [payload])
+        self._apply_derived_fields(payload)
 
         logger.info(
             "document.stream.ready",
@@ -992,8 +1053,7 @@ class DocumentsService:
         await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        self._apply_derived_fields(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -1036,8 +1096,7 @@ class DocumentsService:
         await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
-        self._apply_derived_fields(payload, queue_context)
+        self._apply_derived_fields(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -1086,11 +1145,10 @@ class DocumentsService:
 
         await self._session.flush()
 
-        queue_context = await self.build_queue_context(workspace_id=workspace_id)
         payloads: list[DocumentOut] = []
         for doc_id in ordered_ids:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
-            self._apply_derived_fields(payload, queue_context)
+            self._apply_derived_fields(payload)
             payloads.append(payload)
             await self._changes.record_upsert(
                 workspace_id=workspace_id,
@@ -1105,10 +1163,9 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         page: int,
-        page_size: int,
-        include_total: bool,
+        per_page: int,
+        sort: list[str],
         q: str | None = None,
-        sort: str = "name",
     ) -> TagCatalogPage:
         """Return tag catalog entries with counts."""
 
@@ -1135,28 +1192,25 @@ class DocumentsService:
             pattern = f"%{normalized_q}%"
             stmt = stmt.where(DocumentTag.tag.like(pattern))
 
-        if sort == "-count":
-            order_by = [count_expr.desc(), DocumentTag.tag.asc()]
-        else:
-            order_by = [DocumentTag.tag.asc()]
+        sort_fields = {
+            "name": (DocumentTag.tag.asc(), DocumentTag.tag.desc()),
+            "count": (count_expr.asc(), count_expr.desc()),
+        }
+        order_by = resolve_sort(
+            sort,
+            allowed=sort_fields,
+            default=["name"],
+            id_field=(DocumentTag.tag.asc(), DocumentTag.tag.desc()),
+        )
 
-        offset = (page - 1) * page_size
+        offset = (page - 1) * per_page
         ordered_stmt = stmt.order_by(*order_by)
 
-        if include_total:
-            count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
-            total = (await self._session.execute(count_stmt)).scalar_one()
-            result = await self._session.execute(ordered_stmt.limit(page_size).offset(offset))
-            rows = result.mappings().all()
-            has_next = (page * page_size) < total
-        else:
-            result = await self._session.execute(
-                ordered_stmt.limit(page_size + 1).offset(offset)
-            )
-            rows = result.mappings().all()
-            has_next = len(rows) > page_size
-            rows = rows[:page_size]
-            total = None
+        count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        page_count = math.ceil(total / per_page) if total > 0 else 0
+        result = await self._session.execute(ordered_stmt.limit(per_page).offset(offset))
+        rows = result.mappings().all()
 
         items = [
             TagCatalogItem(tag=row["tag"], document_count=int(row["document_count"] or 0))
@@ -1166,10 +1220,10 @@ class DocumentsService:
         return TagCatalogPage(
             items=items,
             page=page,
-            page_size=page_size,
-            has_next=has_next,
-            has_previous=page > 1,
+            per_page=per_page,
+            page_count=page_count,
             total=total,
+            changes_cursor="0",
         )
 
     async def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
@@ -1219,138 +1273,53 @@ class DocumentsService:
 
         return documents
 
-    async def _attach_last_runs(
+    async def _attach_latest_runs(
         self,
         workspace_id: UUID,
         documents: Sequence[DocumentOut],
     ) -> None:
-        """Populate ``last_run`` on each document using recent run data."""
+        """Populate latest run summaries on each document."""
 
         if not documents:
             return
 
-        last_runs = await self._latest_stream_runs(
+        latest_runs = await self._latest_stream_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
-        last_successful_runs = await self._latest_successful_runs(
+        latest_successful_runs = await self._latest_successful_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
         for document in documents:
-            document.last_run = last_runs.get(document.id)
-            document.last_successful_run = last_successful_runs.get(document.id)
-            if document.last_run and document.last_run.run_at:
-                document.last_run_at = document.last_run.run_at
+            document.latest_run = latest_runs.get(document.id)
+            document.latest_successful_run = latest_successful_runs.get(document.id)
 
-    async def build_queue_context(self, *, workspace_id: UUID) -> DocumentQueueContext:
-        has_active_configuration = await self._configs.get_active(workspace_id) is not None
-        processing_paused = await self._processing_paused(workspace_id)
-        queue_has_capacity = await self._queue_has_capacity()
-        return DocumentQueueContext(
-            has_active_configuration=has_active_configuration,
-            queue_has_capacity=queue_has_capacity,
-            processing_paused=processing_paused,
-        )
-
-    async def _processing_paused(self, workspace_id: UUID) -> bool:
-        workspace = await self._workspaces.get_workspace(workspace_id)
-        if workspace is None:
-            return False
-        return read_processing_paused(workspace.settings)
-
-    async def _queue_has_capacity(self) -> bool:
-        limit = self._settings.queue_size
-        if not limit:
-            return True
-        queued = await self._runs.count_queued()
-        return queued < limit
-
-    def _apply_derived_fields(
-        self,
-        document: DocumentOut,
-        queue_context: DocumentQueueContext | None = None,
-    ) -> None:
-        document.display_status = self._derive_display_status(document)
+    def _apply_derived_fields(self, document: DocumentOut) -> None:
         updated_at = document.updated_at
-        last_run_at = document.last_run_at
-        if last_run_at is not None and last_run_at > updated_at:
-            document.activity_at = last_run_at
-        else:
-            document.activity_at = updated_at
-        if queue_context is not None:
-            self._apply_queue_state(document, queue_context)
-
-    def _apply_queue_state(self, document: DocumentOut, context: DocumentQueueContext) -> None:
-        document.queue_state = None
-        document.queue_reason = None
-
-        if document.status == DocumentStatus.ARCHIVED:
-            return
-
-        last_run_status = document.last_run.status if document.last_run else None
-        if last_run_status == RunStatus.QUEUED:
-            document.queue_state = DocumentQueueState.QUEUED
-            return
-        if last_run_status == RunStatus.RUNNING:
-            return
-        if document.status != DocumentStatus.UPLOADED:
-            return
-
-        document.queue_state = DocumentQueueState.WAITING
-        if context.processing_paused:
-            document.queue_reason = DocumentQueueReason.PROCESSING_PAUSED
-        elif not context.has_active_configuration:
-            document.queue_reason = DocumentQueueReason.NO_ACTIVE_CONFIGURATION
-        elif not context.queue_has_capacity:
-            document.queue_reason = DocumentQueueReason.QUEUE_FULL
+        latest_at = self._latest_run_at(document.latest_run)
+        document.activity_at = latest_at if latest_at and latest_at > updated_at else updated_at
+        document.latest_result = self._derive_latest_result(document)
 
     def _build_list_row(self, document: DocumentOut) -> DocumentListRow:
-        status = document.display_status or self._derive_display_status(document)
         activity_at = document.activity_at or document.updated_at
-        mapping_health = self._derive_mapping_health(document)
-        stage = self._build_stage_label(
-            status=status,
-            last_run=document.last_run,
-            queue_state=document.queue_state,
-            queue_reason=document.queue_reason,
-        )
-        assignee_key = f"user:{document.assignee_user_id}" if document.assignee_user_id else None
-
         return DocumentListRow(
             id=document.id,
             workspace_id=document.workspace_id,
             name=document.name,
             file_type=self._derive_file_type(document.name),
-            status=status,
-            stage=stage,
-            uploader_label=self._derive_uploader_label(document),
-            assignee_user_id=document.assignee_user_id,
-            assignee_key=assignee_key,
+            status=document.status,
+            uploader=document.uploader,
+            assignee=document.assignee,
             tags=document.tags,
             byte_size=document.byte_size,
-            size_label=self._format_bytes(document.byte_size),
-            queue_state=document.queue_state,
-            queue_reason=document.queue_reason,
-            mapping_health=mapping_health,
             created_at=document.created_at,
             updated_at=document.updated_at,
             activity_at=activity_at,
-            last_run=document.last_run,
-            last_successful_run=document.last_successful_run,
+            latest_run=document.latest_run,
+            latest_successful_run=document.latest_successful_run,
+            latest_result=document.latest_result,
         )
-
-    @staticmethod
-    def _derive_display_status(document: DocumentOut) -> DocumentDisplayStatus:
-        if document.status == DocumentStatus.ARCHIVED:
-            return DocumentDisplayStatus.ARCHIVED
-        if document.status == DocumentStatus.FAILED:
-            return DocumentDisplayStatus.FAILED
-        if document.status == DocumentStatus.PROCESSED:
-            return DocumentDisplayStatus.READY
-        if document.status == DocumentStatus.PROCESSING:
-            return DocumentDisplayStatus.PROCESSING
-        return DocumentDisplayStatus.QUEUED
 
     @staticmethod
     def _derive_file_type(name: str) -> DocumentFileType:
@@ -1366,44 +1335,6 @@ class DocumentsService:
         return DocumentFileType.UNKNOWN
 
     @staticmethod
-    def _format_bytes(byte_size: int) -> str:
-        if byte_size <= 0:
-            return "0 B"
-        units = ["B", "KB", "MB", "GB"]
-        size = float(byte_size)
-        unit_index = 0
-        while size >= 1024 and unit_index < len(units) - 1:
-            size /= 1024
-            unit_index += 1
-        precision = 0 if size >= 10 or unit_index == 0 else 1
-        return f"{size:.{precision}f} {units[unit_index]}"
-
-    @staticmethod
-    def _read_owner_from_metadata(metadata: Mapping[str, Any]) -> str | None:
-        owner = metadata.get("owner")
-        if isinstance(owner, str):
-            candidate = owner.strip()
-            if candidate:
-                return candidate
-        owner_email = metadata.get("owner_email")
-        if isinstance(owner_email, str):
-            candidate = owner_email.strip()
-            if candidate:
-                return candidate
-        return None
-
-    @classmethod
-    def _derive_uploader_label(cls, document: DocumentOut) -> str | None:
-        metadata = document.metadata or {}
-        owner = cls._read_owner_from_metadata(metadata)
-        if owner:
-            return owner
-        uploader = document.uploader
-        if uploader and (uploader.name or uploader.email):
-            return uploader.name or uploader.email
-        return None
-
-    @staticmethod
     def _coerce_int(value: Any) -> int | None:
         if isinstance(value, bool):
             return None
@@ -1414,7 +1345,7 @@ class DocumentsService:
         return None
 
     @classmethod
-    def _derive_mapping_health(cls, document: DocumentOut) -> DocumentMappingHealth:
+    def _derive_latest_result(cls, document: DocumentOut) -> DocumentResultSummary:
         metadata = document.metadata or {}
         candidate = (
             metadata.get("mapping") or metadata.get("mapping_health") or metadata.get("mapping_quality")
@@ -1425,7 +1356,7 @@ class DocumentsService:
                 attention = cls._coerce_int(candidate.get("attention")) or 0
             unmapped = cls._coerce_int(candidate.get("unmapped")) or 0
             pending = candidate.get("status") == "pending"
-            return DocumentMappingHealth(
+            return DocumentResultSummary(
                 attention=attention,
                 unmapped=unmapped,
                 pending=True if pending else None,
@@ -1434,51 +1365,21 @@ class DocumentsService:
         attention = cls._coerce_int(metadata.get("mapping_issues"))
         unmapped = cls._coerce_int(metadata.get("unmapped_columns"))
         if attention is not None or unmapped is not None:
-            return DocumentMappingHealth(
+            return DocumentResultSummary(
                 attention=attention or 0,
                 unmapped=unmapped or 0,
             )
 
         if document.status in {DocumentStatus.UPLOADED, DocumentStatus.PROCESSING}:
-            return DocumentMappingHealth(attention=0, unmapped=0, pending=True)
+            return DocumentResultSummary(attention=0, unmapped=0, pending=True)
 
-        return DocumentMappingHealth(attention=0, unmapped=0)
+        return DocumentResultSummary(attention=0, unmapped=0)
 
     @staticmethod
-    def _build_queue_label(
-        queue_state: DocumentQueueState | None,
-        queue_reason: DocumentQueueReason | None,
-    ) -> str | None:
-        if queue_state == DocumentQueueState.QUEUED:
-            return "Queued for processing"
-        if queue_state != DocumentQueueState.WAITING:
+    def _latest_run_at(run: DocumentRunSummary | None) -> datetime | None:
+        if run is None:
             return None
-        if queue_reason == DocumentQueueReason.PROCESSING_PAUSED:
-            return "Processing paused"
-        if queue_reason == DocumentQueueReason.QUEUE_FULL:
-            return "Waiting for capacity"
-        if queue_reason == DocumentQueueReason.NO_ACTIVE_CONFIGURATION:
-            return "Waiting for configuration"
-        return "Waiting to start"
-
-    def _build_stage_label(
-        self,
-        *,
-        status: DocumentDisplayStatus,
-        last_run: DocumentLastRun | None,
-        queue_state: DocumentQueueState | None,
-        queue_reason: DocumentQueueReason | None,
-    ) -> str | None:
-        queued_label = self._build_queue_label(queue_state, queue_reason)
-        if queued_label:
-            return queued_label
-        if status == DocumentDisplayStatus.QUEUED:
-            return "Queued for processing"
-        if status == DocumentDisplayStatus.PROCESSING:
-            if last_run and last_run.status == RunStatus.QUEUED:
-                return "Queued for processing"
-            return "Processing output"
-        return None
+        return run.completed_at or run.started_at
 
     @staticmethod
     def _status_from_last_run(status: RunStatus | None) -> DocumentStatus:
@@ -1539,7 +1440,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         documents: Sequence[DocumentOut],
-    ) -> dict[UUID, DocumentLastRun]:
+    ) -> dict[UUID, DocumentRunSummary]:
         doc_ids = [doc.id for doc in documents]
         if not doc_ids:
             return {}
@@ -1572,20 +1473,17 @@ class DocumentsService:
         stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
         result = await self._session.execute(stmt)
 
-        latest: dict[UUID, DocumentLastRun] = {}
+        latest: dict[UUID, DocumentRunSummary] = {}
         for row in result.mappings():
             document_id = row["document_id"]
             if not isinstance(document_id, UUID):
                 document_id = UUID(str(document_id))
-            run_at = self._ensure_utc(
-                row.get("completed_at") or row.get("started_at") or row.get("created_at")
-            )
-            message = self._last_run_message(error_message=row.get("error_message"))
-            latest[document_id] = DocumentLastRun(
-                run_id=row["run_id"],
+            latest[document_id] = DocumentRunSummary(
+                id=row["run_id"],
                 status=row["status"],
-                run_at=run_at,
-                message=message,
+                started_at=self._ensure_utc(row.get("started_at") or row.get("created_at")),
+                completed_at=self._ensure_utc(row.get("completed_at")),
+                error_summary=self._last_run_message(error_message=row.get("error_message")),
             )
 
         return latest
@@ -1595,7 +1493,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         documents: Sequence[DocumentOut],
-    ) -> dict[UUID, DocumentLastRun]:
+    ) -> dict[UUID, DocumentRunSummary]:
         doc_ids = [doc.id for doc in documents]
         if not doc_ids:
             return {}
@@ -1629,20 +1527,17 @@ class DocumentsService:
         stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
         result = await self._session.execute(stmt)
 
-        latest: dict[UUID, DocumentLastRun] = {}
+        latest: dict[UUID, DocumentRunSummary] = {}
         for row in result.mappings():
             document_id = row["document_id"]
             if not isinstance(document_id, UUID):
                 document_id = UUID(str(document_id))
-            run_at = self._ensure_utc(
-                row.get("completed_at") or row.get("started_at") or row.get("created_at")
-            )
-            message = self._last_run_message(error_message=row.get("error_message"))
-            latest[document_id] = DocumentLastRun(
-                run_id=row["run_id"],
+            latest[document_id] = DocumentRunSummary(
+                id=row["run_id"],
                 status=row["status"],
-                run_at=run_at,
-                message=message,
+                started_at=self._ensure_utc(row.get("started_at") or row.get("created_at")),
+                completed_at=self._ensure_utc(row.get("completed_at")),
+                error_summary=self._last_run_message(error_message=row.get("error_message")),
             )
 
         return latest
@@ -1828,15 +1723,11 @@ class DocumentsService:
 
         return await run_in_threadpool(_read)
 
-    def _serialize_change(
-        self,
-        change: DocumentChange,
-        queue_context: DocumentQueueContext,
-    ) -> DocumentChangeEntry:
+    def _serialize_change(self, change: DocumentChange) -> DocumentChangeEntry:
         cursor = str(change.cursor)
         if change.type == DocumentChangeType.UPSERT:
             document = DocumentOut.model_validate(change.payload)
-            self._apply_derived_fields(document, queue_context)
+            self._apply_derived_fields(document)
             row = self._build_list_row(document)
             return DocumentChangeEntry(
                 cursor=cursor,

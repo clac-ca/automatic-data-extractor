@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from ade_api.common.pagination import Page
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 from ade_api.core.rbac.types import ScopeType
 
@@ -63,15 +63,15 @@ class RoleAssignmentOut(BaseSchema):
     created_at: datetime
 
 
-class RolePage(Page[RoleOut]):
+class RolePage(ListPage[RoleOut]):
     """Paginated role collection."""
 
 
-class RoleAssignmentPage(Page[RoleAssignmentOut]):
+class RoleAssignmentPage(ListPage[RoleAssignmentOut]):
     """Paginated role assignment collection."""
 
 
-class PermissionPage(Page[PermissionOut]):
+class PermissionPage(ListPage[PermissionOut]):
     """Paginated permission registry response."""
 
 

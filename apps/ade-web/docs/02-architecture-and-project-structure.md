@@ -552,7 +552,7 @@ Flow:
 3. **Data fetching**
 
    * `useDocumentsQuery` uses React Query and `@api/documents` under the hood.
-   * `@api/documents` builds the `/api/v1/workspaces/{workspace_id}/documents` URL and parses the JSON response.
+   * `@api/documents` builds the `/api/v1/workspaces/{workspaceId}/documents` URL and parses the JSON response.
    * The response is mapped into `DocumentSummary[]` using types from `@schema/documents`.
 
 4. **Presentation**

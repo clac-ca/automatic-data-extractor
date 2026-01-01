@@ -21,10 +21,10 @@ describe("configuration directory api helpers", () => {
 
     expect(result).toEqual({ path: "assets/new", created: true });
     expect(spy).toHaveBeenCalledWith(
-      "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+      "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}",
       {
         params: {
-          path: { workspace_id: "ws1", configuration_id: "cfg1", directory_path: "assets/new" },
+          path: { workspaceId: "ws1", configurationId: "cfg1", directoryPath: "assets/new" },
         },
       },
     );
@@ -38,10 +38,10 @@ describe("configuration directory api helpers", () => {
     await deleteConfigurationDirectory("ws1", "cfg1", "assets/new", { recursive: true });
 
     expect(spy).toHaveBeenCalledWith(
-      "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+      "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}",
       {
         params: {
-          path: { workspace_id: "ws1", configuration_id: "cfg1", directory_path: "assets/new" },
+          path: { workspaceId: "ws1", configurationId: "cfg1", directoryPath: "assets/new" },
           query: { recursive: true },
         },
       },

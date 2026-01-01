@@ -260,13 +260,13 @@ export function DocumentsGrid({
                 const canEditTags = canSelectRow;
 
                 const outputRun = getDocumentOutputRun(doc.record);
-                const canDownloadOutput = Boolean(outputRun?.run_id);
+                const canDownloadOutput = Boolean(outputRun?.runId);
 
                 const isExpanded = Boolean(expandedContent && expandedId === doc.id);
                 const isActive = Boolean(isExpanded && activeId === doc.id);
                 const isSelected = selectedIds.has(doc.id);
 
-                const isUnassigned = !doc.assignee_key;
+                const isUnassigned = !doc.assigneeKey;
                 const isArchived = doc.status === "archived";
 
                 const rowPresence = presenceByDocument?.[doc.id] ?? [];
@@ -278,7 +278,7 @@ export function DocumentsGrid({
                 }));
 
                 const previewId = `documents-preview-${doc.id}`;
-                const hasNotes = doc.comment_count > 0;
+                const hasNotes = doc.commentCount > 0;
 
                 const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
 
@@ -370,12 +370,12 @@ export function DocumentsGrid({
 
                           <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
                             <span className="text-[10px] font-semibold text-muted-foreground">
-                              {fileTypeLabel(doc.file_type)}
+                              {fileTypeLabel(doc.fileType)}
                             </span>
                             <span aria-hidden className="text-muted-foreground">
                               ·
                             </span>
-                            <span>Uploaded {formatRelativeTime(now, doc.created_at)}</span>
+                            <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
                             <span aria-hidden className="text-muted-foreground">
                               ·
                             </span>
@@ -386,10 +386,10 @@ export function DocumentsGrid({
                                 onOpenNotes(doc.id);
                               }}
                               className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
-                              title={hasNotes ? `${doc.comment_count} notes` : "No notes yet"}
+                              title={hasNotes ? `${doc.commentCount} notes` : "No notes yet"}
                             >
                               <ChatIcon className="h-3 w-3" />
-                              <span className="tabular-nums">{doc.comment_count}</span>
+                              <span className="tabular-nums">{doc.commentCount}</span>
                             </button>
                           </p>
 
@@ -404,8 +404,8 @@ export function DocumentsGrid({
 
                       <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <StatusPill status={doc.status} queueState={doc.queue_state} queueReason={doc.queue_reason} />
-                          <MappingBadge mapping={doc.mapping_health} />
+                          <StatusPill status={doc.status} />
+                          <MappingBadge mapping={doc.latestResult} />
                         </div>
                         {doc.upload && doc.upload.status !== "succeeded" ? <UploadProgress upload={doc.upload} /> : null}
                       </div>
@@ -424,7 +424,7 @@ export function DocumentsGrid({
                           <div className="flex flex-wrap items-center gap-2">
                             <PeoplePicker
                               people={people}
-                              value={[doc.assignee_key ?? unassignedKey()]}
+                              value={[doc.assigneeKey ?? unassignedKey()]}
                               onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
                               placeholder="Assignee..."
                               includeUnassigned
@@ -464,7 +464,7 @@ export function DocumentsGrid({
                       </div>
 
                       <div className="text-right text-xs text-muted-foreground">
-                        {formatRelativeTime(now, doc.activity_at ?? doc.updated_at)}
+                        {formatRelativeTime(now, doc.activityAt ?? doc.updatedAt)}
                       </div>
 
                       <div className="flex justify-end" data-ignore-row-click>
