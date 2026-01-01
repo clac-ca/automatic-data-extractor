@@ -8,8 +8,7 @@ from uuid import UUID
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
-from ade_api.db.types import UTCDateTime
+from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
 
 def _normalise_email(value: str) -> str:
@@ -89,7 +88,7 @@ class OAuthAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "oauth_accounts"
 
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )
@@ -102,7 +101,7 @@ class OAuthAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user: Mapped[User] = relationship("User", back_populates="oauth_accounts")
 
-    __table_args__ = (UniqueConstraint("oauth_name", "account_id"),)
+    __table_args__ = (UniqueConstraint("oauth_name", "account_id", name="uq_oauth_accounts_name_account"),)
 
 
 class AccessToken(UUIDPrimaryKeyMixin, Base):
@@ -111,7 +110,7 @@ class AccessToken(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "access_tokens"
 
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )

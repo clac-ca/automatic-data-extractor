@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.time import utc_now
 from ade_api.core.auth.users import get_cookie_transport, get_password_helper
 from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 from ade_api.models import AccessToken, OAuthAccount, User
 from ade_api.settings import Settings, get_settings
 
@@ -142,7 +142,7 @@ async def authorize_oidc(
 async def callback_oidc(
     provider: str,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_session)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
     password_helper=Depends(get_password_helper),
     settings: Annotated[Settings, Depends(get_settings)] = None,
     response_mode: Annotated[str | None, Query()] = None,

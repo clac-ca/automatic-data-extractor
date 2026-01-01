@@ -4,14 +4,14 @@ import type { ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { CloseIcon } from "@components/icons";
-import { Button } from "@components/tablecn/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogDescription,
   DialogOverlay,
   DialogPortal,
   DialogTitle,
-} from "@components/tablecn/ui/dialog";
+} from "@/components/ui/dialog";
 
 interface SettingsDrawerProps {
   readonly open: boolean;

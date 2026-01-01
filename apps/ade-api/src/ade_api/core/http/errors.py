@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from fastapi import FastAPI, status
 
-from ..auth.errors import AuthenticationError, PermissionDeniedError
 from ade_api.common.exceptions import api_error_handler
 from ade_api.common.problem_details import ApiError
+
+from ..auth.errors import AuthenticationError, PermissionDeniedError
 
 
 async def _handle_authentication_error(request, exc: AuthenticationError):

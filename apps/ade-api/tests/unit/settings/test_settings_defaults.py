@@ -21,7 +21,7 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.api_docs_enabled is False
     assert settings.server_public_url == "http://localhost:8000"
     assert settings.server_cors_origins == ["http://localhost:5173"]
-    assert settings.database_dsn.endswith("data/db/ade.sqlite")
+    assert settings.database_url.endswith("data/db/ade.sqlite")
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     expected_root = (tmp_path / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()

@@ -23,6 +23,7 @@ from fastapi.responses import StreamingResponse
 
 from ade_api.api.deps import SettingsDep, get_builds_service, get_configurations_service
 from ade_api.common.downloads import build_content_disposition
+from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.sorting import resolve_sort
 from ade_api.core.http import require_csrf, require_workspace
@@ -32,7 +33,6 @@ from ade_api.features.builds.tasks import execute_build_background
 from ade_api.features.runs.tasks import enqueue_pending_runs_background
 from ade_api.models import User
 
-from ade_api.common.etag import build_etag_token, format_weak_etag
 from ..etag import format_etag
 from ..exceptions import (
     ConfigImportError,
@@ -51,12 +51,12 @@ from ..schemas import (
     ConfigurationRecord,
     ConfigurationValidateResponse,
 )
-from ..sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ..service import (
     ConfigurationsService,
     PreconditionFailedError,
     PreconditionRequiredError,
 )
+from ..sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter()
 

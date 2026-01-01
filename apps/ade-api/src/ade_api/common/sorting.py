@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
-from typing import Any, Mapping, TypeVar
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any, TypeVar
 
 from fastapi import HTTPException, Query
 

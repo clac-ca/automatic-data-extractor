@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { UploadManagerQueueItem } from "@hooks/documents/uploadManager";
-import { Alert } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { CloseIcon, TrashIcon, UploadIcon } from "@components/icons";
 
 import type { FileType } from "../types";

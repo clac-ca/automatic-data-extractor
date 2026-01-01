@@ -13,11 +13,11 @@ import {
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
 import type { PermissionDefinition, RoleDefinition } from "@schema/workspaces";
-import { Alert } from "@components/ui/alert";
-import { ConfirmDialog } from "@components/ui/confirm-dialog";
-import { FormField } from "@components/ui/form-field";
-import { Button } from "@components/tablecn/ui/button";
-import { Input } from "@components/tablecn/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FormField } from "@/components/ui/form-field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -25,8 +25,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@components/tablecn/ui/table";
-import { Badge } from "@components/tablecn/ui/badge";
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { SettingsSection } from "../components/SettingsSection";
 
 type RoleFormValues = {

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import insert, select, update
@@ -24,8 +24,8 @@ from ade_api.common.events import (
     coerce_event_record,
     new_event_record,
 )
-from ade_api.common.logging import log_context
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
 from ade_api.common.workbook_preview import (
@@ -37,10 +37,9 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
+from ade_api.features.documents.schemas import DocumentOut
 from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.documents.storage import DocumentStorage
-from ade_api.features.workspaces.repository import WorkspacesRepository
-from ade_api.features.workspaces.settings import read_processing_paused
 from ade_api.features.runs.event_stream import (
     RunEventContext,
     RunEventStream,
@@ -51,6 +50,8 @@ from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
     SafeModeService,
 )
+from ade_api.features.workspaces.repository import WorkspacesRepository
+from ade_api.features.workspaces.settings import read_processing_paused
 from ade_api.infra.storage import (
     workspace_documents_root,
     workspace_run_root,
@@ -69,7 +70,6 @@ from ade_api.models import (
     RunStatus,
     RunTableColumn,
 )
-from ade_api.features.documents.schemas import DocumentOut
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -842,6 +842,7 @@ class RunsService:
             now = utc_now()
             return [
                 {
+                    "id": uuid4(),
                     "configuration_id": configuration.id,
                     "workspace_id": configuration.workspace_id,
                     "input_document_id": doc_id,
@@ -2220,6 +2221,8 @@ class RunsService:
             context.build_id,
             workspace_id=context.workspace_id,
         )
+        # Release the SQLite connection before long-running env prep.
+        await self._session.commit()
         venv_path = await self._builds_service.ensure_local_env(build=build)
         python = venv_python_path(venv_path)
         active_sheet_only = bool(getattr(options, "active_sheet_only", False))
@@ -2254,6 +2257,8 @@ class RunsService:
             document_id=UUID(str(input_document_id)),
             run_dir=run_dir,
         )
+        # Persist document access metadata and free the DB connection.
+        await self._session.commit()
 
         # Canonical paths we expect after execution
         output_dir = run_dir / "output"

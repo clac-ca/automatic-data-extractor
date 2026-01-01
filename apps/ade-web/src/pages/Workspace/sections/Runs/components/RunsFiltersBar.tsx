@@ -1,4 +1,4 @@
-import { Button } from "@components/ui/button";
+import { Button } from "@/components/ui/button";
 
 import type { RunConfigOption, RunsFilters } from "../types";
 import { DATE_RANGE_OPTIONS } from "../constants";

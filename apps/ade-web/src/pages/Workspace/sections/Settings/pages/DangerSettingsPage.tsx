@@ -5,11 +5,11 @@ import { useNavigate } from "@app/navigation/history";
 import { deleteWorkspace } from "@api/workspaces/api";
 import { workspacesKeys } from "@hooks/workspaces";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { Alert } from "@components/ui/alert";
-import { ConfirmDialog } from "@components/ui/confirm-dialog";
-import { FormField } from "@components/ui/form-field";
-import { Button } from "@components/tablecn/ui/button";
-import { Input } from "@components/tablecn/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FormField } from "@/components/ui/form-field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SettingsSection } from "../components/SettingsSection";
 
 export function DangerSettingsPage() {

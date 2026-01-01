@@ -7,13 +7,13 @@ import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@hooks/works
 import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
 import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
-import { Button } from "@components/ui/button";
+import { Button } from "@/components/ui/button";
 import { PageState } from "@components/layouts/page-state";
 import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
 import { useShortcutHint } from "@hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 import { GlobalSearchField } from "@components/shell/GlobalSearchField";
-import { Alert } from "@components/ui/alert";
+import { Alert } from "@/components/ui/alert";
 
 export default function WorkspacesScreen() {
   return <WorkspacesIndexContent />;

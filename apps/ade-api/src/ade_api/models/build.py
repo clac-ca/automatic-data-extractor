@@ -6,15 +6,16 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
-from ade_api.db import Base, UUIDType
-from ade_api.db.enums import enum_values
-from ade_api.db.types import UTCDateTime
+from ade_api.db import GUID, Base, UTCDateTime, UUIDPrimaryKeyMixin
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 
 class BuildStatus(str, Enum):
@@ -27,7 +28,7 @@ class BuildStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class Build(Base):
+class Build(UUIDPrimaryKeyMixin, Base):
     """Persist build executions surfaced via the API."""
 
     __tablename__ = "builds"
@@ -35,12 +36,11 @@ class Build(Base):
         UniqueConstraint("configuration_id", "fingerprint", name="ux_builds_config_fingerprint"),
     )
 
-    id: Mapped[UUID] = mapped_column(UUIDType(), primary_key=True, default=generate_uuid7)
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
+        GUID(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
     configuration_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("configurations.id", ondelete="NO ACTION"),
         nullable=False,
         index=True,
@@ -58,7 +58,7 @@ class Build(Base):
             name="build_status",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         server_default=BuildStatus.QUEUED.value,

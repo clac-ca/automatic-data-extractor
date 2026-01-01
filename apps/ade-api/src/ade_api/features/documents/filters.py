@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Iterable
-
 from fastapi import HTTPException, status
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.sql import Select

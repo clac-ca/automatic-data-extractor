@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, delete, func, select, true
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -35,12 +35,6 @@ from .filters import (
     parse_role_filters,
 )
 from .sorting import (
-    ASSIGNMENT_DEFAULT_SORT,
-    ASSIGNMENT_ID_FIELD,
-    ASSIGNMENT_SORT_FIELDS,
-    PERMISSION_DEFAULT_SORT,
-    PERMISSION_ID_FIELD,
-    PERMISSION_SORT_FIELDS,
     ROLE_DEFAULT_SORT,
     ROLE_SORT_FIELDS,
     role_id_key,

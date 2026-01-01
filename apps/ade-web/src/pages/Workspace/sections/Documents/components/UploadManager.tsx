@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DocumentUploadResponse } from "@api/documents";
 import type { UploadManagerItem, UploadManagerSummary } from "@hooks/documents/uploadManager";
 import { CloseIcon, RefreshIcon, UploadIcon } from "@components/icons";
-import { Button } from "@components/tablecn/ui/button";
+import { Button } from "@/components/ui/button";
 
 import { formatBytes } from "../utils";
 import { UploadProgress } from "./UploadProgress";

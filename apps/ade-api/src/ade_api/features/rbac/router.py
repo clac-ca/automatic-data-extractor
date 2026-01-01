@@ -7,15 +7,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.concurrency import require_if_match
+from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.sorting import resolve_sort
-from ade_api.common.concurrency import require_if_match
-from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf
 from ade_api.core.rbac.types import ScopeType
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 from ade_api.features.rbac.schemas import (
     PermissionOut,
     PermissionPage,
@@ -46,9 +46,6 @@ from ade_api.features.rbac.sorting import (
     PERMISSION_DEFAULT_SORT,
     PERMISSION_ID_FIELD,
     PERMISSION_SORT_FIELDS,
-    ROLE_DEFAULT_SORT,
-    ROLE_SORT_FIELDS,
-    role_id_key,
 )
 from ade_api.models import Role, User, UserRoleAssignment
 
@@ -60,7 +57,7 @@ user_roles_router = APIRouter(
 )
 
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 UserPath = Annotated[
     UUID,

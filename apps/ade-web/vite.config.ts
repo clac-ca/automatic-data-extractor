@@ -28,6 +28,7 @@ export default defineConfig({
   plugins: [tailwindcss(), react(), tsconfigPaths()],
   resolve: {
     alias: {
+      "@": resolveSrc(""),
       "@pages": resolveSrc("pages"),
       "@app": resolveSrc("app"),
       "@components": resolveSrc("components"),

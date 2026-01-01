@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import func, select
 
 from ade_api.common.time import utc_now
-from ade_api.db.mixins import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildDecision
 from ade_api.models import Build, BuildStatus

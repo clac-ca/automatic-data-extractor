@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, status
+from sqlalchemy import text
 
 from ade_api.api.deps import SettingsDep
 from ade_api.common.problem_details import ApiError
 from ade_api.common.time import utc_now
-from ade_api.db.engine import check_database_ready
+from ade_api.db import db
 
 from .schemas import HealthCheckResponse, HealthComponentStatus
 from .service import HealthService
@@ -40,7 +41,8 @@ async def read_readiness(settings: SettingsDep) -> HealthCheckResponse:
     """Return readiness status after checking critical dependencies."""
 
     try:
-        await check_database_ready(settings)
+        async with db.engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
     except Exception as exc:  # pragma: no cover - exercised in integration tests
         raise ApiError(
             error_type="service_unavailable",

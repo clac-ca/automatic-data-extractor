@@ -7,8 +7,7 @@ from datetime import datetime
 from sqlalchemy import JSON, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from ade_api.db.types import UTCDateTime
+from ade_api.db import Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
 
 class IdempotencyRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):

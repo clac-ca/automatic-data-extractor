@@ -12,10 +12,10 @@ import { useCreateWorkspaceMutation } from "@hooks/workspaces";
 import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
 import { useUsersQuery } from "@hooks/users/useUsersQuery";
 import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
-import { Alert } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
-import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

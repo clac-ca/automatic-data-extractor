@@ -9,13 +9,13 @@ from fastapi import Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.http import require_authenticated
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 from ade_api.models import User
 
 from .schemas import WorkspaceOut
 from .service import WorkspacesService
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 
 
 async def get_workspace_profile(

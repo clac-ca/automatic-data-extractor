@@ -64,7 +64,7 @@ class RunCreateOptionsBase(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _validate_sheet_options(self) -> "RunCreateOptionsBase":
+    def _validate_sheet_options(self) -> RunCreateOptionsBase:
         if self.active_sheet_only and self.input_sheet_names:
             raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
         return self

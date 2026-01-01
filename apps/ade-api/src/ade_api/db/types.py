@@ -1,4 +1,8 @@
-"""Database column types shared across ADE models."""
+"""SQLAlchemy custom column types (SQLite + SQL Server).
+
+- GUID: UUID stored as UNIQUEIDENTIFIER on SQL Server, CHAR(36) on SQLite.
+- UTCDateTime: timezone-aware datetimes normalized to UTC.
+"""
 
 from __future__ import annotations
 
@@ -8,40 +12,34 @@ from typing import Any
 
 from sqlalchemy.types import CHAR, DateTime, TypeDecorator
 
-__all__ = ["UUIDType", "UTCDateTime"]
+__all__ = ["GUID", "UTCDateTime"]
 
 
-class UUIDType(TypeDecorator):
-    """Platform-agnostic UUID storage.
+class GUID(TypeDecorator):
+    """Platform-independent GUID/UUID.
 
-    Uses native UUID types on PostgreSQL and SQL Server; falls back to a
-    36-character string representation elsewhere. Values are always returned
-    to Python as ``uuid.UUID`` objects.
+    - SQL Server: UNIQUEIDENTIFIER
+    - SQLite: CHAR(36)
     """
 
-    impl = CHAR
+    impl = CHAR(36)
     cache_ok = True
 
-    def load_dialect_impl(self, dialect: Any):
-        name = dialect.name
-        if name in {"postgresql", "postgres"}:
-            from sqlalchemy.dialects.postgresql import UUID
-
-            return dialect.type_descriptor(UUID(as_uuid=True))
-        if name == "mssql":
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "mssql":
             from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 
             return dialect.type_descriptor(UNIQUEIDENTIFIER())
         return dialect.type_descriptor(CHAR(36))
 
-    def process_bind_param(self, value: Any, dialect: Any):
+    def process_bind_param(self, value: Any, dialect):
         if value is None:
             return None
         if isinstance(value, uuid.UUID):
             return str(value)
         return str(uuid.UUID(str(value)))
 
-    def process_result_value(self, value: Any, dialect: Any):
+    def process_result_value(self, value: Any, dialect):
         if value is None:
             return None
         if isinstance(value, uuid.UUID):
@@ -54,12 +52,12 @@ class UUIDType(TypeDecorator):
 
 
 class UTCDateTime(TypeDecorator):
-    """Timezone-aware datetime that normalizes values to UTC."""
+    """Timezone-aware datetime normalized to UTC."""
 
     impl = DateTime(timezone=True)
     cache_ok = True
 
-    def process_bind_param(self, value: Any, dialect: Any):
+    def process_bind_param(self, value: Any, dialect):
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -68,7 +66,7 @@ class UTCDateTime(TypeDecorator):
             return value.astimezone(UTC)
         return value
 
-    def process_result_value(self, value: Any, dialect: Any):
+    def process_result_value(self, value: Any, dialect):
         if value is None:
             return None
         if isinstance(value, datetime):

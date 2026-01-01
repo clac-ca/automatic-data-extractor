@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from ade_api.common.logging import log_context
-from ade_api.db.session import get_sessionmaker
+from ade_api.db import db
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ async def execute_build_background(
     from .service import BuildExecutionContext, BuildsService
 
     settings = Settings(**settings_payload)
-    session_factory = get_sessionmaker(settings=settings)
+    session_factory = db.sessionmaker
     storage = ConfigStorage(settings=settings)
     event_streams = get_run_event_streams()
     context = BuildExecutionContext.from_dict(context_data)

@@ -136,17 +136,15 @@ def setup_logging(settings: Settings) -> None:
     level_name = settings.logging_level.upper()
     level = getattr(logging, level_name, logging.INFO)
 
-    # Only fully configure once per process; subsequent calls just adjust level.
-    if getattr(root_logger, _CONFIGURED_FLAG, False):
-        root_logger.setLevel(level)
-        return
-
-    handler = logging.StreamHandler()
-    handler.setFormatter(ConsoleLogFormatter())
-
-    # Replace any existing handlers to avoid duplicate logs.
-    root_logger.handlers = [handler]
+    configured = getattr(root_logger, _CONFIGURED_FLAG, False)
+    if not configured:
+        handler = logging.StreamHandler()
+        handler.setFormatter(ConsoleLogFormatter())
+        # Replace any existing handlers to avoid duplicate logs.
+        root_logger.handlers = [handler]
+        setattr(root_logger, _CONFIGURED_FLAG, True)
     root_logger.setLevel(level)
+    handler = root_logger.handlers[0] if root_logger.handlers else None
 
     # Let common third-party loggers propagate into our root logger.
     for name in (
@@ -161,7 +159,16 @@ def setup_logging(settings: Settings) -> None:
         logger.handlers.clear()
         logger.propagate = True
 
-    setattr(root_logger, _CONFIGURED_FLAG, True)
+    # Optional: dedicated DB logger level for SQLAlchemy noise control.
+    db_level_name = settings.database_log_level
+    if db_level_name:
+        db_level = getattr(logging, db_level_name.upper(), logging.DEBUG)
+        for name in ("sqlalchemy.engine", "sqlalchemy.pool"):
+            logger = logging.getLogger(name)
+            logger.setLevel(db_level)
+            if handler is not None:
+                logger.handlers = [handler]
+            logger.propagate = False
 
 
 # ---------------------------------------------------------------------------

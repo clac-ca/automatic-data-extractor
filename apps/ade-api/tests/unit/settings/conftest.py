@@ -27,6 +27,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_PIP_CACHE_DIR",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
+        "ADE_DATABASE_URL",
         "ADE_DATABASE_DSN",
         "ADE_JWT_ACCESS_TTL",
         "ADE_SESSION_COOKIE_NAME",

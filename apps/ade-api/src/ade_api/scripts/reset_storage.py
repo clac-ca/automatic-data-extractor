@@ -10,9 +10,9 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from sqlalchemy import MetaData, inspect
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
-from ade_api.db import build_database_url, get_engine, reset_database_state
+from ade_api.db import DatabaseConfig, build_sync_url, db
 
 from ..settings import Settings
 
@@ -137,8 +137,9 @@ def _describe_database_target(database_url: URL, sqlite_path: Path | None) -> No
         print(f"  - {backend} database: {rendered}")
 
 
-async def _drop_all_tables(settings: Settings) -> int:
-    engine = get_engine(settings=settings)
+async def _drop_all_tables(db_config: DatabaseConfig) -> int:
+    db.init(db_config)
+    engine = db.engine
 
     async with engine.begin() as connection:
 
@@ -178,7 +179,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = Settings()
-    database_url = build_database_url(settings)
+    db_config = DatabaseConfig.from_settings(settings)
+    database_url = make_url(build_sync_url(db_config))
     sqlite_path = _resolve_sqlite_database_path(database_url)
     targets = _gather_storage_targets(settings, database_url)
 
@@ -212,11 +214,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("Dropping database tables...")
         try:
-            dropped_tables = asyncio.run(_drop_all_tables(settings))
+            dropped_tables = asyncio.run(_drop_all_tables(db_config))
         except Exception as exc:  # noqa: BLE001
             drop_error = exc
         finally:
-            reset_database_state()
+            asyncio.run(db.dispose())
 
         if drop_error is None:
             if dropped_tables:

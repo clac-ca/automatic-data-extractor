@@ -31,14 +31,19 @@ from ade_api.common.listing import (
 from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import sse_json
 from ade_api.core.auth import AuthenticatedPrincipal
-from ade_api.core.http import get_current_principal, require_authenticated, require_csrf, require_workspace
+from ade_api.core.http import (
+    get_current_principal,
+    require_authenticated,
+    require_csrf,
+    require_workspace,
+)
+from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.idempotency import (
     IdempotencyService,
     build_request_hash,
     build_scope_key,
     require_idempotency_key,
 )
-from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import BuildStatus
 
 from .exceptions import BuildNotFoundError

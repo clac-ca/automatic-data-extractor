@@ -1,7 +1,7 @@
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@components/ui/code-editor", () => ({
+vi.mock("../code-editor", () => ({
   CodeEditor: ({
     value,
     onChange,

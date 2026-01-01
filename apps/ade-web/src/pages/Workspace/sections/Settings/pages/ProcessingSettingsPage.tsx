@@ -2,8 +2,8 @@ import { useState } from "react";
 
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useUpdateWorkspaceMutation } from "@hooks/workspaces";
-import { Alert } from "@components/ui/alert";
-import { Button } from "@components/tablecn/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { SettingsSection } from "../components/SettingsSection";
 
 export function ProcessingSettingsPage() {

@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 import { useSystemVersions } from "@hooks/system";
-import { Alert } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 interface AboutVersionsModalProps {
   readonly open: boolean;

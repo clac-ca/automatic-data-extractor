@@ -6,7 +6,17 @@ import base64
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, Security, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    Security,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-import json
-from typing import Any, Iterable, Sequence
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status

@@ -9,9 +9,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import Depends
-from starlette.responses import Response
 from fastapi_users import BaseUserManager, FastAPIUsers, schemas
-from fastapi_users.manager import UUIDIDMixin
 from fastapi_users.authentication import (
     AuthenticationBackend,
     BearerTransport,
@@ -19,12 +17,14 @@ from fastapi_users.authentication import (
     JWTStrategy,
 )
 from fastapi_users.authentication.strategy import DatabaseStrategy
+from fastapi_users.manager import UUIDIDMixin
 from fastapi_users.password import PasswordHelper
 from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
 from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response
 
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 from ade_api.models import AccessToken, OAuthAccount, User
 from ade_api.settings import Settings, get_settings
 
@@ -91,13 +91,13 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
 
 
 async def get_user_db(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AsyncIterator[SQLAlchemyUserDatabase[User, UUID]]:
     yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
 
 
 async def get_access_token_db(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AsyncIterator[SQLAlchemyAccessTokenDatabase[AccessToken]]:
     yield SQLAlchemyAccessTokenDatabase(session, AccessToken)
 

@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.encoding import json_dumps
-from ade_api.db.mixins import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.features.builds.builder import (
     BuildArtifacts,
     BuilderArtifactsEvent,

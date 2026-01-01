@@ -9,7 +9,7 @@ from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, get_rbac_service, require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
 from ade_api.core.rbac.service_interface import RbacService
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 from ade_api.settings import Settings, get_settings
 
 from .schemas import (
@@ -28,7 +28,7 @@ router = APIRouter(
 
 
 def get_me_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     rbac: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> MeService:
     """Per-request MeService factory."""

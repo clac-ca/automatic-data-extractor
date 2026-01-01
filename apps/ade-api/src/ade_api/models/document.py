@@ -20,9 +20,11 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
-from ade_api.db.enums import enum_values
-from ade_api.db.types import UTCDateTime
+from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 from .user import User
 from .workspace import Workspace
@@ -80,7 +82,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "documents"
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
@@ -98,7 +100,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=dict,
     )
     uploaded_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     uploaded_by_user: Mapped[User | None] = relationship(
         "User",
@@ -106,7 +108,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         foreign_keys=[uploaded_by_user_id],
     )
     assignee_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     assignee_user: Mapped[User | None] = relationship(
         "User",
@@ -119,7 +121,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="document_status",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=DocumentStatus.UPLOADED,
@@ -131,7 +133,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="document_source",
             native_enum=False,
             length=50,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=DocumentSource.MANUAL_UPLOAD,
@@ -141,7 +143,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     tags: Mapped[list[DocumentTag]] = relationship(
         "DocumentTag",
@@ -162,7 +164,6 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "workspace_id",
             "status",
             "created_at",
-            postgresql_where=text("deleted_at IS NULL"),
             sqlite_where=text("deleted_at IS NULL"),
             mssql_where=text("deleted_at IS NULL"),
         ),
@@ -194,7 +195,7 @@ class DocumentTag(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "document_tags"
 
     document_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("documents.id", ondelete="NO ACTION"),
         nullable=False,
     )
@@ -207,9 +208,9 @@ class DocumentTag(UUIDPrimaryKeyMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("document_id", "tag"),
-        Index("document_tags_document_id_idx", "document_id"),
-        Index("document_tags_tag_idx", "tag"),
+        UniqueConstraint("document_id", "tag", name="document_tags_document_id_tag_key"),
+        Index("ix_document_tags_document_id", "document_id"),
+        Index("ix_document_tags_tag", "tag"),
         Index("document_tags_tag_document_id_idx", "tag", "document_id"),
     )
 
@@ -225,12 +226,12 @@ class DocumentChange(Base):
         autoincrement=True,
     )
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
     document_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("documents.id", ondelete="NO ACTION"),
         nullable=True,
     )
@@ -240,7 +241,7 @@ class DocumentChange(Base):
             name="document_change_type",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
     )
@@ -264,12 +265,12 @@ class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "document_upload_sessions"
 
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
     created_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=True,
     )
@@ -289,7 +290,7 @@ class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="document_upload_conflict_behavior",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=DocumentUploadConflictBehavior.RENAME,
@@ -314,7 +315,7 @@ class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="document_upload_session_status",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=DocumentUploadSessionStatus.ACTIVE,

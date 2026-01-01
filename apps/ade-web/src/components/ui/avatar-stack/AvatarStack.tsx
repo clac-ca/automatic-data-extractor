@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-import { Avatar, type AvatarSize } from "@components/ui/avatar";
+import { Avatar, type AvatarSize } from "@/components/ui/avatar";
 
 export type AvatarStackItem = {
   id: string;

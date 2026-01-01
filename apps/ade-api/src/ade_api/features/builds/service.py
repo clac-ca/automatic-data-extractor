@@ -7,7 +7,7 @@ import json
 import logging
 import subprocess
 import sys
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -25,8 +25,8 @@ from ade_api.common.events import (
     new_event_record,
 )
 from ade_api.common.ids import generate_uuid7
-from ade_api.common.logging import log_context
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
 from ade_api.common.validators import normalize_utc
@@ -854,10 +854,10 @@ class BuildsService:
             return
 
         async def _run_detached() -> None:
-            from ade_api.db.session import get_sessionmaker
+            from ade_api.db import db
             from ade_api.features.configs.storage import ConfigStorage
 
-            session_factory = get_sessionmaker(settings=self._settings)
+            session_factory = db.sessionmaker
             async with session_factory() as session:
                 detached_service = BuildsService(
                     session=session,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ade_api.common.events import EventRecord
 from ade_api.common.time import utc_now
-from ade_api.db.mixins import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.service import RunsService

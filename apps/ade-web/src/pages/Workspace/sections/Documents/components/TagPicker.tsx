@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchTagCatalog } from "@api/documents/tags";
-import { Input } from "@components/ui/input";
+import { Input } from "@/components/ui/input";
 
 import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TagIcon } from "@components/icons";
 

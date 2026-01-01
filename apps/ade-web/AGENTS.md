@@ -146,6 +146,15 @@ If you’re not sure where something goes: default to co-locating it under the *
   - Correct ARIA roles, keyboard behavior, and focus management.
 - Do **not** create ad-hoc tab strips or modals; improve the shared primitive instead.
 
+#### UI primitives governance
+
+- `src/components/ui/*` is **generated but owned** code (DiceUI/shadcn). Updates happen by re-running the install commands and reconciling diffs.
+- Prefer theme tokens and global styles before editing primitives.
+- Editing primitives is allowed, but must be **minimal** and documented:
+  - Add a short comment in the file.
+  - Record the change in `src/components/ui/README.md`.
+- App-specific composite UI must **not** live in `src/components/ui`; keep it under page/feature folders (for example, `src/pages/**/components/`).
+
 ---
 
 ### 7. How to extend the app

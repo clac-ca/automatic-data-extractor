@@ -18,11 +18,10 @@ from ade_api.common.list_filters import (
     prepare_filters,
 )
 from ade_api.common.search import build_q_predicate, matches_tokens, parse_q
-from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_api.core.rbac.types import ScopeType
-from ade_api.models import Permission, Role, User, UserRoleAssignment
-
 from ade_api.core.rbac.registry import role_allows_scope
+from ade_api.core.rbac.types import ScopeType
+from ade_api.features.search_registry import SEARCH_REGISTRY
+from ade_api.models import Permission, Role, User, UserRoleAssignment
 
 PERMISSION_FILTER_REGISTRY = FilterRegistry(
     [

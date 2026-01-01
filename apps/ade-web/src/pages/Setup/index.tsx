@@ -13,10 +13,10 @@ import {
   resolveRedirectParam,
 } from "@app/navigation/authNavigation";
 import { completeSetup } from "@api/setup/api";
-import { Alert } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
-import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 
 const setupSchema = z
   .object({

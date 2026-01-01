@@ -14,13 +14,19 @@ import {
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
 import type { RoleDefinition, WorkspaceMember } from "@schema/workspaces";
 import type { UserSummary } from "@api/users/api";
-import { Alert } from "@components/ui/alert";
-import { Avatar } from "@components/ui/avatar";
-import { ConfirmDialog } from "@components/ui/confirm-dialog";
-import { FormField } from "@components/ui/form-field";
-import { Select } from "@components/ui/select";
-import { Button } from "@components/tablecn/ui/button";
-import { Input } from "@components/tablecn/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Avatar } from "@/components/ui/avatar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FormField } from "@/components/ui/form-field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -28,8 +34,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@components/tablecn/ui/table";
-import { Badge } from "@components/tablecn/ui/badge";
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { SettingsSection } from "../components/SettingsSection";
 
 type MemberWithUser = WorkspaceMember & { user?: UserSummary };
@@ -363,22 +369,25 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
 
         <FormField label="User" required>
           <Select
-            value={selectedUserId}
-            onChange={(event) => {
-              setSelectedUserId(event.target.value);
-              if (event.target.value) {
+            value={selectedUserId || undefined}
+            onValueChange={(value) => {
+              setSelectedUserId(value);
+              if (value) {
                 setUserSearch("");
               }
             }}
             disabled={isSubmitting || usersLoading}
-            required
           >
-            <option value="">Select a user</option>
-            {selectableUsers.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.display_name ? `${user.display_name} (${user.email})` : user.email}
-              </option>
-            ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a user" />
+            </SelectTrigger>
+            <SelectContent>
+              {selectableUsers.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.display_name ? `${user.display_name} (${user.email})` : user.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
           {availableUsers.length === 0 && userSearch ? (
             <p className="text-xs text-muted-foreground">No users matched "{userSearch}".</p>

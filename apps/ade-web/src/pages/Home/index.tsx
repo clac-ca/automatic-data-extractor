@@ -5,7 +5,7 @@ import { useWorkspacesQuery } from "@hooks/workspaces";
 import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
 import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
-import { Button } from "@components/ui/button";
+import { Button } from "@/components/ui/button";
 import { PageState } from "@components/layouts/page-state";
 import { useLocation, useNavigate } from "@app/navigation/history";
 

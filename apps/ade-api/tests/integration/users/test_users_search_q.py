@@ -7,7 +7,7 @@ import pytest
 from ade_api.common.list_filters import FilterJoinOperator
 from ade_api.common.sorting import resolve_sort
 from ade_api.core.security.hashing import hash_password
-from ade_api.db import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.features.users.service import UsersService
 from ade_api.features.users.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_api.models import User

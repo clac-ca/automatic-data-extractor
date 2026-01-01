@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from ade_api.db.mixins import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.features.builds.builder import (
     BuildArtifacts,
     BuilderArtifactsEvent,

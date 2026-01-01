@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from typing import Literal
+
+from fastapi import HTTPException, status
 from pydantic import Field, field_validator
 from sqlalchemy import func, or_
 from sqlalchemy.sql import Select

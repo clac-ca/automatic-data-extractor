@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from ade_api.core.security.hashing import hash_password
-from ade_api.db import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.models import (
     Build,
     BuildStatus,

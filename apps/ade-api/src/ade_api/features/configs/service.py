@@ -45,9 +45,9 @@ from .schemas import (
     ConfigSource,
     ConfigSourceClone,
     ConfigSourceTemplate,
-    ConfigValidationIssue,
     ConfigurationPage,
     ConfigurationRecord,
+    ConfigValidationIssue,
 )
 from .storage import ConfigStorage
 

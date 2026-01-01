@@ -12,7 +12,12 @@ from ade_api.features.rbac import RbacService
 from ade_api.models import User
 from ade_api.settings import Settings
 
-from .schemas import AuthProvider, AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
+from .schemas import (
+    AuthProvider,
+    AuthProviderListResponse,
+    AuthSetupRequest,
+    AuthSetupStatusResponse,
+)
 
 
 class SetupAlreadyCompletedError(RuntimeError):

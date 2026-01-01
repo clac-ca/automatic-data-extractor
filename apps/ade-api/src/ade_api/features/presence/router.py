@@ -9,14 +9,14 @@ from fastapi import APIRouter, Depends, Path, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.auth import AuthenticationError, authenticate_websocket
-from ade_api.core.auth.principal import AuthVia, AuthenticatedPrincipal
+from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia
 from ade_api.core.http.dependencies import (
     get_api_key_authenticator_websocket,
     get_bearer_authenticator,
     get_cookie_authenticator,
     get_rbac_service,
 )
-from ade_api.db.session import get_websocket_session
+from ade_api.db import get_db_session
 from ade_api.models import User
 from ade_api.settings import Settings, get_settings
 
@@ -24,7 +24,7 @@ from .registry import ChannelKey, PresenceParticipant, get_presence_registry
 
 router = APIRouter(prefix="/workspaces/{workspaceId}/presence", tags=["presence"])
 
-WebSocketSessionDep = Annotated[AsyncSession, Depends(get_websocket_session)]
+WebSocketSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 WorkspacePath = Annotated[
     UUID,
@@ -240,7 +240,7 @@ async def presence_ws(
                 websocket.receive_json(),
                 timeout=HELLO_TIMEOUT_SECONDS,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await websocket.close(code=WS_CLOSE_TIMEOUT)
             return
         except ValueError:

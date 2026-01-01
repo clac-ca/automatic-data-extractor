@@ -19,13 +19,14 @@ from ade_api.core.auth.users import (
 )
 from ade_api.core.http import require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 from ade_api.models import AccessToken
 from ade_api.settings import Settings
 
-from .schemas import AuthSetupRequest, AuthSetupStatusResponse, AuthProviderListResponse
 from .oidc_router import router as oidc_router
+from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
 from .service import AuthService, SetupAlreadyCompletedError
+
 
 def _add_csrf_logout_dependency(auth_router: APIRouter) -> None:
     for route in auth_router.routes:
@@ -79,7 +80,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     async def complete_setup(
         payload: AuthSetupRequest,
         service: Annotated[AuthService, Depends(get_auth_service)],
-        db: Annotated[AsyncSession, Depends(get_session)],
+        db: Annotated[AsyncSession, Depends(get_db_session)],
         password_helper=Depends(get_password_helper),
     ) -> Response:
         password_hash = password_helper.hash(payload.password.get_secret_value())

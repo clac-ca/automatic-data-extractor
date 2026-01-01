@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from ade_api.common.time import utc_now
-from ade_api.db.mixins import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.schemas import RunCreateOptions
 from ade_api.features.documents.storage import DocumentStorage

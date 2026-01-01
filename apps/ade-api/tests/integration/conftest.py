@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
+import os
 from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
@@ -19,8 +20,8 @@ from sqlalchemy.ext.asyncio import (
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
-from ade_api.db.engine import ensure_database_ready, get_engine, reset_database_state
-from ade_api.db.session import get_session as get_session_dependency
+from ade_api.db import DatabaseConfig, db
+from ade_api.db.migrations import run_migrations_async
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.models import Role, User, Workspace, WorkspaceMembership
@@ -57,8 +58,9 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     database_path = data_dir / "db" / "api.sqlite"
     workspaces_dir = data_dir / "workspaces"
 
+    os.environ["ADE_DATABASE_URL"] = f"sqlite:///{database_path}"
+
     settings = Settings(
-        database_dsn=f"sqlite+aiosqlite:///{database_path}",
         workspaces_dir=workspaces_dir,
         documents_dir=workspaces_dir,
         configs_dir=workspaces_dir,
@@ -111,18 +113,7 @@ async def _override_sessionmaker(
         join_transaction_mode="create_savepoint",
     )
 
-    def _get_sessionmaker_override(*_args: object, **_kwargs: object) -> async_sessionmaker[AsyncSession]:
-        return session_factory
-
-    from ade_api.app import lifecycles as app_lifecycles
-    from ade_api.db import session as db_session
-    from ade_api.features.builds import tasks as builds_tasks
-    from ade_api.features.runs import tasks as runs_tasks
-
-    monkeypatch.setattr(db_session, "get_sessionmaker", _get_sessionmaker_override)
-    monkeypatch.setattr(builds_tasks, "get_sessionmaker", _get_sessionmaker_override)
-    monkeypatch.setattr(runs_tasks, "get_sessionmaker", _get_sessionmaker_override)
-    monkeypatch.setattr(app_lifecycles, "get_sessionmaker", _get_sessionmaker_override)
+    monkeypatch.setattr(db, "_sessionmaker", session_factory)
 
     yield
 
@@ -144,9 +135,11 @@ def _disable_run_workers(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def migrated_db(base_settings: Settings) -> AsyncEngine:
-    reset_database_state()
-    await ensure_database_ready(base_settings)
-    engine = get_engine(base_settings)
+    _ = base_settings
+    db_config = DatabaseConfig.from_env()
+    await run_migrations_async(db_config)
+    db.init(db_config)
+    engine = db.engine
 
     session_factory = async_sessionmaker(
         bind=engine,
@@ -159,7 +152,7 @@ async def migrated_db(base_settings: Settings) -> AsyncEngine:
         await session.commit()
 
     yield engine
-    reset_database_state()
+    await db.dispose()
 
 
 @pytest_asyncio.fixture()
@@ -205,40 +198,7 @@ def app(
     app = create_app(settings=settings)
 
     app.dependency_overrides[get_settings] = lambda: cast(Settings, app.state.settings)
-
-    async def _get_session(request: Request) -> AsyncIterator[AsyncSession]:
-        session = AsyncSession(
-            bind=db_connection,
-            expire_on_commit=False,
-            autoflush=False,
-            join_transaction_mode="create_savepoint",
-        )
-
-        request.state.db_session = session
-        error: BaseException | None = None
-        try:
-            yield session
-        except BaseException as exc:
-            error = exc
-            raise
-        finally:
-            try:
-                if session.in_transaction():
-                    commit_on_error = session.info.pop("force_commit_on_error", False)
-                    if error is None or commit_on_error:
-                        try:
-                            await session.commit()
-                        except Exception:
-                            await session.rollback()
-                            raise
-                    else:
-                        await session.rollback()
-            finally:
-                if getattr(request.state, "db_session", None) is session:
-                    request.state.db_session = None
-                await session.close()
-
-    app.dependency_overrides[get_session_dependency] = _get_session
+    _ = db_connection
 
     return app
 

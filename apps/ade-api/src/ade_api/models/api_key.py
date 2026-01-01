@@ -8,8 +8,7 @@ from uuid import UUID
 from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
-from ade_api.db.types import UTCDateTime
+from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
 from .user import User
 
@@ -21,7 +20,7 @@ class ApiKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user_id: Mapped[UUID] = mapped_column(
         "user_id",
-        UUIDType(),
+        GUID(),
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )

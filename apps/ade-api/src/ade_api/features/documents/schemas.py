@@ -131,7 +131,7 @@ class DocumentOut(BaseSchema):
         return data
 
     @model_validator(mode="after")
-    def _derive_defaults(self) -> "DocumentOut":
+    def _derive_defaults(self) -> DocumentOut:
         if self.activity_at is None:
             self.activity_at = self.updated_at
         return self
@@ -179,7 +179,7 @@ class DocumentUpdateRequest(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _ensure_changes(self) -> "DocumentUpdateRequest":
+    def _ensure_changes(self) -> DocumentUpdateRequest:
         assignee_set = "assignee_user_id" in self.model_fields_set
         if not assignee_set and self.metadata is None:
             raise ValueError("assigneeId or metadata is required")
@@ -336,7 +336,7 @@ class DocumentChangeEntry(BaseSchema):
     requires_refresh: bool = Field(default=False, alias="requiresRefresh")
 
     @model_validator(mode="after")
-    def _validate_payload(self) -> "DocumentChangeEntry":
+    def _validate_payload(self) -> DocumentChangeEntry:
         if self.type == "document.deleted" and not self.document_id:
             raise ValueError("document_id is required for document.deleted changes")
         if self.type == "document.upsert" and self.row is None:
@@ -366,7 +366,7 @@ class DocumentUploadRunOptions(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _validate_sheet_options(self) -> "DocumentUploadRunOptions":
+    def _validate_sheet_options(self) -> DocumentUploadRunOptions:
         if self.active_sheet_only and self.input_sheet_names:
             raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
         return self

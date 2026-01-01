@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
-from typing import Any, Generic, Sequence, TypeVar
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 from fastapi import HTTPException, Query, Request, status
 from pydantic import Field
@@ -12,8 +13,8 @@ from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator, parse_filter_items
-from ade_api.common.search import MAX_QUERY_LENGTH, parse_q
 from ade_api.common.schema import BaseSchema
+from ade_api.common.search import MAX_QUERY_LENGTH, parse_q
 from ade_api.common.sorting import parse_sort
 from ade_api.settings import COUNT_STATEMENT_TIMEOUT_MS
 

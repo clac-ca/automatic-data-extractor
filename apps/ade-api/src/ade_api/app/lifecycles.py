@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
+from sqlalchemy.engine import make_url
 
-from ade_api.db.engine import ensure_database_ready
-from ade_api.db.session import get_sessionmaker
+from ade_api.db import DatabaseConfig, build_sync_url, db
+from ade_api.db.migrations import migration_timeout_seconds, run_migrations_async
 from ade_api.features.rbac import RbacService
 from ade_api.features.runs.event_stream import get_run_event_streams
 from ade_api.features.runs.worker_pool import RunWorkerPool
@@ -112,8 +114,43 @@ def create_application_lifespan(
         ensure_runtime_dirs(settings)
         app.state.settings = settings
         app.state.safe_mode = bool(settings.safe_mode)
-        await ensure_database_ready(settings)
-        session_factory = get_sessionmaker(settings=settings)
+        db_config = DatabaseConfig.from_settings(settings)
+        sync_url = build_sync_url(db_config)
+        safe_url = make_url(sync_url).render_as_string(hide_password=True)
+        timeout_s = migration_timeout_seconds()
+        logger.info(
+            "db.migrations.start",
+            extra={
+                "database_url": safe_url,
+                "timeout_seconds": timeout_s,
+            },
+        )
+        started = time.monotonic()
+        try:
+            await run_migrations_async(db_config, timeout_seconds=timeout_s)
+        except Exception:
+            elapsed = time.monotonic() - started
+            logger.exception(
+                "db.migrations.failed",
+                extra={
+                    "database_url": safe_url,
+                    "elapsed_seconds": round(elapsed, 3),
+                },
+            )
+            raise
+        else:
+            elapsed = time.monotonic() - started
+            logger.info(
+                "db.migrations.complete",
+                extra={
+                    "database_url": safe_url,
+                    "elapsed_seconds": round(elapsed, 3),
+                },
+            )
+        logger.info("db.init.start", extra={"database_url": safe_url})
+        db.init(db_config)
+        logger.info("db.init.complete", extra={"database_url": safe_url})
+        session_factory = db.sessionmaker
         async with session_factory() as session:
             service = RbacService(session=session)
             try:
@@ -132,6 +169,7 @@ def create_application_lifespan(
         app.state.run_workers = run_workers
         yield
         await run_workers.stop()
+        await db.dispose()
 
     return lifespan
 

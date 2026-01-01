@@ -19,7 +19,7 @@ import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
 import { WorkspaceNav, WorkspaceNavList } from "@pages/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@pages/Workspace/components/workspaceNavigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
-import { Alert } from "@components/ui/alert";
+import { Alert } from "@/components/ui/alert";
 import { PageState } from "@components/layouts/page-state";
 import { ChevronDownIcon, CloseIcon, MenuIcon } from "@components/icons";
 import { useShortcutHint } from "@hooks/useShortcutHint";

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 
 import { BUILTIN_THEMES, MODE_OPTIONS, useTheme } from "@components/providers/theme";
-import { ContextMenu } from "@components/ui/context-menu";
+import { ContextMenu } from "@/components/ui/context-menu";
 import { CheckIcon, ChevronDownIcon, SettingsIcon } from "@components/icons";
 
 const MENU_OFFSET = 8;

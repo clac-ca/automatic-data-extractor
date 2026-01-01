@@ -7,7 +7,11 @@ from uuid import UUID
 
 from fastapi import Path
 
-from ade_api.common.problem_details import ApiError, ProblemDetailsErrorItem, resolve_error_definition
+from ade_api.common.problem_details import (
+    ApiError,
+    ProblemDetailsErrorItem,
+    resolve_error_definition,
+)
 
 WorkspaceIdPath = Annotated[
     UUID,

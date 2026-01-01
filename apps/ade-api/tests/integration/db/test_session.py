@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated
+from uuid import uuid4
 
 import pytest
-from fastapi import Depends, Request
+from fastapi import Depends
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.db.mixins import generate_uuid7
-from ade_api.db.session import get_session
+from ade_api.db import get_db_session
 
 
 @pytest.mark.asyncio
@@ -23,7 +21,7 @@ async def test_session_dependency_commits_and_populates_context(
     settings,
     seed_identity,
 ):
-    """The session dependency should attach to the request and commit writes."""
+    """The session dependency should commit writes."""
 
     route_path = "/__tests__/configurations"
     workspace_id = seed_identity.workspace_id
@@ -36,56 +34,13 @@ async def test_session_dependency_commits_and_populates_context(
 
     app.dependency_overrides[get_settings] = lambda: app.state.settings
 
-    async def _get_session(request: Request) -> AsyncIterator[AsyncSession]:
-        session = AsyncSession(
-            bind=db_connection,
-            expire_on_commit=False,
-            autoflush=False,
-        )
-
-        nested = session.begin_nested()
-        await nested.start()
-
-        @event.listens_for(session.sync_session, "after_transaction_end")
-        def _restart_savepoint(sync_session, transaction) -> None:
-            if transaction.nested and not transaction._parent.nested:
-                sync_session.begin_nested()
-
-        request.state.db_session = session
-        error: BaseException | None = None
-        try:
-            yield session
-        except BaseException as exc:
-            error = exc
-            raise
-        finally:
-            try:
-                if session.in_transaction():
-                    commit_on_error = session.info.pop("force_commit_on_error", False)
-                    if error is None or commit_on_error:
-                        try:
-                            await session.commit()
-                        except Exception:
-                            await session.rollback()
-                            raise
-                    else:
-                        await session.rollback()
-            finally:
-                if getattr(request.state, "db_session", None) is session:
-                    request.state.db_session = None
-                await session.close()
-
-    app.dependency_overrides[get_session] = _get_session
-
     @app.post(route_path)
     async def _create_config(
-        request: Request,
-        session: Annotated[AsyncSession, Depends(get_session)],
+        session: Annotated[AsyncSession, Depends(get_db_session)],
     ) -> dict[str, bool | str]:
         assert isinstance(session, AsyncSession)
-        assert request.state.db_session is session
 
-        configuration_id = str(generate_uuid7())
+        configuration_id = str(uuid4())
         now_iso = datetime.now(UTC).isoformat()
         payload = {
             "id": configuration_id,

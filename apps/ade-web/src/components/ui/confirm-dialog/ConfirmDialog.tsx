@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { Button } from "@components/ui/button";
+import { Button } from "@/components/ui/button";
 
 type ConfirmDialogTone = "default" | "danger";
 

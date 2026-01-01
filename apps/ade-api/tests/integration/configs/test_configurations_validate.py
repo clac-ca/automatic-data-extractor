@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from ade_api.db import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.settings import Settings
 from tests.integration.configs.helpers import auth_headers, config_path, create_from_template
 

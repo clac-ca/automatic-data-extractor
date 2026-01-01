@@ -1,4 +1,4 @@
-"""Alembic environment configuration for ADE."""
+"""Alembic environment configuration (SQLite + SQL Server only)."""
 
 from __future__ import annotations
 
@@ -8,112 +8,108 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ArgumentError
 
-from ade_api.settings import get_settings
-from ade_api.db import metadata
-from ade_api.db.engine import attach_managed_identity, render_sync_url
+from ade_api.db.base import metadata
+from ade_api.db.database import DatabaseConfig, attach_managed_identity, build_sync_url
 
+# Alembic Config object
 config = context.config
 
-# Allow callers to opt out of Alembic's logging config so application logging
-# (handlers/levels/formatters) is left intact when migrations run in-process.
+# Keep Alembic logging optional (standard pattern)
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 
+# Import models so Base.metadata is populated
 def _import_models() -> None:
     import ade_api.models  # noqa: F401
 
 
 _import_models()
-
 target_metadata = metadata
 
 
-def _database_url() -> str:
+def _get_url() -> str:
+    # 1) alembic.ini sqlalchemy.url
     url = config.get_main_option("sqlalchemy.url")
     if url:
         return url
 
+    # 2) explicit override
     override = os.getenv("ALEMBIC_DATABASE_URL")
     if override:
         return override
 
-    settings = get_settings()
-    return render_sync_url(settings)
+    # 3) ADE_DATABASE_URL from env (sync URL expected)
+    cfg = DatabaseConfig.from_env()
+    return build_sync_url(cfg)
+
+
+def _is_sqlite(url: str) -> bool:
+    try:
+        return make_url(url).get_backend_name() == "sqlite"
+    except Exception:
+        return url.startswith("sqlite")
 
 
 def _use_managed_identity(url: str) -> bool:
-    settings = get_settings()
+    cfg = DatabaseConfig.from_env()
     try:
         backend = make_url(url).get_backend_name()
-    except ArgumentError:
+    except Exception:
         backend = "sqlite" if url.startswith("sqlite") else ""
-    return settings.database_auth_mode == "managed_identity" and backend == "mssql"
-
-
-def _should_render_as_batch(url: str) -> bool:
-    try:
-        backend = make_url(url).get_backend_name()
-    except ArgumentError:
-        backend = "sqlite" if url.startswith("sqlite") else ""
-    return backend == "sqlite"
+    return cfg.auth_mode == "managed_identity" and backend == "mssql"
 
 
 def run_migrations_offline() -> None:
-    """Run migrations without a live database connection."""
-
-    url = _database_url()
+    url = _get_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=_should_render_as_batch(url),
+        render_as_batch=_is_sqlite(url),
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
-    """Run migrations using a synchronous SQLAlchemy engine."""
+    url = _get_url()
 
-    url = _database_url()
+    # If a connection is passed in (rare but useful), use it
     existing_connection = config.attributes.get("connection")
     if existing_connection is not None:
         context.configure(
             connection=existing_connection,
             target_metadata=target_metadata,
-            render_as_batch=_should_render_as_batch(url),
+            render_as_batch=_is_sqlite(url),
         )
-
         with context.begin_transaction():
             context.run_migrations()
         return
 
-    configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = url
+    section = config.get_section(config.config_ini_section) or {}
+    section["sqlalchemy.url"] = url
 
     connectable = engine_from_config(
-        configuration,
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
         future=True,
     )
 
     if _use_managed_identity(url):
-        attach_managed_identity(connectable, get_settings())
+        cfg = DatabaseConfig.from_env()
+        attach_managed_identity(connectable, client_id=cfg.managed_identity_client_id)
 
     try:
         with connectable.connect() as connection:
             context.configure(
                 connection=connection,
                 target_metadata=target_metadata,
-                render_as_batch=_should_render_as_batch(url),
+                render_as_batch=_is_sqlite(url),
             )
-
             with context.begin_transaction():
                 context.run_migrations()
     finally:

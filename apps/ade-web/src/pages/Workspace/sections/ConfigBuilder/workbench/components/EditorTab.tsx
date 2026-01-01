@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { TabsTrigger } from "@components/ui/tabs";
+import { TabsTrigger } from "@/components/ui/tabs";
 
 import type { WorkbenchFileTab } from "../types";
 import { PinGlyph, TabSavingSpinner } from "./EditorIcons";

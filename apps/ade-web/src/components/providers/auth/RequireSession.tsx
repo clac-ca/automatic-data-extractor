@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from "@app/navigation/history";
 import { useSessionQuery } from "@hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
 import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "@app/navigation/authNavigation";
-import { Button } from "@components/ui/button";
+import { Button } from "@/components/ui/button";
 
 import { SessionProvider } from "./SessionContext";
 

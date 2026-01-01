@@ -11,7 +11,15 @@ from pathlib import Path
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
-from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    PrivateAttr,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 from sqlalchemy.engine import URL, make_url
@@ -305,13 +313,28 @@ class Settings(BaseSettings):
     build_ttl: timedelta | None = Field(default=None)
 
     # Database
-    database_dsn: str | None = None
+    database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_URL", "DATABASE_DSN", "database_url"),
+    )
     database_echo: bool = False
+    database_log_level: str | None = None
     database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
     database_auth_mode: Literal["sql_password", "managed_identity"] = Field(default="sql_password")
     database_mi_client_id: str | None = None
+    database_sqlite_journal_mode: Literal[
+        "WAL",
+        "DELETE",
+        "TRUNCATE",
+        "PERSIST",
+        "MEMORY",
+        "OFF",
+    ] = "WAL"
+    database_sqlite_synchronous: Literal["OFF", "NORMAL", "FULL", "EXTRA"] = "NORMAL"
+    database_sqlite_busy_timeout_ms: int = Field(30000, ge=0)
+    database_sqlite_begin_mode: Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"] | None = None
 
     # JWT
     jwt_secret: SecretStr | None = Field(
@@ -390,6 +413,13 @@ class Settings(BaseSettings):
         s = ("" if v is None else str(v).strip()).upper()
         return s or "INFO"
 
+    @field_validator("database_log_level", mode="before")
+    @classmethod
+    def _v_db_log_level(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return cls._v_log_level(v)
+
     @field_validator("server_cors_origins", mode="before")
     @classmethod
     def _v_cors(cls, v: Any) -> list[str]:
@@ -416,6 +446,20 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return None
         return str(v).strip()
+
+    @field_validator("database_sqlite_journal_mode", "database_sqlite_synchronous", mode="before")
+    @classmethod
+    def _v_sqlite_pragma_enum(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip().upper()
+
+    @field_validator("database_sqlite_begin_mode", mode="before")
+    @classmethod
+    def _v_sqlite_begin_mode(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip().upper()
 
     @field_validator("jwt_secret", mode="before")
     @classmethod
@@ -531,19 +575,21 @@ class Settings(BaseSettings):
         if not self.frontend_url:
             self.frontend_url = self.server_public_url
 
-        if not self.database_dsn:
+        if not self.database_url:
             sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)
-            self.database_dsn = f"sqlite+aiosqlite:///{sqlite.as_posix()}"
+            self.database_url = f"sqlite:///{sqlite.as_posix()}"
 
-        url = make_url(self.database_dsn)
+        url = make_url(self.database_url)
         query = dict(url.query or {})
+
+        if (
+            url.get_backend_name() == "sqlite"
+            and "database_sqlite_busy_timeout_ms" not in self.model_fields_set
+        ):
+            self.database_sqlite_busy_timeout_ms = int(self.database_pool_timeout * 1000)
 
         if url.get_backend_name() == "mssql" and "driver" not in query:
             query["driver"] = "ODBC Driver 18 for SQL Server"
-
-        # SQL Server async connectivity: prefer aioodbc (required for SQLAlchemy async)
-        if url.get_backend_name() == "mssql" and not url.drivername.startswith("mssql+aioodbc"):
-            url = url.set(drivername="mssql+aioodbc")
 
         if self.database_auth_mode == "managed_identity":
             if url.get_backend_name() != "mssql":
@@ -562,7 +608,7 @@ class Settings(BaseSettings):
         elif query != url.query:
             url = url.set(query=query)
 
-        self.database_dsn = url.render_as_string(hide_password=False)
+        self.database_url = url.render_as_string(hide_password=False)
 
         if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
             self.jwt_secret = SecretStr(secrets.token_urlsafe(64))

@@ -2,10 +2,10 @@ import { useMemo } from "react";
 
 import clsx from "clsx";
 
-import { CodeEditor } from "@components/ui/code-editor";
-import { TabsContent } from "@components/ui/tabs";
+import { TabsContent } from "@/components/ui/tabs";
 
 import type { WorkbenchFileTab } from "../types";
+import { CodeEditor } from "./code-editor";
 
 interface EditorPaneProps {
   readonly tabs: readonly WorkbenchFileTab[];

@@ -21,6 +21,7 @@ import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { Explorer } from "./components/Explorer";
 import { PanelResizeHandle } from "./components/PanelResizeHandle";
+import { SplitButton } from "./components/SplitButton";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
@@ -33,9 +34,8 @@ import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./u
 import { hasFileDrag } from "./utils/fileDrop";
 import { isAssetsWorkbenchPath, isSafeWorkbenchPath, joinWorkbenchPath, normalizeWorkbenchPath } from "./utils/paths";
 
-import { ContextMenu, type ContextMenuItem } from "@components/ui/context-menu";
-import { ConfirmDialog } from "@components/ui/confirm-dialog";
-import { SplitButton } from "@components/ui/split-button";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageState } from "@components/layouts/page-state";
 import {
   ActionsIcon,
@@ -74,11 +74,17 @@ import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@api/documents";
 import { client } from "@api/client";
 import { useNotifications, type NotificationIntent } from "@components/providers/notifications";
-import { Select } from "@components/ui/select";
-import { Button } from "@components/ui/button";
-import { Alert } from "@components/ui/alert";
-import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";
 import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
@@ -2702,16 +2708,19 @@ function RunExtractionDialog({
                 Document
               </label>
               <Select
-                id="builder-run-document-select"
-                value={selectedDocumentId}
-                onChange={(event) => setSelectedDocumentId(event.target.value)}
-                className="w-full"
+                value={selectedDocumentId || undefined}
+                onValueChange={(value) => setSelectedDocumentId(value)}
               >
-                {documents.map((document) => (
-                  <option key={document.id} value={document.id}>
-                    {document.name}
-                  </option>
-                ))}
+                <SelectTrigger id="builder-run-document-select" className="w-full">
+                  <SelectValue placeholder="Select a document" />
+                </SelectTrigger>
+                <SelectContent>
+                  {documents.map((document) => (
+                    <SelectItem key={document.id} value={document.id}>
+                      {document.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               {selectedDocument ? (
                 <p className="text-xs text-muted-foreground">
@@ -2725,17 +2734,17 @@ function RunExtractionDialog({
               <label className="text-sm font-medium text-foreground" htmlFor="builder-run-log-level-select">
                 Log level
               </label>
-              <Select
-                id="builder-run-log-level-select"
-                value={logLevel}
-                onChange={(event) => setLogLevel(event.target.value as RunLogLevel)}
-                className="w-full"
-              >
-                {RUN_LOG_LEVEL_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+              <Select value={logLevel} onValueChange={(value) => setLogLevel(value as RunLogLevel)}>
+                <SelectTrigger id="builder-run-log-level-select" className="w-full">
+                  <SelectValue placeholder="Select a log level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RUN_LOG_LEVEL_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Controls the engine runtime verbosity for this run.</p>
             </div>

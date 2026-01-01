@@ -6,7 +6,7 @@ import json
 import logging
 import random
 from collections.abc import AsyncIterator
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import (
@@ -27,14 +27,15 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sse_starlette.sse import EventSourceResponse
+
 from ade_api.api.deps import get_documents_service, get_idempotency_service, get_runs_service
+from ade_api.common.concurrency import require_if_match
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.logging import log_context
-from ade_api.common.concurrency import require_if_match
-from ade_api.common.sse import sse_json
 from ade_api.common.sorting import resolve_sort
+from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -43,15 +44,15 @@ from ade_api.common.workbook_preview import (
     WorkbookPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.idempotency import (
     IdempotencyService,
     build_request_hash,
     build_scope_key,
     require_idempotency_key,
 )
-from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.exceptions import RunQueueFullError
+from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
@@ -61,15 +62,15 @@ from .exceptions import (
     DocumentNotFoundError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
-DocumentPreviewUnsupportedError,
-DocumentTooLargeError,
+    DocumentPreviewUnsupportedError,
+    DocumentTooLargeError,
     DocumentUploadRangeError,
     DocumentUploadSessionExpiredError,
     DocumentUploadSessionNotFoundError,
     DocumentUploadSessionNotReadyError,
     DocumentWorksheetParseError,
-InvalidDocumentExpirationError,
-InvalidDocumentTagsError,
+    InvalidDocumentExpirationError,
+    InvalidDocumentTagsError,
 )
 from .filters import evaluate_document_filters
 from .schemas import (
@@ -77,13 +78,13 @@ from .schemas import (
     DocumentBatchArchiveResponse,
     DocumentBatchDeleteRequest,
     DocumentBatchDeleteResponse,
-    DocumentChangeEntry,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
+    DocumentChangeEntry,
     DocumentChangesPage,
-    DocumentOut,
     DocumentListPage,
     DocumentListRow,
+    DocumentOut,
     DocumentSheet,
     DocumentTagsPatch,
     DocumentTagsReplace,

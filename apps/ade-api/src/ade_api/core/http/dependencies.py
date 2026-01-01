@@ -11,9 +11,8 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.db.session import get_session as get_db_session
-from ade_api.db.session import get_websocket_session
 from ade_api.common.time import utc_now
+from ade_api.db import get_db_session
 from ade_api.models import AccessToken, User
 from ade_api.settings import Settings, get_settings
 
@@ -23,13 +22,13 @@ from ..auth import (
     PermissionDeniedError,
     authenticate_request,
 )
-from ..auth.principal import AuthVia, PrincipalType
 from ..auth.pipeline import ApiKeyAuthenticator, BearerAuthenticator, CookieAuthenticator
+from ..auth.principal import AuthVia, PrincipalType
 from ..rbac.service_interface import RbacService as RbacServiceInterface
 from ..security.tokens import decode_token
 
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
-WebSocketSessionDep = Annotated[AsyncSession, Depends(get_websocket_session)]
+WebSocketSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 PermissionDependency = Callable[..., Awaitable[User]]

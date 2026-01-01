@@ -1,5 +1,5 @@
 # Base versions (override at build time if needed)
-ARG PYTHON_VERSION=3.14
+ARG PYTHON_VERSION=3.12
 ARG NODE_VERSION=20
 
 # =============================================================================
@@ -30,7 +30,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Build deps (kept out of final image). pyodbc builds need unixodbc-dev.
+# Build deps (kept out of final image).
+# - unixodbc-dev: build pyodbc if needed
+# - libssl-dev/libffi-dev: common for azure-identity/crypto deps when wheels lag
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -40,10 +42,11 @@ RUN set -eux; \
         rustc \
         unixodbc-dev \
         pkg-config \
+        libssl-dev \
+        libffi-dev \
     ; \
     rm -rf /var/lib/apt/lists/*
 
-# Copy minimal metadata first to maximize layer cache reuse
 COPY README.md ./
 COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
 COPY apps/ade-engine/pyproject.toml apps/ade-engine/
@@ -51,19 +54,17 @@ COPY apps/ade-api/pyproject.toml    apps/ade-api/
 
 RUN python -m pip install -U pip
 
-# Now copy full sources
 COPY apps ./apps
 COPY --from=frontend-build /app/apps/ade-web/dist \
     ./apps/ade-api/src/ade_api/web/static
 
-# Install CLI, engine, and API into an isolated prefix (/install)
 RUN python -m pip install --prefix=/install \
         ./apps/ade-cli \
         ./apps/ade-engine \
         ./apps/ade-api
 
 # =============================================================================
-# Stage 3: Runtime image (what actually runs in prod)
+# Stage 3: Runtime image
 # =============================================================================
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 
@@ -75,7 +76,6 @@ WORKDIR /app
 
 # -----------------------------------------------------------------------------
 # SQL Server / Azure SQL ODBC driver (msodbcsql18) + unixODBC manager
-# Use Microsoft's repo bootstrap package (stable on Debian slim)
 # -----------------------------------------------------------------------------
 RUN set -eux; \
     apt-get update; \
@@ -89,20 +89,18 @@ RUN set -eux; \
         msodbcsql18 \
         libgssapi-krb5-2 \
     ; \
+    # Optional but robust EULA acceptance method (ODBC 18.4+)
+    mkdir -p /opt/microsoft/msodbcsql18; \
+    touch /opt/microsoft/msodbcsql18/ACCEPT_EULA; \
     rm -rf /var/lib/apt/lists/*
 
-# OCI labels
 LABEL org.opencontainers.image.title="automatic-data-extractor" \
       org.opencontainers.image.description="ADE — Automatic Data Extractor" \
       org.opencontainers.image.source="https://github.com/clac-ca/automatic-data-extractor"
 
-# Bring in installed Python packages + console scripts
 COPY --from=backend-build /install /usr/local
-
-# Copy app source tree (migrations, templates, etc.)
 COPY apps ./apps
 
-# Non-root user + persistent data dir
 RUN set -eux; \
     groupadd -r ade; \
     useradd -r -g ade ade; \

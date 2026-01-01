@@ -12,7 +12,7 @@ import {
 
 import clsx from "clsx";
 
-import { ContextMenu, type ContextMenuItem } from "@components/ui/context-menu";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import {
   ChevronDownSmallIcon,
   ChevronRightTinyIcon,

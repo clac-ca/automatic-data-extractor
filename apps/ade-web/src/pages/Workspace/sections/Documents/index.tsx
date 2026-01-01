@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type ChangeEvent } from "react"
 
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useNotifications } from "@components/providers/notifications";
-import { Button } from "@components/tablecn/ui/button";
+import { Button } from "@/components/ui/button";
 import { UploadIcon } from "@components/icons";
 import { useConfigurationsQuery } from "@hooks/configurations";
 import { useUploadManager, type UploadManagerQueueItem } from "@hooks/documents/uploadManager";
@@ -10,7 +10,7 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 
 import { UploadManager } from "./components/UploadManager";
 import { UploadPreflightDialog } from "./components/UploadPreflightDialog";
-import { TablecnDocumentsView } from "./tablecn/components/TablecnDocumentsView";
+import { DocumentsTableView } from "./data-table/components/DocumentsTableView";
 
 export default function DocumentsScreen() {
   const session = useSession();
@@ -107,7 +107,7 @@ export default function DocumentsScreen() {
     <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-4">
-          <TablecnDocumentsView
+          <DocumentsTableView
             workspaceId={workspace.id}
             currentUser={currentUser}
             configMissing={configMissing}

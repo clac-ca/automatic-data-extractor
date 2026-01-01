@@ -3,11 +3,11 @@ import type { ChangeEvent, FormEvent, MouseEvent as ReactMouseEvent } from "reac
 
 import { useNavigate } from "@app/navigation/history";
 
-import { Button } from "@components/ui/button";
-import { ConfirmDialog } from "@components/ui/confirm-dialog";
-import { ContextMenu, type ContextMenuItem } from "@components/ui/context-menu";
-import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import { PageState } from "@components/layouts/page-state";
 
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";

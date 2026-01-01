@@ -11,11 +11,12 @@ from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
-from ade_api.db import Base, UUIDType
-from ade_api.db.enums import enum_values
-from ade_api.db.types import UTCDateTime
+from ade_api.db import GUID, Base, UTCDateTime, UUIDPrimaryKeyMixin
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 
 class RunStatus(str, Enum):
@@ -28,23 +29,22 @@ class RunStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class Run(Base):
+class Run(UUIDPrimaryKeyMixin, Base):
     """Persistent record of an ADE engine execution."""
 
     __tablename__ = "runs"
 
-    id: Mapped[UUID] = mapped_column(UUIDType(), primary_key=True, default=generate_uuid7)
     configuration_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False
+        GUID(), ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False
     )
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
+        GUID(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
     build_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True
     )
     input_document_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False
+        GUID(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False
     )
     run_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
@@ -62,7 +62,7 @@ class Run(Base):
             name="run_status",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=RunStatus.QUEUED,
@@ -70,7 +70,7 @@ class Run(Base):
     )
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     submitted_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -96,7 +96,6 @@ class Run(Base):
             unique=True,
             sqlite_where=text("status IN ('queued','running')"),
             mssql_where=text("status IN ('queued','running')"),
-            postgresql_where=text("status IN ('queued','running')"),
         ),
         Index(
             "ix_runs_workspace_input_finished",

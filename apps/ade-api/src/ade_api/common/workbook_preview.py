@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from datetime import date, datetime
 from pathlib import Path
-from typing import Iterable, Sequence
 
 import openpyxl
 from pydantic import Field
