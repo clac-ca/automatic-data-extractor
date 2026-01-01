@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@components/tablecn/ui/dropdown-menu";
 import { Input } from "@components/tablecn/ui/input";
+import { cn } from "@components/tablecn/lib/utils";
 import { useSearchParams } from "@app/navigation/urlState";
 import type { DocumentStatus, FileType, WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
 import { MappingBadge } from "@pages/Workspace/sections/Documents/components/MappingBadge";
@@ -42,6 +43,7 @@ interface TablecnDocumentsTableProps {
   onRestore: (documentId: string) => void;
   onDeleteRequest: (document: DocumentListRow) => void;
   isRowActionPending?: (documentId: string) => boolean;
+  archivedFlashIds?: Set<string>;
   toolbarActions?: ReactNode;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   scrollFooter?: ReactNode;
@@ -61,6 +63,7 @@ export function TablecnDocumentsTable({
   onRestore,
   onDeleteRequest,
   isRowActionPending,
+  archivedFlashIds,
   toolbarActions,
   scrollContainerRef,
   scrollFooter,
@@ -202,11 +205,24 @@ export function TablecnDocumentsTable({
         header: ({ column }) => (
           <DataTableColumnHeader column={column} label="Status" />
         ),
-        cell: ({ row }) => (
-          <Badge variant="outline" className="capitalize">
-            {row.getValue<string>("status")}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const status = row.getValue<string>("status");
+          const flash = status === "archived" && (archivedFlashIds?.has(row.original.id) ?? false);
+          return (
+            <Badge
+              variant="outline"
+              className={cn(
+                "capitalize",
+                status === "archived" &&
+                  "border-warning-200 text-warning-900 dark:border-warning-500/60 dark:text-warning-100",
+                flash &&
+                  "bg-warning-50 ring-1 ring-warning-300/70 animate-pulse dark:bg-warning-500/15",
+              )}
+            >
+              {status}
+            </Badge>
+          );
+        },
         meta: {
           label: "Status",
           variant: "multiSelect",
@@ -502,6 +518,7 @@ export function TablecnDocumentsTable({
       },
     ],
     [
+      archivedFlashIds,
       assigneeOptions,
       fileTypeOptions,
       expandedRowId,

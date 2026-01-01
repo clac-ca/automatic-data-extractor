@@ -78,6 +78,17 @@ export function TablecnDocumentsView({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocumentListRow | null>(null);
   const [pendingActions, setPendingActions] = useState<Record<string, "archive" | "restore" | "delete">>({});
+  const [archivedFlashIds, setArchivedFlashIds] = useState<Set<string>>(() => new Set());
+  const archiveUndoRef = useRef(
+    new Map<
+      string,
+      {
+        snapshot: Pick<DocumentListRow, "status" | "updatedAt" | "activityAt">;
+        undoRequested: boolean;
+      }
+    >(),
+  );
+  const archiveFlashTimersRef = useRef<Map<string, number>>(new Map());
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
@@ -278,6 +289,66 @@ export function TablecnDocumentsView({
     [pendingActions],
   );
 
+  const triggerArchivedFlash = useCallback((documentId: string) => {
+    setArchivedFlashIds((current) => {
+      if (current.has(documentId)) return current;
+      const next = new Set(current);
+      next.add(documentId);
+      return next;
+    });
+
+    if (typeof window === "undefined") return;
+    const existing = archiveFlashTimersRef.current.get(documentId);
+    if (existing) {
+      window.clearTimeout(existing);
+    }
+    const timeoutId = window.setTimeout(() => {
+      archiveFlashTimersRef.current.delete(documentId);
+      setArchivedFlashIds((current) => {
+        if (!current.has(documentId)) return current;
+        const next = new Set(current);
+        next.delete(documentId);
+        return next;
+      });
+    }, 1600);
+    archiveFlashTimersRef.current.set(documentId, timeoutId);
+  }, []);
+
+  const clearArchivedFlash = useCallback((documentId: string) => {
+    setArchivedFlashIds((current) => {
+      if (!current.has(documentId)) return current;
+      const next = new Set(current);
+      next.delete(documentId);
+      return next;
+    });
+    const existing = archiveFlashTimersRef.current.get(documentId);
+    if (existing && typeof window !== "undefined") {
+      window.clearTimeout(existing);
+      archiveFlashTimersRef.current.delete(documentId);
+    }
+  }, []);
+
+  const restoreDocument = useCallback(
+    async (documentId: string, options: { silent?: boolean } = {}) => {
+      markActionPending(documentId, "restore");
+      try {
+        const updated = await restoreWorkspaceDocument(workspaceId, documentId);
+        applyDocumentUpdate(documentId, updated);
+        if (!options.silent) {
+          notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
+        }
+      } catch (error) {
+        notifyToast({
+          title: error instanceof Error ? error.message : "Unable to restore document.",
+          intent: "danger",
+        });
+      } finally {
+        clearActionPending(documentId);
+      }
+    },
+    [applyDocumentUpdate, clearActionPending, markActionPending, notifyToast, workspaceId],
+  );
+
   const onAssign = useCallback(
     async (documentId: string, assigneeKey: string | null) => {
       const assigneeId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
@@ -325,40 +396,91 @@ export function TablecnDocumentsView({
 
   const onArchive = useCallback(
     async (documentId: string) => {
+      const current = documentsById.get(documentId);
+      if (!current) {
+        return;
+      }
+
+      const snapshot = {
+        status: current.status,
+        updatedAt: current.updatedAt,
+        activityAt: current.activityAt,
+      };
+      archiveUndoRef.current.set(documentId, { snapshot, undoRequested: false });
+
+      const now = new Date().toISOString();
+      updateDocumentRow(documentId, {
+        status: "archived",
+        updatedAt: now,
+        activityAt: now,
+      });
+      triggerArchivedFlash(documentId);
+
+      notifyToast({
+        title: "Document archived.",
+        intent: "success",
+        duration: 6000,
+        actions: [
+          {
+            label: "Undo",
+            variant: "ghost",
+            onSelect: () => {
+              const entry = archiveUndoRef.current.get(documentId);
+              if (entry) {
+                entry.undoRequested = true;
+                updateDocumentRow(documentId, entry.snapshot);
+                clearArchivedFlash(documentId);
+                return;
+              }
+              void restoreDocument(documentId, { silent: true });
+            },
+          },
+        ],
+      });
+
       markActionPending(documentId, "archive");
       try {
         const updated = await archiveWorkspaceDocument(workspaceId, documentId);
+        const entry = archiveUndoRef.current.get(documentId);
+        if (entry?.undoRequested) {
+          await restoreDocument(documentId, { silent: true });
+          return;
+        }
         applyDocumentUpdate(documentId, updated);
-        notifyToast({ title: "Document archived.", intent: "success", duration: 4000 });
       } catch (error) {
+        const entry = archiveUndoRef.current.get(documentId);
+        if (entry) {
+          updateDocumentRow(documentId, entry.snapshot);
+          clearArchivedFlash(documentId);
+        }
         notifyToast({
           title: error instanceof Error ? error.message : "Unable to archive document.",
           intent: "danger",
         });
       } finally {
+        archiveUndoRef.current.delete(documentId);
         clearActionPending(documentId);
       }
     },
-    [applyDocumentUpdate, clearActionPending, markActionPending, notifyToast, workspaceId],
+    [
+      applyDocumentUpdate,
+      clearActionPending,
+      clearArchivedFlash,
+      documentsById,
+      markActionPending,
+      notifyToast,
+      restoreDocument,
+      triggerArchivedFlash,
+      updateDocumentRow,
+      workspaceId,
+    ],
   );
 
   const onRestore = useCallback(
     async (documentId: string) => {
-      markActionPending(documentId, "restore");
-      try {
-        const updated = await restoreWorkspaceDocument(workspaceId, documentId);
-        applyDocumentUpdate(documentId, updated);
-        notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
-      } catch (error) {
-        notifyToast({
-          title: error instanceof Error ? error.message : "Unable to restore document.",
-          intent: "danger",
-        });
-      } finally {
-        clearActionPending(documentId);
-      }
+      await restoreDocument(documentId);
     },
-    [applyDocumentUpdate, clearActionPending, markActionPending, notifyToast, workspaceId],
+    [restoreDocument],
   );
 
   const onDeleteRequest = useCallback((document: DocumentListRow) => {
@@ -598,6 +720,7 @@ export function TablecnDocumentsView({
         onRestore={onRestore}
         onDeleteRequest={onDeleteRequest}
         isRowActionPending={isRowActionPending}
+        archivedFlashIds={archivedFlashIds}
         toolbarActions={toolbarActions}
         scrollContainerRef={scrollContainerRef}
         scrollFooter={
