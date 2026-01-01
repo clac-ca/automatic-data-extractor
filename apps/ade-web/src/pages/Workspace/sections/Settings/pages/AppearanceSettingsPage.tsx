@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { MODE_OPTIONS, useTheme } from "@components/providers/theme";
 import { ThemeSelect } from "@components/ui/theme-select";
 import { CheckIcon } from "@components/icons";
+import { SettingsPanel } from "../components/SettingsPanel";
 
 
 export function AppearanceSettingsPage() {
@@ -11,14 +12,11 @@ export function AppearanceSettingsPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">Color mode</h3>
-            <p className="text-sm text-muted-foreground">
-              Use the system setting or set a fixed light or dark mode.
-            </p>
-          </div>
-          <div role="radiogroup" aria-label="Color mode" className="mt-4 grid gap-2">
+        <SettingsPanel
+          title="Color mode"
+          description="Use the system setting or set a fixed light or dark mode."
+        >
+          <div role="radiogroup" aria-label="Color mode" className="grid gap-2">
             {MODE_OPTIONS.map((option) => {
               const isSelected = option.value === modePreference;
               return (
@@ -40,16 +38,16 @@ export function AppearanceSettingsPage() {
                     <span className="truncate text-sm font-semibold">{option.label}</span>
                     <span className="truncate text-xs text-muted-foreground">{option.description}</span>
                   </span>
-              {isSelected ? <CheckIcon className="h-4 w-4 text-brand-500" /> : null}
+                  {isSelected ? <CheckIcon className="h-4 w-4 text-brand-500" /> : null}
                 </button>
               );
             })}
           </div>
-        </section>
+        </SettingsPanel>
 
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <SettingsPanel title="Theme" description="Pick the base color palette for this workspace.">
           <ThemeSelect theme={theme} onThemeChange={setTheme} label="Theme" />
-        </section>
+        </SettingsPanel>
       </div>
     </div>
   );

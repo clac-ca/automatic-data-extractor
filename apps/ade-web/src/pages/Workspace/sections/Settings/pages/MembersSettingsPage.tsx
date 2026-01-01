@@ -16,11 +16,21 @@ import type { RoleDefinition, WorkspaceMember } from "@schema/workspaces";
 import type { UserSummary } from "@api/users/api";
 import { Alert } from "@components/ui/alert";
 import { Avatar } from "@components/ui/avatar";
-import { Button } from "@components/ui/button";
 import { ConfirmDialog } from "@components/ui/confirm-dialog";
 import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
 import { Select } from "@components/ui/select";
+import { Button } from "@components/tablecn/ui/button";
+import { Input } from "@components/tablecn/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@components/tablecn/ui/table";
+import { Badge } from "@components/tablecn/ui/badge";
+import { SettingsPanel } from "../components/SettingsPanel";
 
 type MemberWithUser = WorkspaceMember & { user?: UserSummary };
 
@@ -129,30 +139,27 @@ export function MembersSettingsPage() {
         </Alert>
       ) : null}
 
-      <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-soft">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Workspace members</h2>
-            <p className="text-sm text-muted-foreground">
-              {isMembersLoading ? "Loading members…" : `${memberCount} member${memberCount === 1 ? "" : "s"} total`}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <FormField label="Search members" className="w-full max-w-xs">
-              <Input
-                value={memberSearch}
-                onChange={(event) => setMemberSearch(event.target.value)}
-                placeholder="Search by name, email, or ID"
-                disabled={isMembersLoading}
-              />
-            </FormField>
-            {canManageMembers ? (
-              <Button type="button" onClick={openAddMemberDrawer}>
-                Add member
-              </Button>
-            ) : null}
-          </div>
-        </header>
+      <SettingsPanel
+        title="Workspace members"
+        description={
+          isMembersLoading ? "Loading members…" : `${memberCount} member${memberCount === 1 ? "" : "s"} total`
+        }
+        actions={
+          canManageMembers ? (
+            <Button type="button" size="sm" onClick={openAddMemberDrawer}>
+              Add member
+            </Button>
+          ) : null
+        }
+      >
+        <FormField label="Search members" className="max-w-xs">
+          <Input
+            value={memberSearch}
+            onChange={(event) => setMemberSearch(event.target.value)}
+            placeholder="Search by name, email, or ID"
+            disabled={isMembersLoading}
+          />
+        </FormField>
 
         {isMembersLoading ? (
           <p className="text-sm text-muted-foreground">Loading members…</p>
@@ -162,48 +169,47 @@ export function MembersSettingsPage() {
           </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
-            <table className="min-w-full divide-y divide-border">
-              <thead className="bg-background">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3">Member</th>
-                  <th className="px-4 py-3">Roles</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <TableHead className="px-4">Member</TableHead>
+                  <TableHead className="px-4">Roles</TableHead>
+                  <TableHead className="px-4 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredMembers.map((member) => {
                   const roleChips = member.role_ids
                     .map((roleId) => availableRoles.find((role) => role.id === roleId)?.name ?? roleId)
                     .sort((a, b) => a.localeCompare(b));
                   const label = member.user?.display_name ?? member.user?.email ?? member.user_id;
                   return (
-                    <tr key={member.user_id} className="text-sm text-foreground">
-                      <td className="px-4 py-3">
+                    <TableRow key={member.user_id} className="text-sm text-foreground">
+                      <TableCell className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar name={member.user?.display_name} email={member.user?.email} size="sm" />
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-foreground">{label}</p>
-                            <p className="truncate text-xs text-muted-foreground">{member.user?.email ?? member.user_id}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {member.user?.email ?? member.user_id}
+                            </p>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
+                      </TableCell>
+                      <TableCell className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           {roleChips.length === 0 ? (
                             <span className="text-xs text-muted-foreground">No roles assigned.</span>
                           ) : (
                             roleChips.map((name) => (
-                              <span
-                                key={`${member.user_id}-${name}`}
-                                className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground"
-                              >
+                              <Badge key={`${member.user_id}-${name}`} variant="secondary" className="text-xs">
                                 {name}
-                              </span>
+                              </Badge>
                             ))
                           )}
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-right">
                         <Button
                           type="button"
                           variant="ghost"
@@ -213,20 +219,21 @@ export function MembersSettingsPage() {
                         >
                           Manage
                         </Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
         {hasMoreMembers ? (
-          <div className="pt-4">
+          <div>
             <Button
               type="button"
               variant="ghost"
+              size="sm"
               onClick={() => membersQuery.fetchNextPage()}
               disabled={isMembersFetchingMore}
             >
@@ -238,7 +245,7 @@ export function MembersSettingsPage() {
         {!canManageMembers ? (
           <Alert tone="info">You do not have permission to manage workspace members.</Alert>
         ) : null}
-      </section>
+      </SettingsPanel>
 
       <AddMemberDrawer
         open={isAddMemberOpen && canManageMembers}
@@ -343,12 +350,12 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
   };
 
   return (
-	    <SettingsDrawer
-	      open={open}
-	      onClose={onClose}
-	      title="Add member"
-	      description="Add an existing user and choose their workspace roles."
-	    >
+    <SettingsDrawer
+      open={open}
+      onClose={onClose}
+      title="Add member"
+      description="Add an existing user and choose their workspace roles."
+    >
       <form className="space-y-4" onSubmit={handleSubmit}>
         {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
         {usersQuery.isError ? (
@@ -357,49 +364,48 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
           </Alert>
         ) : null}
 
-	        <FormField label="Search directory" hint="Enter at least two characters to search by name or email.">
-	          <Input
-	            value={userSearch}
-	            onChange={(event) => setUserSearch(event.target.value)}
-	            placeholder="Search users"
-	            disabled={isSubmitting || usersLoading}
-	          />
-	          {searchTooShort ? (
-	            <p className="text-xs text-muted-foreground">Enter at least two characters to search the full directory.</p>
-	          ) : null}
-	        </FormField>
+        <FormField label="Search directory" hint="Enter at least two characters to search by name or email.">
+          <Input
+            value={userSearch}
+            onChange={(event) => setUserSearch(event.target.value)}
+            placeholder="Search users"
+            disabled={isSubmitting || usersLoading}
+          />
+          {searchTooShort ? (
+            <p className="text-xs text-muted-foreground">Enter at least two characters to search the full directory.</p>
+          ) : null}
+        </FormField>
 
-	        <FormField label="User" required>
-	          <Select
-	            value={selectedUserId}
-	            onChange={(event) => {
-	              setSelectedUserId(event.target.value);
-	              if (event.target.value) {
-	                setUserSearch("");
-	              }
-	            }}
-	            disabled={isSubmitting || usersLoading}
-	            required
-	          >
-	            <option value="">Select a user</option>
-	            {selectedUser &&
-	            !availableUsers.some((user) => user.id === selectedUser.id) ? (
-	              <option value={selectedUser.id}>
-	                {selectedUser.display_name
-	                  ? `${selectedUser.display_name} (${selectedUser.email})`
-	                  : selectedUser.email}
-	              </option>
-	            ) : null}
+        <FormField label="User" required>
+          <Select
+            value={selectedUserId}
+            onChange={(event) => {
+              setSelectedUserId(event.target.value);
+              if (event.target.value) {
+                setUserSearch("");
+              }
+            }}
+            disabled={isSubmitting || usersLoading}
+            required
+          >
+            <option value="">Select a user</option>
+            {selectedUser && !availableUsers.some((user) => user.id === selectedUser.id) ? (
+              <option value={selectedUser.id}>
+                {selectedUser.display_name
+                  ? `${selectedUser.display_name} (${selectedUser.email})`
+                  : selectedUser.email}
+              </option>
+            ) : null}
             {availableUsers.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.display_name ? `${user.display_name} (${user.email})` : user.email}
               </option>
-	            ))}
-	          </Select>
-	          {availableUsers.length === 0 && userSearch ? (
-	            <p className="text-xs text-muted-foreground">No users matched "{userSearch}".</p>
-	          ) : null}
-	        </FormField>
+            ))}
+          </Select>
+          {availableUsers.length === 0 && userSearch ? (
+            <p className="text-xs text-muted-foreground">No users matched "{userSearch}".</p>
+          ) : null}
+        </FormField>
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold text-foreground">Roles</legend>
@@ -413,26 +419,26 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
                   key={role.id}
                   className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                 >
-	                  <input
-	                    type="checkbox"
-	                    className="h-4 w-4 rounded border-border-strong"
-	                    checked={selectedRoleIds.includes(role.id)}
-	                    onChange={(event) =>
-	                      setSelectedRoleIds((current) =>
-	                        event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id),
-	                      )
-	                    }
-	                    disabled={isSubmitting}
-	                  />
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border-strong"
+                    checked={selectedRoleIds.includes(role.id)}
+                    onChange={(event) =>
+                      setSelectedRoleIds((current) =>
+                        event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id),
+                      )
+                    }
+                    disabled={isSubmitting}
+                  />
                   <span>{role.name}</span>
                 </label>
               ))
-	            )}
-	          </div>
-	          {selectedRoleIds.length > 0 ? (
-	            <p className="text-xs text-muted-foreground">{selectedRoleIds.length} role(s) selected.</p>
-	          ) : null}
-	        </fieldset>
+            )}
+          </div>
+          {selectedRoleIds.length > 0 ? (
+            <p className="text-xs text-muted-foreground">{selectedRoleIds.length} role(s) selected.</p>
+          ) : null}
+        </fieldset>
 
         {usersQuery.hasNextPage ? (
           <div className="pt-2">
@@ -451,8 +457,8 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSubmitting} disabled={!canSubmitAdd}>
-            Add member
+          <Button type="submit" disabled={!canSubmitAdd}>
+            {isSubmitting ? "Adding..." : "Add member"}
           </Button>
         </div>
       </form>
@@ -593,16 +599,16 @@ function MemberDrawer({
             {member ? (
               <Button
                 type="button"
-                variant="danger"
+                variant="destructive"
+                size="sm"
                 onClick={() => setConfirmRemove(true)}
                 disabled={isRemoving}
-                isLoading={isRemoving}
               >
-                Remove
+                {isRemoving ? "Removing..." : "Remove"}
               </Button>
             ) : null}
-            <Button type="button" onClick={handleSave} isLoading={isSaving} disabled={!member || isSaving}>
-              Save changes
+            <Button type="button" onClick={handleSave} disabled={!member || isSaving}>
+              {isSaving ? "Saving..." : "Save changes"}
             </Button>
           </div>
         </div>

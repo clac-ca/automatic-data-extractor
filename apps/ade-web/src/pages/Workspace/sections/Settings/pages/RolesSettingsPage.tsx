@@ -14,10 +14,20 @@ import {
 } from "../hooks/useWorkspaceRoles";
 import type { PermissionDefinition, RoleDefinition } from "@schema/workspaces";
 import { Alert } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
 import { ConfirmDialog } from "@components/ui/confirm-dialog";
 import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import { Button } from "@components/tablecn/ui/button";
+import { Input } from "@components/tablecn/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@components/tablecn/ui/table";
+import { Badge } from "@components/tablecn/ui/badge";
+import { SettingsPanel } from "../components/SettingsPanel";
 
 type RoleFormValues = {
   readonly name: string;
@@ -128,30 +138,25 @@ export function RolesSettingsPage() {
         </Alert>
       ) : null}
 
-      <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-soft">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Workspace roles</h2>
-            <p className="text-sm text-muted-foreground">
-              {rolesQuery.isLoading ? "Loading roles…" : `${roleCount} role${roleCount === 1 ? "" : "s"} total`}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <FormField label="Search roles" className="w-full max-w-xs">
-              <Input
-                value={roleSearch}
-                onChange={(event) => setRoleSearch(event.target.value)}
-                placeholder="Search by name or slug"
-                disabled={rolesQuery.isLoading}
-              />
-            </FormField>
-            {canManageRoles ? (
-              <Button type="button" onClick={openCreateDrawer}>
-                New role
-              </Button>
-            ) : null}
-          </div>
-        </header>
+      <SettingsPanel
+        title="Workspace roles"
+        description={rolesQuery.isLoading ? "Loading roles…" : `${roleCount} role${roleCount === 1 ? "" : "s"} total`}
+        actions={
+          canManageRoles ? (
+            <Button type="button" size="sm" onClick={openCreateDrawer}>
+              New role
+            </Button>
+          ) : null
+        }
+      >
+        <FormField label="Search roles" className="max-w-xs">
+          <Input
+            value={roleSearch}
+            onChange={(event) => setRoleSearch(event.target.value)}
+            placeholder="Search by name or slug"
+            disabled={rolesQuery.isLoading}
+          />
+        </FormField>
 
         {rolesQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading roles…</p>
@@ -161,36 +166,41 @@ export function RolesSettingsPage() {
           </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
-            <table className="min-w-full divide-y divide-border">
-              <thead className="bg-background">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Slug</th>
-                  <th className="px-4 py-3">Permissions</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <TableHead className="px-4">Role</TableHead>
+                  <TableHead className="px-4">Slug</TableHead>
+                  <TableHead className="px-4">Permissions</TableHead>
+                  <TableHead className="px-4 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredRoles.map((role) => (
-                  <tr key={role.id} className="text-sm text-foreground">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                  <TableRow key={role.id} className="text-sm text-foreground">
+                    <TableCell className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-foreground">{role.name}</p>
                         {role.is_system ? (
-                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Badge variant="secondary" className="text-[11px] uppercase tracking-wide">
                             System
-                          </span>
+                          </Badge>
                         ) : null}
                         {!role.is_editable ? (
-                          <span className="inline-flex items-center rounded-full bg-warning-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warning-700">
+                          <Badge
+                            variant="outline"
+                            className="border-warning-200 text-[11px] uppercase tracking-wide text-warning-700"
+                          >
                             Locked
-                          </span>
+                          </Badge>
                         ) : null}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{role.slug}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{role.permissions.length} permission{role.permissions.length === 1 ? "" : "s"}</td>
-                    <td className="px-4 py-3 text-right">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted-foreground">{role.slug}</TableCell>
+                    <TableCell className="px-4 py-3 text-muted-foreground">
+                      {role.permissions.length} permission{role.permissions.length === 1 ? "" : "s"}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right">
                       <Button
                         type="button"
                         variant="ghost"
@@ -200,18 +210,18 @@ export function RolesSettingsPage() {
                       >
                         Manage
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
         {!canManageRoles ? (
           <Alert tone="info">You do not have permission to manage workspace roles.</Alert>
         ) : null}
-      </section>
+      </SettingsPanel>
 
       <RoleDrawer
         open={isCreateOpen && canManageRoles}
@@ -372,16 +382,16 @@ function RoleDrawer({
         {canDeleteRole ? (
           <Button
             type="button"
-            variant="danger"
+            variant="destructive"
+            size="sm"
             onClick={() => setConfirmDelete(true)}
             disabled={isDeleting}
-            isLoading={isDeleting}
           >
-            Delete
+            {isDeleting ? "Deleting..." : "Delete"}
           </Button>
         ) : null}
-        <Button type="button" onClick={handleSave} isLoading={isSaving} disabled={!canEditRole || isSaving}>
-          {mode === "create" ? "Create role" : "Save changes"}
+        <Button type="button" onClick={handleSave} disabled={!canEditRole || isSaving}>
+          {isSaving ? "Saving..." : mode === "create" ? "Create role" : "Save changes"}
         </Button>
       </div>
     </div>

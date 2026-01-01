@@ -7,10 +7,10 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@hooks/workspaces";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
 import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import { Input } from "@components/tablecn/ui/input";
 import { Alert } from "@components/ui/alert";
-import { SaveBar } from "../components/SaveBar";
-import { Button } from "@components/ui/button";
+import { Button } from "@components/tablecn/ui/button";
+import { SettingsPanel } from "../components/SettingsPanel";
 
 const generalSchema = z.object({
   name: z.string().min(1, "Workspace name is required.").max(255, "Keep the name under 255 characters."),
@@ -76,27 +76,14 @@ export function GeneralSettingsPage() {
       <UnsavedChangesPrompt when={isDirty && !updateWorkspace.isPending} />
       {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
 
-      <form
-        className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft"
-        onSubmit={submit}
-        noValidate
-      >
-        <div className="space-y-6 p-6">
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">Workspace identity</h3>
-            <p className="text-sm text-muted-foreground">
-              Update the name and slug. Changes apply immediately across navigation and shared links.
-            </p>
-          </div>
-
+      <form onSubmit={submit} noValidate className="space-y-6">
+        <SettingsPanel
+          title="Workspace identity"
+          description="Update the name and slug. Changes apply immediately across navigation and shared links."
+        >
           <div className="grid gap-6 md:grid-cols-2">
             <FormField label="Workspace name" required error={errors.name?.message}>
-              <Input
-                {...register("name")}
-                placeholder="Finance Operations"
-                invalid={Boolean(errors.name)}
-                disabled={updateWorkspace.isPending}
-              />
+              <Input {...register("name")} placeholder="Finance Operations" disabled={updateWorkspace.isPending} />
             </FormField>
             <FormField
               label="Workspace slug"
@@ -104,12 +91,7 @@ export function GeneralSettingsPage() {
               required
               error={errors.slug?.message}
             >
-              <Input
-                {...register("slug")}
-                placeholder="finance-ops"
-                invalid={Boolean(errors.slug)}
-                disabled={updateWorkspace.isPending}
-              />
+              <Input {...register("slug")} placeholder="finance-ops" disabled={updateWorkspace.isPending} />
             </FormField>
           </div>
 
@@ -120,32 +102,37 @@ export function GeneralSettingsPage() {
                 : "Unable to save workspace details."}
             </Alert>
           ) : null}
-        </div>
 
-        <SaveBar
-          isDirty={isDirty}
-          isSaving={updateWorkspace.isPending}
-          onCancel={() => {
-            reset();
-            setFeedback(null);
-          }}
-          onSave={submit}
-        >
-          Changes apply to everyone who can access this workspace.
-        </SaveBar>
+          {isDirty ? (
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  reset();
+                  setFeedback(null);
+                }}
+                disabled={updateWorkspace.isPending}
+              >
+                Discard
+              </Button>
+              <Button type="submit" size="sm" disabled={updateWorkspace.isPending}>
+                {updateWorkspace.isPending ? "Saving..." : "Save changes"}
+              </Button>
+            </div>
+          ) : null}
+        </SettingsPanel>
       </form>
 
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">Default workspace</h3>
-            <p className="text-sm text-muted-foreground">
-              Choose the workspace you land on first after signing in. This only affects your account.
-            </p>
-          </div>
+      <SettingsPanel
+        title="Default workspace"
+        description="Choose the workspace you land on first after signing in. This only affects your account."
+        actions={
           <Button
             type="button"
-            variant={isDefault ? "secondary" : "primary"}
+            variant={isDefault ? "secondary" : "default"}
+            size="sm"
             onClick={() => {
               setFeedback(null);
               setDefaultWorkspace.mutate(workspace.id, {
@@ -158,17 +145,17 @@ export function GeneralSettingsPage() {
               });
             }}
             disabled={isDefault || isSettingDefault}
-            isLoading={isSettingDefault}
           >
-            {isDefault ? "Default workspace" : "Make default"}
+            {isSettingDefault ? "Updating..." : isDefault ? "Default workspace" : "Make default"}
           </Button>
-        </div>
-        <p className="mt-3 text-sm text-muted-foreground">
+        }
+      >
+        <p className="text-sm text-muted-foreground">
           {isDefault
             ? "This workspace is already your default."
             : "You can switch the default workspace at any time."}
         </p>
-      </div>
+      </SettingsPanel>
     </div>
   );
 }

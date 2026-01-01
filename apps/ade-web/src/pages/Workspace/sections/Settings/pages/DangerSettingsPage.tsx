@@ -6,10 +6,11 @@ import { deleteWorkspace } from "@api/workspaces/api";
 import { workspacesKeys } from "@hooks/workspaces";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { Alert } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
 import { ConfirmDialog } from "@components/ui/confirm-dialog";
 import { FormField } from "@components/ui/form-field";
-import { Input } from "@components/ui/input";
+import { Button } from "@components/tablecn/ui/button";
+import { Input } from "@components/tablecn/ui/input";
+import { SettingsPanel } from "../components/SettingsPanel";
 
 export function DangerSettingsPage() {
   const { workspace, hasPermission } = useWorkspaceContext();
@@ -38,46 +39,35 @@ export function DangerSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">Delete workspace</h3>
-            <p className="text-sm text-muted-foreground">
-              Permanently remove this workspace and all associated data. This action cannot be undone.
-            </p>
-          </div>
+      <SettingsPanel
+        title="Delete workspace"
+        description="Permanently remove this workspace and all associated data. This action cannot be undone."
+        tone="danger"
+        actions={
           <Button
             type="button"
-            variant="danger"
+            variant="destructive"
+            size="sm"
             onClick={() => setConfirmOpen(true)}
             disabled={!canDelete || deleteWorkspaceMutation.isPending}
-            isLoading={deleteWorkspaceMutation.isPending}
           >
-            Delete workspace
+            {deleteWorkspaceMutation.isPending ? "Deleting..." : "Delete workspace"}
           </Button>
-        </div>
-
+        }
+      >
         {!canDelete ? (
-          <Alert tone="warning" className="mt-3">
-            You need additional permissions to delete this workspace.
-          </Alert>
+          <Alert tone="warning">You need additional permissions to delete this workspace.</Alert>
         ) : null}
-        {feedback ? (
-          <Alert tone="danger" className="mt-3">
-            {feedback}
-          </Alert>
-        ) : null}
-        <p className="mt-3 text-sm text-warning-700">
+        {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
+        <p className="text-sm text-warning-700">
           All workspace configurations, documents, runs, and history will be removed.
         </p>
-      </div>
+      </SettingsPanel>
 
-      <div className="rounded-2xl border border-warning-100 bg-warning-50 p-4 text-sm text-warning-800">
-        <p className="font-semibold">Looking for ADE safe mode?</p>
-        <p className="mt-1">
-          Safe mode is a system-wide control. Manage it from the system settings area instead of workspace settings.
-        </p>
-      </div>
+      <SettingsPanel
+        title="Safe mode"
+        description="Safe mode is a system-wide control. Manage it from the system settings area instead of workspace settings."
+      />
 
       <ConfirmDialog
         open={confirmOpen}
@@ -109,8 +99,8 @@ export function DangerSettingsPage() {
           />
         </FormField>
         <p className="text-xs text-muted-foreground">
-            Enter <strong>{workspace.slug}</strong> to confirm deletion.
-          </p>
+          Enter <strong>{workspace.slug}</strong> to confirm deletion.
+        </p>
       </ConfirmDialog>
     </div>
   );

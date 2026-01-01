@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
@@ -14,7 +14,6 @@ import type { WorkbookPreview, WorkbookSheet } from "@pages/Workspace/sections/D
 type PreviewRow = Record<string, string>;
 
 const PREVIEW_MAX_ROWS = 200;
-const PREVIEW_MAX_COLUMNS = 50;
 
 async function fetchDocumentPreview(
   workspaceId: string,
@@ -23,7 +22,6 @@ async function fetchDocumentPreview(
 ): Promise<WorkbookPreview> {
   const params = new URLSearchParams({
     maxRows: String(PREVIEW_MAX_ROWS),
-    maxColumns: String(PREVIEW_MAX_COLUMNS),
   });
   const response = await apiFetch(
     `/api/v1/workspaces/${workspaceId}/documents/${documentId}/preview?${params.toString()}`,
@@ -58,8 +56,7 @@ export function TablecnDocumentPreviewGrid({
       (max, row) => Math.max(max, row.length),
       0,
     );
-    const requestedCount = Math.max(sheet.headers.length, maxRowLength);
-    return Math.min(PREVIEW_MAX_COLUMNS, requestedCount);
+    return Math.max(sheet.headers.length, maxRowLength);
   }, [sheet]);
   const columnIds = useMemo(
     () => Array.from({ length: columnCount }, (_, index) => `col_${index}`),
@@ -111,9 +108,9 @@ export function TablecnDocumentPreviewGrid({
 
   if (previewQuery.isLoading) {
     return (
-      <div className="p-3 text-sm text-muted-foreground">
-        Loading preview...
-      </div>
+      <PreviewShell title={doc.name}>
+        <div className="text-xs text-muted-foreground">Loading preview...</div>
+      </PreviewShell>
     );
   }
 
@@ -122,36 +119,66 @@ export function TablecnDocumentPreviewGrid({
     const message =
       error instanceof ApiError ? error.message : "Unable to load preview.";
     return (
-      <div className="flex flex-wrap items-center gap-3 p-3 text-sm text-muted-foreground">
-        <span>{message}</span>
-        <Button variant="outline" size="sm" onClick={() => previewQuery.refetch()}>
-          Try again
-        </Button>
-      </div>
+      <PreviewShell title={doc.name}>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>{message}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => previewQuery.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      </PreviewShell>
     );
   }
 
   if (!sheet) {
     return (
-      <div className="p-3 text-sm text-muted-foreground">
-        No preview data available.
-      </div>
+      <PreviewShell title={doc.name}>
+        <div className="text-xs text-muted-foreground">No preview data available.</div>
+      </PreviewShell>
     );
   }
 
   const sheetMeta = formatSheetMeta(sheet, previewQuery.data?.sheets?.length ?? 0);
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 p-2">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span>Previewing {doc.name}</span>
-        {sheetMeta ? <span>{sheetMeta}</span> : null}
-      </div>
+    <PreviewShell title={doc.name} meta={sheetMeta}>
       <DataTable
         table={table}
         showPagination={false}
-        className="max-w-full min-w-0 overflow-visible [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table-cell]]:truncate [&_[data-slot=table-head]]:truncate"
+        className="min-w-0 max-w-full gap-1.5 overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:max-h-[min(360px,45vh)] [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table-container]]:overflow-y-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:text-xs [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-10 [&_[data-slot=table-head]]:h-8 [&_[data-slot=table-head]]:bg-muted/30 [&_[data-slot=table-head]]:text-[11px] [&_[data-slot=table-head]]:font-semibold [&_[data-slot=table-head]]:text-muted-foreground [&_[data-slot=table-head]]:truncate [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))] [&_[data-slot=table-cell]]:px-2 [&_[data-slot=table-cell]]:py-1.5 [&_[data-slot=table-cell]]:text-xs [&_[data-slot=table-cell]]:truncate"
       />
+    </PreviewShell>
+  );
+}
+
+function PreviewShell({
+  title,
+  meta,
+  children,
+}: {
+  title: string;
+  meta?: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm [contain:inline-size]">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Preview
+          </div>
+          <div className="truncate text-sm font-medium text-foreground">
+            {title}
+          </div>
+        </div>
+        {meta ? <div className="text-xs text-muted-foreground">{meta}</div> : null}
+      </div>
+      <div className="min-w-0 p-2">{children}</div>
     </div>
   );
 }
