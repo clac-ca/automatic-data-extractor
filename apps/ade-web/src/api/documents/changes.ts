@@ -144,11 +144,21 @@ export async function* streamDocumentChanges(
 
 function parseSseEvent(rawEvent: string): DocumentChangeEntry | null {
   const dataLines: string[] = [];
+  let eventType: string | null = null;
+  let eventId: string | null = null;
 
   for (const line of rawEvent.split(/\r?\n/)) {
     if (line.startsWith("data:")) {
       const value = line.slice(5);
       dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+      continue;
+    }
+    if (line.startsWith("event:")) {
+      eventType = line.slice(6).trim();
+      continue;
+    }
+    if (line.startsWith("id:")) {
+      eventId = line.slice(3).trim();
     }
   }
 
@@ -162,14 +172,22 @@ function parseSseEvent(rawEvent: string): DocumentChangeEntry | null {
   }
 
   try {
-    const parsed = JSON.parse(payload) as DocumentChangeEntry;
+    const parsed = JSON.parse(payload) as Partial<DocumentChangeEntry>;
     if (!parsed || typeof parsed !== "object") {
       return null;
     }
-    if (typeof parsed.type !== "string" || typeof parsed.cursor !== "string") {
+    const type = typeof parsed.type === "string" ? parsed.type : eventType ?? "";
+    const cursor = typeof parsed.cursor === "string" ? parsed.cursor : eventId ?? "";
+    if (!type || !cursor) {
       return null;
     }
-    return parsed;
+    return {
+      ...parsed,
+      type,
+      cursor,
+      matchesFilters: typeof parsed.matchesFilters === "boolean" ? parsed.matchesFilters : false,
+      requiresRefresh: typeof parsed.requiresRefresh === "boolean" ? parsed.requiresRefresh : false,
+    } as DocumentChangeEntry;
   } catch (error) {
     console.warn("Skipping malformed document change event", error, payload);
     return null;

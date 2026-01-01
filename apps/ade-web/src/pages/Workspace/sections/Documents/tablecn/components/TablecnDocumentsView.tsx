@@ -245,26 +245,6 @@ export function TablecnDocumentsView({
 
   const applyChange = useCallback(
     (change: DocumentChangeEntry) => {
-      const id = change.documentId ?? change.row?.id ?? null;
-      const isVisible = id ? documentsById.has(id) : false;
-      const canInsert =
-        change.type === "document.upsert" &&
-        Boolean(change.row) &&
-        Boolean(change.matchesFilters) &&
-        !change.requiresRefresh;
-      const shouldPromptForNew =
-        change.type === "document.upsert" &&
-        Boolean(change.matchesFilters) &&
-        !isVisible &&
-        !canInsert;
-
-      if (!isVisible && !canInsert) {
-        if (change.requiresRefresh || shouldPromptForNew) {
-          setUpdatesAvailable((current) => current || true);
-        }
-        return;
-      }
-
       let shouldPrompt = Boolean(change.requiresRefresh);
 
       queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
@@ -280,7 +260,7 @@ export function TablecnDocumentsView({
         setUpdatesAvailable((current) => current || true);
       }
     },
-    [documentsById, queryClient, queryKey, sortTokens],
+    [queryClient, queryKey, sortTokens],
   );
 
   useEffect(() => {

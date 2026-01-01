@@ -31,75 +31,62 @@ export function mergeDocumentChangeIntoPages(
     return { data: existing, updatesAvailable: false, applied: false };
   }
 
-  let found = false;
   let updatesAvailable = Boolean(change.requiresRefresh);
-  let applied = false;
 
-  const nextPages = existing.pages.map((page) => {
-    if (!page.items?.length) return page;
-    const index = page.items.findIndex((item) => item.id === id);
-    if (index === -1) return page;
-    found = true;
+  for (let pageIndex = 0; pageIndex < existing.pages.length; pageIndex += 1) {
+    const page = existing.pages[pageIndex];
+    const items = page.items ?? [];
+    if (!items.length) continue;
+
+    const index = items.findIndex((item) => item.id === id);
+    if (index === -1) continue;
 
     if (change.type === "document.deleted") {
-      applied = true;
-      return {
+      const nextPages = existing.pages.slice();
+      nextPages[pageIndex] = {
         ...page,
-        items: page.items.filter((item) => item.id !== id),
+        items: items.filter((item) => item.id !== id),
       };
+      return { data: { ...existing, pages: nextPages }, updatesAvailable, applied: true };
     }
 
     if (change.type === "document.upsert" && change.row) {
-      const nextDoc = change.row;
       if (change.matchesFilters === false) {
-        applied = true;
-        updatesAvailable = true;
-        return {
+        const nextPages = existing.pages.slice();
+        nextPages[pageIndex] = {
           ...page,
-          items: page.items.filter((item) => item.id !== id),
+          items: items.filter((item) => item.id !== id),
         };
-      }
-
-      const nextItems = page.items.slice();
-      nextItems[index] = nextDoc;
-      applied = true;
-      return { ...page, items: nextItems };
-    }
-
-    return page;
-  });
-
-  if (!found && change.type === "document.upsert" && change.row) {
-    if (change.matchesFilters && !change.requiresRefresh) {
-      const nextPages = existing.pages.slice();
-      const firstPage = nextPages[0];
-      if (firstPage) {
-        const items = firstPage.items ?? [];
-        const insertPosition = resolveInsertPosition(options.sortTokens);
-        const nextItems =
-          insertPosition === "start"
-            ? [change.row, ...items]
-            : [...items, change.row];
-        nextPages[0] = { ...firstPage, items: nextItems };
         return {
           data: { ...existing, pages: nextPages },
-          updatesAvailable,
+          updatesAvailable: true,
           applied: true,
         };
       }
-      updatesAvailable = true;
-    } else if (change.matchesFilters) {
-      updatesAvailable = true;
-    }
-  }
 
-  if (!found && !applied) {
+      const nextItems = items.slice();
+      nextItems[index] = change.row;
+      const nextPages = existing.pages.slice();
+      nextPages[pageIndex] = { ...page, items: nextItems };
+      return { data: { ...existing, pages: nextPages }, updatesAvailable, applied: true };
+    }
+
     return { data: existing, updatesAvailable, applied: false };
   }
 
-  return {
-    data: { ...existing, pages: nextPages },
-    updatesAvailable,
-    applied,
-  };
+  if (change.type === "document.upsert" && change.row && change.matchesFilters) {
+    const firstPage = existing.pages[0];
+    if (firstPage) {
+      const items = firstPage.items ?? [];
+      const insertPosition = resolveInsertPosition(options.sortTokens);
+      const nextItems =
+        insertPosition === "start" ? [change.row, ...items] : [...items, change.row];
+      const nextPages = existing.pages.slice();
+      nextPages[0] = { ...firstPage, items: nextItems };
+      return { data: { ...existing, pages: nextPages }, updatesAvailable, applied: true };
+    }
+    updatesAvailable = true;
+  }
+
+  return { data: existing, updatesAvailable, applied: false };
 }

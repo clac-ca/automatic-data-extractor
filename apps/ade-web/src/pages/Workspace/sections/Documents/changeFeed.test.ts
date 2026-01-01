@@ -88,7 +88,7 @@ describe("mergeDocumentChangeIntoPages", () => {
     expect(result.data.pages[0].items?.length).toBe(2);
   });
 
-  it("flags updates when the server requires a refresh", () => {
+  it("inserts but still flags updates when the server requires a refresh", () => {
     const doc = makeRow({ id: "doc-1" });
     const data = makeData([makePage([doc])]);
 
@@ -104,7 +104,8 @@ describe("mergeDocumentChangeIntoPages", () => {
 
     const result = mergeDocumentChangeIntoPages(data, change);
 
-    expect(result.applied).toBe(false);
+    expect(result.applied).toBe(true);
     expect(result.updatesAvailable).toBe(true);
+    expect(result.data.pages[0].items?.[0].id).toBe("doc-3");
   });
 });
