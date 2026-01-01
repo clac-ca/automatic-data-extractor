@@ -1,11 +1,11 @@
-import type { components, paths } from "@schema";
 import type { DocumentUploadResponse } from "@api/documents";
+import type { components } from "@schema";
 import type { UploadManagerItem } from "@hooks/documents/uploadManager";
+
+export type { DocumentPageResult, ListDocumentsQuery } from "@api/documents";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"];
 export type DocumentListRow = components["schemas"]["DocumentListRow"];
-export type DocumentListPage = components["schemas"]["DocumentListPage"];
-export type DocumentPageResult = DocumentListPage & { changesCursorHeader?: string | null };
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
 export type ApiDocumentStatus = components["schemas"]["DocumentStatus"];
@@ -14,18 +14,6 @@ export type DocumentMappingHealth = components["schemas"]["DocumentMappingHealth
 export type DocumentQueueState = components["schemas"]["DocumentQueueState"];
 export type DocumentQueueReason = components["schemas"]["DocumentQueueReason"];
 export type DocumentLastRun = components["schemas"]["DocumentLastRun"];
-type BaseListDocumentsQuery = NonNullable<
-  paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"]
->;
-export type ListDocumentsQuery = BaseListDocumentsQuery & {
-  q?: string;
-  display_status?: DocumentStatus[];
-  file_type?: FileType[];
-  tags?: string[];
-  tag_mode?: TagMode;
-  assignee_user_id?: string[];
-  assignee_unassigned?: boolean;
-};
 
 export type WorkspaceMemberOut = components["schemas"]["WorkspaceMemberOut"];
 export type WorkspaceMemberPage = components["schemas"]["WorkspaceMemberPage"];

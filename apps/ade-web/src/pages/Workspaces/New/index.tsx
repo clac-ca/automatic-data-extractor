@@ -7,10 +7,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { ApiError } from "@api";
 import type { UserSummary } from "@api/users/api";
-import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useCreateWorkspaceMutation } from "@hooks/workspaces";
-import { getDefaultWorkspacePath } from "@utils/workspaces";
+import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
 import { useUsersQuery } from "@hooks/users/useUsersQuery";
 import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
 import { Alert } from "@components/ui/alert";
@@ -33,11 +32,7 @@ const workspaceSchema = z.object({
 type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 
 export default function WorkspaceCreateScreen() {
-  return (
-    <RequireSession>
-      <WorkspaceCreateContent />
-    </RequireSession>
-  );
+  return <WorkspaceCreateContent />;
 }
 
 function WorkspaceCreateContent() {

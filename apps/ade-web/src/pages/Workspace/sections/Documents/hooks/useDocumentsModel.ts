@@ -13,7 +13,24 @@ import type { InfiniteData } from "@tanstack/react-query";
 import { ApiError } from "@api";
 import { useConfigurationsQuery } from "@hooks/configurations";
 import { useNotifications } from "@components/providers/notifications";
-import { documentChangesStreamUrl, streamDocumentChanges, type DocumentUploadResponse } from "@api/documents";
+import {
+  archiveWorkspaceDocument,
+  archiveWorkspaceDocumentsBatch,
+  deleteWorkspaceDocument,
+  deleteWorkspaceDocumentsBatch,
+  documentChangesStreamUrl,
+  fetchWorkspaceDocuments,
+  fetchWorkspaceDocumentRowById,
+  patchDocumentTags,
+  patchDocumentTagsBatch,
+  patchWorkspaceDocument,
+  restoreWorkspaceDocument,
+  restoreWorkspaceDocumentsBatch,
+  streamDocumentChanges,
+  type DocumentUploadResponse,
+} from "@api/documents";
+import { createRunForDocument, fetchRunMetrics, fetchWorkspaceRunsForDocument } from "@api/runs/api";
+import { listWorkspaceMembers } from "@api/workspaces/api";
 import {
   useUploadManager,
   type UploadManagerItem,
@@ -21,35 +38,10 @@ import {
   type UploadManagerStatus,
   type UploadManagerSummary,
 } from "@hooks/documents/uploadManager";
+import { documentsKeys } from "@hooks/documents/keys";
 
 import type { RunResource } from "@schema";
 
-import {
-  DOCUMENTS_PAGE_SIZE,
-  archiveWorkspaceDocument,
-  archiveWorkspaceDocumentsBatch,
-  createRunForDocument,
-  deleteWorkspaceDocument,
-  deleteWorkspaceDocumentsBatch,
-  documentsKeys,
-  downloadOriginalDocument,
-  downloadRunOutput,
-  downloadRunOutputById,
-  fetchRunMetrics,
-  fetchWorkbookPreview,
-  fetchWorkspaceDocuments,
-  fetchWorkspaceDocumentRowById,
-  fetchWorkspaceMembers,
-  fetchWorkspaceRunsForDocument,
-  getDocumentOutputRun,
-  patchWorkspaceDocument,
-  patchWorkspaceDocumentTags,
-  patchWorkspaceDocumentTagsBatch,
-  restoreWorkspaceDocument,
-  restoreWorkspaceDocumentsBatch,
-  runHasDownloadableOutput,
-  runOutputDownloadUrl,
-} from "../data";
 import { DEFAULT_LIST_SETTINGS, normalizeListSettings, resolveRefreshIntervalMs } from "../listSettings";
 import { mergeDocumentChangeIntoPages } from "../changeFeed";
 import type {
@@ -70,7 +62,20 @@ import type {
   WorkbookPreview,
   WorkspacePerson,
 } from "../types";
-import { copyToClipboard, fileTypeFromName, formatBytes, parseTimestamp, shortId } from "../utils";
+import {
+  copyToClipboard,
+  downloadOriginalDocument,
+  downloadRunOutput,
+  downloadRunOutputById,
+  fetchWorkbookPreview,
+  fileTypeFromName,
+  formatBytes,
+  getDocumentOutputRun,
+  parseTimestamp,
+  runHasDownloadableOutput,
+  runOutputDownloadUrl,
+  shortId,
+} from "../utils";
 import {
   ACTIVE_DOCUMENT_STATUSES,
   type BuiltInViewId,
@@ -494,7 +499,7 @@ export function useDocumentsModel({
         {
           sort,
           page: typeof pageParam === "number" ? pageParam : 1,
-          pageSize: listSettings.pageSize ?? DOCUMENTS_PAGE_SIZE,
+          pageSize: listSettings.pageSize,
           query: buildDocumentsQuery(filters, search),
         },
         signal,
@@ -570,7 +575,7 @@ export function useDocumentsModel({
       const page = await fetchWorkspaceDocuments(workspaceId, {
         sort,
         page: 1,
-        pageSize: listSettings.pageSize ?? DOCUMENTS_PAGE_SIZE,
+        pageSize: listSettings.pageSize,
         query: buildDocumentsQuery(filters, search),
       });
 
@@ -835,7 +840,7 @@ export function useDocumentsModel({
   // People
   const membersQuery = useQuery({
     queryKey: documentsKeys.members(workspaceId),
-    queryFn: ({ signal }) => fetchWorkspaceMembers(workspaceId, signal),
+    queryFn: ({ signal }) => listWorkspaceMembers(workspaceId, { signal }),
     enabled: Boolean(workspaceId),
     staleTime: 60_000,
   });
@@ -1412,7 +1417,7 @@ export function useDocumentsModel({
       const remove = prevTags.filter((tag) => !nextTags.includes(tag));
       if (add.length === 0 && remove.length === 0) return;
 
-      void patchWorkspaceDocumentTags(workspaceId, entry.id, { add, remove })
+      void patchDocumentTags(workspaceId, entry.id, { add, remove })
         .then(() => {
           queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
             if (!existing?.pages) return existing;
@@ -1865,7 +1870,7 @@ export function useDocumentsModel({
       const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
       if (docs.length === 0) return;
 
-      void patchWorkspaceDocumentTagsBatch(workspaceId, docs.map((doc) => doc.id), { add, remove })
+      void patchDocumentTagsBatch(workspaceId, docs.map((doc) => doc.id), { add, remove })
         .then(() => {
           notifyToast({
             title: "Tags applied",

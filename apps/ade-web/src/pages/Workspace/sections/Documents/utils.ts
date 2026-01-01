@@ -1,6 +1,15 @@
-import type { FileType } from "./types";
+import type {
+  DocumentLastRun,
+  DocumentListRow,
+  DocumentRecord,
+  FileType,
+  RunResource,
+  WorkbookPreview,
+  WorkbookSheet,
+} from "./types";
 
 export const numberFormatter = new Intl.NumberFormat("en-US");
+export const MAX_PREVIEW_ROWS = 200;
 export const DEFAULT_BOARD_ID = "default";
 export const DEFAULT_BOARD_LABEL = "Default board";
 export function formatRelativeTime(nowTimestamp: number, timestamp: number | string | null | undefined) {
@@ -179,4 +188,91 @@ export function stableId() {
 
 export function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
+}
+
+export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): Promise<WorkbookPreview> {
+  const response = await fetch(url, { credentials: "include", signal });
+  if (!response.ok) throw new Error("Unable to fetch processed workbook.");
+
+  const buffer = await response.arrayBuffer();
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(buffer, { type: "array" });
+
+  const sheets = workbook.SheetNames.map((name) => {
+    const worksheet = workbook.Sheets[name];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false }) as unknown[][];
+    const totalRows = rows.length;
+    const totalColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const truncatedRows = totalRows > MAX_PREVIEW_ROWS;
+
+    const visibleRows = rows.slice(0, MAX_PREVIEW_ROWS).map((row) => row.map((cell) => normalizeCell(cell)));
+
+    const columnCount = Math.max(visibleRows[0]?.length ?? 0, totalColumns, 1);
+    const headers = buildHeaders(visibleRows[0] ?? [], columnCount);
+    const bodyRows = visibleRows.slice(1).map((row) => normalizeRow(row as string[], headers.length));
+
+    return {
+      name,
+      headers,
+      rows: bodyRows as string[][],
+      totalRows,
+      totalColumns,
+      truncatedRows,
+      truncatedColumns: false,
+    } satisfies WorkbookSheet;
+  });
+
+  return { sheets };
+}
+
+export async function downloadOriginalDocument(
+  workspaceId: string,
+  documentId: string,
+  fallbackName: string,
+): Promise<string> {
+  const response = await fetch(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/download`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Unable to download original file.");
+  const blob = await response.blob();
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? fallbackName;
+  triggerDownload(blob, filename);
+  return filename;
+}
+
+export async function downloadRunOutput(outputDownloadUrl: string, fallbackName: string): Promise<string> {
+  const response = await fetch(outputDownloadUrl, { credentials: "include" });
+  if (!response.ok) throw new Error("Unable to download processed output.");
+  const blob = await response.blob();
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? buildNormalizedFilename(fallbackName);
+  triggerDownload(blob, filename);
+  return filename;
+}
+
+export async function downloadRunOutputById(runId: string, fallbackName: string): Promise<string> {
+  const response = await fetch(`/api/v1/runs/${runId}/output/download`, { credentials: "include" });
+  if (!response.ok) throw new Error("Unable to download processed output.");
+  const blob = await response.blob();
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? buildNormalizedFilename(fallbackName);
+  triggerDownload(blob, filename);
+  return filename;
+}
+
+export function runOutputDownloadUrl(run: RunResource): string | null {
+  if (run.output?.download_url) return run.output.download_url;
+  if (run.links?.output_download) return run.links.output_download;
+  return null;
+}
+
+export function runHasDownloadableOutput(run: RunResource | null) {
+  if (!run) return false;
+  if (run.status !== "succeeded") return false;
+  return Boolean(runOutputDownloadUrl(run));
+}
+
+export function getDocumentOutputRun(document: DocumentListRow | DocumentRecord | null | undefined): DocumentLastRun | null {
+  if (!document) return null;
+  if (document.last_successful_run) return document.last_successful_run;
+  if (document.last_run?.status === "succeeded") return document.last_run;
+  return null;
 }

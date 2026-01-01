@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 
+import { DEFAULT_WORKSPACE_SECTION_PATH } from "@app/navigation/workspacePaths";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { ConfigureIcon, DocumentIcon, GearIcon, RunsIcon } from "@components/icons";
 
@@ -20,7 +21,7 @@ interface WorkspaceSectionDescriptor {
 const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
   {
     id: "documents",
-    path: "documents",
+    path: DEFAULT_WORKSPACE_SECTION_PATH,
     label: "Documents",
     icon: DocumentIcon,
   },

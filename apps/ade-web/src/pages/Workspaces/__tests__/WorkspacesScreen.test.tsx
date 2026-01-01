@@ -4,14 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { render, screen } from "@test/test-utils";
-import WorkspacesIndexRoute from "..";
+import WorkspacesScreen from "..";
 
 const mockUseWorkspacesQuery = vi.fn();
 const mockUseSetDefaultWorkspaceMutation = vi.fn();
-
-vi.mock("@components/providers/auth/RequireSession", () => ({
-  RequireSession: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
 
 vi.mock("@components/providers/auth/SessionContext", () => ({
   useSession: () => ({
@@ -24,8 +20,11 @@ vi.mock("@hooks/workspaces", () => ({
   useSetDefaultWorkspaceMutation: () => mockUseSetDefaultWorkspaceMutation(),
 }));
 
-vi.mock("@utils/workspaces", () => ({
+vi.mock("@app/navigation/workspacePaths", () => ({
   getDefaultWorkspacePath: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
+}));
+
+vi.mock("@lib/workspacePreferences", () => ({
   writePreferredWorkspaceId: () => undefined,
 }));
 
@@ -45,7 +44,7 @@ vi.mock("@hooks/useShortcutHint", () => ({
   useShortcutHint: () => undefined,
 }));
 
-describe("WorkspacesIndexRoute", () => {
+describe("WorkspacesScreen", () => {
   beforeEach(() => {
     mockUseWorkspacesQuery.mockReset();
     mockUseSetDefaultWorkspaceMutation.mockReset();
@@ -91,7 +90,7 @@ describe("WorkspacesIndexRoute", () => {
       refetch: vi.fn(),
     });
 
-    render(<WorkspacesIndexRoute />);
+    render(<WorkspacesScreen />);
 
     const setDefaultButton = screen.getByRole("button", { name: "Set as default" });
 

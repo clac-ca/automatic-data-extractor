@@ -31,9 +31,7 @@ const DEFAULT_TEMPLATE_LABEL = "Default template";
 const buildConfigDetailPath = (workspaceId: string, configId: string) =>
   `/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}`;
 
-export const handle = { workspaceSectionId: "config-builder" } as const;
-
-export default function WorkspaceConfigsIndexRoute() {
+export default function ConfigBuilderScreen() {
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const { notifyToast } = useNotifications();

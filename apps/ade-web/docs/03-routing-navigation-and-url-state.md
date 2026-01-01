@@ -134,9 +134,6 @@ Inside `/workspaces/:workspaceId`, the next path segment selects the section:
 | `runs`           | `/workspaces/123/runs`           | Runs ledger (workspace run history) |
 | `config-builder` | `/workspaces/123/config-builder` | Configuration Builder (configurations list + workbench) |
 | `settings`       | `/workspaces/123/settings`       | Workspace settings            |
-| `overview`*      | `/workspaces/123/overview`       | Overview/summary (optional)   |
-
-* The `overview` section is optional; if not present, the shell can redirect to a default (e.g. Documents).
 
 Naming stays 1:1: the nav item reads **“Configuration Builder”**, the route segment is `config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder`. The Configuration Builder section always includes both the configurations list and the workbench editing mode.
 
@@ -146,8 +143,8 @@ If the workspace ID is valid but the section segment is unknown, the shell shoul
 
 Workspace routes are derived from:
 
-* `pages/Workspace/components/workspaceNavigation.tsx` (section definitions + `getWorkspacePrimaryNavigation`)
-* `utils/workspacePaths.ts` (default section path)
+* `pages/Workspace/components/workspaceNavigation.ts` (section definitions + `getWorkspacePrimaryNavigation`)
+* `app/navigation/workspacePaths.ts` (default section path)
 
 Use these helpers for nav links and redirects instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
 
@@ -615,7 +612,7 @@ When adding new routes or URL‑encoded state, follow this checklist:
 
 3. **Define route helpers**
 
-  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.tsx` and `utils/workspacePaths.ts` (see §3.3).
+  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.ts` and `app/navigation/workspacePaths.ts` (see §3.3).
    * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
 
 4. **Register query parameters here**

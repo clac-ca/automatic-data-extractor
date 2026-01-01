@@ -4,7 +4,7 @@ This document describes the **workspace‑level UI layout** in ADE Web:
 
 - The **Workspace directory** (`/workspaces`) – where users discover and select workspaces.
 - The **Workspace shell** (`/workspaces/:workspaceId/...`) – the frame around a single workspace.
-- The **sections inside a workspace** (Documents, Runs, Configurations / Configuration Builder, Settings, Overview) and how they plug into the shell.
+- The **sections inside a workspace** (Documents, Runs, Configurations / Configuration Builder, Settings) and how they plug into the shell.
 - Where **banners**, **Safe mode messaging**, and **notifications** appear.
 
 It focuses on **layout and responsibilities**, not API details or low‑level component props.
@@ -34,7 +34,7 @@ ADE Web has two distinct workspace layers:
    - Routes: `/workspaces/:workspaceId/...`.  
    - Wraps all activity **inside a single workspace**.  
    - Provides a stable frame: top bar, left nav, banners.  
-   - Hosts section screens: Documents, Runs, Configurations (Configuration Builder), Settings, Overview.
+   - Hosts section screens: Documents, Runs, Configurations (Configuration Builder), Settings.
 
 The rule:
 
@@ -202,7 +202,7 @@ The shell:
 - Renders a **workspace‑level error state** if the workspace cannot be loaded (e.g. 404, permission denied).
 - Then resolves the section based on the first path segment after `:workspaceId`.
 
-If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the section helpers (e.g. `utils/workspacePaths.ts`) and is consumed by `WorkspaceScreen`.
+If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the navigation helpers (e.g. `app/navigation/workspacePaths.ts`) and is consumed by `WorkspaceScreen`.
 
 ### 4.3 Layout regions (desktop)
 
@@ -240,7 +240,6 @@ Typical ordering:
    - Runs.
    - Configurations (Configuration Builder).
    - Settings.
-   - Overview (if enabled).
 
 Section links use `NavLink` so they reflect active state based on the current path.
 
@@ -393,26 +392,6 @@ Shell integration:
 - Section content is tabbed and controlled by a `view` query parameter.
 
 RBAC and Safe mode are described in [`05-auth-session-rbac-and-safe-mode.md`](./05-auth-session-rbac-and-safe-mode.md).
-
-### 7.5 Overview (optional)
-
-- **Route:** `/workspaces/:workspaceId/overview`  
-- **Screen:** `WorkspaceOverviewScreen` (if implemented).
-
-Responsibilities:
-
-- Provide a **summary** surface for the workspace:
-  - Recent runs.
-  - Documents that need attention.
-  - Current configuration status.
-  - Safe mode state.
-
-Shell integration:
-
-- Typically appears as the first item in the nav or clearly marked as “Home”.
-- Primarily read‑only; actions are delegated to other sections.
-
----
 
 ## 8. Banners and notifications
 

@@ -1,7 +1,7 @@
 import type { components } from "@schema";
 import { apiFetch, client } from "@api/client";
 import { ApiError, type ProblemDetails } from "@api/errors";
-import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@utils/uploads/xhr";
+import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
 export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];

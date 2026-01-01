@@ -10,8 +10,8 @@ If **01‑domain‑model‑and‑naming** tells you *what* the app talks about (
 
 The architecture is intentionally boring and predictable:
 
-- **Layer‑based** – code is grouped by technical layer (pages, components, api, hooks, utils, types), with features composed at the page level.
-- **Layered** – app shell (`app/`) → pages → components/api/hooks/utils → types.
+- **Layer‑based** – code is grouped by technical layer (pages, components, api, hooks, lib, types), with features composed at the page level.
+- **Layered** – app shell (`app/`) → pages → components/api/hooks/lib → types.
 - **One‑way dependencies** – each layer imports “downwards” only, which keeps cycles and hidden couplings out.
 - **Obvious naming** – given a route or concept name, you should know what file to search for.
 
@@ -41,8 +41,9 @@ apps/ade-web/
     pages/            # Route-level pages (aliased as "@pages")
     components/       # Shared UI primitives, layouts, providers, shell
     hooks/            # Shared React hooks (React Query + app hooks)
-    utils/            # Cross-cutting utilities (URL/auth helpers, storage, uploads)
-    index.css         # Global styles and theme tokens
+    lib/              # Cross-cutting utilities (storage, uploads, preferences)
+    styles/           # Global styles and theme tokens
+      globals.css
     vite-env.d.ts     # Vite client typings + globals
     types/            # Hand-written domain models / schemas
       generated/      # Types generated from backend schemas
@@ -56,7 +57,7 @@ At a high level:
 * `app/` is the **composition root**.
 * `pages/` contains **route‑level pages/features**.
 * `components/` contains **UI primitives** with no domain knowledge (plus shared providers).
-* `api/`, `hooks/`, `utils/` contain **infrastructure** and **cross‑cutting logic**.
+* `api/`, `hooks/`, `lib/` contain **infrastructure** and **cross‑cutting logic**.
 * `types/` and `types/generated/` define **types**.
 * `test/` holds **test infrastructure**.
 
@@ -71,7 +72,7 @@ We treat the codebase as layered, with imports flowing “down” only:
           ↑
       pages (@pages)
    ↑    ↑    ↑     ↑
-components api hooks utils
+components api hooks lib
         ↑
       types
         ↑
@@ -82,16 +83,16 @@ components api hooks utils
 
 Allowed dependencies:
 
-* `app/` → may import from `pages/`, `components/`, `api/`, `hooks/`, `utils/`, `types/`, `types/generated/`.
-* `pages/` → may import from `components/`, `api/`, `hooks/`, `utils/`, `types/`, `types/generated/`, and `app/navigation`.
-* `components/`, `api/`, `hooks/`, `utils/` → may import from `types/`, `types/generated/`, and `app/navigation`.
+* `app/` → may import from `pages/`, `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`.
+* `pages/` → may import from `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`, and `app/navigation`.
+* `components/`, `api/`, `hooks/`, `lib/` → may import from `types/`, `types/generated/`, and `app/navigation`.
 * `types/` → may import from `types/generated/` (if needed).
 * `types/generated/` → must not import from anywhere else.
 * `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@test`.
 
 Forbidden dependencies:
 
-* `components/`, `api/`, `hooks/`, `utils/` **must not** import from `pages/` or `app/` (except `app/navigation`).
+* `components/`, `api/`, `hooks/`, `lib/` **must not** import from `pages/` or `app/` (except `app/navigation`).
 * `pages/` **must not** import from `app/` (except `app/navigation`).
 
 If you ever want to import “upwards” (e.g. from `api/` to `pages/`), that’s a sign the code should be moved into a smaller module at the right layer.
@@ -139,7 +140,7 @@ The app shell is glue and composition only.
 
 ## 5. `pages/` – page/feature slices
 
-**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings, Overview). The physical folder is `src/pages/`, imported via the `@pages/*` alias.
+**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings). The physical folder is `src/pages/`, imported via the `@pages/*` alias.
 
 Example structure:
 
@@ -165,7 +166,7 @@ src/pages/
     index.tsx
     components/
       WorkspaceNav.tsx
-      workspaceNavigation.tsx
+      workspaceNavigation.ts
     context/
       WorkspaceContext.tsx
     sections/
@@ -185,11 +186,9 @@ src/pages/
           components/
           state/
       Settings/
-        WorkspaceSettingsRoute.tsx
+        index.tsx
         components/
         pages/
-      Overview/
-        index.tsx
 ```
 
 Keep section naming 1:1 across the UI: the nav item is **Configuration Builder**, the route segment is `config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder`. That folder owns both the configurations list and the workbench editing mode.
@@ -214,7 +213,7 @@ What belongs here:
 What does **not** belong here:
 
 * Generic UI primitives (buttons, inputs, layout) → `components/`.
-* Cross‑feature logic (API clients, storage helpers) → `api/`, `hooks/`, `utils/`.
+* Cross‑feature logic (API clients, storage helpers) → `api/`, `hooks/`, `lib/`.
 
 When you add a new route or page, it should live under `pages/`, in a folder that mirrors the URL path.
 
@@ -273,7 +272,7 @@ Pages in `pages/` own domain logic and pass data into these components.
 
 ---
 
-## 7. `api/`, `hooks/`, `utils/` – shared building blocks
+## 7. `api/`, `hooks/`, `lib/` – shared building blocks
 
 **Responsibility:** Provide non‑UI building blocks used by many pages. This includes API clients, React Query hooks, URL helpers, storage utilities, streaming helpers, upload helpers, etc.
 
@@ -302,27 +301,30 @@ src/hooks/
   workspaces/
     useWorkspacesQuery.ts
 
-src/utils/
-  authNavigation.ts
-  workspacePaths.ts
+src/lib/
   uploads/
     xhr.ts
   storage.ts
+  workspacePreferences.ts
+
+src/app/navigation/
+  authNavigation.ts
+  workspacePaths.ts
 ```
 
 What belongs here:
 
 * **API modules** wrapping `/api/v1/...` (no React).
 * **React Query + shared hooks** used by multiple pages.
-* **URL helpers, streaming helpers**, and other cross‑cutting utilities.
-* **Storage and upload helpers** in `utils/`.
+* **Storage helpers, upload helpers**, and other cross‑cutting utilities.
+* **Local preferences** (e.g. workspace defaults) in `lib/`.
 
 What does **not** belong here:
 
 * JSX components (those live in `components/`).
 * Page‑specific business logic (that stays under `pages/`).
 
-Rule of thumb: if the logic only makes sense inside a single page/section, keep it with that page; move it into `api/`, `hooks/`, or `utils/` only when it is truly reusable across pages.
+Rule of thumb: if the logic only makes sense inside a single page/section, keep it with that page; move it into `api/`, `hooks/`, or `lib/` only when it is truly reusable across pages.
 
 ---
 
@@ -346,8 +348,12 @@ Example structure:
 ```text
 src/types/
   index.ts
-  adeArtifact.ts
-  adeTelemetry.ts
+  builds.ts
+  configurations.ts
+  presence.ts
+  runs.ts
+  runSummary.ts
+  workspaces.ts
 ```
 
 Typical content:
@@ -373,7 +379,7 @@ Example structure:
 src/test/
   setup.ts             # Vitest config: JSDOM, polyfills, globals
   factories.ts         # test data builders (workspaces, documents, runs, configurations)
-  test-utils.tsx       # renderWithProviders, etc.
+  test-lib.tsx       # renderWithProviders, etc.
 ```
 
 * `setup.ts` is referenced from `vitest.config.ts` and runs before each test.
@@ -393,7 +399,7 @@ We use a small set of TS/Vite aliases to keep imports readable:
 * `@components` → `src/components`
 * `@api` → `src/api`
 * `@hooks` → `src/hooks`
-* `@utils` → `src/utils`
+* `@lib` → `src/lib`
 * `@schema` → `src/types`
 * `@schema/generated` → `src/types/generated`
 * `@test` → `src/test` (tests only)
@@ -434,7 +440,7 @@ This section summarises naming conventions used in this document. See **01‑dom
 * Route components typically end with `Screen` or `Page`:
 
   * `LoginScreen`, `WorkspaceDirectoryScreen`, `WorkspaceScreen`.
-  * `DocumentsScreen`, `RunsScreen`, `ConfigBuilderScreen`, `WorkspaceSettingsScreen`, `WorkspaceOverviewScreen`.
+  * `DocumentsScreen`, `RunsScreen`, `ConfigBuilderScreen`, `WorkspaceSettingsScreen`.
 
 * Each page file is named identically to its component, and exports it as the default or main named export.
 
@@ -563,4 +569,4 @@ The **Runs** section follows the same pattern, with:
 * `api/runs/api.ts`.
 * Domain types in `types/runs.ts`.
 
-If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/App.tsx`, use `api/`, `hooks/`, and `utils/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.
+If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/App.tsx`, use `api/`, `hooks/`, and `lib/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.

@@ -16,7 +16,7 @@ import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
 import { UploadPreflightDialog } from "./components/UploadPreflightDialog";
 import { useDocumentsModel } from "./hooks/useDocumentsModel";
-import { getDocumentOutputRun } from "./data";
+import { getDocumentOutputRun } from "./utils";
 import type { DocumentEntry, DocumentsFilters, DocumentStatus, FileType } from "./types";
 import {
   DEFAULT_DOCUMENT_FILTERS,

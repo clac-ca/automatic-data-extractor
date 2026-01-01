@@ -1,10 +1,5 @@
-import type {
-  RunMetrics,
-  RunRecord,
-  RunsCounts,
-  RunsDateRange,
-  RunsStatusFilter,
-} from "./types";
+import type { RunResource } from "@schema";
+import type { RunMetrics, RunRecord, RunsCounts, RunsDateRange, RunsStatusFilter } from "./types";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -113,6 +108,35 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
   counts.active = counts.running + counts.queued;
   if (!warningKnown) counts.warning = null;
   return counts;
+}
+
+export function buildRunRecord(run: RunResource): RunRecord {
+  const inputName = run.input?.filename ?? run.input?.document_id ?? `Run ${run.id}`;
+  const outputName = run.output?.filename ?? null;
+  const startedAtLabel = formatTimestamp(run.started_at ?? run.created_at);
+  const durationLabel = formatDuration(run.duration_seconds ?? null, run.status);
+  const configLabel = run.config_version ?? run.configuration_id ?? "—";
+
+  return {
+    id: run.id,
+    configurationId: run.configuration_id,
+    status: run.status,
+    inputName,
+    outputName,
+    configLabel,
+    startedAtLabel,
+    durationLabel,
+    rows: null,
+    warnings: null,
+    errors: null,
+    quality: null,
+    ownerLabel: "—",
+    triggerLabel: "—",
+    engineLabel: run.engine_version ?? "—",
+    regionLabel: "—",
+    notes: run.failure_message ?? null,
+    raw: run,
+  };
 }
 
 export function buildCreatedAtRange(range: RunsDateRange, now = new Date()) {

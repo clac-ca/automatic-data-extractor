@@ -33,7 +33,7 @@ export default defineConfig({
       "@components": resolveSrc("components"),
       "@api": resolveSrc("api"),
       "@hooks": resolveSrc("hooks"),
-      "@utils": resolveSrc("utils"),
+      "@lib": resolveSrc("lib"),
       "@schema": resolveSrc("types"),
       "@schema/generated": resolveSrc("types/generated"),
       "@test": resolveSrc("test"),

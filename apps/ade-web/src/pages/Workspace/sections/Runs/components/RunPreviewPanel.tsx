@@ -8,7 +8,7 @@ import { RUN_STATUS_META } from "../constants";
 import { computeMappingQuality, formatNumber, formatQuality, formatScore } from "../utils";
 import type { RunColumn, RunField, RunMetrics, RunRecord } from "../types";
 
-type InspectorTab = "summary" | "metrics" | "fields" | "columns";
+type RunPreviewTab = "summary" | "metrics" | "fields" | "columns";
 
 type RunPreviewPanelProps = {
   run: RunRecord;
@@ -37,7 +37,7 @@ export function RunPreviewPanel({
   columnsLoading,
   columnsError,
 }: RunPreviewPanelProps) {
-  const [tab, setTab] = useState<InspectorTab>("summary");
+  const [tab, setTab] = useState<RunPreviewTab>("summary");
 
   const summary = useMemo(() => {
     const warnings =
@@ -93,7 +93,7 @@ export function RunPreviewPanel({
         </div>
       </div>
 
-      <TabsRoot value={tab} onValueChange={(value) => setTab(value as InspectorTab)}>
+      <TabsRoot value={tab} onValueChange={(value) => setTab(value as RunPreviewTab)}>
         <TabsList className="mt-4 flex flex-wrap gap-2 border-b border-border pb-2">
           <TabButton value="summary" label="Summary" active={tab === "summary"} />
           <TabButton value="metrics" label="Metrics" active={tab === "metrics"} />
@@ -474,7 +474,7 @@ function normalizeColumnStatus(status?: string | null): "mapped" | "unmapped" {
   return status?.toLowerCase?.() === "mapped" ? "mapped" : "unmapped";
 }
 
-function TabButton({ value, label, active }: { value: InspectorTab; label: string; active: boolean }) {
+function TabButton({ value, label, active }: { value: RunPreviewTab; label: string; active: boolean }) {
   return (
     <TabsTrigger
       value={value}

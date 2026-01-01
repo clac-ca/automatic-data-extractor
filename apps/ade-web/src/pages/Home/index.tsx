@@ -1,20 +1,16 @@
 import { useEffect } from "react";
 
-import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useWorkspacesQuery } from "@hooks/workspaces";
-import { getDefaultWorkspacePath, readPreferredWorkspaceId } from "@utils/workspaces";
+import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
+import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { Button } from "@components/ui/button";
 import { PageState } from "@components/layouts/page-state";
 import { useLocation, useNavigate } from "@app/navigation/history";
 
 export default function HomeScreen() {
-  return (
-    <RequireSession>
-      <RootIndexContent />
-    </RequireSession>
-  );
+  return <RootIndexContent />;
 }
 
 function RootIndexContent() {

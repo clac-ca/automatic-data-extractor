@@ -1,9 +1,32 @@
+import { ApiError } from "@api";
 import { client, resolveApiUrl } from "@api/client";
 
 import type { components, paths } from "@schema";
 import type { RunStreamEvent } from "@schema/runs";
 
 export type RunResource = components["schemas"]["RunResource"];
+export type RunStatus = RunResource["status"];
+export type RunPage = components["schemas"]["RunPage"];
+export type RunMetricsResource = components["schemas"]["RunMetricsResource"];
+export type RunFieldResource = components["schemas"]["RunFieldResource"];
+export type RunColumnResource = components["schemas"]["RunColumnResource"];
+export type RunColumnsQuery = paths["/api/v1/runs/{run_id}/columns"]["get"]["parameters"]["query"];
+
+export type RunsQuery = {
+  page?: number;
+  page_size?: number;
+  include_total?: boolean;
+  q?: string | null;
+  status?: RunStatus | RunStatus[] | null;
+  configuration_id?: string | null;
+  created_after?: string | null;
+  created_before?: string | null;
+  sort?: string | null;
+  input_document_id?: string | null;
+  has_output?: boolean | null;
+  file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+};
+
 export type RunCreateOptions = components["schemas"]["RunCreateOptionsBase"];
 type RunCreateRequest = components["schemas"]["RunWorkspaceCreateRequest"];
 type RunCreatePathParams =
@@ -13,6 +36,7 @@ export type RunStreamOptions = Partial<RunCreateOptions> & {
   input_document_id: RunCreateRequest["input_document_id"];
   configuration_id?: RunCreateRequest["configuration_id"];
 };
+export const RUNS_PAGE_SIZE = 50;
 const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   dry_run: false,
   validate_only: false,
@@ -20,6 +44,112 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   log_level: "INFO",
   active_sheet_only: false,
 };
+
+export async function fetchWorkspaceRuns(
+  workspaceId: string,
+  query: RunsQuery,
+  signal?: AbortSignal,
+): Promise<RunPage> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/runs", {
+    params: { path: { workspace_id: workspaceId }, query },
+    signal,
+  });
+  if (!data) throw new Error("Expected run page payload.");
+  return data;
+}
+
+export async function fetchWorkspaceRunsForDocument(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<RunResource[]> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/runs", {
+    params: {
+      path: { workspace_id: workspaceId },
+      query: { page: 1, page_size: 25, include_total: false, input_document_id: documentId },
+    },
+    signal,
+  });
+
+  if (!data) throw new Error("Expected run page payload.");
+  return data.items ?? [];
+}
+
+export async function fetchRunMetrics(runId: string, signal?: AbortSignal): Promise<RunMetricsResource | null> {
+  try {
+    const { data } = await client.GET("/api/v1/runs/{run_id}/metrics", {
+      params: { path: { run_id: runId } },
+      signal,
+    });
+    if (!data) {
+      throw new Error("Expected run metrics payload.");
+    }
+    return data;
+  } catch (error: unknown) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function fetchRunFields(runId: string, signal?: AbortSignal): Promise<RunFieldResource[] | null> {
+  try {
+    const { data } = await client.GET("/api/v1/runs/{run_id}/fields", {
+      params: { path: { run_id: runId } },
+      signal,
+    });
+    if (!data) {
+      throw new Error("Expected run fields payload.");
+    }
+    return data;
+  } catch (error: unknown) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function fetchRunColumns(
+  runId: string,
+  query: RunColumnsQuery | null,
+  signal?: AbortSignal,
+): Promise<RunColumnResource[] | null> {
+  try {
+    const { data } = await client.GET("/api/v1/runs/{run_id}/columns", {
+      params: { path: { run_id: runId }, query: query ?? undefined },
+      signal,
+    });
+    if (!data) {
+      throw new Error("Expected run columns payload.");
+    }
+    return data;
+  } catch (error: unknown) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function createRunForDocument(configurationId: string, documentId: string): Promise<RunResource> {
+  const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
+    params: { path: { configuration_id: configurationId } },
+    body: {
+      options: {
+        dry_run: false,
+        validate_only: false,
+        force_rebuild: false,
+        active_sheet_only: false,
+        input_document_id: documentId,
+      },
+    },
+  });
+
+  if (!data) throw new Error("Unable to create run.");
+  return data;
+}
 
 export async function createRun(
   workspaceId: string,

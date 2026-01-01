@@ -2,6 +2,7 @@ import { NavProvider, useLocation } from "@app/navigation/history";
 import { normalizePathname } from "@app/navigation/paths";
 
 import { AppProviders } from "@app/providers/AppProviders";
+import { RequireSession } from "@components/providers/auth/RequireSession";
 import HomeScreen from "@pages/Home";
 import LoginScreen from "@pages/Login";
 import AuthCallbackScreen from "@pages/AuthCallback";
@@ -26,44 +27,59 @@ export function App() {
 export function ScreenSwitch() {
   const location = useLocation();
   const normalized = normalizePathname(location.pathname);
-  const segments = normalized.split("/").filter(Boolean);
+  const match = resolveRoute(normalized);
 
-  if (segments.length === 0) {
-    return <HomeScreen />;
+  if (!match.requiresSession) {
+    return match.element;
   }
 
+  return <RequireSession>{match.element}</RequireSession>;
+}
+
+type RouteMatch = {
+  readonly element: JSX.Element;
+  readonly requiresSession: boolean;
+};
+
+function resolveRoute(pathname: string): RouteMatch {
+  const segments = pathname.split("/").filter(Boolean);
   const [first, second] = segments;
+
+  if (segments.length === 0) {
+    return { element: <HomeScreen />, requiresSession: true };
+  }
 
   switch (first) {
     case "login":
-      return <LoginScreen />;
+      return { element: <LoginScreen />, requiresSession: false };
     case "logout":
-      return <LogoutScreen />;
+      return { element: <LogoutScreen />, requiresSession: false };
     case "auth":
       if (second === "callback") {
-        return <AuthCallbackScreen />;
+        return { element: <AuthCallbackScreen />, requiresSession: false };
       }
       break;
     case "setup":
-      return <SetupScreen />;
+      return { element: <SetupScreen />, requiresSession: false };
     case "workspaces":
       if (!second) {
-        return <WorkspacesScreen />;
+        return { element: <WorkspacesScreen />, requiresSession: true };
       }
       if (second === "new") {
-        return <WorkspaceCreateScreen />;
+        return { element: <WorkspaceCreateScreen />, requiresSession: true };
       }
-      return <WorkspaceScreen />;
+      return { element: <WorkspaceScreen />, requiresSession: true };
     case "playground":
       if (second === "tablecn") {
-        return <TablecnPlaygroundScreen />;
+        // Tablecn handles its own auth gate for now; keep this route untouched.
+        return { element: <TablecnPlaygroundScreen />, requiresSession: false };
       }
       break;
     default:
       break;
   }
 
-  return <NotFoundScreen />;
+  return { element: <NotFoundScreen />, requiresSession: true };
 }
 
 export default App;

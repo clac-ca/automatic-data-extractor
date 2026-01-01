@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "@app/navigation/history";
 
 import { completeAuthCallback, sessionKeys } from "@api/auth/api";
-import { chooseDestination, resolveRedirectParam } from "@utils/authNavigation";
+import { chooseDestination, resolveRedirectParam } from "@app/navigation/authNavigation";
 import { ApiError } from "@api";
 import { Button } from "@components/ui/button";
 import { PageState } from "@components/layouts/page-state";

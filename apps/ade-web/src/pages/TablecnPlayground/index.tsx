@@ -1,17 +1,20 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { apiFetch } from "@api/client";
+import { ApiError } from "@api/errors";
 import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { PageState } from "@components/layouts/page-state";
 import { Button } from "@components/ui/button";
 import { useWorkspacesQuery } from "@hooks/workspaces";
 import { useNavigate } from "@app/navigation/history";
-import { fetchWorkspaceDocuments } from "@pages/Workspace/sections/Documents/data";
-import { readPreferredWorkspaceId } from "@utils/workspaces";
+import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
 import { TablecnDocumentsTable } from "./components/TablecnDocumentsTable";
 import { TablecnPlaygroundLayout } from "./components/TablecnPlaygroundLayout";
-import { useDocumentsPagination } from "./hooks/useDocumentsPagination";
+import { useDocumentsListParams } from "./hooks/useDocumentsListParams";
+import type { DocumentListResponse, DocumentsListParams } from "./types";
+import { buildDocumentsListQuery } from "./utils";
 
 export default function TablecnPlaygroundScreen() {
   return (
@@ -19,6 +22,38 @@ export default function TablecnPlaygroundScreen() {
       <TablecnDocumentsPlayground />
     </RequireSession>
   );
+}
+
+async function fetchTablecnDocuments(
+  workspaceId: string,
+  params: DocumentsListParams,
+  signal?: AbortSignal,
+) {
+  const query = buildDocumentsListQuery(params);
+  const url = `/api/v1/workspaces/${workspaceId}/documents?${query.toString()}`;
+  const response = await apiFetch(url, { signal });
+  if (!response.ok) {
+    const problem = await tryParseProblem(response);
+    const message = problem?.title ?? `Request failed with status ${response.status}`;
+    throw new ApiError(message, response.status, problem);
+  }
+  return (await response.json()) as DocumentListResponse;
+}
+
+async function tryParseProblem(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return undefined;
+  }
+  try {
+    return (await response.clone().json()) as {
+      title?: string;
+      detail?: string;
+      status?: number;
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function TablecnDocumentsPlayground() {
@@ -87,13 +122,23 @@ function TablecnDocumentsPlayground() {
 }
 
 function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
-  const { page, perPage } = useDocumentsPagination();
+  const { page, perPage, sort, filters, joinOperator, q } =
+    useDocumentsListParams();
   const documentsQuery = useQuery({
-    queryKey: ["tablecn-documents", workspaceId, page, perPage],
+    queryKey: [
+      "tablecn-documents",
+      workspaceId,
+      page,
+      perPage,
+      sort,
+      filters,
+      joinOperator,
+      q,
+    ],
     queryFn: ({ signal }) =>
-      fetchWorkspaceDocuments(
+      fetchTablecnDocuments(
         workspaceId,
-        { sort: null, page, pageSize: perPage },
+        { page, perPage, sort, filters, joinOperator, q },
         signal,
       ),
     enabled: Boolean(workspaceId),
@@ -118,11 +163,7 @@ function TablecnDocumentsContainer({ workspaceId }: { workspaceId: string }) {
     );
   }
 
-  const pageCount = documentsQuery.data
-    ? documentsQuery.data.has_next
-      ? documentsQuery.data.page + 1
-      : documentsQuery.data.page
-    : 1;
+  const pageCount = documentsQuery.data?.pageCount ?? 1;
 
   return (
     <TablecnPlaygroundLayout>

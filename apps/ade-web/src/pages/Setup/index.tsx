@@ -11,7 +11,7 @@ import {
   buildLoginRedirect,
   chooseDestination,
   resolveRedirectParam,
-} from "@utils/authNavigation";
+} from "@app/navigation/authNavigation";
 import { completeSetup } from "@api/setup/api";
 import { Alert } from "@components/ui/alert";
 import { Button } from "@components/ui/button";

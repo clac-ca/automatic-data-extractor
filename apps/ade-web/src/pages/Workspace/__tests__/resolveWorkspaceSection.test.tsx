@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 
 import { resolveWorkspaceSection } from "../index";
 
-vi.mock("@pages/Workspace/sections/Overview", () => ({ default: () => <div>overview</div> }));
 vi.mock("@pages/Workspace/sections/Documents", () => ({ default: () => <div>documents</div> }));
 vi.mock("@pages/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
 vi.mock("@pages/Workspace/sections/ConfigBuilder", () => ({ default: () => <div>configs</div> }));

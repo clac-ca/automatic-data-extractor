@@ -1,5 +1,5 @@
-import type { WorkbenchConsoleLine } from "../types";
 import type { ReactElement } from "react";
+import type { WorkbenchConsoleLine } from "../types";
 
 export function resolveSeverity(level: WorkbenchConsoleLine["level"] | "all"): number {
   if (level === "debug") return 0;
@@ -32,23 +32,6 @@ export function formatConsoleLineNdjson(line: WorkbenchConsoleLine): string | nu
   } catch {
     return null;
   }
-}
-
-export function renderPrettyJson(value: unknown) {
-  if (value == null) {
-    return <span className="text-muted-foreground">null</span>;
-  }
-  let pretty: string;
-  try {
-    pretty = JSON.stringify(value, null, 2);
-  } catch {
-    pretty = String(value);
-  }
-  return (
-    <pre className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-foreground">
-      {highlightJson(pretty)}
-    </pre>
-  );
 }
 
 function safeParseJson(value: string) {

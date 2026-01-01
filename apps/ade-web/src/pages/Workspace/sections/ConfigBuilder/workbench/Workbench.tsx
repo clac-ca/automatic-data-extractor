@@ -66,7 +66,7 @@ import {
   useSaveConfigurationFileMutation,
 } from "@hooks/configurations";
 import type { FileReadJson } from "@schema/configurations";
-import { createScopedStorage } from "@utils/storage";
+import { createScopedStorage } from "@lib/storage";
 import { isDarkMode, useTheme } from "@components/providers/theme";
 import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@api";

@@ -1,4 +1,4 @@
-import { createScopedStorage } from "@utils/storage";
+import { createScopedStorage } from "@lib/storage";
 
 const PREFERRED_WORKSPACE_STORAGE_KEY = "backend.app.active_workspace";
 const storage = createScopedStorage(PREFERRED_WORKSPACE_STORAGE_KEY);

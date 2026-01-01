@@ -2,10 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 
 import { useNavigate } from "@app/navigation/history";
 
-import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@hooks/workspaces";
-import { getDefaultWorkspacePath, writePreferredWorkspaceId } from "@utils/workspaces";
+import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
+import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { Button } from "@components/ui/button";
 import { PageState } from "@components/layouts/page-state";
@@ -16,11 +16,7 @@ import { GlobalSearchField } from "@components/shell/GlobalSearchField";
 import { Alert } from "@components/ui/alert";
 
 export default function WorkspacesScreen() {
-  return (
-    <RequireSession>
-      <WorkspacesIndexContent />
-    </RequireSession>
-  );
+  return <WorkspacesIndexContent />;
 }
 
 function WorkspacesIndexContent() {

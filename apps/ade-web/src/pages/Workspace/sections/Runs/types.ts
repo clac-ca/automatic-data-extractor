@@ -19,21 +19,6 @@ export type RunConfigOption = {
   label: string;
 };
 
-export type RunsQuery = {
-  page?: number;
-  page_size?: number;
-  include_total?: boolean;
-  q?: string | null;
-  status?: RunStatus | RunStatus[] | null;
-  configuration_id?: string | null;
-  created_after?: string | null;
-  created_before?: string | null;
-  sort?: string | null;
-  input_document_id?: string | null;
-  has_output?: boolean | null;
-  file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
-};
-
 export interface RunsCounts {
   readonly total: number;
   readonly success: number;

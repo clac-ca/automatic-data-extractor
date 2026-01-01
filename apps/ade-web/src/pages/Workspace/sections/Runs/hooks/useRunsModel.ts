@@ -1,16 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  fetchRunColumns,
-  fetchRunFields,
-  fetchRunMetrics,
-  fetchWorkspaceRuns,
-  buildRunRecord,
-  runsKeys,
-  RUNS_PAGE_SIZE,
-} from "../data";
-import { buildCounts, buildCreatedAtRange } from "../utils";
+import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns, RUNS_PAGE_SIZE } from "@api/runs/api";
+import { runsKeys } from "@hooks/runs/keys";
+import { buildCounts, buildCreatedAtRange, buildRunRecord } from "../utils";
 import type { RunConfigOption, RunsFilters } from "../types";
 import { DEFAULT_RUNS_FILTERS } from "../constants";
 

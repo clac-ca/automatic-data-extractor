@@ -450,7 +450,7 @@ Shortcuts (below) build on top of these primitives.
 
 ## 5. Keyboard shortcuts
 
-Keyboard shortcuts are implemented centrally (e.g. in `src/hooks/useHotkeys.ts`). UI components may display shortcut hints, but they do not bind global listeners themselves.
+Keyboard shortcuts live in the owning feature (for example, the workbench) so scope is obvious. UI components may display shortcut hints, but they do not bind global listeners themselves.
 
 ### 5.1 Global shortcuts
 
@@ -540,7 +540,7 @@ These use `Alert` directly within the layout.
 
 ## 7. State persistence and user preferences
 
-UI state and preferences are stored in `localStorage` via helpers in `src/utils/storage`. Components in `src/components` are written to work cleanly whether preferences are present or absent.
+UI state and preferences are stored in `localStorage` via helpers in `src/lib/storage`. Components in `src/components` are written to work cleanly whether preferences are present or absent.
 
 ### 7.1 Key naming convention
 

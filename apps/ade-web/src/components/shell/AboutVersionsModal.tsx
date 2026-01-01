@@ -16,7 +16,6 @@ const ADE_WEB_VERSION =
   "unknown";
 
 export function AboutVersionsModal({ open, onClose }: AboutVersionsModalProps) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const versionsQuery = useSystemVersions({ enabled: open });
   const isError = versionsQuery.isError;
@@ -71,7 +70,6 @@ export function AboutVersionsModal({ open, onClose }: AboutVersionsModalProps) {
       }}
     >
       <div
-        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="about-versions-heading"

@@ -8,11 +8,11 @@ import { useConfigurationQuery } from "@hooks/configurations";
 
 import { Workbench } from "./Workbench";
 
-interface ConfigEditorWorkbenchRouteProps {
+interface ConfigBuilderWorkbenchScreenProps {
   readonly params?: { readonly configId?: string };
 }
 
-export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkbenchRouteProps = {}) {
+export default function ConfigBuilderWorkbenchScreen({ params }: ConfigBuilderWorkbenchScreenProps = {}) {
   const { workspace } = useWorkspaceContext();
   const {
     session,

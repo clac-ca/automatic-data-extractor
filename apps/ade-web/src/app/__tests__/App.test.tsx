@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@test/test-utils";
 
@@ -13,6 +14,9 @@ vi.mock("@pages/Workspaces/New", () => ({ default: () => <div data-testid="works
 vi.mock("@pages/Workspace", () => ({ default: () => <div data-testid="workspace-screen">workspace</div> }));
 vi.mock("@pages/Logout", () => ({ default: () => <div data-testid="logout-screen">logout</div> }));
 vi.mock("@pages/NotFound", () => ({ default: () => <div data-testid="not-found-screen">not-found</div> }));
+vi.mock("@components/providers/auth/RequireSession", () => ({
+  RequireSession: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
 
 function renderAt(path: string) {
   window.history.replaceState(null, "", path);

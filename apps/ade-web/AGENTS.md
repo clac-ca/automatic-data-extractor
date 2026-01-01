@@ -20,10 +20,11 @@ apps/ade-web/
    │  ├─ providers/                 # Auth, theme, notifications
    │  ├─ shell/                     # Global chrome (top bar, profile menu, etc.)
    │  ├─ icons.tsx                  # Icon exports
-   ├─ index.css                    # Global styles + theme tokens
+   ├─ styles/                      # Global styles + theme tokens
+   │  └─ globals.css
    ├─ vite-env.d.ts                # Vite client typings + globals
    ├─ hooks/                       # React Query + shared app hooks
-   ├─ utils/                       # Cross-cutting utilities (URL/auth helpers)
+   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
    ├─ types/                       # Curated, app-facing type exports
    │  └─ generated/                # Raw OpenAPI-derived types
    └─ test/                        # Vitest setup + helpers
@@ -49,7 +50,7 @@ ade openapi-types  # regenerate TS types from the FastAPI schema
 
 ### Notes
 
-* Co-locate page-specific components under the owning page. Promote to `components/`, `hooks/`, `api/`, or `utils/` only when reuse emerges.
+* Co-locate page-specific components under the owning page. Promote to `components/`, `hooks/`, `api/`, or `lib/` only when reuse emerges.
 * Keep OpenAPI types in `types/generated/`. Run `ade openapi-types` after backend schema changes.
 * Import API contracts from `@schema` (curated) instead of `@schema/generated`. Extend `src/types/` when new types are needed.
 * Prefer the shared API client and generated types for HTTP interactions.
@@ -66,7 +67,7 @@ Think in three layers:
 
 1. **App shell** – global providers, layout, navigation wiring (`src/app/`).
 2. **Pages** – URL-addressable pages and big experiences (`src/pages`).
-3. **Shared building blocks** – reusable UI + app infrastructure (`src/components`, `src/api`, `src/hooks`, `src/utils`).
+3. **Shared building blocks** – reusable UI + app infrastructure (`src/components`, `src/api`, `src/hooks`, `src/lib`).
 
 Screens are thin: they **compose** things, they don’t invent new infra.
 
@@ -88,9 +89,9 @@ Screens are thin: they **compose** things, they don’t invent new infra.
   - HTTP client + domain API calls (no React).
 - `src/hooks/`
   - Shared React hooks (React Query hooks, global app hooks).
-- `src/utils/`
-  - Cross-cutting helpers (URL helpers, auth helpers, etc.).
-- `src/index.css`
+- `src/lib/`
+  - Cross-cutting helpers (storage, uploads, local preferences).
+- `src/styles/globals.css`
   - Global styles and theme tokens.
 - `src/types/`
   - Human-authored, app-facing types (and curated re-exports from generated types).
@@ -160,8 +161,8 @@ When you add new functionality:
    - UI widgets → `src/components/ui/` or `src/components/layouts/`.  
    - API calls → `src/api/`.  
    - Shared React hooks → `src/hooks/`.  
-   - Non-React helpers → `src/utils/` (uploads, storage, etc.).  
-   - Utilities → `src/utils/`.
+   - Non-React helpers → `src/lib/` (uploads, storage, etc.).  
+   - Utilities → `src/lib/`.
 4. **Types**  
    - Add or refine app-facing types in `src/types/`, not next to generated types.
 

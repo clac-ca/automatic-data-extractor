@@ -5,14 +5,13 @@ import clsx from "clsx";
 import { useLocation, useNavigate } from "@app/navigation/history";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS } from "@hooks/workspaces";
-import { writePreferredWorkspaceId } from "@utils/workspaces";
+import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { WorkspaceProvider } from "@pages/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider, useWorkbenchWindow } from "@pages/Workspace/context/WorkbenchWindowContext";
-import { createScopedStorage } from "@utils/storage";
+import { createScopedStorage } from "@lib/storage";
 import { GlobalTopBar } from "@components/shell/GlobalTopBar";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";
 import { ProfileDropdown } from "@components/shell/ProfileDropdown";
@@ -26,24 +25,19 @@ import { ChevronDownIcon, CloseIcon, MenuIcon } from "@components/icons";
 import { useShortcutHint } from "@hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 
-import WorkspaceOverviewRoute from "@pages/Workspace/sections/Overview";
-import WorkspaceDocumentsRoute from "@pages/Workspace/sections/Documents";
-import WorkspaceRunsRoute from "@pages/Workspace/sections/Runs";
-import WorkspaceConfigsIndexRoute from "@pages/Workspace/sections/ConfigBuilder";
-import WorkspaceConfigRoute from "@pages/Workspace/sections/ConfigBuilder/detail";
-import ConfigEditorWorkbenchRoute from "@pages/Workspace/sections/ConfigBuilder/workbench";
-import WorkspaceSettingsRoute from "@pages/Workspace/sections/Settings";
+import DocumentsScreen from "@pages/Workspace/sections/Documents";
+import RunsScreen from "@pages/Workspace/sections/Runs";
+import ConfigBuilderScreen from "@pages/Workspace/sections/ConfigBuilder";
+import ConfigurationDetailScreen from "@pages/Workspace/sections/ConfigBuilder/detail";
+import ConfigBuilderWorkbenchScreen from "@pages/Workspace/sections/ConfigBuilder/workbench";
+import WorkspaceSettingsScreen from "@pages/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }
   | { readonly kind: "content"; readonly key: string; readonly element: ReactElement; readonly fullHeight?: boolean };
 
 export default function WorkspaceScreen() {
-  return (
-    <RequireSession>
-      <WorkspaceContent />
-    </RequireSession>
-  );
+  return <WorkspaceContent />;
 }
 
 function WorkspaceContent() {
@@ -644,8 +638,6 @@ export function resolveWorkspaceSection(
 
   const [first, second, third] = segments;
   switch (first) {
-    case "overview":
-      return { kind: "content", key: "overview", element: <WorkspaceOverviewRoute /> };
     case defaultWorkspaceSection.path:
     case "documents": {
       if (second) {
@@ -657,33 +649,33 @@ export function resolveWorkspaceSection(
           to: `/workspaces/${workspaceId}/documents${query ? `?${query}` : ""}${hash}`,
         };
       }
-      return { kind: "content", key: "documents", element: <WorkspaceDocumentsRoute />, fullHeight: true };
+      return { kind: "content", key: "documents", element: <DocumentsScreen />, fullHeight: true };
     }
     case "runs":
-      return { kind: "content", key: "runs", element: <WorkspaceRunsRoute />, fullHeight: true };
+      return { kind: "content", key: "runs", element: <RunsScreen />, fullHeight: true };
     case "config-builder": {
       if (!second) {
-        return { kind: "content", key: "config-builder", element: <WorkspaceConfigsIndexRoute /> };
+        return { kind: "content", key: "config-builder", element: <ConfigBuilderScreen /> };
       }
       if (third === "editor") {
         return {
           kind: "content",
           key: `config-builder:${second}:editor`,
-          element: <ConfigEditorWorkbenchRouteWithParams configId={decodeURIComponent(second)} />,
+          element: <ConfigBuilderWorkbenchScreenWithParams configId={decodeURIComponent(second)} />,
           fullHeight: true,
         };
       }
       return {
         kind: "content",
         key: `config-builder:${second}`,
-        element: <WorkspaceConfigRoute params={{ configId: decodeURIComponent(second) }} />,
+        element: <ConfigurationDetailScreen params={{ configId: decodeURIComponent(second) }} />,
       };
     }
     case "settings": {
       const remaining = segments.slice(1);
       const normalized = remaining.length > 0 ? remaining : [];
       const key = `settings:${normalized.length > 0 ? normalized.join(":") : "general"}`;
-      return { kind: "content", key, element: <WorkspaceSettingsRoute sectionSegments={normalized} /> };
+      return { kind: "content", key, element: <WorkspaceSettingsScreen sectionSegments={normalized} /> };
     }
     default:
       return {
@@ -699,6 +691,6 @@ export function resolveWorkspaceSection(
       };
   }
 }
-function ConfigEditorWorkbenchRouteWithParams({ configId }: { readonly configId: string }) {
-  return <ConfigEditorWorkbenchRoute params={{ configId }} />;
+function ConfigBuilderWorkbenchScreenWithParams({ configId }: { readonly configId: string }) {
+  return <ConfigBuilderWorkbenchScreen params={{ configId }} />;
 }

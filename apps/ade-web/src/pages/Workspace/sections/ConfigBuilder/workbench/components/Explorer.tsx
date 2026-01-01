@@ -28,7 +28,7 @@ import {
   OpenFileIcon,
   UploadIcon,
 } from "@components/icons";
-import { createScopedStorage } from "@utils/storage";
+import { createScopedStorage } from "@lib/storage";
 
 import type { WorkbenchFileNode, WorkbenchUploadFile } from "../types";
 import { extractDroppedFiles, hasFileDrag } from "../utils/fileDrop";

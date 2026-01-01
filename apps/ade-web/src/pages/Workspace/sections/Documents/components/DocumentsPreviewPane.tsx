@@ -8,7 +8,7 @@ import { Select } from "@components/ui/select";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@components/ui/tabs";
 import type { RunResource } from "@schema";
 
-import { MAX_PREVIEW_ROWS } from "../data";
+import { MAX_PREVIEW_ROWS } from "../utils";
 import type {
   DocumentComment,
   DocumentEntry,

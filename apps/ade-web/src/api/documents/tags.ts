@@ -54,6 +54,30 @@ export async function patchDocumentTags(
   return data as DocumentRecord;
 }
 
+export async function patchDocumentTagsBatch(
+  workspaceId: string,
+  documentIds: string[],
+  payload: { add?: readonly string[] | null; remove?: readonly string[] | null },
+  signal?: AbortSignal,
+): Promise<DocumentRecord[]> {
+  const body = {
+    document_ids: documentIds,
+    add: payload.add ? [...payload.add] : payload.add,
+    remove: payload.remove ? [...payload.remove] : payload.remove,
+  };
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/tags", {
+    params: { path: { workspace_id: workspaceId } },
+    body,
+    signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected updated document records.");
+  }
+
+  return (data.documents ?? []) as DocumentRecord[];
+}
+
 export async function fetchTagCatalog(
   workspaceId: string,
   query: TagCatalogQuery = {},

@@ -23,11 +23,11 @@ import { createLastSelectionStorage, persistLastSelection } from "../storage";
 import { StatusPill } from "../components/StatusPill";
 import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
 
-interface WorkspaceConfigRouteProps {
+interface ConfigurationDetailScreenProps {
   readonly params?: { readonly configId?: string };
 }
 
-export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRouteProps = {}) {
+export default function ConfigurationDetailScreen({ params }: ConfigurationDetailScreenProps = {}) {
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const { notifyToast } = useNotifications();

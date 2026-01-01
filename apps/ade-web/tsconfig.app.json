@@ -15,7 +15,7 @@
       "@api": ["api/index.ts"],
       "@api/*": ["api/*"],
       "@hooks/*": ["hooks/*"],
-      "@utils/*": ["utils/*"],
+      "@lib/*": ["lib/*"],
       "@schema": ["types"],
       "@schema/*": ["types/*"],
       "@schema/generated": ["types/generated"],

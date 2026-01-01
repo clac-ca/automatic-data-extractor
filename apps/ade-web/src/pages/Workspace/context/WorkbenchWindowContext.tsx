@@ -8,7 +8,7 @@ import { Workbench } from "@pages/Workspace/sections/ConfigBuilder/workbench/Wor
 import type { WorkbenchDataSeed } from "@pages/Workspace/sections/ConfigBuilder/workbench/types";
 import { getWorkbenchReturnPathStorageKey } from "@pages/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 
-import { createScopedStorage } from "@utils/storage";
+import { createScopedStorage } from "@lib/storage";
 import {
   SearchParamsOverrideProvider,
   toURLSearchParams,

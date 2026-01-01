@@ -24,7 +24,7 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
-  Do not import “upwards”: `api/`, `hooks/`, `utils/`, and `components/` must not depend on `pages/` or the app shell (`app/`). ESLint enforces this.  
+  Do not import “upwards”: `api/`, `hooks/`, `lib/`, and `components/` must not depend on `pages/` or the app shell (`app/`). ESLint enforces this.  
   See: [`docs/02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)
 
 - **Reuse existing patterns**  
@@ -44,7 +44,7 @@ For contribution workflow, linting, scripts, and local dev setup, see `CONTRIBUT
 ADE Web has two major UX layers:
 
 1. **Workspace directory** (`/workspaces`) – where users discover and create workspaces.
-2. **Workspace shell** (`/workspaces/:workspaceId/...`) – where users operate *inside* a workspace (Documents, Runs, Configuration Builder, Settings, optional Overview).
+2. **Workspace shell** (`/workspaces/:workspaceId/...`) – where users operate *inside* a workspace (Documents, Runs, Configuration Builder, Settings).
 
 Both layers share:
 
@@ -72,8 +72,7 @@ Inside a workspace, the **workspace shell** provides:
   - Documents  
   - Runs  
   - Configurations (**Configuration Builder**)  
-  - Settings  
-  (and optional Overview)
+  - Settings
 
 - **Top bar**  
   Workspace name, optional environment label (`Production`, `Staging`), section-aware search (`GlobalSearchField`), and `ProfileDropdown`.
@@ -155,7 +154,6 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/runs`
 - `/workspaces/:workspaceId/config-builder`
 - `/workspaces/:workspaceId/settings`
-- Optional `/workspaces/:workspaceId/overview`
 
 Route helpers live in `@app/navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
 
@@ -241,7 +239,6 @@ The workbench is a dedicated editing window with:
 - File tree (`WorkbenchFileNode`) built from backend listings.
 - Tabbed Monaco editor (`CodeEditor`) with ADE-specific Python helpers.
 - Bottom console/validation panel for streaming build/run logs and validation issues.
-- Inspector panel for file metadata.
 - Window states: restored, maximised, docked; plus navigation blockers for unsaved changes.
 - URL-driven layout (`file`, `pane`, `console`, `view`) and persisted layout/theme preferences.
 
@@ -291,8 +288,8 @@ High-level layout (under `apps/ade-web/src`):
 - `pages/` (aliased as `@pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
 - `components/` – shared UI primitives, layouts, providers, and shell chrome.
 - `hooks/` – shared React hooks (React Query + app hooks).
-- `utils/` – cross-cutting helpers (URL/auth helpers, storage, uploads).
-- `index.css` – global styles and theme tokens.
+- `lib/` – cross-cutting helpers (storage, uploads, local preferences).
+- `styles/globals.css` – global styles and theme tokens.
 - `types/` – curated domain models and re-exports.
 - `types/generated/` – OpenAPI-generated types.
 - `vite-env.d.ts` – Vite client typings + globals.

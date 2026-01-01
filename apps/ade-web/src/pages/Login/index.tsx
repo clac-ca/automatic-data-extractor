@@ -9,7 +9,7 @@ import { createSession, sessionKeys, type AuthProvider } from "@api/auth/api";
 import { useAuthProvidersQuery } from "@hooks/auth/useAuthProvidersQuery";
 import { useSessionQuery } from "@hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
-import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@utils/authNavigation";
+import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@app/navigation/authNavigation";
 import { Alert } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { FormField } from "@components/ui/form-field";

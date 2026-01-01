@@ -14,7 +14,7 @@ import { useRunsModel } from "./hooks/useRunsModel";
 import { coerceDateRange, coerceStatus } from "./utils";
 import type { RunsFilters } from "./types";
 
-export default function WorkspaceRunsRoute() {
+export default function RunsScreen() {
   const { workspace } = useWorkspaceContext();
   const location = useLocation();
   const navigate = useNavigate();

@@ -5,7 +5,8 @@ import { useLocation, useNavigate } from "@app/navigation/history";
 
 import { useSessionQuery } from "@hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
-import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "@utils/authNavigation";
+import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "@app/navigation/authNavigation";
+import { Button } from "@components/ui/button";
 
 import { SessionProvider } from "./SessionContext";
 
@@ -71,12 +72,9 @@ export function RequireSession({ children }: RequireSessionProps) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center text-sm text-muted-foreground">
         <p>We were unable to confirm your session.</p>
-        <button
-          onClick={() => refetch()}
-          className="focus-ring rounded-lg border border-border-strong bg-card px-4 py-2 font-semibold text-muted-foreground hover:bg-muted"
-        >
+        <Button variant="secondary" size="sm" onClick={() => refetch()}>
           Try again
-        </button>
+        </Button>
       </div>
     );
   }
@@ -94,12 +92,9 @@ export function RequireSession({ children }: RequireSessionProps) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center text-sm text-muted-foreground">
           <p>We were unable to check whether ADE is ready.</p>
-          <button
-            onClick={() => refetchSetupStatus()}
-            className="focus-ring rounded-lg border border-border-strong bg-card px-4 py-2 font-semibold text-muted-foreground hover:bg-muted"
-          >
+          <Button variant="secondary" size="sm" onClick={() => refetchSetupStatus()}>
             Try again
-          </button>
+          </Button>
         </div>
       );
     }

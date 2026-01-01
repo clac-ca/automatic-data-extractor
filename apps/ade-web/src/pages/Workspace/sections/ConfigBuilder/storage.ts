@@ -1,4 +1,4 @@
-import { createScopedStorage } from "@utils/storage";
+import { createScopedStorage } from "@lib/storage";
 
 export type LastSelection = { readonly configId?: string | null } | null;
 
