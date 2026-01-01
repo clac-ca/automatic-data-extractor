@@ -483,7 +483,7 @@ export function TablecnDocumentsTable({
     <DataTable
       table={table}
       showPagination={false}
-      className="w-full [&_[data-slot=table]]:w-full [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full"
+      className="w-full overflow-visible [&_[data-slot=table]]:w-full [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full"
       onRowClick={onRowClick}
       isRowExpanded={isRowExpanded}
       expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-hidden"

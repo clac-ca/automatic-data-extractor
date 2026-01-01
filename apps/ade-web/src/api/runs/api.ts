@@ -1,4 +1,4 @@
-import { ApiError } from "@api";
+import { ApiError } from "@api/errors";
 import { createIdempotencyKey } from "@api/idempotency";
 import { client, resolveApiUrl } from "@api/client";
 import { encodeFilters, type FilterItem, type FilterJoinOperator } from "@api/listing";
@@ -373,8 +373,8 @@ export async function fetchRun(
   runId: string,
   signal?: AbortSignal,
 ): Promise<RunResource> {
-  const { data } = await client.GET("/api/v1/runs/{run_id}", {
-    params: { path: { run_id: runId } },
+  const { data } = await client.GET("/api/v1/runs/{runId}", {
+    params: { path: { runId } },
     signal,
   });
 

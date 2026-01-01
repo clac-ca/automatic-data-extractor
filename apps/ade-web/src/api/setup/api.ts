@@ -1,4 +1,4 @@
-import { ApiError } from "@api";
+import { ApiError } from "@api/errors";
 import { client } from "@api/client";
 import { bootstrapSession, type SessionEnvelope } from "@api/auth/api";
 import type { AuthSetupRequest, AuthSetupStatus, components } from "@schema";

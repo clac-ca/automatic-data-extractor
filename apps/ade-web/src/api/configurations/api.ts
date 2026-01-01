@@ -1,6 +1,6 @@
 import { apiFetch, client } from "@api/client";
 import type { ListQueryParams } from "@api/listing";
-import { ApiError } from "@api";
+import { ApiError, tryParseProblemDetails } from "@api/errors";
 
 import type {
   ConfigurationPage,
@@ -257,7 +257,7 @@ export async function upsertConfigurationFile(
   );
 
   if (!response.ok) {
-    const problem = await tryParseProblem(response);
+    const problem = await tryParseProblemDetails(response);
     const message = problem?.title ?? `Request failed with status ${response.status}`;
     throw new ApiError(message, response.status, problem);
   }
@@ -460,16 +460,4 @@ function encodeFilePath(path: string) {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-}
-
-async function tryParseProblem(response: Response) {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return undefined;
-  }
-  try {
-    return await response.clone().json();
-  } catch {
-    return undefined;
-  }
 }

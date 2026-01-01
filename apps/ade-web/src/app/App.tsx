@@ -10,7 +10,6 @@ import SetupScreen from "@pages/Setup";
 import WorkspacesScreen from "@pages/Workspaces";
 import WorkspaceCreateScreen from "@pages/Workspaces/New";
 import WorkspaceScreen from "@pages/Workspace";
-import TablecnPlaygroundScreen from "@pages/TablecnPlayground";
 import LogoutScreen from "@pages/Logout";
 import NotFoundScreen from "@pages/NotFound";
 
@@ -69,12 +68,6 @@ function resolveRoute(pathname: string): RouteMatch {
         return { element: <WorkspaceCreateScreen />, requiresSession: true };
       }
       return { element: <WorkspaceScreen />, requiresSession: true };
-    case "playground":
-      if (second === "tablecn") {
-        // Tablecn handles its own auth gate for now; keep this route untouched.
-        return { element: <TablecnPlaygroundScreen />, requiresSession: false };
-      }
-      break;
     default:
       break;
   }

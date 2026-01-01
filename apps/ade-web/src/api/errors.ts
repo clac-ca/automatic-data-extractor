@@ -1,17 +1,43 @@
-export interface ProblemDetailsErrorItem {
-  readonly path?: string;
-  readonly message: string;
-  readonly code?: string;
+import type { components } from "@schema";
+
+export type ProblemDetailsErrorItem = components["schemas"]["ProblemDetailsErrorItem"];
+export type ProblemDetails = components["schemas"]["ProblemDetails"];
+export type ProblemDetailsErrorMap = Record<string, string[]>;
+
+export function groupProblemDetailsErrors(
+  errors: ProblemDetailsErrorItem[] | null | undefined,
+): ProblemDetailsErrorMap {
+  const grouped: ProblemDetailsErrorMap = {};
+  if (!errors) {
+    return grouped;
+  }
+  for (const error of errors) {
+    const path = error.path?.trim();
+    if (!path) {
+      continue;
+    }
+    if (!grouped[path]) {
+      grouped[path] = [];
+    }
+    grouped[path].push(error.message);
+  }
+  return grouped;
 }
 
-export interface ProblemDetails {
-  readonly type?: string;
-  readonly title?: string;
-  readonly status?: number;
-  readonly detail?: string;
-  readonly instance?: string;
-  readonly requestId?: string;
-  readonly errors?: ProblemDetailsErrorItem[];
+export function isProblemDetailsContentType(contentType: string): boolean {
+  return contentType.includes("application/problem+json") || contentType.includes("application/json");
+}
+
+export async function tryParseProblemDetails(response: Response): Promise<ProblemDetails | undefined> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!isProblemDetailsContentType(contentType)) {
+    return undefined;
+  }
+  try {
+    return (await response.clone().json()) as ProblemDetails;
+  } catch {
+    return undefined;
+  }
 }
 
 export class ApiError extends Error {

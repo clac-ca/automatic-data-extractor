@@ -1,4 +1,4 @@
-import { ApiError, type ProblemDetails } from "@api/errors";
+import { ApiError, tryParseProblemDetails } from "@api/errors";
 import { buildApiHeaders, client, resolveApiUrl } from "@api/client";
 import type { FilterItem, FilterJoinOperator } from "@api/listing";
 import { encodeFilters } from "@api/listing";
@@ -85,7 +85,7 @@ export async function* streamDocumentChanges(
     });
 
     if (!response.ok) {
-      const problem = await tryParseProblem(response);
+      const problem = await tryParseProblemDetails(response);
       const message = problem?.title ?? `Request failed with status ${response.status}`;
       throw new ApiError(message, response.status, problem);
     }
@@ -173,17 +173,5 @@ function parseSseEvent(rawEvent: string): DocumentChangeEntry | null {
   } catch (error) {
     console.warn("Skipping malformed document change event", error, payload);
     return null;
-  }
-}
-
-async function tryParseProblem(response: Response): Promise<ProblemDetails | undefined> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return undefined;
-  }
-  try {
-    return (await response.clone().json()) as ProblemDetails;
-  } catch {
-    return undefined;
   }
 }

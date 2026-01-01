@@ -3,9 +3,9 @@ import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-
 import { useQuery } from "@tanstack/react-query";
 
 import { DataTable } from "@components/tablecn/data-table/data-table";
+import { Button } from "@components/tablecn/ui/button";
 import { apiFetch } from "@api/client";
-import { ApiError } from "@api/errors";
-import { Button } from "@components/ui/button";
+import { ApiError, tryParseProblemDetails } from "@api/errors";
 import { columnLabel } from "@pages/Workspace/sections/Documents/utils";
 
 import type { DocumentListRow } from "../types";
@@ -30,27 +30,11 @@ async function fetchDocumentPreview(
     { signal },
   );
   if (!response.ok) {
-    const problem = await tryParseProblem(response);
+    const problem = await tryParseProblemDetails(response);
     const message = problem?.title ?? `Preview request failed (${response.status})`;
     throw new ApiError(message, response.status, problem);
   }
   return (await response.json()) as WorkbookPreview;
-}
-
-async function tryParseProblem(response: Response) {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return undefined;
-  }
-  try {
-    return (await response.clone().json()) as {
-      title?: string;
-      detail?: string;
-      status?: number;
-    };
-  } catch {
-    return undefined;
-  }
 }
 
 interface TablecnDocumentPreviewGridProps {
@@ -140,7 +124,7 @@ export function TablecnDocumentPreviewGrid({
     return (
       <div className="flex flex-wrap items-center gap-3 p-3 text-sm text-muted-foreground">
         <span>{message}</span>
-        <Button variant="secondary" size="sm" onClick={() => previewQuery.refetch()}>
+        <Button variant="outline" size="sm" onClick={() => previewQuery.refetch()}>
           Try again
         </Button>
       </div>
@@ -166,7 +150,7 @@ export function TablecnDocumentPreviewGrid({
       <DataTable
         table={table}
         showPagination={false}
-        className="max-w-full min-w-0 [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table-cell]]:truncate [&_[data-slot=table-head]]:truncate"
+        className="max-w-full min-w-0 overflow-visible [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table-cell]]:truncate [&_[data-slot=table-head]]:truncate"
       />
     </div>
   );

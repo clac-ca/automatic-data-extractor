@@ -1,7 +1,7 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
 import { readCsrfToken } from "./csrf";
-import { ApiError } from "./errors";
+import { ApiError, tryParseProblemDetails } from "./errors";
 import type { paths } from "@schema";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
@@ -68,7 +68,7 @@ const throwOnError: Middleware = {
       return response;
     }
 
-    const problem = await tryParseProblem(response);
+    const problem = await tryParseProblemDetails(response);
     const message = problem?.title ?? `Request failed with status ${response.status}`;
     throw new ApiError(message, response.status, problem);
   },
@@ -76,15 +76,3 @@ const throwOnError: Middleware = {
 
 client.use(csrfMiddleware);
 client.use(throwOnError);
-
-async function tryParseProblem(response: Response) {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json") && !contentType.includes("application/problem+json")) {
-    return undefined;
-  }
-  try {
-    return await response.clone().json();
-  } catch {
-    return undefined;
-  }
-}

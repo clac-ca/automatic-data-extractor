@@ -6,30 +6,23 @@ import { documentChangesStreamUrl, streamDocumentChanges } from "@api/documents/
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { ApiError } from "@api/errors";
 import { listWorkspaceMembers } from "@api/workspaces/api";
-import { RequireSession } from "@components/providers/auth/RequireSession";
-import { useSession } from "@components/providers/auth/SessionContext";
+import { Button } from "@components/tablecn/ui/button";
 import { useNotifications } from "@components/providers/notifications";
-import { PageState } from "@components/layouts/page-state";
-import { Button } from "@components/ui/button";
-import { useWorkspacesQuery } from "@hooks/workspaces";
-import { useNavigate } from "@app/navigation/history";
-import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
 import { shortId } from "@pages/Workspace/sections/Documents/utils";
 import { mergeDocumentChangeIntoPages } from "@pages/Workspace/sections/Documents/changeFeed";
 import type { WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
-import { TablecnDocumentsTable } from "./components/TablecnDocumentsTable";
-import { TablecnPlaygroundLayout } from "./components/TablecnPlaygroundLayout";
-import { useDocumentsListParams } from "./hooks/useDocumentsListParams";
-import type { DocumentChangeEntry } from "./types";
-import { normalizeDocumentsFilters, normalizeDocumentsSort } from "./utils";
 
-export default function TablecnPlaygroundScreen() {
-  return (
-    <RequireSession>
-      <TablecnDocumentsPlayground />
-    </RequireSession>
-  );
-}
+import { TablecnDocumentsTable } from "./TablecnDocumentsTable";
+import { TablecnEmptyState, TablecnInlineBanner } from "./TablecnEmptyState";
+import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
+import type { DocumentChangeEntry } from "../types";
+import { normalizeDocumentsFilters, normalizeDocumentsSort } from "../utils";
+
+type CurrentUser = {
+  id: string;
+  email: string;
+  label: string;
+};
 
 function sleep(duration: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -47,86 +40,7 @@ function sleep(duration: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function TablecnDocumentsPlayground() {
-  const session = useSession();
-  const navigate = useNavigate();
-  const workspacesQuery = useWorkspacesQuery();
-
-  const workspaces = useMemo(
-    () => workspacesQuery.data?.items ?? [],
-    [workspacesQuery.data?.items],
-  );
-
-  const preferredIds = useMemo(
-    () =>
-      [readPreferredWorkspaceId(), session.user.preferred_workspace_id].filter(
-        (value): value is string => Boolean(value),
-      ),
-    [session.user.preferred_workspace_id],
-  );
-
-  const preferredWorkspace = useMemo(
-    () =>
-      preferredIds
-        .map((id) => workspaces.find((workspace) => workspace.id === id))
-        .find((match) => Boolean(match)),
-    [preferredIds, workspaces],
-  );
-
-  const workspace = preferredWorkspace ?? workspaces[0] ?? null;
-  const currentUser = useMemo(
-    () => ({
-      id: session.user.id,
-      email: session.user.email,
-      label: session.user.display_name || session.user.email || "You",
-    }),
-    [session.user.display_name, session.user.email, session.user.id],
-  );
-
-  if (workspacesQuery.isLoading) {
-    return <PageState title="Loading documents" variant="loading" />;
-  }
-
-  if (workspacesQuery.isError) {
-    return (
-      <PageState
-        title="Unable to load workspaces"
-        description="Refresh the page or try again later."
-        variant="error"
-        action={
-          <Button variant="secondary" onClick={() => workspacesQuery.refetch()}>
-            Try again
-          </Button>
-        }
-      />
-    );
-  }
-
-  if (!workspace) {
-    return (
-      <PageState
-        title="No workspaces yet"
-        description="Create a workspace to view documents."
-        variant="empty"
-        action={
-          <Button variant="secondary" onClick={() => navigate("/workspaces")}>
-            Go to workspaces
-          </Button>
-        }
-      />
-    );
-  }
-
-  return <TablecnDocumentsContainer workspaceId={workspace.id} currentUser={currentUser} />;
-}
-
-type CurrentUser = {
-  id: string;
-  email: string;
-  label: string;
-};
-
-function TablecnDocumentsContainer({
+export function TablecnDocumentsView({
   workspaceId,
   currentUser,
 }: {
@@ -139,13 +53,9 @@ function TablecnDocumentsContainer({
   const lastCursorRef = useRef<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  const { perPage, sort, filters, joinOperator, q } =
-    useDocumentsListParams();
+  const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
-  const normalizedFilters = useMemo(
-    () => normalizeDocumentsFilters(filters),
-    [filters],
-  );
+  const normalizedFilters = useMemo(() => normalizeDocumentsFilters(filters), [filters]);
   const filtersKey = useMemo(
     () => (normalizedFilters.length > 0 ? JSON.stringify(normalizedFilters) : ""),
     [normalizedFilters],
@@ -265,7 +175,7 @@ function TablecnDocumentsContainer({
         };
       });
     },
-    [queryClient, queryKey],
+    [queryClient, queryKey, documentsQuery.data],
   );
 
   const onAssign = useCallback(
@@ -422,21 +332,25 @@ function TablecnDocumentsContainer({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   if (documentsQuery.isLoading) {
-    return <PageState title="Loading documents" variant="loading" />;
+    return (
+      <div className="min-h-[240px]">
+        <TablecnEmptyState
+          title="Loading documents"
+          description="Fetching the latest processing activity."
+        />
+      </div>
+    );
   }
 
   if (documentsQuery.isError) {
     return (
-      <PageState
-        title="Unable to load documents"
-        description="Refresh the page or try again later."
-        variant="error"
-        action={
-          <Button variant="secondary" onClick={() => documentsQuery.refetch()}>
-            Try again
-          </Button>
-        }
-      />
+      <div className="min-h-[240px]">
+        <TablecnEmptyState
+          title="Unable to load documents"
+          description="We could not refresh this view. Try again."
+          action={{ label: "Try again", onClick: () => documentsQuery.refetch() }}
+        />
+      </div>
     );
   }
 
@@ -447,29 +361,27 @@ function TablecnDocumentsContainer({
   };
 
   return (
-    <TablecnPlaygroundLayout>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {updatesAvailable ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
-          <div>
-            <p className="font-semibold text-foreground">Updates available</p>
-            <p className="text-muted-foreground">
-              Refresh to load the latest changes.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRefresh}
-              isLoading={documentsQuery.isFetching}
-            >
-              Refresh
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setUpdatesAvailable(false)}>
-              Dismiss
-            </Button>
-          </div>
-        </div>
+        <TablecnInlineBanner
+          title="Updates available"
+          description="Refresh to load the latest changes."
+          actions={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={documentsQuery.isFetching}
+              >
+                {documentsQuery.isFetching ? "Refreshing..." : "Refresh"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setUpdatesAvailable(false)}>
+                Dismiss
+              </Button>
+            </>
+          }
+        />
       ) : null}
       <TablecnDocumentsTable
         data={documents}
@@ -486,6 +398,6 @@ function TablecnDocumentsContainer({
         </div>
       ) : null}
       <div ref={loadMoreRef} className="h-1" />
-    </TablecnPlaygroundLayout>
+    </div>
   );
 }

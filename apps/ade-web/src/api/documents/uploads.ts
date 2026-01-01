@@ -1,6 +1,6 @@
 import type { components } from "@schema";
 import { apiFetch, client } from "@api/client";
-import { ApiError, type ProblemDetails } from "@api/errors";
+import { ApiError, tryParseProblemDetails } from "@api/errors";
 import { createIdempotencyKey } from "@api/idempotency";
 import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@lib/uploads/xhr";
 
@@ -84,7 +84,7 @@ export async function uploadDocumentUploadSessionRange(
   );
 
   if (!response.ok) {
-    const problem = await tryParseProblem(response);
+    const problem = await tryParseProblemDetails(response);
     const message = problem?.title ?? `Request failed with status ${response.status}`;
     throw new ApiError(message, response.status, problem);
   }
@@ -148,16 +148,4 @@ export async function cancelDocumentUploadSession(
       signal,
     },
   );
-}
-
-async function tryParseProblem(response: Response): Promise<ProblemDetails | undefined> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return undefined;
-  }
-  try {
-    return (await response.clone().json()) as ProblemDetails;
-  } catch {
-    return undefined;
-  }
 }

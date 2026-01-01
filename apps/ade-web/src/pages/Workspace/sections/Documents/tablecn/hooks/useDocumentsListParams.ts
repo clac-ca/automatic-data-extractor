@@ -15,6 +15,7 @@ export function useDocumentsListParams(): DocumentsListParams {
       return params;
     }, { replace: true });
   }, [searchParams, setSearchParams]);
+
   const perPage = useMemo(
     () => parseNumberParam(searchParams.get("perPage"), DEFAULT_PAGE_SIZE),
     [searchParams],

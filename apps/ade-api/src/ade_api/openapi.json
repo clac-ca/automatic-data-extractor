@@ -22,7 +22,15 @@
                   "$ref": "#/components/schemas/HealthCheckResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -44,20 +52,18 @@
                   "$ref": "#/components/schemas/InfoResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        "security": []
       }
     },
     "/api/v1/meta/versions": {
@@ -77,7 +83,15 @@
                   "$ref": "#/components/schemas/VersionsResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -118,6 +132,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "400": {
@@ -142,10 +161,20 @@
                   }
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "204": {
-            "description": "No Content"
+            "description": "No Content",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -155,7 +184,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -202,13 +239,28 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Missing token or inactive user."
+            "description": "Missing token or inactive user.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "204": {
-            "description": "No Content"
+            "description": "No Content",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -218,7 +270,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         }
       }
@@ -254,6 +314,11 @@
                   "token_type": "bearer"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "400": {
@@ -278,6 +343,11 @@
                   }
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -288,7 +358,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -335,10 +413,20 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Missing token or inactive user."
+            "description": "Missing token or inactive user.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -348,7 +436,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         }
       }
@@ -396,6 +492,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -406,7 +507,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -455,6 +564,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -465,7 +579,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -498,6 +620,11 @@
                   "$ref": "#/components/schemas/UserRead"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "400": {
@@ -525,6 +652,11 @@
                   }
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -535,7 +667,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -557,7 +697,15 @@
                   "$ref": "#/components/schemas/AuthSetupStatusResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -580,7 +728,12 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -590,7 +743,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -612,7 +773,15 @@
                   "$ref": "#/components/schemas/AuthProviderListResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": []
@@ -740,10 +909,20 @@
                   "$ref": "#/components/schemas/ApiKeyPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -753,7 +932,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -790,6 +977,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -811,13 +1014,28 @@
                   "$ref": "#/components/schemas/ApiKeyCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "400": {
-            "description": "Invalid API key payload."
+            "description": "Invalid API key payload.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -827,7 +1045,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -873,16 +1099,39 @@
                   "$ref": "#/components/schemas/ApiKeySummary"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
             }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "API key not found."
+            "description": "API key not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "API key not owned by caller."
+            "description": "API key not owned by caller.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -892,7 +1141,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -941,20 +1198,43 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "API key not found."
+            "description": "API key not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "API key not owned by caller."
+            "description": "API key not owned by caller.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -964,7 +1244,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1114,13 +1402,28 @@
                   "$ref": "#/components/schemas/ApiKeyPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Requires api_keys.read_all global permission."
+            "description": "Requires api_keys.read_all global permission.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1130,7 +1433,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1179,6 +1490,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -1200,16 +1527,36 @@
                   "$ref": "#/components/schemas/ApiKeyCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Requires api_keys.manage_all global permission."
+            "description": "Requires api_keys.manage_all global permission.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "400": {
-            "description": "Invalid API key payload."
+            "description": "Invalid API key payload.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1219,7 +1566,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1277,16 +1632,39 @@
                   "$ref": "#/components/schemas/ApiKeySummary"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
             }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Requires api_keys.read_all global permission."
+            "description": "Requires api_keys.read_all global permission.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "API key not found."
+            "description": "API key not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1296,7 +1674,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1357,20 +1743,43 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "401": {
-            "description": "Authentication required."
+            "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Requires api_keys.manage_all global permission."
+            "description": "Requires api_keys.manage_all global permission.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "API key not found."
+            "description": "API key not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1380,7 +1789,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1518,6 +1935,11 @@
                   "$ref": "#/components/schemas/UserPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -1528,7 +1950,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1574,16 +2004,36 @@
                   "$ref": "#/components/schemas/UserOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to read users."
+            "description": "Authentication required to read users.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Global users.read_all permission required."
+            "description": "Global users.read_all permission required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "User not found."
+            "description": "User not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1593,7 +2043,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1664,19 +2122,47 @@
                   "$ref": "#/components/schemas/UserOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update users."
+            "description": "Authentication required to update users.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Global users.manage_all permission required."
+            "description": "Global users.manage_all permission required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "User not found."
+            "description": "User not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "No valid fields were provided for update."
+            "description": "No valid fields were provided for update.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1738,16 +2224,36 @@
                   "$ref": "#/components/schemas/UserOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to deactivate users."
+            "description": "Authentication required to deactivate users.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Global users.manage_all permission required."
+            "description": "Global users.manage_all permission required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "User not found."
+            "description": "User not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1757,7 +2263,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -1895,6 +2409,11 @@
                   "$ref": "#/components/schemas/PermissionPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -1905,7 +2424,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2043,6 +2570,11 @@
                   "$ref": "#/components/schemas/RolePage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2053,7 +2585,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2111,6 +2651,11 @@
                   "$ref": "#/components/schemas/RoleOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2121,7 +2666,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2167,6 +2720,11 @@
                   "$ref": "#/components/schemas/RoleOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2177,7 +2735,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2247,6 +2813,11 @@
                   "$ref": "#/components/schemas/RoleOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2257,7 +2828,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2310,7 +2889,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2320,7 +2904,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2458,6 +3050,11 @@
                   "$ref": "#/components/schemas/RoleAssignmentPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2468,7 +3065,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2514,6 +3119,11 @@
                   "$ref": "#/components/schemas/RoleAssignmentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2524,7 +3134,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2570,6 +3188,11 @@
                   "$ref": "#/components/schemas/UserRolesEnvelope"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2580,7 +3203,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2654,6 +3285,11 @@
                   "$ref": "#/components/schemas/UserRolesEnvelope"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -2664,7 +3300,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2729,7 +3373,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2739,7 +3388,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2772,16 +3429,39 @@
                   "$ref": "#/components/schemas/MeProfile"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to access the profile."
+            "description": "Authentication required to access the profile.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Service account principals cannot access this endpoint."
+            "description": "Service account principals cannot access this endpoint.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "User record not found."
+            "description": "User record not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2814,13 +3494,31 @@
                   "$ref": "#/components/schemas/MeContext"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to bootstrap the session."
+            "description": "Authentication required to bootstrap the session.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Service account principals cannot access this endpoint."
+            "description": "Service account principals cannot access this endpoint.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2853,10 +3551,23 @@
                   "$ref": "#/components/schemas/EffectivePermissions"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to inspect permissions."
+            "description": "Authentication required to inspect permissions.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2917,16 +3628,39 @@
                   "$ref": "#/components/schemas/PermissionCheckResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to evaluate permissions."
+            "description": "Authentication required to evaluate permissions.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Workspace not found when scoped permissions are requested."
+            "description": "Workspace not found when scoped permissions are requested.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Invalid permission keys or missing workspace identifier."
+            "description": "Invalid permission keys or missing workspace identifier.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -2986,22 +3720,55 @@
                   "$ref": "#/components/schemas/WorkspaceOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to manage workspaces."
+            "description": "Authentication required to manage workspaces.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Administrator role required to create workspaces."
+            "description": "Administrator role required to create workspaces.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Specified owner could not be found or is inactive."
+            "description": "Specified owner could not be found or is inactive.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "409": {
-            "description": "Workspace slug already exists."
+            "description": "Workspace slug already exists.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Workspace name or slug is invalid."
+            "description": "Workspace name or slug is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3137,13 +3904,28 @@
                   "$ref": "#/components/schemas/WorkspacePage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to list workspaces."
+            "description": "Authentication required to list workspaces.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Service account credentials cannot access workspace listings."
+            "description": "Service account credentials cannot access workspace listings.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3153,7 +3935,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3199,16 +3989,36 @@
                   "$ref": "#/components/schemas/WorkspaceOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to view workspace context."
+            "description": "Authentication required to view workspace context.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace access denied for the authenticated user."
+            "description": "Workspace access denied for the authenticated user.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Workspace not found."
+            "description": "Workspace not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3218,7 +4028,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3288,22 +4106,55 @@
                   "$ref": "#/components/schemas/WorkspaceOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update workspaces."
+            "description": "Authentication required to update workspaces.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow settings management."
+            "description": "Workspace permissions do not allow settings management.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Workspace not found."
+            "description": "Workspace not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "409": {
-            "description": "Workspace slug already exists."
+            "description": "Workspace slug already exists.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Workspace name or slug is invalid."
+            "description": "Workspace name or slug is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3356,16 +4207,36 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "401": {
-            "description": "Authentication required to delete workspaces."
+            "description": "Authentication required to delete workspaces.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow workspace deletion."
+            "description": "Workspace permissions do not allow workspace deletion.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Workspace not found."
+            "description": "Workspace not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3375,7 +4246,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3430,13 +4309,28 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "401": {
-            "description": "Authentication required to set the default workspace."
+            "description": "Authentication required to set the default workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace access denied for the authenticated user."
+            "description": "Workspace access denied for the authenticated user.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3446,7 +4340,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3596,6 +4498,11 @@
                   "$ref": "#/components/schemas/WorkspaceMemberPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -3606,7 +4513,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3676,6 +4591,11 @@
                   "$ref": "#/components/schemas/WorkspaceMemberOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -3686,7 +4606,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3770,6 +4698,11 @@
                   "$ref": "#/components/schemas/WorkspaceMemberOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -3780,7 +4713,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -3845,7 +4786,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3855,7 +4801,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4005,16 +4959,39 @@
                   "$ref": "#/components/schemas/TagCatalogPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to list tags."
+            "description": "Authentication required to list tags.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow tag access."
+            "description": "Workspace permissions do not allow tag access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Tag search parameters are invalid."
+            "description": "Tag search parameters are invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4065,6 +5042,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -4086,19 +5079,44 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "400": {
-            "description": "Metadata payload or expiration timestamp is invalid."
+            "description": "Metadata payload or expiration timestamp is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "401": {
-            "description": "Authentication required to upload documents."
+            "description": "Authentication required to upload documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document uploads."
+            "description": "Workspace permissions do not allow document uploads.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "413": {
-            "description": "Uploaded file exceeds the configured size limit."
+            "description": "Uploaded file exceeds the configured size limit.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4108,7 +5126,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4256,16 +5282,39 @@
                   "$ref": "#/components/schemas/DocumentListPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to list documents."
+            "description": "Authentication required to list documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document access."
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Query parameters are invalid or unsupported."
+            "description": "Query parameters are invalid or unsupported.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4445,6 +5494,11 @@
                   "$ref": "#/components/schemas/DocumentChangesPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -4455,7 +5509,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4633,6 +5695,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -4643,7 +5710,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4715,6 +5790,11 @@
                   "$ref": "#/components/schemas/DocumentUploadSessionCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -4725,7 +5805,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4815,6 +5903,11 @@
                   "$ref": "#/components/schemas/DocumentUploadSessionUploadResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -4825,7 +5918,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4881,6 +5982,11 @@
                   "$ref": "#/components/schemas/DocumentUploadSessionStatusResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -4891,7 +5997,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -4956,7 +6070,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4966,7 +6085,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5029,6 +6156,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "responses": {
@@ -5040,6 +6183,11 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -5050,7 +6198,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5113,6 +6269,9 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "requestBody": {
@@ -5134,16 +6293,36 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update documents."
+            "description": "Authentication required to update documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5153,7 +6332,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5209,16 +6396,39 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to access documents."
+            "description": "Authentication required to access documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document access."
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5228,7 +6438,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5289,20 +6507,43 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "401": {
-            "description": "Authentication required to delete documents."
+            "description": "Authentication required to delete documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document deletion."
+            "description": "Workspace permissions do not allow document deletion.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5312,7 +6553,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5384,19 +6633,47 @@
                   "$ref": "#/components/schemas/DocumentBatchTagsResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update tags."
+            "description": "Authentication required to update tags.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "One or more documents were not found within the workspace."
+            "description": "One or more documents were not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Tag payload is invalid."
+            "description": "Tag payload is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5468,16 +6745,36 @@
                   "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update documents."
+            "description": "Authentication required to update documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "One or more documents were not found within the workspace."
+            "description": "One or more documents were not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5487,7 +6784,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5559,16 +6864,36 @@
                   "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update documents."
+            "description": "Authentication required to update documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "One or more documents were not found within the workspace."
+            "description": "One or more documents were not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5578,7 +6903,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5652,16 +6985,36 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update documents."
+            "description": "Authentication required to update documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5671,7 +7024,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5745,16 +7106,36 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update documents."
+            "description": "Authentication required to update documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5764,7 +7145,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5848,19 +7237,47 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update tags."
+            "description": "Authentication required to update tags.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Tag payload is invalid."
+            "description": "Tag payload is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -5942,19 +7359,47 @@
                   "$ref": "#/components/schemas/DocumentOut"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to update tags."
+            "description": "Authentication required to update tags.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document updates."
+            "description": "Workspace permissions do not allow document updates.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "Tag payload is invalid."
+            "description": "Tag payload is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6012,16 +7457,36 @@
                   "$ref": "#/components/schemas/DocumentListRow"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to access documents."
+            "description": "Authentication required to access documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document access."
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6031,7 +7496,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6087,16 +7560,36 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to download documents."
+            "description": "Authentication required to download documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document downloads."
+            "description": "Workspace permissions do not allow document downloads.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Document is missing or its stored file is unavailable."
+            "description": "Document is missing or its stored file is unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6106,7 +7599,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6229,16 +7730,39 @@
                   "$ref": "#/components/schemas/WorkbookPreview"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "415": {
-            "description": "Preview is not supported for this file type."
+            "description": "Preview is not supported for this file type.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "The workbook exists but could not be parsed for preview."
+            "description": "The workbook exists but could not be parsed for preview.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6300,13 +7824,31 @@
                   "title": "Response List Document Sheets Endpoint Api V1 Workspaces  Workspaceid  Documents  Documentid  Sheets Get"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "404": {
-            "description": "Document not found within the workspace."
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "The workbook exists but could not be parsed for worksheets."
+            "description": "The workbook exists but could not be parsed for worksheets.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6378,16 +7920,36 @@
                   "$ref": "#/components/schemas/DocumentBatchDeleteResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "401": {
-            "description": "Authentication required to delete documents."
+            "description": "Authentication required to delete documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "403": {
-            "description": "Workspace permissions do not allow document deletion."
+            "description": "Workspace permissions do not allow document deletion.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "One or more documents were not found within the workspace."
+            "description": "One or more documents were not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6397,7 +7959,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6547,6 +8117,11 @@
                   "$ref": "#/components/schemas/ConfigurationPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -6557,7 +8132,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6628,6 +8211,11 @@
                   "$ref": "#/components/schemas/ConfigurationRecord"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -6638,7 +8226,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6696,6 +8292,14 @@
                   "$ref": "#/components/schemas/ConfigurationRecord"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
             }
           },
           "422": {
@@ -6706,7 +8310,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6778,6 +8390,11 @@
                   "$ref": "#/components/schemas/ConfigurationRecord"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -6788,7 +8405,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6862,6 +8487,11 @@
                   "$ref": "#/components/schemas/ConfigurationValidateResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -6872,7 +8502,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -6957,6 +8595,11 @@
                   "$ref": "#/components/schemas/ConfigurationRecord"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -6967,7 +8610,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7041,6 +8692,11 @@
                   "$ref": "#/components/schemas/ConfigurationRecord"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -7051,7 +8707,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7118,6 +8782,11 @@
                 "schema": {}
               },
               "application/zip": {}
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -7128,7 +8797,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7212,6 +8889,11 @@
                   "$ref": "#/components/schemas/ConfigurationRecord"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -7222,7 +8904,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7401,6 +9091,11 @@
                   "$ref": "#/components/schemas/FileListing"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -7411,7 +9106,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7493,16 +9196,31 @@
                 "schema": {}
               },
               "application/octet-stream": {}
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "206": {
             "content": {
               "application/octet-stream": {}
             },
-            "description": "Partial Content"
+            "description": "Partial Content",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "304": {
-            "description": "Not Modified"
+            "description": "Not Modified",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -7512,7 +9230,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7575,6 +9301,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -7585,7 +9316,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7676,6 +9415,11 @@
                   "$ref": "#/components/schemas/FileWriteResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "201": {
@@ -7686,7 +9430,12 @@
                 }
               }
             },
-            "description": "Created"
+            "description": "Created",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -7696,7 +9445,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7770,7 +9527,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -7780,7 +9542,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7871,6 +9641,11 @@
                   "$ref": "#/components/schemas/FileRenameResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -7881,7 +9656,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -7964,6 +9747,11 @@
                   "$ref": "#/components/schemas/DirectoryWriteResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "201": {
@@ -7973,6 +9761,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/DirectoryWriteResponse"
                 }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
               }
             }
           },
@@ -7984,7 +9777,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8068,7 +9869,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -8078,7 +9884,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8240,6 +10054,11 @@
                   "$ref": "#/components/schemas/BuildPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8250,7 +10069,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8311,6 +10138,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -8332,6 +10175,11 @@
                   "$ref": "#/components/schemas/BuildResource"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8342,7 +10190,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8388,6 +10244,11 @@
                   "$ref": "#/components/schemas/BuildResource"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8398,7 +10259,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8487,6 +10356,11 @@
                   "$ref": "#/components/schemas/BuildEventsPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8497,7 +10371,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8558,6 +10440,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8568,7 +10455,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8620,6 +10515,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -8641,6 +10552,11 @@
                   "$ref": "#/components/schemas/RunResource"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8651,7 +10567,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8799,6 +10723,11 @@
                   "$ref": "#/components/schemas/RunPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8809,7 +10738,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8861,6 +10798,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -8882,6 +10835,11 @@
                   "$ref": "#/components/schemas/RunBatchCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8892,7 +10850,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -8944,6 +10910,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -8965,6 +10947,11 @@
                   "$ref": "#/components/schemas/RunResource"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -8975,7 +10962,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9123,6 +11118,11 @@
                   "$ref": "#/components/schemas/RunPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9133,7 +11133,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9185,6 +11193,22 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -9206,6 +11230,11 @@
                   "$ref": "#/components/schemas/RunBatchCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9216,7 +11245,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9262,6 +11299,11 @@
                   "$ref": "#/components/schemas/RunResource"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9272,7 +11314,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9318,6 +11368,11 @@
                   "$ref": "#/components/schemas/RunMetricsResource"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9328,7 +11383,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9378,6 +11441,11 @@
                   "title": "Response List Run Fields Endpoint Api V1 Runs  Runid  Fields Get"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9388,7 +11456,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9524,6 +11600,11 @@
                   "title": "Response List Run Columns Endpoint Api V1 Runs  Runid  Columns Get"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9534,7 +11615,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9580,6 +11669,11 @@
                   "$ref": "#/components/schemas/RunInput"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9590,7 +11684,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9634,6 +11736,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9644,7 +11751,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9733,6 +11848,11 @@
                   "$ref": "#/components/schemas/RunEventsPage"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9743,7 +11863,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9804,6 +11932,11 @@
               "application/json": {
                 "schema": {}
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "422": {
@@ -9814,7 +11947,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9853,10 +11994,20 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Events unavailable"
+            "description": "Events unavailable",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -9866,7 +12017,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9912,10 +12071,20 @@
                   "$ref": "#/components/schemas/RunOutput"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "404": {
-            "description": "Run or output not found"
+            "description": "Run or output not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -9925,7 +12094,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -9964,13 +12141,28 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "404": {
-            "description": "Output not found"
+            "description": "Output not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "409": {
-            "description": "Output not ready"
+            "description": "Output not ready",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -9980,7 +12172,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -10091,19 +12291,47 @@
                   "$ref": "#/components/schemas/WorkbookPreview"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
           },
           "404": {
-            "description": "Run or output not found"
+            "description": "Run or output not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "409": {
-            "description": "Output not ready"
+            "description": "Output not ready",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "415": {
-            "description": "Preview is not supported for this file type."
+            "description": "Preview is not supported for this file type.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
-            "description": "The output exists but could not be parsed for preview."
+            "description": "The output exists but could not be parsed for preview.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -10136,7 +12364,15 @@
                   "$ref": "#/components/schemas/SafeModeStatus"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -10188,7 +12424,12 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -10198,7 +12439,15 @@
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
             }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
           }
         },
         "security": [
@@ -15874,6 +18123,63 @@
         "type": "object",
         "title": "WorkspaceUpdate",
         "description": "Payload for updating workspace metadata."
+      },
+      "ProblemDetailsErrorItem": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProblemDetailsErrorItem"
+            },
+            "nullable": true
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "instance"
+        ]
       }
     },
     "securitySchemes": {
@@ -15908,6 +18214,58 @@
         "in": "header",
         "name": "X-API-Key",
         "description": "Static API key for service integrations."
+      }
+    },
+    "headers": {
+      "X-Request-Id": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "Unique request identifier for tracing and support."
+      },
+      "ETag": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "Entity tag for the current representation."
+      }
+    },
+    "responses": {
+      "ProblemDetails": {
+        "description": "Problem Details error response.",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/X-Request-Id"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "ETag value required for optimistic concurrency checks."
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "description": "Unique key for replaying POST requests safely."
       }
     }
   },

@@ -1,4 +1,4 @@
-import { ApiError } from "@api";
+import { ApiError, tryParseProblemDetails } from "@api/errors";
 import { apiFetch, client } from "@api/client";
 import type { components } from "@schema";
 
@@ -134,7 +134,7 @@ async function submitPasswordLogin(payload: LoginPayload, signal?: AbortSignal):
     return;
   }
 
-  const problem = await tryParseProblem(response);
+  const problem = await tryParseProblemDetails(response);
   const message = problem?.detail ?? problem?.title ?? `Request failed with status ${response.status}`;
   throw new ApiError(message, response.status, problem);
 }
@@ -192,16 +192,4 @@ function normalizeAuthProvider(provider: AuthProvider): AuthProvider {
     start_url: provider.start_url ?? "",
     icon_url: provider.icon_url ?? null,
   };
-}
-
-async function tryParseProblem(response: Response) {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return undefined;
-  }
-  try {
-    return await response.clone().json();
-  } catch {
-    return undefined;
-  }
 }

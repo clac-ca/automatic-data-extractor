@@ -1,5 +1,5 @@
 import { buildApiHeaders, resolveApiUrl } from "@api/client";
-import { ApiError, type ProblemDetails } from "@api/errors";
+import { ApiError, isProblemDetailsContentType, type ProblemDetails } from "@api/errors";
 
 export type UploadProgress = {
   readonly loaded: number;
@@ -117,7 +117,7 @@ function parseJsonResponse<T>(payload: string, contentType: string): T | null {
 }
 
 function parseProblem(payload: string, contentType: string): ProblemDetails | undefined {
-  if (!payload || !contentType.includes("application/json")) {
+  if (!payload || !isProblemDetailsContentType(contentType)) {
     return undefined;
   }
   try {

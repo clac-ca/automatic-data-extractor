@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { ApiError } from "@api";
+import { ApiError, groupProblemDetailsErrors } from "@api";
 import type { UserSummary } from "@api/users/api";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useCreateWorkspaceMutation } from "@hooks/workspaces";
@@ -119,16 +119,19 @@ function WorkspaceCreateContent() {
         onError(error: unknown) {
           if (error instanceof ApiError) {
             const detail = error.problem?.detail ?? error.message;
-            const fieldErrors = error.problem?.errors ?? {};
+            const fieldErrors = groupProblemDetailsErrors(error.problem?.errors);
             setError("root", { type: "server", message: detail });
-            if (fieldErrors.name?.[0]) {
-              setError("name", { type: "server", message: fieldErrors.name[0] });
+            const nameError = fieldErrors.name?.[0];
+            if (nameError) {
+              setError("name", { type: "server", message: nameError });
             }
-            if (fieldErrors.slug?.[0]) {
-              setError("slug", { type: "server", message: fieldErrors.slug[0] });
+            const slugError = fieldErrors.slug?.[0];
+            if (slugError) {
+              setError("slug", { type: "server", message: slugError });
             }
-            if (fieldErrors.owner_user_id?.[0]) {
-              setError("ownerUserId", { type: "server", message: fieldErrors.owner_user_id[0] });
+            const ownerError = fieldErrors.owner_user_id?.[0];
+            if (ownerError) {
+              setError("ownerUserId", { type: "server", message: ownerError });
             }
             return;
           }
