@@ -48,6 +48,7 @@ class Run(UUIDPrimaryKeyMixin, Base):
     )
     run_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    output_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     available_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=utc_now
     )

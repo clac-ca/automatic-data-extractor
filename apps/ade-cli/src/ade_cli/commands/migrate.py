@@ -7,8 +7,25 @@ import sys
 from pathlib import Path
 
 import typer
+from sqlalchemy.engine import make_url
 
 from ade_cli.commands import common
+
+
+def _ensure_sqlite_parent_dir(url: str) -> None:
+    try:
+        parsed = make_url(url)
+    except Exception:
+        return
+    if parsed.get_backend_name() != "sqlite":
+        return
+    db = (parsed.database or "").strip()
+    if not db or db == ":memory:" or db.startswith("file:"):
+        return
+    path = Path(db)
+    if not path.is_absolute():
+        path = (common.REPO_ROOT / path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
 
 
 def run_migrate(revision: str = "head") -> None:
@@ -22,7 +39,9 @@ def run_migrate(revision: str = "head") -> None:
     )
     alembic_ini = common.BACKEND_DIR / "alembic.ini"
     env = common.build_env()
-    if "ALEMBIC_DATABASE_URL" not in env:
+    if "ALEMBIC_DATABASE_URL" in env:
+        db_url = env["ALEMBIC_DATABASE_URL"]
+    else:
         db_url = env.get("ADE_DATABASE_URL")
         if not db_url:
             default_path = (common.REPO_ROOT / "data" / "db" / "ade.sqlite").resolve()
@@ -33,6 +52,8 @@ def run_migrate(revision: str = "head") -> None:
                 abs_path = (common.REPO_ROOT / raw_path).resolve()
                 db_url = f"sqlite:///{abs_path.as_posix()}"
         env["ALEMBIC_DATABASE_URL"] = db_url
+
+    _ensure_sqlite_parent_dir(db_url)
 
     common.run(
         [sys.executable, "-m", "alembic", "-c", str(alembic_ini), "upgrade", revision],

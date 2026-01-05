@@ -12,8 +12,9 @@ anywhere without provisioning external infrastructure.
 - **FastAPI backend + worker** – the API in
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
   executes builds and runs from the database queue.
-- **Frontend SPA** – the React app in `apps/ade-web` is served separately
-  (Vite dev server in development, static build behind a reverse proxy in production).
+- **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
+  in development; in production you can serve the built `apps/ade-web/dist`
+  bundle via `ade start` or behind a reverse proxy.
 
 
 ## 2. Prerequisites

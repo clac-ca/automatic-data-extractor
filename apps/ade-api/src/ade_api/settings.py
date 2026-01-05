@@ -365,6 +365,7 @@ class Settings(BaseSettings):
 
     # Runs (queue limits)
     queue_size: int | None = Field(default=None, ge=1)
+    preview_timeout_seconds: float = Field(10, gt=0)
 
     # OIDC
     oidc_enabled: bool = False

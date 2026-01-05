@@ -19,7 +19,7 @@ from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
-from ade_api.api.deps import get_builds_service, get_idempotency_service
+from ade_api.api.deps import SessionDep, get_builds_service, get_idempotency_service
 from ade_api.common.encoding import json_bytes
 from ade_api.common.sse import stream_ndjson_events
 from ade_api.common.listing import (
@@ -197,6 +197,7 @@ async def get_build_endpoint(
 )
 async def list_build_events_endpoint(
     build_id: BuildPath,
+    db_session: SessionDep,
     format: Literal["json", "ndjson"] = Query(default="json"),
     after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
@@ -217,8 +218,10 @@ async def list_build_events_endpoint(
             for event in events:
                 yield _event_bytes(event)
 
+        await db_session.close()
         return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
+    await db_session.close()
     return BuildEventsPage(items=events, next_after_sequence=next_after_sequence)
 
 
@@ -226,6 +229,7 @@ async def list_build_events_endpoint(
 async def stream_build_events_endpoint(
     build_id: BuildPath,
     request: Request,
+    db_session: SessionDep,
     after_sequence: int | None = Query(default=None, ge=0),
     service: BuildsService = builds_service_dependency,
 ) -> EventSourceResponse:
@@ -249,6 +253,7 @@ async def stream_build_events_endpoint(
         configuration_id=build.configuration_id,
         build_id=build.id,
     )
+    await db_session.close()
 
     return EventSourceResponse(
         stream_ndjson_events(

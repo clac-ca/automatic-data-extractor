@@ -7,6 +7,7 @@ import math
 import os
 import re
 import unicodedata
+import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -22,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
+from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.listing import paginate_query
 from ade_api.common.logging import log_context
@@ -316,7 +318,25 @@ class DocumentsService:
             cursor=cursor,
             limit=limit,
         )
-        entries = [self._serialize_change(change) for change in page.items]
+        entries: list[DocumentChangeEntry] = []
+        for change in page.items:
+            if change.type == DocumentChangeType.UPSERT and not change.payload:
+                entries.append(
+                    await self._hydrate_change_entry(
+                        workspace_id=workspace_id,
+                        change=change,
+                    )
+                )
+                continue
+            try:
+                entries.append(self._serialize_change(change))
+            except ValidationError:
+                entries.append(
+                    await self._hydrate_change_entry(
+                        workspace_id=workspace_id,
+                        change=change,
+                    )
+                )
         return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
 
     async def create_upload_session(
@@ -771,7 +791,10 @@ class DocumentsService:
         suffix = Path(document.original_filename).suffix.lower()
         if suffix == ".xlsx":
             try:
-                sheets = await run_in_threadpool(self._inspect_workbook, path)
+                sheets = await asyncio.wait_for(
+                    run_in_threadpool(self._inspect_workbook, path),
+                    timeout=self._settings.preview_timeout_seconds,
+                )
                 logger.info(
                     "document.sheets.list.success",
                     extra=log_context(
@@ -782,6 +805,12 @@ class DocumentsService:
                     ),
                 )
                 return sheets
+            except asyncio.TimeoutError as exc:
+                raise DocumentWorksheetParseError(
+                    document_id=document_id,
+                    stored_uri=document.stored_uri,
+                    reason="timeout",
+                ) from exc
             except Exception as exc:  # pragma: no cover - defensive fallback
                 raise DocumentWorksheetParseError(
                     document_id=document_id,
@@ -844,26 +873,32 @@ class DocumentsService:
         suffix = Path(document.original_filename).suffix.lower()
         try:
             if suffix == ".xlsx":
-                preview = await run_in_threadpool(
-                    build_workbook_preview_from_xlsx,
-                    path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
+                preview = await asyncio.wait_for(
+                    run_in_threadpool(
+                        build_workbook_preview_from_xlsx,
+                        path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    ),
+                    timeout=self._settings.preview_timeout_seconds,
                 )
             elif suffix == ".csv":
-                preview = await run_in_threadpool(
-                    build_workbook_preview_from_csv,
-                    path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
+                preview = await asyncio.wait_for(
+                    run_in_threadpool(
+                        build_workbook_preview_from_csv,
+                        path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    ),
+                    timeout=self._settings.preview_timeout_seconds,
                 )
             else:
                 raise DocumentPreviewUnsupportedError(
@@ -875,6 +910,12 @@ class DocumentsService:
             raise DocumentPreviewSheetNotFoundError(
                 document_id=document_id,
                 sheet=requested,
+            ) from exc
+        except asyncio.TimeoutError as exc:
+            raise DocumentPreviewParseError(
+                document_id=document_id,
+                stored_uri=document.stored_uri,
+                reason="timeout",
             ) from exc
         except DocumentPreviewUnsupportedError:
             raise
@@ -1310,6 +1351,7 @@ class DocumentsService:
         latest_at = self._latest_run_at(document.latest_run)
         document.activity_at = latest_at if latest_at and latest_at > updated_at else updated_at
         document.latest_result = self._derive_latest_result(document)
+        document.etag = format_weak_etag(build_etag_token(document.id, updated_at))
 
     def _build_list_row(self, document: DocumentOut) -> DocumentListRow:
         activity_at = document.activity_at or document.updated_at
@@ -1326,6 +1368,7 @@ class DocumentsService:
             created_at=document.created_at,
             updated_at=document.updated_at,
             activity_at=activity_at,
+            etag=document.etag,
             latest_run=document.latest_run,
             latest_successful_run=document.latest_successful_run,
             latest_result=document.latest_result,
@@ -1733,6 +1776,41 @@ class DocumentsService:
 
         return await run_in_threadpool(_read)
 
+    async def _hydrate_change_entry(
+        self,
+        *,
+        workspace_id: UUID,
+        change: DocumentChange,
+    ) -> DocumentChangeEntry:
+        cursor = str(change.cursor)
+        document_id = change.document_id
+        if document_id is None:
+            raise ValueError("document_id is required to hydrate document changes")
+
+        document = await self._repository.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            include_deleted=True,
+        )
+        if document is None:
+            return DocumentChangeEntry(
+                cursor=cursor,
+                type="document.deleted",
+                document_id=str(document_id),
+                occurred_at=change.occurred_at,
+            )
+
+        payload = DocumentOut.model_validate(document)
+        await self._attach_latest_runs(workspace_id, [payload])
+        self._apply_derived_fields(payload)
+        row = self._build_list_row(payload)
+        return DocumentChangeEntry(
+            cursor=cursor,
+            type="document.upsert",
+            row=row,
+            occurred_at=change.occurred_at,
+        )
+
     def _serialize_change(self, change: DocumentChange) -> DocumentChangeEntry:
         cursor = str(change.cursor)
         if change.type == DocumentChangeType.UPSERT:
@@ -1755,7 +1833,12 @@ class DocumentsService:
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:
         with path.open("rb") as raw:
-            workbook = openpyxl.load_workbook(raw, read_only=True, data_only=True)
+            workbook = openpyxl.load_workbook(
+                raw,
+                read_only=True,
+                data_only=True,
+                keep_links=False,
+            )
             try:
                 sheetnames = workbook.sheetnames
                 active = workbook.active.title if sheetnames else None

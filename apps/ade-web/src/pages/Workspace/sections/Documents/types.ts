@@ -2,9 +2,11 @@ import type { components } from "@schema";
 
 export type { DocumentPageResult, ListDocumentsQuery } from "@api/documents";
 
-export type DocumentRecord = components["schemas"]["DocumentOut"];
-export type DocumentListRow = components["schemas"]["DocumentListRow"];
-export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
+export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
+export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
+export type DocumentChangeEntry = Omit<components["schemas"]["DocumentChangeEntry"], "row"> & {
+  row?: DocumentListRow | null;
+};
 export type DocumentResultSummary = components["schemas"]["DocumentResultSummary"];
 export type DocumentRunSummary = components["schemas"]["DocumentRunSummary"];
 

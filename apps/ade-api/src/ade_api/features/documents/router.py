@@ -28,7 +28,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sse_starlette.sse import EventSourceResponse
 
-from ade_api.api.deps import get_documents_service, get_idempotency_service, get_runs_service
+from ade_api.api.deps import (
+    SessionDep,
+    SettingsDep,
+    get_documents_service,
+    get_idempotency_service,
+    get_runs_service,
+)
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
@@ -55,6 +61,7 @@ from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
+from ade_api.db import db
 
 from .change_feed import DocumentChangeCursorTooOld
 from .exceptions import (
@@ -487,7 +494,8 @@ async def list_document_changes(
 async def stream_document_changes(
     workspace_id: WorkspacePath,
     request: Request,
-    service: DocumentsServiceDep,
+    settings: SettingsDep,
+    db_session: SessionDep,
     _actor: DocumentReader,
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     *,
@@ -501,13 +509,22 @@ async def stream_document_changes(
             detail="cursor and Last-Event-ID must match when both are provided",
         )
     start_token = last_event_id or cursor or "latest"
+    await db_session.close()
+
+    async def fetch_changes_page(
+        *,
+        cursor_token: str,
+    ) -> DocumentChangesPage:
+        async with db.sessionmaker() as session:
+            scoped_service = DocumentsService(session=session, settings=settings)
+            return await scoped_service.list_document_changes(
+                workspace_id=workspace_id,
+                cursor_token=cursor_token,
+                limit=limit,
+            )
 
     try:
-        initial_page = await service.list_document_changes(
-            workspace_id=workspace_id,
-            cursor_token=start_token,
-            limit=limit,
-        )
+        initial_page = await fetch_changes_page(cursor_token=start_token)
     except DocumentChangeCursorTooOld as exc:
         raise HTTPException(
             status.HTTP_410_GONE,
@@ -556,11 +573,7 @@ async def stream_document_changes(
                 return
 
             try:
-                page = await service.list_document_changes(
-                    workspace_id=workspace_id,
-                    cursor_token=str(cursor_value),
-                    limit=limit,
-                )
+                page = await fetch_changes_page(cursor_token=str(cursor_value))
             except DocumentChangeCursorTooOld:
                 return
 
@@ -1165,6 +1178,7 @@ async def download_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
+    db_session: SessionDep,
     _actor: DocumentReader,
 ) -> StreamingResponse:
     try:
@@ -1177,6 +1191,7 @@ async def download_document(
     except DocumentFileMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
+    await db_session.close()
     media_type = record.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
     response.headers["Content-Disposition"] = build_content_disposition(record.name)

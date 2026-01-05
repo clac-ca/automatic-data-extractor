@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    BigInteger,
 )
 
 metadata = MetaData()
@@ -27,6 +28,7 @@ runs = Table(
     Column("input_document_id", String(36), nullable=False),
     Column("run_options", JSON, nullable=True),
     Column("input_sheet_names", JSON, nullable=True),
+    Column("output_path", String(512), nullable=True),
     Column("available_at", DateTime, nullable=False),
     Column("attempt_count", Integer, nullable=False),
     Column("max_attempts", Integer, nullable=False),
@@ -84,6 +86,18 @@ documents = Table(
     Column("stored_uri", String(512), nullable=False),
     Column("status", String(20), nullable=False),
     Column("last_run_at", DateTime, nullable=True),
+    Column("updated_at", DateTime, nullable=False),
+)
+
+document_changes = Table(
+    "document_changes",
+    metadata,
+    Column("cursor", BigInteger, primary_key=True, autoincrement=True),
+    Column("workspace_id", String(36), nullable=False),
+    Column("document_id", String(36), nullable=True),
+    Column("type", String(20), nullable=False),
+    Column("payload", JSON, nullable=False),
+    Column("occurred_at", DateTime, nullable=False),
 )
 
 run_metrics = Table(
@@ -147,4 +161,3 @@ run_table_columns = Table(
     Column("mapping_method", String(32), nullable=True),
     Column("unmapped_reason", String(64), nullable=True),
 )
-

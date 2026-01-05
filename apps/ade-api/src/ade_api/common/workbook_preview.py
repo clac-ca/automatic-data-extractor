@@ -40,7 +40,12 @@ def build_workbook_preview_from_xlsx(
     sheet_index: int | None = None,
 ) -> WorkbookSheetPreview:
     with path.open("rb") as handle:
-        workbook = openpyxl.load_workbook(handle, read_only=True, data_only=True)
+        workbook = openpyxl.load_workbook(
+            handle,
+            read_only=True,
+            data_only=True,
+            keep_links=False,
+        )
         try:
             index, sheet = _select_xlsx_sheet(workbook, sheet_name, sheet_index)
             return _preview_xlsx_sheet(

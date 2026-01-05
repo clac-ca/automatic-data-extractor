@@ -27,6 +27,7 @@ from .schema import (
     builds,
     configurations,
     documents,
+    document_changes,
     run_fields,
     run_metrics,
     run_table_columns,
@@ -500,6 +501,7 @@ class Worker:
                 self._complete_run(
                     run_id=run_id,
                     document_id=document["id"],
+                    workspace_id=workspace_id,
                     status="succeeded",
                     exit_code=0,
                     error_message="Dry run requested",
@@ -513,6 +515,7 @@ class Worker:
                 self._fail_run(
                     run_id=run_id,
                     document_id=document["id"],
+                    workspace_id=workspace_id,
                     event_log_path=event_log_path,
                     error_message="Build is required before running",
                     exit_code=2,
@@ -525,6 +528,7 @@ class Worker:
                 self._fail_run(
                     run_id=run_id,
                     document_id=document["id"],
+                    workspace_id=workspace_id,
                     event_log_path=event_log_path,
                     error_message="Build environment missing; rerun build",
                     exit_code=2,
@@ -567,8 +571,11 @@ class Worker:
                     self._fail_run(
                         run_id=run_id,
                         document_id=document["id"],
+                        workspace_id=workspace_id,
                         event_log_path=event_log_path,
-                        error_message=f"Validation timed out after {self._settings.build_timeout_seconds}s",
+                        error_message=(
+                            f"Validation timed out after {self._settings.build_timeout_seconds}s"
+                        ),
                         exit_code=124,
                         update_document=False,
                     )
@@ -578,6 +585,7 @@ class Worker:
                 self._complete_run(
                     run_id=run_id,
                     document_id=document["id"],
+                    workspace_id=workspace_id,
                     status=status,
                     exit_code=return_code,
                     error_message=error_message,
@@ -595,7 +603,13 @@ class Worker:
                 conn.execute(
                     update(documents)
                     .where(documents.c.id == document["id"])
-                    .values(status="processing", last_run_at=now)
+                    .values(status="processing", last_run_at=now, updated_at=now)
+                )
+                self._record_document_change(
+                    conn,
+                    workspace_id=workspace_id,
+                    document_id=document["id"],
+                    occurred_at=now,
                 )
 
             cmd = [str(venv_python), "-m", "ade_engine", "process", "file"]
@@ -631,6 +645,7 @@ class Worker:
                 self._fail_run(
                     run_id=run_id,
                     document_id=document["id"],
+                    workspace_id=workspace_id,
                     event_log_path=event_log_path,
                     error_message=f"Run timed out after {self._settings.run_timeout_seconds}s",
                     exit_code=124,
@@ -642,6 +657,7 @@ class Worker:
             self._complete_run(
                 run_id=run_id,
                 document_id=document["id"],
+                workspace_id=workspace_id,
                 status=status,
                 exit_code=return_code,
                 error_message=error_message,
@@ -651,6 +667,7 @@ class Worker:
             self._fail_run(
                 run_id=run_id,
                 document_id=document_id,
+                workspace_id=workspace_id,
                 event_log_path=event_log_path,
                 error_message=str(exc),
                 exit_code=1,
@@ -777,11 +794,30 @@ class Worker:
             raise RuntimeError(f"Document not found: {doc_id}")
         return dict(row)
 
+    def _record_document_change(
+        self,
+        conn,
+        *,
+        workspace_id: str,
+        document_id: str,
+        occurred_at: datetime | None = None,
+    ) -> None:
+        conn.execute(
+            document_changes.insert().values(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                type="upsert",
+                payload={},
+                occurred_at=occurred_at or self._utc_now(),
+            )
+        )
+
     def _complete_run(
         self,
         *,
         run_id: str,
         document_id: str,
+        workspace_id: str | None = None,
         status: str,
         exit_code: int | None,
         error_message: str | None,
@@ -809,8 +845,16 @@ class Worker:
                     .values(
                         status="processed" if status == "succeeded" else "failed",
                         last_run_at=now,
+                        updated_at=now,
                     )
                 )
+                if workspace_id:
+                    self._record_document_change(
+                        conn,
+                        workspace_id=workspace_id,
+                        document_id=document_id,
+                        occurred_at=now,
+                    )
         level = "error" if status == "failed" else "info"
         done_event = new_event_record(
             event="run.complete",
@@ -834,8 +878,15 @@ class Worker:
         metrics = extract_run_metrics(payload)
         fields = extract_run_fields(payload.get("fields") or [])
         columns = extract_run_columns(payload.get("workbooks") or [])
+        output_path = self._extract_output_path(run_id, payload)
 
         with self._engine.begin() as conn:
+            if output_path:
+                conn.execute(
+                    update(runs)
+                    .where(runs.c.id == run_id)
+                    .values(output_path=output_path)
+                )
             # Upsert run_metrics
             existing = conn.execute(
                 select(run_metrics.c.run_id).where(run_metrics.c.run_id == run_id)
@@ -973,6 +1024,48 @@ class Worker:
     def _run_dir(self, workspace_id: str, run_id: str) -> Path:
         return self._settings.runs_dir / str(workspace_id) / "runs" / str(run_id)
 
+    def _relative_run_path(
+        self,
+        *,
+        workspace_id: str | None,
+        run_id: str,
+        path: str | None,
+    ) -> str | None:
+        if not workspace_id or not path:
+            return None
+        run_dir = self._run_dir(workspace_id, run_id).resolve()
+        candidate = Path(path)
+        if not candidate.is_absolute():
+            candidate = (run_dir / candidate).resolve()
+        else:
+            candidate = candidate.resolve()
+        try:
+            relative = candidate.relative_to(run_dir)
+        except ValueError:
+            return None
+        if not candidate.exists():
+            return None
+        return str(relative)
+
+    def _extract_output_path(self, run_id: str, payload: dict[str, Any]) -> str | None:
+        outputs = payload.get("outputs")
+        if not isinstance(outputs, dict):
+            return None
+        normalized = outputs.get("normalized")
+        if not isinstance(normalized, dict):
+            return None
+        raw_path = normalized.get("path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            return None
+        workspace_id = payload.get("workspaceId")
+        if not isinstance(workspace_id, str) or not workspace_id.strip():
+            workspace_id = None
+        return self._relative_run_path(
+            workspace_id=workspace_id,
+            run_id=run_id,
+            path=raw_path,
+        )
+
     def _document_path(self, workspace_id: str, stored_uri: str) -> Path:
         root = self._settings.documents_dir / str(workspace_id) / "documents"
         return (root / stored_uri.lstrip("/")).resolve()
@@ -1074,6 +1167,7 @@ class Worker:
         *,
         run_id: str,
         document_id: str | None,
+        workspace_id: str | None = None,
         event_log_path: Path,
         error_message: str,
         exit_code: int,
@@ -1083,6 +1177,7 @@ class Worker:
             self._complete_run(
                 run_id=run_id,
                 document_id=document_id or "",
+                workspace_id=workspace_id,
                 status="failed",
                 exit_code=exit_code,
                 error_message=error_message,

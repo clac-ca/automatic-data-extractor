@@ -239,6 +239,27 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
     threads: list[threading.Thread] = []
     use_process_groups = hasattr(os, "killpg")
     interrupted = False
+    received_signal: int | None = None
+    previous_handlers: dict[int, object] = {}
+
+    def _handle_signal(signum: int, _frame) -> None:
+        nonlocal interrupted, received_signal
+        interrupted = True
+        received_signal = signum
+        raise KeyboardInterrupt
+
+    handled_signals = [signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        handled_signals.append(signal.SIGHUP)
+    if hasattr(signal, "SIGQUIT"):
+        handled_signals.append(signal.SIGQUIT)
+    for signum in handled_signals:
+        try:
+            previous_handlers[signum] = signal.signal(signum, _handle_signal)
+        except (ValueError, OSError):
+            # ValueError if not in main thread; OSError on unsupported signals.
+            continue
+
     try:
         for name, cmd, cwd, env in tasks:
             typer.echo(f"▶️  starting {name}: {' '.join(cmd)}")
@@ -282,7 +303,14 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 typer.echo(f"✅ {name} exited")
                 processes.remove((name, proc))
     except KeyboardInterrupt:
-        typer.echo("\n🛑 received interrupt; stopping child processes...")
+        if received_signal is not None:
+            try:
+                signal_name = signal.Signals(received_signal).name
+            except ValueError:
+                signal_name = f"signal {received_signal}"
+            typer.echo(f"\n🛑 received {signal_name}; stopping child processes...")
+        else:
+            typer.echo("\n🛑 received interrupt; stopping child processes...")
         interrupted = True
     finally:
         for name, proc in processes:
@@ -290,11 +318,16 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 typer.echo(f"⏹️  terminating {name}")
                 if use_process_groups:
                     try:
-                        os.killpg(proc.pid, signal.SIGTERM)
+                        pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else proc.pid
+                        os.killpg(pgid, signal.SIGTERM)
                     except ProcessLookupError:
                         pass
                     except Exception:
+                        pass
+                    try:
                         proc.terminate()
+                    except Exception:
+                        pass
                 else:
                     proc.terminate()
         for _, proc in processes:
@@ -304,11 +337,16 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 except subprocess.TimeoutExpired:
                     if use_process_groups:
                         try:
-                            os.killpg(proc.pid, signal.SIGKILL)
+                            pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else proc.pid
+                            os.killpg(pgid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
                         except Exception:
+                            pass
+                        try:
                             proc.kill()
+                        except Exception:
+                            pass
                     else:
                         proc.kill()
         for _, proc in processes:
@@ -316,8 +354,16 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 proc.wait(timeout=5)
         for thread in threads:
             thread.join(timeout=1)
+        for signum, handler in previous_handlers.items():
+            try:
+                signal.signal(signum, handler)
+            except (ValueError, OSError):
+                continue
         if interrupted:
-            raise typer.Exit(code=130)
+            exit_code = 130
+            if received_signal is not None:
+                exit_code = 128 + received_signal
+            raise typer.Exit(code=exit_code)
 
 
 def load_frontend_package_json() -> dict:

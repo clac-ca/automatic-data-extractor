@@ -551,6 +551,7 @@ def _create_runs() -> None:
         sa.Column("build_id", GUID(), sa.ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True),
         sa.Column("input_document_id", GUID(), sa.ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False),
         sa.Column("input_sheet_names", sa.JSON(), nullable=True),
+        sa.Column("output_path", sa.String(length=512), nullable=True),
         sa.Column("status", RUN_STATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column("submitted_by_user_id", GUID(), nullable=True),

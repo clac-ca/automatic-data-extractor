@@ -883,7 +883,7 @@ class RunsService:
         )
         paths = self._finalize_paths(
             run_dir=run_dir,
-            default_paths=RunPathsSnapshot(),
+            default_paths=RunPathsSnapshot(output_path=run.output_path),
         )
 
         processed_file = self._resolve_processed_file(
@@ -1001,7 +1001,7 @@ class RunsService:
         paths: RunPathsSnapshot,
         processed_file: str | None,
     ) -> RunOutput:
-        output_path = paths.output_path or self._relative_output_path(run_dir / "output", run_dir)
+        output_path = paths.output_path
         output_file: Path | None = None
         if output_path:
             candidate = (run_dir / output_path).resolve()
@@ -1036,7 +1036,7 @@ class RunsService:
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
-            has_output=bool(output_path),
+            has_output=bool(output_file),
             output_path=output_path,
             processed_file=str(processed_file) if processed_file else None,
         )
@@ -1185,29 +1185,36 @@ class RunsService:
 
         run, path = await self.resolve_output_for_download(run_id=run_id)
         suffix = path.suffix.lower()
+        timeout = self._settings.preview_timeout_seconds
 
         try:
             if suffix == ".xlsx":
-                preview = await run_in_threadpool(
-                    build_workbook_preview_from_xlsx,
-                    path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
+                preview = await asyncio.wait_for(
+                    run_in_threadpool(
+                        build_workbook_preview_from_xlsx,
+                        path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    ),
+                    timeout=timeout,
                 )
             elif suffix == ".csv":
-                preview = await run_in_threadpool(
-                    build_workbook_preview_from_csv,
-                    path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
+                preview = await asyncio.wait_for(
+                    run_in_threadpool(
+                        build_workbook_preview_from_csv,
+                        path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    ),
+                    timeout=timeout,
                 )
             else:
                 raise RunOutputPreviewUnsupportedError(
@@ -1217,6 +1224,10 @@ class RunsService:
             requested = sheet_name if sheet_name is not None else str(effective_sheet_index)
             raise RunOutputPreviewSheetNotFoundError(
                 f"Sheet {requested!r} was not found in run {run_id!r} output."
+            ) from exc
+        except asyncio.TimeoutError as exc:
+            raise RunOutputPreviewParseError(
+                f"Preview timed out after {timeout:g}s for run {run_id!r} output."
             ) from exc
         except RunOutputPreviewUnsupportedError:
             raise
@@ -1251,10 +1262,18 @@ class RunsService:
 
         run, path = await self.resolve_output_for_download(run_id=run_id)
         suffix = path.suffix.lower()
+        timeout = self._settings.preview_timeout_seconds
 
         if suffix == ".xlsx":
             try:
-                sheets = await run_in_threadpool(self._inspect_workbook, path)
+                sheets = await asyncio.wait_for(
+                    run_in_threadpool(self._inspect_workbook, path),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError as exc:
+                raise RunOutputSheetParseError(
+                    f"Worksheet inspection timed out after {timeout:g}s for run {run_id!r} output."
+                ) from exc
             except Exception as exc:  # pragma: no cover - defensive fallback
                 raise RunOutputSheetParseError(
                     f"Worksheet inspection failed for run {run_id!r} output ({type(exc).__name__})."
@@ -1343,7 +1362,7 @@ class RunsService:
 
         paths_snapshot = self._finalize_paths(
             run_dir=run_dir,
-            default_paths=RunPathsSnapshot(),
+            default_paths=RunPathsSnapshot(output_path=run.output_path),
         )
         output_relative = paths_snapshot.output_path
         if not output_relative:
@@ -1516,6 +1535,8 @@ class RunsService:
                         break
 
         # Output path: if not provided, infer from <run_dir>/output.
+        if snapshot.output_path:
+            snapshot.output_path = self._run_relative_hint(snapshot.output_path, run_dir=run_dir)
         if not snapshot.output_path:
             snapshot.output_path = self._relative_output_path(run_dir / "output", run_dir)
 
@@ -1682,7 +1703,12 @@ class RunsService:
     @staticmethod
     def _inspect_workbook(path: Path) -> list[RunOutputSheet]:
         with path.open("rb") as raw:
-            workbook = openpyxl.load_workbook(raw, read_only=True, data_only=True)
+            workbook = openpyxl.load_workbook(
+                raw,
+                read_only=True,
+                data_only=True,
+                keep_links=False,
+            )
             try:
                 sheetnames = workbook.sheetnames
                 active = workbook.active.title if sheetnames else None

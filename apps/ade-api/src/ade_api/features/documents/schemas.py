@@ -69,6 +69,10 @@ class DocumentOut(BaseSchema):
     activity_at: datetime | None = Field(default=None, alias="activityAt")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
+    etag: str | None = Field(
+        default=None,
+        description="Weak ETag for optimistic concurrency checks.",
+    )
     deleted_at: datetime | None = Field(default=None, alias="deletedAt")
     assignee_user_id: UUIDStr | None = Field(default=None, alias="assigneeId")
     deleted_by: UUIDStr | None = Field(
@@ -307,6 +311,10 @@ class DocumentListRow(BaseSchema):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     activity_at: datetime = Field(alias="activityAt")
+    etag: str | None = Field(
+        default=None,
+        description="Weak ETag for optimistic concurrency checks.",
+    )
     latest_run: DocumentRunSummary | None = Field(default=None, alias="latestRun")
     latest_successful_run: DocumentRunSummary | None = Field(
         default=None,

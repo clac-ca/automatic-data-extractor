@@ -3,9 +3,11 @@ import type { FilterItem, FilterJoinOperator } from "@api/listing";
 import { encodeFilters } from "@api/listing";
 import type { components } from "@schema";
 
-export type DocumentRecord = components["schemas"]["DocumentOut"];
-export type DocumentListRow = components["schemas"]["DocumentListRow"];
-export type DocumentListPage = components["schemas"]["DocumentListPage"];
+export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
+export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
+export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "items"> & {
+  items?: DocumentListRow[] | null;
+};
 export type DocumentPageResult = DocumentListPage & { changesCursorHeader?: string | null };
 export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];

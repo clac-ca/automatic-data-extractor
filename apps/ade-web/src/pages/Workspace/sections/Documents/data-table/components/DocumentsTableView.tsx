@@ -13,9 +13,11 @@ import {
 import { documentChangesStreamUrl, streamDocumentChanges } from "@api/documents/changes";
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { ApiError } from "@api/errors";
+import { buildWeakEtag } from "@api/etag";
 import { Link } from "@app/navigation/Link";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@/components/ui/button";
+import type { PresenceParticipant } from "@schema/presence";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +30,8 @@ import { useNotifications } from "@components/providers/notifications";
 import { shortId } from "@pages/Workspace/sections/Documents/utils";
 import { mergeDocumentChangeIntoPages } from "@pages/Workspace/sections/Documents/changeFeed";
 import type { WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
+import { DocumentsPresenceIndicator } from "@pages/Workspace/sections/Documents/components/DocumentsPresenceIndicator";
+import { useDocumentsPresence } from "@pages/Workspace/sections/Documents/hooks/useDocumentsPresence";
 
 import { DocumentsTable } from "./DocumentsTable";
 import { DocumentsEmptyState, DocumentsInlineBanner } from "./DocumentsEmptyState";
@@ -89,6 +93,9 @@ export function DocumentsTableView({
     >(),
   );
   const archiveFlashTimersRef = useRef<Map<string, number>>(new Map());
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
@@ -153,6 +160,34 @@ export function DocumentsTableView({
     () => new Map(documents.map((doc) => [doc.id, doc])),
     [documents],
   );
+
+  useEffect(() => {
+    if (!expandedRowId) return;
+    if (documentsById.has(expandedRowId)) return;
+    setExpandedRowId(null);
+  }, [documentsById, expandedRowId]);
+
+  const toolbarParticipants = useMemo(
+    () => dedupeParticipants(presence.participants, presence.clientId),
+    [presence.clientId, presence.participants],
+  );
+
+  const rowPresence = useMemo(
+    () => mapPresenceByDocument(presence.participants, presence.clientId),
+    [presence.clientId, presence.participants],
+  );
+
+  const handleTogglePreview = useCallback((documentId: string) => {
+    setExpandedRowId((current) => (current === documentId ? null : documentId));
+  }, []);
+
+  useEffect(() => {
+    if (presence.connectionState !== "open") return;
+    const selection = expandedRowId
+      ? { documentId: expandedRowId, mode: "preview" }
+      : { documentId: null };
+    presence.sendSelection(selection);
+  }, [expandedRowId, presence.connectionState, presence.sendSelection]);
 
   const membersQuery = useQuery({
     queryKey: ["documents-members", workspaceId],
@@ -247,6 +282,9 @@ export function DocumentsTableView({
       const activityAt = updated.activityAt ?? updated.updatedAt;
       if (activityAt) {
         updates.activityAt = activityAt;
+      }
+      if (updated.etag !== undefined) {
+        updates.etag = updated.etag ?? null;
       }
       if (updated.tags !== undefined) {
         updates.tags = updated.tags;
@@ -351,17 +389,35 @@ export function DocumentsTableView({
 
   const onAssign = useCallback(
     async (documentId: string, assigneeKey: string | null) => {
+      const current = documentsById.get(documentId);
+      if (!current) {
+        notifyToast({
+          title: "Unable to update assignee",
+          description: "Document not found in the current list.",
+          intent: "danger",
+        });
+        return;
+      }
       const assigneeId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
       const assigneeLabel = assigneeKey
         ? people.find((person) => person.key === assigneeKey)?.label ?? assigneeKey
         : null;
       const assigneeEmail = assigneeLabel && assigneeLabel.includes("@") ? assigneeLabel : "";
+      const ifMatch = current.etag ?? buildWeakEtag(documentId, current.updatedAt);
 
       try {
-        const updated = await patchWorkspaceDocument(workspaceId, documentId, { assigneeId });
-        updateDocumentRow(documentId, {
-          assignee: updated.assignee ?? (assigneeId ? { id: assigneeId, name: assigneeLabel, email: assigneeEmail } : null),
-        });
+        const updated = await patchWorkspaceDocument(
+          workspaceId,
+          documentId,
+          { assigneeId },
+          { ifMatch },
+        );
+        applyDocumentUpdate(documentId, updated);
+        if (!updated.assignee && assigneeId) {
+          updateDocumentRow(documentId, {
+            assignee: { id: assigneeId, name: assigneeLabel, email: assigneeEmail },
+          });
+        }
       } catch (error) {
         notifyToast({
           title: "Unable to update assignee",
@@ -370,7 +426,7 @@ export function DocumentsTableView({
         });
       }
     },
-    [notifyToast, people, updateDocumentRow, workspaceId],
+    [applyDocumentUpdate, documentsById, notifyToast, people, updateDocumentRow, workspaceId],
   );
 
   const onToggleTag = useCallback(
@@ -660,6 +716,20 @@ export function DocumentsTableView({
   const processingSettingsPath = `/workspaces/${workspaceId}/settings/processing`;
   const deletePending =
     deleteTarget ? pendingActions[deleteTarget.id] === "delete" : false;
+  const toolbarPresence = (
+    <DocumentsPresenceIndicator
+      participants={toolbarParticipants}
+      connectionState={presence.connectionState}
+    />
+  );
+  const toolbarContent = toolbarActions ? (
+    <div className="flex flex-wrap items-center gap-3">
+      {toolbarPresence}
+      {toolbarActions}
+    </div>
+  ) : (
+    toolbarPresence
+  );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
@@ -714,14 +784,17 @@ export function DocumentsTableView({
         workspaceId={workspaceId}
         people={people}
         tagOptions={tagOptions}
+        rowPresence={rowPresence}
         onAssign={onAssign}
         onToggleTag={onToggleTag}
         onArchive={onArchive}
         onRestore={onRestore}
         onDeleteRequest={onDeleteRequest}
+        expandedRowId={expandedRowId}
+        onTogglePreview={handleTogglePreview}
         isRowActionPending={isRowActionPending}
         archivedFlashIds={archivedFlashIds}
-        toolbarActions={toolbarActions}
+        toolbarActions={toolbarContent}
         scrollContainerRef={scrollContainerRef}
         scrollFooter={
           <>
@@ -756,4 +829,73 @@ export function DocumentsTableView({
       </Dialog>
     </div>
   );
+}
+
+function getParticipantLabel(participant: PresenceParticipant) {
+  return participant.display_name || participant.email || "Workspace member";
+}
+
+function getSelectedDocumentId(participant: PresenceParticipant) {
+  const selection = participant.selection;
+  if (!selection || typeof selection !== "object") return null;
+  const documentId = selection["documentId"];
+  return typeof documentId === "string" ? documentId : null;
+}
+
+function rankParticipant(participant: PresenceParticipant) {
+  let score = 0;
+  if (participant.status === "active") score += 2;
+  if (getSelectedDocumentId(participant)) score += 3;
+  if (participant.editing) score += 1;
+  return score;
+}
+
+function sortParticipants(participants: PresenceParticipant[]) {
+  return participants.sort((a, b) => {
+    const aPriority = a.status === "active" ? 0 : 1;
+    const bPriority = b.status === "active" ? 0 : 1;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    const aLabel = getParticipantLabel(a).toLowerCase();
+    const bLabel = getParticipantLabel(b).toLowerCase();
+    return aLabel.localeCompare(bLabel);
+  });
+}
+
+function dedupeParticipants(participants: PresenceParticipant[], clientId: string | null) {
+  const byUser = new Map<string, PresenceParticipant>();
+  for (const participant of participants) {
+    if (participant.client_id === clientId) continue;
+    const key = participant.user_id || participant.client_id;
+    const existing = byUser.get(key);
+    if (!existing) {
+      byUser.set(key, participant);
+      continue;
+    }
+    if (rankParticipant(participant) > rankParticipant(existing)) {
+      byUser.set(key, participant);
+    }
+  }
+  return sortParticipants(Array.from(byUser.values()));
+}
+
+function mapPresenceByDocument(participants: PresenceParticipant[], clientId: string | null) {
+  const map = new Map<string, Map<string, PresenceParticipant>>();
+  participants.forEach((participant) => {
+    if (participant.client_id === clientId) return;
+    const documentId = getSelectedDocumentId(participant);
+    if (!documentId) return;
+    const userKey = participant.user_id || participant.client_id;
+    const bucket = map.get(documentId) ?? new Map<string, PresenceParticipant>();
+    const existing = bucket.get(userKey);
+    if (!existing || rankParticipant(participant) > rankParticipant(existing)) {
+      bucket.set(userKey, participant);
+    }
+    map.set(documentId, bucket);
+  });
+
+  const resolved = new Map<string, PresenceParticipant[]>();
+  map.forEach((bucket, documentId) => {
+    resolved.set(documentId, sortParticipants(Array.from(bucket.values())));
+  });
+  return resolved;
 }

@@ -20,7 +20,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.api.deps import get_configurations_service, get_runs_service
+from ade_api.api.deps import SessionDep, get_configurations_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
@@ -366,6 +366,7 @@ async def archive_configuration_endpoint(
 async def export_config(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
+    db_session: SessionDep,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -389,6 +390,7 @@ async def export_config(
     headers = {
         "Content-Disposition": build_content_disposition(f"{configuration_id}.zip"),
     }
+    await db_session.close()
     return StreamingResponse(stream, media_type="application/zip", headers=headers)
 
 

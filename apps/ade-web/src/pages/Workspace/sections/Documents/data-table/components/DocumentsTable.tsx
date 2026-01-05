@@ -21,7 +21,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useSearchParams } from "@app/navigation/urlState";
+import type { PresenceParticipant } from "@schema/presence";
 import type { DocumentStatus, FileType, WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
+import { DocumentPresenceBadges } from "@pages/Workspace/sections/Documents/components/DocumentPresenceBadges";
 import { MappingBadge } from "@pages/Workspace/sections/Documents/components/MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "@pages/Workspace/sections/Documents/components/PeoplePicker";
 import { TagPicker } from "@pages/Workspace/sections/Documents/components/TagPicker";
@@ -37,11 +39,14 @@ interface DocumentsTableProps {
   workspaceId: string;
   people: WorkspacePerson[];
   tagOptions: string[];
+  rowPresence?: Map<string, PresenceParticipant[]>;
   onAssign: (documentId: string, assigneeKey: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
   onArchive: (documentId: string) => void;
   onRestore: (documentId: string) => void;
   onDeleteRequest: (document: DocumentListRow) => void;
+  expandedRowId: string | null;
+  onTogglePreview: (documentId: string) => void;
   isRowActionPending?: (documentId: string) => boolean;
   archivedFlashIds?: Set<string>;
   toolbarActions?: ReactNode;
@@ -55,18 +60,20 @@ export function DocumentsTable({
   workspaceId,
   people,
   tagOptions,
+  rowPresence,
   onAssign,
   onToggleTag,
   onArchive,
   onRestore,
   onDeleteRequest,
+  expandedRowId,
+  onTogglePreview,
   isRowActionPending,
   archivedFlashIds,
   toolbarActions,
   scrollContainerRef,
   scrollFooter,
 }: DocumentsTableProps) {
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(() => searchParams.get("q") ?? "");
 
@@ -130,9 +137,12 @@ export function DocumentsTable({
     [],
   );
 
-  const togglePreview = useCallback((rowId: string) => {
-    setExpandedRowId((current) => (current === rowId ? null : rowId));
-  }, []);
+  const togglePreview = useCallback(
+    (rowId: string) => {
+      onTogglePreview(rowId);
+    },
+    [onTogglePreview],
+  );
 
   const columns = useMemo<ColumnDef<DocumentListRow>[]>(
     () => [
@@ -181,14 +191,20 @@ export function DocumentsTable({
         header: ({ column }) => (
           <DataTableColumnHeader column={column} label="Document" />
         ),
-        cell: ({ row }) => (
-          <div
-            className="min-w-0 max-w-full truncate font-medium"
-            title={row.getValue<string>("name")}
-          >
-            {row.getValue<string>("name")}
-          </div>
-        ),
+        cell: ({ row }) => {
+          const viewers = rowPresence?.get(row.original.id) ?? [];
+          return (
+            <div className="min-w-0 max-w-full">
+              <div
+                className="truncate font-medium"
+                title={row.getValue<string>("name")}
+              >
+                {row.getValue<string>("name")}
+              </div>
+              <DocumentPresenceBadges participants={viewers} />
+            </div>
+          );
+        },
         meta: {
           label: "Document",
           placeholder: "Search documents...",
@@ -525,8 +541,10 @@ export function DocumentsTable({
       onAssign,
       onArchive,
       onDeleteRequest,
+      rowPresence,
       onRestore,
       onToggleTag,
+      onTogglePreview,
       people,
       runStatusOptions,
       sourceOptions,

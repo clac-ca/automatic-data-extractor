@@ -21,7 +21,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
-from ade_api.api.deps import get_idempotency_service, get_runs_service
+from ade_api.api.deps import SessionDep, get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord
@@ -566,6 +566,7 @@ async def get_run_input_endpoint(
 )
 async def download_run_input_endpoint(
     run_id: RunPath,
+    db_session: SessionDep,
     service: RunsService = runs_service_dependency,
 ) -> StreamingResponse:
     try:
@@ -575,6 +576,7 @@ async def download_run_input_endpoint(
     except (RunDocumentMissingError, RunInputMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
+    await db_session.close()
     media_type = document.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
     disposition = document.original_filename
@@ -589,6 +591,7 @@ async def download_run_input_endpoint(
 )
 async def get_run_events_endpoint(
     run_id: RunPath,
+    db_session: SessionDep,
     format: Literal["json", "ndjson"] = Query(default="json"),
     after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
@@ -609,8 +612,10 @@ async def get_run_events_endpoint(
             for event in events:
                 yield _event_bytes(event)
 
+        await db_session.close()
         return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
+    await db_session.close()
     return RunEventsPage(
         items=events,
         next_after_sequence=next_after_sequence,
@@ -621,6 +626,7 @@ async def get_run_events_endpoint(
 async def stream_run_events_endpoint(
     run_id: RunPath,
     request: Request,
+    db_session: SessionDep,
     after_sequence: int | None = Query(default=None, ge=0),
     service: RunsService = runs_service_dependency,
 ) -> EventSourceResponse:
@@ -639,6 +645,7 @@ async def stream_run_events_endpoint(
         log_path = await service.get_event_log_path(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await db_session.close()
 
     return EventSourceResponse(
         stream_ndjson_events(
@@ -662,12 +669,14 @@ async def stream_run_events_endpoint(
 )
 async def download_run_events_file_endpoint(
     run_id: RunPath,
+    db_session: SessionDep,
     service: RunsService = runs_service_dependency,
 ):
     try:
         path = await service.get_logs_file_path(run_id=run_id)
     except (RunNotFoundError, RunLogsFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await db_session.close()
     return FileResponse(
         path=path,
         media_type="application/x-ndjson",
@@ -706,6 +715,7 @@ async def get_run_output_metadata_endpoint(
 )
 async def download_run_output_endpoint(
     run_id: RunPath,
+    db_session: SessionDep,
     service: RunsService = runs_service_dependency,
 ):
     try:
@@ -736,6 +746,7 @@ async def download_run_output_endpoint(
             detail = str(exc)
         raise HTTPException(status_code, detail=detail) from exc
 
+    await db_session.close()
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(
         path=path,

@@ -16,7 +16,7 @@ from ade_api.core.http.dependencies import (
     get_cookie_authenticator,
     get_rbac_service,
 )
-from ade_api.db import get_db_session
+from ade_api.db import db as database, get_db_session
 from ade_api.models import User
 from ade_api.settings import Settings, get_settings
 
@@ -125,32 +125,36 @@ def _parse_hello(payload: dict[str, Any]) -> tuple[str, dict[str, Any], str | No
 async def presence_ws(
     websocket: WebSocket,
     workspace_id: WorkspacePath,
-    db: WebSocketSessionDep,
+    db_session: WebSocketSessionDep,
     settings: SettingsDep,
     api_keys=Depends(get_api_key_authenticator_websocket),
 ) -> None:
     try:
         principal = await authenticate_websocket(
             websocket,
-            db,
+            db_session,
             settings,
             api_keys,
-            get_cookie_authenticator(db, settings),
-            get_bearer_authenticator(db, settings),
+            get_cookie_authenticator(db_session, settings),
+            get_bearer_authenticator(db_session, settings),
         )
     except AuthenticationError:
+        await db_session.close()
         await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
         return
 
     if principal.auth_via == AuthVia.SESSION:
         if not _origin_allowed(websocket.headers.get("origin"), settings):
+            await db_session.close()
             await websocket.close(code=WS_CLOSE_FORBIDDEN)
             return
 
-    user = await db.get(User, principal.user_id)
+    user = await db_session.get(User, principal.user_id)
     if user is None:
+        await db_session.close()
         await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
         return
+    await db_session.close()
 
     await websocket.accept()
 
@@ -175,12 +179,13 @@ async def presence_ws(
     async def join_channel(scope: str, context: dict[str, Any]) -> None:
         nonlocal channel_key, client_id
 
-        allowed = await _authorize_scope(
-            principal=principal,
-            db=db,
-            workspace_id=workspace_id,
-            scope=scope,
-        )
+        async with database.sessionmaker() as session:
+            allowed = await _authorize_scope(
+                principal=principal,
+                db=session,
+                workspace_id=workspace_id,
+                scope=scope,
+            )
         if not allowed:
             await websocket.close(code=WS_CLOSE_FORBIDDEN)
             raise RuntimeError("presence.forbidden")
