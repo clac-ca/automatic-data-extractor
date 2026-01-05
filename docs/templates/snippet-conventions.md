@@ -52,7 +52,7 @@ $ pytest -q
 - For local API checks, show concise commands and output:
 
 ```bash
-curl -s http://localhost:8000/api/health
+curl -s http://localhost:8000/api/v1/health
 ```
 
 ## Good vs. bad examples

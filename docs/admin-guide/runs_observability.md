@@ -7,19 +7,23 @@ engine successfully.
 
 ## 1. Streaming an active run
 
-The runs API mirrors the OpenAI streaming pattern and exposes
-newline-delimited JSON events. When the caller enables `stream: true`, the API
-emits lifecycle notifications (`run.queued`, `run.start`, `console.line`,
-`run.complete`) and forwards all `engine.*` telemetry.
+The runs API exposes newline-delimited JSON events via the run events stream.
+Create the run first, then attach to `/runs/{runId}/events/stream` for live
+updates (`run.queued`, `run.start`, `console.line`, `run.complete`) and all
+`engine.*` telemetry.
 
 ```bash
-http --stream POST :8000/api/v1/configurations/$CONFIG_ID/runs stream:=true \
+# 1) Create the run
+http POST :8000/api/v1/configurations/$CONFIG_ID/runs \
   "options:={\"dry_run\": false}"
+
+# 2) Stream events
+http --stream GET :8000/api/v1/runs/$RUN_ID/events/stream
 ```
 
 Key things to watch while streaming:
 
-- The first `run.queued` event confirms the database row exists and provides the run id for follow-up queries; build events may follow before `run.start` while the build is prepared.
+- The first `run.queued` event confirms the database row exists; `run.start` arrives when the worker claims the job.
 - `console.line` events include the ADE engine stdout; store the NDJSON output
   alongside ticket timelines when escalating to engineering.
 - `engine.run.completed` carries the full run payload (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine
@@ -30,7 +34,7 @@ Key things to watch while streaming:
 For asynchronous automation or when safe-mode blocks execution, poll the
 non-streaming endpoints:
 
-1. Trigger the run with `stream: false`; the response body mirrors the
+1. Trigger the run; the response body mirrors the
    `Run` schema documented in `docs/ade_runs_api_spec.md`.
 2. Poll `/api/v1/runs/{runId}` until the `status` transitions from
    `queued`/`running` to a terminal state.
@@ -64,22 +68,19 @@ calls.
 
 ## 5. Monitoring configuration builds
 
-Build activity is emitted through the unified run event stream. Use the same
+Build activity is emitted through the build event stream. Use the same
 troubleshooting workflow you use for runs:
 
-1. Trigger a build (or run with `stream: true`) using
-   `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`
-   or the run creation endpoint. Watch for `build.queued`,
-   `build.start`, `build.phase.start`, `build.complete`, and `console.line`
-   events (`payload.scope: "build"`).
+1. Trigger a build using
+   `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`.
+   Watch for `build.queued`, `build.start`, `build.complete`, and
+   `console.line` events (`payload.scope: \"build\"`).
 2. For status snapshots, hit `/api/v1/builds/{buildId}`. For history,
    use `GET /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`
    with the canonical list contract (`filters`, `q`, `sort`). For live logs/events,
-   attach to `/api/v1/runs/{runId}/events?stream=true&after_sequence=<cursor>`
-   (build + run + console output in one ordered stream).
+   attach to `/api/v1/builds/{buildId}/events/stream?after_sequence=<cursor>`.
 3. Database fallbacks mirror runs: inspect the `builds` table if the API is
-   unavailable. Build log polling endpoints are deprecated in favor of the run
-   event stream.
+   unavailable.
 
 Refer to the event catalog in `.workpackages/ade-event-system-refactor/020-EVENT-TYPES-REFERENCE.md`
 for canonical payloads and the decision log in `docs/workpackages/WP12_ade_runs.md`

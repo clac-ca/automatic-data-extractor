@@ -917,7 +917,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Preview a document workbook */
+        /** Preview a document worksheet */
         get: operations["preview_document_api_v1_workspaces__workspaceId__documents__documentId__preview_get"];
         put?: never;
         post?: never;
@@ -1499,7 +1499,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Preview run output workbook */
+        /** Preview run output worksheet */
         get: operations["preview_run_output_endpoint_api_v1_runs__runId__output_preview_get"];
         put?: never;
         post?: never;
@@ -3873,20 +3873,14 @@ export type components = {
             ade_engine: string;
         };
         /**
-         * WorkbookPreview
-         * @description Preview payload for a workbook.
-         */
-        WorkbookPreview: {
-            /** Sheets */
-            sheets: components["schemas"]["WorkbookSheetPreview"][];
-        };
-        /**
          * WorkbookSheetPreview
          * @description Table-ready preview for a single workbook sheet.
          */
         WorkbookSheetPreview: {
             /** Name */
             name: string;
+            /** Index */
+            index: number;
             /** Headers */
             headers: string[];
             /** Rows */
@@ -7664,9 +7658,13 @@ export interface operations {
                 maxRows?: number;
                 /** @description Maximum columns per sheet to include in the preview. */
                 maxColumns?: number;
-                /** @description Optional worksheet name to preview. */
+                /** @description If true, trims columns with no data within the preview window. */
+                trimEmptyColumns?: boolean;
+                /** @description If true, trims rows with no data within the preview window. */
+                trimEmptyRows?: boolean;
+                /** @description Optional worksheet name to preview (defaults to the first sheet when omitted). */
                 sheetName?: string | null;
-                /** @description Optional worksheet index to preview (0-based). */
+                /** @description Optional worksheet index to preview (0-based, defaults to the first sheet when omitted). */
                 sheetIndex?: number | null;
             };
             header?: never;
@@ -7687,7 +7685,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkbookPreview"];
+                    "application/json": components["schemas"]["WorkbookSheetPreview"];
                 };
             };
             /** @description Document not found within the workspace. */
@@ -9465,9 +9463,13 @@ export interface operations {
                 maxRows?: number;
                 /** @description Maximum columns per sheet to include in the preview. */
                 maxColumns?: number;
-                /** @description Optional worksheet name to preview. */
+                /** @description If true, trims columns with no data within the preview window. */
+                trimEmptyColumns?: boolean;
+                /** @description If true, trims rows with no data within the preview window. */
+                trimEmptyRows?: boolean;
+                /** @description Optional worksheet name to preview (defaults to the first sheet when omitted). */
                 sheetName?: string | null;
-                /** @description Optional worksheet index to preview (0-based). */
+                /** @description Optional worksheet index to preview (0-based, defaults to the first sheet when omitted). */
                 sheetIndex?: number | null;
             };
             header?: never;
@@ -9486,7 +9488,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkbookPreview"];
+                    "application/json": components["schemas"]["WorkbookSheetPreview"];
                 };
             };
             /** @description Run or output not found */

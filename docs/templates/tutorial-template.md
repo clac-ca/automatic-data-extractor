@@ -27,7 +27,7 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 
    ```bash
    source setup.sh   # create/activate venv, install packages
-   ade dev           # starts backend + frontend in watch mode
+   ade dev           # starts API + web + worker in watch mode
    ```
 
 2. Next action — For example, run backend migrations and tests:
@@ -40,7 +40,7 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 3. Verification — Call a health endpoint locally:
 
    ```bash
-   curl -s http://localhost:8000/api/health
+   curl -s http://localhost:8000/api/v1/health
    ```
 
 > Tip: Add notes or warnings for common pitfalls, but keep them brief.

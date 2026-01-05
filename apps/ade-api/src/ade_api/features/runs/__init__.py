@@ -8,7 +8,7 @@ from .schemas import (
     RunEventsPage,
     RunResource,
 )
-from .service import RunExecutionContext, RunsService
+from .service import RunsService
 
 __all__ = [
     "Run",
@@ -17,6 +17,5 @@ __all__ = [
     "RunCreateRequest",
     "RunEventsPage",
     "RunResource",
-    "RunExecutionContext",
     "RunsService",
 ]

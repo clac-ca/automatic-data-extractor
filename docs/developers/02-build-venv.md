@@ -23,7 +23,7 @@ Once built, every run for that configuration runs inside this frozen environment
 Virtual environments live on local storage at `ADE_VENVS_DIR/<workspace>/<configuration>/<build_id>/.venv/`. They are not co-located with the configuration or shared storage.
 
 ```text
-ADE_VENVS_DIR/                     # default: /tmp/ade-venvs (local, non-shared)
+ADE_VENVS_DIR/                     # default: ./data/venvs (local, non-shared)
 └─ <workspace_id>/
    └─ <configuration_id>/
       └─ <build_id>/
@@ -145,10 +145,10 @@ This self‑healing logic guarantees that a crash during build does not permanen
 
 ## Runs and Build Reuse
 
-Before each run, the backend resolves the build for the configuration fingerprint, records the `build_id` on the run, and hydrates the local env if missing. Runs launch using the build-scoped venv:
+Before each run, the API resolves the build for the configuration fingerprint, records the `build_id` on the run, and enqueues the job. The worker hydrates the local env if missing and launches the engine using the build-scoped venv:
 
 ```bash
-${ADE_VENVS_DIR}/<workspace_id>/<configuration_id>/<build_id>/.venv/bin/python -I -B -m ade_engine.run <run_id>
+${ADE_VENVS_DIR}/<workspace_id>/<configuration_id>/<build_id>/.venv/bin/python -I -B -m ade_engine process ...
 ```
 
 Runs never install packages; they always run inside the verified build venv. The run record stores the `build_id` used for audit and reproducibility.
@@ -157,9 +157,9 @@ Runs never install packages; they always run inside the verified build venv. The
 
 ## API Endpoints
 
-Build orchestration now mirrors the runs contract with dedicated build resources and streaming events.
+Build orchestration uses dedicated build resources; execution happens in the worker.
 
-### Create or rebuild (supports streaming)
+### Create or rebuild (enqueue)
 
 ```
 POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds
@@ -169,7 +169,6 @@ Body:
 
 ```json
 {
-  "stream": false,
   "options": {
     "force": false,
     "wait": false
@@ -177,8 +176,7 @@ Body:
 }
 ```
 
-* `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Progress is emitted as run events (see below).
-* `stream: true` — execute inline and stream `EventRecord` dictionaries (`build.*` + `console.line` with `scope:"build"`) over SSE.
+This enqueues a build and returns a `Build` snapshot immediately. Progress is written by the worker to the build event log.
 
 ### List build history
 
@@ -196,17 +194,17 @@ GET /api/v1/builds/{buildId}
 
 Returns the persisted `Build` resource including timestamps, status, and exit metadata.
 
-### Stream build/run events
+### Stream build events
 
-Build activity is part of the run stream. After creating a run, attach to:
+Build activity is streamed from the build log:
 
 ```
-GET /api/v1/runs/{runId}/events/stream?after_sequence=<cursor>
+GET /api/v1/builds/{buildId}/events/stream?after_sequence=<cursor>
 ```
 
-This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `id:` counter per event (build lifecycle + `console.line scope=build` + subsequent run events). Use `after_sequence` or `Last-Event-ID` to resume; the cursor maps to the SSE `id` field.
+This returns an SSE stream of `EventRecord` objects. Use `after_sequence` or `Last-Event-ID` to resume; the cursor maps to the SSE `id` field.
 
-> **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configurationId}/runs`. The server resolves the workspace, ensures the build, and records `build_id` at submit time.
+> **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configurationId}/runs`. The server resolves the workspace, queues the build if needed, and records `build_id` at submit time.
 
 ---
 
@@ -217,14 +215,15 @@ This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `
 | `ADE_WORKSPACES_DIR`            | `./data/workspaces`    | Workspace root for ADE storage                  |
 | `ADE_DOCUMENTS_DIR`             | `./data/workspaces`    | Base for documents (`<ws>/documents/...`)       |
 | `ADE_CONFIGS_DIR`               | `./data/workspaces`    | Base for configs (`<ws>/config_packages/...`)   |
-| `ADE_VENVS_DIR`                 | `/tmp/ade-venvs`       | Local base for venvs (`<ws>/<configuration>/<build>/...`) |
+| `ADE_VENVS_DIR`                 | `./data/venvs`         | Local base for venvs (`<ws>/<configuration>/<build>/...`) |
 | `ADE_RUNS_DIR`                  | `./data/workspaces`    | Base for runs (`<ws>/runs/<run_id>/...`)        |
 | `ADE_PIP_CACHE_DIR`             | `./data/cache/pip`     | Cache for pip downloads (safe to delete)        |
 | `ADE_BUILD_TTL_DAYS`            | —                      | Optional expiry for builds                      |
 | `ADE_ENGINE_SPEC`               | `apps/ade-engine/` | How to install the engine (path or pinned dist) |
 | `ADE_PYTHON_BIN`                | system default         | Python executable to use for `venv` (optional)  |
 | `ADE_BUILD_TIMEOUT`             | `600`                  | Max duration (seconds) for a single build before failing |
-| `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent runs per API process         |
+| `ADE_WORKER_CONCURRENCY`        | `1`                    | Worker concurrency per process                  |
+| `ADE_WORKER_POLL_INTERVAL`      | `2`                    | Idle poll interval for workers (seconds)        |
 | `ADE_QUEUE_SIZE`                | —                      | Maximum queued runs allowed (server-level)      |
 | `ADE_RUN_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for runs                           |
 | `ADE_WORKER_CPU_SECONDS`        | `60`                   | CPU limit per run                               |
@@ -236,10 +235,10 @@ This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `
 ## Backend Architecture (Essentials)
 
 * **Router** — `POST /workspaces/{workspaceId}/configurations/{configurationId}/builds` plus status/log polling endpoints under `/builds/{buildId}`.
-* **Service (`ensure_build_for_run`)** — computes the fingerprint, applies force rules, **get‑or‑creates by `(configuration_id, fingerprint)`**, and claims a build via status transitions before running the builder.
-* **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<configuration>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
-* **Runs** — resolve the build via fingerprint, then run the worker using the build‑scoped `venv_path`. Each run row stores the `build_id`.
-* **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs are streamed as `console.line` in the run event stream.
+* **API service** — computes the fingerprint, **get‑or‑creates by `(configuration_id, fingerprint)`**, and enqueues a build row (status = `queued`).
+* **Worker** — claims build rows, creates `<ADE_VENVS_DIR>/<ws>/<configuration>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure, and writes `events.ndjson`.
+* **Runs** — API records the `build_id` on each run; worker executes runs inside the build‑scoped venv.
+* **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs live alongside the venv in `events.ndjson`.
 
 ---
 

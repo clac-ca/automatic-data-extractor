@@ -9,9 +9,10 @@ If you are operating inside a subdirectory with its own `AGENTS.md`, follow the 
 ```
 automatic-data-extractor/
 ├─ apps/
-│  ├─ ade-api/      # FastAPI backend (serves /api + built SPA)
+│  ├─ ade-api/      # FastAPI backend (API only)
 │  ├─ ade-web/      # React/Vite SPA
 │  ├─ ade-engine/   # Engine runtime (Python package + Typer CLI)
+│  ├─ ade-worker/   # Background worker (builds + runs)
 │  └─ ade-cli/      # Orchestration CLI (console script: ade)
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
@@ -28,8 +29,8 @@ Docs to know:
 Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
 
 - `ade setup` — one-time bootstrap (venv, hooks).
-- `ade dev [--backend-only|--frontend-only] [--backend-port 9000]` — run dev servers.
-- `ade start` — serve API + built SPA. `ade build` — build frontend assets.
+- `ade dev [--api-only|--web-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; disable worker if needed).
+- `ade start` — serve the API + worker (run `ade migrate` first). `ade worker` — run the worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
 - `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
 - Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
@@ -45,9 +46,10 @@ Options:
 
 Commands:
   setup     Bootstrap repo env and hooks
-  dev       Run backend/frontend dev servers
-  start     Serve API + built SPA
-  build     Build frontend assets
+  dev       Run API/web dev servers (+ worker)
+  start     Serve API + worker
+  worker    Run the background worker only
+  build     Build web assets
   tests     Run Python/JS tests
   lint      Lint/format helpers
   bundle    Bundle files into Markdown

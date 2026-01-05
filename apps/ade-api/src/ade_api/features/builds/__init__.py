@@ -17,12 +17,11 @@ from .schemas import (
     BuildPage,
     BuildResource,
 )
-from .service import BuildDecision, BuildExecutionContext, BuildsService
+from .service import BuildDecision, BuildsService
 
 __all__ = [
     "BuildAlreadyInProgressError",
     "BuildDecision",
-    "BuildExecutionContext",
     "BuildExecutionError",
     "BuildNotFoundError",
     "BuildWorkspaceMismatchError",

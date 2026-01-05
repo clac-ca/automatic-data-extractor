@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sys
+from pathlib import Path
 
 import typer
 
@@ -19,9 +21,23 @@ def run_migrate(revision: str = "head") -> None:
         "Install backend dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
     alembic_ini = common.BACKEND_DIR / "alembic.ini"
+    env = common.build_env()
+    if "ALEMBIC_DATABASE_URL" not in env:
+        db_url = env.get("ADE_DATABASE_URL")
+        if not db_url:
+            default_path = (common.REPO_ROOT / "data" / "db" / "ade.sqlite").resolve()
+            db_url = f"sqlite:///{default_path.as_posix()}"
+        elif db_url.startswith("sqlite:///") and not db_url.startswith("sqlite:////"):
+            raw_path = db_url[len("sqlite:///"):]
+            if raw_path and not Path(raw_path).is_absolute():
+                abs_path = (common.REPO_ROOT / raw_path).resolve()
+                db_url = f"sqlite:///{abs_path.as_posix()}"
+        env["ALEMBIC_DATABASE_URL"] = db_url
+
     common.run(
         [sys.executable, "-m", "alembic", "-c", str(alembic_ini), "upgrade", revision],
         cwd=common.BACKEND_DIR,
+        env=env,
     )
 
 

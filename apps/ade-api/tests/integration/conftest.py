@@ -118,21 +118,6 @@ async def _override_sessionmaker(
     yield
 
 
-@pytest.fixture(autouse=True)
-def _disable_run_workers(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid long-running worker tasks during integration tests."""
-
-    async def _noop(*_args: object, **_kwargs: object) -> None:
-        return None
-
-    from ade_api.features.builds.service import BuildsService
-    from ade_api.features.runs.worker_pool import RunWorkerPool
-
-    monkeypatch.setattr(BuildsService, "launch_build_if_needed", _noop)
-    monkeypatch.setattr(RunWorkerPool, "start", _noop)
-    monkeypatch.setattr(RunWorkerPool, "stop", _noop)
-
-
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def migrated_db(base_settings: Settings) -> AsyncEngine:
     _ = base_settings

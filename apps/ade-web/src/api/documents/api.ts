@@ -9,6 +9,7 @@ export type DocumentListPage = components["schemas"]["DocumentListPage"];
 export type DocumentPageResult = DocumentListPage & { changesCursorHeader?: string | null };
 export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
+export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
 
@@ -37,6 +38,39 @@ export async function fetchDocumentSheets(
   );
 
   return (data ?? []) as DocumentSheet[];
+}
+
+export async function fetchDocumentPreview(
+  workspaceId: string,
+  documentId: string,
+  options: {
+    maxRows?: number;
+    maxColumns?: number;
+    trimEmptyRows?: boolean;
+    trimEmptyColumns?: boolean;
+    sheetName?: string | null;
+    sheetIndex?: number | null;
+  } = {},
+  signal?: AbortSignal,
+): Promise<WorkbookSheetPreview> {
+  const query: Record<string, unknown> = {};
+  if (options.maxRows !== undefined) query.maxRows = options.maxRows;
+  if (options.maxColumns !== undefined) query.maxColumns = options.maxColumns;
+  if (options.trimEmptyRows !== undefined) query.trimEmptyRows = options.trimEmptyRows;
+  if (options.trimEmptyColumns !== undefined) query.trimEmptyColumns = options.trimEmptyColumns;
+  if (options.sheetName) query.sheetName = options.sheetName;
+  if (typeof options.sheetIndex === "number") query.sheetIndex = options.sheetIndex;
+
+  const { data } = await client.GET(
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/preview",
+    {
+      params: { path: { workspaceId, documentId }, query },
+      signal,
+    },
+  );
+
+  if (!data) throw new Error("Expected document preview payload.");
+  return data;
 }
 
 export async function fetchWorkspaceDocuments(

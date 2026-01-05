@@ -4,10 +4,10 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 
 ## Deployment at a glance
 - ADE is a FastAPI application created in [`apps/ade-api/src/ade_api/main.py`](../../apps/ade-api/src/ade_api/main.py) with its settings defined in [`apps/ade-api/src/ade_api/settings.py`](../../apps/ade-api/src/ade_api/settings.py).
-- Development mirrors Uvicorn's factory semantics: run `uvicorn ade_api.main:create_app --factory` (or `ade start`) to serve the compiled SPA and API in a single process. Add `--reload` while iterating and run `ade dev --frontend --no-backend` for Vite hot module reload.
+- Development uses `ade dev` to run the API, Vite dev server, and worker together (migrations run first). Use `--no-worker`, `--api-only`, or `--web-only` when you want fewer services. Use `ade start` for the prod-ish flow (builds frontend if missing, serves frontend + API + worker; runs migrations first). Add `--no-web` if you serve the frontend separately.
 - Production deployments build the frontend once (`ade build`) and serve the static bundle behind the same reverse proxy that forwards API traffic to a managed ASGI process (Uvicorn, Uvicorn+Gunicorn, systemd, or a container orchestrator).
 - Persistent state lives under the `data/` directory by default. SQLite databases sit under `data/db/`, and each workspace stores documents beneath `data/workspaces/<workspace_id>/documents/`. Override the roots with `ADE_DATABASE_URL`, `ADE_WORKSPACES_DIR`, or `ADE_DOCUMENTS_DIR` when relocating storage.
-- The API entry point calls the shared database bootstrap helper before opening sessions. It creates the SQLite directory, runs Alembic migrations, and surfaces progress in the logs before mirroring the manual fallback documented in the [admin getting started guide](getting_started.md#manual-migrations-and-recovery).
+- The API and worker expect the schema to be migrated before startup. `ade dev` and `ade start` run migrations automatically; use `ade migrate` when you need a manual step (see the [admin getting started guide](getting_started.md#manual-migrations-and-recovery)).
 
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes read from this state rather than reloading environment variables on every request.

@@ -79,37 +79,20 @@ def get_configurations_service(session: SessionDep, settings: SettingsDep):
 
 def get_builds_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.builds.service import BuildsService
-    from ade_api.features.runs.event_stream import get_run_event_streams
 
-    event_streams = get_run_event_streams()
     storage = _build_config_storage(settings)
     return BuildsService(
         session=session,
         settings=settings,
         storage=storage,
-        event_streams=event_streams,
     )
 
 
 def get_runs_service(session: SessionDep, settings: SettingsDep):
-    from ade_api.features.runs.event_stream import get_run_event_streams
     from ade_api.features.runs.service import RunsService
-    from ade_api.features.runs.supervisor import RunExecutionSupervisor
-    from ade_api.features.system_settings.service import SafeModeService
 
     storage = _build_config_storage(settings)
-    event_streams = get_run_event_streams()
-    supervisor = RunExecutionSupervisor()
-
-    return RunsService(
-        session=session,
-        settings=settings,
-        supervisor=supervisor,
-        safe_mode_service=SafeModeService(session=session, settings=settings),
-        storage=storage,
-        event_streams=event_streams,
-        build_event_streams=event_streams,
-    )
+    return RunsService(session=session, settings=settings, storage=storage)
 
 
 def get_workspaces_service(session: SessionDep):

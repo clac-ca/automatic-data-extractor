@@ -41,7 +41,7 @@ from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_ROWS,
     MAX_PREVIEW_COLUMNS,
     MAX_PREVIEW_ROWS,
-    WorkbookPreview,
+    WorkbookSheetPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -1185,8 +1185,8 @@ async def download_document(
 
 @router.get(
     "/{documentId}/preview",
-    response_model=WorkbookPreview,
-    summary="Preview a document workbook",
+    response_model=WorkbookSheetPreview,
+    summary="Preview a document worksheet",
     response_model_exclude_none=True,
     responses={
         status.HTTP_404_NOT_FOUND: {
@@ -1240,22 +1240,27 @@ async def preview_document(
     ] = False,
     sheet_name: Annotated[
         str | None,
-        Query(alias="sheetName", description="Optional worksheet name to preview."),
+        Query(
+            alias="sheetName",
+            description="Optional worksheet name to preview (defaults to the first sheet when omitted).",
+        ),
     ] = None,
     sheet_index: Annotated[
         int | None,
         Query(
             ge=0,
             alias="sheetIndex",
-            description="Optional worksheet index to preview (0-based).",
+            description="Optional worksheet index to preview (0-based, defaults to the first sheet when omitted).",
         ),
     ] = None,
-) -> WorkbookPreview:
+) -> WorkbookSheetPreview:
     if sheet_name and sheet_index is not None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="sheetName and sheetIndex are mutually exclusive",
         )
+    if sheet_name is None and sheet_index is None:
+        sheet_index = 0
     try:
         return await service.get_document_preview(
             workspace_id=workspace_id,

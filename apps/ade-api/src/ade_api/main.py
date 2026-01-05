@@ -99,12 +99,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             extra=log_context(auth_disabled=True),
         )
 
-    # Middleware, routers, SPA, and OpenAPI configuration.
+    # Middleware, routers, and OpenAPI configuration.
     register_middleware(app, settings=settings)
     app.include_router(ops_router, include_in_schema=False)
     app.include_router(create_api_router(settings), prefix=API_PREFIX)
-    mount_spa(app, api_prefix=API_PREFIX, static_dir=settings.web_dir / "static")
     configure_openapi(app, settings)
+
+    mount_spa(app, settings.frontend_dist_dir)
 
     return app
 

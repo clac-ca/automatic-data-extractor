@@ -89,10 +89,10 @@ ADE reads database settings from environment variables (prefix `ADE_`):
 * `ADE_DATABASE_MI_CLIENT_ID`
   Optional GUID of a **user‑assigned** managed identity, if you use one. Leave unset for system‑assigned managed identity.
 
-ADE automatically:
+ADE expects:
 
-* Runs Alembic migrations against the configured database at startup.
-* Uses the same configuration (DSN + auth mode) for both runtime and migrations.
+* Migrations to be applied before starting the API/worker (`ade start` and `ade dev` run them automatically; otherwise use `ade migrate`).
+* The same configuration (DSN + auth mode) for both runtime and migrations.
 
 ---
 
@@ -193,7 +193,7 @@ ADE_DATABASE_AUTH_MODE=sql_password
 On startup, ADE will:
 
 1. Connect to Azure SQL with the supplied credentials.
-2. Run Alembic migrations to ensure the schema is up to date.
+2. Expect the schema to be migrated already (`ade migrate`).
 3. Serve traffic using Azure SQL as the backing store.
 
 **Recommended use**: staging, early production, or where managed identity is not yet available. Long‑term, consider switching to managed identity for secretless auth.
@@ -252,7 +252,7 @@ On startup, ADE will:
 
 * Use `DefaultAzureCredential` inside the container to obtain an access token for `https://database.windows.net/.default`.
 * Pass that token to the SQL Server ODBC driver in the correct format.
-* Run migrations and serve traffic with **no credentials in the DSN**.
+* Serve traffic with **no credentials in the DSN** after migrations are applied (`ade migrate`).
 
 **Recommended use**: production ADE deployments on Azure Container Apps.
 
@@ -277,4 +277,4 @@ On startup, ADE will:
 * Start with **`sql_password`** if you need a simple bring‑up.
 * Move to **`managed_identity`** as your long‑term, secure, secretless configuration.
 
-Once the environment variables are set and the image includes the required ODBC driver (as in the provided Dockerfile), ADE will bootstrap the database automatically on startup.
+Once the environment variables are set and the image includes the required ODBC driver (as in the provided Dockerfile), `ade start` will run migrations automatically. If you are launching the API/worker manually, run `ade migrate` to bootstrap the schema first.

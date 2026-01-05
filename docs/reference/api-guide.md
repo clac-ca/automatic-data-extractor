@@ -6,7 +6,7 @@ This guide is for developers who want to integrate with the Automatic Data Extra
 
 ADE exposes a JSON REST API under a versioned base path:
 
-- **Base URL**: `https://{your-domain}/api`
+- **Base URL**: `https://{your-domain}/api/v1`
 - **Current version**: `v1`
 - **Example**: `https://ade.example.com/api/v1`
 
@@ -174,11 +174,12 @@ Upload source files for extraction. All document routes are nested under the wor
 
 Trigger and monitor extraction runs. Creation is configuration-scoped; reads are global by run ID.
 
-- `POST /configurations/{configurationId}/runs` – submit a run for the given configuration; requires `input_document_id` and supports inline streaming or background execution depending on `stream` (returns `429` with `run_queue_full` when the queue is full).
+- `POST /configurations/{configurationId}/runs` – submit a run for the given configuration; requires `input_document_id` and returns a queued `Run` snapshot (returns `429` with `run_queue_full` when the queue is full).
 - `POST /configurations/{configurationId}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection; returns `429` with `run_queue_full` when the full batch does not fit).
 - `GET /workspaces/{workspaceId}/runs` – list recent runs for a workspace; use the filter DSL for status or source document filters.
 - `GET /runs/{runId}` – retrieve run metadata (status, timing, config/build references, input/output hints).
-- `GET /runs/{runId}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).
+- `GET /runs/{runId}/events` – fetch structured events (JSON or NDJSON).
+- `GET /runs/{runId}/events/stream` – SSE stream of the run event log.
 - `GET /runs/{runId}/input` – fetch input metadata; `GET /runs/{runId}/input/download` downloads the original file.
 - `GET /runs/{runId}/output` – fetch output metadata (`ready`, size, content type, download URL).
 - `GET /runs/{runId}/output/download` – download the normalized output; returns `409` when not ready.
@@ -210,11 +211,13 @@ Author and manage ADE configuration packages. All routes are workspace-scoped.
 
 Provision isolated virtual environments for configurations. Builds are configuration-scoped, with global lookup by `build_id`.
 
-- `POST /workspaces/{workspaceId}/configurations/{configurationId}/builds` – enqueue or stream a build (`stream: true|false`, `options.force`, `options.wait`).
+- `POST /workspaces/{workspaceId}/configurations/{configurationId}/builds` – enqueue a build (`options.force`, `options.wait`).
 - `GET /workspaces/{workspaceId}/configurations/{configurationId}/builds` – list build history for a configuration (canonical list contract; filter on `status`, `createdAt`, etc.).
 - `GET /builds/{buildId}` – fetch a build snapshot (status, timestamps, exit code, engine/python metadata).
+- `GET /builds/{buildId}/events` – fetch structured build events (JSON or NDJSON).
+- `GET /builds/{buildId}/events/stream` – SSE stream of the build event log.
 
-> Build console output is emitted as `EventRecord` entries (`console.line` with `data.scope="build"`) in the same stream used for run events. Attach to `/runs/{runId}/events/stream` after submitting a run or use streaming build creation (`stream: true`) to receive the same EventRecords inline.
+> Build console output is emitted as `EventRecord` entries (`console.line` with `data.scope=\"build\"`) in the build event stream. Runs expose their own event stream under `/runs/{runId}/events/stream`.
 
 ## Error handling
 

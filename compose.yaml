@@ -1,21 +1,65 @@
 services:
-  ade:
-    image: ghcr.io/clac-ca/automatic-data-extractor:local
+  ade-api:
+    image: ghcr.io/clac-ca/automatic-data-extractor-api:local
     build:
       context: .
       dockerfile: ./Dockerfile
       args:
-        PYTHON_VERSION: "3.14"
+        PYTHON_VERSION: "3.12"
 
     env_file:
       - .env
 
+    # Store everything ADE produces in a managed Docker volume
+    volumes:
+      - ade_data:/app/data
+
+    command: ["ade", "start", "--no-worker", "--no-web", "--api-host", "0.0.0.0", "--api-port", "8000"]
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ade-web:
+    image: ghcr.io/clac-ca/automatic-data-extractor-web:local
+    build:
+      context: .
+      dockerfile: ./Dockerfile.web
+      args:
+        NODE_VERSION: "20"
+
     ports:
-      - "8000:8000"
+      - "8000:80"
+
+    depends_on:
+      - ade-api
+
+    restart: unless-stopped
+
+  ade-worker:
+    image: ghcr.io/clac-ca/automatic-data-extractor-api:local
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        PYTHON_VERSION: "3.12"
+
+    env_file:
+      - .env
 
     # Store everything ADE produces in a managed Docker volume
     volumes:
       - ade_data:/app/data
+
+    command: ["ade-worker"]
+
+    depends_on:
+      ade-api:
+        condition: service_healthy
 
     restart: unless-stopped
 

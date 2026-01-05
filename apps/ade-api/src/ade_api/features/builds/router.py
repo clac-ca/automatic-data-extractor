@@ -8,7 +8,6 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -22,14 +21,13 @@ from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import get_builds_service, get_idempotency_service
 from ade_api.common.encoding import json_bytes
-from ade_api.common.events import strip_sequence
+from ade_api.common.sse import stream_ndjson_events
 from ade_api.common.listing import (
     ListQueryParams,
     list_query_params,
     strict_list_query_guard,
 )
 from ade_api.common.sorting import resolve_sort
-from ade_api.common.sse import sse_json
 from ade_api.core.auth import AuthenticatedPrincipal
 from ade_api.core.http import (
     get_current_principal,
@@ -44,13 +42,11 @@ from ade_api.features.idempotency import (
     build_scope_key,
     require_idempotency_key,
 )
-from ade_api.models import BuildStatus
 
 from .exceptions import BuildNotFoundError
 from .schemas import BuildCreateRequest, BuildEventsPage, BuildPage, BuildResource
 from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from .tasks import execute_build_background
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
 builds_service_dependency = Depends(get_builds_service)
@@ -133,7 +129,6 @@ async def create_build_endpoint(
     workspace_id: WorkspacePath,
     configuration_id: ConfigurationPath,
     payload: BuildCreateRequest,
-    background_tasks: BackgroundTasks,
     request: Request,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     idempotency_key: Annotated[str, Depends(require_idempotency_key)],
@@ -164,7 +159,7 @@ async def create_build_endpoint(
     if replay:
         return replay.to_response()
     try:
-        build, context = await service.prepare_build(
+        build = await service.prepare_build(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             options=payload.options,
@@ -180,12 +175,6 @@ async def create_build_endpoint(
         request_hash=request_hash,
         status_code=status.HTTP_201_CREATED,
         body=resource,
-    )
-    background_tasks.add_task(
-        execute_build_background,
-        context.as_dict(),
-        payload.options.model_dump(),
-        service.settings.model_dump(mode="python"),
     )
     return resource
 
@@ -244,9 +233,6 @@ async def stream_build_events_endpoint(
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
 
-    # Kick off execution if this build is still pending; stream will then tail events.
-    await service.launch_build_if_needed(build=build, reason="sse_stream", run_id=None)
-
     last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
         "Last-Event-ID"
     )
@@ -258,55 +244,21 @@ async def stream_build_events_endpoint(
             start_sequence = None
     start_sequence = start_sequence or 0
 
-    async def event_stream() -> AsyncIterator[dict[str, str]]:
-        last_sequence = start_sequence
-
-        async with service.subscribe_to_events(build) as subscription:
-            for event in service.iter_events(build=build, after_sequence=start_sequence):
-                seq = event.get("sequence")
-                if isinstance(seq, int):
-                    last_sequence = seq
-                else:
-                    last_sequence += 1
-                payload = strip_sequence(event)
-                yield sse_json(
-                    str(event.get("event") or "message"),
-                    payload,
-                    event_id=last_sequence,
-                )
-                if event.get("event") in {"build.complete", "build.failed"}:
-                    return
-
-            build_already_finished = build.status in {
-                BuildStatus.READY,
-                BuildStatus.FAILED,
-                BuildStatus.CANCELLED,
-            }
-            if build_already_finished:
-                return
-
-            async for live_event in subscription:
-                seq = live_event.get("sequence")
-                if isinstance(seq, int):
-                    if seq <= last_sequence:
-                        continue
-                    last_sequence = seq
-                else:
-                    last_sequence += 1
-                payload = strip_sequence(live_event)
-                yield sse_json(
-                    str(live_event.get("event") or "message"),
-                    payload,
-                    event_id=last_sequence,
-                )
-                if live_event.get("event") in {"build.complete", "build.failed"}:
-                    break
+    log_path = service.get_event_log_path(
+        workspace_id=build.workspace_id,
+        configuration_id=build.configuration_id,
+        build_id=build.id,
+    )
 
     return EventSourceResponse(
-        event_stream(),
+        stream_ndjson_events(
+            path=log_path,
+            start_sequence=start_sequence,
+            stop_events={"build.complete", "build.failed"},
+            ping_interval=15,
+        ),
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
-        ping=15,
     )

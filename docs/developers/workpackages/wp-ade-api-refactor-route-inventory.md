@@ -3,7 +3,7 @@
 Generated via:
 
 ```
-ADE_LOGGING_LEVEL=CRITICAL PYTHONPATH=apps/ade-api/src python -m ade_api.scripts.api_routes --format text
+ADE_API_LOG_LEVEL=CRITICAL PYTHONPATH=apps/ade-api/src python -m ade_api.scripts.api_routes --format text
 ```
 
 Note: `ade routes` was not available in this environment, so the underlying module command was used.

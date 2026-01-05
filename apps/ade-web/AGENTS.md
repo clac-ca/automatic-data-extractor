@@ -42,7 +42,7 @@ apps/ade-web/
 
 ```
 npm run dev        # Vite dev server
-npm run build      # Vite build output (copied into apps/ade-api/src/ade_api/web/static by ade build)
+npm run build      # Vite build output in apps/ade-web/dist (serve via web server or reverse proxy)
 npm run test       # Vitest test suite
 npm run lint       # ESLint (frontend)
 ade openapi-types  # regenerate TS types from the FastAPI schema

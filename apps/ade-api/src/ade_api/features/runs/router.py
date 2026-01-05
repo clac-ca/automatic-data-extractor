@@ -24,20 +24,20 @@ from sse_starlette.sse import EventSourceResponse
 from ade_api.api.deps import get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
-from ade_api.common.events import EventRecord, strip_sequence
+from ade_api.common.events import EventRecord
 from ade_api.common.listing import (
     ListQueryParams,
     list_query_params,
     strict_list_query_guard,
 )
 from ade_api.common.sorting import resolve_sort
-from ade_api.common.sse import sse_json
+from ade_api.common.sse import stream_ndjson_events
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
     MAX_PREVIEW_COLUMNS,
     MAX_PREVIEW_ROWS,
-    WorkbookPreview,
+    WorkbookSheetPreview,
 )
 from ade_api.core.auth import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
@@ -60,6 +60,8 @@ from .exceptions import (
     RunOutputPreviewParseError,
     RunOutputPreviewSheetNotFoundError,
     RunOutputPreviewUnsupportedError,
+    RunOutputSheetParseError,
+    RunOutputSheetUnsupportedError,
     RunQueueFullError,
 )
 from .filters import RunColumnFilters
@@ -73,6 +75,7 @@ from .schemas import (
     RunInput,
     RunMetricsResource,
     RunOutput,
+    RunOutputSheet,
     RunPage,
     RunResource,
     RunWorkspaceBatchCreateRequest,
@@ -621,10 +624,6 @@ async def stream_run_events_endpoint(
     after_sequence: int | None = Query(default=None, ge=0),
     service: RunsService = runs_service_dependency,
 ) -> EventSourceResponse:
-    run = await service.get_run(run_id)
-    if run is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
-
     last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
         "Last-Event-ID"
     )
@@ -636,57 +635,22 @@ async def stream_run_events_endpoint(
             start_sequence = None
     start_sequence = start_sequence or 0
 
-    async def event_stream() -> AsyncIterator[dict[str, str]]:
-        last_sequence = start_sequence
-
-        async with service.subscribe_to_events(run) as subscription:
-            for event in service.iter_events(run=run, after_sequence=start_sequence):
-                seq = event.get("sequence")
-                if isinstance(seq, int):
-                    last_sequence = seq
-                else:
-                    last_sequence += 1
-                payload = strip_sequence(event)
-                yield sse_json(
-                    str(event.get("event") or "message"),
-                    payload,
-                    event_id=last_sequence,
-                )
-                if event.get("event") == "run.complete":
-                    return
-
-            run_already_finished = run.status in {
-                RunStatus.SUCCEEDED,
-                RunStatus.FAILED,
-                RunStatus.CANCELLED,
-            }
-            if run_already_finished:
-                return
-
-            async for live_event in subscription:
-                seq = live_event.get("sequence")
-                if isinstance(seq, int):
-                    if seq <= last_sequence:
-                        continue
-                    last_sequence = seq
-                else:
-                    last_sequence += 1
-                payload = strip_sequence(live_event)
-                yield sse_json(
-                    str(live_event.get("event") or "message"),
-                    payload,
-                    event_id=last_sequence,
-                )
-                if live_event.get("event") == "run.complete":
-                    break
+    try:
+        log_path = await service.get_event_log_path(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return EventSourceResponse(
-        event_stream(),
+        stream_ndjson_events(
+            path=log_path,
+            start_sequence=start_sequence,
+            stop_events={"run.complete"},
+            ping_interval=15,
+        ),
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
-        ping=15,
     )
 
 
@@ -782,10 +746,66 @@ async def download_run_output_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/output/preview",
-    response_model=WorkbookPreview,
+    "/runs/{runId}/output/sheets",
+    response_model=list[RunOutputSheet],
     response_model_exclude_none=True,
-    summary="Preview run output workbook",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
+        status.HTTP_409_CONFLICT: {"description": "Output not ready"},
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: {
+            "description": "Sheets are not supported for this file type.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "The output exists but could not be parsed for worksheets.",
+        },
+    },
+    summary="List run output worksheets",
+)
+async def list_run_output_sheets_endpoint(
+    run_id: RunPath,
+    service: RunsService = runs_service_dependency,
+) -> list[RunOutputSheet]:
+    try:
+        return await service.list_run_output_sheets(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunOutputNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "OUTPUT_NOT_READY",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+    except RunOutputMissingError as exc:
+        status_code = status.HTTP_404_NOT_FOUND
+        run_record = await service.get_run(run_id)  # type: ignore[arg-type]
+        if run_record and run_record.status is RunStatus.FAILED:
+            detail = {
+                "error": {
+                    "code": "RUN_FAILED_NO_OUTPUT",
+                    "message": str(exc),
+                }
+            }
+        else:
+            detail = str(exc)
+        raise HTTPException(status_code, detail=detail) from exc
+    except RunOutputSheetUnsupportedError as exc:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except RunOutputSheetParseError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/runs/{runId}/output/preview",
+    response_model=WorkbookSheetPreview,
+    response_model_exclude_none=True,
+    summary="Preview run output worksheet",
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
         status.HTTP_409_CONFLICT: {"description": "Output not ready"},
@@ -819,29 +839,50 @@ async def preview_run_output_endpoint(
             description="Maximum columns per sheet to include in the preview.",
         ),
     ] = DEFAULT_PREVIEW_COLUMNS,
+    trim_empty_columns: Annotated[
+        bool,
+        Query(
+            alias="trimEmptyColumns",
+            description="If true, trims columns with no data within the preview window.",
+        ),
+    ] = False,
+    trim_empty_rows: Annotated[
+        bool,
+        Query(
+            alias="trimEmptyRows",
+            description="If true, trims rows with no data within the preview window.",
+        ),
+    ] = False,
     sheet_name: Annotated[
         str | None,
-        Query(alias="sheetName", description="Optional worksheet name to preview."),
+        Query(
+            alias="sheetName",
+            description="Optional worksheet name to preview (defaults to the first sheet when omitted).",
+        ),
     ] = None,
     sheet_index: Annotated[
         int | None,
         Query(
             ge=0,
             alias="sheetIndex",
-            description="Optional worksheet index to preview (0-based).",
+            description="Optional worksheet index to preview (0-based, defaults to the first sheet when omitted).",
         ),
     ] = None,
-) -> WorkbookPreview:
+) -> WorkbookSheetPreview:
     if sheet_name and sheet_index is not None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="sheetName and sheetIndex are mutually exclusive",
         )
+    if sheet_name is None and sheet_index is None:
+        sheet_index = 0
     try:
         return await service.get_run_output_preview(
             run_id=run_id,
             max_rows=max_rows,
             max_columns=max_columns,
+            trim_empty_columns=trim_empty_columns,
+            trim_empty_rows=trim_empty_rows,
             sheet_name=sheet_name,
             sheet_index=sheet_index,
         )

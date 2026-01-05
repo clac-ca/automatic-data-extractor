@@ -125,7 +125,8 @@ def setup_logging(settings: Settings) -> None:
     """Configure root logging for the ADE API process.
 
     This installs a single console-style StreamHandler on stdout and sets the
-    root log level from ``settings.logging_level`` (env: ``ADE_LOGGING_LEVEL``).
+    root log level from ``settings.logging_level`` (env: ``ADE_API_LOG_LEVEL`` or
+    ``ADE_LOG_LEVEL``).
 
     It also wires common third-party loggers (uvicorn, alembic, sqlalchemy) to
     propagate into the same root logger so that all logs share a consistent

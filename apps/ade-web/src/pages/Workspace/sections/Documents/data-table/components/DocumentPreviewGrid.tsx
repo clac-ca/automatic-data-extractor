@@ -1,41 +1,22 @@
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
-import { apiFetch } from "@api/client";
-import { ApiError, tryParseProblemDetails } from "@api/errors";
+import { cn } from "@/lib/utils";
+import { fetchRunOutputPreview, fetchRunOutputSheets } from "@api/runs/api";
+import { ApiError } from "@api/errors";
 import { columnLabel } from "@pages/Workspace/sections/Documents/utils";
 
 import type { DocumentListRow } from "../types";
-import type { WorkbookPreview, WorkbookSheet } from "@pages/Workspace/sections/Documents/types";
+import type { WorkbookSheetPreview } from "@pages/Workspace/sections/Documents/types";
+import type { RunOutputSheet } from "@api/runs/api";
 
 type PreviewRow = Record<string, string>;
 
 const PREVIEW_MAX_ROWS = 200;
-
-async function fetchDocumentPreview(
-  workspaceId: string,
-  documentId: string,
-  signal?: AbortSignal,
-): Promise<WorkbookPreview> {
-  const params = new URLSearchParams({
-    maxRows: String(PREVIEW_MAX_ROWS),
-    trimEmptyColumns: "true",
-    trimEmptyRows: "true",
-  });
-  const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/documents/${documentId}/preview?${params.toString()}`,
-    { signal },
-  );
-  if (!response.ok) {
-    const problem = await tryParseProblemDetails(response);
-    const message = problem?.title ?? `Preview request failed (${response.status})`;
-    throw new ApiError(message, response.status, problem);
-  }
-  return (await response.json()) as WorkbookPreview;
-}
+const PREVIEW_MAX_COLUMNS = 50;
 
 interface DocumentPreviewGridProps {
   document: DocumentListRow;
@@ -44,14 +25,52 @@ interface DocumentPreviewGridProps {
 export function DocumentPreviewGrid({
   document: doc,
 }: DocumentPreviewGridProps) {
-  const previewQuery = useQuery({
-    queryKey: ["document-preview", doc.workspaceId, doc.id],
-    queryFn: ({ signal }) => fetchDocumentPreview(doc.workspaceId, doc.id, signal),
+  const runId = doc.latestSuccessfulRun?.id ?? null;
+
+  const sheetsQuery = useQuery({
+    queryKey: ["run-output-sheets", runId],
+    queryFn: ({ signal }) => fetchRunOutputSheets(runId ?? "", signal),
     staleTime: 30_000,
-    enabled: Boolean(doc.workspaceId && doc.id),
+    enabled: Boolean(runId),
   });
 
-  const sheet = previewQuery.data?.sheets?.[0] ?? null;
+  const sheets = sheetsQuery.data ?? [];
+  const [selectedSheetIndex, setSelectedSheetIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!sheets.length) return;
+    if (selectedSheetIndex !== null && sheets.some((sheet) => sheet.index === selectedSheetIndex)) {
+      return;
+    }
+    const active = sheets.find((sheet) => sheet.is_active);
+    setSelectedSheetIndex(active?.index ?? sheets[0].index);
+  }, [sheets, selectedSheetIndex]);
+
+  const activeSheetIndex = useMemo(() => {
+    if (selectedSheetIndex !== null) return selectedSheetIndex;
+    const active = sheets.find((sheet) => sheet.is_active);
+    return active?.index ?? sheets[0]?.index ?? 0;
+  }, [selectedSheetIndex, sheets]);
+
+  const previewQuery = useQuery({
+    queryKey: ["run-output-preview", runId, activeSheetIndex],
+    queryFn: ({ signal }) =>
+      fetchRunOutputPreview(
+        runId ?? "",
+        {
+          maxRows: PREVIEW_MAX_ROWS,
+          maxColumns: PREVIEW_MAX_COLUMNS,
+          trimEmptyColumns: true,
+          trimEmptyRows: true,
+          sheetIndex: activeSheetIndex,
+        },
+        signal,
+      ),
+    staleTime: 30_000,
+    enabled: Boolean(runId),
+  });
+
+  const sheet = previewQuery.data ?? null;
   const columnCount = useMemo(() => {
     if (!sheet) return 0;
     const maxRowLength = sheet.rows.reduce(
@@ -108,9 +127,26 @@ export function DocumentPreviewGrid({
     },
   });
 
+  const sheetMeta = sheet ? formatSheetMeta(sheet) : null;
+  const sheetTabs = sheets.length ? (
+    <SheetTabs
+      sheets={sheets}
+      activeIndex={activeSheetIndex}
+      onSelect={setSelectedSheetIndex}
+    />
+  ) : null;
+
+  if (!runId) {
+    return (
+      <PreviewShell title={doc.name} meta={sheetMeta}>
+        <div className="text-xs text-muted-foreground">No successful run output available yet.</div>
+      </PreviewShell>
+    );
+  }
+
   if (previewQuery.isLoading) {
     return (
-      <PreviewShell title={doc.name}>
+      <PreviewShell title={doc.name} meta={sheetMeta}>
         <div className="text-xs text-muted-foreground">Loading preview...</div>
       </PreviewShell>
     );
@@ -121,7 +157,7 @@ export function DocumentPreviewGrid({
     const message =
       error instanceof ApiError ? error.message : "Unable to load preview.";
     return (
-      <PreviewShell title={doc.name}>
+      <PreviewShell title={doc.name} meta={sheetMeta}>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{message}</span>
           <Button
@@ -139,21 +175,22 @@ export function DocumentPreviewGrid({
 
   if (!sheet) {
     return (
-      <PreviewShell title={doc.name}>
+      <PreviewShell title={doc.name} meta={sheetMeta}>
         <div className="text-xs text-muted-foreground">No preview data available.</div>
       </PreviewShell>
     );
   }
 
-  const sheetMeta = formatSheetMeta(sheet, previewQuery.data?.sheets?.length ?? 0);
-
   return (
     <PreviewShell title={doc.name} meta={sheetMeta}>
-      <DataTable
-        table={table}
-        showPagination={false}
-        className="min-w-0 max-w-full gap-1.5 overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:max-h-[min(360px,45vh)] [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table-container]]:overflow-y-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:text-xs [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-10 [&_[data-slot=table-head]]:h-8 [&_[data-slot=table-head]]:bg-muted/30 [&_[data-slot=table-head]]:text-[11px] [&_[data-slot=table-head]]:font-semibold [&_[data-slot=table-head]]:text-muted-foreground [&_[data-slot=table-head]]:truncate [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))] [&_[data-slot=table-cell]]:px-2 [&_[data-slot=table-cell]]:py-1.5 [&_[data-slot=table-cell]]:text-xs [&_[data-slot=table-cell]]:truncate"
-      />
+      <div className="flex flex-col gap-2">
+        <DataTable
+          table={table}
+          showPagination={false}
+          className="min-w-0 max-w-full gap-1.5 overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:max-h-[min(360px,45vh)] [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table-container]]:overflow-y-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:text-xs [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-10 [&_[data-slot=table-head]]:h-8 [&_[data-slot=table-head]]:bg-muted/30 [&_[data-slot=table-head]]:text-[11px] [&_[data-slot=table-head]]:font-semibold [&_[data-slot=table-head]]:text-muted-foreground [&_[data-slot=table-head]]:truncate [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))] [&_[data-slot=table-cell]]:px-2 [&_[data-slot=table-cell]]:py-1.5 [&_[data-slot=table-cell]]:text-xs [&_[data-slot=table-cell]]:truncate"
+        />
+        {sheetTabs}
+      </div>
     </PreviewShell>
   );
 }
@@ -178,14 +215,16 @@ function PreviewShell({
             {title}
           </div>
         </div>
-        {meta ? <div className="text-xs text-muted-foreground">{meta}</div> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {meta ? <div className="text-xs text-muted-foreground">{meta}</div> : null}
+        </div>
       </div>
       <div className="min-w-0 p-2">{children}</div>
     </div>
   );
 }
 
-function formatSheetMeta(sheet: WorkbookSheet, sheetCount: number) {
+function formatSheetMeta(sheet: WorkbookSheetPreview) {
   const parts = [
     sheet.name,
     `${sheet.totalRows.toLocaleString()} rows`,
@@ -199,9 +238,39 @@ function formatSheetMeta(sheet: WorkbookSheet, sheetCount: number) {
     parts.push(truncations.join(", "));
   }
 
-  if (sheetCount > 1) {
-    parts.push(`1 of ${sheetCount} sheets`);
-  }
-
   return parts.filter(Boolean).join(" | ");
+}
+
+function SheetTabs({
+  sheets,
+  activeIndex,
+  onSelect,
+}: {
+  sheets: RunOutputSheet[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <div className="flex w-full items-center gap-1 overflow-x-auto border-t border-border bg-muted/30 px-2 py-1">
+      {sheets.map((sheet) => {
+        const isActive = sheet.index === activeIndex;
+        return (
+          <button
+            key={sheet.index}
+            type="button"
+            onClick={() => onSelect(sheet.index)}
+            className={cn(
+              "rounded-t-md border px-3 py-1 text-xs font-medium transition",
+              isActive
+                ? "border-border bg-background text-foreground shadow-sm"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50",
+            )}
+            aria-current={isActive ? "page" : undefined}
+          >
+            {sheet.name}
+          </button>
+        );
+      })}
+    </div>
+  );
 }

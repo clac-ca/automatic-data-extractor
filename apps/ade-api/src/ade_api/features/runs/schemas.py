@@ -31,6 +31,7 @@ __all__ = [
     "RunColumnResource",
     "RunLinks",
     "RunOutput",
+    "RunOutputSheet",
     "RunPage",
     "RunResource",
     "RunEventsPage",
@@ -193,6 +194,15 @@ class RunOutput(BaseSchema):
     has_output: bool = False
     output_path: str | None = None
     processed_file: str | None = None
+
+
+class RunOutputSheet(BaseSchema):
+    """Descriptor for a worksheet or single-sheet run output."""
+
+    name: str
+    index: int = Field(ge=0)
+    kind: Literal["worksheet", "file"] = "worksheet"
+    is_active: bool = False
 
 
 class RunMetricsResource(BaseSchema):

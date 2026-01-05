@@ -49,8 +49,6 @@ interface DocumentsTableProps {
   scrollFooter?: ReactNode;
 }
 
-const PREVIEWABLE_FILE_TYPES = new Set<FileType>(["xlsx", "csv"]);
-
 export function DocumentsTable({
   data,
   pageCount,
@@ -461,7 +459,7 @@ export function DocumentsTable({
         id: "actions",
         cell: ({ row }) => {
           const isArchived = row.original.status === "archived";
-          const isPreviewable = PREVIEWABLE_FILE_TYPES.has(row.original.fileType);
+          const isPreviewable = Boolean(row.original.latestSuccessfulRun?.id);
           const isExpanded = row.id === expandedRowId;
           const isBusy = isRowActionPending?.(row.original.id) ?? false;
 
@@ -677,9 +675,9 @@ export function DocumentsTable({
                     maxWidth: "var(--documents-preview-width, 100%)",
                   }}
                 >
-                  {!PREVIEWABLE_FILE_TYPES.has(row.original.fileType) ? (
+                  {!row.original.latestSuccessfulRun?.id ? (
                     <div className="p-2 text-muted-foreground text-sm">
-                      Preview not available for this file type.
+                      Preview is available after a successful run completes.
                     </div>
                   ) : (
                     <DocumentPreviewGrid document={row.original} />

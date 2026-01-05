@@ -13,6 +13,8 @@ export type RunMetricsResource = components["schemas"]["RunMetricsResource"];
 export type RunFieldResource = components["schemas"]["RunFieldResource"];
 export type RunColumnResource = components["schemas"]["RunColumnResource"];
 export type RunColumnsQuery = paths["/api/v1/runs/{runId}/columns"]["get"]["parameters"]["query"];
+export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
+export type RunOutputSheet = components["schemas"]["RunOutputSheet"];
 
 export type RunsQuery = {
   page?: number;
@@ -145,6 +147,47 @@ export async function fetchRunColumns(
     }
     throw error;
   }
+}
+
+export async function fetchRunOutputSheets(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<RunOutputSheet[]> {
+  const { data } = await client.GET("/api/v1/runs/{runId}/output/sheets", {
+    params: { path: { runId } },
+    signal,
+  });
+  if (!data) throw new Error("Expected run output sheets payload.");
+  return data;
+}
+
+export async function fetchRunOutputPreview(
+  runId: string,
+  options: {
+    maxRows?: number;
+    maxColumns?: number;
+    trimEmptyRows?: boolean;
+    trimEmptyColumns?: boolean;
+    sheetName?: string | null;
+    sheetIndex?: number | null;
+  } = {},
+  signal?: AbortSignal,
+): Promise<WorkbookSheetPreview> {
+  const query: Record<string, unknown> = {};
+  if (options.maxRows !== undefined) query.maxRows = options.maxRows;
+  if (options.maxColumns !== undefined) query.maxColumns = options.maxColumns;
+  if (options.trimEmptyRows !== undefined) query.trimEmptyRows = options.trimEmptyRows;
+  if (options.trimEmptyColumns !== undefined) query.trimEmptyColumns = options.trimEmptyColumns;
+  if (options.sheetName) query.sheetName = options.sheetName;
+  if (typeof options.sheetIndex === "number") query.sheetIndex = options.sheetIndex;
+
+  const { data } = await client.GET("/api/v1/runs/{runId}/output/preview", {
+    params: { path: { runId }, query },
+    signal,
+  });
+
+  if (!data) throw new Error("Expected run output preview payload.");
+  return data;
 }
 
 export async function createRunForDocument(

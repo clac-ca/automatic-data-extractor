@@ -36,3 +36,21 @@ def test_run_parallel_handles_keyboard_interrupt(monkeypatch):
     assert excinfo.value.exit_code == 130
     assert fake_proc.terminated is True
     assert fake_proc.waited is True
+
+
+def test_build_env_reads_dotenv_without_overriding(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        """
+FOO=from_dotenv
+BAR=from_dotenv
+"""
+    )
+
+    monkeypatch.setattr(common, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv("BAR", "from_env")
+
+    env = common.build_env()
+
+    assert env["FOO"] == "from_dotenv"
+    assert env["BAR"] == "from_env"

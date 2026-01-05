@@ -20,18 +20,13 @@ class WorkbookSheetPreview(BaseSchema):
     """Table-ready preview for a single workbook sheet."""
 
     name: str
+    index: int = Field(ge=0)
     headers: list[str]
     rows: list[list[str]]
     total_rows: int = Field(alias="totalRows")
     total_columns: int = Field(alias="totalColumns")
     truncated_rows: bool = Field(alias="truncatedRows")
     truncated_columns: bool = Field(alias="truncatedColumns")
-
-
-class WorkbookPreview(BaseSchema):
-    """Preview payload for a workbook."""
-
-    sheets: list[WorkbookSheetPreview]
 
 
 def build_workbook_preview_from_xlsx(
@@ -43,22 +38,19 @@ def build_workbook_preview_from_xlsx(
     trim_empty_rows: bool = False,
     sheet_name: str | None = None,
     sheet_index: int | None = None,
-) -> WorkbookPreview:
+) -> WorkbookSheetPreview:
     with path.open("rb") as handle:
         workbook = openpyxl.load_workbook(handle, read_only=True, data_only=True)
         try:
-            sheets = _select_xlsx_sheets(workbook, sheet_name, sheet_index)
-            previews = [
-                _preview_xlsx_sheet(
-                    sheet,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                )
-                for sheet in sheets
-            ]
-            return WorkbookPreview(sheets=previews)
+            index, sheet = _select_xlsx_sheet(workbook, sheet_name, sheet_index)
+            return _preview_xlsx_sheet(
+                sheet,
+                index=index,
+                max_rows=max_rows,
+                max_columns=max_columns,
+                trim_empty_columns=trim_empty_columns,
+                trim_empty_rows=trim_empty_rows,
+            )
         finally:
             workbook.close()
 
@@ -72,7 +64,7 @@ def build_workbook_preview_from_csv(
     trim_empty_rows: bool = False,
     sheet_name: str | None = None,
     sheet_index: int | None = None,
-) -> WorkbookPreview:
+) -> WorkbookSheetPreview:
     name = path.stem or "Sheet1"
     if sheet_name and sheet_name != name:
         raise KeyError(f"Sheet {sheet_name!r} not found")
@@ -91,37 +83,35 @@ def build_workbook_preview_from_csv(
             if len(rows) < max_rows:
                 rows.append([_normalize_cell(cell) for cell in row])
 
-    return WorkbookPreview(
-        sheets=[
-            _preview_sheet_from_rows(
-                name=name,
-                rows=rows,
-                total_rows=total_rows,
-                total_columns=total_columns,
-                max_rows=max_rows,
-                max_columns=max_columns,
-                trim_empty_columns=trim_empty_columns,
-                trim_empty_rows=trim_empty_rows,
-            )
-        ]
+    return _preview_sheet_from_rows(
+        name=name,
+        index=0,
+        rows=rows,
+        total_rows=total_rows,
+        total_columns=total_columns,
+        max_rows=max_rows,
+        max_columns=max_columns,
+        trim_empty_columns=trim_empty_columns,
+        trim_empty_rows=trim_empty_rows,
     )
 
 
-def _select_xlsx_sheets(workbook, sheet_name: str | None, sheet_index: int | None):
+def _select_xlsx_sheet(workbook, sheet_name: str | None, sheet_index: int | None):
     if sheet_name:
         if sheet_name not in workbook.sheetnames:
             raise KeyError(f"Sheet {sheet_name!r} not found")
-        return [workbook[sheet_name]]
-    if sheet_index is not None:
-        if sheet_index < 0 or sheet_index >= len(workbook.sheetnames):
-            raise IndexError("sheet_index out of range")
-        return [workbook[workbook.sheetnames[sheet_index]]]
-    return [workbook[name] for name in workbook.sheetnames]
+        index = workbook.sheetnames.index(sheet_name)
+        return index, workbook[sheet_name]
+    effective_index = sheet_index if sheet_index is not None else 0
+    if effective_index < 0 or effective_index >= len(workbook.sheetnames):
+        raise IndexError("sheet_index out of range")
+    return effective_index, workbook[workbook.sheetnames[effective_index]]
 
 
 def _preview_xlsx_sheet(
     sheet,
     *,
+    index: int,
     max_rows: int,
     max_columns: int,
     trim_empty_columns: bool,
@@ -140,6 +130,7 @@ def _preview_xlsx_sheet(
     total_columns = sheet.max_column or 0
     return _preview_sheet_from_rows(
         name=sheet.title,
+        index=index,
         rows=rows,
         total_rows=total_rows,
         total_columns=total_columns,
@@ -153,6 +144,7 @@ def _preview_xlsx_sheet(
 def _preview_sheet_from_rows(
     *,
     name: str,
+    index: int,
     rows: Sequence[Sequence[str]],
     total_rows: int,
     total_columns: int,
@@ -185,6 +177,7 @@ def _preview_sheet_from_rows(
 
     return WorkbookSheetPreview(
         name=name,
+        index=index,
         headers=headers,
         rows=body_rows,
         total_rows=total_rows,
@@ -265,7 +258,6 @@ __all__ = [
     "DEFAULT_PREVIEW_ROWS",
     "MAX_PREVIEW_COLUMNS",
     "MAX_PREVIEW_ROWS",
-    "WorkbookPreview",
     "WorkbookSheetPreview",
     "build_workbook_preview_from_csv",
     "build_workbook_preview_from_xlsx",

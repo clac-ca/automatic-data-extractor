@@ -7628,7 +7628,7 @@
         "tags": [
           "documents"
         ],
-        "summary": "Preview a document workbook",
+        "summary": "Preview a document worksheet",
         "operationId": "preview_document_api_v1_workspaces__workspaceId__documents__documentId__preview_get",
         "parameters": [
           {
@@ -7684,6 +7684,30 @@
             "description": "Maximum columns per sheet to include in the preview."
           },
           {
+            "name": "trimEmptyColumns",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, trims columns with no data within the preview window.",
+              "default": false,
+              "title": "Trimemptycolumns"
+            },
+            "description": "If true, trims columns with no data within the preview window."
+          },
+          {
+            "name": "trimEmptyRows",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, trims rows with no data within the preview window.",
+              "default": false,
+              "title": "Trimemptyrows"
+            },
+            "description": "If true, trims rows with no data within the preview window."
+          },
+          {
             "name": "sheetName",
             "in": "query",
             "required": false,
@@ -7696,10 +7720,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional worksheet name to preview.",
+              "description": "Optional worksheet name to preview (defaults to the first sheet when omitted).",
               "title": "Sheetname"
             },
-            "description": "Optional worksheet name to preview."
+            "description": "Optional worksheet name to preview (defaults to the first sheet when omitted)."
           },
           {
             "name": "sheetIndex",
@@ -7715,10 +7739,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional worksheet index to preview (0-based).",
+              "description": "Optional worksheet index to preview (0-based, defaults to the first sheet when omitted).",
               "title": "Sheetindex"
             },
-            "description": "Optional worksheet index to preview (0-based)."
+            "description": "Optional worksheet index to preview (0-based, defaults to the first sheet when omitted)."
           }
         ],
         "responses": {
@@ -7727,7 +7751,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkbookPreview"
+                  "$ref": "#/components/schemas/WorkbookSheetPreview"
                 }
               }
             },
@@ -12201,7 +12225,7 @@
         "tags": [
           "runs"
         ],
-        "summary": "Preview run output workbook",
+        "summary": "Preview run output worksheet",
         "operationId": "preview_run_output_endpoint_api_v1_runs__runId__output_preview_get",
         "parameters": [
           {
@@ -12245,6 +12269,30 @@
             "description": "Maximum columns per sheet to include in the preview."
           },
           {
+            "name": "trimEmptyColumns",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, trims columns with no data within the preview window.",
+              "default": false,
+              "title": "Trimemptycolumns"
+            },
+            "description": "If true, trims columns with no data within the preview window."
+          },
+          {
+            "name": "trimEmptyRows",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "If true, trims rows with no data within the preview window.",
+              "default": false,
+              "title": "Trimemptyrows"
+            },
+            "description": "If true, trims rows with no data within the preview window."
+          },
+          {
             "name": "sheetName",
             "in": "query",
             "required": false,
@@ -12257,10 +12305,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional worksheet name to preview.",
+              "description": "Optional worksheet name to preview (defaults to the first sheet when omitted).",
               "title": "Sheetname"
             },
-            "description": "Optional worksheet name to preview."
+            "description": "Optional worksheet name to preview (defaults to the first sheet when omitted)."
           },
           {
             "name": "sheetIndex",
@@ -12276,10 +12324,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Optional worksheet index to preview (0-based).",
+              "description": "Optional worksheet index to preview (0-based, defaults to the first sheet when omitted).",
               "title": "Sheetindex"
             },
-            "description": "Optional worksheet index to preview (0-based)."
+            "description": "Optional worksheet index to preview (0-based, defaults to the first sheet when omitted)."
           }
         ],
         "responses": {
@@ -12288,7 +12336,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkbookPreview"
+                  "$ref": "#/components/schemas/WorkbookSheetPreview"
                 }
               }
             },
@@ -17699,29 +17747,16 @@
         "title": "VersionsResponse",
         "description": "Installed ADE package versions."
       },
-      "WorkbookPreview": {
-        "properties": {
-          "sheets": {
-            "items": {
-              "$ref": "#/components/schemas/WorkbookSheetPreview"
-            },
-            "type": "array",
-            "title": "Sheets"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "sheets"
-        ],
-        "title": "WorkbookPreview",
-        "description": "Preview payload for a workbook."
-      },
       "WorkbookSheetPreview": {
         "properties": {
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Index"
           },
           "headers": {
             "items": {
@@ -17761,6 +17796,7 @@
         "type": "object",
         "required": [
           "name",
+          "index",
           "headers",
           "rows",
           "totalRows",

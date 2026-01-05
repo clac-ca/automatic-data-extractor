@@ -64,7 +64,6 @@ def _detect_api_root() -> Path:
 
 
 DEFAULT_API_ROOT = _detect_api_root()
-DEFAULT_WEB_DIR = MODULE_DIR / "web"
 DEFAULT_STORAGE_ROOT = Path("./data")  # resolve later
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
@@ -74,12 +73,12 @@ DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 DEFAULT_DOCUMENTS_DIR = DEFAULT_WORKSPACES_DIR
 DEFAULT_CONFIGS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_VENVS_DIR = Path(tempfile.gettempdir()) / "ade-venvs"
+DEFAULT_VENVS_DIR = DEFAULT_STORAGE_ROOT / "venvs"
 DEFAULT_RUNS_DIR = DEFAULT_WORKSPACES_DIR
 DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
 DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
-DEFAULT_BUILD_TIMEOUT = 600
+DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 2000
@@ -278,18 +277,21 @@ class Settings(BaseSettings):
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     openapi_url: str = "/openapi.json"
-    logging_level: str = "INFO"
+    logging_level: str = Field(
+        default="INFO",
+        validation_alias=AliasChoices("ADE_API_LOG_LEVEL", "ADE_LOG_LEVEL"),
+    )
     safe_mode: bool = False
 
     # Server
     server_public_url: str = DEFAULT_PUBLIC_URL
     frontend_url: str | None = None
+    frontend_dist_dir: Path | None = Field(default=None)
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
     idempotency_key_ttl: timedelta = Field(default=timedelta(hours=24))
 
     # Paths
     api_root: Path = Field(default=DEFAULT_API_ROOT)
-    web_dir: Path = Field(default=DEFAULT_WEB_DIR)
     alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
@@ -308,9 +310,6 @@ class Settings(BaseSettings):
 
     # Builds
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
-    python_bin: str | None = Field(default=None)
-    build_timeout: int = Field(default=DEFAULT_BUILD_TIMEOUT, ge=1)
-    build_ttl: timedelta | None = Field(default=None)
 
     # Database
     database_url: str | None = Field(
@@ -364,16 +363,8 @@ class Settings(BaseSettings):
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
 
-    # Runs & workers
-    max_concurrency: int = Field(default=2, ge=1)
+    # Runs (queue limits)
     queue_size: int | None = Field(default=None, ge=1)
-    run_worker_poll_interval: timedelta = Field(default=timedelta(seconds=2))
-    run_lease_seconds: int = Field(default=900, ge=1)
-    run_max_attempts: int = Field(default=3, ge=1)
-    run_timeout_seconds: int | None = Field(default=None, ge=1)
-    worker_cpu_seconds: int | None = Field(default=None, ge=1)  # plain seconds
-    worker_mem_mb: int | None = Field(default=None, ge=1)
-    worker_fsize_mb: int | None = Field(default=None, ge=1)
 
     # OIDC
     oidc_enabled: bool = False
@@ -484,45 +475,11 @@ class Settings(BaseSettings):
         "documents_change_feed_retention_period",
         "documents_upload_session_ttl",
         "idempotency_key_ttl",
-        "run_worker_poll_interval",
         mode="before",
     )
     @classmethod
     def _v_durations(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)
-
-    @field_validator("build_timeout", mode="before")
-    @classmethod
-    def _v_build_required(cls, v: Any, info: ValidationInfo) -> int:
-        if v in (None, ""):
-            raise ValueError(f"{info.field_name} must not be blank")
-        try:
-            seconds = int(v)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{info.field_name} must be integer seconds") from exc
-        if seconds <= 0:
-            raise ValueError(f"{info.field_name} must be > 0 seconds")
-        return seconds
-
-    @field_validator("build_ttl", mode="before")
-    @classmethod
-    def _v_build_optional(cls, v: Any, info: ValidationInfo) -> timedelta | None:
-        if v in (None, ""):
-            return None
-        return _parse_duration(v, field_name=info.field_name)
-
-    @field_validator("run_timeout_seconds", mode="before")
-    @classmethod
-    def _v_run_timeout(cls, v: Any) -> int | None:
-        if v in (None, ""):
-            return None
-        try:
-            seconds = int(v)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("run_timeout_seconds must be integer seconds") from exc
-        if seconds <= 0:
-            raise ValueError("run_timeout_seconds must be > 0 seconds")
-        return seconds
 
     @field_validator("oidc_issuer", mode="before")
     @classmethod
@@ -548,12 +505,18 @@ class Settings(BaseSettings):
             raise ValueError("ADE_OIDC_REDIRECT_URL must be https or a path starting with '/'")
         return p.geturl().rstrip("/")
 
+    @field_validator("frontend_dist_dir", mode="before")
+    @classmethod
+    def _v_frontend_dist_dir(cls, v: Any) -> Path | None:
+        if v in (None, ""):
+            return None
+        return Path(v)
+
     # ---- Finalize: resolve paths & validate OIDC ----
 
     @model_validator(mode="after")
     def _finalize(self) -> Settings:
         self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
-        self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
         self.alembic_ini_path = _resolve_path(self.alembic_ini_path, default=DEFAULT_ALEMBIC_INI)
         self.alembic_migrations_dir = _resolve_path(
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
@@ -571,6 +534,11 @@ class Settings(BaseSettings):
         self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
         self.runs_dir = _resolve_path(self.runs_dir, default=self.workspaces_dir)
         self.pip_cache_dir = _resolve_path(self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR)
+
+        if self.frontend_dist_dir:
+            self.frontend_dist_dir = _resolve_path(
+                self.frontend_dist_dir, default=DEFAULT_FRONTEND_DIST_DIR
+            )
 
         if not self.frontend_url:
             self.frontend_url = self.server_public_url

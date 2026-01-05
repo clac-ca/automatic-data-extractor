@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ade-worker"
+version = "0.2.0"
+description = "ADE background worker (runs/builds)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "CLAC IT Team" }]
+license = { text = "Proprietary" }
+urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
+
+# Runtime deps — keep minimal and independent of ade-api
+# ade-engine provides the CLI and runtime engine.
+dependencies = [
+  "ade-engine",
+  "sqlalchemy==2.0.44",
+  "pyodbc==5.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.0.1",
+]
+
+[project.scripts]
+ade-worker = "ade_worker.main:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ade_worker*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+  "tests",
+]
+addopts = "-ra"
+pythonpath = ["src"]

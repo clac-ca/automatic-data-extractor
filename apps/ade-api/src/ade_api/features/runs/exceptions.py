@@ -11,6 +11,8 @@ __all__ = [
     "RunOutputPreviewUnsupportedError",
     "RunOutputPreviewSheetNotFoundError",
     "RunOutputPreviewParseError",
+    "RunOutputSheetUnsupportedError",
+    "RunOutputSheetParseError",
     "RunInputMissingError",
     "RunQueueFullError",
 ]
@@ -46,6 +48,14 @@ class RunOutputPreviewSheetNotFoundError(RuntimeError):
 
 class RunOutputPreviewParseError(RuntimeError):
     """Raised when a run output preview cannot be generated."""
+
+
+class RunOutputSheetUnsupportedError(RuntimeError):
+    """Raised when run output sheets are requested for an unsupported file type."""
+
+
+class RunOutputSheetParseError(RuntimeError):
+    """Raised when run output sheets cannot be listed."""
 
 
 class RunInputMissingError(RuntimeError):

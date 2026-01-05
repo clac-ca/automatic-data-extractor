@@ -27,7 +27,8 @@ relies on older runs endpoints. Key touchpoints:
 ## Config Builder panel (Terminal | Run | Problems)
 
 - `apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/` now
-  consumes run/build NDJSON streams: `Terminal` shows raw logs, `Problems`
+  consumes run/build NDJSON streams (`/runs/{runId}/events/stream` and
+  `/builds/{buildId}/events/stream`): `Terminal` shows raw logs, `Problems`
   shows validation issues, and `Run` hosts output and event log cards.
 - `BottomPanel.tsx` already accepts console lines with `origin` and supports
   origin/level filters, follow toggle, and clear. Keep feeding it build/run

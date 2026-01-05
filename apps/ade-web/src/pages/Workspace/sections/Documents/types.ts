@@ -24,16 +24,4 @@ export type WorkspacePerson = {
   userId?: string;
 };
 
-export type WorkbookSheet = {
-  name: string;
-  headers: string[];
-  rows: string[][];
-  totalRows: number;
-  totalColumns: number;
-  truncatedRows: boolean;
-  truncatedColumns: boolean;
-};
-
-export type WorkbookPreview = {
-  sheets: WorkbookSheet[];
-};
+export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];

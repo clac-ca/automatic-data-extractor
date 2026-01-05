@@ -63,8 +63,6 @@ def compute_build_fingerprint(
     config_digest: str,
     engine_spec: str,
     engine_version: str | None,
-    python_version: str | None,
-    python_bin: str | None,
     extra: Mapping[str, Any] | None = None,
 ) -> str:
     """Return a deterministic fingerprint string for a build specification."""
@@ -73,8 +71,6 @@ def compute_build_fingerprint(
         "config_digest": config_digest,
         "engine_spec": engine_spec,
         "engine_version": engine_version,
-        "python_version": python_version,
-        "python_bin": python_bin,
         "extra": extra or {},
     }
     normalized = json_dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")

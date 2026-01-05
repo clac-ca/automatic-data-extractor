@@ -10,46 +10,47 @@ At run runtime, the **ADE Engine** and your versioned **ADE Config** are install
 
 ## Repository and Runtime Layout
 
-The ADE monorepo brings together four cooperating layers:
+The ADE monorepo brings together five cooperating layers:
 
 * **Frontend (React Router)** — web app where workspace owners create and manage config packages, edit code, and trigger builds and runs.
-* **Backend (Python FastAPI)** — API service that stores metadata, builds isolated Python environments, and orchestrates run execution.
+* **Backend (Python FastAPI)** — API service that stores metadata, manages auth, and queues builds/runs.
+* **Worker (Python)** — background worker that claims build/run jobs from the database, creates venvs, and executes the engine.
 * **Engine (Python `ade_engine`)** — runtime module that executes inside the worker process, reading spreadsheets, applying detectors and hooks, and producing normalized outputs with full audit trails.
 * **Config package (Python `ade_config`)** — built and managed in the frontend; defines the business logic that tells ADE how to detect, map, and transform data. Versioned for draft, testing, rollback, and extension through a flexible Python interface.
 
 ```text
 automatic-data-extractor/
 ├─ apps/                                   # Deployable applications (things you run/ship)
-│  ├─ ade-api/                             # FastAPI service (serves /api + static SPA)
+│  ├─ ade-api/                             # FastAPI service (API only)
 │  │  ├─ pyproject.toml
-│  │  ├─ src/ade_api/                      # settings, routers, features, shared modules, templates, web assets
+│  │  ├─ src/ade_api/                      # settings, routers, features, shared modules
 │  │  ├─ migrations/                       # Alembic migration scripts
 │  │  └─ tests/                            # API service tests
+│  ├─ ade-worker/                          # Background worker (builds + runs)
+│  │  ├─ pyproject.toml
+│  │  ├─ src/ade_worker/
+│  │  └─ tests/
+│  ├─ ade-engine/                          # installable Python package: ade_engine
+│  │  ├─ pyproject.toml
+│  │  ├─ src/ade_engine/
+│  │  └─ tests/
+│  ├─ ade-cli/                             # Python orchestration CLI (console: ade)
+│  │  ├─ pyproject.toml
+│  │  └─ src/ade_cli/
 │  └─ ade-web/                             # React SPA (Vite)
 │     ├─ src/                              # routes, components, features
 │     ├─ public/                           # static public assets
 │     ├─ package.json
 │     └─ vite.config.ts
 │
-├─ packages/                               # Reusable libraries (imported by apps)
-│  └─ ade-engine/                          # installable Python package: ade_engine
-│     ├─ pyproject.toml
-│     ├─ src/ade_engine/                   # engine runtime, IO, pipeline, hooks integration, bundled schemas
-│     └─ tests/                            # engine unit tests
-│
-├─ tools/                                   # Python orchestration CLI (console script: ade)
-│  └─ ade-cli/
-│     ├─ pyproject.toml
-│     └─ src/ade_tools/
-├─ examples/                                # sample inputs/outputs for docs/tests
+├─ docker/                                  # deployment helpers (nginx config)
+│  └─ nginx.conf                            # serve web dist + proxy /api/v1 to ade-api
+├─ Dockerfile                               # API image (FastAPI only)
+├─ Dockerfile.web                           # Web image (Nginx serving apps/ade-web/dist)
+├─ compose.yaml                             # local stack (api + web + worker)
+├─ data/                                    # local runtime state (db, workspaces, venvs)
 ├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
 ├─ scripts/                                 # helper scripts
-│
-├─ infra/                                   # deployment infra (container, compose, k8s, IaC)
-│  ├─ docker/
-│  │  └─ api.Dockerfile                     # multi-stage: build web → copy dist → apps/ade-api/src/ade_api/web/static
-│  └─ compose.yaml                          # optional: local prod-style run
-│
 ├─ .env.example                             # documented env vars for local/dev
 ├─ .editorconfig
 ├─ .pre-commit-config.yaml
@@ -59,9 +60,9 @@ automatic-data-extractor/
 
 Config packages are scaffolded via the ade-engine CLI (`ade-engine config init <dir>`), which carries the built-in starter template. The API no longer ships or syncs its own template copies.
 
-Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<configuration_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
+Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `./data/venvs/<workspace_id>/<configuration_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
 
-If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates** the required build from DB metadata on demand before executing runs.
+If a container restarts or ADE_VENVS_DIR is empty, the worker **lazily hydrates** the required build from DB metadata on demand before executing runs.
 
 ```text
 ./data/
@@ -110,7 +111,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1["Results: output.xlsx + events stream (API persists events.ndjson)"]
+    A5 --> R1["Results: output.xlsx + events stream (worker persists events.ndjson)"]
 
     %% Run B
     S2 -->|reuse frozen venv| J2["Step 3: Run run B"]
@@ -120,7 +121,7 @@ flowchart TD
         B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
     J2 --> B1
-    B5 --> R2["Results: output.xlsx + events stream (API persists events.ndjson)"]
+    B5 --> R2["Results: output.xlsx + events stream (worker persists events.ndjson)"]
 
     %% Run C
     S2 -->|reuse frozen venv| J3["Step 3: Run run C"]
@@ -130,7 +131,7 @@ flowchart TD
         C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
     J3 --> C1
-    C5 --> R3["Results: output.xlsx + events stream (API persists events.ndjson)"]
+    C5 --> R3["Results: output.xlsx + events stream (worker persists events.ndjson)"]
 ```
 
 ## Step 1: Config — Define the Rules
@@ -211,16 +212,15 @@ Once the configuration environment is built, ADE can process real spreadsheets s
 * The engine streams rows from the uploaded file through your detectors, transforms, and hooks, using your logic to identify tables, map columns, and clean or validate data.
 * The result is a fully normalized Excel workbook, written along with a complete audit trail.
 
-**Manifest check (current CLI)**
+**Manifest check (sanity check)**
 
 ```bash
 ${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine
 ```
 
-This placeholder command prints the engine version together with the installed
-`ade_config` manifest so you can verify a build without the UI. The production
-worker entry point will eventually accept a `run_id` argument once the run
-service orchestrator is in place.
+This prints the engine version together with the installed `ade_config` manifest
+so you can verify a build without the UI. Runs are executed by **ade-worker**,
+which reads run rows from the database and launches the engine inside the venv.
 
 All results are written atomically inside the run folder so you always have a consistent, inspectable record:
 
@@ -243,13 +243,14 @@ ADE is configured via environment variables so it remains simple and portable. D
 | `ADE_WORKSPACES_DIR`      | `./data/workspaces`             | Workspace root for ADE storage                              |
 | `ADE_DOCUMENTS_DIR`       | `./data/workspaces`             | Base for documents (`<ws>/documents/...`)                   |
 | `ADE_CONFIGS_DIR`         | `./data/workspaces`             | Base for configs (`<ws>/config_packages/...`)               |
-| `ADE_VENVS_DIR`           | `/tmp/ade-venvs`                | Base for venvs (`<ws>/<cfg>/<build>/.../.venv`) on local storage |
+| `ADE_VENVS_DIR`           | `./data/venvs`                  | Base for venvs (`<ws>/<cfg>/<build>/.../.venv`) on local storage |
 | `ADE_RUNS_DIR`            | `./data/workspaces`             | Per‑run working directories (`<ws>/runs/<run_id>/...`)      |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip cache for wheels/sdists (speeds up building)            |
-| `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                              |
-| `ADE_QUEUE_SIZE`          | `10`                            | Max enqueued runs before the API returns 429                |
-| `ADE_RUN_WORKER_POLL_INTERVAL` | `2s`                       | Idle poll interval for run workers                          |
-| `ADE_RUN_TIMEOUT_SECONDS` | `300`                           | Parent‑enforced wall‑clock timeout for a worker             |
+| `ADE_WORKER_CONCURRENCY`  | `1`                             | Worker concurrency per process                               |
+| `ADE_QUEUE_SIZE`          | `10`                            | Max enqueued runs before the API returns 429                 |
+| `ADE_WORKER_POLL_INTERVAL`| `2`                             | Idle poll interval for workers (seconds)                     |
+| `ADE_RUN_TIMEOUT_SECONDS` | `300`                           | Wall‑clock timeout for a run                                 |
+| `ADE_BUILD_TIMEOUT`       | `600`                           | Wall‑clock timeout for a build                               |
 | `ADE_WORKER_CPU_SECONDS`  | `60`                            | Best‑effort CPU limit per run (POSIX `rlimit`)              |
 | `ADE_WORKER_MEM_MB`       | `512`                           | Best‑effort address‑space ceiling per run (POSIX `rlimit`)  |
 | `ADE_WORKER_FSIZE_MB`     | `100`                           | Best‑effort max file size a run can create (POSIX `rlimit`) |
@@ -276,24 +277,24 @@ You can exercise the complete path without the frontend. Copy the template to cr
 
 ```bash
 # 1) Create a build-scoped virtual environment and install engine + config (production installs)
-python -m venv /tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv
-/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/pip install apps/ade-engine/
-/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/pip install data/config_packages/<config_id>/
+python -m venv ${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/pip install apps/ade-engine/
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/pip install data/config_packages/<config_id>/
 
 # 2) Smoke-test the installed manifest (placeholder runtime)
-/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine
 ```
 
 The CLI prints the ADE engine version plus the packaged `ade_config` manifest.
-The worker command that accepts `run_id` will replace this once the full run
-orchestrator lands.
+Runs are executed by `ade-worker`; use the API to enqueue runs and tail the
+event log via `/runs/{runId}/events/stream`.
 
 ## Troubleshooting and Reproducibility
 
 If a build fails, re‑run the build action and check `ade_build.json` and `packages.txt` under the build folder to see the resolved dependency set. If imports fail inside the worker, verify that `ade_engine` and `ade_config` exist in the venv’s `site‑packages` and that this command succeeds:
 
 ```bash
-/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
 ```
 
 If mapping results look unexpected, inspect `events.ndjson` (look for `run.table.summary` events); they record mapping scores, unmapped columns, and validation breakdowns. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.

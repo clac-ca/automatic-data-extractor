@@ -1,26 +1,7 @@
 # Base versions (override at build time if needed)
 ARG PYTHON_VERSION=3.12
-ARG NODE_VERSION=20
-
 # =============================================================================
-# Stage 1: Frontend build (Vite SPA)
-# =============================================================================
-FROM node:${NODE_VERSION}-alpine AS frontend-build
-
-WORKDIR /app/apps/ade-web
-
-ARG FRONTEND_BUILD_SHA=dev
-
-COPY apps/ade-web/package*.json ./
-RUN if [ ! -x /usr/bin/npm ]; then ln -s "$(command -v npm)" /usr/bin/npm; fi
-RUN /usr/bin/npm ci --no-audit --no-fund
-
-COPY apps/ade-web/ ./
-RUN echo "frontend build ${FRONTEND_BUILD_SHA}" >/dev/null && \
-    /usr/bin/npm run build
-
-# =============================================================================
-# Stage 2: Backend build (install Python packages)
+# Stage 1: Backend build (install Python packages)
 # =============================================================================
 FROM python:${PYTHON_VERSION}-slim-bookworm AS backend-build
 
@@ -51,20 +32,20 @@ COPY README.md ./
 COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
 COPY apps/ade-engine/pyproject.toml apps/ade-engine/
 COPY apps/ade-api/pyproject.toml    apps/ade-api/
+COPY apps/ade-worker/pyproject.toml apps/ade-worker/
 
 RUN python -m pip install -U pip
 
 COPY apps ./apps
-COPY --from=frontend-build /app/apps/ade-web/dist \
-    ./apps/ade-api/src/ade_api/web/static
 
 RUN python -m pip install --prefix=/install \
         ./apps/ade-cli \
         ./apps/ade-engine \
-        ./apps/ade-api
+        ./apps/ade-api \
+        ./apps/ade-worker
 
 # =============================================================================
-# Stage 3: Runtime image
+# Stage 2: Runtime image
 # =============================================================================
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 

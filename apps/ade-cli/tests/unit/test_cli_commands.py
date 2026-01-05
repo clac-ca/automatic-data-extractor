@@ -41,6 +41,9 @@ def test_version_flag_outputs_version() -> None:
     expected_engine_version = tomllib.loads(
         (repo_root / "apps" / "ade-engine" / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]["version"]
+    expected_worker_version = tomllib.loads(
+        (repo_root / "apps" / "ade-worker" / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
     expected_web_version = json.loads((repo_root / "apps" / "ade-web" / "package.json").read_text(encoding="utf-8"))[
         "version"
     ]
@@ -58,6 +61,7 @@ def test_version_flag_outputs_version() -> None:
     assert parsed["ade-cli"] == expected_cli_version
     assert parsed["ade-api"] == expected_api_version
     assert parsed["ade-engine"] == expected_engine_version
+    assert parsed["ade-worker"] == expected_worker_version
     assert parsed["ade-web"] == expected_web_version
 
 
@@ -82,15 +86,12 @@ def test_ci_continues_when_types_exits_zero(monkeypatch) -> None:
 
 def test_build_handles_missing_dist(monkeypatch, tmp_path) -> None:
     frontend = tmp_path / "apps" / "ade-web"
-    backend = tmp_path / "apps" / "ade-api" / "src" / "ade_api"
     frontend.mkdir(parents=True)
-    backend.mkdir(parents=True)
     (frontend / "package.json").write_text("{}")
     (frontend / "node_modules").mkdir()
 
     monkeypatch.setattr(common, "refresh_paths", lambda: None)
     monkeypatch.setattr(common, "FRONTEND_DIR", frontend)
-    monkeypatch.setattr(common, "BACKEND_SRC", backend)
     monkeypatch.setattr(common, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(common, "npm_path", lambda: "npm-bin")
     monkeypatch.setattr(common, "ensure_node_modules", lambda *args, **kwargs: None)

@@ -29,7 +29,7 @@ from ade_api.common.sorting import resolve_sort
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
 from ade_api.common.workbook_preview import (
-    WorkbookPreview,
+    WorkbookSheetPreview,
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
@@ -813,8 +813,12 @@ class DocumentsService:
         trim_empty_rows: bool = False,
         sheet_name: str | None = None,
         sheet_index: int | None = None,
-    ) -> WorkbookPreview:
+    ) -> WorkbookSheetPreview:
         """Return a table-ready preview for a document workbook."""
+
+        effective_sheet_index = sheet_index
+        if sheet_name is None and sheet_index is None:
+            effective_sheet_index = 0
 
         logger.debug(
             "document.preview.start",
@@ -822,7 +826,7 @@ class DocumentsService:
                 workspace_id=workspace_id,
                 document_id=document_id,
                 sheet_name=sheet_name,
-                sheet_index=sheet_index,
+                sheet_index=effective_sheet_index,
             ),
         )
 
@@ -848,7 +852,7 @@ class DocumentsService:
                     trim_empty_columns=trim_empty_columns,
                     trim_empty_rows=trim_empty_rows,
                     sheet_name=sheet_name,
-                    sheet_index=sheet_index,
+                    sheet_index=effective_sheet_index,
                 )
             elif suffix == ".csv":
                 preview = await run_in_threadpool(
@@ -859,7 +863,7 @@ class DocumentsService:
                     trim_empty_columns=trim_empty_columns,
                     trim_empty_rows=trim_empty_rows,
                     sheet_name=sheet_name,
-                    sheet_index=sheet_index,
+                    sheet_index=effective_sheet_index,
                 )
             else:
                 raise DocumentPreviewUnsupportedError(
@@ -867,7 +871,7 @@ class DocumentsService:
                     file_type=suffix or "unknown",
                 )
         except (KeyError, IndexError) as exc:
-            requested = sheet_name if sheet_name is not None else str(sheet_index)
+            requested = sheet_name if sheet_name is not None else str(effective_sheet_index)
             raise DocumentPreviewSheetNotFoundError(
                 document_id=document_id,
                 sheet=requested,
@@ -886,7 +890,8 @@ class DocumentsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                sheet_count=len(preview.sheets),
+                sheet_name=preview.name,
+                sheet_index=preview.index,
             ),
         )
         return preview

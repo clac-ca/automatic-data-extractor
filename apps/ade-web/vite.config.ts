@@ -13,16 +13,8 @@ const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url)
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
 const appVersion = packageJson.version ?? "unknown";
 
-const parsedFrontendPort = Number.parseInt(process.env.DEV_FRONTEND_PORT ?? "8000", 10);
-const frontendPort = Number.isNaN(parsedFrontendPort) ? 8000 : parsedFrontendPort;
-const parsedBackendPort = Number.parseInt(process.env.DEV_BACKEND_PORT ?? "8001", 10);
-const backendPort = Number.isNaN(parsedBackendPort) ? 8001 : parsedBackendPort;
-
-if (backendPort === frontendPort) {
-  throw new Error(
-    `DEV_BACKEND_PORT (${backendPort}) must not match DEV_FRONTEND_PORT (${frontendPort}); otherwise the /api proxy will loop.`,
-  );
-}
+const apiBaseUrl = (process.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+const apiTarget = apiBaseUrl.replace(/\/api\/v1\/?$/, "").replace(/\/api\/?$/, "");
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), tsconfigPaths()],
@@ -44,12 +36,9 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   server: {
-    port: frontendPort,
-    strictPort: true,
-    host: process.env.DEV_FRONTEND_HOST ?? "0.0.0.0",
     proxy: {
       "/api": {
-        target: `http://localhost:${backendPort}`,
+        target: apiTarget,
         changeOrigin: true,
         ws: true,
       },
