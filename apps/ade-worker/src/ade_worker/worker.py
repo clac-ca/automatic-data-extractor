@@ -161,7 +161,7 @@ class Worker:
                           AND builds.status = 'ready'
                     )
                   )
-                ORDER BY created_at ASC
+                ORDER BY available_at ASC, created_at ASC
             )
                 """
             )
@@ -197,7 +197,7 @@ class Worker:
                             ),
                         )
                     )
-                    .order_by(runs.c.created_at.asc())
+                    .order_by(runs.c.available_at.asc(), runs.c.created_at.asc())
                     .limit(1)
                     .scalar_subquery()
                 )
@@ -249,7 +249,7 @@ class Worker:
                         ),
                     )
                 )
-                .order_by(runs.c.created_at.asc())
+                .order_by(runs.c.available_at.asc(), runs.c.created_at.asc())
                 .limit(1)
             ).scalar_one_or_none()
             if candidate is None:

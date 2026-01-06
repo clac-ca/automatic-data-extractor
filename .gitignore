@@ -67,6 +67,7 @@ apps/api/app/web/static/
 # --- Misc / Tools ---
 # Workpackage attachments referenced by scripts
 workpackages/*
+apps/*/workpackages
 .workpackages/
 # IDE test artifacts, temp files
 *.tmp
