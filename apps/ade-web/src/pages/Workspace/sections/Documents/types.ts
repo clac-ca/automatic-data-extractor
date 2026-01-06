@@ -4,9 +4,7 @@ export type { DocumentPageResult, ListDocumentsQuery } from "@api/documents";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
 export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
-export type DocumentChangeEntry = Omit<components["schemas"]["DocumentChangeEntry"], "row"> & {
-  row?: DocumentListRow | null;
-};
+export type DocumentRow = DocumentListRow & { uploadProgress?: number | null };
 export type DocumentResultSummary = components["schemas"]["DocumentResultSummary"];
 export type DocumentRunSummary = components["schemas"]["DocumentRunSummary"];
 

@@ -83,6 +83,7 @@ documents = Table(
     Column("original_filename", String(255), nullable=False),
     Column("content_type", String(255), nullable=True),
     Column("byte_size", Integer, nullable=False),
+    Column("version", Integer, nullable=False),
     Column("stored_uri", String(512), nullable=False),
     Column("status", String(20), nullable=False),
     Column("last_run_at", DateTime, nullable=True),
@@ -96,6 +97,8 @@ document_changes = Table(
     Column("workspace_id", String(36), nullable=False),
     Column("document_id", String(36), nullable=True),
     Column("type", String(20), nullable=False),
+    Column("document_version", Integer, nullable=True),
+    Column("client_request_id", String(128), nullable=True),
     Column("payload", JSON, nullable=False),
     Column("occurred_at", DateTime, nullable=False),
 )

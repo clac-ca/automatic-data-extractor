@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
-import random
-from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -26,7 +23,6 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import (
     SessionDep,
@@ -41,7 +37,6 @@ from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.logging import log_context
 from ade_api.common.sorting import resolve_sort
-from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -61,7 +56,6 @@ from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
-from ade_api.db import db
 
 from .change_feed import DocumentChangeCursorTooOld
 from .exceptions import (
@@ -79,7 +73,6 @@ from .exceptions import (
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
 )
-from .filters import evaluate_document_filters
 from .schemas import (
     DocumentBatchArchiveRequest,
     DocumentBatchArchiveResponse,
@@ -129,6 +122,7 @@ WorkspacePath = Annotated[
         alias="workspaceId",
     ),
 ]
+ClientRequestIdHeader = Annotated[str | None, Header(alias="X-Client-Request-Id")]
 DocumentPath = Annotated[
     UUID,
     Path(
@@ -179,53 +173,6 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
             detail="metadata must be a JSON object",
         )
     return decoded
-
-
-def _requires_refresh_for_sort(sort_tokens: list[str]) -> bool:
-    normalized = [token.lstrip("-") for token in sort_tokens]
-    safe = {"createdAt", "id"}
-    return any(name not in safe for name in normalized)
-
-
-def _apply_change_metadata(
-    entry: DocumentChangeEntry,
-    *,
-    list_query: ListQueryParams,
-    sort_tokens: list[str],
-) -> DocumentChangeEntry:
-    requires_refresh = _requires_refresh_for_sort(sort_tokens)
-    matches_filters = False
-
-    if entry.row is None:
-        requires_refresh = True
-    else:
-        matches_filters, filter_refresh = evaluate_document_filters(
-            entry.row,
-            list_query.filters,
-            join_operator=list_query.join_operator,
-            q=list_query.q,
-        )
-        requires_refresh = requires_refresh or filter_refresh
-
-    document_id = entry.document_id or (entry.row.id if entry.row else None)
-    return entry.model_copy(
-        update={
-            "matches_filters": matches_filters,
-            "requires_refresh": requires_refresh,
-            "document_id": document_id,
-        }
-    )
-
-
-def _build_change_payload(entry: DocumentChangeEntry) -> dict[str, Any]:
-    return {
-        "cursor": entry.cursor,
-        "occurredAt": entry.occurred_at,
-        "documentId": entry.document_id,
-        "row": entry.row,
-        "matchesFilters": entry.matches_filters,
-        "requiresRefresh": entry.requires_refresh,
-    }
 
 
 def _parse_run_options(run_options: str | None) -> DocumentUploadRunOptions | None:
@@ -456,15 +403,14 @@ async def list_document_changes(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     *,
-    cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
+    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> DocumentChangesPage:
     if cursor is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="cursor is required; use cursor=latest to sync from now",
+            detail="cursor is required",
         )
     try:
         page = await service.list_document_changes(
@@ -472,133 +418,18 @@ async def list_document_changes(
             cursor_token=cursor,
             limit=limit,
         )
-        sort_tokens = list_query.sort or DEFAULT_SORT
-        updated = [
-            _apply_change_metadata(entry, list_query=list_query, sort_tokens=sort_tokens)
-            for entry in page.items
-        ]
-        return DocumentChangesPage(items=updated, next_cursor=page.next_cursor)
+        return DocumentChangesPage(items=page.items, next_cursor=page.next_cursor)
     except DocumentChangeCursorTooOld as exc:
         raise HTTPException(
             status.HTTP_410_GONE,
-            detail={"error": "resync_required", "latest_cursor": str(exc.latest_cursor)},
+            detail={"error": "resync_required", "latestCursor": str(exc.latest_cursor)},
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-
-@router.get(
-    "/changes/stream",
-    dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit"}))],
-)
-async def stream_document_changes(
-    workspace_id: WorkspacePath,
-    request: Request,
-    settings: SettingsDep,
-    db_session: SessionDep,
-    _actor: DocumentReader,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    *,
-    cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
-    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
-) -> EventSourceResponse:
-    last_event_id = request.headers.get("Last-Event-ID") or request.headers.get("last-event-id")
-    if last_event_id and cursor and last_event_id != cursor:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="cursor and Last-Event-ID must match when both are provided",
-        )
-    start_token = last_event_id or cursor or "latest"
-    await db_session.close()
-
-    async def fetch_changes_page(
-        *,
-        cursor_token: str,
-    ) -> DocumentChangesPage:
-        async with db.sessionmaker() as session:
-            scoped_service = DocumentsService(session=session, settings=settings)
-            return await scoped_service.list_document_changes(
-                workspace_id=workspace_id,
-                cursor_token=cursor_token,
-                limit=limit,
-            )
-
-    try:
-        initial_page = await fetch_changes_page(cursor_token=start_token)
-    except DocumentChangeCursorTooOld as exc:
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            detail={"error": "resync_required", "latest_cursor": str(exc.latest_cursor)},
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    sort_tokens = list_query.sort or DEFAULT_SORT
-
-    async def event_stream() -> AsyncIterator[dict[str, str]]:
-        base_interval = 2.0
-        max_interval = 30.0
-        backoff = 1.6
-        jitter_ratio = 0.2
-        poll_interval = base_interval
-
-        cursor_value = 0
-        pending = initial_page.items
-        if start_token != "latest":
-            try:
-                cursor_value = int(start_token)
-            except (TypeError, ValueError):
-                cursor_value = 0
-        if start_token == "latest":
-            cursor_value = int(initial_page.next_cursor)
-
-        while True:
-            if pending:
-                for change in pending:
-                    cursor_value = int(change.cursor)
-                    updated = _apply_change_metadata(
-                        change,
-                        list_query=list_query,
-                        sort_tokens=sort_tokens,
-                    )
-                    yield sse_json(
-                        change.type,
-                        _build_change_payload(updated),
-                        event_id=change.cursor,
-                    )
-                pending = []
-                continue
-
-            if await request.is_disconnected():
-                return
-
-            try:
-                page = await fetch_changes_page(cursor_token=str(cursor_value))
-            except DocumentChangeCursorTooOld:
-                return
-
-            if page.items:
-                pending = page.items
-                poll_interval = base_interval
-                continue
-
-            jitter = poll_interval * jitter_ratio
-            delay = max(0.0, poll_interval + random.uniform(-jitter, jitter))
-            await asyncio.sleep(delay)
-            poll_interval = min(max_interval, poll_interval * backoff)
-
-    return EventSourceResponse(
-        event_stream(),
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-        ping=15,
-    )
 
 
 @router.post(
-    "/uploadsessions",
+    "/uploadSessions",
     dependencies=[Security(require_csrf)],
     response_model=DocumentUploadSessionCreateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -622,7 +453,7 @@ async def create_upload_session(
 
 
 @router.put(
-    "/uploadsessions/{uploadSessionId}",
+    "/uploadSessions/{uploadSessionId}",
     dependencies=[Security(require_csrf)],
     response_model=DocumentUploadSessionUploadResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -661,7 +492,7 @@ async def upload_session_range(
 
 
 @router.get(
-    "/uploadsessions/{uploadSessionId}",
+    "/uploadSessions/{uploadSessionId}",
     response_model=DocumentUploadSessionStatusResponse,
     status_code=status.HTTP_200_OK,
     summary="Get upload session status",
@@ -685,7 +516,7 @@ async def get_upload_session_status(
 
 
 @router.post(
-    "/uploadsessions/{uploadSessionId}/commit",
+    "/uploadSessions/{uploadSessionId}/commit",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_201_CREATED,
@@ -701,6 +532,7 @@ async def commit_upload_session(
     idempotency_key: Annotated[str, Depends(require_idempotency_key)],
     idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     scope_key = build_scope_key(
         principal_id=str(actor.id),
@@ -723,6 +555,7 @@ async def commit_upload_session(
             workspace_id=workspace_id,
             upload_session_id=upload_session_id,
             actor=actor,
+            client_request_id=client_request_id,
         )
     except DocumentUploadSessionNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -749,7 +582,7 @@ async def commit_upload_session(
 
 
 @router.delete(
-    "/uploadsessions/{uploadSessionId}",
+    "/uploadSessions/{uploadSessionId}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Cancel an upload session",
@@ -799,6 +632,7 @@ async def update_document(
     response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
         current = await service.get_document(
@@ -807,14 +641,15 @@ async def update_document(
         )
         require_if_match(
             request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.updated_at),
+            expected_token=build_etag_token(current.id, current.version),
         )
         updated = await service.update_document(
             workspace_id=workspace_id,
             document_id=document_id,
             payload=payload,
+            client_request_id=client_request_id,
         )
-        etag = format_weak_etag(build_etag_token(updated.id, updated.updated_at))
+        etag = format_weak_etag(build_etag_token(updated.id, updated.version))
         if etag:
             response.headers["ETag"] = etag
         return updated
@@ -849,6 +684,7 @@ async def patch_document_tags_batch(
     payload: DocumentBatchTagsRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchTagsResponse:
     try:
         documents = await service.patch_document_tags_batch(
@@ -856,6 +692,7 @@ async def patch_document_tags_batch(
             document_ids=payload.document_ids,
             add=payload.add,
             remove=payload.remove,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -889,11 +726,13 @@ async def archive_documents_batch_endpoint(
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
         documents = await service.archive_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -925,11 +764,13 @@ async def restore_documents_batch_endpoint(
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
         documents = await service.restore_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -959,13 +800,24 @@ async def restore_documents_batch_endpoint(
 async def archive_document_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
+        current = await service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
         return await service.archive_document(
             workspace_id=workspace_id,
             document_id=document_id,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -993,13 +845,24 @@ async def archive_document_endpoint(
 async def restore_document_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
+        current = await service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
         return await service.restore_document(
             workspace_id=workspace_id,
             document_id=document_id,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1031,14 +894,25 @@ async def replace_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsReplace,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
+        current = await service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
         return await service.replace_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             tags=payload.tags,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1072,15 +946,26 @@ async def patch_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsPatch,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
+        current = await service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
         return await service.patch_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             add=payload.add,
             remove=payload.remove,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1118,7 +1003,7 @@ async def read_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
-        etag = format_weak_etag(build_etag_token(document.id, document.updated_at))
+        etag = format_weak_etag(build_etag_token(document.id, document.version))
         if etag:
             response.headers["ETag"] = etag
         return document
@@ -1351,6 +1236,7 @@ async def delete_document(
     request: Request,
     service: DocumentsServiceDep,
     actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> None:
     try:
         current = await service.get_document(
@@ -1359,12 +1245,13 @@ async def delete_document(
         )
         require_if_match(
             request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.updated_at),
+            expected_token=build_etag_token(current.id, current.version),
         )
         await service.delete_document(
             workspace_id=workspace_id,
             document_id=document_id,
             actor=actor,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1393,12 +1280,14 @@ async def delete_documents_batch(
     payload: DocumentBatchDeleteRequest,
     service: DocumentsServiceDep,
     actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchDeleteResponse:
     try:
         deleted_ids = await service.delete_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             actor=actor,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

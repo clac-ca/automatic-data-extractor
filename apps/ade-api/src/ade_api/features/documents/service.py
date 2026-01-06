@@ -87,6 +87,7 @@ from .schemas import (
     DocumentUploadSessionUploadResponse,
     TagCatalogItem,
     TagCatalogPage,
+    UserSummary,
 )
 from .storage import DocumentStorage
 from .tags import (
@@ -104,6 +105,7 @@ _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 _UPLOAD_SESSION_PREFIX = "upload_sessions"
 _CONTENT_RANGE_PATTERN = re.compile(r"^bytes (\d+)-(\d+)/(\d+)$")
+_UPLOAD_PLACEHOLDER_SHA256 = "0" * 64
 
 
 
@@ -209,10 +211,12 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
+        row = self._build_list_row(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=payload.model_dump(),
+            payload=row.model_dump(),
+            document_version=payload.version,
         )
 
         logger.info(
@@ -303,20 +307,18 @@ class DocumentsService:
         workspace_id: UUID,
         cursor_token: str,
         limit: int,
+        max_cursor: int | None = None,
     ) -> DocumentChangesPage:
-        if cursor_token == "latest":
-            latest = await self._changes.current_cursor(workspace_id=workspace_id)
-            return DocumentChangesPage(items=[], next_cursor=str(latest))
-
         try:
             cursor = int(cursor_token)
         except (TypeError, ValueError) as exc:
-            raise ValueError("cursor must be an integer string or 'latest'") from exc
+            raise ValueError("cursor must be an integer string") from exc
 
         page = await self._changes.list_changes(
             workspace_id=workspace_id,
             cursor=cursor,
             limit=limit,
+            max_cursor=max_cursor,
         )
         entries: list[DocumentChangeEntry] = []
         for change in page.items:
@@ -355,13 +357,15 @@ class DocumentsService:
         now = utc_now()
         expires_at = now + self._settings.documents_upload_session_ttl
         session_id = generate_uuid7()
-        storage = self._upload_session_storage(workspace_id)
-        stored_uri = storage.make_stored_uri(str(session_id))
+        document_id = generate_uuid7()
+        upload_storage = self._upload_session_storage(workspace_id)
+        stored_uri = upload_storage.make_stored_uri(str(session_id))
 
         session = DocumentUploadSession(
             id=session_id,
             workspace_id=workspace_id,
             created_by_user_id=actor.id if actor else None,
+            document_id=document_id,
             filename=payload.filename,
             content_type=payload.content_type,
             byte_size=payload.byte_size,
@@ -375,14 +379,50 @@ class DocumentsService:
             expires_at=expires_at,
         )
         self._session.add(session)
+        document_storage = self._storage_for(workspace_id)
+        document_stored_uri = document_storage.make_stored_uri(str(document_id))
+        metadata_payload = dict(session.upload_metadata or {})
+        document = Document(
+            id=document_id,
+            workspace_id=workspace_id,
+            original_filename=self._normalise_filename(payload.filename),
+            content_type=self._normalise_content_type(payload.content_type),
+            byte_size=payload.byte_size,
+            sha256=_UPLOAD_PLACEHOLDER_SHA256,
+            stored_uri=document_stored_uri,
+            attributes=metadata_payload,
+            uploaded_by_user_id=actor.id if actor else session.created_by_user_id,
+            status=DocumentStatus.UPLOADING,
+            source=DocumentSource.MANUAL_UPLOAD,
+            expires_at=self._resolve_expiration(None, now),
+            last_run_at=None,
+        )
+        self._session.add(document)
         await self._session.flush()
+
+        row = self._build_upload_session_row(
+            document_id=document_id,
+            workspace_id=workspace_id,
+            filename=payload.filename,
+            byte_size=payload.byte_size,
+            actor=actor,
+            created_at=now,
+        )
+        await self._changes.record_upsert(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            payload=row.model_dump(),
+            document_version=row.version,
+        )
 
         return DocumentUploadSessionCreateResponse(
             upload_session_id=str(session_id),
+            document_id=str(document_id),
+            row=row,
             expires_at=expires_at,
             chunk_size_bytes=self._settings.documents_upload_session_chunk_bytes,
             next_expected_ranges=self._next_expected_ranges(session),
-            upload_url=f"/workspaces/{workspace_id}/documents/uploadsessions/{session_id}",
+            upload_url=f"/workspaces/{workspace_id}/documents/uploadSessions/{session_id}",
         )
 
     async def upload_session_range(
@@ -479,6 +519,7 @@ class DocumentsService:
         workspace_id: UUID,
         upload_session_id: UUID,
         actor: User | None,
+        client_request_id: str | None = None,
     ) -> tuple[DocumentOut, DocumentUploadRunOptions | None]:
         session = await self._require_upload_session(
             workspace_id=workspace_id,
@@ -488,7 +529,8 @@ class DocumentsService:
             raise DocumentUploadSessionNotReadyError(upload_session_id)
 
         now = utc_now()
-        document_id = generate_uuid7()
+        document_id = session.document_id or generate_uuid7()
+        session.document_id = document_id
         storage = self._storage_for(workspace_id)
         stored_uri = storage.make_stored_uri(str(document_id))
 
@@ -503,22 +545,42 @@ class DocumentsService:
 
         run_options = self.read_upload_run_options(session.upload_metadata)
         metadata_payload = dict(session.upload_metadata or {})
-        document = Document(
-            id=document_id,
+        document = await self._repository.get_document(
             workspace_id=workspace_id,
-            original_filename=self._normalise_filename(session.filename),
-            content_type=self._normalise_content_type(session.content_type),
-            byte_size=size,
-            sha256=sha,
-            stored_uri=stored_uri,
-            attributes=metadata_payload,
-            uploaded_by_user_id=actor.id if actor else session.created_by_user_id,
-            status=DocumentStatus.UPLOADED,
-            source=DocumentSource.MANUAL_UPLOAD,
-            expires_at=self._resolve_expiration(None, now),
-            last_run_at=None,
+            document_id=document_id,
+            include_deleted=True,
         )
-        self._session.add(document)
+        if document is None:
+            document = Document(
+                id=document_id,
+                workspace_id=workspace_id,
+                original_filename=self._normalise_filename(session.filename),
+                content_type=self._normalise_content_type(session.content_type),
+                byte_size=size,
+                sha256=sha,
+                stored_uri=stored_uri,
+                attributes=metadata_payload,
+                uploaded_by_user_id=actor.id if actor else session.created_by_user_id,
+                status=DocumentStatus.UPLOADED,
+                source=DocumentSource.MANUAL_UPLOAD,
+                expires_at=self._resolve_expiration(None, now),
+                last_run_at=None,
+            )
+            self._session.add(document)
+        else:
+            document.original_filename = self._normalise_filename(session.filename)
+            document.content_type = self._normalise_content_type(session.content_type)
+            document.byte_size = size
+            document.sha256 = sha
+            document.stored_uri = stored_uri
+            document.attributes = metadata_payload
+            if actor:
+                document.uploaded_by_user_id = actor.id
+            document.status = DocumentStatus.UPLOADED
+            document.source = DocumentSource.MANUAL_UPLOAD
+            document.expires_at = self._resolve_expiration(None, now)
+            document.last_run_at = None
+            document.version += 1
 
         session.status = DocumentUploadSessionStatus.COMMITTED
         await self._session.flush()
@@ -529,10 +591,13 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
+        row = self._build_list_row(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=payload.model_dump(),
+            payload=row.model_dump(),
+            document_version=payload.version,
+            client_request_id=client_request_id,
         )
         return payload, run_options
 
@@ -548,6 +613,25 @@ class DocumentsService:
         )
         storage = self._upload_session_storage(workspace_id)
         await storage.delete(session.temp_stored_uri)
+        if session.document_id:
+            document = await self._repository.get_document(
+                workspace_id=workspace_id,
+                document_id=session.document_id,
+                include_deleted=True,
+            )
+            if document is not None and document.status == DocumentStatus.UPLOADING:
+                document.status = DocumentStatus.FAILED
+                document.version += 1
+                await self._session.flush()
+                payload = DocumentOut.model_validate(document)
+                self._apply_derived_fields(payload)
+                row = self._build_list_row(payload)
+                await self._changes.record_upsert(
+                    workspace_id=workspace_id,
+                    document_id=document.id,
+                    payload=row.model_dump(),
+                    document_version=payload.version,
+                )
         await self._session.delete(session)
 
     async def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
@@ -603,23 +687,38 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         payload: DocumentUpdateRequest,
+        client_request_id: str | None = None,
     ) -> DocumentOut:
         document = await self._get_document(workspace_id, document_id)
+        changed = False
 
         if "assignee_user_id" in payload.model_fields_set:
-            document.assignee_user_id = payload.assignee_user_id
+            if document.assignee_user_id != payload.assignee_user_id:
+                document.assignee_user_id = payload.assignee_user_id
+                changed = True
         if "metadata" in payload.model_fields_set and payload.metadata is not None:
-            document.attributes = dict(payload.metadata)
+            next_metadata = dict(payload.metadata)
+            if document.attributes != next_metadata:
+                document.attributes = next_metadata
+                changed = True
 
-        await self._session.flush()
+        if changed:
+            document.version += 1
+
+        if changed:
+            await self._session.flush()
 
         updated = DocumentOut.model_validate(document)
         self._apply_derived_fields(updated)
-        await self._changes.record_upsert(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            payload=updated.model_dump(),
-        )
+        if changed:
+            row = self._build_list_row(updated)
+            await self._changes.record_upsert(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                payload=row.model_dump(),
+                document_version=updated.version,
+                client_request_id=client_request_id,
+            )
         return updated
 
     async def archive_document(
@@ -627,6 +726,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
+        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Archive a document to remove it from active workflows."""
 
@@ -634,15 +734,19 @@ class DocumentsService:
         changed = document.status != DocumentStatus.ARCHIVED
         if changed:
             document.status = DocumentStatus.ARCHIVED
+            document.version += 1
             await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
         if changed:
+            row = self._build_list_row(payload)
             await self._changes.record_upsert(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                payload=payload.model_dump(),
+                payload=row.model_dump(),
+                document_version=payload.version,
+                client_request_id=client_request_id,
             )
         return payload
 
@@ -651,6 +755,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
+        client_request_id: str | None = None,
     ) -> list[DocumentOut]:
         """Archive multiple documents."""
 
@@ -663,12 +768,14 @@ class DocumentsService:
             document_ids=ordered_ids,
         )
         document_by_id = {doc.id: doc for doc in documents}
+        document_by_id = {doc.id: doc for doc in documents}
         changed_ids: set[UUID] = set()
 
         for document in documents:
             if document.status == DocumentStatus.ARCHIVED:
                 continue
             document.status = DocumentStatus.ARCHIVED
+            document.version += 1
             changed_ids.add(document.id)
 
         if changed_ids:
@@ -680,10 +787,13 @@ class DocumentsService:
             self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
+                row = self._build_list_row(payload)
                 await self._changes.record_upsert(
                     workspace_id=workspace_id,
                     document_id=doc_id,
-                    payload=payload.model_dump(),
+                    payload=row.model_dump(),
+                    document_version=payload.version,
+                    client_request_id=client_request_id,
                 )
 
         return payloads
@@ -693,6 +803,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
+        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Restore a document from the archive."""
 
@@ -707,14 +818,18 @@ class DocumentsService:
             document_ids=[document.id],
         )
         document.status = self._status_from_last_run(status_map.get(document.id))
+        document.version += 1
         await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
+        row = self._build_list_row(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=payload.model_dump(),
+            payload=row.model_dump(),
+            document_version=payload.version,
+            client_request_id=client_request_id,
         )
         return payload
 
@@ -723,6 +838,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
+        client_request_id: str | None = None,
     ) -> list[DocumentOut]:
         """Restore multiple documents from the archive."""
 
@@ -745,6 +861,7 @@ class DocumentsService:
             if document.status != DocumentStatus.ARCHIVED:
                 continue
             document.status = self._status_from_last_run(status_map.get(document.id))
+            document.version += 1
             changed_ids.add(document.id)
 
         if changed_ids:
@@ -756,10 +873,13 @@ class DocumentsService:
             self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
+                row = self._build_list_row(payload)
                 await self._changes.record_upsert(
                     workspace_id=workspace_id,
                     document_id=doc_id,
-                    payload=payload.model_dump(),
+                    payload=row.model_dump(),
+                    document_version=payload.version,
+                    client_request_id=client_request_id,
                 )
 
         return payloads
@@ -1009,6 +1129,7 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         actor: User | None = None,
+        client_request_id: str | None = None,
     ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
@@ -1025,6 +1146,7 @@ class DocumentsService:
         document = await self._get_document(workspace_id, document_id)
         now = datetime.now(tz=UTC)
         document.deleted_at = now
+        document.version += 1
         if actor is not None:
             document.deleted_by_user_id = actor_id
         await self._session.flush()
@@ -1034,6 +1156,8 @@ class DocumentsService:
         await self._changes.record_deleted(
             workspace_id=workspace_id,
             document_id=document_id,
+            document_version=document.version,
+            client_request_id=client_request_id,
         )
 
         logger.info(
@@ -1052,6 +1176,7 @@ class DocumentsService:
         workspace_id: UUID,
         document_ids: Sequence[UUID],
         actor: User | None = None,
+        client_request_id: str | None = None,
     ) -> list[UUID]:
         """Soft delete multiple documents and remove stored files."""
 
@@ -1064,10 +1189,12 @@ class DocumentsService:
             workspace_id=workspace_id,
             document_ids=ordered_ids,
         )
+        document_by_id = {doc.id: doc for doc in documents}
 
         now = datetime.now(tz=UTC)
         for document in documents:
             document.deleted_at = now
+            document.version += 1
             if actor is not None:
                 document.deleted_by_user_id = actor_id
 
@@ -1078,9 +1205,12 @@ class DocumentsService:
             await storage.delete(document.stored_uri)
 
         for document_id in ordered_ids:
+            document = document_by_id.get(document_id)
             await self._changes.record_deleted(
                 workspace_id=workspace_id,
                 document_id=document_id,
+                document_version=document.version if document else None,
+                client_request_id=client_request_id,
             )
 
         return ordered_ids
@@ -1091,6 +1221,7 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         tags: list[str],
+        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Replace tags on a document in a single transaction."""
 
@@ -1101,14 +1232,18 @@ class DocumentsService:
 
         document = await self._get_document(workspace_id, document_id)
         document.tags = [DocumentTag(document_id=document.id, tag=tag) for tag in normalized]
+        document.version += 1
         await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
+        row = self._build_list_row(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=payload.model_dump(),
+            payload=row.model_dump(),
+            document_version=payload.version,
+            client_request_id=client_request_id,
         )
         return payload
 
@@ -1119,6 +1254,7 @@ class DocumentsService:
         document_id: UUID,
         add: list[str] | None = None,
         remove: list[str] | None = None,
+        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Add or remove tags on a document."""
 
@@ -1144,14 +1280,18 @@ class DocumentsService:
         for tag in to_add:
             document.tags.append(DocumentTag(document_id=document.id, tag=tag))
 
+        document.version += 1
         await self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
+        row = self._build_list_row(payload)
         await self._changes.record_upsert(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=payload.model_dump(),
+            payload=row.model_dump(),
+            document_version=payload.version,
+            client_request_id=client_request_id,
         )
         return payload
 
@@ -1162,6 +1302,7 @@ class DocumentsService:
         document_ids: Sequence[UUID],
         add: list[str] | None = None,
         remove: list[str] | None = None,
+        client_request_id: str | None = None,
     ) -> list[DocumentOut]:
         """Add or remove tags on multiple documents."""
 
@@ -1194,6 +1335,8 @@ class DocumentsService:
             for tag in to_add:
                 document.tags.append(DocumentTag(document_id=document.id, tag=tag))
 
+            document.version += 1
+
         await self._session.flush()
 
         payloads: list[DocumentOut] = []
@@ -1201,10 +1344,13 @@ class DocumentsService:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
             self._apply_derived_fields(payload)
             payloads.append(payload)
+            row = self._build_list_row(payload)
             await self._changes.record_upsert(
                 workspace_id=workspace_id,
                 document_id=UUID(str(doc_id)),
-                payload=payload.model_dump(),
+                payload=row.model_dump(),
+                document_version=payload.version,
+                client_request_id=client_request_id,
             )
 
         return payloads
@@ -1351,7 +1497,7 @@ class DocumentsService:
         latest_at = self._latest_run_at(document.latest_run)
         document.activity_at = latest_at if latest_at and latest_at > updated_at else updated_at
         document.latest_result = self._derive_latest_result(document)
-        document.etag = format_weak_etag(build_etag_token(document.id, updated_at))
+        document.etag = format_weak_etag(build_etag_token(document.id, document.version))
 
     def _build_list_row(self, document: DocumentOut) -> DocumentListRow:
         activity_at = document.activity_at or document.updated_at
@@ -1368,10 +1514,48 @@ class DocumentsService:
             created_at=document.created_at,
             updated_at=document.updated_at,
             activity_at=activity_at,
+            version=document.version,
             etag=document.etag,
             latest_run=document.latest_run,
             latest_successful_run=document.latest_successful_run,
             latest_result=document.latest_result,
+        )
+
+    def _build_upload_session_row(
+        self,
+        *,
+        document_id: UUID,
+        workspace_id: UUID,
+        filename: str,
+        byte_size: int,
+        actor: User | None,
+        created_at: datetime,
+    ) -> DocumentListRow:
+        uploader = None
+        if actor is not None:
+            uploader = UserSummary(id=actor.id, name=actor.display_name, email=actor.email)
+
+        version = 1
+        etag = format_weak_etag(build_etag_token(document_id, version))
+        name = self._normalise_filename(filename)
+        return DocumentListRow(
+            id=str(document_id),
+            workspace_id=str(workspace_id),
+            name=name,
+            file_type=self._derive_file_type(name),
+            status=DocumentStatus.UPLOADING,
+            uploader=uploader,
+            assignee=None,
+            tags=[],
+            byte_size=byte_size,
+            created_at=created_at,
+            updated_at=created_at,
+            activity_at=created_at,
+            version=version,
+            etag=etag,
+            latest_run=None,
+            latest_successful_run=None,
+            latest_result=None,
         )
 
     @staticmethod
@@ -1798,6 +1982,8 @@ class DocumentsService:
                 type="document.deleted",
                 document_id=str(document_id),
                 occurred_at=change.occurred_at,
+                document_version=change.document_version,
+                client_request_id=change.client_request_id,
             )
 
         payload = DocumentOut.model_validate(document)
@@ -1809,25 +1995,34 @@ class DocumentsService:
             type="document.upsert",
             row=row,
             occurred_at=change.occurred_at,
+            document_version=change.document_version or payload.version,
+            client_request_id=change.client_request_id,
         )
 
     def _serialize_change(self, change: DocumentChange) -> DocumentChangeEntry:
         cursor = str(change.cursor)
         if change.type == DocumentChangeType.UPSERT:
-            document = DocumentOut.model_validate(change.payload)
-            self._apply_derived_fields(document)
-            row = self._build_list_row(document)
+            try:
+                row = DocumentListRow.model_validate(change.payload)
+            except ValidationError:
+                document = DocumentOut.model_validate(change.payload)
+                self._apply_derived_fields(document)
+                row = self._build_list_row(document)
             return DocumentChangeEntry(
                 cursor=cursor,
                 type="document.upsert",
                 row=row,
                 occurred_at=change.occurred_at,
+                document_version=change.document_version or row.version,
+                client_request_id=change.client_request_id,
             )
         return DocumentChangeEntry(
             cursor=cursor,
             type="document.deleted",
             document_id=str(change.document_id) if change.document_id else None,
             occurred_at=change.occurred_at,
+            document_version=change.document_version,
+            client_request_id=change.client_request_id,
         )
 
     @staticmethod

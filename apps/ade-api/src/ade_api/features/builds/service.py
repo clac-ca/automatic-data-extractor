@@ -13,7 +13,6 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.events import EventRecord, EventRecordLog
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
@@ -43,9 +42,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_EVENTS_PAGE_LIMIT = 1000
-
 
 @dataclass(slots=True, frozen=True)
 class BuildSpec:
@@ -211,31 +207,6 @@ class BuildsService:
         )
         return response
 
-    async def get_build_events(
-        self,
-        *,
-        build_id: UUID,
-        after_sequence: int | None = None,
-        limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
-    ) -> tuple[list[EventRecord], int | None]:
-        """Return telemetry events for ``build_id`` with optional paging."""
-
-        build = await self._require_build(build_id)
-        events: list[EventRecord] = []
-        next_after: int | None = None
-        log = self.event_log_reader(
-            workspace_id=build.workspace_id,
-            configuration_id=build.configuration_id,
-            build_id=build.id,
-        )
-        for event in log.iter(after_sequence=after_sequence):
-            events.append(event)
-            if len(events) >= limit:
-                seq = event.get("sequence")
-                next_after = int(seq) if isinstance(seq, int) else None
-                break
-        return events, next_after
-
     async def get_build(self, build_id: UUID) -> Build | None:
         return await self._builds.get(build_id)
 
@@ -279,23 +250,8 @@ class BuildsService:
         base = f"/api/v1/builds/{build_id}"
         return BuildLinks(
             self=base,
-            events=f"{base}/events",
             events_stream=f"{base}/events/stream",
         )
-
-    def event_log_reader(
-        self,
-        *,
-        workspace_id: UUID,
-        configuration_id: UUID,
-        build_id: UUID,
-    ) -> EventRecordLog:
-        path = self.get_event_log_path(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            build_id=build_id,
-        )
-        return EventRecordLog(path=str(path))
 
     def get_event_log_path(
         self,

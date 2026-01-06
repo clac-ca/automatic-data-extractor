@@ -1,4 +1,5 @@
 import { flexRender, type Row, type Table as TanstackTable } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
@@ -21,6 +22,13 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   isRowExpanded?: (row: Row<TData>) => boolean;
   renderExpandedRow?: (row: Row<TData>) => React.ReactNode;
   expandedRowCellClassName?: string;
+  virtualize?: {
+    enabled?: boolean;
+    estimateSize?: number;
+    overscan?: number;
+    getScrollElement?: () => HTMLElement | null;
+    onRangeChange?: (range: { startIndex: number; endIndex: number; total: number }) => void;
+  };
 }
 
 export function DataTable<TData>({
@@ -31,19 +39,52 @@ export function DataTable<TData>({
   isRowExpanded,
   renderExpandedRow,
   expandedRowCellClassName,
+  virtualize,
   children,
   className,
   ...props
 }: DataTableProps<TData>) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const rows = showPagination
     ? table.getRowModel().rows
     : table.getPrePaginationRowModel().rows;
   const visibleColumnCount = Math.max(1, table.getVisibleLeafColumns().length);
+  const virtualizeEnabled = Boolean(virtualize?.enabled);
+  const onRangeChange = virtualize?.onRangeChange;
+
+  const rowVirtualizer = useVirtualizer({
+    count: virtualizeEnabled ? rows.length : 0,
+    getScrollElement: virtualize?.getScrollElement ?? (() => containerRef.current),
+    estimateSize: () => virtualize?.estimateSize ?? 44,
+    overscan: virtualize?.overscan ?? 8,
+  });
+  const virtualRows = virtualizeEnabled ? rowVirtualizer.getVirtualItems() : [];
+  const virtualPaddingTop = virtualizeEnabled ? (virtualRows[0]?.start ?? 0) : 0;
+  const virtualPaddingBottom = virtualizeEnabled
+    ? rowVirtualizer.getTotalSize() - (virtualRows[virtualRows.length - 1]?.end ?? 0)
+    : 0;
+
+  React.useEffect(() => {
+    if (!virtualizeEnabled || !onRangeChange) {
+      return;
+    }
+    const total = rows.length;
+    if (!virtualRows.length) {
+      onRangeChange({ startIndex: 0, endIndex: -1, total });
+      return;
+    }
+    onRangeChange({
+      startIndex: virtualRows[0].index,
+      endIndex: virtualRows[virtualRows.length - 1].index,
+      total,
+    });
+  }, [onRangeChange, rows.length, virtualRows, virtualizeEnabled]);
 
   return (
     <div
       className={cn("flex min-w-0 w-full flex-col gap-2.5 overflow-auto", className)}
       {...props}
+      ref={containerRef}
     >
       {children}
       <div className="overflow-hidden rounded-md border">
@@ -72,44 +113,62 @@ export function DataTable<TData>({
           </TableHeader>
           <TableBody>
             {rows?.length ? (
-              rows.map((row) => {
-                const expanded = isRowExpanded?.(row) ?? false;
-                return (
-                <React.Fragment key={row.id}>
-                  <TableRow
-                    data-state={row.getIsSelected() && "selected"}
-                    data-expanded={expanded || undefined}
-                    aria-expanded={expanded || undefined}
-                    className={cn(onRowClick && "cursor-pointer")}
-                    onClick={onRowClick ? (event) => onRowClick(row, event) : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        style={{
-                          ...getCommonPinningStyles({ column: cell.column }),
-                        }}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </TableCell>
-                    ))}
+              <>
+                {virtualizeEnabled && virtualPaddingTop > 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={visibleColumnCount}
+                      style={{ height: `${virtualPaddingTop}px` }}
+                    />
                   </TableRow>
-                  {renderExpandedRow && expanded && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={visibleColumnCount}
-                        className={cn("bg-muted/20", expandedRowCellClassName)}
+                ) : null}
+                {(virtualizeEnabled ? virtualRows.map((virtualRow) => rows[virtualRow.index]) : rows).map((row) => {
+                  const expanded = isRowExpanded?.(row) ?? false;
+                  return (
+                    <React.Fragment key={row.id}>
+                      <TableRow
+                        data-state={row.getIsSelected() && "selected"}
+                        data-expanded={expanded || undefined}
+                        aria-expanded={expanded || undefined}
+                        className={cn(onRowClick && "cursor-pointer")}
+                        onClick={onRowClick ? (event) => onRowClick(row, event) : undefined}
                       >
-                        {renderExpandedRow(row)}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
-              );
-              })
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell
+                            key={cell.id}
+                            style={{
+                              ...getCommonPinningStyles({ column: cell.column }),
+                            }}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                      {renderExpandedRow && expanded && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={visibleColumnCount}
+                            className={cn("bg-muted/20", expandedRowCellClassName)}
+                          >
+                            {renderExpandedRow(row)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                {virtualizeEnabled && virtualPaddingBottom > 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={visibleColumnCount}
+                      style={{ height: `${virtualPaddingBottom}px` }}
+                    />
+                  </TableRow>
+                ) : null}
+              </>
             ) : (
               <TableRow>
                 <TableCell

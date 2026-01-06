@@ -19,7 +19,11 @@ export default function DocumentsScreen() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadPreflightFiles, setUploadPreflightFiles] = useState<File[]>([]);
 
-  const uploadManager = useUploadManager({ workspaceId: workspace.id });
+  const uploadManager = useUploadManager({
+    workspaceId: workspace.id,
+    sessionThresholdBytes: 0,
+    concurrency: 10,
+  });
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
 
   const currentUser = useMemo(
@@ -113,6 +117,7 @@ export default function DocumentsScreen() {
             configMissing={configMissing}
             processingPaused={processingPaused}
             toolbarActions={toolbarActions}
+            uploadItems={uploadManager.items}
           />
         </section>
       </div>

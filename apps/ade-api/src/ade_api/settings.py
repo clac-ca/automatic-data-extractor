@@ -364,7 +364,7 @@ class Settings(BaseSettings):
     auth_disabled_user_name: str | None = "Development User"
 
     # Runs (queue limits)
-    queue_size: int | None = Field(default=None, ge=1)
+    queue_size: int | None = Field(default=200, ge=1)
     preview_timeout_seconds: float = Field(10, gt=0)
 
     # OIDC

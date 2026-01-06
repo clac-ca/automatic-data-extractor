@@ -27,35 +27,45 @@ async def test_document_tags_replace_and_patch(
         files={"file": ("tags.txt", b"tag payload", "text/plain")},
     )
     assert upload.status_code == 201, upload.text
-    document_id = upload.json()["id"]
+    upload_payload = upload.json()
+    document_id = upload_payload["id"]
+    etag = upload_payload.get("etag")
+    assert etag is not None
 
     replace = await async_client.put(
         f"{workspace_base}/documents/{document_id}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag},
         json={"tags": [" Finance ", "Q1   Report", "finance"]},
     )
     assert replace.status_code == 200, replace.text
-    assert replace.json()["tags"] == ["finance", "q1 report"]
+    replace_payload = replace.json()
+    assert replace_payload["tags"] == ["finance", "q1 report"]
+    etag = replace_payload.get("etag")
+    assert etag is not None
 
     patch = await async_client.patch(
         f"{workspace_base}/documents/{document_id}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag},
         json={"add": ["Priority"], "remove": ["q1 report"]},
     )
     assert patch.status_code == 200, patch.text
-    assert patch.json()["tags"] == ["finance", "priority"]
+    patch_payload = patch.json()
+    assert patch_payload["tags"] == ["finance", "priority"]
+    etag = patch_payload.get("etag")
+    assert etag is not None
 
     patch_again = await async_client.patch(
         f"{workspace_base}/documents/{document_id}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag},
         json={"add": ["Priority"], "remove": ["q1 report"]},
     )
     assert patch_again.status_code == 200, patch_again.text
-    assert patch_again.json()["tags"] == ["finance", "priority"]
+    patch_again_payload = patch_again.json()
+    assert patch_again_payload["tags"] == ["finance", "priority"]
 
     empty_patch = await async_client.patch(
         f"{workspace_base}/documents/{document_id}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag},
         json={},
     )
     assert empty_patch.status_code == 422
@@ -76,7 +86,10 @@ async def test_tag_catalog_counts_and_excludes_deleted(
         files={"file": ("catalog-one.txt", b"one", "text/plain")},
     )
     assert upload_one.status_code == 201, upload_one.text
-    document_one = upload_one.json()["id"]
+    upload_one_payload = upload_one.json()
+    document_one = upload_one_payload["id"]
+    etag_one = upload_one_payload.get("etag")
+    assert etag_one is not None
 
     upload_two = await async_client.post(
         f"{workspace_base}/documents",
@@ -84,18 +97,21 @@ async def test_tag_catalog_counts_and_excludes_deleted(
         files={"file": ("catalog-two.txt", b"two", "text/plain")},
     )
     assert upload_two.status_code == 201, upload_two.text
-    document_two = upload_two.json()["id"]
+    upload_two_payload = upload_two.json()
+    document_two = upload_two_payload["id"]
+    etag_two = upload_two_payload.get("etag")
+    assert etag_two is not None
 
     replace_one = await async_client.put(
         f"{workspace_base}/documents/{document_one}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag_one},
         json={"tags": ["finance", "priority"]},
     )
     assert replace_one.status_code == 200, replace_one.text
 
     replace_two = await async_client.put(
         f"{workspace_base}/documents/{document_two}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag_two},
         json={"tags": ["finance"]},
     )
     assert replace_two.status_code == 200, replace_two.text

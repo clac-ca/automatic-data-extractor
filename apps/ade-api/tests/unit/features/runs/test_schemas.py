@@ -8,7 +8,6 @@ import pytest
 from ade_api.features.runs.schemas import (
     RunCreateOptions,
     RunCreateRequest,
-    RunEventsPage,
     RunLinks,
     RunResource,
 )
@@ -35,7 +34,6 @@ def _links_for(run_id: UUID) -> RunLinks:
     base = f"/api/v1/runs/{run_str}"
     return RunLinks(
         self=base,
-        events=f"{base}/events",
         events_stream=f"{base}/events/stream",
         events_download=f"{base}/events/download",
         logs=f"{base}/events/download",
@@ -95,11 +93,3 @@ def test_run_create_request_serializes_minimal_options() -> None:
         }
     }
 
-
-@pytest.mark.parametrize("cursor", [9, None])
-def test_run_events_page_serialization_handles_cursor(cursor: int | None) -> None:
-    payload = RunEventsPage(items=[], next_after_sequence=cursor).model_dump()
-
-    assert ("next_after_sequence" in payload) is (cursor is not None)
-    if cursor is not None:
-        assert payload["next_after_sequence"] == cursor

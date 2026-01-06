@@ -59,6 +59,7 @@ class DocumentChangesService:
         workspace_id: UUID,
         cursor: int,
         limit: int,
+        max_cursor: int | None = None,
     ) -> ChangeFeedPage:
         await self._prune_if_needed(workspace_id=workspace_id)
 
@@ -67,14 +68,19 @@ class DocumentChangesService:
         if oldest is not None and cursor < oldest:
             raise DocumentChangeCursorTooOld(latest_cursor=latest)
 
-        if cursor >= latest:
-            return ChangeFeedPage(items=[], next_cursor=latest)
+        if max_cursor is not None and max_cursor > latest:
+            max_cursor = latest
+
+        effective_latest = max_cursor if max_cursor is not None else latest
+        if cursor >= effective_latest:
+            return ChangeFeedPage(items=[], next_cursor=effective_latest)
 
         stmt = (
             select(DocumentChange)
             .where(
                 DocumentChange.workspace_id == workspace_id,
                 DocumentChange.cursor > cursor,
+                DocumentChange.cursor <= effective_latest,
             )
             .order_by(DocumentChange.cursor.asc())
             .limit(limit)
@@ -82,7 +88,7 @@ class DocumentChangesService:
         result = await self._session.execute(stmt)
         changes = list(result.scalars())
         if not changes:
-            return ChangeFeedPage(items=[], next_cursor=latest)
+            return ChangeFeedPage(items=[], next_cursor=effective_latest)
         next_cursor = int(changes[-1].cursor)
         return ChangeFeedPage(items=changes, next_cursor=next_cursor)
 
@@ -92,6 +98,8 @@ class DocumentChangesService:
         workspace_id: UUID,
         document_id: UUID,
         payload: dict[str, Any],
+        document_version: int | None = None,
+        client_request_id: str | None = None,
         occurred_at: datetime | None = None,
     ) -> DocumentChange:
         serialized = jsonable_encoder(payload)
@@ -99,6 +107,8 @@ class DocumentChangesService:
             workspace_id=workspace_id,
             document_id=document_id,
             type=DocumentChangeType.UPSERT,
+            document_version=document_version,
+            client_request_id=client_request_id,
             payload=serialized,
             occurred_at=occurred_at or utc_now(),
         )
@@ -115,12 +125,16 @@ class DocumentChangesService:
         *,
         workspace_id: UUID,
         document_id: UUID,
+        document_version: int | None = None,
+        client_request_id: str | None = None,
         occurred_at: datetime | None = None,
     ) -> DocumentChange:
         entry = DocumentChange(
             workspace_id=workspace_id,
             document_id=document_id,
             type=DocumentChangeType.DELETED,
+            document_version=document_version,
+            client_request_id=client_request_id,
             payload={},
             occurred_at=occurred_at or utc_now(),
         )

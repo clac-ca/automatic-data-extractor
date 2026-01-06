@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Annotated, Any, Literal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import (
@@ -16,11 +15,9 @@ from fastapi import (
     status,
 )
 from fastapi import Path as PathParam
-from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import SessionDep, get_builds_service, get_idempotency_service
-from ade_api.common.encoding import json_bytes
 from ade_api.common.sse import stream_ndjson_events
 from ade_api.common.listing import (
     ListQueryParams,
@@ -44,8 +41,8 @@ from ade_api.features.idempotency import (
 )
 
 from .exceptions import BuildNotFoundError
-from .schemas import BuildCreateRequest, BuildEventsPage, BuildPage, BuildResource
-from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildsService
+from .schemas import BuildCreateRequest, BuildPage, BuildResource
+from .service import BuildsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
@@ -72,10 +69,6 @@ BuildPath = Annotated[
         alias="buildId",
     ),
 ]
-
-
-def _event_bytes(event: Any) -> bytes:
-    return json_bytes(event) + b"\n"
 
 
 @router.get(
@@ -188,41 +181,6 @@ async def get_build_endpoint(
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
     return service.to_resource(build)
-
-
-@router.get(
-    "/builds/{buildId}/events",
-    response_model=BuildEventsPage,
-    response_model_exclude_none=True,
-)
-async def list_build_events_endpoint(
-    build_id: BuildPath,
-    db_session: SessionDep,
-    format: Literal["json", "ndjson"] = Query(default="json"),
-    after_sequence: int | None = Query(default=None, ge=0),
-    limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
-    service: BuildsService = builds_service_dependency,
-) -> BuildEventsPage | StreamingResponse:
-    try:
-        events, next_after_sequence = await service.get_build_events(
-            build_id=build_id,
-            after_sequence=after_sequence,
-            limit=limit,
-        )
-    except BuildNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    if format == "ndjson":
-
-        async def event_stream() -> AsyncIterator[bytes]:
-            for event in events:
-                yield _event_bytes(event)
-
-        await db_session.close()
-        return StreamingResponse(event_stream(), media_type="application/x-ndjson")
-
-    await db_session.close()
-    return BuildEventsPage(items=events, next_after_sequence=next_after_sequence)
 
 
 @router.get("/builds/{buildId}/events/stream")

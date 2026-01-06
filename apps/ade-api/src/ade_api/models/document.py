@@ -33,6 +33,7 @@ from .workspace import Workspace
 class DocumentStatus(str, Enum):
     """Canonical document processing states."""
 
+    UPLOADING = "uploading"
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     PROCESSED = "processed"
@@ -91,6 +92,12 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     stored_uri: Mapped[str] = mapped_column(String(512), nullable=False)
     attributes: Mapped[dict[str, object]] = mapped_column(
@@ -245,6 +252,8 @@ class DocumentChange(Base):
         ),
         nullable=False,
     )
+    document_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    client_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     payload: Mapped[dict[str, object]] = mapped_column(
         MutableDict.as_mutable(JSON),
         nullable=False,
@@ -272,6 +281,11 @@ class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     created_by_user_id: Mapped[UUID | None] = mapped_column(
         GUID(),
         ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=True,
+    )
+    document_id: Mapped[UUID | None] = mapped_column(
+        GUID(),
+        ForeignKey("documents.id", ondelete="NO ACTION"),
         nullable=True,
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -327,6 +341,7 @@ class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_document_upload_sessions_workspace", "workspace_id"),
         Index("ix_document_upload_sessions_expires", "expires_at"),
         Index("ix_document_upload_sessions_status", "status"),
+        Index("ix_document_upload_sessions_document", "document_id"),
     )
 
 

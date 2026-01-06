@@ -30,11 +30,11 @@ import { TagPicker } from "@pages/Workspace/sections/Documents/components/TagPic
 import { UNASSIGNED_KEY } from "@pages/Workspace/sections/Documents/filters";
 import { fileTypeLabel, formatBytes, shortId } from "@pages/Workspace/sections/Documents/utils";
 import { DocumentPreviewGrid } from "./DocumentPreviewGrid";
-import type { DocumentListRow } from "../types";
+import type { DocumentRow } from "../types";
 import { DEFAULT_PAGE_SIZE, formatTimestamp } from "../utils";
 
 interface DocumentsTableProps {
-  data: DocumentListRow[];
+  data: DocumentRow[];
   pageCount: number;
   workspaceId: string;
   people: WorkspacePerson[];
@@ -44,7 +44,7 @@ interface DocumentsTableProps {
   onToggleTag: (documentId: string, tag: string) => void;
   onArchive: (documentId: string) => void;
   onRestore: (documentId: string) => void;
-  onDeleteRequest: (document: DocumentListRow) => void;
+  onDeleteRequest: (document: DocumentRow) => void;
   expandedRowId: string | null;
   onTogglePreview: (documentId: string) => void;
   isRowActionPending?: (documentId: string) => boolean;
@@ -52,6 +52,7 @@ interface DocumentsTableProps {
   toolbarActions?: ReactNode;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   scrollFooter?: ReactNode;
+  onVisibleRangeChange?: (range: { startIndex: number; endIndex: number; total: number }) => void;
 }
 
 export function DocumentsTable({
@@ -73,6 +74,7 @@ export function DocumentsTable({
   toolbarActions,
   scrollContainerRef,
   scrollFooter,
+  onVisibleRangeChange,
 }: DocumentsTableProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(() => searchParams.get("q") ?? "");
@@ -83,7 +85,7 @@ export function DocumentsTable({
 
   const statusOptions = useMemo(
     () =>
-      (["uploaded", "processing", "processed", "failed", "archived"] as DocumentStatus[])
+      (["uploading", "uploaded", "processing", "processed", "failed", "archived"] as DocumentStatus[])
         .map((value) => ({
           value,
           label: value[0]?.toUpperCase() + value.slice(1),
@@ -144,7 +146,7 @@ export function DocumentsTable({
     [onTogglePreview],
   );
 
-  const columns = useMemo<ColumnDef<DocumentListRow>[]>(
+  const columns = useMemo<ColumnDef<DocumentRow>[]>(
     () => [
       {
         id: "id",
@@ -222,19 +224,33 @@ export function DocumentsTable({
         cell: ({ row }) => {
           const status = row.getValue<string>("status");
           const flash = status === "archived" && (archivedFlashIds?.has(row.original.id) ?? false);
+          const uploadProgress = row.original.uploadProgress ?? null;
           return (
-            <Badge
-              variant="outline"
-              className={cn(
-                "capitalize",
-                status === "archived" &&
-                  "border-warning-200 text-warning-900 dark:border-warning-500/60 dark:text-warning-100",
-                flash &&
-                  "bg-warning-50 ring-1 ring-warning-300/70 animate-pulse dark:bg-warning-500/15",
-              )}
-            >
-              {status}
-            </Badge>
+            <div className="flex min-w-[120px] flex-col gap-1">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "capitalize",
+                  status === "archived" &&
+                    "border-warning-200 text-warning-900 dark:border-warning-500/60 dark:text-warning-100",
+                  flash &&
+                    "bg-warning-50 ring-1 ring-warning-300/70 animate-pulse dark:bg-warning-500/15",
+                )}
+              >
+                {status}
+              </Badge>
+              {status === "uploading" && typeof uploadProgress === "number" ? (
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <div className="h-1.5 w-16 rounded-full bg-muted">
+                    <div
+                      className="h-1.5 rounded-full bg-brand-500"
+                      style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }}
+                    />
+                  </div>
+                  <span className="tabular-nums">{Math.round(uploadProgress)}%</span>
+                </div>
+              ) : null}
+            </div>
           );
         },
         meta: {
@@ -290,6 +306,7 @@ export function DocumentsTable({
             onChange={(keys) => onAssign(row.original.id, normalizeSingleAssignee(keys))}
             placeholder="Assignee..."
             includeUnassigned
+            disabled={isRowActionPending?.(row.original.id) ?? false}
             buttonClassName="min-w-[140px] bg-background px-2 py-1 text-[11px] shadow-none"
           />
         ),
@@ -314,6 +331,7 @@ export function DocumentsTable({
             selected={row.original.tags ?? []}
             onToggle={(tag) => onToggleTag(row.original.id, tag)}
             placeholder="Add tags"
+            disabled={isRowActionPending?.(row.original.id) ?? false}
             buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
           />
         ),
@@ -624,12 +642,12 @@ export function DocumentsTable({
   }, [scrollContainerRef]);
 
   const isRowExpanded = useCallback(
-    (row: Row<DocumentListRow>) => row.id === expandedRowId,
+    (row: Row<DocumentRow>) => row.id === expandedRowId,
     [expandedRowId],
   );
 
   const onRowClick = useCallback(
-    (row: Row<DocumentListRow>, event: MouseEvent<HTMLTableRowElement>) => {
+    (row: Row<DocumentRow>, event: MouseEvent<HTMLTableRowElement>) => {
       const target = event.target as HTMLElement | null;
       if (
         target?.closest(
@@ -683,6 +701,13 @@ export function DocumentsTable({
           onRowClick={onRowClick}
           isRowExpanded={isRowExpanded}
           expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-visible"
+          virtualize={{
+            enabled: !expandedRowId,
+            estimateSize: 52,
+            overscan: 8,
+            getScrollElement: () => scrollContainerRef?.current ?? null,
+            onRangeChange: onVisibleRangeChange,
+          }}
           renderExpandedRow={(row) => {
             return (
               <div className="min-w-0 max-w-full">
@@ -711,7 +736,7 @@ export function DocumentsTable({
   );
 }
 
-function renderLatestResult(result: DocumentListRow["latestResult"]) {
+function renderLatestResult(result: DocumentRow["latestResult"]) {
   if (!result) {
     return <span className="text-muted-foreground">-</span>;
   }

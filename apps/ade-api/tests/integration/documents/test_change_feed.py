@@ -19,6 +19,51 @@ from tests.utils import login
 pytestmark = pytest.mark.asyncio
 
 
+async def test_document_changes_include_create_event(async_client, seed_identity) -> None:
+    manager = seed_identity.member_with_manage
+    token, _ = await login(
+        async_client,
+        email=manager.email,
+        password=manager.password,
+    )
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": f"idem-{uuid4().hex}",
+    }
+
+    listing = await async_client.get(
+        f"{workspace_base}/documents",
+        headers=headers,
+        params={"page": 1, "perPage": 1},
+    )
+    assert listing.status_code == 200, listing.text
+    baseline_cursor = listing.json()["changesCursor"]
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("first.txt", b"hello", "text/plain")},
+    )
+    assert upload.status_code == 201, upload.text
+    upload_payload = upload.json()
+    document_id = upload_payload["id"]
+    etag = upload_payload.get("etag")
+    assert etag is not None
+
+    replay = await async_client.get(
+        f"{workspace_base}/documents/changes",
+        headers=headers,
+        params={"cursor": baseline_cursor},
+    )
+    assert replay.status_code == 200, replay.text
+    payload = replay.json()
+    assert any(
+        entry["type"] == "document.upsert" and entry["row"]["id"] == document_id
+        for entry in payload["items"]
+    )
+
+
 async def test_document_changes_cursor_replay(async_client, seed_identity) -> None:
     manager = seed_identity.member_with_manage
     token, _ = await login(
@@ -40,17 +85,17 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
     assert upload.status_code == 201, upload.text
     document_id = upload.json()["id"]
 
-    baseline = await async_client.get(
-        f"{workspace_base}/documents/changes",
+    listing = await async_client.get(
+        f"{workspace_base}/documents",
         headers=headers,
-        params={"cursor": "latest"},
+        params={"page": 1, "perPage": 1},
     )
-    assert baseline.status_code == 200, baseline.text
-    baseline_cursor = baseline.json()["nextCursor"]
+    assert listing.status_code == 200, listing.text
+    baseline_cursor = listing.json()["changesCursor"]
 
     patch = await async_client.patch(
         f"{workspace_base}/documents/{document_id}/tags",
-        headers=headers,
+        headers={**headers, "If-Match": etag},
         json={"add": ["finance"]},
     )
     assert patch.status_code == 200, patch.text
@@ -65,6 +110,58 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
     assert payload["items"], "Expected at least one change after the cursor."
     assert any(
         entry["type"] == "document.upsert" and entry["row"]["id"] == document_id
+        for entry in payload["items"]
+    )
+
+
+async def test_document_changes_include_delete_event(async_client, seed_identity) -> None:
+    manager = seed_identity.member_with_manage
+    token, _ = await login(
+        async_client,
+        email=manager.email,
+        password=manager.password,
+    )
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": f"idem-{uuid4().hex}",
+    }
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("delete.txt", b"hello", "text/plain")},
+    )
+    assert upload.status_code == 201, upload.text
+    uploaded = upload.json()
+    document_id = uploaded["id"]
+
+    listing = await async_client.get(
+        f"{workspace_base}/documents",
+        headers=headers,
+        params={"page": 1, "perPage": 1},
+    )
+    assert listing.status_code == 200, listing.text
+    baseline_cursor = listing.json()["changesCursor"]
+
+    delete = await async_client.delete(
+        f"{workspace_base}/documents/{document_id}",
+        headers={
+            **headers,
+            "If-Match": uploaded["etag"],
+        },
+    )
+    assert delete.status_code == 204, delete.text
+
+    replay = await async_client.get(
+        f"{workspace_base}/documents/changes",
+        headers=headers,
+        params={"cursor": baseline_cursor},
+    )
+    assert replay.status_code == 200, replay.text
+    payload = replay.json()
+    assert any(
+        entry["type"] == "document.deleted" and entry["documentId"] == document_id
         for entry in payload["items"]
     )
 
@@ -124,5 +221,6 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
     )
     assert response.status_code == 410, response.text
     payload = response.json()
-    assert payload["type"] == "resync_required"
-    assert str(fresh_change.cursor) in (payload.get("detail") or "")
+    detail = payload.get("detail") or {}
+    assert detail.get("error") == "resync_required"
+    assert detail.get("latestCursor") == str(fresh_change.cursor)

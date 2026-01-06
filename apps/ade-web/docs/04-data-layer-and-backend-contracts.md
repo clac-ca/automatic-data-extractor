@@ -463,7 +463,7 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 
 1. Run creation is **configuration-scoped**: `POST /configurations/{configurationId}/runs`.
 2. Use workspace-scoped `/workspaces/{workspaceId}/runs` for **listing** runs.
-3. Use global `/runs/{runId}` for **detail, events, output, and logs** once you know `runId`.
+3. Use global `/runs/{runId}` for **detail, output, and logs** once you know `runId`.
 
 #### Workspace run ledger (list only)
 
@@ -472,7 +472,8 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 #### Canonical run detail & assets (global)
 
 - `GET  /api/v1/runs/{runId}` – canonical run detail.
-- `GET  /api/v1/runs/{runId}/events` – poll/stream events; `GET /runs/{runId}/events/download` downloads NDJSON.
+- `GET  /api/v1/runs/{runId}/events/stream` – live SSE event stream.
+- `GET  /api/v1/runs/{runId}/events/download` – download NDJSON event log.
 - `GET  /api/v1/runs/{runId}/input` – input metadata; `GET /runs/{runId}/input/download` downloads the source file.
 - `GET  /api/v1/runs/{runId}/output` – output metadata; `GET /runs/{runId}/output/download` downloads once ready (returns 409 if not).
 #### Configuration-scoped triggers

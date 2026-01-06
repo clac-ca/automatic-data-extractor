@@ -7,7 +7,6 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
@@ -34,7 +33,6 @@ __all__ = [
     "RunOutputSheet",
     "RunPage",
     "RunResource",
-    "RunEventsPage",
 ]
 
 
@@ -159,7 +157,6 @@ class RunLinks(BaseSchema):
     """Hypermedia links for run-related resources."""
 
     self: str
-    events: str
     events_stream: str
     events_download: str
     logs: str
@@ -298,7 +295,6 @@ class RunResource(BaseSchema):
     input: RunInput = Field(default_factory=RunInput)
     output: RunOutput = Field(default_factory=RunOutput)
     links: RunLinks
-    events_url: str | None = None
     events_stream_url: str | None = None
     events_download_url: str | None = None
 
@@ -308,9 +304,3 @@ class RunPage(ListPage[RunResource]):
 
     items: list[RunResource]
 
-
-class RunEventsPage(BaseSchema):
-    """Paginated ADE events for a run."""
-
-    items: list[EventRecord]
-    next_after_sequence: int | None = None

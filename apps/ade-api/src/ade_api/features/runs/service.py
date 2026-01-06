@@ -18,7 +18,6 @@ from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.events import EventRecord, EventRecordLog
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
@@ -94,7 +93,6 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 
 # --------------------------------------------------------------------------- #
@@ -104,13 +102,12 @@ DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 @dataclass(slots=True)
 class RunPathsSnapshot:
-    """Container for run-relative output and log paths.
+    """Container for run-relative output paths.
 
     This is the normalized view that higher layers use. All paths here are
     relative to the runs root, so they are safe to surface externally.
     """
 
-    events_path: str | None = None
     output_path: str | None = None
     processed_file: str | None = None
 
@@ -170,7 +167,7 @@ class RunsService:
         configuration_id: UUID,
         options: RunCreateOptions,
     ) -> Run:
-        """Create the queued run row and persist initial events."""
+        """Create the queued run row and enqueue execution."""
 
         logger.debug(
             "run.prepare.start",
@@ -289,6 +286,8 @@ class RunsService:
         options: RunBatchCreateOptions,
         input_sheet_names_by_document_id: dict[UUID, list[str]] | None = None,
         active_sheet_only_by_document_id: dict[UUID, bool] | None = None,
+        skip_existing_check: bool = False,
+        queued_count: int | None = None,
     ) -> list[Run]:
         """Create queued runs for each document id, enforcing all-or-nothing semantics."""
 
@@ -317,15 +316,18 @@ class RunsService:
         active_sheet_only_lookup: dict[UUID, bool] = {}
         run_options_by_document_id: dict[UUID, RunCreateOptions] = {}
 
-        existing = await self._runs.list_active_for_documents(
-            configuration_id=configuration.id,
-            document_ids=list(document_ids),
-        )
-        existing_ids = {run.input_document_id for run in existing}
-        new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
+        if skip_existing_check:
+            new_document_ids = list(document_ids)
+        else:
+            existing = await self._runs.list_active_for_documents(
+                configuration_id=configuration.id,
+                document_ids=list(document_ids),
+            )
+            existing_ids = {run.input_document_id for run in existing}
+            new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
 
         if new_document_ids:
-            await self._enforce_queue_capacity(requested=len(new_document_ids))
+            await self._enforce_queue_capacity(requested=len(new_document_ids), queued_count=queued_count)
 
             for document_id in new_document_ids:
                 input_sheet_names = None
@@ -463,15 +465,20 @@ class RunsService:
             )
             return 0
 
-        batch_size = batch_size or self._settings.queue_size or 100
+        queue_limit = self._settings.queue_size
+        batch_size = batch_size or queue_limit or 100
         if batch_size <= 0:
             return 0
 
         total = 0
         while True:
-            remaining = await self._remaining_queue_capacity()
-            if remaining is not None and remaining <= 0:
-                break
+            queued_count = None
+            remaining = None
+            if queue_limit:
+                queued_count = await self._runs.count_queued()
+                remaining = max(queue_limit - queued_count, 0)
+                if remaining <= 0:
+                    break
             limit = batch_size if remaining is None else min(batch_size, remaining)
             documents = await self._pending_documents(
                 workspace_id=configuration.workspace_id,
@@ -480,6 +487,19 @@ class RunsService:
             )
             if not documents:
                 break
+            logger.debug(
+                "run.pending.enqueue.batch batch_size=%s queued_count=%s remaining=%s",
+                limit,
+                queued_count,
+                remaining,
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    batch_size=limit,
+                    queued_count=queued_count,
+                    remaining=remaining,
+                ),
+            )
             document_ids = [doc.id for doc in documents]
             sheet_names_by_document_id: dict[UUID, list[str]] = {}
             active_sheet_only_by_document_id: dict[UUID, bool] = {}
@@ -496,6 +516,8 @@ class RunsService:
                     options=RunBatchCreateOptions(),
                     input_sheet_names_by_document_id=sheet_names_by_document_id or None,
                     active_sheet_only_by_document_id=active_sheet_only_by_document_id or None,
+                    skip_existing_check=True,
+                    queued_count=queued_count,
                 )
             except RunQueueFullError:
                 logger.warning(
@@ -692,16 +714,22 @@ class RunsService:
                         return
                     rows = build_rows(remaining)
 
-    async def _enforce_queue_capacity(self, *, requested: int = 1) -> None:
+    async def _enforce_queue_capacity(
+        self,
+        *,
+        requested: int = 1,
+        queued_count: int | None = None,
+    ) -> None:
         limit = self._settings.queue_size
         if not limit or requested <= 0:
             return
-        queued = await self._runs.count_queued()
+
+        queued = queued_count if queued_count is not None else await self._runs.count_queued()
         if queued + requested > limit:
             raise RunQueueFullError(f"Run queue is full (limit {limit})")
 
     # --------------------------------------------------------------------- #
-    # Public read APIs (runs, summaries, events, outputs)
+    # Public read APIs (runs, summaries, outputs)
     # --------------------------------------------------------------------- #
 
     async def get_run(self, run_id: UUID) -> Run | None:
@@ -751,43 +779,6 @@ class RunsService:
 
         run = await self._require_run(run_id)
         return await self._runs.list_columns(run_id=run.id, filters=filters)
-
-    async def get_run_events(
-        self,
-        *,
-        run_id: UUID,
-        after_sequence: int | None = None,
-        limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
-    ) -> tuple[list[EventRecord], int | None]:
-        """Return telemetry events for ``run_id`` with optional paging."""
-
-        logger.debug(
-            "run.events.get.start",
-            extra=log_context(run_id=run_id, after_sequence=after_sequence, limit=limit),
-        )
-        run = await self._require_run(run_id)
-        events: list[EventRecord] = []
-        next_after: int | None = None
-        log_path = await self.get_event_log_path(run_id=run_id)
-        log = EventRecordLog(path=str(log_path))
-        for event in log.iter(after_sequence=after_sequence):
-            events.append(event)
-            if len(events) >= limit:
-                seq = event.get("sequence")
-                next_after = int(seq) if isinstance(seq, int) else None
-                break
-
-        logger.info(
-            "run.events.get.success",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                count=len(events),
-                next_after_sequence=next_after,
-            ),
-        )
-        return events, next_after
 
     async def list_runs(
         self,
@@ -935,7 +926,6 @@ class RunsService:
             input=input_meta,
             output=output_meta,
             links=links,
-            events_url=links.events,
             events_stream_url=links.events_stream,
             events_download_url=links.events_download,
         )
@@ -1044,9 +1034,8 @@ class RunsService:
     @staticmethod
     def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
-        events = f"{base}/events"
-        events_stream = f"{events}/stream"
-        events_download = f"{events}/download"
+        events_stream = f"{base}/events/stream"
+        events_download = f"{base}/events/download"
         output_metadata = f"{base}/output"
         output_download = f"{output_metadata}/download"
         input_metadata = f"{base}/input"
@@ -1054,7 +1043,6 @@ class RunsService:
 
         return RunLinks(
             self=base,
-            events=events,
             events_stream=events_stream,
             events_download=events_download,
             logs=events_download,
@@ -1514,18 +1502,12 @@ class RunsService:
         run_dir: Path,
         default_paths: RunPathsSnapshot,
     ) -> RunPathsSnapshot:
-        """Merge inferred filesystem paths for events and outputs."""
+        """Merge inferred filesystem paths for outputs."""
 
         snapshot = RunPathsSnapshot(
-            events_path=default_paths.events_path,
             output_path=default_paths.output_path,
             processed_file=default_paths.processed_file,
         )
-
-        # Events path: default to <run_dir>/logs/events.ndjson, if it exists.
-        if not snapshot.events_path:
-            candidate = run_dir / "logs" / "events.ndjson"
-            snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
 
         # Output path: if not provided, infer from <run_dir>/output.
         if snapshot.output_path:

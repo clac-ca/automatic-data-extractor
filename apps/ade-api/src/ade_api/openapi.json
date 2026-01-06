@@ -5363,10 +5363,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Cursor token or 'latest'.",
+              "description": "Cursor token.",
               "title": "Cursor"
             },
-            "description": "Cursor token or 'latest'."
+            "description": "Cursor token."
           },
           {
             "name": "limit",
@@ -5379,110 +5379,6 @@
               "default": 200,
               "title": "Limit"
             }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "description": "Items per page (max 200)",
-              "default": 50,
-              "title": "Perpage"
-            },
-            "description": "Items per page (max 200)"
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
-              "title": "Sort"
-            },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
-          },
-          {
-            "name": "filters",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
-              "title": "Filters"
-            },
-            "description": "URL-encoded JSON array of filter objects."
-          },
-          {
-            "name": "joinOperator",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/FilterJoinOperator",
-              "description": "Logical operator to join filters (and/or).",
-              "default": "and"
-            },
-            "description": "Logical operator to join filters (and/or)."
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
-              "title": "Q"
-            },
-            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
           }
         ],
         "responses": {
@@ -5533,214 +5429,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/changes/stream": {
-      "get": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Stream Document Changes",
-        "operationId": "stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Cursor token or 'latest'.",
-              "title": "Cursor"
-            },
-            "description": "Cursor token or 'latest'."
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 1000,
-              "minimum": 1,
-              "default": 200,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "description": "Items per page (max 200)",
-              "default": 50,
-              "title": "Perpage"
-            },
-            "description": "Items per page (max 200)"
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
-              "title": "Sort"
-            },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
-          },
-          {
-            "name": "filters",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
-              "title": "Filters"
-            },
-            "description": "URL-encoded JSON array of filter objects."
-          },
-          {
-            "name": "joinOperator",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/FilterJoinOperator",
-              "description": "Logical operator to join filters (and/or).",
-              "default": "and"
-            },
-            "description": "Logical operator to join filters (and/or)."
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
-              "title": "Q"
-            },
-            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions": {
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions": {
       "post": {
         "tags": [
           "documents"
         ],
         "summary": "Create a resumable upload session",
-        "operationId": "create_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions_post",
+        "operationId": "create_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions_post",
         "parameters": [
           {
             "name": "workspaceId",
@@ -5829,13 +5524,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}": {
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}": {
       "put": {
         "tags": [
           "documents"
         ],
         "summary": "Upload a byte range to a session",
-        "operationId": "upload_session_range_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__put",
+        "operationId": "upload_session_range_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__put",
         "parameters": [
           {
             "name": "workspaceId",
@@ -5946,7 +5641,7 @@
           "documents"
         ],
         "summary": "Get upload session status",
-        "operationId": "get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__get",
+        "operationId": "get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__get",
         "parameters": [
           {
             "name": "workspaceId",
@@ -6025,7 +5720,7 @@
           "documents"
         ],
         "summary": "Cancel an upload session",
-        "operationId": "cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__delete",
+        "operationId": "cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__delete",
         "parameters": [
           {
             "name": "workspaceId",
@@ -6109,13 +5804,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}/commit": {
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}/commit": {
       "post": {
         "tags": [
           "documents"
         ],
         "summary": "Commit an upload session",
-        "operationId": "commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__commit_post",
+        "operationId": "commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__commit_post",
         "parameters": [
           {
             "name": "workspaceId",
@@ -6140,6 +5835,22 @@
               "title": "Uploadsessionid"
             },
             "description": "Upload session identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6253,6 +5964,22 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6493,6 +6220,22 @@
             "description": "Document identifier"
           },
           {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
+          },
+          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -6596,6 +6339,22 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6708,6 +6467,22 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6827,6 +6602,22 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6960,6 +6751,22 @@
             "description": "Document identifier"
           },
           {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
+          },
+          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -7079,6 +6886,22 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -7202,6 +7025,22 @@
             "description": "Document identifier"
           },
           {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
+          },
+          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -7322,6 +7161,22 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -7907,6 +7762,22 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-Client-Request-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Request-Id"
+            }
           },
           {
             "name": "X-CSRF-Token",
@@ -10307,118 +10178,6 @@
         ]
       }
     },
-    "/api/v1/builds/{buildId}/events": {
-      "get": {
-        "tags": [
-          "builds"
-        ],
-        "summary": "List Build Events Endpoint",
-        "operationId": "list_build_events_endpoint_api_v1_builds__buildId__events_get",
-        "parameters": [
-          {
-            "name": "buildId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Build identifier",
-              "title": "Buildid"
-            },
-            "description": "Build identifier"
-          },
-          {
-            "name": "format",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "json",
-                "ndjson"
-              ],
-              "type": "string",
-              "default": "json",
-              "title": "Format"
-            }
-          },
-          {
-            "name": "after_sequence",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "After Sequence"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 1000,
-              "minimum": 1,
-              "default": 1000,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BuildEventsPage"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/builds/{buildId}/events/stream": {
       "get": {
         "tags": [
@@ -11799,118 +11558,6 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/events": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Run Events Endpoint",
-        "operationId": "get_run_events_endpoint_api_v1_runs__runId__events_get",
-        "parameters": [
-          {
-            "name": "runId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Runid"
-            },
-            "description": "Run identifier"
-          },
-          {
-            "name": "format",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "json",
-                "ndjson"
-              ],
-              "type": "string",
-              "default": "json",
-              "title": "Format"
-            }
-          },
-          {
-            "name": "after_sequence",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "After Sequence"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 1000,
-              "minimum": 1,
-              "default": 1000,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunEventsPage"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/runs/{runId}/events/stream": {
       "get": {
         "tags": [
@@ -12197,6 +11844,96 @@
                 }
               }
             },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{runId}/output/sheets": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List run output worksheets",
+        "operationId": "list_run_output_sheets_endpoint_api_v1_runs__runId__output_sheets_get",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Runid"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunOutputSheet"
+                  },
+                  "title": "Response List Run Output Sheets Endpoint Api V1 Runs  Runid  Output Sheets Get"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Run or output not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Output not ready",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "415": {
+            "description": "Sheets are not supported for this file type.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "The output exists but could not be parsed for worksheets.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -13143,45 +12880,11 @@
         "title": "BuildCreateRequest",
         "description": "Request body for POST /builds."
       },
-      "BuildEventsPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "next_after_sequence": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next After Sequence"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "BuildEventsPage",
-        "description": "Paginated ADE events for a build."
-      },
       "BuildLinks": {
         "properties": {
           "self": {
             "type": "string",
             "title": "Self"
-          },
-          "events": {
-            "type": "string",
-            "title": "Events"
           },
           "events_stream": {
             "type": "string",
@@ -13192,7 +12895,6 @@
         "type": "object",
         "required": [
           "self",
-          "events",
           "events_stream"
         ],
         "title": "BuildLinks",
@@ -13828,15 +13530,27 @@
             "format": "date-time",
             "title": "Occurredat"
           },
-          "matchesFilters": {
-            "type": "boolean",
-            "title": "Matchesfilters",
-            "default": false
+          "documentVersion": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentversion"
           },
-          "requiresRefresh": {
-            "type": "boolean",
-            "title": "Requiresrefresh",
-            "default": false
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientrequestid"
           }
         },
         "additionalProperties": false,
@@ -13998,6 +13712,23 @@
             "format": "date-time",
             "title": "Activityat"
           },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "description": "Monotonic document version."
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etag",
+            "description": "Weak ETag for optimistic concurrency checks."
+          },
           "latestRun": {
             "anyOf": [
               {
@@ -14040,7 +13771,8 @@
           "byteSize",
           "createdAt",
           "updatedAt",
-          "activityAt"
+          "activityAt",
+          "version"
         ],
         "title": "DocumentListRow",
         "description": "Table-ready projection for document list rows."
@@ -14116,6 +13848,23 @@
             "type": "string",
             "format": "date-time",
             "title": "Updatedat"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "description": "Monotonic document version."
+          },
+          "etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etag",
+            "description": "Weak ETag for optimistic concurrency checks."
           },
           "deletedAt": {
             "anyOf": [
@@ -14230,7 +13979,8 @@
           "source",
           "expiresAt",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "version"
         ],
         "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
@@ -14373,6 +14123,7 @@
       "DocumentStatus": {
         "type": "string",
         "enum": [
+          "uploading",
           "uploaded",
           "processing",
           "processed",
@@ -14590,6 +14341,22 @@
             "title": "Uploadsessionid",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Documentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentListRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "expiresAt": {
             "type": "string",
             "format": "date-time",
@@ -14615,6 +14382,7 @@
         "type": "object",
         "required": [
           "uploadSessionId",
+          "documentId",
           "expiresAt",
           "chunkSizeBytes",
           "nextExpectedRanges",
@@ -16258,36 +16026,6 @@
         "title": "RunCreateRequest",
         "description": "Payload accepted by the run creation endpoint."
       },
-      "RunEventsPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "next_after_sequence": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next After Sequence"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "title": "RunEventsPage",
-        "description": "Paginated ADE events for a run."
-      },
       "RunFieldResource": {
         "properties": {
           "field": {
@@ -16447,10 +16185,6 @@
             "type": "string",
             "title": "Self"
           },
-          "events": {
-            "type": "string",
-            "title": "Events"
-          },
           "events_stream": {
             "type": "string",
             "title": "Events Stream"
@@ -16488,7 +16222,6 @@
         "type": "object",
         "required": [
           "self",
-          "events",
           "events_stream",
           "events_download",
           "logs",
@@ -16857,6 +16590,41 @@
         "title": "RunOutput",
         "description": "Output metadata captured for a run."
       },
+      "RunOutputSheet": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Index"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "worksheet",
+              "file"
+            ],
+            "title": "Kind",
+            "default": "worksheet"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "index"
+        ],
+        "title": "RunOutputSheet",
+        "description": "Descriptor for a worksheet or single-sheet run output."
+      },
       "RunPage": {
         "properties": {
           "items": {
@@ -17078,17 +16846,6 @@
           },
           "links": {
             "$ref": "#/components/schemas/RunLinks"
-          },
-          "events_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Events Url"
           },
           "events_stream_url": {
             "anyOf": [

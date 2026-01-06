@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
-from collections.abc import AsyncIterator
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import (
@@ -23,8 +22,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import SessionDep, get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
-from ade_api.common.encoding import json_bytes
-from ade_api.common.events import EventRecord
 from ade_api.common.listing import (
     ListQueryParams,
     list_query_params,
@@ -70,7 +67,6 @@ from .schemas import (
     RunBatchCreateResponse,
     RunColumnResource,
     RunCreateRequest,
-    RunEventsPage,
     RunFieldResource,
     RunInput,
     RunMetricsResource,
@@ -81,10 +77,7 @@ from .schemas import (
     RunWorkspaceBatchCreateRequest,
     RunWorkspaceCreateRequest,
 )
-from .service import (
-    DEFAULT_EVENTS_PAGE_LIMIT,
-    RunsService,
-)
+from .service import RunsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
@@ -143,11 +136,6 @@ def get_run_column_filters(
         ]
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     return filters
-
-
-def _event_bytes(event: EventRecord) -> bytes:
-    return json_bytes(event) + b"\n"
-
 
 
 @router.post(
@@ -582,44 +570,6 @@ async def download_run_input_endpoint(
     disposition = document.original_filename
     response.headers["Content-Disposition"] = disposition
     return response
-
-
-@router.get(
-    "/runs/{runId}/events",
-    response_model=RunEventsPage,
-    response_model_exclude_none=True,
-)
-async def get_run_events_endpoint(
-    run_id: RunPath,
-    db_session: SessionDep,
-    format: Literal["json", "ndjson"] = Query(default="json"),
-    after_sequence: int | None = Query(default=None, ge=0),
-    limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
-    service: RunsService = runs_service_dependency,
-) -> RunEventsPage | StreamingResponse:
-    try:
-        events, next_after_sequence = await service.get_run_events(
-            run_id=run_id,
-            after_sequence=after_sequence,
-            limit=limit,
-        )
-    except RunNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    if format == "ndjson":
-
-        async def event_stream() -> AsyncIterator[bytes]:
-            for event in events:
-                yield _event_bytes(event)
-
-        await db_session.close()
-        return StreamingResponse(event_stream(), media_type="application/x-ndjson")
-
-    await db_session.close()
-    return RunEventsPage(
-        items=events,
-        next_after_sequence=next_after_sequence,
-    )
 
 
 @router.get("/runs/{runId}/events/stream")

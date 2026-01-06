@@ -18,7 +18,7 @@ from pathlib import Path
 from queue import Queue
 from typing import Any, Callable
 
-from sqlalchemy import and_, or_, select, text, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.engine import Engine
 
 from .events import coerce_event_record, ensure_event_context, new_event_record
@@ -83,6 +83,9 @@ class Worker:
         logger.info("worker.start", extra={"worker_id": worker_id})
 
         last_cleanup = 0.0
+        last_metrics = 0.0
+        sleep_seconds = self._settings.poll_interval
+        max_sleep = max(self._settings.poll_interval_max, self._settings.poll_interval)
         while not self._stop.is_set():
             should_sleep = False
             try:
@@ -92,20 +95,26 @@ class Worker:
                     self._expire_stuck_builds()
                     self._fail_runs_with_failed_builds()
                     last_cleanup = now
+                if now - last_metrics >= self._settings.metrics_interval:
+                    self._log_queue_metrics()
+                    last_metrics = now
 
                 job = self._claim_next_job(worker_id)
                 if job is None:
                     should_sleep = True
                 elif isinstance(job, BuildJob):
+                    sleep_seconds = self._settings.poll_interval
                     self._execute_build(job, worker_id=worker_id)
                 else:
+                    sleep_seconds = self._settings.poll_interval
                     self._execute_run(job, worker_id=worker_id)
             except Exception:
                 logger.exception("worker.loop.error", extra={"worker_id": worker_id})
                 should_sleep = True
 
             if should_sleep:
-                time.sleep(self._settings.poll_interval)
+                time.sleep(sleep_seconds)
+                sleep_seconds = min(max_sleep, sleep_seconds * 1.5)
 
         logger.info("worker.stop", extra={"worker_id": worker_id})
 
@@ -165,9 +174,67 @@ class Worker:
                         "now": now,
                     },
                 ).mappings().first()
-            return RunJob(dict(row)) if row else None
+            if not row:
+                return None
+            job = RunJob(dict(row))
+            self._log_job_claimed(job_type="run", row=job.row, now=now)
+            return job
 
+        supports_returning = bool(getattr(self._engine.dialect, "update_returning", False))
         with self._engine.begin() as conn:
+            if supports_returning:
+                candidate_subquery = (
+                    select(runs.c.id)
+                    .select_from(runs.outerjoin(builds, runs.c.build_id == builds.c.id))
+                    .where(
+                        and_(
+                            runs.c.status == "queued",
+                            runs.c.available_at <= now,
+                            runs.c.attempt_count < runs.c.max_attempts,
+                            or_(
+                                runs.c.build_id.is_(None),
+                                builds.c.status == "ready",
+                            ),
+                        )
+                    )
+                    .order_by(runs.c.created_at.asc())
+                    .limit(1)
+                    .scalar_subquery()
+                )
+                stmt = (
+                    update(runs)
+                    .where(and_(runs.c.id == candidate_subquery, runs.c.status == "queued"))
+                    .values(
+                        status="running",
+                        claimed_by=worker_id,
+                        claim_expires_at=lease_expires,
+                        started_at=now,
+                        attempt_count=runs.c.attempt_count + 1,
+                        error_message=None,
+                    )
+                    .returning(runs)
+                )
+                started = time.perf_counter()
+                row = conn.execute(stmt).mappings().first()
+                if logger.isEnabledFor(logging.DEBUG):
+                    duration_ms = (time.perf_counter() - started) * 1000
+                    logger.debug(
+                        "worker.job.claim.query job_type=%s duration_ms=%.2f claimed=%s",
+                        "run",
+                        duration_ms,
+                        bool(row),
+                        extra={
+                            "job_type": "run",
+                            "duration_ms": round(duration_ms, 2),
+                            "claimed": bool(row),
+                        },
+                    )
+                if not row:
+                    return None
+                job = RunJob(dict(row))
+                self._log_job_claimed(job_type="run", row=job.row, now=now)
+                return job
+
             candidate = conn.execute(
                 select(runs.c.id)
                 .select_from(runs.outerjoin(builds, runs.c.build_id == builds.c.id))
@@ -202,7 +269,11 @@ class Worker:
             if not updated.rowcount:
                 return None
             row = conn.execute(select(runs).where(runs.c.id == candidate)).mappings().first()
-            return RunJob(dict(row)) if row else None
+            if not row:
+                return None
+            job = RunJob(dict(row))
+            self._log_job_claimed(job_type="run", row=job.row, now=now)
+            return job
 
     def _claim_next_build(self, worker_id: str) -> BuildJob | None:
         now = self._utc_now()
@@ -224,9 +295,49 @@ class Worker:
             )
             with self._engine.begin() as conn:
                 row = conn.execute(stmt, {"now": now}).mappings().first()
-            return BuildJob(dict(row)) if row else None
+            if not row:
+                return None
+            job = BuildJob(dict(row))
+            self._log_job_claimed(job_type="build", row=job.row, now=now)
+            return job
 
+        supports_returning = bool(getattr(self._engine.dialect, "update_returning", False))
         with self._engine.begin() as conn:
+            if supports_returning:
+                candidate_subquery = (
+                    select(builds.c.id)
+                    .where(builds.c.status == "queued")
+                    .order_by(builds.c.created_at.asc())
+                    .limit(1)
+                    .scalar_subquery()
+                )
+                stmt = (
+                    update(builds)
+                    .where(and_(builds.c.id == candidate_subquery, builds.c.status == "queued"))
+                    .values(status="building", started_at=now)
+                    .returning(builds)
+                )
+                started = time.perf_counter()
+                row = conn.execute(stmt).mappings().first()
+                if logger.isEnabledFor(logging.DEBUG):
+                    duration_ms = (time.perf_counter() - started) * 1000
+                    logger.debug(
+                        "worker.job.claim.query job_type=%s duration_ms=%.2f claimed=%s",
+                        "build",
+                        duration_ms,
+                        bool(row),
+                        extra={
+                            "job_type": "build",
+                            "duration_ms": round(duration_ms, 2),
+                            "claimed": bool(row),
+                        },
+                    )
+                if not row:
+                    return None
+                job = BuildJob(dict(row))
+                self._log_job_claimed(job_type="build", row=job.row, now=now)
+                return job
+
             candidate = conn.execute(
                 select(builds.c.id)
                 .where(builds.c.status == "queued")
@@ -243,7 +354,11 @@ class Worker:
             if not updated.rowcount:
                 return None
             row = conn.execute(select(builds).where(builds.c.id == candidate)).mappings().first()
-            return BuildJob(dict(row)) if row else None
+            if not row:
+                return None
+            job = BuildJob(dict(row))
+            self._log_job_claimed(job_type="build", row=job.row, now=now)
+            return job
 
     # ------------------------------------------------------------------
     # Execution
@@ -607,12 +722,22 @@ class Worker:
                 conn.execute(
                     update(documents)
                     .where(documents.c.id == document["id"])
-                    .values(status="processing", last_run_at=now, updated_at=now)
+                    .values(
+                        status="processing",
+                        last_run_at=now,
+                        updated_at=now,
+                        version=documents.c.version + 1,
+                    )
                 )
+                next_version = conn.execute(
+                    select(documents.c.version)
+                    .where(documents.c.id == document["id"])
+                ).scalar_one()
                 self._record_document_change(
                     conn,
                     workspace_id=workspace_id,
                     document_id=document["id"],
+                    document_version=next_version,
                     occurred_at=now,
                 )
 
@@ -785,6 +910,53 @@ class Worker:
     # DB helpers
     # ------------------------------------------------------------------
 
+    def _log_job_claimed(self, *, job_type: str, row: dict[str, Any], now: datetime) -> None:
+        available_at = row.get("available_at") or row.get("created_at")
+        latency_ms = None
+        if isinstance(available_at, datetime):
+            if available_at.tzinfo is None and now.tzinfo is not None:
+                available_at = available_at.replace(tzinfo=now.tzinfo)
+            latency_ms = max(0, int((now - available_at).total_seconds() * 1000))
+        logger.info(
+            "worker.job.claimed",
+            extra={
+                "job_type": job_type,
+                "job_id": row.get("id"),
+                "workspace_id": row.get("workspace_id"),
+                "pickup_latency_ms": latency_ms,
+            },
+        )
+
+    def _log_queue_metrics(self) -> None:
+        now = self._utc_now()
+        with self._engine.begin() as conn:
+            queued_builds = conn.execute(
+                select(func.count()).select_from(builds).where(builds.c.status == "queued")
+            ).scalar_one()
+            queued_runs = conn.execute(
+                select(func.count()).select_from(runs).where(runs.c.status == "queued")
+            ).scalar_one()
+            ready_runs = conn.execute(
+                select(func.count())
+                .select_from(runs.outerjoin(builds, runs.c.build_id == builds.c.id))
+                .where(
+                    and_(
+                        runs.c.status == "queued",
+                        runs.c.available_at <= now,
+                        runs.c.attempt_count < runs.c.max_attempts,
+                        or_(runs.c.build_id.is_(None), builds.c.status == "ready"),
+                    )
+                )
+            ).scalar_one()
+        logger.info(
+            "worker.queue.metrics",
+            extra={
+                "queued_builds": int(queued_builds or 0),
+                "queued_runs": int(queued_runs or 0),
+                "ready_runs": int(ready_runs or 0),
+            },
+        )
+
     def _load_document(self, run: dict[str, Any]) -> dict[str, Any]:
         doc_id = run["input_document_id"]
         with self._engine.begin() as conn:
@@ -803,6 +975,8 @@ class Worker:
         *,
         workspace_id: str,
         document_id: str,
+        document_version: int | None = None,
+        client_request_id: str | None = None,
         occurred_at: datetime | None = None,
     ) -> None:
         conn.execute(
@@ -810,6 +984,8 @@ class Worker:
                 workspace_id=workspace_id,
                 document_id=document_id,
                 type="upsert",
+                document_version=document_version,
+                client_request_id=client_request_id,
                 payload={},
                 occurred_at=occurred_at or self._utc_now(),
             )
@@ -849,13 +1025,19 @@ class Worker:
                         status="processed" if status == "succeeded" else "failed",
                         last_run_at=now,
                         updated_at=now,
+                        version=documents.c.version + 1,
                     )
                 )
                 if workspace_id:
+                    next_version = conn.execute(
+                        select(documents.c.version)
+                        .where(documents.c.id == document_id)
+                    ).scalar_one()
                     self._record_document_change(
                         conn,
                         workspace_id=workspace_id,
                         document_id=document_id,
+                        document_version=next_version,
                         occurred_at=now,
                     )
         level = "error" if status == "failed" else "info"

@@ -48,7 +48,7 @@ export async function createDocumentUploadSession(
   payload: DocumentUploadSessionCreateRequest,
   signal?: AbortSignal,
 ): Promise<DocumentUploadSessionCreateResponse> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/uploadsessions", {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/uploadSessions", {
     params: { path: { workspaceId } },
     body: payload,
     signal,
@@ -71,7 +71,7 @@ export async function uploadDocumentUploadSessionRange(
   },
 ): Promise<DocumentUploadSessionUploadResponse> {
   const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/documents/uploadsessions/${sessionId}`,
+    `/api/v1/workspaces/${workspaceId}/documents/uploadSessions/${sessionId}`,
     {
       method: "PUT",
       body: options.body,
@@ -102,7 +102,7 @@ export async function getDocumentUploadSessionStatus(
   signal?: AbortSignal,
 ): Promise<DocumentUploadSessionStatusResponse> {
   const { data } = await client.GET(
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}",
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}",
     {
       params: { path: { workspaceId, uploadSessionId: sessionId } },
       signal,
@@ -117,17 +117,24 @@ export async function getDocumentUploadSessionStatus(
 export async function commitDocumentUploadSession(
   workspaceId: string,
   sessionId: string,
-  idempotencyKey?: string,
-  signal?: AbortSignal,
+  options: {
+    idempotencyKey?: string;
+    signal?: AbortSignal;
+    clientRequestId?: string | null;
+  } = {},
 ): Promise<DocumentUploadResponse> {
+  const headers: Record<string, string> = {
+    "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey("document-commit"),
+  };
+  if (options.clientRequestId) {
+    headers["X-Client-Request-Id"] = options.clientRequestId;
+  }
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}/commit",
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}/commit",
     {
       params: { path: { workspaceId, uploadSessionId: sessionId } },
-      headers: {
-        "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("document-commit"),
-      },
-      signal,
+      headers,
+      signal: options.signal,
     },
   );
   if (!data) {
@@ -142,7 +149,7 @@ export async function cancelDocumentUploadSession(
   signal?: AbortSignal,
 ): Promise<void> {
   await client.DELETE(
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}",
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}",
     {
       params: { path: { workspaceId, uploadSessionId: sessionId } },
       signal,

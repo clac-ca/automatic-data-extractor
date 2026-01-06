@@ -12,6 +12,7 @@ import {
   type DocumentUploadResponse,
   type DocumentUploadRunOptions,
 } from "@api/documents/uploads";
+import type { components } from "@schema";
 
 export type UploadManagerStatus =
   | "queued"
@@ -39,6 +40,8 @@ export interface UploadManagerItem<TResponse> {
   readonly sessionId?: string;
   readonly chunkSizeBytes?: number;
   readonly nextExpectedRanges?: string[];
+  readonly documentId?: string;
+  readonly row?: components["schemas"]["DocumentListRow"] | null;
 }
 
 export type UploadManagerQueueItem = {
@@ -436,10 +439,10 @@ async function runSessionUpload(
         sessionId,
         options.controller.signal,
       );
-      receivedBytes = Math.min(status.received_bytes ?? receivedBytes, total);
+      receivedBytes = Math.min(status.receivedBytes ?? receivedBytes, total);
       options.updateItem({
-        sessionId: status.upload_session_id,
-        nextExpectedRanges: status.next_expected_ranges,
+        sessionId: status.uploadSessionId,
+        nextExpectedRanges: status.nextExpectedRanges,
         progress: {
           loaded: receivedBytes,
           total,
@@ -466,20 +469,22 @@ async function runSessionUpload(
       options.workspaceId,
       {
         filename: item.file.name,
-        byte_size: total,
-        content_type: item.file.type || undefined,
-        conflict_behavior: "rename",
-        run_options: item.runOptions,
+        byteSize: total,
+        contentType: item.file.type || undefined,
+        conflictBehavior: "rename",
+        runOptions: item.runOptions,
       },
       options.controller.signal,
     );
-    sessionId = created.upload_session_id;
-    chunkSize = created.chunk_size_bytes ?? chunkSize;
+    sessionId = created.uploadSessionId;
+    chunkSize = created.chunkSizeBytes ?? chunkSize;
     receivedBytes = 0;
     options.updateItem({
       sessionId,
       chunkSizeBytes: chunkSize,
-      nextExpectedRanges: created.next_expected_ranges,
+      nextExpectedRanges: created.nextExpectedRanges,
+      documentId: created.documentId,
+      row: created.row ?? null,
       progress: resetProgress(item.file),
     });
   }
@@ -507,7 +512,7 @@ async function runSessionUpload(
     );
     receivedBytes = end + 1;
     options.updateItem({
-      nextExpectedRanges: response.next_expected_ranges,
+      nextExpectedRanges: response.nextExpectedRanges,
       progress: {
         loaded: receivedBytes,
         total,
@@ -516,11 +521,10 @@ async function runSessionUpload(
     });
   }
 
-  const committed = await commitDocumentUploadSession(
-    options.workspaceId,
-    sessionId,
-    item.id,
-    options.controller.signal,
-  );
+  const committed = await commitDocumentUploadSession(options.workspaceId, sessionId, {
+    idempotencyKey: item.id,
+    clientRequestId: item.id,
+    signal: options.controller.signal,
+  });
   return committed;
 }

@@ -596,7 +596,7 @@ Flows:
 * **Configuration Builder** – uses the same endpoint (typically with `stream: true`) for validation/test runs and streams events into the workbench console via:
 
   ```text
-  GET /api/v1/runs/{runId}/events?stream=true
+  GET /api/v1/runs/{runId}/events/stream
   ```
 
 Responses include the run `id`; follow-up fetches/streams use the global run endpoints. Semantics (status transitions, options, output) are identical regardless of surface.
@@ -718,7 +718,7 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/runs/{runId}`
   Global run detail.
 
-* `GET /api/v1/runs/{runId}/events?stream=true`
+* `GET /api/v1/runs/{runId}/events/stream`
   Run event stream (NDJSON SSE); `GET /runs/{runId}/events/download` downloads the NDJSON log.
 
 * `GET /api/v1/runs/{runId}/input`

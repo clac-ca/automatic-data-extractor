@@ -7,7 +7,6 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
-from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
@@ -20,7 +19,6 @@ __all__ = [
     "BuildCreateOptions",
     "BuildCreateRequest",
     "BuildLinks",
-    "BuildEventsPage",
     "BuildEvent",
     "BuildPage",
     "BuildResource",
@@ -76,7 +74,6 @@ class BuildLinks(BaseSchema):
     """Hypermedia links for build-related resources."""
 
     self: str
-    events: str
     events_stream: str
 
 
@@ -85,12 +82,6 @@ class BuildPage(ListPage[BuildResource]):
 
     items: list[BuildResource]
 
-
-class BuildEventsPage(BaseSchema):
-    """Paginated ADE events for a build."""
-
-    items: list[EventRecord]
-    next_after_sequence: int | None = None
 
 
 class BuildEventBase(BaseSchema):

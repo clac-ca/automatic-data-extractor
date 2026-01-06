@@ -65,7 +65,9 @@ class WorkerSettings:
     # Worker-specific (ADE_WORKER_*)
     concurrency: int
     poll_interval: float
+    poll_interval_max: float
     cleanup_interval: float
+    metrics_interval: float
     worker_id: str | None
     job_lease_seconds: int
     job_max_attempts: int
@@ -84,6 +86,9 @@ class WorkerSettings:
         run_timeout = _env("ADE_RUN_TIMEOUT_SECONDS")
         run_timeout_seconds = int(run_timeout) if run_timeout else None
 
+        cpu_count = os.cpu_count() or 2
+        default_concurrency = max(1, min(4, cpu_count // 2))
+
         return cls(
             database_url=_env("ADE_DATABASE_URL", "sqlite:///./data/db/ade.sqlite"),
             database_sqlite_journal_mode=(_env("ADE_DATABASE_SQLITE_JOURNAL_MODE", "WAL") or "WAL").upper(),
@@ -98,9 +103,11 @@ class WorkerSettings:
             engine_spec=_env("ADE_ENGINE_SPEC", "apps/ade-engine"),
             build_timeout_seconds=_env_int("ADE_BUILD_TIMEOUT", 600),
             run_timeout_seconds=run_timeout_seconds,
-            concurrency=_env_int("ADE_WORKER_CONCURRENCY", 1),
-            poll_interval=_env_float("ADE_WORKER_POLL_INTERVAL", 2.0),
+            concurrency=_env_int("ADE_WORKER_CONCURRENCY", default_concurrency),
+            poll_interval=_env_float("ADE_WORKER_POLL_INTERVAL", 0.5),
+            poll_interval_max=_env_float("ADE_WORKER_POLL_INTERVAL_MAX", 2.0),
             cleanup_interval=_env_float("ADE_WORKER_CLEANUP_INTERVAL", 30.0),
+            metrics_interval=_env_float("ADE_WORKER_METRICS_INTERVAL", 30.0),
             worker_id=_env("ADE_WORKER_ID"),
             job_lease_seconds=_env_int("ADE_WORKER_JOB_LEASE_SECONDS", 900),
             job_max_attempts=_env_int("ADE_WORKER_JOB_MAX_ATTEMPTS", 3),

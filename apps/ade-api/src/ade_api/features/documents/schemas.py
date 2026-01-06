@@ -69,6 +69,7 @@ class DocumentOut(BaseSchema):
     activity_at: datetime | None = Field(default=None, alias="activityAt")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
+    version: int = Field(description="Monotonic document version.")
     etag: str | None = Field(
         default=None,
         description="Weak ETag for optimistic concurrency checks.",
@@ -311,6 +312,7 @@ class DocumentListRow(BaseSchema):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     activity_at: datetime = Field(alias="activityAt")
+    version: int = Field(description="Monotonic document version.")
     etag: str | None = Field(
         default=None,
         description="Weak ETag for optimistic concurrency checks.",
@@ -340,8 +342,8 @@ class DocumentChangeEntry(BaseSchema):
     row: DocumentListRow | None = None
     document_id: UUIDStr | None = Field(default=None, alias="documentId")
     occurred_at: datetime = Field(alias="occurredAt")
-    matches_filters: bool = Field(default=False, alias="matchesFilters")
-    requires_refresh: bool = Field(default=False, alias="requiresRefresh")
+    document_version: int | None = Field(default=None, alias="documentVersion")
+    client_request_id: str | None = Field(default=None, alias="clientRequestId")
 
     @model_validator(mode="after")
     def _validate_payload(self) -> DocumentChangeEntry:
@@ -399,6 +401,8 @@ class DocumentUploadSessionCreateResponse(BaseSchema):
     """Response payload for a new upload session."""
 
     upload_session_id: UUIDStr = Field(alias="uploadSessionId")
+    document_id: UUIDStr = Field(alias="documentId")
+    row: DocumentListRow | None = None
     expires_at: datetime = Field(alias="expiresAt")
     chunk_size_bytes: int = Field(alias="chunkSizeBytes")
     next_expected_ranges: list[str] = Field(alias="nextExpectedRanges")

@@ -1,4 +1,6 @@
 import { client } from "@api/client";
+import { apiFetch } from "@api/client";
+import { ApiError } from "@api/errors";
 import type { FilterItem, FilterJoinOperator } from "@api/listing";
 import { encodeFilters } from "@api/listing";
 import type { components } from "@schema";
@@ -8,12 +10,24 @@ export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?
 export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "items"> & {
   items?: DocumentListRow[] | null;
 };
-export type DocumentPageResult = DocumentListPage & { changesCursorHeader?: string | null };
+export type DocumentPageResult = DocumentListPage;
+export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
+export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
 export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
+
+export class DocumentChangesResyncError extends Error {
+  readonly latestCursor: string;
+
+  constructor(latestCursor: string) {
+    super("Document changes cursor is too old; resync required.");
+    this.name = "DocumentChangesResyncError";
+    this.latestCursor = latestCursor;
+  }
+}
 
 export type ListDocumentsQuery = {
   page: number;
@@ -96,17 +110,51 @@ export async function fetchWorkspaceDocuments(
     joinOperator: options.joinOperator,
   };
 
-  const { data, response } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
     params: { path: { workspaceId }, query },
     signal,
   });
 
   if (!data) throw new Error("Expected document page payload.");
-  const changesCursorHeader = response?.headers?.get("x-ade-changes-cursor");
-  return {
-    ...data,
-    changesCursorHeader,
-  };
+  return data;
+}
+
+export async function fetchWorkspaceDocumentChanges(
+  workspaceId: string,
+  options: { cursor: string; limit?: number },
+  signal?: AbortSignal,
+): Promise<DocumentChangesPage> {
+  const query = new URLSearchParams({
+    cursor: options.cursor,
+  });
+  if (typeof options.limit === "number") {
+    query.set("limit", String(options.limit));
+  }
+
+  const response = await apiFetch(
+    `/api/v1/workspaces/${workspaceId}/documents/changes?${query.toString()}`,
+    { signal },
+  );
+
+  if (response.status === 410) {
+    const payload = (await response.json().catch(() => null)) as
+      | { detail?: { error?: string; latestCursor?: string } }
+      | null;
+    const latestCursor = payload?.detail?.latestCursor;
+    if (latestCursor) {
+      throw new DocumentChangesResyncError(latestCursor);
+    }
+  }
+
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+
+  const data = (await response.json().catch(() => null)) as DocumentChangesPage | null;
+  if (!data) {
+    throw new Error("Expected document changes payload.");
+  }
+  return data;
 }
 
 export async function fetchWorkspaceDocumentById(
@@ -139,7 +187,7 @@ export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
   payload: { assigneeId?: string | null; metadata?: Record<string, unknown> | null },
-  options: { ifMatch?: string | null } = {},
+  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body: {
     assigneeId?: string | null;
@@ -152,10 +200,18 @@ export async function patchWorkspaceDocument(
     body.metadata = payload.metadata ?? null;
   }
 
+  const headers: Record<string, string> = {};
+  if (options.ifMatch) {
+    headers["If-Match"] = options.ifMatch;
+  }
+  if (options.clientRequestId) {
+    headers["X-Client-Request-Id"] = options.clientRequestId;
+  }
+
   const { data } = await client.PATCH("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
     body,
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 
   if (!data) throw new Error("Expected updated document record.");
@@ -165,36 +221,73 @@ export async function patchWorkspaceDocument(
 export async function deleteWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  options: { ifMatch?: string | null } = {},
+  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
 ): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (options.ifMatch) {
+    headers["If-Match"] = options.ifMatch;
+  }
+  if (options.clientRequestId) {
+    headers["X-Client-Request-Id"] = options.clientRequestId;
+  }
+
   await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 }
 
-export async function deleteWorkspaceDocumentsBatch(workspaceId: string, documentIds: string[]): Promise<string[]> {
+export async function deleteWorkspaceDocumentsBatch(
+  workspaceId: string,
+  documentIds: string[],
+  options: { clientRequestId?: string | null } = {},
+): Promise<string[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/delete", {
     params: { path: { workspaceId } },
     body: { documentIds },
+    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) throw new Error("Expected delete response.");
   return data.documentIds ?? [];
 }
 
-export async function archiveWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
+export async function archiveWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+): Promise<DocumentRecord> {
+  const headers: Record<string, string> = {};
+  if (options.ifMatch) {
+    headers["If-Match"] = options.ifMatch;
+  }
+  if (options.clientRequestId) {
+    headers["X-Client-Request-Id"] = options.clientRequestId;
+  }
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
     params: { path: { workspaceId, documentId } },
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 
   if (!data) throw new Error("Expected updated document record.");
   return data;
 }
 
-export async function restoreWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
+export async function restoreWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+): Promise<DocumentRecord> {
+  const headers: Record<string, string> = {};
+  if (options.ifMatch) {
+    headers["If-Match"] = options.ifMatch;
+  }
+  if (options.clientRequestId) {
+    headers["X-Client-Request-Id"] = options.clientRequestId;
+  }
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
     params: { path: { workspaceId, documentId } },
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 
   if (!data) throw new Error("Expected updated document record.");
@@ -204,10 +297,12 @@ export async function restoreWorkspaceDocument(workspaceId: string, documentId: 
 export async function archiveWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
+  options: { clientRequestId?: string | null } = {},
 ): Promise<DocumentRecord[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
     params: { path: { workspaceId } },
     body: { documentIds },
+    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) throw new Error("Expected updated document records.");
@@ -217,10 +312,12 @@ export async function archiveWorkspaceDocumentsBatch(
 export async function restoreWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
+  options: { clientRequestId?: string | null } = {},
 ): Promise<DocumentRecord[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
     params: { path: { workspaceId } },
     body: { documentIds },
+    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) throw new Error("Expected updated document records.");

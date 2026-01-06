@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   archiveWorkspaceDocument,
   deleteWorkspaceDocument,
-  fetchWorkspaceDocuments,
+  fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
   restoreWorkspaceDocument,
-  type DocumentPageResult,
+  type DocumentUploadResponse,
   type DocumentRecord,
 } from "@api/documents";
-import { documentChangesStreamUrl, streamDocumentChanges } from "@api/documents/changes";
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
-import { ApiError } from "@api/errors";
 import { buildWeakEtag } from "@api/etag";
+import { createIdempotencyKey } from "@api/idempotency";
 import { Link } from "@app/navigation/Link";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@/components/ui/button";
 import type { PresenceParticipant } from "@schema/presence";
+import type { UploadManagerItem } from "@hooks/documents/uploadManager";
 import {
   Dialog,
   DialogContent,
@@ -28,16 +28,15 @@ import {
 } from "@/components/ui/dialog";
 import { useNotifications } from "@components/providers/notifications";
 import { shortId } from "@pages/Workspace/sections/Documents/utils";
-import { mergeDocumentChangeIntoPages } from "@pages/Workspace/sections/Documents/changeFeed";
-import type { WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
+import type { WorkspacePerson, DocumentRow } from "@pages/Workspace/sections/Documents/types";
 import { DocumentsPresenceIndicator } from "@pages/Workspace/sections/Documents/components/DocumentsPresenceIndicator";
 import { useDocumentsPresence } from "@pages/Workspace/sections/Documents/hooks/useDocumentsPresence";
+import { useDocumentsView } from "@pages/Workspace/sections/Documents/hooks/useDocumentsView";
 
 import { DocumentsTable } from "./DocumentsTable";
 import { DocumentsEmptyState, DocumentsInlineBanner } from "./DocumentsEmptyState";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
-import type { DocumentChangeEntry, DocumentListRow } from "../types";
-import { normalizeDocumentsFilters, normalizeDocumentsSort } from "../utils";
+import { DEFAULT_DOCUMENT_SORT, normalizeDocumentsFilters, normalizeDocumentsSort } from "../utils";
 
 type CurrentUser = {
   id: string;
@@ -45,21 +44,9 @@ type CurrentUser = {
   label: string;
 };
 
-function sleep(duration: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    let timeout: number;
-    const onAbort = () => {
-      window.clearTimeout(timeout);
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    };
-    timeout = window.setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, duration);
-    signal.addEventListener("abort", onAbort);
-  });
-}
+type UploadItem = UploadManagerItem<DocumentUploadResponse>;
+
+type RowMutation = "archive" | "restore" | "delete" | "assign" | "tags";
 
 export function DocumentsTableView({
   workspaceId,
@@ -67,105 +54,115 @@ export function DocumentsTableView({
   configMissing = false,
   processingPaused = false,
   toolbarActions,
+  uploadItems,
 }: {
   workspaceId: string;
   currentUser: CurrentUser;
   configMissing?: boolean;
   processingPaused?: boolean;
   toolbarActions?: ReactNode;
+  uploadItems?: UploadItem[];
 }) {
-  const queryClient = useQueryClient();
   const { notifyToast } = useNotifications();
-  const [updatesAvailable, setUpdatesAvailable] = useState(false);
-  const lastCursorRef = useRef<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DocumentListRow | null>(null);
-  const [pendingActions, setPendingActions] = useState<Record<string, "archive" | "restore" | "delete">>({});
+  const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
+  const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
   const [archivedFlashIds, setArchivedFlashIds] = useState<Set<string>>(() => new Set());
   const archiveUndoRef = useRef(
     new Map<
       string,
       {
-        snapshot: Pick<DocumentListRow, "status" | "updatedAt" | "activityAt">;
+        snapshot: Pick<DocumentRow, "status" | "updatedAt" | "activityAt">;
         undoRequested: boolean;
       }
     >(),
   );
   const archiveFlashTimersRef = useRef<Map<string, number>>(new Map());
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [isAtTop, setIsAtTop] = useState(true);
+  const [visibleRange, setVisibleRange] = useState<{ startIndex: number; endIndex: number; total: number } | null>(null);
 
   const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
-  const normalizedFilters = useMemo(() => normalizeDocumentsFilters(filters), [filters]);
-  const sortTokens = useMemo(
-    () =>
-      normalizedSort
-        ? normalizedSort.split(",").map((token) => token.trim()).filter(Boolean)
-        : [],
+  const effectiveSort = useMemo(
+    () => normalizedSort ?? DEFAULT_DOCUMENT_SORT,
     [normalizedSort],
   );
-  const filtersKey = useMemo(
-    () => (normalizedFilters.length > 0 ? JSON.stringify(normalizedFilters) : ""),
-    [normalizedFilters],
-  );
-  const queryKey = useMemo(
-    () => [
-      "documents",
-      workspaceId,
-      perPage,
-      normalizedSort,
-      filtersKey,
-      joinOperator,
-      q,
-    ],
-    [workspaceId, perPage, normalizedSort, filtersKey, joinOperator, q],
-  );
-
-  const documentsQuery = useInfiniteQuery<DocumentPageResult>({
-    queryKey,
-    initialPageParam: 1,
-    queryFn: ({ pageParam, signal }) =>
-      fetchWorkspaceDocuments(
-        workspaceId,
-        {
-          page: typeof pageParam === "number" ? pageParam : 1,
-          perPage,
-          sort: normalizedSort,
-          filters: normalizedFilters.length > 0 ? normalizedFilters : undefined,
-          joinOperator: joinOperator ?? undefined,
-          q: q ?? undefined,
-        },
-        signal,
-      ),
-    getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
+  const normalizedFilters = useMemo(() => normalizeDocumentsFilters(filters), [filters]);
+  const documentsView = useDocumentsView({
+    workspaceId,
+    perPage,
+    sort: effectiveSort,
+    filters: normalizedFilters,
+    joinOperator,
+    q,
     enabled: Boolean(workspaceId),
-    staleTime: 15_000,
+    isAtTop,
+    visibleStartIndex: visibleRange?.startIndex ?? null,
   });
   const {
-    fetchNextPage,
+    rows: documents,
+    documentsById,
+    pageCount,
     hasNextPage,
     isFetchingNextPage,
-    refetch: refetchDocuments,
-  } = documentsQuery;
-
-  const documents = useMemo(
-    () => documentsQuery.data?.pages.flatMap((page) => page.items ?? []) ?? [],
-    [documentsQuery.data?.pages],
-  );
-  const documentsById = useMemo(
-    () => new Map(documents.map((doc) => [doc.id, doc])),
-    [documents],
+    isLoading,
+    error,
+    fetchNextPage,
+    refreshSnapshot,
+    updateRow,
+    upsertRow,
+    removeRow,
+    setUploadProgress,
+    registerClientRequestId,
+    clearClientRequestId,
+    queuedChanges,
+    applyQueuedChanges,
+  } = documentsView;
+  const handledUploadsRef = useRef(new Set<string>());
+  const completedUploadsRef = useRef(new Set<string>());
+  const handleVisibleRangeChange = useCallback(
+    (range: { startIndex: number; endIndex: number; total: number }) => {
+      setVisibleRange(range);
+    },
+    [],
   );
 
   useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      setIsAtTop(container.scrollTop <= 8);
+    };
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [documents.length, isLoading]);
+
+  useEffect(() => {
     if (!expandedRowId) return;
-    if (documentsById.has(expandedRowId)) return;
+    if (documentsById[expandedRowId]) return;
     setExpandedRowId(null);
   }, [documentsById, expandedRowId]);
+
+  useEffect(() => {
+    if (expandedRowId) {
+      setVisibleRange(null);
+    }
+  }, [expandedRowId]);
+
+  const handleApplyQueuedChanges = useCallback(() => {
+    applyQueuedChanges();
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [applyQueuedChanges]);
 
   const toolbarParticipants = useMemo(
     () => dedupeParticipants(presence.participants, presence.clientId),
@@ -239,92 +236,99 @@ export function DocumentsTableView({
     [tagsQuery.data?.items],
   );
 
-  const updateDocumentRow = useCallback(
-    (documentId: string, updates: Partial<DocumentPageResult["items"][number]>) => {
-      queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
-        if (!existing?.pages) return existing;
-        return {
-          ...existing,
-          pages: existing.pages.map((page) => ({
-            ...page,
-            items: (page.items ?? []).map((item) =>
-              item.id === documentId ? { ...item, ...updates } : item,
-            ),
-          })),
-        };
-      });
-    },
-    [queryClient, queryKey, documentsQuery.data],
-  );
+  const createClientRequestId = useCallback(() => createIdempotencyKey("req"), []);
 
-  const removeDocumentRow = useCallback(
-    (documentId: string) => {
-      queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
-        if (!existing?.pages) return existing;
-        return {
-          ...existing,
-          pages: existing.pages.map((page) => ({
-            ...page,
-            items: (page.items ?? []).filter((item) => item.id !== documentId),
-          })),
-        };
-      });
-    },
-    [queryClient, queryKey, documentsQuery.data],
-  );
+  useEffect(() => {
+    if (!uploadItems?.length) return;
+    uploadItems.forEach((item) => {
+      const documentId =
+        item.documentId ?? item.row?.id ?? item.response?.id ?? null;
+      if (item.row && !handledUploadsRef.current.has(item.id)) {
+        handledUploadsRef.current.add(item.id);
+        registerClientRequestId(item.id);
+        upsertRow(item.row);
+      }
+
+      if (documentId && item.status !== "succeeded" && item.status !== "failed" && item.status !== "cancelled") {
+        setUploadProgress(documentId, item.progress.percent ?? 0);
+      }
+
+      if (documentId && item.status === "succeeded" && !completedUploadsRef.current.has(item.id)) {
+        completedUploadsRef.current.add(item.id);
+        setUploadProgress(documentId, null);
+        void fetchWorkspaceDocumentRowById(workspaceId, documentId)
+          .then((fresh) => {
+            upsertRow(fresh);
+          })
+          .catch(() => null);
+      }
+
+      if (
+        documentId &&
+        (item.status === "failed" || item.status === "cancelled") &&
+        !completedUploadsRef.current.has(item.id)
+      ) {
+        completedUploadsRef.current.add(item.id);
+        clearClientRequestId(item.id);
+        setUploadProgress(documentId, null);
+        removeRow(documentId);
+      }
+    });
+  }, [clearClientRequestId, registerClientRequestId, removeRow, setUploadProgress, upsertRow, uploadItems, workspaceId]);
 
   const applyDocumentUpdate = useCallback(
     (documentId: string, updated: DocumentRecord) => {
-      const updates: Partial<DocumentPageResult["items"][number]> = {
+      const activityAt = updated.activityAt ?? updated.updatedAt;
+      const etag = updated.etag ?? buildWeakEtag(updated.id, String(updated.version));
+      const updates: Partial<DocumentRow> = {
         status: updated.status,
         updatedAt: updated.updatedAt,
+        activityAt,
+        version: updated.version,
+        etag,
+        tags: updated.tags,
+        assignee: updated.assignee ?? null,
+        uploader: updated.uploader ?? null,
+        latestRun: updated.latestRun ?? null,
+        latestSuccessfulRun: updated.latestSuccessfulRun ?? null,
+        latestResult: updated.latestResult ?? null,
       };
-      const activityAt = updated.activityAt ?? updated.updatedAt;
-      if (activityAt) {
-        updates.activityAt = activityAt;
-      }
-      if (updated.etag !== undefined) {
-        updates.etag = updated.etag ?? null;
-      }
-      if (updated.tags !== undefined) {
-        updates.tags = updated.tags;
-      }
-      if (updated.assignee !== undefined) {
-        updates.assignee = updated.assignee ?? null;
-      }
-      if (updated.uploader !== undefined) {
-        updates.uploader = updated.uploader ?? null;
-      }
-      if (updated.latestRun !== undefined) {
-        updates.latestRun = updated.latestRun ?? null;
-      }
-      if (updated.latestSuccessfulRun !== undefined) {
-        updates.latestSuccessfulRun = updated.latestSuccessfulRun ?? null;
-      }
-      if (updated.latestResult !== undefined) {
-        updates.latestResult = updated.latestResult ?? null;
-      }
-      updateDocumentRow(documentId, updates);
+      updateRow(documentId, updates);
     },
-    [updateDocumentRow],
+    [updateRow],
   );
 
-  const markActionPending = useCallback((documentId: string, action: "archive" | "restore" | "delete") => {
-    setPendingActions((current) => ({ ...current, [documentId]: action }));
-  }, []);
-
-  const clearActionPending = useCallback((documentId: string) => {
-    setPendingActions((current) => {
-      if (!current[documentId]) return current;
-      const next = { ...current };
-      delete next[documentId];
-      return next;
+  const markRowPending = useCallback((documentId: string, action: RowMutation) => {
+    setPendingMutations((current) => {
+      const next = new Set(current[documentId] ?? []);
+      next.add(action);
+      return { ...current, [documentId]: next };
     });
   }, []);
 
-  const isRowActionPending = useCallback(
-    (documentId: string) => Boolean(pendingActions[documentId]),
-    [pendingActions],
+  const clearRowPending = useCallback((documentId: string, action?: RowMutation) => {
+    setPendingMutations((current) => {
+      const existing = current[documentId];
+      if (!existing) return current;
+      if (!action) {
+        const next = { ...current };
+        delete next[documentId];
+        return next;
+      }
+      const nextSet = new Set(existing);
+      nextSet.delete(action);
+      if (nextSet.size === 0) {
+        const next = { ...current };
+        delete next[documentId];
+        return next;
+      }
+      return { ...current, [documentId]: nextSet };
+    });
+  }, []);
+
+  const isRowMutationPending = useCallback(
+    (documentId: string) => (pendingMutations[documentId]?.size ?? 0) > 0,
+    [pendingMutations],
   );
 
   const triggerArchivedFlash = useCallback((documentId: string) => {
@@ -367,29 +371,56 @@ export function DocumentsTableView({
   }, []);
 
   const restoreDocument = useCallback(
-    async (documentId: string, options: { silent?: boolean } = {}) => {
-      markActionPending(documentId, "restore");
+    async (documentId: string, options: { silent?: boolean; ifMatch?: string | null } = {}) => {
+      const current = documentsById[documentId];
+      if (!current) {
+        notifyToast({
+          title: "Unable to restore document",
+          description: "Document not found in the current list.",
+          intent: "danger",
+        });
+        return;
+      }
+      const ifMatch =
+        options.ifMatch ?? current.etag ?? buildWeakEtag(documentId, String(current.version));
+      const requestId = createClientRequestId();
+      registerClientRequestId(requestId);
+      markRowPending(documentId, "restore");
       try {
-        const updated = await restoreWorkspaceDocument(workspaceId, documentId);
+        const updated = await restoreWorkspaceDocument(workspaceId, documentId, {
+          clientRequestId: requestId,
+          ifMatch,
+        });
         applyDocumentUpdate(documentId, updated);
         if (!options.silent) {
           notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
         }
       } catch (error) {
+        clearClientRequestId(requestId);
         notifyToast({
           title: error instanceof Error ? error.message : "Unable to restore document.",
           intent: "danger",
         });
       } finally {
-        clearActionPending(documentId);
+        clearRowPending(documentId, "restore");
       }
     },
-    [applyDocumentUpdate, clearActionPending, markActionPending, notifyToast, workspaceId],
+    [
+      applyDocumentUpdate,
+      clearClientRequestId,
+      clearRowPending,
+      createClientRequestId,
+      documentsById,
+      markRowPending,
+      notifyToast,
+      registerClientRequestId,
+      workspaceId,
+    ],
   );
 
   const onAssign = useCallback(
     async (documentId: string, assigneeKey: string | null) => {
-      const current = documentsById.get(documentId);
+      const current = documentsById[documentId];
       if (!current) {
         notifyToast({
           title: "Unable to update assignee",
@@ -403,56 +434,101 @@ export function DocumentsTableView({
         ? people.find((person) => person.key === assigneeKey)?.label ?? assigneeKey
         : null;
       const assigneeEmail = assigneeLabel && assigneeLabel.includes("@") ? assigneeLabel : "";
-      const ifMatch = current.etag ?? buildWeakEtag(documentId, current.updatedAt);
+      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
+      const optimisticAssignee = assigneeId
+        ? { id: assigneeId, name: assigneeLabel, email: assigneeEmail }
+        : null;
+      const snapshot = current.assignee ?? null;
 
+      const requestId = createClientRequestId();
+      registerClientRequestId(requestId);
+      markRowPending(documentId, "assign");
+      updateRow(documentId, { assignee: optimisticAssignee });
       try {
         const updated = await patchWorkspaceDocument(
           workspaceId,
           documentId,
           { assigneeId },
-          { ifMatch },
+          { ifMatch, clientRequestId: requestId },
         );
         applyDocumentUpdate(documentId, updated);
-        if (!updated.assignee && assigneeId) {
-          updateDocumentRow(documentId, {
-            assignee: { id: assigneeId, name: assigneeLabel, email: assigneeEmail },
-          });
-        }
       } catch (error) {
+        clearClientRequestId(requestId);
+        updateRow(documentId, { assignee: snapshot });
         notifyToast({
           title: "Unable to update assignee",
           description: error instanceof Error ? error.message : "Please try again.",
           intent: "danger",
         });
+      } finally {
+        clearRowPending(documentId, "assign");
       }
     },
-    [applyDocumentUpdate, documentsById, notifyToast, people, updateDocumentRow, workspaceId],
+    [
+      applyDocumentUpdate,
+      clearClientRequestId,
+      clearRowPending,
+      createClientRequestId,
+      documentsById,
+      markRowPending,
+      notifyToast,
+      people,
+      registerClientRequestId,
+      updateRow,
+      workspaceId,
+    ],
   );
 
   const onToggleTag = useCallback(
     async (documentId: string, tag: string) => {
-      const current = documentsById.get(documentId);
+      const current = documentsById[documentId];
       if (!current) return;
       const tags = current.tags ?? [];
       const hasTag = tags.includes(tag);
+      const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
+
+      const requestId = createClientRequestId();
+      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
+      registerClientRequestId(requestId);
+      markRowPending(documentId, "tags");
+      updateRow(documentId, { tags: nextTags });
       try {
-        await patchDocumentTags(workspaceId, documentId, hasTag ? { remove: [tag] } : { add: [tag] });
-        const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
-        updateDocumentRow(documentId, { tags: nextTags });
+        const updated = await patchDocumentTags(
+          workspaceId,
+          documentId,
+          hasTag ? { remove: [tag] } : { add: [tag] },
+          { clientRequestId: requestId, ifMatch },
+        );
+        applyDocumentUpdate(documentId, updated);
       } catch (error) {
+        clearClientRequestId(requestId);
+        updateRow(documentId, { tags });
         notifyToast({
           title: "Unable to update tags",
           description: error instanceof Error ? error.message : "Please try again.",
           intent: "danger",
         });
+      } finally {
+        clearRowPending(documentId, "tags");
       }
     },
-    [documentsById, notifyToast, updateDocumentRow, workspaceId],
+    [
+      applyDocumentUpdate,
+      clearClientRequestId,
+      clearRowPending,
+      createClientRequestId,
+      documentsById,
+      markRowPending,
+      notifyToast,
+      registerClientRequestId,
+      updateRow,
+      workspaceId,
+    ],
   );
 
   const onArchive = useCallback(
     async (documentId: string) => {
-      const current = documentsById.get(documentId);
+      const current = documentsById[documentId];
       if (!current) {
         return;
       }
@@ -465,7 +541,7 @@ export function DocumentsTableView({
       archiveUndoRef.current.set(documentId, { snapshot, undoRequested: false });
 
       const now = new Date().toISOString();
-      updateDocumentRow(documentId, {
+      updateRow(documentId, {
         status: "archived",
         updatedAt: now,
         activityAt: now,
@@ -484,7 +560,7 @@ export function DocumentsTableView({
               const entry = archiveUndoRef.current.get(documentId);
               if (entry) {
                 entry.undoRequested = true;
-                updateDocumentRow(documentId, entry.snapshot);
+                updateRow(documentId, entry.snapshot);
                 clearArchivedFlash(documentId);
                 return;
               }
@@ -494,19 +570,28 @@ export function DocumentsTableView({
         ],
       });
 
-      markActionPending(documentId, "archive");
+      const requestId = createClientRequestId();
+      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
+      registerClientRequestId(requestId);
+      markRowPending(documentId, "archive");
       try {
-        const updated = await archiveWorkspaceDocument(workspaceId, documentId);
+        const updated = await archiveWorkspaceDocument(workspaceId, documentId, {
+          clientRequestId: requestId,
+          ifMatch,
+        });
         const entry = archiveUndoRef.current.get(documentId);
         if (entry?.undoRequested) {
-          await restoreDocument(documentId, { silent: true });
+          const undoMatch =
+            updated.etag ?? buildWeakEtag(updated.id, String(updated.version));
+          await restoreDocument(documentId, { silent: true, ifMatch: undoMatch });
           return;
         }
         applyDocumentUpdate(documentId, updated);
       } catch (error) {
+        clearClientRequestId(requestId);
         const entry = archiveUndoRef.current.get(documentId);
         if (entry) {
-          updateDocumentRow(documentId, entry.snapshot);
+          updateRow(documentId, entry.snapshot);
           clearArchivedFlash(documentId);
         }
         notifyToast({
@@ -515,19 +600,22 @@ export function DocumentsTableView({
         });
       } finally {
         archiveUndoRef.current.delete(documentId);
-        clearActionPending(documentId);
+        clearRowPending(documentId, "archive");
       }
     },
     [
       applyDocumentUpdate,
-      clearActionPending,
+      clearClientRequestId,
+      clearRowPending,
       clearArchivedFlash,
+      createClientRequestId,
       documentsById,
-      markActionPending,
+      markRowPending,
       notifyToast,
+      registerClientRequestId,
       restoreDocument,
       triggerArchivedFlash,
-      updateDocumentRow,
+      updateRow,
       workspaceId,
     ],
   );
@@ -539,7 +627,7 @@ export function DocumentsTableView({
     [restoreDocument],
   );
 
-  const onDeleteRequest = useCallback((document: DocumentListRow) => {
+  const onDeleteRequest = useCallback((document: DocumentRow) => {
     setDeleteTarget(document);
   }, []);
 
@@ -549,116 +637,36 @@ export function DocumentsTableView({
 
   const onDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
-    markActionPending(deleteTarget.id, "delete");
+    const ifMatch = deleteTarget.etag ?? buildWeakEtag(deleteTarget.id, String(deleteTarget.version));
+    const requestId = createClientRequestId();
+    registerClientRequestId(requestId);
+    markRowPending(deleteTarget.id, "delete");
     try {
-      await deleteWorkspaceDocument(workspaceId, deleteTarget.id);
-      removeDocumentRow(deleteTarget.id);
+      await deleteWorkspaceDocument(workspaceId, deleteTarget.id, {
+        ifMatch,
+        clientRequestId: requestId,
+      });
+      removeRow(deleteTarget.id);
       notifyToast({ title: "Document deleted.", intent: "success", duration: 4000 });
       setDeleteTarget(null);
     } catch (error) {
+      clearClientRequestId(requestId);
       notifyToast({
         title: error instanceof Error ? error.message : "Unable to delete document.",
         intent: "danger",
       });
     } finally {
-      clearActionPending(deleteTarget.id);
+      clearRowPending(deleteTarget.id, "delete");
     }
   }, [
-    clearActionPending,
+    clearClientRequestId,
+    clearRowPending,
+    createClientRequestId,
     deleteTarget,
-    markActionPending,
+    markRowPending,
     notifyToast,
-    removeDocumentRow,
-    workspaceId,
-  ]);
-
-  const changesCursor =
-    documentsQuery.data?.pages[0]?.changesCursor ??
-    documentsQuery.data?.pages[0]?.changesCursorHeader ??
-    null;
-
-  const applyChange = useCallback(
-    (change: DocumentChangeEntry) => {
-      let shouldPrompt = Boolean(change.requiresRefresh);
-
-      queryClient.setQueryData(queryKey, (existing: typeof documentsQuery.data | undefined) => {
-        if (!existing) {
-          return existing;
-        }
-        const result = mergeDocumentChangeIntoPages(existing, change, { sortTokens });
-        shouldPrompt = shouldPrompt || result.updatesAvailable;
-        return result.data;
-      });
-
-      if (shouldPrompt) {
-        setUpdatesAvailable((current) => current || true);
-      }
-    },
-    [queryClient, queryKey, sortTokens],
-  );
-
-  useEffect(() => {
-    setUpdatesAvailable(false);
-    lastCursorRef.current = changesCursor;
-  }, [changesCursor, filtersKey, joinOperator, perPage, q, normalizedSort, workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId || !changesCursor) return;
-
-    const controller = new AbortController();
-    let retryAttempt = 0;
-
-    const streamChanges = async () => {
-      while (!controller.signal.aborted) {
-        const cursor = lastCursorRef.current ?? changesCursor;
-        const streamUrl = documentChangesStreamUrl(workspaceId, {
-          cursor,
-          sort: normalizedSort ?? undefined,
-          filters: normalizedFilters.length > 0 ? normalizedFilters : undefined,
-          joinOperator: joinOperator ?? undefined,
-          q: q ?? undefined,
-        });
-
-        try {
-          for await (const change of streamDocumentChanges(streamUrl, controller.signal)) {
-            lastCursorRef.current = change.cursor;
-            applyChange(change);
-            retryAttempt = 0;
-          }
-        } catch (error) {
-          if (controller.signal.aborted) return;
-
-          if (error instanceof ApiError && error.status === 410) {
-            setUpdatesAvailable(false);
-            void refetchDocuments();
-            return;
-          }
-
-          console.warn("Documents change stream failed", error);
-        }
-
-        if (controller.signal.aborted) return;
-
-        const baseDelay = 1000;
-        const maxDelay = 30000;
-        const delay = Math.min(maxDelay, baseDelay * 2 ** Math.min(retryAttempt, 5));
-        retryAttempt += 1;
-        const jitter = Math.floor(delay * 0.15 * Math.random());
-        await sleep(delay + jitter, controller.signal);
-      }
-    };
-
-    void streamChanges();
-
-    return () => controller.abort();
-  }, [
-    applyChange,
-    changesCursor,
-    joinOperator,
-    normalizedFilters,
-    normalizedSort,
-    q,
-    refetchDocuments,
+    registerClientRequestId,
+    removeRow,
     workspaceId,
   ]);
 
@@ -683,7 +691,7 @@ export function DocumentsTableView({
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  if (documentsQuery.isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-[240px]">
         <DocumentsEmptyState
@@ -694,28 +702,23 @@ export function DocumentsTableView({
     );
   }
 
-  if (documentsQuery.isError) {
+  if (error) {
     return (
       <div className="min-h-[240px]">
         <DocumentsEmptyState
           title="Unable to load documents"
           description="We could not refresh this view. Try again."
-          action={{ label: "Try again", onClick: () => documentsQuery.refetch() }}
+          action={{ label: "Try again", onClick: () => refreshSnapshot() }}
         />
       </div>
     );
   }
 
-  const pageCount = documentsQuery.data?.pages[0]?.pageCount ?? 1;
-  const handleRefresh = () => {
-    setUpdatesAvailable(false);
-    void documentsQuery.refetch();
-  };
-
   const configBuilderPath = `/workspaces/${workspaceId}/config-builder`;
   const processingSettingsPath = `/workspaces/${workspaceId}/settings/processing`;
   const deletePending =
-    deleteTarget ? pendingActions[deleteTarget.id] === "delete" : false;
+    deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
+  const queuedCount = queuedChanges.length;
   const toolbarPresence = (
     <DocumentsPresenceIndicator
       participants={toolbarParticipants}
@@ -757,24 +760,14 @@ export function DocumentsTableView({
           }
         />
       ) : null}
-      {updatesAvailable ? (
+      {queuedCount > 0 && !isAtTop ? (
         <DocumentsInlineBanner
-          title="Updates available"
-          description="Refresh to load the latest changes."
+          title={`${queuedCount} new update${queuedCount === 1 ? "" : "s"} available`}
+          description="Scroll to the top or apply updates to refresh the list."
           actions={
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={documentsQuery.isFetching}
-              >
-                {documentsQuery.isFetching ? "Refreshing..." : "Refresh"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setUpdatesAvailable(false)}>
-                Dismiss
-              </Button>
-            </>
+            <Button size="sm" variant="outline" onClick={handleApplyQueuedChanges}>
+              Show updates
+            </Button>
           }
         />
       ) : null}
@@ -792,10 +785,11 @@ export function DocumentsTableView({
         onDeleteRequest={onDeleteRequest}
         expandedRowId={expandedRowId}
         onTogglePreview={handleTogglePreview}
-        isRowActionPending={isRowActionPending}
+        isRowActionPending={isRowMutationPending}
         archivedFlashIds={archivedFlashIds}
         toolbarActions={toolbarContent}
         scrollContainerRef={scrollContainerRef}
+        onVisibleRangeChange={handleVisibleRangeChange}
         scrollFooter={
           <>
             {hasNextPage ? (

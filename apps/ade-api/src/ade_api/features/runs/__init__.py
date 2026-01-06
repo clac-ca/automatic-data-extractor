@@ -5,7 +5,6 @@ from ade_api.models import Run, RunStatus
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
-    RunEventsPage,
     RunResource,
 )
 from .service import RunsService
@@ -15,7 +14,6 @@ __all__ = [
     "RunStatus",
     "RunCreateOptions",
     "RunCreateRequest",
-    "RunEventsPage",
     "RunResource",
     "RunsService",
 ]

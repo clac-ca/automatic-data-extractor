@@ -3,7 +3,7 @@
  * Do not make direct changes to the file.
  */
 
-export type paths = {
+export interface paths {
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -684,24 +684,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/changes/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream Document Changes */
-        get: operations["stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions": {
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions": {
         parameters: {
             query?: never;
             header?: never;
@@ -711,14 +694,14 @@ export type paths = {
         get?: never;
         put?: never;
         /** Create a resumable upload session */
-        post: operations["create_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions_post"];
+        post: operations["create_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}": {
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -726,18 +709,18 @@ export type paths = {
             cookie?: never;
         };
         /** Get upload session status */
-        get: operations["get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__get"];
+        get: operations["get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__get"];
         /** Upload a byte range to a session */
-        put: operations["upload_session_range_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__put"];
+        put: operations["upload_session_range_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__put"];
         post?: never;
         /** Cancel an upload session */
-        delete: operations["cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__delete"];
+        delete: operations["cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}/commit": {
+    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}/commit": {
         parameters: {
             query?: never;
             header?: never;
@@ -747,7 +730,7 @@ export type paths = {
         get?: never;
         put?: never;
         /** Commit an upload session */
-        post: operations["commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__commit_post"];
+        post: operations["commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__commit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1189,23 +1172,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/builds/{buildId}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Build Events Endpoint */
-        get: operations["list_build_events_endpoint_api_v1_builds__buildId__events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/builds/{buildId}/events/stream": {
         parameters: {
             query?: never;
@@ -1407,23 +1373,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{runId}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run Events Endpoint */
-        get: operations["get_run_events_endpoint_api_v1_runs__runId__events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{runId}/events/stream": {
         parameters: {
             query?: never;
@@ -1492,6 +1441,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{runId}/output/sheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List run output worksheets */
+        get: operations["list_run_output_sheets_endpoint_api_v1_runs__runId__output_sheets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{runId}/output/preview": {
         parameters: {
             query?: never;
@@ -1533,9 +1499,9 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-};
+}
 export type webhooks = Record<string, never>;
-export type components = {
+export interface components {
     schemas: {
         /**
          * ApiKeyCreateRequest
@@ -1840,26 +1806,12 @@ export type components = {
             options?: components["schemas"]["BuildCreateOptions"];
         };
         /**
-         * BuildEventsPage
-         * @description Paginated ADE events for a build.
-         */
-        BuildEventsPage: {
-            /** Items */
-            items: {
-                [key: string]: unknown;
-            }[];
-            /** Next After Sequence */
-            next_after_sequence?: number | null;
-        };
-        /**
          * BuildLinks
          * @description Hypermedia links for build-related resources.
          */
         BuildLinks: {
             /** Self */
             self: string;
-            /** Events */
-            events: string;
             /** Events Stream */
             events_stream: string;
         };
@@ -2164,16 +2116,10 @@ export type components = {
              * Format: date-time
              */
             occurredAt: string;
-            /**
-             * Matchesfilters
-             * @default false
-             */
-            matchesFilters: boolean;
-            /**
-             * Requiresrefresh
-             * @default false
-             */
-            requiresRefresh: boolean;
+            /** Documentversion */
+            documentVersion?: number | null;
+            /** Clientrequestid */
+            clientRequestId?: string | null;
         };
         /**
          * DocumentChangesPage
@@ -2257,6 +2203,16 @@ export type components = {
              * Format: date-time
              */
             activityAt: string;
+            /**
+             * Version
+             * @description Monotonic document version.
+             */
+            version: number;
+            /**
+             * Etag
+             * @description Weak ETag for optimistic concurrency checks.
+             */
+            etag?: string | null;
             latestRun?: components["schemas"]["DocumentRunSummary"] | null;
             latestSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
             latestResult?: components["schemas"]["DocumentResultSummary"] | null;
@@ -2310,6 +2266,16 @@ export type components = {
              * Format: date-time
              */
             updatedAt: string;
+            /**
+             * Version
+             * @description Monotonic document version.
+             */
+            version: number;
+            /**
+             * Etag
+             * @description Weak ETag for optimistic concurrency checks.
+             */
+            etag?: string | null;
             /** Deletedat */
             deletedAt?: string | null;
             /** Assigneeid */
@@ -2404,7 +2370,7 @@ export type components = {
          * @description Canonical document processing states.
          * @enum {string}
          */
-        DocumentStatus: "uploaded" | "processing" | "processed" | "failed" | "archived";
+        DocumentStatus: "uploading" | "uploaded" | "processing" | "processed" | "failed" | "archived";
         /**
          * DocumentTagsPatch
          * @description Payload for adding/removing tags on a document.
@@ -2505,6 +2471,13 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             uploadSessionId: string;
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            documentId: string;
+            row?: components["schemas"]["DocumentListRow"] | null;
             /**
              * Expiresat
              * Format: date-time
@@ -3309,18 +3282,6 @@ export type components = {
             options?: components["schemas"]["RunCreateOptions"];
         };
         /**
-         * RunEventsPage
-         * @description Paginated ADE events for a run.
-         */
-        RunEventsPage: {
-            /** Items */
-            items: {
-                [key: string]: unknown;
-            }[];
-            /** Next After Sequence */
-            next_after_sequence?: number | null;
-        };
-        /**
          * RunFieldResource
          * @description Field-level detection summary for a run.
          */
@@ -3367,8 +3328,6 @@ export type components = {
         RunLinks: {
             /** Self */
             self: string;
-            /** Events */
-            events: string;
             /** Events Stream */
             events_stream: string;
             /** Events Download */
@@ -3469,6 +3428,27 @@ export type components = {
             processed_file?: string | null;
         };
         /**
+         * RunOutputSheet
+         * @description Descriptor for a worksheet or single-sheet run output.
+         */
+        RunOutputSheet: {
+            /** Name */
+            name: string;
+            /** Index */
+            index: number;
+            /**
+             * Kind
+             * @default worksheet
+             * @enum {string}
+             */
+            kind: "worksheet" | "file";
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
+        };
+        /**
          * RunPage
          * @description Paginated collection of ``RunResource`` items.
          */
@@ -3548,8 +3528,6 @@ export type components = {
             input?: components["schemas"]["RunInput"];
             output?: components["schemas"]["RunOutput"];
             links: components["schemas"]["RunLinks"];
-            /** Events Url */
-            events_url?: string | null;
             /** Events Stream Url */
             events_stream_url?: string | null;
             /** Events Download Url */
@@ -4082,7 +4060,7 @@ export type components = {
         ETag: string;
     };
     pathItems: never;
-};
+}
 export type $defs = Record<string, never>;
 export interface operations {
     read_health_api_v1_health_get: {
@@ -6592,21 +6570,9 @@ export interface operations {
     list_document_changes_api_v1_workspaces__workspaceId__documents_changes_get: {
         parameters: {
             query?: {
-                /** @description Cursor token or 'latest'. */
+                /** @description Cursor token. */
                 cursor?: string | null;
                 limit?: number;
-                /** @description 1-based page number */
-                page?: number;
-                /** @description Items per page (max 200) */
-                perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
-                sort?: string | null;
-                /** @description URL-encoded JSON array of filter objects. */
-                filters?: string | null;
-                /** @description Logical operator to join filters (and/or). */
-                joinOperator?: components["schemas"]["FilterJoinOperator"];
-                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
-                q?: string | null;
             };
             header?: never;
             path: {
@@ -6640,58 +6606,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get: {
-        parameters: {
-            query?: {
-                /** @description Cursor token or 'latest'. */
-                cursor?: string | null;
-                limit?: number;
-                /** @description 1-based page number */
-                page?: number;
-                /** @description Items per page (max 200) */
-                perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
-                sort?: string | null;
-                /** @description URL-encoded JSON array of filter objects. */
-                filters?: string | null;
-                /** @description Logical operator to join filters (and/or). */
-                joinOperator?: components["schemas"]["FilterJoinOperator"];
-                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
-                q?: string | null;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    create_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions_post: {
+    create_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions_post: {
         parameters: {
             query?: never;
             header?: {
@@ -6732,7 +6647,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__get: {
+    get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6769,7 +6684,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    upload_session_range_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__put: {
+    upload_session_range_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__put: {
         parameters: {
             query?: never;
             header?: {
@@ -6809,7 +6724,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__delete: {
+    cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -6846,10 +6761,11 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadsessions__uploadSessionId__commit_post: {
+    commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__commit_post: {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
                 "Idempotency-Key"?: string | null;
             };
@@ -6952,6 +6868,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
                 /** @description ETag value required for optimistic concurrency checks. */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -7015,6 +6932,7 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
                 /** @description ETag value required for optimistic concurrency checks. */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -7084,6 +7002,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7147,6 +7066,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7212,6 +7132,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7277,6 +7198,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7340,6 +7262,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7403,6 +7326,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7468,6 +7392,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7762,6 +7687,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -8691,45 +8617,6 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    list_build_events_endpoint_api_v1_builds__buildId__events_get: {
-        parameters: {
-            query?: {
-                format?: "json" | "ndjson";
-                after_sequence?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Build identifier */
-                buildId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildEventsPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
     stream_build_events_endpoint_api_v1_builds__buildId__events_stream_get: {
         parameters: {
             query?: {
@@ -9247,45 +9134,6 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    get_run_events_endpoint_api_v1_runs__runId__events_get: {
-        parameters: {
-            query?: {
-                format?: "json" | "ndjson";
-                after_sequence?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                runId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunEventsPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
     stream_run_events_endpoint_api_v1_runs__runId__events_stream_get: {
         parameters: {
             query?: {
@@ -9452,6 +9300,63 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_run_output_sheets_endpoint_api_v1_runs__runId__output_sheets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutputSheet"][];
+                };
+            };
+            /** @description Run or output not found */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Output not ready */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sheets are not supported for this file type. */
+            415: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The output exists but could not be parsed for worksheets. */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["ProblemDetails"];
         };
