@@ -715,7 +715,12 @@ class Worker:
 
             staged_input = input_dir / document["original_filename"]
             source_path = self._document_path(workspace_id, document["stored_uri"])
-            shutil.copy2(source_path, staged_input)
+            if staged_input.exists():
+                staged_input.unlink()
+            try:
+                os.link(source_path, staged_input)
+            except OSError:
+                shutil.copy2(source_path, staged_input)
 
             now = self._utc_now()
             with self._engine.begin() as conn:
