@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator
 
 import asyncio
 import json
+import time
 from pathlib import Path
 
 from watchfiles import awatch
@@ -18,6 +19,10 @@ from watchfiles import awatch
 from ade_api.common.events import strip_sequence
 
 from ade_api.common.encoding import json_dumps
+
+WATCH_DEBOUNCE_MS = 50
+WATCH_STEP_MS = 50
+WATCH_TIMEOUT_MS = 500
 
 
 def _build_event(
@@ -83,64 +88,81 @@ async def stream_ndjson_events(
     stop_events = stop_events or set()
     last_sequence = start_sequence
     cursor = 0
+    last_ping = time.monotonic()
 
-    while not path.exists():
+    def _handle_event(event: dict[str, Any]) -> tuple[dict[str, str] | None, bool]:
+        nonlocal cursor, last_sequence
+        cursor += 1
+        seq = event.get("sequence")
+        if not isinstance(seq, int):
+            seq = cursor
+            event["sequence"] = seq
+        if seq <= last_sequence:
+            return None, False
+        last_sequence = seq
+        payload = strip_sequence(event)
+        message = sse_json(
+            str(event.get("event") or "message"),
+            payload,
+            event_id=last_sequence,
+        )
+        return message, event.get("event") in stop_events
+
+    if not path.exists():
+        # The worker pre-creates the log file; this only runs if a client connects early.
         yield sse_text("ping", "waiting")
-        await asyncio.sleep(ping_interval)
+        last_ping = time.monotonic()
+        wait_step = min(0.25, ping_interval)
+        while not path.exists():
+            await asyncio.sleep(wait_step)
+            now = time.monotonic()
+            if now - last_ping >= ping_interval:
+                yield sse_text("ping", "waiting")
+                last_ping = now
+        last_ping = time.monotonic()
 
     with path.open("r", encoding="utf-8") as handle:
         for raw in handle:
             event = _parse_event_line(raw)
             if event is None:
                 continue
-            cursor += 1
-            seq = event.get("sequence")
-            if not isinstance(seq, int):
-                seq = cursor
-                event["sequence"] = seq
-            if seq <= start_sequence:
+            message, should_stop = _handle_event(event)
+            if message is None:
                 continue
-            last_sequence = seq
-            payload = strip_sequence(event)
-            yield sse_json(
-                str(event.get("event") or "message"),
-                payload,
-                event_id=last_sequence,
-            )
-            if event.get("event") in stop_events:
+            yield message
+            if should_stop:
                 return
 
-        watcher = awatch(path.parent)
+        watcher = awatch(
+            path,
+            debounce=WATCH_DEBOUNCE_MS,
+            step=WATCH_STEP_MS,
+            rust_timeout=WATCH_TIMEOUT_MS,
+            yield_on_timeout=True,
+        )
         while True:
             line = handle.readline()
             if line:
                 event = _parse_event_line(line)
                 if event is None:
                     continue
-                cursor += 1
-                seq = event.get("sequence")
-                if isinstance(seq, int):
-                    if seq <= last_sequence:
-                        continue
-                    last_sequence = seq
-                else:
-                    last_sequence += 1
-                payload = strip_sequence(event)
-                yield sse_json(
-                    str(event.get("event") or "message"),
-                    payload,
-                    event_id=last_sequence,
-                )
-                if event.get("event") in stop_events:
+                message, should_stop = _handle_event(event)
+                if message is None:
+                    continue
+                yield message
+                if should_stop:
                     return
                 continue
 
             try:
-                await asyncio.wait_for(watcher.__anext__(), timeout=ping_interval)
-            except asyncio.TimeoutError:
-                yield sse_text("ping", "keep-alive")
+                await watcher.__anext__()
             except StopAsyncIteration:
                 return
+
+            now = time.monotonic()
+            if now - last_ping >= ping_interval:
+                yield sse_text("ping", "keep-alive")
+                last_ping = now
 
 
 def _parse_event_line(raw: str) -> dict[str, Any] | None:

@@ -257,6 +257,8 @@ class Worker:
 
         log_path = self._build_logs_path(workspace_id, configuration_id, build_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Pre-create the log file so SSE tailing can attach immediately.
+        log_path.touch(exist_ok=True)
 
         start_event = new_event_record(
             event="build.start",
@@ -461,6 +463,8 @@ class Worker:
         logs_dir.mkdir(parents=True, exist_ok=True)
 
         event_log_path = logs_dir / "events.ndjson"
+        # Pre-create the log file so SSE tailing can attach immediately.
+        event_log_path.touch(exist_ok=True)
 
         start_event = new_event_record(
             event="run.start",
@@ -615,7 +619,6 @@ class Worker:
             cmd = [str(venv_python), "-m", "ade_engine", "process", "file"]
             cmd.extend(["--input", str(staged_input)])
             cmd.extend(["--output-dir", str(output_dir)])
-            cmd.extend(["--logs-dir", str(logs_dir)])
             cmd.extend(["--config-package", str(self._config_path(workspace_id, configuration_id))])
             cmd.extend(["--log-format", "ndjson", "--log-level", str(log_level)])
             if active_sheet_only:

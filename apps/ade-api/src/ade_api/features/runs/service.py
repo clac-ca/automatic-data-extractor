@@ -1526,13 +1526,6 @@ class RunsService:
         if not snapshot.events_path:
             candidate = run_dir / "logs" / "events.ndjson"
             snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
-        if not snapshot.events_path:
-            logs_dir = run_dir / "logs"
-            if logs_dir.exists():
-                for path in sorted(logs_dir.glob("*_engine_events.ndjson")):
-                    snapshot.events_path = self._run_relative_hint(path, run_dir=run_dir)
-                    if snapshot.events_path:
-                        break
 
         # Output path: if not provided, infer from <run_dir>/output.
         if snapshot.output_path:

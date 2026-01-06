@@ -60,6 +60,7 @@ Commonly overridden settings per package:
 ## Testing your package
 
 - Run a quick check with `python -m ade_engine process file --config-package <path> --input <file> --output-dir ./output --logs-dir ./logs`.
+- If you omit `--logs-dir`, the engine logs only to stderr/stdout and does not write a log file.
 - Keep a small fixture workbook in your repo and add a smoke test that uses `Engine(Settings())` with your package path.
 - Use `--log-format ndjson --debug` to capture detector/transform telemetry while iterating.
 

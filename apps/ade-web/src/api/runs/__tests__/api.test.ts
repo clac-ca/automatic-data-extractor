@@ -7,7 +7,7 @@ import type { RunStreamEvent } from "@schema/runs";
 
 const encoder = new TextEncoder();
 
-function createSseStream() {
+function createSseStream(lineEnding = "\n") {
   let closed = false;
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   const stream = new ReadableStream<Uint8Array>({
@@ -19,7 +19,7 @@ function createSseStream() {
     stream,
     emit(event: RunStreamEvent) {
       if (closed) return;
-      const payload = `event: ${event.event}\ndata: ${JSON.stringify(event)}\n\n`;
+      const payload = `event: ${event.event}${lineEnding}data: ${JSON.stringify(event)}${lineEnding}${lineEnding}`;
       controller?.enqueue(encoder.encode(payload));
     },
     close() {
@@ -34,8 +34,8 @@ function createSseStream() {
   };
 }
 
-function mockSseFetch() {
-  const sse = createSseStream();
+function mockSseFetch(lineEnding?: string) {
+  const sse = createSseStream(lineEnding);
   const response = new Response(sse.stream, {
     status: 200,
     headers: { "Content-Type": "text/event-stream" },
@@ -117,6 +117,24 @@ describe("streamRunEvents", () => {
     sse.close();
     const done = await iterator.next();
     expect(done.done).toBe(true);
+  });
+
+  it("parses CRLF-delimited SSE events", async () => {
+    const { sse } = mockSseFetch("\r\n");
+    const iterator = streamRunEvents("http://example.com/stream");
+
+    const pending = iterator.next();
+    await Promise.resolve();
+
+    const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
+    sse.emit(runEvent);
+
+    const result = await pending;
+    expect(result.done).toBe(false);
+    expect(result.value).toMatchObject(runEvent);
+
+    await iterator.return?.(undefined);
+    sse.close();
   });
 });
 

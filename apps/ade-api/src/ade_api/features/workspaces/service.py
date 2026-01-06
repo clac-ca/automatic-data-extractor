@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import delete, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +40,7 @@ from ade_api.models import (
     Workspace,
     WorkspaceMembership,
 )
+from ade_api.settings import Settings
 
 from ..users.repository import UsersRepository
 from .filters import (
@@ -85,8 +89,9 @@ def _slugify(value: str) -> str:
 class WorkspacesService:
     """Resolve workspace membership and manage workspace-scoped roles."""
 
-    def __init__(self, *, session: AsyncSession) -> None:
+    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
         self._session = session
+        self._settings = settings
         self._repo = WorkspacesRepository(session)
         self._users_repo = UsersRepository(session)
         self._rbac = RbacService(session=session)
@@ -511,6 +516,16 @@ class WorkspacesService:
     async def delete_workspace(self, *, workspace_id: UUID) -> None:
         workspace = await self._ensure_workspace(workspace_id)
         await self._repo.delete_workspace(workspace)
+        storage_errors = await self._delete_workspace_storage(workspace_id)
+        if storage_errors:
+            logger.warning(
+                "workspace.delete.storage_incomplete",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    error_count=len(storage_errors),
+                    error_paths=[str(path) for path, _exc in storage_errors],
+                ),
+            )
         logger.info(
             "workspace.delete.success",
             extra=log_context(workspace_id=workspace_id),
@@ -836,6 +851,46 @@ class WorkspacesService:
                 detail="Workspace not found",
             )
         return workspace
+
+    async def _delete_workspace_storage(self, workspace_id: UUID) -> list[tuple[Path, Exception]]:
+        paths = self._workspace_storage_paths(workspace_id)
+        if not paths:
+            return []
+        return await run_in_threadpool(self._remove_storage_paths, paths)
+
+    def _workspace_storage_paths(self, workspace_id: UUID) -> list[Path]:
+        roots = [
+            self._settings.workspaces_dir,
+            self._settings.configs_dir,
+            self._settings.documents_dir,
+            self._settings.runs_dir,
+            self._settings.venvs_dir,
+        ]
+        candidates = [Path(root) / str(workspace_id) for root in roots]
+        seen: set[Path] = set()
+        paths: list[Path] = []
+        for candidate in candidates:
+            resolved = candidate.expanduser().resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                paths.append(resolved)
+        paths.sort(key=lambda path: len(path.parents), reverse=True)
+        return paths
+
+    @staticmethod
+    def _remove_storage_paths(paths: Sequence[Path]) -> list[tuple[Path, Exception]]:
+        errors: list[tuple[Path, Exception]] = []
+        for path in paths:
+            try:
+                if not path.exists() and not path.is_symlink():
+                    continue
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink(missing_ok=True)
+            except Exception as exc:  # noqa: BLE001
+                errors.append((path, exc))
+        return errors
 
     async def _get_workspace_assignments(
         self,

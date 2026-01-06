@@ -95,10 +95,10 @@ def get_runs_service(session: SessionDep, settings: SettingsDep):
     return RunsService(session=session, settings=settings, storage=storage)
 
 
-def get_workspaces_service(session: SessionDep):
+def get_workspaces_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.workspaces.service import WorkspacesService
 
-    return WorkspacesService(session=session)
+    return WorkspacesService(session=session, settings=settings)
 
 
 def get_idempotency_service(session: SessionDep, settings: SettingsDep):

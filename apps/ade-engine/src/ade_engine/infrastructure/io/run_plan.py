@@ -13,7 +13,7 @@ class RunPlan:
     request: RunRequest
     output_dir: Path
     output_path: Path
-    logs_dir: Path
+    logs_dir: Path | None
     logs_path: Path | None
 
 
@@ -50,19 +50,24 @@ def plan_run(request: RunRequest, *, log_format: str) -> RunPlan:
     if output_path.suffix.lower() != ".xlsx":
         raise InputError(f"Output path must end with .xlsx: {output_path}")
 
-    logs_dir = (
-        request.logs_dir.expanduser().resolve()
-        if request.logs_dir is not None
-        else output_dir
-    )
-
-    if request.logs_path is not None:
-        logs_path = (
-            request.logs_path.expanduser().resolve()
+    logs_dir: Path | None = None
+    if request.logs_dir is not None:
+        logs_dir = request.logs_dir.expanduser().resolve()
+    elif request.logs_path is not None:
+        logs_dir = (
+            request.logs_path.expanduser().resolve().parent
             if request.logs_path.is_absolute()
-            else (logs_dir / request.logs_path).expanduser().resolve()
+            else output_dir
         )
-    else:
+
+    logs_path: Path | None = None
+    if request.logs_path is not None:
+        if request.logs_path.is_absolute():
+            logs_path = request.logs_path.expanduser().resolve()
+        else:
+            base_dir = logs_dir or output_dir
+            logs_path = (base_dir / request.logs_path).expanduser().resolve()
+    elif request.logs_dir is not None:
         fmt = (log_format or "text").strip().lower()
         suffix = "engine_events.ndjson" if fmt in {"ndjson", "json"} else "engine.log"
         logs_path = (logs_dir / f"{input_file.stem}_{suffix}").resolve()

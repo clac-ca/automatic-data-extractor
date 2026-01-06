@@ -10,7 +10,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.models import Workspace, WorkspaceMembership
+from ade_api.models import (
+    Build,
+    Configuration,
+    Document,
+    DocumentChange,
+    DocumentTag,
+    DocumentUploadSession,
+    Run,
+    RunField,
+    RunMetrics,
+    RunTableColumn,
+    UserRoleAssignment,
+    Workspace,
+    WorkspaceMembership,
+)
 
 
 class WorkspacesRepository:
@@ -174,8 +188,47 @@ class WorkspacesRepository:
         return workspace
 
     async def delete_workspace(self, workspace: Workspace) -> None:
+        workspace_id = workspace.id
+        run_ids = select(Run.id).where(Run.workspace_id == workspace_id)
+        document_ids = select(Document.id).where(Document.workspace_id == workspace_id)
+
+        # Delete in dependency order to satisfy FK constraints across workspace data.
         await self._session.execute(
-            delete(WorkspaceMembership).where(WorkspaceMembership.workspace_id == workspace.id)
+            update(Configuration)
+            .where(Configuration.workspace_id == workspace_id)
+            .values(active_build_id=None, active_build_fingerprint=None)
+        )
+        await self._session.execute(
+            delete(RunTableColumn).where(RunTableColumn.run_id.in_(run_ids))
+        )
+        await self._session.execute(delete(RunField).where(RunField.run_id.in_(run_ids)))
+        await self._session.execute(delete(RunMetrics).where(RunMetrics.run_id.in_(run_ids)))
+        await self._session.execute(delete(Run).where(Run.workspace_id == workspace_id))
+
+        await self._session.execute(
+            delete(DocumentTag).where(DocumentTag.document_id.in_(document_ids))
+        )
+        await self._session.execute(
+            delete(DocumentChange).where(DocumentChange.workspace_id == workspace_id)
+        )
+        await self._session.execute(
+            delete(DocumentUploadSession).where(
+                DocumentUploadSession.workspace_id == workspace_id
+            )
+        )
+        await self._session.execute(
+            delete(Document).where(Document.workspace_id == workspace_id)
+        )
+
+        await self._session.execute(delete(Build).where(Build.workspace_id == workspace_id))
+        await self._session.execute(
+            delete(Configuration).where(Configuration.workspace_id == workspace_id)
+        )
+        await self._session.execute(
+            delete(UserRoleAssignment).where(UserRoleAssignment.workspace_id == workspace_id)
+        )
+        await self._session.execute(
+            delete(WorkspaceMembership).where(WorkspaceMembership.workspace_id == workspace_id)
         )
         await self._session.delete(workspace)
         await self._session.flush()
