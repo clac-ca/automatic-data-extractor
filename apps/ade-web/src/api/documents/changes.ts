@@ -1,5 +1,6 @@
-import { resolveWebSocketUrl } from "@api/presence/client";
+import { resolveApiUrl } from "@api/client";
 
-export function documentsChangesSocketUrl(workspaceId: string) {
-  return resolveWebSocketUrl(`/api/v1/workspaces/${workspaceId}/documents/changes/ws`);
+export function documentsChangesStreamUrl(workspaceId: string, cursor: string) {
+  const params = new URLSearchParams({ cursor });
+  return resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/changes/stream?${params.toString()}`);
 }

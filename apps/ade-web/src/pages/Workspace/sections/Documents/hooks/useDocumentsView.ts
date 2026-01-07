@@ -4,9 +4,11 @@ import {
   DocumentChangesResyncError,
   fetchWorkspaceDocumentChanges,
   fetchWorkspaceDocuments,
+  fetchWorkspaceDocumentRowById,
   type DocumentChangeEntry,
   type DocumentListRow,
 } from "@api/documents";
+import { ApiError } from "@api/errors";
 import type { FilterItem, FilterJoinOperator } from "@api/listing";
 import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 
@@ -17,7 +19,9 @@ import {
   supportsSortTokens,
 } from "../data-table/utils";
 import type { DocumentRow } from "../types";
-import { useDocumentsChangesSocket } from "./useDocumentsChangesSocket";
+import { useDocumentsChangesStream } from "./useDocumentsChangesStream";
+
+type HydratedChange = DocumentChangeEntry & { row?: DocumentListRow | null };
 
 type DocumentsState = {
   documentsById: Record<string, DocumentRow>;
@@ -30,7 +34,7 @@ type DocumentsState = {
   error: string | null;
   cursor: string | null;
   changesCursor: string | null;
-  queuedChanges: DocumentChangeEntry[];
+  queuedChanges: HydratedChange[];
 };
 
 const DEFAULT_STATE: DocumentsState = {
@@ -103,7 +107,7 @@ function removeId(ids: string[], rowId: string) {
   return next;
 }
 
-function addQueuedChange(changes: DocumentChangeEntry[], entry: DocumentChangeEntry) {
+function addQueuedChange(changes: HydratedChange[], entry: HydratedChange) {
   if (changes.some((item) => item.cursor === entry.cursor)) {
     return changes;
   }
@@ -189,7 +193,7 @@ export function useDocumentsView({
   }, []);
 
   const applyUpsert = useCallback(
-    (prev: DocumentsState, entry: DocumentChangeEntry) => {
+    (prev: DocumentsState, entry: HydratedChange) => {
       const row = entry.row;
       if (!row) return { state: prev, requiresRefresh: false };
 
@@ -242,7 +246,7 @@ export function useDocumentsView({
     [comparator, filters, joinOperator, q, sortSupported],
   );
 
-  const applyDelete = useCallback((prev: DocumentsState, entry: DocumentChangeEntry) => {
+  const applyDelete = useCallback((prev: DocumentsState, entry: HydratedChange) => {
     const documentId = entry.documentId;
     if (!documentId) {
       return prev;
@@ -262,7 +266,7 @@ export function useDocumentsView({
 
   const applyChanges = useCallback(
     (
-      entries: DocumentChangeEntry[],
+      entries: HydratedChange[],
       {
         allowQueue = true,
         nextCursor = null,
@@ -286,7 +290,7 @@ export function useDocumentsView({
             allowQueue &&
             !isLocal &&
             !isAtTopRef.current &&
-            entry.type === "document.upsert" &&
+            entry.type === "document.changed" &&
             entry.row
           ) {
             const startIndex = visibleStartIndexRef.current;
@@ -323,7 +327,7 @@ export function useDocumentsView({
             continue;
           }
 
-          if (entry.type === "document.upsert") {
+          if (entry.type === "document.changed") {
             const result = applyUpsert(next, entry);
             if (result.requiresRefresh) {
               markNeedsRefresh();
@@ -350,6 +354,43 @@ export function useDocumentsView({
     [applyDelete, applyUpsert, comparator, filters, joinOperator, markNeedsRefresh, q, sortSupported],
   );
 
+  const hydrateChange = useCallback(
+    async (entry: DocumentChangeEntry): Promise<HydratedChange> => {
+      if (entry.type === "document.deleted") {
+        return entry;
+      }
+      try {
+        const row = await fetchWorkspaceDocumentRowById(workspaceId, entry.documentId);
+        return { ...entry, row };
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          return { ...entry, type: "document.deleted" };
+        }
+        markNeedsRefresh();
+        return entry;
+      }
+    },
+    [markNeedsRefresh, workspaceId],
+  );
+
+  const applyIncomingChanges = useCallback(
+    async (
+      entries: DocumentChangeEntry[],
+      {
+        allowQueue = true,
+        nextCursor = null,
+      }: { allowQueue?: boolean; nextCursor?: string | null } = {},
+    ) => {
+      if (!entries.length) {
+        applyChanges([], { allowQueue, nextCursor });
+        return;
+      }
+      const hydrated = await Promise.all(entries.map((entry) => hydrateChange(entry)));
+      applyChanges(hydrated, { allowQueue, nextCursor });
+    },
+    [applyChanges, hydrateChange],
+  );
+
   const applyQueuedChanges = useCallback(() => {
     setState((prev) => {
       if (!prev.queuedChanges.length) return prev;
@@ -360,7 +401,7 @@ export function useDocumentsView({
       };
       let updated = nextState;
       for (const entry of ordered) {
-        if (entry.type === "document.upsert") {
+        if (entry.type === "document.changed") {
           const result = applyUpsert(updated, entry);
           if (result.requiresRefresh) {
             markNeedsRefresh();
@@ -484,7 +525,7 @@ export function useDocumentsView({
           { cursor, limit: DELTA_LIMIT },
         );
         const items = changes.items ?? [];
-        applyChanges(items, {
+        await applyIncomingChanges(items, {
           allowQueue: true,
           nextCursor: changes.nextCursor ?? null,
         });
@@ -506,7 +547,7 @@ export function useDocumentsView({
         return;
       }
     }
-  }, [applyChanges, enabled, refreshSnapshot, state.cursor, workspaceId]);
+  }, [applyIncomingChanges, enabled, refreshSnapshot, state.cursor, workspaceId]);
 
   useEffect(() => {
     if (!enabled || !workspaceId) return;
@@ -524,15 +565,18 @@ export function useDocumentsView({
     };
   }, [catchUp, enabled, workspaceId]);
 
-  const { connectionState } = useDocumentsChangesSocket({
+  const { connectionState } = useDocumentsChangesStream({
     workspaceId,
     cursor: state.cursor,
     enabled: enabled && Boolean(state.cursor),
-    onChanges: (items, nextCursor) => {
-      applyChanges(items, { allowQueue: true, nextCursor });
+    onEvent: (change) => {
+      void applyIncomingChanges([change], { allowQueue: true });
     },
-    onEvent: (change) => applyChanges([change], { allowQueue: true }),
-    onResyncRequired: (latestCursor) => {
+    onReady: (nextCursor) => {
+      if (!nextCursor) return;
+      setState((prev) => (prev.cursor === nextCursor ? prev : { ...prev, cursor: nextCursor }));
+    },
+    onResyncRequired: (latestCursor, _oldestCursor) => {
       if (latestCursor) {
         setState((prev) => ({ ...prev, cursor: latestCursor }));
       }
@@ -558,11 +602,13 @@ export function useDocumentsView({
         applyUpsert(
           prev,
           {
-            type: "document.upsert",
+            type: "document.changed",
+            documentId: row.id,
+            documentVersion: row.version,
             row,
             cursor: "0",
             occurredAt: new Date().toISOString(),
-          } as DocumentChangeEntry,
+          } as HydratedChange,
         ).state,
       );
     },
@@ -571,7 +617,18 @@ export function useDocumentsView({
 
   const removeRow = useCallback(
     (documentId: string) => {
-      setState((prev) => applyDelete(prev, { type: "document.deleted", documentId, cursor: "0", occurredAt: new Date().toISOString() } as DocumentChangeEntry));
+      setState((prev) =>
+        applyDelete(
+          prev,
+          {
+            type: "document.deleted",
+            documentId,
+            documentVersion: 0,
+            cursor: "0",
+            occurredAt: new Date().toISOString(),
+          } as HydratedChange,
+        ),
+      );
     },
     [applyDelete],
   );

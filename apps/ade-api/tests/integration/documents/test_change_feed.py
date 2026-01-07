@@ -9,8 +9,8 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.models import (
     Document,
-    DocumentChange,
-    DocumentChangeType,
+    DocumentEvent,
+    DocumentEventType,
     DocumentSource,
     DocumentStatus,
 )
@@ -50,6 +50,7 @@ async def test_document_changes_include_create_event(async_client, seed_identity
     document_id = upload_payload["id"]
     etag = upload_payload.get("etag")
     assert etag is not None
+    assert etag is not None
 
     replay = await async_client.get(
         f"{workspace_base}/documents/changes",
@@ -59,7 +60,7 @@ async def test_document_changes_include_create_event(async_client, seed_identity
     assert replay.status_code == 200, replay.text
     payload = replay.json()
     assert any(
-        entry["type"] == "document.upsert" and entry["row"]["id"] == document_id
+        entry["type"] == "document.changed" and entry["documentId"] == document_id
         for entry in payload["items"]
     )
 
@@ -83,7 +84,9 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
         files={"file": ("first.txt", b"hello", "text/plain")},
     )
     assert upload.status_code == 201, upload.text
-    document_id = upload.json()["id"]
+    upload_payload = upload.json()
+    document_id = upload_payload["id"]
+    etag = upload_payload.get("etag")
 
     listing = await async_client.get(
         f"{workspace_base}/documents",
@@ -109,7 +112,7 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
     payload = replay.json()
     assert payload["items"], "Expected at least one change after the cursor."
     assert any(
-        entry["type"] == "document.upsert" and entry["row"]["id"] == document_id
+        entry["type"] == "document.changed" and entry["documentId"] == document_id
         for entry in payload["items"]
     )
 
@@ -189,18 +192,18 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
     session.add(doc)
 
     now = utc_now()
-    old_change = DocumentChange(
+    old_change = DocumentEvent(
         workspace_id=workspace_id,
         document_id=doc.id,
-        type=DocumentChangeType.UPSERT,
-        payload={},
+        event_type=DocumentEventType.CHANGED,
+        document_version=1,
         occurred_at=now - timedelta(seconds=10),
     )
-    fresh_change = DocumentChange(
+    fresh_change = DocumentEvent(
         workspace_id=workspace_id,
         document_id=doc.id,
-        type=DocumentChangeType.UPSERT,
-        payload={},
+        event_type=DocumentEventType.CHANGED,
+        document_version=2,
         occurred_at=now,
     )
     session.add_all([old_change, fresh_change])
@@ -223,4 +226,5 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
     payload = response.json()
     detail = payload.get("detail") or {}
     assert detail.get("error") == "resync_required"
+    assert detail.get("oldestCursor") == str(old_change.cursor)
     assert detail.get("latestCursor") == str(fresh_change.cursor)

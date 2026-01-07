@@ -10,7 +10,6 @@ from ade_api.features.builds.router import router as builds_router
 from ade_api.features.configs.router import router as configurations_router
 from ade_api.features.documents.router import router as documents_router
 from ade_api.features.documents.router import tags_router as document_tags_router
-from ade_api.features.documents.changes_ws import ws_router as document_changes_ws_router
 from ade_api.features.health.router import router as health_router
 from ade_api.features.info.router import router as info_router
 from ade_api.features.me.router import router as me_router
@@ -41,7 +40,6 @@ def create_api_router(settings: Settings) -> APIRouter:
     api_router.include_router(workspace_members_router)
     api_router.include_router(document_tags_router)
     api_router.include_router(documents_router)
-    api_router.include_router(document_changes_ws_router)
     api_router.include_router(presence_router)
     api_router.include_router(configurations_router)
     api_router.include_router(builds_router)

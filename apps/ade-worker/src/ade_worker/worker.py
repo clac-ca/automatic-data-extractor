@@ -1,1440 +1,871 @@
-"""Worker loop that executes queued builds and runs."""
+"""Worker process: claim builds/runs from the DB and execute them.
+
+This is deliberately a single-process design with a thread pool for concurrency.
+No brokers, no Redis.
+
+Contracts:
+- The main application inserts rows into `builds`/`runs` with queued status.
+- The worker claims builds/runs, executes them, and updates status on completion.
+- Build work prepares an isolated venv for a configuration.
+- Run work stages an input document and executes `ade_engine` in the build venv.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
-import socket
 import shutil
-import signal
+import socket
 import subprocess
 import sys
-import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
-from queue import Queue
-from typing import Any, Callable
+from typing import Any
+from uuid import uuid4
 
-from sqlalchemy import and_, func, or_, select, text, update
-from sqlalchemy.engine import Engine
+from sqlalchemy import select, update
 
-from .events import coerce_event_record, ensure_event_context, new_event_record
-from .metrics import extract_run_columns, extract_run_fields, extract_run_metrics
-from .schema import (
-    builds,
-    configurations,
-    documents,
-    document_changes,
-    run_fields,
-    run_metrics,
-    run_table_columns,
-    runs,
-)
+from .db import create_db_engine, maybe_create_schema
+from .paths import PathManager
+from .queue import BuildClaim, BuildQueue, RunClaim, RunQueue
+from .schema import REQUIRED_TABLES, builds, documents, metadata, runs
 from .settings import WorkerSettings
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True)
-class RunJob:
-    row: dict[str, Any]
+from .subprocess_runner import EventLog, SubprocessRunner
 
 
-@dataclass(slots=True)
-class BuildJob:
-    row: dict[str, Any]
+logger = logging.getLogger("ade_worker")
 
 
-class Worker:
-    """Process queued runs and builds using the database as the queue."""
+def utcnow() -> datetime:
+    # Store naive UTC in the database (portable across SQLite + SQL Server).
+    return datetime.utcnow().replace(tzinfo=None)
 
-    def __init__(self, *, engine: Engine, settings: WorkerSettings) -> None:
-        self._engine = engine
-        self._settings = settings
-        self._stop = threading.Event()
 
-    def start(self) -> None:
-        threads: list[threading.Thread] = []
-        for idx in range(self._settings.concurrency):
-            t = threading.Thread(target=self._worker_loop, args=(idx,), daemon=True)
-            threads.append(t)
-            t.start()
+def _default_worker_id() -> str:
+    host = socket.gethostname() or "worker"
+    return f"{host}-{uuid4().hex[:8]}"
 
+
+def _setup_logging(level: str) -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-5s %(name)s %(message)s",
+    )
+
+
+def _ensure_dir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def _hardlink_or_copy(src: Path, dst: Path) -> None:
+    _ensure_dir(dst.parent)
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+
+
+def _json_loads_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return {}
         try:
-            while any(t.is_alive() for t in threads):
-                time.sleep(0.5)
-        except KeyboardInterrupt:
-            self.stop()
-            for t in threads:
-                t.join()
+            obj = json.loads(raw)
+            return obj if isinstance(obj, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
 
-    def stop(self) -> None:
-        self._stop.set()
 
-    # ------------------------------------------------------------------
-    # Loop
-    # ------------------------------------------------------------------
+def _run_capture_text(cmd: list[str]) -> str:
+    """Run a short command and return combined stdout+stderr."""
+    p = subprocess.run(cmd, text=True, capture_output=True)
+    out = (p.stdout or "").strip()
+    err = (p.stderr or "").strip()
+    return out or err
 
-    def _worker_loop(self, idx: int) -> None:
-        worker_id = self._settings.worker_id or f"{socket.gethostname()}:{os.getpid()}:{idx}"
-        logger.info("worker.start", extra={"worker_id": worker_id})
 
-        last_cleanup = 0.0
-        last_metrics = 0.0
-        sleep_seconds = self._settings.poll_interval
-        max_sleep = max(self._settings.poll_interval_max, self._settings.poll_interval)
-        while not self._stop.is_set():
-            should_sleep = False
-            try:
-                now = time.monotonic()
-                if now - last_cleanup >= self._settings.cleanup_interval:
-                    self._expire_stuck_runs()
-                    self._expire_stuck_builds()
-                    self._fail_runs_with_failed_builds()
-                    last_cleanup = now
-                if now - last_metrics >= self._settings.metrics_interval:
-                    self._log_queue_metrics()
-                    last_metrics = now
 
-                job = self._claim_next_job(worker_id)
-                if job is None:
-                    should_sleep = True
-                elif isinstance(job, BuildJob):
-                    sleep_seconds = self._settings.poll_interval
-                    self._execute_build(job, worker_id=worker_id)
-                else:
-                    sleep_seconds = self._settings.poll_interval
-                    self._execute_run(job, worker_id=worker_id)
-            except Exception:
-                logger.exception("worker.loop.error", extra={"worker_id": worker_id})
-                should_sleep = True
 
-            if should_sleep:
-                time.sleep(sleep_seconds)
-                sleep_seconds = min(max_sleep, sleep_seconds * 1.5)
+@dataclass(slots=True)
+class RunOptions:
+    validate_only: bool = False
+    dry_run: bool = False
+    log_level: str = "INFO"
+    input_sheet_names: list[str] = None  # type: ignore[assignment]
+    active_sheet_only: bool = False
+    max_findings_per_sheet: int | None = None
+    extra_engine_args: list[str] = None  # type: ignore[assignment]
 
-        logger.info("worker.stop", extra={"worker_id": worker_id})
+    def __post_init__(self) -> None:
+        self.input_sheet_names = self.input_sheet_names or []
+        self.extra_engine_args = self.extra_engine_args or []
 
-    # ------------------------------------------------------------------
-    # Claiming
-    # ------------------------------------------------------------------
 
-    def _claim_next_job(self, worker_id: str) -> BuildJob | RunJob | None:
-        build = self._claim_next_build(worker_id)
-        if build is not None:
-            return build
-        run = self._claim_next_run(worker_id)
-        if run is not None:
-            return run
+def _as_bool(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in {"1", "true", "yes", "y", "on"}:
+            return True
+        if s in {"0", "false", "no", "n", "off"}:
+            return False
+    return False
+
+
+def _as_int(v: Any) -> int | None:
+    if isinstance(v, bool):
         return None
-
-    def _claim_next_run(self, worker_id: str) -> RunJob | None:
-        now = self._utc_now()
-        lease_seconds = self._lease_seconds()
-        lease_expires = now + timedelta(seconds=lease_seconds)
-
-        if self._engine.dialect.name == "mssql":
-            stmt = text(
-                """
-                UPDATE runs
-                SET status = 'running',
-                    claimed_by = :worker_id,
-                    claim_expires_at = :lease_expires,
-                    started_at = :now,
-                    attempt_count = attempt_count + 1,
-                    error_message = NULL
-                OUTPUT inserted.*
-                WHERE id = (
-                    SELECT TOP (1) id
-                    FROM runs WITH (UPDLOCK, READPAST, ROWLOCK)
-                WHERE status = 'queued'
-                  AND available_at <= :now
-                  AND attempt_count < max_attempts
-                  AND (
-                    build_id IS NULL
-                    OR EXISTS (
-                        SELECT 1 FROM builds
-                        WHERE builds.id = runs.build_id
-                          AND builds.status = 'ready'
-                    )
-                  )
-                ORDER BY available_at ASC, created_at ASC
-            )
-                """
-            )
-            with self._engine.begin() as conn:
-                row = conn.execute(
-                    stmt,
-                    {
-                        "worker_id": worker_id,
-                        "lease_expires": lease_expires,
-                        "now": now,
-                    },
-                ).mappings().first()
-            if not row:
-                return None
-            job = RunJob(dict(row))
-            self._log_job_claimed(job_type="run", row=job.row, now=now)
-            return job
-
-        supports_returning = bool(getattr(self._engine.dialect, "update_returning", False))
-        with self._engine.begin() as conn:
-            if supports_returning:
-                candidate_subquery = (
-                    select(runs.c.id)
-                    .select_from(runs.outerjoin(builds, runs.c.build_id == builds.c.id))
-                    .where(
-                        and_(
-                            runs.c.status == "queued",
-                            runs.c.available_at <= now,
-                            runs.c.attempt_count < runs.c.max_attempts,
-                            or_(
-                                runs.c.build_id.is_(None),
-                                builds.c.status == "ready",
-                            ),
-                        )
-                    )
-                    .order_by(runs.c.available_at.asc(), runs.c.created_at.asc())
-                    .limit(1)
-                    .scalar_subquery()
-                )
-                stmt = (
-                    update(runs)
-                    .where(and_(runs.c.id == candidate_subquery, runs.c.status == "queued"))
-                    .values(
-                        status="running",
-                        claimed_by=worker_id,
-                        claim_expires_at=lease_expires,
-                        started_at=now,
-                        attempt_count=runs.c.attempt_count + 1,
-                        error_message=None,
-                    )
-                    .returning(runs)
-                )
-                started = time.perf_counter()
-                row = conn.execute(stmt).mappings().first()
-                if logger.isEnabledFor(logging.DEBUG):
-                    duration_ms = (time.perf_counter() - started) * 1000
-                    logger.debug(
-                        "worker.job.claim.query job_type=%s duration_ms=%.2f claimed=%s",
-                        "run",
-                        duration_ms,
-                        bool(row),
-                        extra={
-                            "job_type": "run",
-                            "duration_ms": round(duration_ms, 2),
-                            "claimed": bool(row),
-                        },
-                    )
-                if not row:
-                    return None
-                job = RunJob(dict(row))
-                self._log_job_claimed(job_type="run", row=job.row, now=now)
-                return job
-
-            candidate = conn.execute(
-                select(runs.c.id)
-                .select_from(runs.outerjoin(builds, runs.c.build_id == builds.c.id))
-                .where(
-                    and_(
-                        runs.c.status == "queued",
-                        runs.c.available_at <= now,
-                        runs.c.attempt_count < runs.c.max_attempts,
-                        or_(
-                            runs.c.build_id.is_(None),
-                            builds.c.status == "ready",
-                        ),
-                    )
-                )
-                .order_by(runs.c.available_at.asc(), runs.c.created_at.asc())
-                .limit(1)
-            ).scalar_one_or_none()
-            if candidate is None:
-                return None
-            updated = conn.execute(
-                update(runs)
-                .where(and_(runs.c.id == candidate, runs.c.status == "queued"))
-                .values(
-                    status="running",
-                    claimed_by=worker_id,
-                    claim_expires_at=lease_expires,
-                    started_at=now,
-                    attempt_count=runs.c.attempt_count + 1,
-                    error_message=None,
-                )
-            )
-            if not updated.rowcount:
-                return None
-            row = conn.execute(select(runs).where(runs.c.id == candidate)).mappings().first()
-            if not row:
-                return None
-            job = RunJob(dict(row))
-            self._log_job_claimed(job_type="run", row=job.row, now=now)
-            return job
-
-    def _claim_next_build(self, worker_id: str) -> BuildJob | None:
-        now = self._utc_now()
-
-        if self._engine.dialect.name == "mssql":
-            stmt = text(
-                """
-                UPDATE builds
-                SET status = 'building',
-                    started_at = :now
-                OUTPUT inserted.*
-                WHERE id = (
-                    SELECT TOP (1) id
-                    FROM builds WITH (UPDLOCK, READPAST, ROWLOCK)
-                    WHERE status = 'queued'
-                    ORDER BY created_at ASC
-                )
-                """
-            )
-            with self._engine.begin() as conn:
-                row = conn.execute(stmt, {"now": now}).mappings().first()
-            if not row:
-                return None
-            job = BuildJob(dict(row))
-            self._log_job_claimed(job_type="build", row=job.row, now=now)
-            return job
-
-        supports_returning = bool(getattr(self._engine.dialect, "update_returning", False))
-        with self._engine.begin() as conn:
-            if supports_returning:
-                candidate_subquery = (
-                    select(builds.c.id)
-                    .where(builds.c.status == "queued")
-                    .order_by(builds.c.created_at.asc())
-                    .limit(1)
-                    .scalar_subquery()
-                )
-                stmt = (
-                    update(builds)
-                    .where(and_(builds.c.id == candidate_subquery, builds.c.status == "queued"))
-                    .values(status="building", started_at=now)
-                    .returning(builds)
-                )
-                started = time.perf_counter()
-                row = conn.execute(stmt).mappings().first()
-                if logger.isEnabledFor(logging.DEBUG):
-                    duration_ms = (time.perf_counter() - started) * 1000
-                    logger.debug(
-                        "worker.job.claim.query job_type=%s duration_ms=%.2f claimed=%s",
-                        "build",
-                        duration_ms,
-                        bool(row),
-                        extra={
-                            "job_type": "build",
-                            "duration_ms": round(duration_ms, 2),
-                            "claimed": bool(row),
-                        },
-                    )
-                if not row:
-                    return None
-                job = BuildJob(dict(row))
-                self._log_job_claimed(job_type="build", row=job.row, now=now)
-                return job
-
-            candidate = conn.execute(
-                select(builds.c.id)
-                .where(builds.c.status == "queued")
-                .order_by(builds.c.created_at.asc())
-                .limit(1)
-            ).scalar_one_or_none()
-            if candidate is None:
-                return None
-            updated = conn.execute(
-                update(builds)
-                .where(and_(builds.c.id == candidate, builds.c.status == "queued"))
-                .values(status="building", started_at=now)
-            )
-            if not updated.rowcount:
-                return None
-            row = conn.execute(select(builds).where(builds.c.id == candidate)).mappings().first()
-            if not row:
-                return None
-            job = BuildJob(dict(row))
-            self._log_job_claimed(job_type="build", row=job.row, now=now)
-            return job
-
-    # ------------------------------------------------------------------
-    # Execution
-    # ------------------------------------------------------------------
-
-    def _execute_build(self, job: BuildJob, *, worker_id: str) -> None:
-        build = job.row
-        workspace_id = build["workspace_id"]
-        configuration_id = build["configuration_id"]
-        build_id = build["id"]
-
-        log_path = self._build_logs_path(workspace_id, configuration_id, build_id)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        # Pre-create the log file so SSE tailing can attach immediately.
-        log_path.touch(exist_ok=True)
-
-        start_event = new_event_record(
-            event="build.start",
-            message="Build started",
-            data={"status": "building"},
-        )
-        start_event = ensure_event_context(
-            start_event,
-            job_id=None,
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            build_id=build_id,
-        )
-        self._append_event(log_path, start_event)
-        build_root = self._build_root(workspace_id, configuration_id, build_id)
-        venv_root = build_root / ".venv"
-        config_path = self._config_path(workspace_id, configuration_id)
-        engine_spec = build.get("engine_spec") or self._settings.engine_spec
-        engine_spec_value = str(engine_spec)
-        candidate = Path(engine_spec_value)
-        if candidate.exists():
-            engine_spec_value = str(candidate.resolve())
-        build_root.mkdir(parents=True, exist_ok=True)
-
-        start_time = time.monotonic()
-
-        def _remaining_timeout() -> int | None:
-            timeout = self._settings.build_timeout_seconds
-            if timeout is None:
-                return None
-            elapsed = time.monotonic() - start_time
-            remaining = int(timeout - elapsed)
-            return max(0, remaining)
-
-        def _step(cmd: list[str], *, env: dict[str, str] | None = None) -> tuple[int, bool]:
-            remaining = _remaining_timeout()
-            if remaining is not None and remaining <= 0:
-                return 1, True
-            return self._run_subprocess(
-                cmd,
-                log_path,
-                scope="build",
-                timeout_seconds=remaining,
-                context={
-                    "workspace_id": workspace_id,
-                    "configuration_id": configuration_id,
-                    "build_id": build_id,
-                },
-                env=env,
-            )
-
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    if isinstance(v, str) and v.strip().isdigit():
         try:
-            if not config_path.exists():
-                raise RuntimeError(f"Config package not found at {config_path}")
-            if venv_root.exists():
-                shutil.rmtree(venv_root, ignore_errors=True)
+            return int(v.strip())
+        except ValueError:
+            return None
+    return None
 
-            # 1) Create virtual environment
-            return_code, timed_out = _step(
-                [sys.executable, "-m", "venv", str(venv_root)],
-            )
-            if timed_out:
-                raise TimeoutError("Build timed out while creating venv")
-            if return_code != 0:
-                raise RuntimeError(f"venv creation failed with exit code {return_code}")
 
-            venv_python = self._venv_python_path(venv_root)
+def _as_str(v: Any) -> str | None:
+    if isinstance(v, str) and v.strip():
+        return v.strip()
+    return None
 
-            # 2) Upgrade pip/setuptools/wheel
-            return_code, timed_out = _step(
-                [
-                    str(venv_python),
-                    "-m",
-                    "pip",
-                    "install",
-                    "--upgrade",
-                    "pip",
-                    "wheel",
-                    "setuptools",
-                ],
-                env=self._pip_env(),
-            )
-            if timed_out:
-                raise TimeoutError("Build timed out while upgrading pip")
-            if return_code != 0:
-                raise RuntimeError(f"pip upgrade failed with exit code {return_code}")
 
-            # 3) Install engine
-            return_code, timed_out = _step(
-                [
-                    str(venv_python),
-                    "-m",
-                    "pip",
-                    "install",
-                    "--no-input",
-                    engine_spec_value,
-                ],
-                env=self._pip_env(),
-            )
-            if timed_out:
-                raise TimeoutError("Build timed out while installing engine")
-            if return_code != 0:
-                raise RuntimeError(f"engine install failed with exit code {return_code}")
+def _as_str_list(v: Any) -> list[str]:
+    if isinstance(v, list):
+        out: list[str] = []
+        for item in v:
+            s = _as_str(item)
+            if s:
+                out.append(s)
+        return out
+    return []
 
-            # 4) Install config package
-            return_code, timed_out = _step(
-                [
-                    str(venv_python),
-                    "-m",
-                    "pip",
-                    "install",
-                    "--no-input",
-                    "-e",
-                    str(config_path),
-                ],
-                env=self._pip_env(),
-            )
-            if timed_out:
-                raise TimeoutError("Build timed out while installing config package")
-            if return_code != 0:
-                raise RuntimeError(f"config install failed with exit code {return_code}")
 
-            # 5) Verify imports
-            return_code, timed_out = _step(
-                [
-                    str(venv_python),
-                    "-c",
-                    "import ade_engine, ade_config; print('ok')",
-                ]
-            )
-            if timed_out:
-                raise TimeoutError("Build timed out while verifying imports")
-            if return_code != 0:
-                raise RuntimeError(f"import verification failed with exit code {return_code}")
+def parse_run_options(raw: Any, *, default_log_level: str) -> RunOptions:
+    opts = _json_loads_dict(raw)
+    return RunOptions(
+        validate_only=_as_bool(opts.get("validate_only") or opts.get("validation_only")),
+        dry_run=_as_bool(opts.get("dry_run")),
+        log_level=(_as_str(opts.get("log_level")) or default_log_level).upper(),
+        input_sheet_names=_as_str_list(opts.get("input_sheet_names")),
+        active_sheet_only=_as_bool(opts.get("active_sheet_only")),
+        max_findings_per_sheet=_as_int(opts.get("max_findings_per_sheet")),
+        extra_engine_args=_as_str_list(opts.get("engine_args") or opts.get("extra_args")),
+    )
 
-            python_version = self._probe_python_version(venv_python)
-            engine_version = self._probe_engine_version(venv_python)
 
-            finished_at = self._utc_now()
-            summary = "Build succeeded"
-            with self._engine.begin() as conn:
-                conn.execute(
-                    update(builds)
-                    .where(builds.c.id == build_id)
-                    .values(
-                        status="ready",
-                        finished_at=finished_at,
-                        exit_code=0,
-                        summary=summary,
-                        error_message=None,
-                        python_version=python_version,
-                        python_interpreter=str(venv_python),
-                        engine_version=engine_version,
-                    )
-                )
-                conn.execute(
-                    update(configurations)
-                    .where(configurations.c.id == configuration_id)
-                    .values(
-                        active_build_id=build_id,
-                        active_build_fingerprint=build.get("fingerprint"),
-                    )
-                )
+def engine_config_validate_cmd(*, python_bin: Path, config_dir: Path, log_level: str) -> list[str]:
+    return [
+        str(python_bin),
+        "-m",
+        "ade_engine",
+        "config",
+        "validate",
+        "--config-package",
+        str(config_dir),
+        "--log-format",
+        "ndjson",
+        "--log-level",
+        log_level.upper(),
+    ]
 
-            done_event = new_event_record(
-                event="build.complete",
-                message=summary,
-                data={"status": "ready", "exit_code": 0},
-            )
-            done_event = ensure_event_context(
-                done_event,
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                build_id=build_id,
-            )
-            self._append_event(log_path, done_event)
-            return
-        except Exception as exc:
-            self._cleanup_failed_build(venv_root)
-            self._fail_build(
-                build_id=build_id,
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                log_path=log_path,
-                error_message=str(exc),
-                exit_code=1,
-            )
-            return
 
-    def _execute_run(self, job: RunJob, *, worker_id: str) -> None:
-        run = job.row
-        run_id = run["id"]
-        workspace_id = run["workspace_id"]
-        configuration_id = run["configuration_id"]
+def engine_process_file_cmd(
+    *,
+    python_bin: Path,
+    input_path: Path,
+    output_dir: Path,
+    config_dir: Path,
+    options: RunOptions,
+    sheet_names: list[str],
+) -> list[str]:
+    cmd = [
+        str(python_bin),
+        "-m",
+        "ade_engine",
+        "process",
+        "file",
+        "--input",
+        str(input_path),
+        "--output-dir",
+        str(output_dir),
+        "--config-package",
+        str(config_dir),
+        "--log-format",
+        "ndjson",
+        "--log-level",
+        options.log_level.upper(),
+    ]
+    if options.max_findings_per_sheet is not None and options.max_findings_per_sheet >= 0:
+        cmd.extend(["--max-findings-per-sheet", str(options.max_findings_per_sheet)])
+    if options.active_sheet_only:
+        cmd.append("--active-sheet-only")
+    else:
+        for sheet in sheet_names:
+            s = str(sheet).strip()
+            if s:
+                cmd.extend(["--input-sheet", s])
+    cmd.extend(options.extra_engine_args or [])
+    return cmd
 
-        run_dir = self._run_dir(workspace_id, run_id)
-        input_dir = run_dir / "input"
-        output_dir = run_dir / "output"
-        logs_dir = run_dir / "logs"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        logs_dir.mkdir(parents=True, exist_ok=True)
 
-        event_log_path = logs_dir / "events.ndjson"
-        # Pre-create the log file so SSE tailing can attach immediately.
-        event_log_path.touch(exist_ok=True)
+class Repo:
+    def __init__(self, engine) -> None:
+        self.engine = engine
 
-        start_event = new_event_record(
-            event="run.start",
-            message="Run started",
-            data={"status": "in_progress", "mode": "execute"},
-        )
-        start_event = ensure_event_context(
-            start_event,
-            job_id=run_id,
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            build_id=run.get("build_id"),
-        )
-        self._append_event(event_log_path, start_event)
+    def load_build(self, build_id: str) -> dict[str, Any] | None:
+        with self.engine.begin() as conn:
+            row = conn.execute(select(builds).where(builds.c.id == build_id)).mappings().first()
+        return dict(row) if row else None
 
-        document_id = run.get("input_document_id")
-        try:
-            document = self._load_document(run)
+    def load_run(self, run_id: str) -> dict[str, Any] | None:
+        with self.engine.begin() as conn:
+            row = conn.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
+        return dict(row) if row else None
 
-            options = run.get("run_options") or {}
-            if isinstance(options, str):
-                try:
-                    options = json.loads(options)
-                except json.JSONDecodeError:
-                    options = {}
-            log_level = options.get("log_level") or "INFO"
-            input_sheet_names = options.get("input_sheet_names") or run.get("input_sheet_names") or []
-            if isinstance(input_sheet_names, str):
-                try:
-                    input_sheet_names = json.loads(input_sheet_names)
-                except json.JSONDecodeError:
-                    input_sheet_names = []
-            active_sheet_only = bool(options.get("active_sheet_only"))
-            validate_only = bool(options.get("validate_only"))
-            dry_run = bool(options.get("dry_run"))
+    def load_document(self, document_id: str) -> dict[str, Any] | None:
+        with self.engine.begin() as conn:
+            row = conn.execute(select(documents).where(documents.c.id == document_id)).mappings().first()
+        return dict(row) if row else None
 
-            if dry_run:
-                self._complete_run(
-                    run_id=run_id,
-                    document_id=document["id"],
-                    workspace_id=workspace_id,
-                    status="succeeded",
-                    exit_code=0,
-                    error_message="Dry run requested",
-                    event_log_path=event_log_path,
-                    update_document=False,
-                )
-                return
-
-            build_id = run.get("build_id")
-            if not build_id:
-                self._fail_run(
-                    run_id=run_id,
-                    document_id=document["id"],
-                    workspace_id=workspace_id,
-                    event_log_path=event_log_path,
-                    error_message="Build is required before running",
-                    exit_code=2,
-                )
-                return
-
-            venv_root = self._build_root(workspace_id, configuration_id, str(build_id)) / ".venv"
-            venv_python = self._venv_python_path(venv_root)
-            if not venv_python.exists():
-                self._fail_run(
-                    run_id=run_id,
-                    document_id=document["id"],
-                    workspace_id=workspace_id,
-                    event_log_path=event_log_path,
-                    error_message="Build environment missing; rerun build",
-                    exit_code=2,
-                )
-                self._fail_build(
-                    build_id=str(build_id),
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    log_path=self._build_logs_path(workspace_id, configuration_id, str(build_id)),
-                    error_message="Build environment missing; rerun build",
-                    exit_code=2,
-                )
-                return
-
-            if validate_only:
-                cmd = [
-                    str(venv_python),
-                    "-m",
-                    "ade_engine",
-                    "config",
-                    "validate",
-                    "--config-package",
-                    str(self._config_path(workspace_id, configuration_id)),
-                    "--log-format",
-                    "ndjson",
-                ]
-                return_code, timed_out = self._run_subprocess(
-                    cmd,
-                    event_log_path,
-                    scope="run.validate",
-                    context={
-                        "job_id": run_id,
-                        "workspace_id": workspace_id,
-                        "configuration_id": configuration_id,
-                        "build_id": str(build_id),
-                    },
-                    timeout_seconds=self._settings.build_timeout_seconds,
-                )
-                if timed_out:
-                    self._fail_run(
-                        run_id=run_id,
-                        document_id=document["id"],
-                        workspace_id=workspace_id,
-                        event_log_path=event_log_path,
-                        error_message=(
-                            f"Validation timed out after {self._settings.build_timeout_seconds}s"
-                        ),
-                        exit_code=124,
-                        update_document=False,
-                    )
-                    return
-                status = "succeeded" if return_code == 0 else "failed"
-                error_message = None if return_code == 0 else f"Validation exited with {return_code}"
-                self._complete_run(
-                    run_id=run_id,
-                    document_id=document["id"],
-                    workspace_id=workspace_id,
-                    status=status,
-                    exit_code=return_code,
-                    error_message=error_message,
-                    event_log_path=event_log_path,
-                    update_document=False,
-                )
-                return
-
-            staged_input = input_dir / document["original_filename"]
-            source_path = self._document_path(workspace_id, document["stored_uri"])
-            if staged_input.exists():
-                staged_input.unlink()
-            try:
-                os.link(source_path, staged_input)
-            except OSError:
-                shutil.copy2(source_path, staged_input)
-
-            now = self._utc_now()
-            with self._engine.begin() as conn:
-                conn.execute(
-                    update(documents)
-                    .where(documents.c.id == document["id"])
-                    .values(
-                        status="processing",
-                        last_run_at=now,
-                        updated_at=now,
-                        version=documents.c.version + 1,
-                    )
-                )
-                next_version = conn.execute(
-                    select(documents.c.version)
-                    .where(documents.c.id == document["id"])
-                ).scalar_one()
-                self._record_document_change(
-                    conn,
-                    workspace_id=workspace_id,
-                    document_id=document["id"],
-                    document_version=next_version,
-                    occurred_at=now,
-                )
-
-            cmd = [str(venv_python), "-m", "ade_engine", "process", "file"]
-            cmd.extend(["--input", str(staged_input)])
-            cmd.extend(["--output-dir", str(output_dir)])
-            cmd.extend(["--config-package", str(self._config_path(workspace_id, configuration_id))])
-            cmd.extend(["--log-format", "ndjson", "--log-level", str(log_level)])
-            if active_sheet_only:
-                cmd.append("--active-sheet-only")
-            else:
-                for sheet in input_sheet_names:
-                    cmd.extend(["--input-sheet", str(sheet)])
-
-            lease_seconds = self._lease_seconds()
-            heartbeat_interval = max(5.0, min(30.0, lease_seconds / 2))
-            return_code, timed_out = self._run_subprocess(
-                cmd,
-                event_log_path,
-                scope="run",
-                context={
-                    "job_id": run_id,
-                    "workspace_id": workspace_id,
-                    "configuration_id": configuration_id,
-                    "build_id": str(build_id),
-                },
-                timeout_seconds=self._settings.run_timeout_seconds,
-                heartbeat=lambda: self._extend_run_lease(run_id, worker_id),
-                heartbeat_interval=heartbeat_interval,
+    def update_document_status(self, *, document_id: str, status: str, now: datetime) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(
+                update(documents)
+                .where(documents.c.id == document_id)
+                .values(status=status, updated_at=now)
             )
 
-            if timed_out:
-                self._fail_run(
-                    run_id=run_id,
-                    document_id=document["id"],
-                    workspace_id=workspace_id,
-                    event_log_path=event_log_path,
-                    error_message=f"Run timed out after {self._settings.run_timeout_seconds}s",
-                    exit_code=124,
-                )
-                return
-
-            status = "succeeded" if return_code == 0 else "failed"
-            error_message = None if return_code == 0 else f"Process exited with {return_code}"
-            self._complete_run(
-                run_id=run_id,
-                document_id=document["id"],
-                workspace_id=workspace_id,
-                status=status,
-                exit_code=return_code,
-                error_message=error_message,
-                event_log_path=event_log_path,
-            )
-        except Exception as exc:
-            self._fail_run(
-                run_id=run_id,
-                document_id=document_id,
-                workspace_id=workspace_id,
-                event_log_path=event_log_path,
-                error_message=str(exc),
-                exit_code=1,
-            )
-            raise
-
-    # ------------------------------------------------------------------
-    # Subprocess + events
-    # ------------------------------------------------------------------
-
-    def _run_subprocess(
+    def record_build_result(
         self,
-        cmd: list[str],
-        event_log_path: Path,
         *,
-        scope: str,
-        context: dict[str, str] | None = None,
-        timeout_seconds: int | None = None,
-        heartbeat: Callable[[], None] | None = None,
-        heartbeat_interval: float = 30.0,
-        env: dict[str, str] | None = None,
-    ) -> tuple[int, bool]:
-        logger.info("worker.subprocess.start", extra={"cmd": " ".join(cmd)})
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            start_new_session=True,
-            env=env,
-        )
-
-        queue: Queue[tuple[str, str]] = Queue()
-
-        def _drain(stream, name: str) -> None:
-            for line in iter(stream.readline, ""):
-                queue.put((name, line.rstrip("\n")))
-            stream.close()
-
-        threads = [
-            threading.Thread(target=_drain, args=(process.stdout, "stdout"), daemon=True),
-            threading.Thread(target=_drain, args=(process.stderr, "stderr"), daemon=True),
-        ]
-        for t in threads:
-            t.start()
-
-        context = context or {}
-        start_time = time.monotonic()
-        next_heartbeat = start_time + heartbeat_interval
-        timed_out = False
-        while True:
-            try:
-                stream, line = queue.get(timeout=0.1)
-            except Exception:
-                if process.poll() is not None:
-                    break
-                stream, line = None, None
-
-            now = time.monotonic()
-            if timeout_seconds and now - start_time >= timeout_seconds:
-                timed_out = True
-                self._terminate_process(process)
-                break
-            if heartbeat and now >= next_heartbeat:
-                try:
-                    heartbeat()
-                except Exception:
-                    logger.exception("worker.heartbeat.error")
-                next_heartbeat = now + heartbeat_interval
-
-            if stream is None or line is None:
-                continue
-            if not line:
-                continue
-
-            parsed = coerce_event_record(line)
-            if parsed:
-                parsed = ensure_event_context(
-                    parsed,
-                    job_id=context.get("job_id"),
-                    workspace_id=context.get("workspace_id"),
-                    configuration_id=context.get("configuration_id"),
-                    build_id=context.get("build_id"),
-                )
-                self._append_event(event_log_path, parsed)
-                if parsed.get("event") == "engine.run.completed":
-                    self._persist_run_completed(context.get("job_id"), parsed)
-                continue
-
-            level = "error" if stream == "stderr" else "info"
-            event = new_event_record(
-                event="console.line",
-                message=line,
-                level=level,
-                data={"scope": scope, "stream": stream},
-            )
-            self._append_event(event_log_path, event)
-
-        for t in threads:
-            t.join(timeout=1)
-
-        return process.wait(), timed_out
-
-    def _append_event(self, path: Path, event: dict[str, Any]) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False))
-            handle.write("\n")
-
-    # ------------------------------------------------------------------
-    # DB helpers
-    # ------------------------------------------------------------------
-
-    def _log_job_claimed(self, *, job_type: str, row: dict[str, Any], now: datetime) -> None:
-        available_at = row.get("available_at") or row.get("created_at")
-        latency_ms = None
-        if isinstance(available_at, datetime):
-            if available_at.tzinfo is None and now.tzinfo is not None:
-                available_at = available_at.replace(tzinfo=now.tzinfo)
-            latency_ms = max(0, int((now - available_at).total_seconds() * 1000))
-        logger.info(
-            "worker.job.claimed",
-            extra={
-                "job_type": job_type,
-                "job_id": row.get("id"),
-                "workspace_id": row.get("workspace_id"),
-                "pickup_latency_ms": latency_ms,
-            },
-        )
-
-    def _log_queue_metrics(self) -> None:
-        now = self._utc_now()
-        with self._engine.begin() as conn:
-            queued_builds = conn.execute(
-                select(func.count()).select_from(builds).where(builds.c.status == "queued")
-            ).scalar_one()
-            queued_runs = conn.execute(
-                select(func.count()).select_from(runs).where(runs.c.status == "queued")
-            ).scalar_one()
-            ready_runs = conn.execute(
-                select(func.count())
-                .select_from(runs.outerjoin(builds, runs.c.build_id == builds.c.id))
-                .where(
-                    and_(
-                        runs.c.status == "queued",
-                        runs.c.available_at <= now,
-                        runs.c.attempt_count < runs.c.max_attempts,
-                        or_(runs.c.build_id.is_(None), builds.c.status == "ready"),
-                    )
-                )
-            ).scalar_one()
-        logger.info(
-            "worker.queue.metrics",
-            extra={
-                "queued_builds": int(queued_builds or 0),
-                "queued_runs": int(queued_runs or 0),
-                "ready_runs": int(ready_runs or 0),
-            },
-        )
-
-    def _load_document(self, run: dict[str, Any]) -> dict[str, Any]:
-        doc_id = run["input_document_id"]
-        with self._engine.begin() as conn:
-            row = conn.execute(
-                select(documents)
-                .where(documents.c.id == doc_id)
-                .limit(1)
-            ).mappings().first()
-        if row is None:
-            raise RuntimeError(f"Document not found: {doc_id}")
-        return dict(row)
-
-    def _record_document_change(
-        self,
         conn,
-        *,
-        workspace_id: str,
-        document_id: str,
-        document_version: int | None = None,
-        client_request_id: str | None = None,
-        occurred_at: datetime | None = None,
-    ) -> None:
-        conn.execute(
-            document_changes.insert().values(
-                workspace_id=workspace_id,
-                document_id=document_id,
-                type="upsert",
-                document_version=document_version,
-                client_request_id=client_request_id,
-                payload={},
-                occurred_at=occurred_at or self._utc_now(),
-            )
-        )
-
-    def _complete_run(
-        self,
-        *,
-        run_id: str,
-        document_id: str,
-        workspace_id: str | None = None,
+        build_id: str,
+        finished_at: datetime | None,
+        python_interpreter: str | None,
+        python_version: str | None,
+        engine_version: str | None,
+        summary: str | None,
+        error_message: str | None,
         status: str,
         exit_code: int | None,
-        error_message: str | None,
-        event_log_path: Path,
-        update_document: bool = True,
-    ) -> None:
-        now = self._utc_now()
-        with self._engine.begin() as conn:
-            conn.execute(
-                update(runs)
-                .where(runs.c.id == run_id)
-                .values(
-                    status=status,
-                    completed_at=now,
-                    exit_code=exit_code,
-                    error_message=error_message,
-                    claimed_by=None,
-                    claim_expires_at=None,
-                )
+        expected_status: str | None = None,
+    ) -> bool:
+        stmt = update(builds).where(builds.c.id == build_id)
+        if expected_status:
+            stmt = stmt.where(builds.c.status == expected_status)
+        result = conn.execute(
+            stmt.values(
+                status=status,
+                exit_code=exit_code,
+                finished_at=finished_at,
+                python_interpreter=python_interpreter,
+                python_version=python_version,
+                engine_version=engine_version,
+                summary=summary,
+                error_message=error_message,
             )
-            if update_document and document_id:
+        )
+        return bool(getattr(result, "rowcount", 0) == 1)
+
+    def record_run_result(
+        self,
+        *,
+        conn,
+        run_id: str,
+        completed_at: datetime | None,
+        exit_code: int | None,
+        output_path: str | None,
+        error_message: str | None,
+    ) -> None:
+        conn.execute(
+            update(runs)
+            .where(runs.c.id == run_id)
+            .values(
+                completed_at=completed_at,
+                exit_code=exit_code,
+                output_path=output_path,
+                error_message=error_message,
+            )
+        )
+
+
+@dataclass(slots=True)
+class JobProcessor:
+    settings: WorkerSettings
+    engine: Any  # sqlalchemy.Engine
+    run_queue: RunQueue
+    repo: Repo
+    paths: PathManager
+    runner: SubprocessRunner
+    worker_id: str
+
+    def _pip_env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+        env["PIP_NO_INPUT"] = "1"
+        env["PIP_PROGRESS_BAR"] = "off"
+        env["PIP_CACHE_DIR"] = str(self.paths.pip_cache_dir())
+        env["PYTHONUNBUFFERED"] = "1"
+        return env
+
+    def _heartbeat_run(self, run: RunClaim) -> None:
+        self.run_queue.heartbeat(
+            run_id=run.id,
+            worker_id=self.worker_id,
+            now=utcnow(),
+            lease_seconds=int(self.settings.lease_seconds),
+        )
+
+    def _retry_at(self, run: RunClaim, now: datetime) -> datetime | None:
+        if run.attempt_count < run.max_attempts:
+            delay = self.settings.backoff_seconds(run.attempt_count)
+            return now + timedelta(seconds=int(delay))
+        return None
+
+    # ---- Build ----
+
+    def _process_build(self, claim: BuildClaim) -> None:
+        build_id = claim.id
+
+        build = self.repo.load_build(build_id)
+        if not build:
+            logger.error("build not found: %s", build_id)
+            return
+
+        workspace_id = str(build["workspace_id"])
+        configuration_id = str(build["configuration_id"])
+
+        build_root = self.paths.build_root(workspace_id, configuration_id, build_id)
+        venv_dir = self.paths.venv_dir(workspace_id, configuration_id, build_id)
+        event_log = EventLog(self.paths.build_event_log_path(workspace_id, configuration_id, build_id))
+        ctx = {"job_id": build_id, "workspace_id": workspace_id, "configuration_id": configuration_id}
+
+        # Clean slate per attempt (prevents weird partial state).
+        if build_root.exists():
+            shutil.rmtree(build_root, ignore_errors=True)
+        _ensure_dir(build_root)
+
+        event_log.emit(event="build.start", message="Starting build", context=ctx)
+
+        deadline = time.monotonic() + float(self.settings.build_timeout_seconds)
+        pip_env = self._pip_env()
+        last_exit_code: int | None = None
+
+        def remaining() -> float:
+            return max(0.1, deadline - time.monotonic())
+
+        try:
+            # 1) venv
+            create_cmd = [sys.executable, "-m", "venv", str(venv_dir)]
+            res = self.runner.run(
+                create_cmd,
+                event_log=event_log,
+                scope="build.venv",
+                timeout_seconds=remaining(),
+                cwd=None,
+                env=pip_env,
+                context=ctx,
+            )
+            last_exit_code = res.exit_code
+            if res.exit_code != 0:
+                raise RuntimeError(f"venv creation failed (exit {res.exit_code})")
+
+            python_bin = self.paths.python_in_venv(venv_dir)
+            if not python_bin.exists():
+                raise RuntimeError(f"venv python missing: {python_bin}")
+
+            # 2) install engine
+            engine_spec = (build.get("engine_spec") or self.settings.engine_spec)
+            install_engine = [str(python_bin), "-m", "pip", "install"]
+            if Path(str(engine_spec)).exists():
+                install_engine.extend(["-e", str(engine_spec)])
+            else:
+                install_engine.append(str(engine_spec))
+
+            res = self.runner.run(
+                install_engine,
+                event_log=event_log,
+                scope="build.engine",
+                timeout_seconds=remaining(),
+                cwd=None,
+                env=pip_env,
+                context=ctx,
+            )
+            last_exit_code = res.exit_code
+            if res.exit_code != 0:
+                raise RuntimeError(f"engine install failed (exit {res.exit_code})")
+
+            # 3) install config package (editable)
+            config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
+            if not config_dir.exists():
+                raise RuntimeError(f"config package dir missing: {config_dir}")
+
+            res = self.runner.run(
+                [str(python_bin), "-m", "pip", "install", "-e", str(config_dir)],
+                event_log=event_log,
+                scope="build.config",
+                timeout_seconds=remaining(),
+                cwd=None,
+                env=pip_env,
+                context=ctx,
+            )
+            last_exit_code = res.exit_code
+            if res.exit_code != 0:
+                raise RuntimeError(f"config install failed (exit {res.exit_code})")
+
+            # 4) probe versions
+            python_version = _run_capture_text([str(python_bin), "--version"])
+            try:
+                engine_version = subprocess.check_output(
+                    [str(python_bin), "-c", "import ade_engine; print(getattr(ade_engine, '__version__', 'unknown'))"],
+                    text=True,
+                ).strip()
+            except Exception:
+                engine_version = None
+
+            event_log.emit(event="build.versions", message=f"python={python_version} engine={engine_version or 'unknown'}", context=ctx)
+
+            finished_at = utcnow()
+
+            with self.engine.begin() as conn:
+                ok = self.repo.record_build_result(
+                    conn=conn,
+                    build_id=build_id,
+                    finished_at=finished_at,
+                    python_interpreter=str(python_bin),
+                    python_version=python_version,
+                    engine_version=engine_version,
+                    summary="Build completed",
+                    error_message=None,
+                    status="ready",
+                    exit_code=0,
+                    expected_status="building",
+                )
+
+            if not ok:
+                event_log.emit(event="build.lost_claim", level="warning", message="Build status changed before completion", context=ctx)
+                return
+
+            event_log.emit(event="build.complete", message="Build succeeded", context=ctx)
+
+        except Exception as exc:
+            err = str(exc)
+            logger.exception("build failed: %s", err)
+
+            finished_at = utcnow()
+            exit_code = last_exit_code or 1
+
+            with self.engine.begin() as conn:
+                ok = self.repo.record_build_result(
+                    conn=conn,
+                    build_id=build_id,
+                    finished_at=finished_at,
+                    python_interpreter=None,
+                    python_version=None,
+                    engine_version=None,
+                    summary=None,
+                    error_message=err,
+                    status="failed",
+                    exit_code=exit_code,
+                    expected_status="building",
+                )
+
+            if not ok:
+                event_log.emit(event="build.lost_claim", level="warning", message="Build status changed before failure ack", context=ctx)
+                return
+
+            event_log.emit(event="build.failed", level="error", message=err, context=ctx)
+
+    # ---- Run ----
+
+    def _process_run(self, claim: RunClaim) -> None:
+        now = utcnow()
+        run_id = claim.id
+
+        run = self.repo.load_run(run_id)
+        if not run:
+            logger.error("run not found: %s", run_id)
+            return
+
+        workspace_id = str(run["workspace_id"])
+        configuration_id = str(run["configuration_id"])
+        build_id = str(run["build_id"])
+        document_id = str(run["input_document_id"])
+
+        ctx = {"job_id": run_id, "workspace_id": workspace_id, "configuration_id": configuration_id, "build_id": build_id}
+
+        event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
+        event_log.emit(event="run.start", message="Starting run", context=ctx)
+
+        # Build must exist and its venv python must exist.
+        build = self.repo.load_build(build_id)
+        if not build:
+            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Build not found: {build_id}")
+            return
+
+        venv_dir = self.paths.venv_dir(workspace_id, configuration_id, build_id)
+        python_bin = self.paths.python_in_venv(venv_dir)
+        if not python_bin.exists():
+            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Missing build venv python: {python_bin}")
+            return
+
+        config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
+        if not config_dir.exists():
+            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Missing config package dir: {config_dir}")
+            return
+
+        options = parse_run_options(run.get("run_options"), default_log_level=self.settings.log_level)
+        sheet_names = options.input_sheet_names or []
+
+        if options.dry_run:
+            finished_at = utcnow()
+            with self.engine.begin() as conn:
+                ok = self.run_queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
+                if not ok:
+                    event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                    return
+                self.repo.record_run_result(
+                    conn=conn,
+                    run_id=run_id,
+                    completed_at=finished_at,
+                    exit_code=0,
+                    output_path=None,
+                    error_message="Dry run",
+                )
+            event_log.emit(event="run.complete", message="Dry run complete", context=ctx)
+            return
+
+        if options.validate_only:
+            cmd = engine_config_validate_cmd(python_bin=python_bin, config_dir=config_dir, log_level=options.log_level)
+            res = self.runner.run(
+                cmd,
+                event_log=event_log,
+                scope="run.validate",
+                timeout_seconds=float(self.settings.run_timeout_seconds) if self.settings.run_timeout_seconds else None,
+                cwd=None,
+                env=self._pip_env(),
+                heartbeat=lambda: self._heartbeat_run(claim),
+                heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+                context=ctx,
+            )
+            finished_at = utcnow()
+            if res.exit_code == 0:
+                with self.engine.begin() as conn:
+                    ok = self.run_queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
+                    if not ok:
+                        event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                        return
+                    self.repo.record_run_result(
+                        conn=conn,
+                        run_id=run_id,
+                        completed_at=finished_at,
+                        exit_code=0,
+                        output_path=None,
+                        error_message=None,
+                    )
+                event_log.emit(event="run.complete", message="Validation succeeded", context=ctx)
+            else:
+                self._handle_run_failure(claim, run_id, document_id, event_log, ctx, finished_at, res.exit_code, f"Validation failed (exit {res.exit_code})")
+            return
+
+        # Stage document input
+        doc = self.repo.load_document(document_id)
+        if not doc:
+            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Document not found: {document_id}")
+            return
+
+        source_path = self.paths.document_storage_path(workspace_id=workspace_id, stored_uri=str(doc.get("stored_uri") or ""))
+        if not source_path.exists():
+            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Document file missing: {source_path}")
+            return
+
+        input_dir = self.paths.run_input_dir(workspace_id, run_id)
+        output_dir = self.paths.run_output_dir(workspace_id, run_id)
+        _ensure_dir(input_dir)
+        _ensure_dir(output_dir)
+
+        original_name = Path(str(doc.get("original_filename") or "input")).name
+        staged_input = input_dir / original_name
+        _hardlink_or_copy(source_path, staged_input)
+
+        # Mark document processing (best effort; not fatal if it fails).
+        try:
+            self.repo.update_document_status(document_id=document_id, status="processing", now=utcnow())
+        except Exception:
+            logger.exception("failed to mark document processing")
+
+        # Run engine
+        engine_payload: dict[str, Any] | None = None
+
+        def on_event(rec: dict[str, Any]) -> None:
+            nonlocal engine_payload
+            if rec.get("event") == "engine.run.completed":
+                data = rec.get("data")
+                if isinstance(data, dict):
+                    engine_payload = data
+
+        cmd = engine_process_file_cmd(
+            python_bin=python_bin,
+            input_path=staged_input,
+            output_dir=output_dir,
+            config_dir=config_dir,
+            options=options,
+            sheet_names=sheet_names,
+        )
+
+        res = self.runner.run(
+            cmd,
+            event_log=event_log,
+            scope="run",
+            timeout_seconds=float(self.settings.run_timeout_seconds) if self.settings.run_timeout_seconds else None,
+            cwd=None,
+            env=self._pip_env(),
+            heartbeat=lambda: self._heartbeat_run(claim),
+            heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+            context=ctx,
+            on_json_event=on_event,
+        )
+
+        finished_at = utcnow()
+
+        if res.timed_out:
+            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, finished_at, res.exit_code, "Run timed out")
+            return
+
+        if res.exit_code == 0:
+            # Success
+            output_path = _extract_output_path(engine_payload)
+            with self.engine.begin() as conn:
+                ok = self.run_queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
+                if not ok:
+                    event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                    return
+
+                self.repo.record_run_result(
+                    conn=conn,
+                    run_id=run_id,
+                    completed_at=finished_at,
+                    exit_code=0,
+                    output_path=output_path,
+                    error_message=None,
+                )
                 conn.execute(
                     update(documents)
                     .where(documents.c.id == document_id)
-                    .values(
-                        status="processed" if status == "succeeded" else "failed",
-                        last_run_at=now,
-                        updated_at=now,
-                        version=documents.c.version + 1,
-                    )
+                    .values(status="processed", updated_at=finished_at)
                 )
-                if workspace_id:
-                    next_version = conn.execute(
-                        select(documents.c.version)
-                        .where(documents.c.id == document_id)
-                    ).scalar_one()
-                    self._record_document_change(
-                        conn,
-                        workspace_id=workspace_id,
-                        document_id=document_id,
-                        document_version=next_version,
-                        occurred_at=now,
-                    )
-        level = "error" if status == "failed" else "info"
-        done_event = new_event_record(
-            event="run.complete",
-            message=error_message or "Run completed",
-            level=level,
-            data={"status": status, "exit_code": exit_code},
-        )
-        done_event = ensure_event_context(
-            done_event,
-            job_id=run_id,
-        )
-        self._append_event(event_log_path, done_event)
 
-    def _persist_run_completed(self, run_id: str | None, event: dict[str, Any]) -> None:
-        if run_id is None:
-            return
-        payload = event.get("data")
-        if not isinstance(payload, dict):
+            event_log.emit(event="run.complete", message="Run succeeded", context=ctx)
             return
 
-        metrics = extract_run_metrics(payload)
-        fields = extract_run_fields(payload.get("fields") or [])
-        columns = extract_run_columns(payload.get("workbooks") or [])
-        output_path = self._extract_output_path(run_id, payload)
+        # Failure
+        self._handle_run_failure(claim, run_id, document_id, event_log, ctx, finished_at, res.exit_code, f"Engine failed (exit {res.exit_code})")
 
-        with self._engine.begin() as conn:
-            if output_path:
-                conn.execute(
-                    update(runs)
-                    .where(runs.c.id == run_id)
-                    .values(output_path=output_path)
-                )
-            # Upsert run_metrics
-            existing = conn.execute(
-                select(run_metrics.c.run_id).where(run_metrics.c.run_id == run_id)
-            ).first()
-            if existing is None:
-                conn.execute(run_metrics.insert().values(run_id=run_id, **metrics))
-            else:
-                conn.execute(
-                    run_metrics.update()
-                    .where(run_metrics.c.run_id == run_id)
-                    .values(**metrics)
-                )
-
-            if fields:
-                exists = conn.execute(
-                    select(run_fields.c.run_id)
-                    .where(run_fields.c.run_id == run_id)
-                    .limit(1)
-                ).first()
-                if exists is None:
-                    conn.execute(
-                        run_fields.insert(),
-                        [{"run_id": run_id, **row} for row in fields],
-                    )
-
-            if columns:
-                exists = conn.execute(
-                    select(run_table_columns.c.run_id)
-                    .where(run_table_columns.c.run_id == run_id)
-                    .limit(1)
-                ).first()
-                if exists is None:
-                    conn.execute(
-                        run_table_columns.insert(),
-                        [{"run_id": run_id, **row} for row in columns],
-                    )
-
-    # ------------------------------------------------------------------
-    # Cleanup
-    # ------------------------------------------------------------------
-
-    def _expire_stuck_runs(self) -> None:
-        now = self._utc_now()
-        with self._engine.begin() as conn:
-            rows = conn.execute(
-                select(runs)
-                .where(
-                    and_(
-                        runs.c.status == "running",
-                        runs.c.claim_expires_at.is_not(None),
-                        runs.c.claim_expires_at < now,
-                    )
-                )
-            ).mappings().all()
-
-            for run in rows:
-                attempt_count = run.get("attempt_count") or 0
-                max_attempts = run.get("max_attempts") or self._settings.job_max_attempts
-                if attempt_count >= max_attempts:
-                    conn.execute(
-                        update(runs)
-                        .where(runs.c.id == run["id"])
-                        .values(
-                            status="failed",
-                            completed_at=now,
-                            exit_code=1,
-                            error_message="Run lease expired",
-                            claimed_by=None,
-                            claim_expires_at=None,
-                        )
-                    )
-                    continue
-
-                delay = self._retry_delay_seconds(attempt_count)
-                conn.execute(
-                    update(runs)
-                    .where(runs.c.id == run["id"])
-                    .values(
-                        status="queued",
-                        available_at=now + timedelta(seconds=delay),
-                        claimed_by=None,
-                        claim_expires_at=None,
-                        started_at=None,
-                        completed_at=None,
-                        exit_code=None,
-                        error_message="Run lease expired",
-                    )
-                )
-
-    def _expire_stuck_builds(self) -> None:
-        horizon = self._utc_now() - timedelta(seconds=self._settings.build_timeout_seconds)
-        with self._engine.begin() as conn:
-            conn.execute(
-                update(builds)
-                .where(and_(builds.c.status == "building", builds.c.started_at < horizon))
-                .values(
-                    status="failed",
-                    finished_at=self._utc_now(),
-                    exit_code=1,
-                    error_message=f"Build timed out after {self._settings.build_timeout_seconds}s",
-                )
-            )
-
-    def _fail_runs_with_failed_builds(self) -> None:
-        now = self._utc_now()
-        with self._engine.begin() as conn:
-            rows = conn.execute(
-                select(runs.c.id)
-                .select_from(runs.join(builds, runs.c.build_id == builds.c.id))
-                .where(
-                    and_(
-                        runs.c.status == "queued",
-                        builds.c.status.in_(["failed", "cancelled"]),
-                    )
-                )
-            ).all()
-            for (run_id,) in rows:
-                conn.execute(
-                    update(runs)
-                    .where(runs.c.id == run_id)
-                    .values(
-                        status="failed",
-                        completed_at=now,
-                        exit_code=1,
-                        error_message="Build failed before run could start",
-                        claimed_by=None,
-                        claim_expires_at=None,
-                    )
-                )
-
-    # ------------------------------------------------------------------
-    # Paths + helpers
-    # ------------------------------------------------------------------
-
-    def _run_dir(self, workspace_id: str, run_id: str) -> Path:
-        return self._settings.runs_dir / str(workspace_id) / "runs" / str(run_id)
-
-    def _relative_run_path(
+    def _handle_run_failure(
         self,
-        *,
-        workspace_id: str | None,
+        claim: RunClaim,
         run_id: str,
-        path: str | None,
-    ) -> str | None:
-        if not workspace_id or not path:
-            return None
-        run_dir = self._run_dir(workspace_id, run_id).resolve()
-        candidate = Path(path)
-        if not candidate.is_absolute():
-            candidate = (run_dir / candidate).resolve()
-        else:
-            candidate = candidate.resolve()
-        try:
-            relative = candidate.relative_to(run_dir)
-        except ValueError:
-            return None
-        if not candidate.exists():
-            return None
-        return str(relative)
-
-    def _extract_output_path(self, run_id: str, payload: dict[str, Any]) -> str | None:
-        outputs = payload.get("outputs")
-        if not isinstance(outputs, dict):
-            return None
-        normalized = outputs.get("normalized")
-        if not isinstance(normalized, dict):
-            return None
-        raw_path = normalized.get("path")
-        if not isinstance(raw_path, str) or not raw_path.strip():
-            return None
-        workspace_id = payload.get("workspaceId")
-        if not isinstance(workspace_id, str) or not workspace_id.strip():
-            workspace_id = None
-        return self._relative_run_path(
-            workspace_id=workspace_id,
-            run_id=run_id,
-            path=raw_path,
-        )
-
-    def _document_path(self, workspace_id: str, stored_uri: str) -> Path:
-        root = self._settings.documents_dir / str(workspace_id) / "documents"
-        return (root / stored_uri.lstrip("/")).resolve()
-
-    def _config_path(self, workspace_id: str, configuration_id: str) -> Path:
-        return (
-            self._settings.configs_dir
-            / str(workspace_id)
-            / "config_packages"
-            / str(configuration_id)
-        )
-
-    def _build_root(self, workspace_id: str, configuration_id: str, build_id: str) -> Path:
-        return (
-            self._settings.venvs_dir
-            / str(workspace_id)
-            / str(configuration_id)
-            / str(build_id)
-        )
-
-    def _build_logs_path(self, workspace_id: str, configuration_id: str, build_id: str) -> Path:
-        return self._build_root(workspace_id, configuration_id, build_id) / "logs" / "events.ndjson"
-
-    def _venv_python_path(self, venv_root: Path) -> Path:
-        if os.name == "nt":
-            return venv_root / "Scripts" / "python.exe"
-        return venv_root / "bin" / "python"
-
-    def _pip_env(self) -> dict[str, str]:
-        env = os.environ.copy()
-        env.setdefault("PIP_DISABLE_PIP_VERSION_CHECK", "1")
-        env.setdefault("PIP_NO_INPUT", "1")
-        env.setdefault("PIP_PROGRESS_BAR", "off")
-        env.setdefault("PIP_CACHE_DIR", str(self._settings.pip_cache_dir))
-        return env
-
-    def _probe_python_version(self, python_bin: Path) -> str | None:
-        try:
-            output = subprocess.check_output(
-                [
-                    str(python_bin),
-                    "-c",
-                    "import sys; print('.'.join(map(str, sys.version_info[:3])))",
-                ],
-                text=True,
-            )
-            return output.strip()
-        except Exception:
-            logger.warning("worker.python_version.detect_failed", exc_info=True)
-            return None
-
-    def _probe_engine_version(self, python_bin: Path) -> str | None:
-        try:
-            output = subprocess.check_output(
-                [
-                    str(python_bin),
-                    "-c",
-                    "import ade_engine; print(getattr(ade_engine, '__version__', ''))",
-                ],
-                text=True,
-            )
-            value = output.strip()
-            return value or None
-        except Exception:
-            logger.warning("worker.engine_version.detect_failed", exc_info=True)
-            return None
-
-    def _cleanup_failed_build(self, venv_root: Path) -> None:
-        if venv_root.exists():
-            shutil.rmtree(venv_root, ignore_errors=True)
-
-    @staticmethod
-    def _utc_now() -> datetime:
-        return datetime.now(tz=UTC)
-
-    def _lease_seconds(self) -> int:
-        lease = int(self._settings.job_lease_seconds)
-        if self._settings.run_timeout_seconds:
-            lease = max(lease, int(self._settings.run_timeout_seconds))
-        return lease
-
-    def _retry_delay_seconds(self, attempt_count: int) -> int:
-        base = self._settings.job_backoff_base_seconds
-        delay = base * (2 ** max(attempt_count - 1, 0))
-        return min(self._settings.job_backoff_max_seconds, delay)
-
-    def _extend_run_lease(self, run_id: str, worker_id: str) -> None:
-        now = self._utc_now()
-        lease_expires = now + timedelta(seconds=self._lease_seconds())
-        with self._engine.begin() as conn:
-            conn.execute(
-                update(runs)
-                .where(and_(runs.c.id == run_id, runs.c.claimed_by == worker_id))
-                .values(claim_expires_at=lease_expires)
-            )
-
-    def _fail_run(
-        self,
-        *,
-        run_id: str,
-        document_id: str | None,
-        workspace_id: str | None = None,
-        event_log_path: Path,
-        error_message: str,
+        document_id: str,
+        event_log: EventLog,
+        ctx: dict[str, Any],
+        now: datetime,
         exit_code: int,
-        update_document: bool = True,
+        error_message: str,
     ) -> None:
-        try:
-            self._complete_run(
+        retry_at = self._retry_at(claim, now)
+
+        with self.engine.begin() as conn:
+            ok = self.run_queue.ack_failure(
+                conn=conn,
                 run_id=run_id,
-                document_id=document_id or "",
-                workspace_id=workspace_id,
-                status="failed",
-                exit_code=exit_code,
+                worker_id=self.worker_id,
+                now=now,
                 error_message=error_message,
-                event_log_path=event_log_path,
-                update_document=update_document,
+                retry_at=retry_at,
             )
-        except Exception:
-            logger.exception("worker.run.fail.error", extra={"run_id": run_id})
+            if not ok:
+                event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                return
 
-    def _fail_build(
-        self,
-        *,
-        build_id: str,
-        workspace_id: str,
-        configuration_id: str,
-        log_path: Path,
-        error_message: str,
-        exit_code: int,
-    ) -> None:
-        finished_at = self._utc_now()
-        with self._engine.begin() as conn:
-            conn.execute(
-                update(builds)
-                .where(builds.c.id == build_id)
-                .values(
-                    status="failed",
-                    finished_at=finished_at,
+            if retry_at is None:
+                # Terminal failure: record result + mark document failed.
+                self.repo.record_run_result(
+                    conn=conn,
+                    run_id=run_id,
+                    completed_at=now,
                     exit_code=exit_code,
+                    output_path=None,
                     error_message=error_message,
                 )
-            )
-        done_event = new_event_record(
-            event="build.complete",
-            message=error_message,
-            level="error",
-            data={"status": "failed", "exit_code": exit_code},
-        )
-        done_event = ensure_event_context(
-            done_event,
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            build_id=build_id,
-        )
-        self._append_event(log_path, done_event)
-
-    @staticmethod
-    def _terminate_process(process: subprocess.Popen) -> None:
-        if process.poll() is not None:
-            return
-        try:
-            if hasattr(os, "killpg"):
-                os.killpg(process.pid, signal.SIGTERM)
+                conn.execute(
+                    update(documents)
+                    .where(documents.c.id == document_id)
+                    .values(status="failed", updated_at=now)
+                )
             else:
-                process.terminate()
-        except Exception:
-            process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            try:
-                if hasattr(os, "killpg"):
-                    os.killpg(process.pid, signal.SIGKILL)
-                else:
-                    process.kill()
-            except Exception:
-                process.kill()
-            process.wait(timeout=5)
+                # Retry: keep the last error visible on the run row (optional).
+                self.repo.record_run_result(
+                    conn=conn,
+                    run_id=run_id,
+                    completed_at=None,
+                    exit_code=None,
+                    output_path=None,
+                    error_message=error_message,
+                )
+
+        if retry_at is not None:
+            event_log.emit(event="run.retry", level="error", message=f"Retry scheduled at {retry_at.isoformat()}", context=ctx)
+        else:
+            event_log.emit(event="run.failed", level="error", message=error_message, context=ctx)
 
 
-__all__ = ["Worker"]
+def _extract_output_path(payload: dict[str, Any] | None) -> str | None:
+    if not payload:
+        return None
+    outputs = payload.get("outputs")
+    if not isinstance(outputs, dict):
+        return None
+    normalized = outputs.get("normalized")
+    if not isinstance(normalized, dict):
+        return None
+    path = normalized.get("path")
+    return str(path) if isinstance(path, str) and path.strip() else None
+
+
+@dataclass(slots=True)
+class Worker:
+    engine: Any  # sqlalchemy.Engine
+    settings: WorkerSettings
+    worker_id: str
+    build_queue: BuildQueue
+    run_queue: RunQueue
+    processor: JobProcessor
+
+    def start(self) -> None:
+        logger.info("ade-worker starting worker_id=%s concurrency=%s", self.worker_id, self.settings.concurrency)
+
+        poll = float(self.settings.poll_interval)
+        max_poll = float(self.settings.poll_interval_max)
+
+        cleanup_every = float(self.settings.cleanup_interval)
+        next_cleanup = time.monotonic() + cleanup_every
+
+        with ThreadPoolExecutor(max_workers=int(self.settings.concurrency)) as executor:
+            in_flight: set[Future[None]] = set()
+
+            while True:
+                # Reap completed work items.
+                done = {f for f in in_flight if f.done()}
+                for f in done:
+                    in_flight.remove(f)
+                    try:
+                        f.result()
+                    except Exception:
+                        logger.exception("work item crashed")
+
+                now = utcnow()
+
+                # Periodic cleanup: expire stuck leases.
+                mono = time.monotonic()
+                if mono >= next_cleanup:
+                    try:
+                        expired = int(self.run_queue.expire_stuck(now=now))
+                        if expired:
+                            logger.info("expired %s stuck run leases", expired)
+                    except Exception:
+                        logger.exception("lease expiration failed")
+                    next_cleanup = mono + cleanup_every
+
+                # Claim work while capacity remains.
+                claimed_any = False
+                while len(in_flight) < int(self.settings.concurrency):
+                    build_claim = self.build_queue.claim_next(now=now)
+                    if build_claim is not None:
+                        claimed_any = True
+                        in_flight.add(executor.submit(self.processor._process_build, build_claim))
+                        continue
+
+                    run_claim = self.run_queue.claim_next(
+                        worker_id=self.worker_id,
+                        now=now,
+                        lease_seconds=int(self.settings.lease_seconds),
+                    )
+                    if run_claim is None:
+                        break
+                    claimed_any = True
+                    in_flight.add(executor.submit(self.processor._process_run, run_claim))
+
+                if claimed_any:
+                    poll = float(self.settings.poll_interval)
+                    continue
+
+                # Idle backoff.
+                time.sleep(poll)
+                poll = min(max_poll, poll * 1.25 + 0.01)
+
+
+def _ensure_runtime_dirs(data_dir: Path) -> None:
+    for sub in ["db", "workspaces", "venvs", "cache/pip"]:
+        _ensure_dir(data_dir / sub)
+
+
+def main() -> int:
+    settings = WorkerSettings.load()
+    _setup_logging(settings.log_level)
+
+    _ensure_runtime_dirs(settings.data_dir)
+
+    engine = create_db_engine(
+        settings.database_url,
+        sqlite_busy_timeout_ms=settings.sqlite_busy_timeout_ms,
+        sqlite_journal_mode=settings.sqlite_journal_mode,
+        sqlite_synchronous=settings.sqlite_synchronous,
+    )
+
+    maybe_create_schema(engine, auto_create=settings.auto_create_schema, required_tables=REQUIRED_TABLES, metadata=metadata)
+
+    worker_id = settings.worker_id or _default_worker_id()
+
+    paths = PathManager(settings.data_dir)
+    repo = Repo(engine)
+
+    build_queue = BuildQueue(engine)
+    run_queue = RunQueue(engine, backoff=settings.backoff_seconds)
+
+    processor = JobProcessor(
+        settings=settings,
+        engine=engine,
+        run_queue=run_queue,
+        repo=repo,
+        paths=paths,
+        runner=SubprocessRunner(),
+        worker_id=worker_id,
+    )
+
+    Worker(
+        engine=engine,
+        settings=settings,
+        worker_id=worker_id,
+        build_queue=build_queue,
+        run_queue=run_queue,
+        processor=processor,
+    ).start()
+    return 0
+
+
+__all__ = ["main", "Worker"]

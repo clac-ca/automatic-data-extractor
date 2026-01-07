@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
+import time
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -23,6 +25,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
+from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import (
     SessionDep,
@@ -36,6 +39,7 @@ from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.logging import log_context
+from ade_api.common.sse import sse_json
 from ade_api.common.sorting import resolve_sort
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
@@ -55,9 +59,10 @@ from ade_api.features.idempotency import (
 from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
+from ade_api.db import db
 from ade_api.models import User
 
-from .change_feed import DocumentChangeCursorTooOld
+from .change_feed import DocumentEventCursorTooOld, DocumentEventsService
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -113,6 +118,9 @@ tags_router = APIRouter(
 logger = logging.getLogger(__name__)
 
 _UPLOAD_HASH_CHUNK_SIZE = 1024 * 1024
+TAILER_POLL_INTERVAL_SECONDS = 0.25
+TAILER_BATCH_LIMIT = 200
+KEEPALIVE_SECONDS = 15.0
 
 
 WorkspacePath = Annotated[
@@ -153,6 +161,18 @@ DocumentManager = Annotated[
         scopes=["{workspaceId}"],
     ),
 ]
+
+
+def _resolve_change_cursor(request: Request, cursor: str | None) -> int:
+    last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    token = last_event_id if last_event_id is not None else cursor
+    if token is None:
+        return 0
+    try:
+        return int(token)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cursor must be an integer string") from exc
+
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
     if metadata is None:
@@ -419,13 +439,102 @@ async def list_document_changes(
             limit=limit,
         )
         return DocumentChangesPage(items=page.items, next_cursor=page.next_cursor)
-    except DocumentChangeCursorTooOld as exc:
+    except DocumentEventCursorTooOld as exc:
         raise HTTPException(
             status.HTTP_410_GONE,
-            detail={"error": "resync_required", "latestCursor": str(exc.latest_cursor)},
+            detail={
+                "error": "resync_required",
+                "oldestCursor": str(exc.oldest_cursor),
+                "latestCursor": str(exc.latest_cursor),
+            },
         ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get(
+    "/changes/stream",
+    summary="Stream document changes",
+)
+async def stream_document_changes(
+    workspace_id: WorkspacePath,
+    request: Request,
+    settings: SettingsDep,
+    db_session: SessionDep,
+    _actor: DocumentReader,
+    *,
+    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
+) -> EventSourceResponse:
+    start_cursor = _resolve_change_cursor(request, cursor)
+    await db_session.close()
+
+    async def event_stream():
+        cursor_value = start_cursor
+        last_send = time.monotonic()
+
+        async with db.sessionmaker() as session:
+            events_service = DocumentEventsService(session=session, settings=settings)
+            oldest_cursor = await events_service.oldest_cursor(workspace_id=workspace_id)
+            latest_cursor = await events_service.current_cursor(workspace_id=workspace_id)
+
+        if oldest_cursor is not None and cursor_value < oldest_cursor:
+            yield sse_json(
+                "error",
+                {
+                    "code": "resync_required",
+                    "oldestCursor": str(oldest_cursor),
+                    "latestCursor": str(latest_cursor),
+                },
+            )
+            return
+
+        if cursor_value > latest_cursor:
+            cursor_value = latest_cursor
+
+        yield sse_json("ready", {"cursor": str(cursor_value)})
+
+        while True:
+            if await request.is_disconnected():
+                return
+
+            async with db.sessionmaker() as session:
+                events_service = DocumentEventsService(session=session, settings=settings)
+                events = await events_service.fetch_changes_after(
+                    workspace_id=workspace_id,
+                    cursor=cursor_value,
+                    limit=TAILER_BATCH_LIMIT,
+                )
+
+            if events:
+                for change in events:
+                    payload = DocumentChangeEntry(
+                        cursor=str(change.cursor),
+                        type=change.event_type.value,
+                        document_id=str(change.document_id),
+                        occurred_at=change.occurred_at,
+                        document_version=change.document_version,
+                        request_id=change.request_id,
+                        client_request_id=change.client_request_id,
+                    ).model_dump(by_alias=True, exclude_none=True)
+                    yield sse_json(change.event_type.value, payload, event_id=change.cursor)
+                    cursor_value = int(change.cursor)
+                    last_send = time.monotonic()
+                continue
+
+            now = time.monotonic()
+            if now - last_send >= KEEPALIVE_SECONDS:
+                last_send = now
+                yield sse_json("keepalive", {})
+
+            await asyncio.sleep(TAILER_POLL_INTERVAL_SECONDS)
+
+    return EventSourceResponse(
+        event_stream(),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(

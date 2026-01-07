@@ -432,99 +432,111 @@ async function runSessionUpload(
   let chunkSize = item.chunkSizeBytes ?? FALLBACK_CHUNK_BYTES;
   let receivedBytes = Math.min(item.progress.loaded, total);
 
-  if (sessionId) {
-    try {
-      const status = await getDocumentUploadSessionStatus(
+  try {
+    if (sessionId) {
+      try {
+        const status = await getDocumentUploadSessionStatus(
+          options.workspaceId,
+          sessionId,
+          options.controller.signal,
+        );
+        receivedBytes = Math.min(status.receivedBytes ?? receivedBytes, total);
+        options.updateItem({
+          sessionId: status.uploadSessionId,
+          nextExpectedRanges: status.nextExpectedRanges,
+          progress: {
+            loaded: receivedBytes,
+            total,
+            percent: total > 0 ? Math.min(100, Math.round((receivedBytes / total) * 100)) : 0,
+          },
+        });
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
+          sessionId = undefined;
+          receivedBytes = 0;
+          options.updateItem({
+            sessionId: undefined,
+            nextExpectedRanges: undefined,
+            progress: resetProgress(item.file),
+          });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!sessionId) {
+      const created = await createDocumentUploadSession(
         options.workspaceId,
-        sessionId,
+        {
+          filename: item.file.name,
+          byteSize: total,
+          contentType: item.file.type || undefined,
+          conflictBehavior: "rename",
+          runOptions: item.runOptions,
+        },
         options.controller.signal,
       );
-      receivedBytes = Math.min(status.receivedBytes ?? receivedBytes, total);
+      sessionId = created.uploadSessionId;
+      chunkSize = created.chunkSizeBytes ?? chunkSize;
+      receivedBytes = 0;
       options.updateItem({
-        sessionId: status.uploadSessionId,
-        nextExpectedRanges: status.nextExpectedRanges,
+        sessionId,
+        chunkSizeBytes: chunkSize,
+        nextExpectedRanges: created.nextExpectedRanges,
+        documentId: created.documentId,
+        row: created.row ?? null,
+        progress: resetProgress(item.file),
+      });
+    }
+
+    if (!sessionId) {
+      throw new Error("Upload session id was not initialized.");
+    }
+
+    while (receivedBytes < total) {
+      if (options.controller.signal.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      const end = Math.min(receivedBytes + chunkSize - 1, total - 1);
+      const chunk = item.file.slice(receivedBytes, end + 1);
+      const response = await uploadDocumentUploadSessionRange(
+        options.workspaceId,
+        sessionId,
+        {
+          start: receivedBytes,
+          end,
+          total,
+          body: chunk,
+          signal: options.controller.signal,
+        },
+      );
+      receivedBytes = end + 1;
+      options.updateItem({
+        nextExpectedRanges: response.nextExpectedRanges,
         progress: {
           loaded: receivedBytes,
           total,
           percent: total > 0 ? Math.min(100, Math.round((receivedBytes / total) * 100)) : 0,
         },
       });
-    } catch (error) {
-      if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
-        sessionId = undefined;
-        receivedBytes = 0;
-        options.updateItem({
-          sessionId: undefined,
-          nextExpectedRanges: undefined,
-          progress: resetProgress(item.file),
-        });
-      } else {
-        throw error;
+    }
+
+    const committed = await commitDocumentUploadSession(options.workspaceId, sessionId, {
+      idempotencyKey: item.id,
+      clientRequestId: item.id,
+      signal: options.controller.signal,
+    });
+    return committed;
+  } catch (error) {
+    const isAbort = error instanceof Error && error.name === "AbortError";
+    if (!isAbort && sessionId) {
+      try {
+        await cancelDocumentUploadSession(options.workspaceId, sessionId);
+      } catch {
+        // Best-effort cleanup; the caller handles the failure state.
       }
     }
+    throw error;
   }
-
-  if (!sessionId) {
-    const created = await createDocumentUploadSession(
-      options.workspaceId,
-      {
-        filename: item.file.name,
-        byteSize: total,
-        contentType: item.file.type || undefined,
-        conflictBehavior: "rename",
-        runOptions: item.runOptions,
-      },
-      options.controller.signal,
-    );
-    sessionId = created.uploadSessionId;
-    chunkSize = created.chunkSizeBytes ?? chunkSize;
-    receivedBytes = 0;
-    options.updateItem({
-      sessionId,
-      chunkSizeBytes: chunkSize,
-      nextExpectedRanges: created.nextExpectedRanges,
-      documentId: created.documentId,
-      row: created.row ?? null,
-      progress: resetProgress(item.file),
-    });
-  }
-
-  if (!sessionId) {
-    throw new Error("Upload session id was not initialized.");
-  }
-
-  while (receivedBytes < total) {
-    if (options.controller.signal.aborted) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-    const end = Math.min(receivedBytes + chunkSize - 1, total - 1);
-    const chunk = item.file.slice(receivedBytes, end + 1);
-    const response = await uploadDocumentUploadSessionRange(
-      options.workspaceId,
-      sessionId,
-      {
-        start: receivedBytes,
-        end,
-        total,
-        body: chunk,
-        signal: options.controller.signal,
-      },
-    );
-    receivedBytes = end + 1;
-    options.updateItem({
-      nextExpectedRanges: response.nextExpectedRanges,
-      progress: {
-        loaded: receivedBytes,
-        total,
-        percent: total > 0 ? Math.min(100, Math.round((receivedBytes / total) * 100)) : 0,
-      },
-    });
-  }
-
-  const committed = await commitDocumentUploadSession(options.workspaceId, sessionId, {
-    idempotencyKey: item.id,
-    clientRequestId: item.id,
-    signal: options.controller.signal,
-  });
-  return committed;
 }

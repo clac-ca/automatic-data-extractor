@@ -1,4 +1,4 @@
-from .main import main
+from .worker import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

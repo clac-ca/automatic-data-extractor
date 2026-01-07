@@ -47,11 +47,11 @@ class DocumentSource(str, Enum):
     MANUAL_UPLOAD = "manual_upload"
 
 
-class DocumentChangeType(str, Enum):
-    """Persistent change feed types for documents."""
+class DocumentEventType(str, Enum):
+    """Persistent change feed event types for documents."""
 
-    UPSERT = "upsert"
-    DELETED = "deleted"
+    CHANGED = "document.changed"
+    DELETED = "document.deleted"
 
 
 class DocumentUploadConflictBehavior(str, Enum):
@@ -73,7 +73,7 @@ class DocumentUploadSessionStatus(str, Enum):
 
 DOCUMENT_STATUS_VALUES = tuple(status.value for status in DocumentStatus)
 DOCUMENT_SOURCE_VALUES = tuple(source.value for source in DocumentSource)
-DOCUMENT_CHANGE_TYPE_VALUES = tuple(change.value for change in DocumentChangeType)
+DOCUMENT_EVENT_TYPE_VALUES = tuple(change.value for change in DocumentEventType)
 DOCUMENT_UPLOAD_CONFLICT_VALUES = tuple(mode.value for mode in DocumentUploadConflictBehavior)
 DOCUMENT_UPLOAD_SESSION_STATUS_VALUES = tuple(status.value for status in DocumentUploadSessionStatus)
 
@@ -222,10 +222,10 @@ class DocumentTag(UUIDPrimaryKeyMixin, Base):
     )
 
 
-class DocumentChange(Base):
+class DocumentEvent(Base):
     """Durable change feed entry for documents."""
 
-    __tablename__ = "document_changes"
+    __tablename__ = "document_events"
 
     cursor: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer(), "sqlite"),
@@ -237,34 +237,31 @@ class DocumentChange(Base):
         ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
-    document_id: Mapped[UUID | None] = mapped_column(
+    document_id: Mapped[UUID] = mapped_column(
         GUID(),
         ForeignKey("documents.id", ondelete="NO ACTION"),
-        nullable=True,
+        nullable=False,
     )
-    type: Mapped[DocumentChangeType] = mapped_column(
+    event_type: Mapped[DocumentEventType] = mapped_column(
         SAEnum(
-            DocumentChangeType,
-            name="document_change_type",
+            DocumentEventType,
+            name="document_event_type",
             native_enum=False,
-            length=20,
+            length=40,
             values_callable=_enum_values,
         ),
         nullable=False,
     )
-    document_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    document_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     client_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    payload: Mapped[dict[str, object]] = mapped_column(
-        MutableDict.as_mutable(JSON),
-        nullable=False,
-        default=dict,
-    )
+    payload: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
 
     __table_args__ = (
-        Index("ix_document_changes_workspace_cursor", "workspace_id", "cursor"),
-        Index("ix_document_changes_workspace_document", "workspace_id", "document_id"),
-        Index("ix_document_changes_workspace_occurred", "workspace_id", "occurred_at"),
+        Index("ix_document_events_workspace_cursor", "workspace_id", "cursor"),
+        Index("ix_document_events_workspace_document", "workspace_id", "document_id"),
+        Index("ix_document_events_workspace_occurred", "workspace_id", "occurred_at"),
     )
 
 
@@ -346,13 +343,13 @@ class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 __all__ = [
-    "DOCUMENT_CHANGE_TYPE_VALUES",
+    "DOCUMENT_EVENT_TYPE_VALUES",
     "DOCUMENT_SOURCE_VALUES",
     "DOCUMENT_STATUS_VALUES",
     "DOCUMENT_UPLOAD_CONFLICT_VALUES",
     "DOCUMENT_UPLOAD_SESSION_STATUS_VALUES",
-    "DocumentChange",
-    "DocumentChangeType",
+    "DocumentEvent",
+    "DocumentEventType",
     "Document",
     "DocumentSource",
     "DocumentStatus",

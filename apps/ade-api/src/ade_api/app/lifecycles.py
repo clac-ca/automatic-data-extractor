@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from ade_api.db import DatabaseConfig, build_sync_url, db
+from ade_api.features.documents.change_feed import run_document_events_pruner
 from ade_api.features.rbac import RbacService
 from ade_api.settings import Settings, get_settings
 
@@ -141,7 +143,18 @@ def create_application_lifespan(
                 await session.rollback()
                 logger.warning("rbac.registry.sync.failed", exc_info=True)
 
-        yield
+        pruner_stop = asyncio.Event()
+        pruner_task = asyncio.create_task(
+            run_document_events_pruner(settings=settings, stop_event=pruner_stop)
+        )
+
+        try:
+            yield
+        finally:
+            pruner_stop.set()
+            pruner_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await pruner_task
         await db.dispose()
 
     return lifespan

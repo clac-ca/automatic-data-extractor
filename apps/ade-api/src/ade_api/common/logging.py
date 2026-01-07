@@ -187,6 +187,11 @@ def clear_request_context() -> None:
     _CORRELATION_ID.set(None)
 
 
+def current_request_id() -> str | None:
+    """Return the current request/correlation ID if bound."""
+    return _CORRELATION_ID.get()
+
+
 def log_context(
     *,
     workspace_id: UUID | None = None,
@@ -250,6 +255,7 @@ __all__ = [
     "ConsoleLogFormatter",
     "bind_request_context",
     "clear_request_context",
+    "current_request_id",
     "log_context",
     "setup_logging",
 ]

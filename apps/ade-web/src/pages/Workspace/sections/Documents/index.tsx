@@ -21,7 +21,6 @@ export default function DocumentsScreen() {
 
   const uploadManager = useUploadManager({
     workspaceId: workspace.id,
-    sessionThresholdBytes: 0,
     concurrency: 10,
   });
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });

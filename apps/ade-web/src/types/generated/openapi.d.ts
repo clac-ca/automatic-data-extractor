@@ -2107,17 +2107,18 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "document.upsert" | "document.deleted";
-            row?: components["schemas"]["DocumentListRow"] | null;
+            type: "document.changed" | "document.deleted";
             /** Documentid */
-            documentId?: string | null;
+            documentId: string;
             /**
              * Occurredat
              * Format: date-time
              */
             occurredAt: string;
             /** Documentversion */
-            documentVersion?: number | null;
+            documentVersion: number;
+            /** Requestid */
+            requestId?: string | null;
             /** Clientrequestid */
             clientRequestId?: string | null;
         };

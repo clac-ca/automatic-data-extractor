@@ -1,9 +1,14 @@
-"""Minimal DB helpers for ade-worker (SQLite + MSSQL)."""
+"""Database helpers (SQLite + SQL Server).
+
+We keep the DB layer intentionally thin:
+- create_engine() with safe defaults
+- optional schema bootstrapping for local dev
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Iterable
 
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine, URL, make_url
@@ -20,6 +25,7 @@ def _ensure_sqlite_parent(url: URL) -> None:
 
 
 def _mssql_with_defaults(url: URL) -> URL:
+    # Ensure a driver is present; allow override via querystring.
     query = dict(url.query or {})
     query.setdefault("driver", "ODBC Driver 18 for SQL Server")
     return url.set(query=query)
@@ -29,60 +35,64 @@ def create_db_engine(
     database_url: str,
     *,
     sqlite_busy_timeout_ms: int = 30000,
-    sqlite_journal_mode: str | None = None,
-    sqlite_synchronous: str | None = None,
+    sqlite_journal_mode: str = "WAL",
+    sqlite_synchronous: str = "NORMAL",
 ) -> Engine:
     url = make_url(database_url)
     backend = url.get_backend_name()
+
     if backend not in {"sqlite", "mssql"}:
-        raise ValueError("Only SQLite and SQL Server are supported for ade-worker.")
+        raise ValueError("Only SQLite and SQL Server are supported.")
 
     if backend == "sqlite":
         _ensure_sqlite_parent(url)
         engine = create_engine(
             url,
-            future=True,
             connect_args={
                 "check_same_thread": False,
-                "timeout": max(sqlite_busy_timeout_ms, 0) / 1000.0,
+                "timeout": max(int(sqlite_busy_timeout_ms), 0) / 1000.0,
             },
+            pool_pre_ping=True,
         )
+
         journal_mode = (sqlite_journal_mode or "").strip().upper()
         synchronous = (sqlite_synchronous or "").strip().upper()
 
-        def _set_sqlite_pragmas(dbapi_conn, _record) -> None:
-            cursor = dbapi_conn.cursor()
+        def _set_pragmas(dbapi_conn, _record) -> None:
+            cur = dbapi_conn.cursor()
+            # Reasonable dev defaults; WAL improves concurrency.
             if journal_mode:
-                cursor.execute(f"PRAGMA journal_mode={journal_mode}")
+                cur.execute(f"PRAGMA journal_mode={journal_mode}")
             if synchronous:
-                cursor.execute(f"PRAGMA synchronous={synchronous}")
+                cur.execute(f"PRAGMA synchronous={synchronous}")
             if sqlite_busy_timeout_ms >= 0:
-                cursor.execute(f"PRAGMA busy_timeout={int(sqlite_busy_timeout_ms)}")
-            cursor.close()
+                cur.execute(f"PRAGMA busy_timeout={int(sqlite_busy_timeout_ms)}")
+            cur.execute("PRAGMA foreign_keys=ON")
+            cur.close()
 
-        event.listen(engine, "connect", _set_sqlite_pragmas)
+        event.listen(engine, "connect", _set_pragmas)
         return engine
 
-    if backend == "mssql":
-        url = _mssql_with_defaults(url)
-        return create_engine(url, future=True)
-
-    raise ValueError(f"Unsupported backend: {backend}")
+    # mssql
+    url = _mssql_with_defaults(url)
+    return create_engine(url, pool_pre_ping=True)
 
 
-def execute_scalar(conn, stmt) -> Any:
-    result = conn.execute(stmt)
-    return result.scalar_one_or_none()
-
-
-def assert_schema_ready(engine: Engine) -> None:
-    """Fail fast if the database schema has not been migrated."""
-
+def assert_tables_exist(engine: Engine, required_tables: Iterable[str]) -> None:
     inspector = inspect(engine)
-    if not inspector.has_table("alembic_version"):
+    missing = [t for t in required_tables if not inspector.has_table(t)]
+    if missing:
         raise RuntimeError(
-            "Database schema is not initialized. Run `ade migrate` before starting ade-worker."
+            f"Missing required tables: {', '.join(missing)}. "
+            "Run your migrations (or enable ADE_WORKER_AUTO_CREATE_SCHEMA=1 for dev)."
         )
 
 
-__all__ = ["assert_schema_ready", "create_db_engine", "execute_scalar"]
+def maybe_create_schema(engine: Engine, *, auto_create: bool, required_tables: Iterable[str], metadata) -> None:
+    """Create tables on startup only when explicitly enabled.
+
+    For local SQLite dev this is convenient. For production, migrations should own schema changes.
+    """
+    if auto_create:
+        metadata.create_all(engine, checkfirst=True)
+    assert_tables_exist(engine, required_tables)

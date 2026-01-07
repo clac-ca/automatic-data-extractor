@@ -21,11 +21,13 @@ export type TagMode = "any" | "all";
 
 export class DocumentChangesResyncError extends Error {
   readonly latestCursor: string;
+  readonly oldestCursor: string | null;
 
-  constructor(latestCursor: string) {
+  constructor(latestCursor: string, oldestCursor: string | null = null) {
     super("Document changes cursor is too old; resync required.");
     this.name = "DocumentChangesResyncError";
     this.latestCursor = latestCursor;
+    this.oldestCursor = oldestCursor;
   }
 }
 
@@ -138,11 +140,12 @@ export async function fetchWorkspaceDocumentChanges(
 
   if (response.status === 410) {
     const payload = (await response.json().catch(() => null)) as
-      | { detail?: { error?: string; latestCursor?: string } }
+      | { detail?: { error?: string; latestCursor?: string; oldestCursor?: string } }
       | null;
     const latestCursor = payload?.detail?.latestCursor;
+    const oldestCursor = payload?.detail?.oldestCursor ?? null;
     if (latestCursor) {
-      throw new DocumentChangesResyncError(latestCursor);
+      throw new DocumentChangesResyncError(latestCursor, oldestCursor);
     }
   }
 

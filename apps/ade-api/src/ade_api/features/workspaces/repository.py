@@ -14,7 +14,7 @@ from ade_api.models import (
     Build,
     Configuration,
     Document,
-    DocumentChange,
+    DocumentEvent,
     DocumentTag,
     DocumentUploadSession,
     Run,
@@ -209,7 +209,7 @@ class WorkspacesRepository:
             delete(DocumentTag).where(DocumentTag.document_id.in_(document_ids))
         )
         await self._session.execute(
-            delete(DocumentChange).where(DocumentChange.workspace_id == workspace_id)
+            delete(DocumentEvent).where(DocumentEvent.workspace_id == workspace_id)
         )
         await self._session.execute(
             delete(DocumentUploadSession).where(

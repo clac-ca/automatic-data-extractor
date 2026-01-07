@@ -157,10 +157,10 @@ Upload source files for extraction. All document routes are nested under the wor
 
 **Change feed + streaming**
 
-- `GET /workspaces/{workspaceId}/documents/changes?cursor=latest` – delta-style change feed (use the returned `nextCursor` as the new cursor).
-- `GET /workspaces/{workspaceId}/documents/changes/stream` – SSE stream of the same feed; honors `Last-Event-ID` or `cursor`.
-- When a cursor is too old the API returns `410` with `{"error": "resync_required", "latest_cursor": "..."}`.
-- Each change entry includes `matchesFilters` and `requiresRefresh` to guide safe in-place updates; prompt for refresh when `requiresRefresh=true`.
+- `GET /workspaces/{workspaceId}/documents/changes?cursor=<int>` – cursor-based change feed (use `nextCursor` as the new cursor).
+- `GET /workspaces/{workspaceId}/documents/changes/stream?cursor=<int>` – SSE stream of the same feed; honors `Last-Event-ID` or `cursor`.
+- When a cursor is too old the API returns `410` with `{"error": "resync_required", "oldestCursor": "...", "latestCursor": "..."}`.
+- Change entries are minimal (`documentId`, `documentVersion`, `occurredAt`, optional `requestId`/`clientRequestId`); clients fetch the latest row on `document.changed`.
 
 **Resumable upload sessions (large files)**
 

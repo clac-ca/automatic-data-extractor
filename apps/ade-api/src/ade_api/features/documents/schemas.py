@@ -338,20 +338,12 @@ class DocumentChangeEntry(BaseSchema):
     """Single entry from the documents change feed."""
 
     cursor: str
-    type: Literal["document.upsert", "document.deleted"]
-    row: DocumentListRow | None = None
-    document_id: UUIDStr | None = Field(default=None, alias="documentId")
+    type: Literal["document.changed", "document.deleted"]
+    document_id: UUIDStr = Field(alias="documentId")
     occurred_at: datetime = Field(alias="occurredAt")
-    document_version: int | None = Field(default=None, alias="documentVersion")
+    document_version: int = Field(alias="documentVersion")
+    request_id: str | None = Field(default=None, alias="requestId")
     client_request_id: str | None = Field(default=None, alias="clientRequestId")
-
-    @model_validator(mode="after")
-    def _validate_payload(self) -> DocumentChangeEntry:
-        if self.type == "document.deleted" and not self.document_id:
-            raise ValueError("document_id is required for document.deleted changes")
-        if self.type == "document.upsert" and self.row is None:
-            raise ValueError("row is required for document.upsert changes")
-        return self
 
 
 class DocumentChangesPage(BaseSchema):

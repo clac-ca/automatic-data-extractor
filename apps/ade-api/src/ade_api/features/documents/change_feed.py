@@ -2,37 +2,44 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
 from uuid import UUID
 
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.time import utc_now
-from ade_api.models import DocumentChange, DocumentChangeType
+from ade_api.common.logging import current_request_id
+from ade_api.db import db
+from ade_api.models import DocumentEvent, DocumentEventType
 from ade_api.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+DOCUMENT_EVENTS_PRUNE_INTERVAL_SECONDS = 600
 
 
 @dataclass(slots=True)
 class ChangeFeedPage:
-    items: list[DocumentChange]
+    items: list[DocumentEvent]
     next_cursor: int
 
 
-class DocumentChangeCursorError(Exception):
+class DocumentEventCursorError(Exception):
     """Base error for invalid change feed cursors."""
 
 
-class DocumentChangeCursorTooOld(DocumentChangeCursorError):
-    def __init__(self, *, latest_cursor: int) -> None:
+class DocumentEventCursorTooOld(DocumentEventCursorError):
+    def __init__(self, *, oldest_cursor: int, latest_cursor: int) -> None:
         super().__init__("resync_required")
+        self.oldest_cursor = oldest_cursor
         self.latest_cursor = latest_cursor
 
 
-class DocumentChangesService:
+class DocumentEventsService:
     """Persist and query the documents change feed."""
 
     def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
@@ -40,15 +47,15 @@ class DocumentChangesService:
         self._settings = settings
 
     async def current_cursor(self, *, workspace_id: UUID) -> int:
-        stmt = select(func.max(DocumentChange.cursor)).where(
-            DocumentChange.workspace_id == workspace_id,
+        stmt = select(func.max(DocumentEvent.cursor)).where(
+            DocumentEvent.workspace_id == workspace_id,
         )
         value = (await self._session.execute(stmt)).scalar_one_or_none()
         return int(value or 0)
 
     async def oldest_cursor(self, *, workspace_id: UUID) -> int | None:
-        stmt = select(func.min(DocumentChange.cursor)).where(
-            DocumentChange.workspace_id == workspace_id,
+        stmt = select(func.min(DocumentEvent.cursor)).where(
+            DocumentEvent.workspace_id == workspace_id,
         )
         value = (await self._session.execute(stmt)).scalar_one_or_none()
         return int(value) if value is not None else None
@@ -61,12 +68,10 @@ class DocumentChangesService:
         limit: int,
         max_cursor: int | None = None,
     ) -> ChangeFeedPage:
-        await self._prune_if_needed(workspace_id=workspace_id)
-
         oldest = await self.oldest_cursor(workspace_id=workspace_id)
         latest = await self.current_cursor(workspace_id=workspace_id)
         if oldest is not None and cursor < oldest:
-            raise DocumentChangeCursorTooOld(latest_cursor=latest)
+            raise DocumentEventCursorTooOld(oldest_cursor=oldest, latest_cursor=latest)
 
         if max_cursor is not None and max_cursor > latest:
             max_cursor = latest
@@ -76,13 +81,13 @@ class DocumentChangesService:
             return ChangeFeedPage(items=[], next_cursor=effective_latest)
 
         stmt = (
-            select(DocumentChange)
+            select(DocumentEvent)
             .where(
-                DocumentChange.workspace_id == workspace_id,
-                DocumentChange.cursor > cursor,
-                DocumentChange.cursor <= effective_latest,
+                DocumentEvent.workspace_id == workspace_id,
+                DocumentEvent.cursor > cursor,
+                DocumentEvent.cursor <= effective_latest,
             )
-            .order_by(DocumentChange.cursor.asc())
+            .order_by(DocumentEvent.cursor.asc())
             .limit(limit)
         )
         result = await self._session.execute(stmt)
@@ -92,32 +97,47 @@ class DocumentChangesService:
         next_cursor = int(changes[-1].cursor)
         return ChangeFeedPage(items=changes, next_cursor=next_cursor)
 
-    async def record_upsert(
+    async def fetch_changes_after(
+        self,
+        *,
+        workspace_id: UUID,
+        cursor: int,
+        limit: int,
+    ) -> list[DocumentEvent]:
+        stmt = (
+            select(DocumentEvent)
+            .where(
+                DocumentEvent.workspace_id == workspace_id,
+                DocumentEvent.cursor > cursor,
+            )
+            .order_by(DocumentEvent.cursor.asc())
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars())
+
+    async def record_changed(
         self,
         *,
         workspace_id: UUID,
         document_id: UUID,
-        payload: dict[str, Any],
-        document_version: int | None = None,
+        document_version: int,
         client_request_id: str | None = None,
+        request_id: str | None = None,
         occurred_at: datetime | None = None,
-    ) -> DocumentChange:
-        serialized = jsonable_encoder(payload)
-        entry = DocumentChange(
+    ) -> DocumentEvent:
+        entry = DocumentEvent(
             workspace_id=workspace_id,
             document_id=document_id,
-            type=DocumentChangeType.UPSERT,
+            event_type=DocumentEventType.CHANGED,
             document_version=document_version,
+            request_id=request_id or current_request_id(),
             client_request_id=client_request_id,
-            payload=serialized,
+            payload=None,
             occurred_at=occurred_at or utc_now(),
         )
         self._session.add(entry)
         await self._session.flush()
-        await self._prune_if_needed(
-            workspace_id=workspace_id,
-            reference_time=entry.occurred_at,
-        )
         return entry
 
     async def record_deleted(
@@ -125,31 +145,29 @@ class DocumentChangesService:
         *,
         workspace_id: UUID,
         document_id: UUID,
-        document_version: int | None = None,
+        document_version: int,
         client_request_id: str | None = None,
+        request_id: str | None = None,
         occurred_at: datetime | None = None,
-    ) -> DocumentChange:
-        entry = DocumentChange(
+    ) -> DocumentEvent:
+        entry = DocumentEvent(
             workspace_id=workspace_id,
             document_id=document_id,
-            type=DocumentChangeType.DELETED,
+            event_type=DocumentEventType.DELETED,
             document_version=document_version,
+            request_id=request_id or current_request_id(),
             client_request_id=client_request_id,
-            payload={},
+            payload=None,
             occurred_at=occurred_at or utc_now(),
         )
         self._session.add(entry)
         await self._session.flush()
-        await self._prune_if_needed(
-            workspace_id=workspace_id,
-            reference_time=entry.occurred_at,
-        )
         return entry
 
-    async def _prune_if_needed(
+    async def prune(
         self,
         *,
-        workspace_id: UUID,
+        workspace_id: UUID | None = None,
         reference_time: datetime | None = None,
     ) -> None:
         retention = self._settings.documents_change_feed_retention_period
@@ -159,16 +177,43 @@ class DocumentChangesService:
             return
         now = reference_time or utc_now()
         cutoff = now - retention
-        stmt = delete(DocumentChange).where(
-            DocumentChange.workspace_id == workspace_id,
-            DocumentChange.occurred_at < cutoff,
-        )
+        stmt = delete(DocumentEvent).where(DocumentEvent.occurred_at < cutoff)
+        if workspace_id is not None:
+            stmt = stmt.where(DocumentEvent.workspace_id == workspace_id)
         await self._session.execute(stmt)
+
+
+async def run_document_events_pruner(
+    *,
+    settings: Settings,
+    stop_event: asyncio.Event,
+) -> None:
+    retention = settings.documents_change_feed_retention_period
+    if retention is None:
+        return
+    if isinstance(retention, timedelta) and retention.total_seconds() <= 0:
+        return
+
+    while not stop_event.is_set():
+        try:
+            async with db.sessionmaker() as session:
+                service = DocumentEventsService(session=session, settings=settings)
+                await service.prune()
+                await session.commit()
+        except Exception:
+            logger.warning("document_events.prune.failed", exc_info=True)
+
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=DOCUMENT_EVENTS_PRUNE_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
 
 
 __all__ = [
     "ChangeFeedPage",
-    "DocumentChangeCursorError",
-    "DocumentChangeCursorTooOld",
-    "DocumentChangesService",
+    "DocumentEventCursorError",
+    "DocumentEventCursorTooOld",
+    "DocumentEventsService",
+    "DOCUMENT_EVENTS_PRUNE_INTERVAL_SECONDS",
+    "run_document_events_pruner",
 ]

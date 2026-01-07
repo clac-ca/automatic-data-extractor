@@ -38,8 +38,6 @@ from ade_api.common.workbook_preview import (
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.models import (
     Document,
-    DocumentChange,
-    DocumentChangeType,
     DocumentSource,
     DocumentStatus,
     DocumentTag,
@@ -51,7 +49,7 @@ from ade_api.models import (
 )
 from ade_api.settings import Settings
 
-from .change_feed import DocumentChangesService
+from .change_feed import DocumentEventsService
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -121,7 +119,7 @@ class DocumentsService:
             raise RuntimeError("Document storage directory is not configured")
 
         self._repository = DocumentsRepository(session)
-        self._changes = DocumentChangesService(session=session, settings=settings)
+        self._events = DocumentEventsService(session=session, settings=settings)
 
     @staticmethod
     def build_upload_metadata(
@@ -211,11 +209,9 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
-        row = self._build_list_row(payload)
-        await self._changes.record_upsert(
+        await self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=row.model_dump(),
             document_version=payload.version,
         )
 
@@ -265,7 +261,7 @@ class DocumentsService:
         )
 
         # Capture the cursor before listing to avoid skipping changes committed during the query.
-        changes_cursor = await self._changes.current_cursor(workspace_id=workspace_id)
+        changes_cursor = await self._events.current_cursor(workspace_id=workspace_id)
         page_result = await paginate_query(
             self._session,
             stmt,
@@ -314,31 +310,24 @@ class DocumentsService:
         except (TypeError, ValueError) as exc:
             raise ValueError("cursor must be an integer string") from exc
 
-        page = await self._changes.list_changes(
+        page = await self._events.list_changes(
             workspace_id=workspace_id,
             cursor=cursor,
             limit=limit,
             max_cursor=max_cursor,
         )
-        entries: list[DocumentChangeEntry] = []
-        for change in page.items:
-            if change.type == DocumentChangeType.UPSERT and not change.payload:
-                entries.append(
-                    await self._hydrate_change_entry(
-                        workspace_id=workspace_id,
-                        change=change,
-                    )
-                )
-                continue
-            try:
-                entries.append(self._serialize_change(change))
-            except ValidationError:
-                entries.append(
-                    await self._hydrate_change_entry(
-                        workspace_id=workspace_id,
-                        change=change,
-                    )
-                )
+        entries = [
+            DocumentChangeEntry(
+                cursor=str(change.cursor),
+                type=change.event_type.value,
+                document_id=str(change.document_id),
+                occurred_at=change.occurred_at,
+                document_version=change.document_version,
+                request_id=change.request_id,
+                client_request_id=change.client_request_id,
+            )
+            for change in page.items
+        ]
         return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
 
     async def create_upload_session(
@@ -408,10 +397,9 @@ class DocumentsService:
             actor=actor,
             created_at=now,
         )
-        await self._changes.record_upsert(
+        await self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=row.model_dump(),
             document_version=row.version,
         )
 
@@ -591,11 +579,9 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
-        row = self._build_list_row(payload)
-        await self._changes.record_upsert(
+        await self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=row.model_dump(),
             document_version=payload.version,
             client_request_id=client_request_id,
         )
@@ -623,14 +609,10 @@ class DocumentsService:
                 document.status = DocumentStatus.FAILED
                 document.version += 1
                 await self._session.flush()
-                payload = DocumentOut.model_validate(document)
-                self._apply_derived_fields(payload)
-                row = self._build_list_row(payload)
-                await self._changes.record_upsert(
+                await self._events.record_changed(
                     workspace_id=workspace_id,
                     document_id=document.id,
-                    payload=row.model_dump(),
-                    document_version=payload.version,
+                    document_version=document.version,
                 )
         await self._session.delete(session)
 
@@ -711,11 +693,9 @@ class DocumentsService:
         updated = DocumentOut.model_validate(document)
         self._apply_derived_fields(updated)
         if changed:
-            row = self._build_list_row(updated)
-            await self._changes.record_upsert(
+            await self._events.record_changed(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                payload=row.model_dump(),
                 document_version=updated.version,
                 client_request_id=client_request_id,
             )
@@ -740,11 +720,9 @@ class DocumentsService:
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
         if changed:
-            row = self._build_list_row(payload)
-            await self._changes.record_upsert(
+            await self._events.record_changed(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                payload=row.model_dump(),
                 document_version=payload.version,
                 client_request_id=client_request_id,
             )
@@ -787,11 +765,9 @@ class DocumentsService:
             self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
-                row = self._build_list_row(payload)
-                await self._changes.record_upsert(
+                await self._events.record_changed(
                     workspace_id=workspace_id,
                     document_id=doc_id,
-                    payload=row.model_dump(),
                     document_version=payload.version,
                     client_request_id=client_request_id,
                 )
@@ -823,11 +799,9 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        row = self._build_list_row(payload)
-        await self._changes.record_upsert(
+        await self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=row.model_dump(),
             document_version=payload.version,
             client_request_id=client_request_id,
         )
@@ -873,11 +847,9 @@ class DocumentsService:
             self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
-                row = self._build_list_row(payload)
-                await self._changes.record_upsert(
+                await self._events.record_changed(
                     workspace_id=workspace_id,
                     document_id=doc_id,
-                    payload=row.model_dump(),
                     document_version=payload.version,
                     client_request_id=client_request_id,
                 )
@@ -1153,7 +1125,7 @@ class DocumentsService:
 
         storage = self._storage_for(workspace_id)
         await storage.delete(document.stored_uri)
-        await self._changes.record_deleted(
+        await self._events.record_deleted(
             workspace_id=workspace_id,
             document_id=document_id,
             document_version=document.version,
@@ -1205,11 +1177,11 @@ class DocumentsService:
             await storage.delete(document.stored_uri)
 
         for document_id in ordered_ids:
-            document = document_by_id.get(document_id)
-            await self._changes.record_deleted(
+            document = document_by_id[document_id]
+            await self._events.record_deleted(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                document_version=document.version if document else None,
+                document_version=document.version,
                 client_request_id=client_request_id,
             )
 
@@ -1237,11 +1209,9 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        row = self._build_list_row(payload)
-        await self._changes.record_upsert(
+        await self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=row.model_dump(),
             document_version=payload.version,
             client_request_id=client_request_id,
         )
@@ -1285,11 +1255,9 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        row = self._build_list_row(payload)
-        await self._changes.record_upsert(
+        await self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
-            payload=row.model_dump(),
             document_version=payload.version,
             client_request_id=client_request_id,
         )
@@ -1344,11 +1312,9 @@ class DocumentsService:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
             self._apply_derived_fields(payload)
             payloads.append(payload)
-            row = self._build_list_row(payload)
-            await self._changes.record_upsert(
+            await self._events.record_changed(
                 workspace_id=workspace_id,
                 document_id=UUID(str(doc_id)),
-                payload=row.model_dump(),
                 document_version=payload.version,
                 client_request_id=client_request_id,
             )
@@ -1959,71 +1925,6 @@ class DocumentsService:
             return digest.hexdigest(), size
 
         return await run_in_threadpool(_read)
-
-    async def _hydrate_change_entry(
-        self,
-        *,
-        workspace_id: UUID,
-        change: DocumentChange,
-    ) -> DocumentChangeEntry:
-        cursor = str(change.cursor)
-        document_id = change.document_id
-        if document_id is None:
-            raise ValueError("document_id is required to hydrate document changes")
-
-        document = await self._repository.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            include_deleted=True,
-        )
-        if document is None:
-            return DocumentChangeEntry(
-                cursor=cursor,
-                type="document.deleted",
-                document_id=str(document_id),
-                occurred_at=change.occurred_at,
-                document_version=change.document_version,
-                client_request_id=change.client_request_id,
-            )
-
-        payload = DocumentOut.model_validate(document)
-        await self._attach_latest_runs(workspace_id, [payload])
-        self._apply_derived_fields(payload)
-        row = self._build_list_row(payload)
-        return DocumentChangeEntry(
-            cursor=cursor,
-            type="document.upsert",
-            row=row,
-            occurred_at=change.occurred_at,
-            document_version=change.document_version or payload.version,
-            client_request_id=change.client_request_id,
-        )
-
-    def _serialize_change(self, change: DocumentChange) -> DocumentChangeEntry:
-        cursor = str(change.cursor)
-        if change.type == DocumentChangeType.UPSERT:
-            try:
-                row = DocumentListRow.model_validate(change.payload)
-            except ValidationError:
-                document = DocumentOut.model_validate(change.payload)
-                self._apply_derived_fields(document)
-                row = self._build_list_row(document)
-            return DocumentChangeEntry(
-                cursor=cursor,
-                type="document.upsert",
-                row=row,
-                occurred_at=change.occurred_at,
-                document_version=change.document_version or row.version,
-                client_request_id=change.client_request_id,
-            )
-        return DocumentChangeEntry(
-            cursor=cursor,
-            type="document.deleted",
-            document_id=str(change.document_id) if change.document_id else None,
-            occurred_at=change.occurred_at,
-            document_version=change.document_version,
-            client_request_id=change.client_request_id,
-        )
 
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:
