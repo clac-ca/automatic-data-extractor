@@ -39,8 +39,8 @@ from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.logging import log_context
-from ade_api.common.sse import sse_json
 from ade_api.common.sorting import resolve_sort
+from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -49,6 +49,7 @@ from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.db import db
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.idempotency import (
     IdempotencyService,
@@ -59,7 +60,6 @@ from ade_api.features.idempotency import (
 from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
-from ade_api.db import db
 from ade_api.models import User
 
 from .change_feed import DocumentEventCursorTooOld, DocumentEventsService
@@ -70,10 +70,6 @@ from .exceptions import (
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
     DocumentTooLargeError,
-    DocumentUploadRangeError,
-    DocumentUploadSessionExpiredError,
-    DocumentUploadSessionNotFoundError,
-    DocumentUploadSessionNotReadyError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
@@ -95,10 +91,6 @@ from .schemas import (
     DocumentTagsReplace,
     DocumentUpdateRequest,
     DocumentUploadRunOptions,
-    DocumentUploadSessionCreateRequest,
-    DocumentUploadSessionCreateResponse,
-    DocumentUploadSessionStatusResponse,
-    DocumentUploadSessionUploadResponse,
     TagCatalogPage,
 )
 from .service import DocumentsService
@@ -138,13 +130,6 @@ DocumentPath = Annotated[
         alias="documentId",
     ),
 ]
-UploadSessionPath = Annotated[
-    UUID,
-    Path(
-        description="Upload session identifier",
-        alias="uploadSessionId",
-    ),
-]
 DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
 RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
 DocumentReader = Annotated[
@@ -171,7 +156,10 @@ def _resolve_change_cursor(request: Request, cursor: str | None) -> int:
     try:
         return int(token)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cursor must be an integer string") from exc
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="cursor must be an integer string",
+        ) from exc
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -535,183 +523,6 @@ async def stream_document_changes(
             "X-Accel-Buffering": "no",
         },
     )
-
-
-@router.post(
-    "/uploadSessions",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentUploadSessionCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a resumable upload session",
-    response_model_exclude_none=True,
-)
-async def create_upload_session(
-    workspace_id: WorkspacePath,
-    payload: DocumentUploadSessionCreateRequest,
-    service: DocumentsServiceDep,
-    actor: DocumentManager,
-) -> DocumentUploadSessionCreateResponse:
-    try:
-        return await service.create_upload_session(
-            workspace_id=workspace_id,
-            payload=payload,
-            actor=actor,
-        )
-    except DocumentTooLargeError as exc:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
-
-
-@router.put(
-    "/uploadSessions/{uploadSessionId}",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentUploadSessionUploadResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Upload a byte range to a session",
-    response_model_exclude_none=True,
-)
-async def upload_session_range(
-    workspace_id: WorkspacePath,
-    upload_session_id: UploadSessionPath,
-    request: Request,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-    content_range: Annotated[str | None, Header(alias="Content-Range")] = None,
-) -> DocumentUploadSessionUploadResponse:
-    try:
-        return await service.upload_session_range(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-            content_range=content_range,
-            body=request.stream(),
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-    except DocumentUploadRangeError as exc:
-        raise HTTPException(
-            status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
-            detail={
-                "detail": str(exc),
-                "next_expected_ranges": exc.next_expected_ranges,
-            },
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-
-@router.get(
-    "/uploadSessions/{uploadSessionId}",
-    response_model=DocumentUploadSessionStatusResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get upload session status",
-    response_model_exclude_none=True,
-)
-async def get_upload_session_status(
-    workspace_id: WorkspacePath,
-    upload_session_id: UploadSessionPath,
-    service: DocumentsServiceDep,
-    _actor: DocumentReader,
-) -> DocumentUploadSessionStatusResponse:
-    try:
-        return await service.get_upload_session_status(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-
-
-@router.post(
-    "/uploadSessions/{uploadSessionId}/commit",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Commit an upload session",
-    response_model_exclude_none=True,
-)
-async def commit_upload_session(
-    workspace_id: WorkspacePath,
-    upload_session_id: UploadSessionPath,
-    request: Request,
-    service: DocumentsServiceDep,
-    runs_service: RunsServiceDep,
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
-    actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
-) -> DocumentOut:
-    scope_key = build_scope_key(
-        principal_id=str(actor.id),
-        workspace_id=str(workspace_id),
-    )
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload={"upload_session_id": str(upload_session_id)},
-    )
-    replay = await idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
-    try:
-        document, upload_run_options = await service.commit_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-            actor=actor,
-            client_request_id=client_request_id,
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-    except DocumentUploadSessionNotReadyError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    await _try_enqueue_run(
-        runs_service=runs_service,
-        workspace_id=workspace_id,
-        document_id=document.id,
-        run_options=upload_run_options,
-    )
-
-    await idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=document,
-    )
-    return document
-
-
-@router.delete(
-    "/uploadSessions/{uploadSessionId}",
-    dependencies=[Security(require_csrf)],
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Cancel an upload session",
-)
-async def cancel_upload_session(
-    workspace_id: WorkspacePath,
-    upload_session_id: UploadSessionPath,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> Response:
-    try:
-        await service.cancel_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch(
@@ -1251,7 +1062,10 @@ async def preview_document(
         str | None,
         Query(
             alias="sheetName",
-            description="Optional worksheet name to preview (defaults to the first sheet when omitted).",
+            description=(
+                "Optional worksheet name to preview "
+                "(defaults to the first sheet when omitted)."
+            ),
         ),
     ] = None,
     sheet_index: Annotated[
@@ -1259,7 +1073,10 @@ async def preview_document(
         Query(
             ge=0,
             alias="sheetIndex",
-            description="Optional worksheet index to preview (0-based, defaults to the first sheet when omitted).",
+            description=(
+                "Optional worksheet index to preview "
+                "(0-based, defaults to the first sheet when omitted)."
+            ),
         ),
     ] = None,
 ) -> WorkbookSheetPreview:

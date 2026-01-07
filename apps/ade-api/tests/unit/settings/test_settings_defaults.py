@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -25,7 +24,7 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     expected_root = (tmp_path / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()
-    expected_venvs = (Path(tempfile.gettempdir()) / "ade-venvs").resolve()
+    expected_venvs = (expected_root / "venvs").resolve()
     assert settings.workspaces_dir == expected_workspaces
     assert settings.documents_dir == expected_workspaces
     assert settings.configs_dir == expected_workspaces
@@ -47,7 +46,7 @@ def test_workspaces_dir_propagates_defaults(
     settings = get_settings()
 
     expected_root = (tmp_path / "custom" / "workspaces").resolve()
-    expected_venvs = (Path(tempfile.gettempdir()) / "ade-venvs").resolve()
+    expected_venvs = (tmp_path / "data" / "venvs").resolve()
     assert settings.workspaces_dir == expected_root
     assert settings.documents_dir == expected_root
     assert settings.configs_dir == expected_root

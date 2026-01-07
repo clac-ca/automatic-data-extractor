@@ -21,18 +21,18 @@ relies on older runs endpoints. Key touchpoints:
     to show historical runs. Replace it with the workspace runs list endpoint
     and add pagination/`after_id` handling.
   - The "Safe mode" tooltips gate run buttons. Surface the new run status
-    states (queued, running, succeeded, failed, cancelled) and error
+    states (queued, running, succeeded, failed) and error
     messaging in the drawer summary.
 
 ## Config Builder panel (Terminal | Run | Problems)
 
 - `apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/` now
-  consumes run/build NDJSON streams (`/runs/{runId}/events/stream` and
-  `/builds/{buildId}/events/stream`): `Terminal` shows raw logs, `Problems`
-  shows validation issues, and `Run` hosts output and event log cards.
+  consumes run NDJSON streams (`/runs/{runId}/events/stream`): `Terminal` shows
+  raw logs, `Problems` shows validation issues, and `Run` hosts output and event
+  log cards.
 - `BottomPanel.tsx` already accepts console lines with `origin` and supports
-  origin/level filters, follow toggle, and clear. Keep feeding it build/run
-  events via `describeRunEvent`/`describeBuildEvent`.
+  origin/level filters, follow toggle, and clear. Keep feeding it run events
+  via `describeRunEvent`.
 - `Workbench.tsx` keeps `validationState.status/lastRunAt` and the latest run
   metadata. Ensure these hydrate from the streaming runs endpoints and the
   follow-up fetches (`fetchRun`, `runOutputUrl`, `runLogsUrl`).

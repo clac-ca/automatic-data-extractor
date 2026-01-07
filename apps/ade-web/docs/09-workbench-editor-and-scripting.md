@@ -16,12 +16,11 @@ This doc is for people working on `ade-web` internals. It explains how the workb
 >   `apps/ade-engine/docs/11-ade-event-model.md` (event schemas)
 
 Workbench run actions always use the canonical **`RunOptions`** shape (camelCase:
-`dryRun`, `validateOnly`, `forceRebuild`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
-Environment builds stay as backend `Build` entities but are triggered automatically when runs start if:
+`dryRun`, `validateOnly`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
+Environments are provisioned automatically when runs start if:
 
 * the environment is missing or stale,
-* the environment was built from outdated content, or
-* the user explicitly requested `force_rebuild`.
+* the environment was built from outdated dependency metadata.
 
 Validation runs and test runs are always `Run` entities.
 
@@ -662,16 +661,14 @@ All workbench run actions use the canonical `RunOptions` shape (see `07-document
 
 * `dryRun`
 * `validateOnly`
-* `forceRebuild`
 * `inputSheetNames`
 * Optional `mode` (e.g. `"validation"`)
 
-Environment builds remain `Build` entities on the backend, but are triggered automatically at run start if:
+Environments are provisioned automatically at run start if:
 
 * the environment is missing,
 * stale,
-* built from outdated content, or
-* `force_rebuild: true` is set (e.g. user chooses **Force build and test**).
+* built from outdated dependency metadata.
 
 ### 7.2 Test runs
 
@@ -686,7 +683,6 @@ The **Test** split button in the workbench:
    * Builds a `RunOptions` object.
    * Sends a run request to the backend (camelCase → snake_case).
    * Starts streaming events to the **Console**.
-   * Includes `force_rebuild: true` if the user selected that option.
 
 The console shows:
 

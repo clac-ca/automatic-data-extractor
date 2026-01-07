@@ -128,10 +128,11 @@ Example:
 
 #### `SplitButton`
 
-Primary action plus a small dropdown of related actions. The canonical example is the Configuration Builder **Test** control (primary “Test”, menu “Force build and test”).
+Primary action plus a small dropdown of related actions. Use only when there are
+secondary expert actions beyond the obvious default.
 
-* Left segment: calls `onPrimaryClick` (e.g. “Test” with environment reuse).
-* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options (e.g. “Force build and test”).
+* Left segment: calls `onPrimaryClick` (the default action).
+* Right segment: opens a dropdown (often backed by `ContextMenu`) with secondary options.
 
 Guidelines:
 
@@ -486,7 +487,7 @@ Guidelines:
 * Use `preventDefault()` only when a shortcut is actually handled.
 * Shortcuts should be disabled while modal dialogs in the workbench are open, unless they are explicitly designed to work there.
 
-There is intentionally **no** dedicated “build environment” shortcut; environment rebuild happens when runs start (and can be forced via the workbench Test split button).
+There is intentionally **no** dedicated “build environment” shortcut; environment provisioning happens automatically when runs start.
 
 ---
 

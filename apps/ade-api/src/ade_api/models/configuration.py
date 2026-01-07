@@ -54,16 +54,9 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UTCDateTime(),
         nullable=True,
     )
-    active_build_id: Mapped[UUID | None] = mapped_column(
-        GUID(),
-        ForeignKey("builds.id", ondelete="NO ACTION"),
-        nullable=True,
-    )
-    active_build_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (
         Index("ix_configurations_workspace_status", "workspace_id", "status"),
-        Index("ix_configurations_active_build_id", "active_build_id"),
     )
 
 

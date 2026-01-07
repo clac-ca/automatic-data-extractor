@@ -11,7 +11,7 @@ anywhere without provisioning external infrastructure.
   under `data/`. No external database service is required.
 - **FastAPI backend + worker** – the API in
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
-  executes builds and runs from the database queue.
+  provisions environments and executes runs from the database queue.
 - **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
   in development; in production you can serve the built `apps/ade-web/dist`
   bundle via `ade start` or behind a reverse proxy.

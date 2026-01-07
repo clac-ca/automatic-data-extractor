@@ -6,7 +6,6 @@ from fastapi import APIRouter
 
 from ade_api.features.api_keys.router import router as api_keys_router
 from ade_api.features.auth.router import create_auth_router
-from ade_api.features.builds.router import router as builds_router
 from ade_api.features.configs.router import router as configurations_router
 from ade_api.features.documents.router import router as documents_router
 from ade_api.features.documents.router import tags_router as document_tags_router
@@ -42,7 +41,6 @@ def create_api_router(settings: Settings) -> APIRouter:
     api_router.include_router(documents_router)
     api_router.include_router(presence_router)
     api_router.include_router(configurations_router)
-    api_router.include_router(builds_router)
     api_router.include_router(runs_router)
     api_router.include_router(system_router)
     return api_router

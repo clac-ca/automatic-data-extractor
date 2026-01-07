@@ -180,12 +180,10 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         }
         idempotency_routes = {
             ("/api/v1/workspaces/{workspaceId}/documents", "POST"),
-            ("/api/v1/workspaces/{workspaceId}/documents/uploadsessions/{uploadSessionId}/commit", "POST"),
             ("/api/v1/configurations/{configurationId}/runs", "POST"),
             ("/api/v1/configurations/{configurationId}/runs/batch", "POST"),
             ("/api/v1/workspaces/{workspaceId}/runs", "POST"),
             ("/api/v1/workspaces/{workspaceId}/runs/batch", "POST"),
-            ("/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds", "POST"),
             ("/api/v1/users/me/apikeys", "POST"),
             ("/api/v1/users/{userId}/apikeys", "POST"),
         }
@@ -234,7 +232,11 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                     for status_code, response in responses.items():
                         if not isinstance(response, dict) or "$ref" in response:
                             continue
-                        if isinstance(status_code, str) and status_code.isdigit() and status_code.startswith("2"):
+                        if (
+                            isinstance(status_code, str)
+                            and status_code.isdigit()
+                            and status_code.startswith("2")
+                        ):
                             headers = response.setdefault("headers", {})
                             headers.setdefault("ETag", {"$ref": "#/components/headers/ETag"})
 
@@ -242,7 +244,11 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                     _add_parameter(operation, "#/components/parameters/IfMatch", "If-Match")
 
                 if (path, method_upper) in idempotency_routes:
-                    _add_parameter(operation, "#/components/parameters/IdempotencyKey", "Idempotency-Key")
+                    _add_parameter(
+                        operation,
+                        "#/components/parameters/IdempotencyKey",
+                        "Idempotency-Key",
+                    )
 
         app.openapi_schema = schema
         return schema

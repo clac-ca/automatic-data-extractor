@@ -20,7 +20,6 @@ def run_identifiers() -> dict[str, UUID]:
         "run_id": uuid4(),
         "workspace_id": uuid4(),
         "configuration_id": uuid4(),
-        "build_id": uuid4(),
     }
 
 
@@ -52,7 +51,6 @@ def test_run_resource_dump_uses_aliases_and_defaults(
         id=run_identifiers["run_id"],
         workspace_id=run_identifiers["workspace_id"],
         configuration_id=run_identifiers["configuration_id"],
-        build_id=run_identifiers["build_id"],
         status=RunStatus.QUEUED,
         created_at=timestamp,
         links=_links_for(run_identifiers["run_id"]),
@@ -87,9 +85,7 @@ def test_run_create_request_serializes_minimal_options() -> None:
         "options": {
             "dry_run": False,
             "validate_only": False,
-            "force_rebuild": False,
             "active_sheet_only": False,
             "input_document_id": request.options.input_document_id,
         }
     }
-

@@ -121,7 +121,7 @@ export interface SafeModeStatus {
 * Drives:
 
   * A persistent banner inside the workspace shell.
-* Disabling all **run‑invoking** actions (starting new runs, configuration builds, validations, activations that trigger runs).
+* Disabling all **run‑invoking** actions (starting new runs, validations, activations that trigger runs).
 * Status is **system‑wide**; the toggle lives on a system‑level Settings screen that only appears for users with `System.SafeMode.*`.
 
 ### 2.4 Default workspace selection
@@ -560,8 +560,6 @@ Examples:
   * The Runs ledger (“New run”, if present),
   * The Configuration Builder workbench (“Run extraction” within the editor).
 
-* Starting a **build** of a configuration environment.
-
 * Starting **validate‑only** runs (validation of configurations or manifests).
 
 * Activating/publishing configurations if that triggers background engine work.
@@ -589,7 +587,7 @@ When Safe mode is on:
 * Recommended copy:
 
   ```text
-  Safe mode is enabled. New runs, builds, and validations are temporarily disabled.
+  Safe mode is enabled. New runs and validations are temporarily disabled.
   ```
 
 * If `detail` is provided by the backend, append or incorporate it:
@@ -710,7 +708,7 @@ When adding a feature that touches auth, permissions, or runs:
 
 3. **Respect Safe mode**
 
-  * If the feature starts or schedules new runs or builds, disable it when `SafeModeStatus.enabled === true`.
+  * If the feature starts or schedules new runs, disable it when `SafeModeStatus.enabled === true`.
   * Add an explanatory tooltip mentioning Safe mode.
 
 4. **Handle unauthenticated users**

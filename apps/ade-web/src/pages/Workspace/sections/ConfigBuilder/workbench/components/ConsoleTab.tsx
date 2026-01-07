@@ -18,7 +18,7 @@ interface ConsoleTabProps {
 }
 
 type ConsoleFilters = {
-  readonly origin: "all" | "run" | "build";
+  readonly origin: "all" | "run" | "environment";
   readonly level: "all" | WorkbenchConsoleLine["level"];
 };
 
@@ -183,10 +183,10 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 }
                 className="rounded border border-terminal-border bg-terminal/80 px-2 py-1 text-[11px] text-terminal-foreground shadow-sm focus:border-ring focus:outline-none"
               >
-	                <option value="all">All</option>
-	                <option value="run">Run</option>
-	                <option value="build">Build</option>
-	              </select>
+                <option value="all">All</option>
+                <option value="run">Run</option>
+                <option value="environment">Environment</option>
+              </select>
             </label>
             <label className="flex items-center gap-1 text-terminal-muted" title="Filter by severity">
               Level
@@ -440,7 +440,7 @@ function isCancelledStatus(status?: WorkbenchRunSummary["status"]) {
 }
 
 function originLabel(origin?: WorkbenchConsoleLine["origin"]) {
-  return origin === "build" ? "[build]" : "[run]";
+  return origin === "environment" ? "[environment]" : "[run]";
 }
 
 function renderTimestamp(timestamp?: string) {

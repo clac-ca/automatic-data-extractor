@@ -7,7 +7,7 @@ flags, and rollback considerations.
 ## 1. Pre-deploy validation
 
 - Confirm the target environment includes the Alembic migration
-  `apps/ade-api/migrations/versions/0002_runs_tables.py`.
+  `apps/ade-api/migrations/versions/0004_environments_runs_no_builds.py`.
 - Run `ade ci` locally and ensure the backend image builds with the new
   FastAPI routers mounted (`/api/v1/configurations/{configurationId}/runs`, `/api/v1/runs/...`).
 - Review `docs/ade_runs_api_spec.md#manual-qa-checklist` and run at least
@@ -20,10 +20,9 @@ flags, and rollback considerations.
   to permit engine execution. Document the toggle in your change
   management system when flipping it.
 - `ADE_VENVS_DIR` – ensure the directory exists on local storage and
-  matches the path used by the builder
-  (`${ADE_VENVS_DIR}/<workspace>/<config>/<build_id>/.venv`). Without the
-  venv the runner will emit `run.complete` with `exit_code=2` and an error
-  message (hydration will recreate it if DB metadata is intact).
+  matches the path used by the worker
+  (`${ADE_VENVS_DIR}/<workspace>/<config>/<deps_digest>/<environment_id>/.venv`).
+  If the venv is missing, the worker will provision a new environment.
 
 ## 3. Release sequence
 
@@ -37,13 +36,12 @@ flags, and rollback considerations.
 6. Notify frontend teams that the API is live so they can schedule their
    UI integration.
 
-## 4. Rebuilds and troubleshooting
+## 4. Environments and troubleshooting
 
-- **Trigger rebuilds:** POST `/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds` or submit a run with `force_rebuild=true`. Each rebuild produces a new `build_id` and venv under `ADE_VENVS_DIR`.
-- **Diagnose build failures:** Check build status via `GET /api/v1/builds/{buildId}` and attach to the build event stream (`/api/v1/builds/{buildId}/events/stream`) to read `build.*` + `console.line` (scope `build`). The marker `ade_build.json` under `ADE_VENVS_DIR/<ws>/<cfg>/<build_id>/.venv` captures fingerprint/versions.
-- **Review build history:** `GET /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds?perPage=20&filters=[{"id":"status","operator":"eq","value":"failed"}]` returns recent builds for quick triage.
-- **Diagnose hydration failures:** The worker will attempt to hydrate the venv locally from DB metadata; errors surface as run 409s or engine exits. Ensure `ADE_VENVS_DIR` is writable/local and has free space; deleting a stale build folder is safe—the next run rehydrates it.
-- **Local cleanup:** It is safe to delete old build folders under `ADE_VENVS_DIR` (prefer keeping the active `build_id`). Cache pruning does not affect correctness; the system will recreate missing venvs on demand.
+- **Trigger new environments:** Environments are rebuilt when dependency manifests change (new `deps_digest`) or when the environment is missing on disk. There is no build API; deleting a stale environment folder is safe—the worker recreates it on demand.
+- **Diagnose environment failures:** Inspect the environment log on disk (`.../venvs/<workspace>/<config>/<deps_digest>/<environment_id>/logs/events.ndjson`) alongside the worker logs. Environment events use the `environment.*` namespace.
+- **Diagnose missing venvs:** If the environment directory is missing, the worker requeues provisioning and the run waits until it becomes `ready`. Ensure the venv root is writable/local and has free space.
+- **Local cleanup:** It is safe to delete old environment folders under `ADE_VENVS_DIR` once they are no longer referenced by queued/running runs. The worker GC can handle this automatically.
 
 ## 4. Rollback strategy
 

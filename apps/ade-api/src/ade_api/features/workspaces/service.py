@@ -474,7 +474,10 @@ class WorkspacesService:
 
         settings_payload = None
         if settings is not None or processing_paused is not None:
-            base_settings = dict(settings) if settings is not None else dict(workspace.settings or {})
+            if settings is not None:
+                base_settings = dict(settings)
+            else:
+                base_settings = dict(workspace.settings or {})
             settings_payload = apply_processing_paused(base_settings, processing_paused)
 
         try:

@@ -1,4 +1,4 @@
-"""Queues for builds and runs stored in the ADE database.
+"""Queues for environments and runs stored in the ADE database.
 
 Design goals:
 - Works on SQLite and SQL Server/Azure SQL.
@@ -19,17 +19,16 @@ from sqlalchemy.engine import Connection, Engine
 
 SQLITE_BEGIN_IMMEDIATE = "BEGIN IMMEDIATE"
 
-SQLITE_CLAIM_BUILD = """    UPDATE builds
+SQLITE_CLAIM_ENVIRONMENT = """    UPDATE environments
 SET
     status = 'building',
-    started_at = COALESCE(started_at, :now),
-    finished_at = NULL,
-    exit_code = NULL,
-    summary = NULL,
-    error_message = NULL
+    claimed_by = :worker_id,
+    claim_expires_at = :lease_expires_at,
+    error_message = NULL,
+    updated_at = :now
 WHERE id = (
     SELECT id
-    FROM builds
+    FROM environments
     WHERE status = 'queued'
     ORDER BY created_at ASC
     LIMIT 1
@@ -38,20 +37,19 @@ AND status = 'queued'
 RETURNING id;
 """
 
-MSSQL_CLAIM_BUILD = """    ;WITH next_build AS (
+MSSQL_CLAIM_ENVIRONMENT = """    ;WITH next_env AS (
     SELECT TOP (1) *
-    FROM builds WITH (UPDLOCK, READPAST, ROWLOCK, READCOMMITTEDLOCK)
+    FROM environments WITH (UPDLOCK, READPAST, ROWLOCK, READCOMMITTEDLOCK)
     WHERE status = 'queued'
     ORDER BY created_at ASC
 )
-UPDATE next_build
+UPDATE next_env
 SET
     status = 'building',
-    started_at = COALESCE(started_at, :now),
-    finished_at = NULL,
-    exit_code = NULL,
-    summary = NULL,
-    error_message = NULL
+    claimed_by = :worker_id,
+    claim_expires_at = :lease_expires_at,
+    error_message = NULL,
+    updated_at = :now
 OUTPUT inserted.id;
 """
 
@@ -64,12 +62,18 @@ SET
     attempt_count = attempt_count + 1,
     error_message = NULL
 WHERE id = (
-    SELECT id
+    SELECT runs.id
     FROM runs
-    WHERE status = 'queued'
-      AND available_at <= :now
-      AND attempt_count < max_attempts
-    ORDER BY available_at ASC, created_at ASC
+    JOIN environments
+      ON environments.workspace_id = runs.workspace_id
+     AND environments.configuration_id = runs.configuration_id
+     AND environments.engine_spec = runs.engine_spec
+     AND environments.deps_digest = runs.deps_digest
+    WHERE runs.status = 'queued'
+      AND runs.available_at <= :now
+      AND runs.attempt_count < runs.max_attempts
+      AND environments.status = 'ready'
+    ORDER BY runs.available_at ASC, runs.created_at ASC
     LIMIT 1
 )
 AND status = 'queued'
@@ -77,12 +81,18 @@ RETURNING id, attempt_count, max_attempts;
 """
 
 MSSQL_CLAIM_RUN = """    ;WITH next_run AS (
-    SELECT TOP (1) *
+    SELECT TOP (1) runs.*
     FROM runs WITH (UPDLOCK, READPAST, ROWLOCK, READCOMMITTEDLOCK)
-    WHERE status = 'queued'
-      AND available_at <= :now
-      AND attempt_count < max_attempts
-    ORDER BY available_at ASC, created_at ASC
+    JOIN environments WITH (READPAST)
+      ON environments.workspace_id = runs.workspace_id
+     AND environments.configuration_id = runs.configuration_id
+     AND environments.engine_spec = runs.engine_spec
+     AND environments.deps_digest = runs.deps_digest
+    WHERE runs.status = 'queued'
+      AND runs.available_at <= :now
+      AND runs.attempt_count < runs.max_attempts
+      AND environments.status = 'ready'
+    ORDER BY runs.available_at ASC, runs.created_at ASC
 )
 UPDATE next_run
 SET
@@ -93,6 +103,57 @@ SET
     attempt_count = attempt_count + 1,
     error_message = NULL
 OUTPUT inserted.id, inserted.attempt_count, inserted.max_attempts;
+"""
+
+ENVIRONMENT_ACK_SUCCESS = """    UPDATE environments
+SET
+    status = 'ready',
+    claimed_by = NULL,
+    claim_expires_at = NULL,
+    error_message = NULL,
+    updated_at = :now
+WHERE id = :env_id
+  AND status = 'building'
+  AND claimed_by = :worker_id;
+"""
+
+ENVIRONMENT_ACK_FAILURE = """    UPDATE environments
+SET
+    status = 'failed',
+    claimed_by = NULL,
+    claim_expires_at = NULL,
+    error_message = :error_message,
+    updated_at = :now
+WHERE id = :env_id
+  AND status = 'building'
+  AND claimed_by = :worker_id;
+"""
+
+ENVIRONMENT_HEARTBEAT = """    UPDATE environments
+SET
+    claim_expires_at = :lease_expires_at
+WHERE id = :env_id
+  AND status = 'building'
+  AND claimed_by = :worker_id;
+"""
+
+ENVIRONMENT_SELECT_EXPIRED = """    SELECT id
+FROM environments
+WHERE status = 'building'
+  AND claim_expires_at IS NOT NULL
+  AND claim_expires_at < :now
+ORDER BY claim_expires_at ASC;
+"""
+
+ENVIRONMENT_EXPIRE_REQUEUE = """    UPDATE environments
+SET
+    status = 'queued',
+    claimed_by = NULL,
+    claim_expires_at = NULL,
+    error_message = 'lease expired',
+    updated_at = :now
+WHERE id = :env_id
+  AND status = 'building';
 """
 
 RUN_ACK_SUCCESS = """    UPDATE runs
@@ -126,6 +187,20 @@ SET
     claimed_by = NULL,
     claim_expires_at = NULL,
     error_message = :error_message
+WHERE id = :run_id
+  AND status = 'running'
+  AND claimed_by = :worker_id;
+"""
+
+RUN_RELEASE_ENV = """    UPDATE runs
+SET
+    status = 'queued',
+    available_at = :retry_at,
+    claimed_by = NULL,
+    claim_expires_at = NULL,
+    error_message = :error_message,
+    completed_at = NULL,
+    attempt_count = CASE WHEN attempt_count > 0 THEN attempt_count - 1 ELSE 0 END
 WHERE id = :run_id
   AND status = 'running'
   AND claimed_by = :worker_id;
@@ -173,7 +248,7 @@ WHERE id = :run_id
 # --- Types ---
 
 @dataclass(frozen=True, slots=True)
-class BuildClaim:
+class EnvironmentClaim:
     id: str
 
 
@@ -193,7 +268,7 @@ def _row_to_run_claim(row: dict[str, object]) -> RunClaim:
     )
 
 
-class BuildQueue:
+class EnvironmentQueue:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
@@ -201,24 +276,128 @@ class BuildQueue:
     def dialect(self) -> str:
         return self._engine.dialect.name
 
-    def claim_next(self, *, now: datetime) -> BuildClaim | None:
+    def claim_next(self, *, worker_id: str, now: datetime, lease_seconds: int) -> EnvironmentClaim | None:
+        lease_expires_at = now + timedelta(seconds=int(lease_seconds))
+        params = {
+            "worker_id": worker_id,
+            "now": now,
+            "lease_expires_at": lease_expires_at,
+        }
+
         if self.dialect == "sqlite":
             with self._engine.connect() as conn:
                 try:
                     conn.exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
-                    row = conn.execute(text(SQLITE_CLAIM_BUILD), {"now": now}).mappings().first()
+                    row = conn.execute(text(SQLITE_CLAIM_ENVIRONMENT), params).mappings().first()
                     conn.commit()
                 except Exception:
                     conn.rollback()
                     raise
-            return BuildClaim(id=str(row["id"])) if row else None
+            return EnvironmentClaim(id=str(row["id"])) if row else None
 
         if self.dialect == "mssql":
             with self._engine.begin() as conn:
-                row = conn.execute(text(MSSQL_CLAIM_BUILD), {"now": now}).mappings().first()
-            return BuildClaim(id=str(row["id"])) if row else None
+                row = conn.execute(text(MSSQL_CLAIM_ENVIRONMENT), params).mappings().first()
+            return EnvironmentClaim(id=str(row["id"])) if row else None
 
         raise ValueError(f"Unsupported dialect: {self.dialect}")
+
+    def heartbeat(
+        self,
+        *,
+        conn: Connection | None = None,
+        env_id: str,
+        worker_id: str,
+        now: datetime,
+        lease_seconds: int,
+    ) -> bool:
+        lease_expires_at = now + timedelta(seconds=int(lease_seconds))
+        stmt = text(ENVIRONMENT_HEARTBEAT)
+        params = {
+            "env_id": env_id,
+            "worker_id": worker_id,
+            "lease_expires_at": lease_expires_at,
+        }
+        if conn is not None:
+            result = conn.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+
+        with self._engine.begin() as tx:
+            result = tx.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+
+    def ack_success(
+        self,
+        *,
+        conn: Connection | None = None,
+        env_id: str,
+        worker_id: str,
+        now: datetime,
+    ) -> bool:
+        stmt = text(ENVIRONMENT_ACK_SUCCESS)
+        params = {"env_id": env_id, "worker_id": worker_id, "now": now}
+        if conn is not None:
+            result = conn.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+        with self._engine.begin() as tx:
+            result = tx.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+
+    def ack_failure(
+        self,
+        *,
+        conn: Connection | None = None,
+        env_id: str,
+        worker_id: str,
+        now: datetime,
+        error_message: str,
+    ) -> bool:
+        stmt = text(ENVIRONMENT_ACK_FAILURE)
+        params = {
+            "env_id": env_id,
+            "worker_id": worker_id,
+            "now": now,
+            "error_message": error_message,
+        }
+        if conn is not None:
+            result = conn.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+        with self._engine.begin() as tx:
+            result = tx.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+
+    def release_for_env(
+        self,
+        *,
+        conn: Connection | None = None,
+        run_id: str,
+        worker_id: str,
+        retry_at: datetime,
+        error_message: str,
+    ) -> bool:
+        stmt = text(RUN_RELEASE_ENV)
+        params = {
+            "run_id": run_id,
+            "worker_id": worker_id,
+            "retry_at": retry_at,
+            "error_message": error_message,
+        }
+        if conn is not None:
+            result = conn.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+        with self._engine.begin() as tx:
+            result = tx.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+
+    def expire_stuck(self, *, now: datetime) -> int:
+        processed = 0
+        with self._engine.begin() as conn:
+            rows = conn.execute(text(ENVIRONMENT_SELECT_EXPIRED), {"now": now}).mappings().all()
+            for row in rows:
+                processed += 1
+                env_id = str(row["id"])
+                conn.execute(text(ENVIRONMENT_EXPIRE_REQUEUE), {"env_id": env_id, "now": now})
+        return processed
 
 
 class RunQueue:
@@ -355,4 +534,4 @@ class RunQueue:
         return processed
 
 
-__all__ = ["BuildClaim", "BuildQueue", "RunClaim", "RunQueue"]
+__all__ = ["EnvironmentClaim", "EnvironmentQueue", "RunClaim", "RunQueue"]

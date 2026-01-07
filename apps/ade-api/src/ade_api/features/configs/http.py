@@ -50,7 +50,10 @@ def raise_problem(
             detail_text = f"{detail_text} ({meta_bits})" if detail_text else meta_bits
 
     definition = resolve_error_definition(status_code)
-    error_type = code if code in {"precondition_required", "precondition_failed"} else definition.type
+    if code in {"precondition_required", "precondition_failed"}:
+        error_type = code
+    else:
+        error_type = definition.type
     errors = None
     if code not in {definition.type, "precondition_required", "precondition_failed"}:
         errors = [

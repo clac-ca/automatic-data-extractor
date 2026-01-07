@@ -35,7 +35,6 @@ expression).
 - documents: `name`, `status`, `uploaderName`, `uploaderEmail`, `tags`
 - runs: `id`, `status`, `configurationId`, `inputFilename`
 - configurations: `displayName`, `status`
-- builds: `id`, `status`, `summary`, `errorMessage`
 - users: `email`, `displayName`
 - apikeys: `name`, `prefix`
 - workspaces: `name`, `slug`

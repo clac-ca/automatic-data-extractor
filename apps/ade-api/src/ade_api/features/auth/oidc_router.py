@@ -11,6 +11,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi_users.authentication.strategy import DatabaseStrategy
+from fastapi_users.password import PasswordHelper
 from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,7 +144,7 @@ async def callback_oidc(
     provider: str,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db_session)],
-    password_helper=Depends(get_password_helper),
+    password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
     settings: Annotated[Settings, Depends(get_settings)] = None,
     response_mode: Annotated[str | None, Query()] = None,
 ) -> Response:

@@ -15,8 +15,6 @@ from ade_api.common.schema import BaseSchema
 from ade_api.models import (
     DocumentSource,
     DocumentStatus,
-    DocumentUploadConflictBehavior,
-    DocumentUploadSessionStatus,
     RunStatus,
 )
 
@@ -374,52 +372,6 @@ class DocumentUploadRunOptions(BaseSchema):
         return self
 
 
-class DocumentUploadSessionCreateRequest(BaseSchema):
-    """Create a resumable upload session for a document."""
-
-    filename: str
-    byte_size: int = Field(ge=1, alias="byteSize")
-    content_type: str | None = Field(default=None, alias="contentType")
-    conflict_behavior: DocumentUploadConflictBehavior = Field(
-        default=DocumentUploadConflictBehavior.RENAME,
-        alias="conflictBehavior",
-    )
-    folder_id: str | None = Field(default=None, alias="folderId")
-    metadata: dict[str, Any] | None = None
-    run_options: DocumentUploadRunOptions | None = Field(default=None, alias="runOptions")
-
-
-class DocumentUploadSessionCreateResponse(BaseSchema):
-    """Response payload for a new upload session."""
-
-    upload_session_id: UUIDStr = Field(alias="uploadSessionId")
-    document_id: UUIDStr = Field(alias="documentId")
-    row: DocumentListRow | None = None
-    expires_at: datetime = Field(alias="expiresAt")
-    chunk_size_bytes: int = Field(alias="chunkSizeBytes")
-    next_expected_ranges: list[str] = Field(alias="nextExpectedRanges")
-    upload_url: str = Field(alias="uploadUrl")
-
-
-class DocumentUploadSessionStatusResponse(BaseSchema):
-    """Status payload for an upload session."""
-
-    upload_session_id: UUIDStr = Field(alias="uploadSessionId")
-    expires_at: datetime = Field(alias="expiresAt")
-    byte_size: int = Field(alias="byteSize")
-    received_bytes: int = Field(alias="receivedBytes")
-    next_expected_ranges: list[str] = Field(alias="nextExpectedRanges")
-    upload_complete: bool = Field(default=False, alias="uploadComplete")
-    status: DocumentUploadSessionStatus
-
-
-class DocumentUploadSessionUploadResponse(BaseSchema):
-    """Response payload after uploading a range."""
-
-    next_expected_ranges: list[str] = Field(alias="nextExpectedRanges")
-    upload_complete: bool = Field(default=False, alias="uploadComplete")
-
-
 class DocumentSheet(BaseSchema):
     """Descriptor for a worksheet or single-sheet document."""
 
@@ -449,10 +401,6 @@ __all__ = [
     "DocumentTagsReplace",
     "DocumentUpdateRequest",
     "DocumentUploadRunOptions",
-    "DocumentUploadSessionCreateRequest",
-    "DocumentUploadSessionCreateResponse",
-    "DocumentUploadSessionStatusResponse",
-    "DocumentUploadSessionUploadResponse",
     "TagCatalogItem",
     "TagCatalogPage",
     "UserSummary",

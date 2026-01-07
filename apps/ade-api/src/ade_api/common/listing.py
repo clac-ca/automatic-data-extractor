@@ -26,6 +26,12 @@ MAX_FILTERS = 25
 MAX_FILTERS_RAW_LENGTH = 8 * 1024
 
 LIST_QUERY_KEYS = {"page", "perPage", "sort", "filters", "joinOperator", "q"}
+STATUS_FILTER_EXAMPLE = '[{"id":"status","operator":"in","value":["processing","failed"]}]'
+JOIN_OPERATOR_QUERY = Query(
+    FilterJoinOperator.AND,
+    alias="joinOperator",
+    description="Logical operator to join filters (and/or).",
+)
 
 
 @dataclass(frozen=True)
@@ -66,15 +72,11 @@ def list_query_params(
         examples={
             "statusIn": {
                 "summary": "Status filter",
-                "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]",
+                "value": STATUS_FILTER_EXAMPLE,
             }
         },
     ),
-    join_operator: FilterJoinOperator = Query(
-        FilterJoinOperator.AND,
-        alias="joinOperator",
-        description="Logical operator to join filters (and/or).",
-    ),
+    join_operator: FilterJoinOperator = JOIN_OPERATOR_QUERY,
     q: str | None = Query(
         None,
         description=(

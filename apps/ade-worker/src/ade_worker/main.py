@@ -1,5 +1,5 @@
 """Console entrypoint for ade-worker."""
 
-from .worker import main
+from .loop import main
 
 __all__ = ["main"]

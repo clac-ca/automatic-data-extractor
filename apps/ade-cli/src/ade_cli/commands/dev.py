@@ -42,8 +42,10 @@ def run_dev(
     worker: bool = True,
     api_only: bool = False,
     web_only: bool = False,
-    api_port: int = 8000,
-    web_port: int = 5173,
+    api_port: int | None = None,
+    api_host: str | None = None,
+    web_port: int | None = None,
+    web_host: str | None = None,
 ) -> None:
     """
     Run ADE dev services with sensible defaults.
@@ -70,6 +72,11 @@ def run_dev(
     if not api and not web and not worker:
         typer.echo("⚠️ No services selected; nothing to run.", err=True)
         raise typer.Exit(code=1)
+
+    api_port = int(api_port if api_port is not None else os.getenv("ADE_API_PORT", "8000") or "8000")
+    api_host = api_host or os.getenv("ADE_API_HOST", "127.0.0.1")
+    web_port = int(web_port if web_port is not None else os.getenv("ADE_WEB_PORT", "5173") or "5173")
+    web_host = web_host or os.getenv("ADE_WEB_HOST", "127.0.0.1")
 
     api_present = common.BACKEND_SRC.exists()
     web_present = common.FRONTEND_DIR.exists()
@@ -107,12 +114,12 @@ def run_dev(
             "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
         )
         common.uvicorn_path()
-        typer.echo(f"🔧 API dev server:        http://localhost:{api_port}")
+        typer.echo(f"🔧 API dev server:        http://{api_host}:{api_port}")
 
     if web:
         common.npm_path()
         common.ensure_node_modules()
-        typer.echo(f"💻 Web dev server:        http://localhost:{web_port}")
+        typer.echo(f"💻 Web dev server:        http://{web_host}:{web_port}")
 
     if worker:
         common.require_python_module(
@@ -140,7 +147,7 @@ def run_dev(
                     "ade_api.main:create_app",
                     "--factory",
                     "--host",
-                    "127.0.0.1",
+                    api_host,
                     "--port",
                     str(api_port),
                     "--reload",
@@ -170,6 +177,8 @@ def run_dev(
                     "run",
                     "dev",
                     "--",
+                    "--host",
+                    web_host,
                     "--port",
                     str(web_port),
                     *(
@@ -229,14 +238,28 @@ def register(app: typer.Typer) -> None:
             help="Shortcut for web only (same as --web --no-api --no-worker).",
         ),
         api_port: int = typer.Option(
-            8000,
+            None,
             "--api-port",
             help="Port for the API dev server.",
+            envvar="ADE_API_PORT",
+        ),
+        api_host: str = typer.Option(
+            None,
+            "--api-host",
+            help="Host/interface for the API dev server.",
+            envvar="ADE_API_HOST",
         ),
         web_port: int = typer.Option(
-            5173,
+            None,
             "--web-port",
             help="Port for the web dev server.",
+            envvar="ADE_WEB_PORT",
+        ),
+        web_host: str = typer.Option(
+            None,
+            "--web-host",
+            help="Host/interface for the web dev server.",
+            envvar="ADE_WEB_HOST",
         ),
     ) -> None:
         run_dev(
@@ -246,5 +269,7 @@ def register(app: typer.Typer) -> None:
             api_only=api_only,
             web_only=web_only,
             api_port=api_port,
+            api_host=api_host,
             web_port=web_port,
+            web_host=web_host,
         )

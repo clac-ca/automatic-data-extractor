@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Path, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.auth import AuthenticationError, authenticate_websocket
+from ade_api.core.auth.pipeline import ApiKeyAuthenticator
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia
 from ade_api.core.http.dependencies import (
     get_api_key_authenticator_websocket,
@@ -16,7 +17,8 @@ from ade_api.core.http.dependencies import (
     get_cookie_authenticator,
     get_rbac_service,
 )
-from ade_api.db import db as database, get_db_session
+from ade_api.db import db as database
+from ade_api.db import get_db_session
 from ade_api.models import User
 from ade_api.settings import Settings, get_settings
 
@@ -127,7 +129,7 @@ async def presence_ws(
     workspace_id: WorkspacePath,
     db_session: WebSocketSessionDep,
     settings: SettingsDep,
-    api_keys=Depends(get_api_key_authenticator_websocket),
+    api_keys: Annotated[ApiKeyAuthenticator, Depends(get_api_key_authenticator_websocket)],
 ) -> None:
     try:
         principal = await authenticate_websocket(

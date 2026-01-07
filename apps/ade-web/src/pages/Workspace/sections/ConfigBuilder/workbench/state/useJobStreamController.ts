@@ -6,7 +6,7 @@ import type { WorkbenchConsoleLine } from "../types";
 import { createRun, streamRunEventsForRun, type RunStreamOptions } from "@api/runs/api";
 import { eventName, eventPayload, eventTimestamp, type RunStreamEvent } from "@schema/runs";
 
-export type JobStreamStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
+export type JobStreamStatus = "idle" | "running" | "succeeded" | "failed";
 
 export interface JobStreamMetadata {
   readonly mode: "validation" | "extraction";
@@ -100,12 +100,12 @@ export function useJobStreamController({
 
       const payload = eventPayload(evt);
       const scopeRaw =
-        name.startsWith("build.")
-          ? "build"
+        name.startsWith("environment.")
+          ? "environment"
           : name === "console.line" && typeof payload.scope === "string"
             ? payload.scope
             : "run";
-      const scope = scopeRaw === "build" ? "build" : "run";
+      const scope = scopeRaw.includes("environment") ? "environment" : "run";
 
       const levelRaw = typeof evt.level === "string" ? evt.level.toLowerCase() : "info";
       const level: WorkbenchConsoleLine["level"] =
@@ -131,8 +131,6 @@ export function useJobStreamController({
         const status = typeof payload.status === "string" ? payload.status.toLowerCase() : "";
         if (status === "succeeded" || status === "success") {
           setJobStatus("succeeded");
-        } else if (status === "cancelled" || status === "canceled") {
-          setJobStatus("cancelled");
         } else {
           setJobStatus("failed");
         }

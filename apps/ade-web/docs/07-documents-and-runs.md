@@ -52,11 +52,10 @@ Key property: **Documents and Runs are loosely coupled.**
 
 ADE Web distinguishes three related concepts:
 
-* **Build** – prepares or refreshes the environment for a configuration.
+* **Environment** – worker-owned execution cache for a configuration + dependency digest.
 
-  * Lives under `/builds` endpoints.
-  * Represented by the `Build` type.
-  * Never called a “run” in UI or types.
+  * Not a user action in the UI.
+  * Provisioned automatically as runs start.
 
 * **Run** – executes the ADE engine against one or more documents.
 
@@ -73,7 +72,6 @@ type RunMode = "normal" | "validation" | "test";
 interface RunOptions {
   dryRun?: boolean;
   validateOnly?: boolean;
-  forceRebuild?: boolean;   // Force environment rebuild before executing
   inputSheetNames?: string[];
   mode?: RunMode;           // View-model helper derived from the flags above
 }
@@ -93,7 +91,7 @@ Typical interpretations:
 
 Backend payloads use **snake_case** equivalents:
 
-* `dry_run`, `validate_only`, `force_rebuild`, `input_sheet_names`.
+* `dry_run`, `validate_only`, `input_sheet_names`.
 * The `mode` field is **UI‑only**; the backend infers behaviour from the flags.
 
 ---
@@ -381,7 +379,6 @@ type RunMode = "normal" | "validation" | "test";
 export interface RunOptions {
   dryRun?: boolean;
   validateOnly?: boolean;
-  forceRebuild?: boolean; // Force environment rebuild before executing
   inputSheetNames?: string[];
   mode?: RunMode;         // View-model helper; API uses snake_case flags
 }
@@ -401,7 +398,6 @@ Canonical `RunStatus` values (defined centrally in `@schema`):
 * `running` – in progress.
 * `succeeded` – completed successfully.
 * `failed` – completed with an error.
-* `cancelled` – terminated early by user or system.
 
 Semantics:
 
@@ -521,7 +517,7 @@ A “Run again” action in the ledger always creates a **new** run, using the p
 
 * **Configuration version** – defaults to the same version as the source run (user can override).
 * **Document set** – defaults to the same input documents.
-* **RunOptions** – copied (including `dryRun`, `validateOnly`, `inputSheetNames`; `forceRebuild` only if explicitly set on the original) unless the user modifies them.
+* **RunOptions** – copied (including `dryRun`, `validateOnly`, `inputSheetNames`) unless the user modifies them.
 
 This mirrors the per‑document run preference pattern: previous choices are **helpful defaults**, not authoritative configuration.
 
@@ -548,13 +544,6 @@ ADE Web exposes options through the `RunOptions` shape (camelCase in the UI, con
 
   * Label: “Run validators only”.
   * Skips full extraction; sets `validateOnly: true` and typically `mode: "validation"`.
-
-* **Force rebuild**
-
-  * Label: “Force rebuild environment”.
-  * Sends `forceRebuild: true` (`force_rebuild` in the API).
-  * Forces a fresh environment build before running.
-  * Backends should also rebuild automatically when the environment is missing, stale, or derived from outdated content; `forceRebuild` is an explicit override.
 
 * **Sheet selection**
 
@@ -586,7 +575,7 @@ Common payload fields:
 
 * `input_document_ids: [...]` (usually one document from Documents; may be multiple from Runs).
 * Optional `input_sheet_names`.
-* Run options mapped from `RunOptions` → snake_case (`dry_run`, `validate_only`, `force_rebuild`).
+* Run options mapped from `RunOptions` → snake_case (`dry_run`, `validate_only`).
 * `stream` flag when inline streaming is desired (Configuration Builder often sets this to `true`).
 
 Flows:
@@ -624,7 +613,6 @@ export interface DocumentRunPreferences {
 Notes:
 
 * All fields are optional; missing fields fall back to defaults.
-* `forceRebuild` is **not** persisted; rebuilding is a deliberate per‑run choice, not a sticky preference for general document runs.
 
 ### 8.2 Storage and keying
 

@@ -77,17 +77,6 @@ def get_configurations_service(session: SessionDep, settings: SettingsDep):
     return ConfigurationsService(session=session, storage=storage)
 
 
-def get_builds_service(session: SessionDep, settings: SettingsDep):
-    from ade_api.features.builds.service import BuildsService
-
-    storage = _build_config_storage(settings)
-    return BuildsService(
-        session=session,
-        settings=settings,
-        storage=storage,
-    )
-
-
 def get_runs_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.runs.service import RunsService
 
@@ -116,7 +105,6 @@ __all__ = [
     "get_health_service",
     "get_safe_mode_service",
     "get_configurations_service",
-    "get_builds_service",
     "get_runs_service",
     "get_workspaces_service",
     "get_idempotency_service",

@@ -4,7 +4,7 @@ Align with the API storage layout:
 - data/workspaces/<workspace_id>/config_packages/<configuration_id>
 - data/workspaces/<workspace_id>/documents/<stored_uri>
 - data/workspaces/<workspace_id>/runs/<run_id>
-- data/venvs/<workspace_id>/<configuration_id>/<build_id>/.venv
+- data/venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
 """
 
 from __future__ import annotations
@@ -44,6 +44,26 @@ def _strip_file_uri(uri: str) -> str:
     return path
 
 
+def _safe_segment(value: str, *, fallback: str) -> str:
+    cleaned = []
+    for ch in value:
+        if ch.isalnum() or ch in {"-", "_"}:
+            cleaned.append(ch)
+        else:
+            cleaned.append("_")
+    segment = "".join(cleaned).strip("_")
+    return segment or fallback
+
+
+def _deps_digest_segment(deps_digest: str) -> str:
+    raw = (deps_digest or "").strip()
+    if not raw:
+        return "deps-unknown"
+    if ":" in raw:
+        _, raw = raw.split(":", 1)
+    return f"deps-{_safe_segment(raw, fallback='unknown')}"
+
+
 @dataclass(frozen=True, slots=True)
 class PathManager:
     data_dir: Path
@@ -71,15 +91,41 @@ class PathManager:
     def config_package_dir(self, workspace_id: str, configuration_id: str) -> Path:
         return _safe_join(self.configs_root(workspace_id), configuration_id)
 
-    # --- builds / venvs ---
-    def build_root(self, workspace_id: str, configuration_id: str, build_id: str) -> Path:
-        return _safe_join(self.venvs_root(workspace_id), configuration_id, build_id)
+    # --- environments / venvs ---
+    def environment_root(
+        self,
+        workspace_id: str,
+        configuration_id: str,
+        deps_digest: str,
+        environment_id: str,
+    ) -> Path:
+        segment = _deps_digest_segment(deps_digest)
+        return _safe_join(self.venvs_root(workspace_id), configuration_id, segment, environment_id)
 
-    def venv_dir(self, workspace_id: str, configuration_id: str, build_id: str) -> Path:
-        return _safe_join(self.build_root(workspace_id, configuration_id, build_id), ".venv")
+    def environment_venv_dir(
+        self,
+        workspace_id: str,
+        configuration_id: str,
+        deps_digest: str,
+        environment_id: str,
+    ) -> Path:
+        return _safe_join(
+            self.environment_root(workspace_id, configuration_id, deps_digest, environment_id),
+            ".venv",
+        )
 
-    def build_event_log_path(self, workspace_id: str, configuration_id: str, build_id: str) -> Path:
-        return _safe_join(self.build_root(workspace_id, configuration_id, build_id), "logs", "events.ndjson")
+    def environment_event_log_path(
+        self,
+        workspace_id: str,
+        configuration_id: str,
+        deps_digest: str,
+        environment_id: str,
+    ) -> Path:
+        return _safe_join(
+            self.environment_root(workspace_id, configuration_id, deps_digest, environment_id),
+            "logs",
+            "events.ndjson",
+        )
 
     # --- runs ---
     def run_dir(self, workspace_id: str, run_id: str) -> Path:

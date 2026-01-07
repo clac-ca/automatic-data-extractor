@@ -11,6 +11,9 @@ def test_run_parallel_handles_keyboard_interrupt(monkeypatch):
         def __init__(self):
             self.terminated = False
             self.waited = False
+            self.stdout = None
+            self.stderr = None
+            self.pid = 999999
 
         def poll(self):
             return None

@@ -83,7 +83,7 @@ If-Match: W/"doc_123:1700000000"
 
 ### Idempotent POSTs
 
-- Creating documents, runs, builds, and API keys requires `Idempotency-Key`.
+- Creating documents, runs, and API keys requires `Idempotency-Key`.
 - Replaying the same key + payload returns the original response.
 - Reusing a key with a different payload returns `409 idempotency_key_conflict`.
 
@@ -177,7 +177,7 @@ Trigger and monitor extraction runs. Creation is configuration-scoped; reads are
 - `POST /configurations/{configurationId}/runs` – submit a run for the given configuration; requires `input_document_id` and returns a queued `Run` snapshot (returns `429` with `run_queue_full` when the queue is full).
 - `POST /configurations/{configurationId}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection; returns `429` with `run_queue_full` when the full batch does not fit).
 - `GET /workspaces/{workspaceId}/runs` – list recent runs for a workspace; use the filter DSL for status or source document filters.
-- `GET /runs/{runId}` – retrieve run metadata (status, timing, config/build references, input/output hints).
+- `GET /runs/{runId}` – retrieve run metadata (status, timing, configuration, input/output hints).
 - `GET /runs/{runId}/events` – fetch structured events (JSON or NDJSON).
 - `GET /runs/{runId}/events/stream` – SSE stream of the run event log.
 - `GET /runs/{runId}/input` – fetch input metadata; `GET /runs/{runId}/input/download` downloads the original file.
@@ -207,17 +207,11 @@ Author and manage ADE configuration packages. All routes are workspace-scoped.
 - `PUT /workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}` – ensure an empty directory exists (idempotent; returns `created` flag).
 - `DELETE /workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}` – remove a directory; `?recursive=true` allowed.
 
-### Builds
+### Environments
 
-Provision isolated virtual environments for configurations. Builds are configuration-scoped, with global lookup by `build_id`.
-
-- `POST /workspaces/{workspaceId}/configurations/{configurationId}/builds` – enqueue a build (`options.force`, `options.wait`).
-- `GET /workspaces/{workspaceId}/configurations/{configurationId}/builds` – list build history for a configuration (canonical list contract; filter on `status`, `createdAt`, etc.).
-- `GET /builds/{buildId}` – fetch a build snapshot (status, timestamps, exit code, engine/python metadata).
-- `GET /builds/{buildId}/events` – fetch structured build events (JSON or NDJSON).
-- `GET /builds/{buildId}/events/stream` – SSE stream of the build event log.
-
-> Build console output is emitted as `EventRecord` entries (`console.line` with `data.scope=\"build\"`) in the build event stream. Runs expose their own event stream under `/runs/{runId}/events/stream`.
+Environments are worker-owned cached venvs keyed by configuration + dependency digest. They are
+provisioned automatically as runs start. There is no public environment API in v1; operational
+visibility comes from run event streams and worker logs.
 
 ## Error handling
 

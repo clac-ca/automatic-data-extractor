@@ -27,6 +27,7 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
+from ade_api.features.configs.deps import compute_dependency_digest
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
@@ -39,8 +40,6 @@ from ade_api.infra.storage import (
     workspace_run_root,
 )
 from ade_api.models import (
-    Build,
-    BuildStatus,
     Configuration,
     ConfigurationStatus,
     Document,
@@ -175,7 +174,6 @@ class RunsService:
                 configuration_id=configuration_id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
-                force_rebuild=options.force_rebuild,
                 input_document_id=options.input_document_id,
             ),
         )
@@ -214,14 +212,13 @@ class RunsService:
 
         selected_sheet_names = self._select_input_sheet_names(options)
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
-        build_id = await self._resolve_build_id(
-            configuration=configuration,
-            force_rebuild=options.force_rebuild,
-        )
+        deps_digest = await self._resolve_deps_digest(configuration)
+        engine_spec = self._settings.engine_spec
         await self._insert_runs_for_documents(
             configuration=configuration,
             document_ids=[input_document_id],
-            build_id=build_id,
+            engine_spec=engine_spec,
+            deps_digest=deps_digest,
             input_sheet_names_by_document_id={
                 input_document_id: selected_sheet_names or None,
             },
@@ -250,7 +247,6 @@ class RunsService:
                 input_document_id=input_document_id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
-                force_rebuild=options.force_rebuild,
             ),
         )
         return run
@@ -298,7 +294,6 @@ class RunsService:
                 document_count=len(document_ids),
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
-                force_rebuild=options.force_rebuild,
             ),
         )
 
@@ -327,18 +322,30 @@ class RunsService:
             new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
 
         if new_document_ids:
-            await self._enforce_queue_capacity(requested=len(new_document_ids), queued_count=queued_count)
+            await self._enforce_queue_capacity(
+                requested=len(new_document_ids),
+                queued_count=queued_count,
+            )
 
             for document_id in new_document_ids:
                 input_sheet_names = None
-                if input_sheet_names_by_document_id and document_id in input_sheet_names_by_document_id:
+                if (
+                    input_sheet_names_by_document_id
+                    and document_id in input_sheet_names_by_document_id
+                ):
                     raw_names = input_sheet_names_by_document_id.get(document_id) or []
                     normalized = self._select_input_sheet_names(
-                        RunCreateOptions(input_document_id=document_id, input_sheet_names=raw_names),
+                        RunCreateOptions(
+                            input_document_id=document_id,
+                            input_sheet_names=raw_names,
+                        ),
                     )
                     input_sheet_names = normalized or None
                 active_sheet_only = batch_active_sheet_only
-                if active_sheet_only_by_document_id and document_id in active_sheet_only_by_document_id:
+                if (
+                    active_sheet_only_by_document_id
+                    and document_id in active_sheet_only_by_document_id
+                ):
                     active_sheet_only = bool(active_sheet_only_by_document_id.get(document_id))
                 if input_sheet_names:
                     active_sheet_only = False
@@ -347,7 +354,6 @@ class RunsService:
                 run_options_by_document_id[document_id] = RunCreateOptions(
                     dry_run=options.dry_run,
                     validate_only=options.validate_only,
-                    force_rebuild=options.force_rebuild,
                     log_level=options.log_level,
                     input_document_id=document_id,
                     input_sheet_names=input_sheet_names,
@@ -355,14 +361,13 @@ class RunsService:
                     metadata=options.metadata,
                 )
 
-            build_id = await self._resolve_build_id(
-                configuration=configuration,
-                force_rebuild=options.force_rebuild,
-            )
+            deps_digest = await self._resolve_deps_digest(configuration)
+            engine_spec = self._settings.engine_spec
             await self._insert_runs_for_documents(
                 configuration=configuration,
                 document_ids=new_document_ids,
-                build_id=build_id,
+                engine_spec=engine_spec,
+                deps_digest=deps_digest,
                 input_sheet_names_by_document_id=normalized_sheet_names,
                 run_options_by_document_id={
                     doc_id: run_options.model_dump(mode="json", exclude_none=True)
@@ -599,39 +604,23 @@ class RunsService:
             raise RuntimeError(f"No active run found for document {document_id}")
         return runs[0]
 
-    async def _resolve_build_id(
-        self,
-        *,
-        configuration: Configuration,
-        force_rebuild: bool,
-    ) -> UUID | None:
-        if not force_rebuild and configuration.active_build_id:
-            build = await self._session.get(Build, configuration.active_build_id)
-            if build and build.status == BuildStatus.READY:
-                return build.id
-
-        from ade_api.features.builds.schemas import BuildCreateOptions
-        from ade_api.features.builds.service import BuildsService
-
-        builds = BuildsService(
-            session=self._session,
-            settings=self._settings,
-            storage=self._storage,
-        )
-        build = await builds.prepare_build(
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            options=BuildCreateOptions(force=force_rebuild),
-            reason="run.enqueue",
-        )
-        return build.id
+    async def _resolve_deps_digest(self, configuration: Configuration) -> str:
+        try:
+            config_path = await self._storage.ensure_config_path(
+                configuration.workspace_id,
+                configuration.id,
+            )
+        except Exception as exc:  # pragma: no cover - surface as run error
+            raise RunInputMissingError("Configuration files are missing") from exc
+        return await run_in_threadpool(compute_dependency_digest, config_path)
 
     async def _insert_runs_for_documents(
         self,
         *,
         configuration: Configuration,
         document_ids: Sequence[UUID],
-        build_id: UUID | None,
+        engine_spec: str,
+        deps_digest: str,
         input_sheet_names_by_document_id: dict[UUID, list[str] | None] | None,
         run_options_by_document_id: dict[UUID, dict[str, Any] | None] | None,
         document_status: DocumentStatus | None,
@@ -671,7 +660,6 @@ class RunsService:
                     "id": uuid4(),
                     "configuration_id": configuration.id,
                     "workspace_id": configuration.workspace_id,
-                    "build_id": build_id,
                     "input_document_id": doc_id,
                     "input_sheet_names": (
                         input_sheet_names_by_document_id.get(doc_id)
@@ -683,6 +671,8 @@ class RunsService:
                         if run_options_by_document_id
                         else None
                     ),
+                    "engine_spec": engine_spec,
+                    "deps_digest": deps_digest,
                     "status": RunStatus.QUEUED,
                     "available_at": now,
                     "attempt_count": 0,
@@ -909,15 +899,10 @@ class RunsService:
             id=run.id,
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
-            build_id=run.build_id,
             status=run.status,
             failure_code=failure_code,
             failure_stage=failure_stage,
             failure_message=failure_message,
-            engine_version=None,
-            config_version=None,
-            env_reason=None,
-            env_reused=None,
             created_at=self._ensure_utc(run.created_at) or utc_now(),
             started_at=started_at,
             completed_at=completed_at,
@@ -1005,7 +990,6 @@ class RunsService:
         ready = bool(output_file) and run.status in {
             RunStatus.SUCCEEDED,
             RunStatus.FAILED,
-            RunStatus.CANCELLED,
         }
 
         filename: str | None = None
@@ -1213,7 +1197,7 @@ class RunsService:
             raise RunOutputPreviewSheetNotFoundError(
                 f"Sheet {requested!r} was not found in run {run_id!r} output."
             ) from exc
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise RunOutputPreviewParseError(
                 f"Preview timed out after {timeout:g}s for run {run_id!r} output."
             ) from exc
@@ -1258,7 +1242,7 @@ class RunsService:
                     run_in_threadpool(self._inspect_workbook, path),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 raise RunOutputSheetParseError(
                     f"Worksheet inspection timed out after {timeout:g}s for run {run_id!r} output."
                 ) from exc
@@ -1304,6 +1288,7 @@ class RunsService:
             "run.logs.file_path.start",
             extra=log_context(run_id=run_id),
         )
+        run = await self._require_run(run_id)
         logs_path = await self.get_event_log_path(run_id=run_id)
         if not logs_path.is_file():
             logger.warning(

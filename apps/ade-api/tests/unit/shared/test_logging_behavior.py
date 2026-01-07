@@ -34,7 +34,7 @@ class _CaptureHandler(logging.Handler):
 
 
 def test_log_context_includes_correlation_and_fields():
-    setup_logging(Settings(logging_level="DEBUG"))
+    setup_logging(Settings(log_level="DEBUG"))
     handler = _CaptureHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(ConsoleLogFormatter())
@@ -60,7 +60,7 @@ def test_log_context_includes_correlation_and_fields():
 
 
 def test_unhandled_exception_handler_logs_with_correlation():
-    setup_logging(Settings(logging_level="DEBUG"))
+    setup_logging(Settings(log_level="DEBUG"))
     handler = _CaptureHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(ConsoleLogFormatter())

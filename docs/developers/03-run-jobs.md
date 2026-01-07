@@ -1,55 +1,42 @@
+# Runs & Environments (Worker Queue Model)
+
+This document describes how ADE uses the database as a queue for **runs** and
+worker-owned **environments**. The API and worker communicate only via SQL and
+shared storage paths.
+
 ---
-title: Runs & Builds (Worker Queue Model)
+
+## Core rules
+
+* Runs are the **only queued jobs** created by the API.
+* Environments are **worker-owned cache rows** keyed by configuration + dependency digest.
+* Runs are only claimed when a matching environment is `ready`.
+* Leases (`claim_expires_at`) protect long-running work and allow recovery.
+
 ---
 
-# Runs & Builds (Worker Queue Model)
+## Lifecycle (happy path)
 
-This document describes how ADE uses the database as the queue for builds and runs. The API and worker are **not** coupled at runtime; they only interact via SQL (and shared storage paths).
+1. API inserts a `runs` row (`status=queued`).
+2. Worker ensures a matching `environments` row exists (`status=queued`).
+3. Worker claims the environment (`status=building`) and provisions the venv.
+4. Environment becomes `ready`.
+5. Worker claims the run (`status=running`) and executes the engine.
+6. Worker marks the run `succeeded` or `failed`.
 
-## Overview
+---
 
-- **API** creates `builds` and `runs` rows (status = `queued`).
-- **Worker** claims rows, executes jobs, writes NDJSON event logs, and updates status.
-- **Client** reads events and outputs via the API (which reads from disk + DB).
+## Crash recovery
 
-## Queue model (standard DB queue)
+* If a worker crashes mid-environment build, the lease expires and another
+  worker can requeue and rebuild.
+* If a worker crashes mid-run, the run lease expires and the run is retried or
+  failed based on attempt counts.
 
-Each job type lives in its own table:
+---
 
-- `builds`: build jobs for configuration environments
-- `runs`: run jobs for processing documents
+## No in-place rebuilds
 
-The worker uses **atomic claim + lease** semantics:
-
-1. **Claim**: update one `queued` row to `running/building`, set `claimed_by` and `claim_expires_at`.
-2. **Heartbeat**: periodically extend `claim_expires_at` while the subprocess runs.
-3. **Complete**: mark `succeeded/failed`, clear `claimed_by` and `claim_expires_at`.
-
-If a lease expires, the worker either re-queues the job or fails it once max attempts are exceeded.
-
-## Build → Run lifecycle
-
-Runs are only claimed if their `build_id` is ready:
-
-1. API resolves a build for a configuration (reuse or create).
-2. API stores `build_id` on the run row when enqueuing.
-3. Worker only claims runs with `build_id = NULL` **or** `build.status = ready`.
-
-This guarantees that a run never starts against a missing or failed build.
-
-## Logs & events
-
-- Worker appends NDJSON to `events.ndjson` for both builds and runs.
-- API exposes **events list**, **events stream (SSE)**, and **events download** endpoints by reading the same files.
-
-## Failure semantics
-
-- **Run timeout**: worker terminates the subprocess, marks the run failed, and releases the claim.
-- **Build timeout**: worker marks the build failed and releases the claim.
-- **Failed build**: queued runs referencing the build are marked failed with a clear error message.
-
-## Scaling
-
-- Multiple worker instances can run concurrently (processes or hosts).
-- For SQL Server: row locking hints avoid contention.
-- For SQLite: WAL + busy timeouts reduce lock errors (still best for low concurrency).
+Dependency changes create a **new** environment (new `deps_digest`). In-flight
+runs keep using their current environment; old environments are removed only
+by GC when they are cold and unreferenced.

@@ -1,4 +1,4 @@
-"""API route exposing build/runtime metadata."""
+"""API route exposing runtime metadata."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ router = APIRouter(tags=["info"])
     "/info",
     response_model=InfoResponse,
     status_code=status.HTTP_200_OK,
-    summary="Build/runtime metadata",
+    summary="Runtime metadata",
 )
 async def read_info(
     request: Request,

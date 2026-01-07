@@ -5,7 +5,7 @@ from ade_api.infra.storage import workspace_run_root
 from ade_api.models import RunStatus
 from ade_api.settings import Settings
 
-from tests.integration.runs.helpers import auth_headers, make_build, make_configuration, make_document, make_run
+from tests.integration.runs.helpers import auth_headers, make_configuration, make_document, make_run
 
 pytestmark = pytest.mark.asyncio
 
@@ -24,18 +24,13 @@ async def test_run_output_endpoint_serves_file(
     session.add(configuration)
     await session.flush()
 
-    build = make_build(
-        workspace_id=workspace_id,
-        configuration_id=configuration.id,
-    )
     document = make_document(workspace_id=workspace_id, filename="input.csv")
-    session.add_all([build, document])
+    session.add_all([document])
     await session.flush()
 
     run = make_run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
-        build_id=build.id,
         document_id=document.id,
         status=RunStatus.SUCCEEDED,
     )

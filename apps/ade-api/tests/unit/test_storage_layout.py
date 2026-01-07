@@ -3,13 +3,11 @@ from pathlib import Path
 import pytest
 
 from ade_api.infra.storage import (
-    build_venv_path,
-    build_venv_root,
-    build_venv_temp_path,
     workspace_config_root,
     workspace_documents_root,
     workspace_root,
     workspace_run_root,
+    workspace_venvs_root,
 )
 from ade_api.settings import DEFAULT_VENVS_DIR, Settings
 
@@ -35,13 +33,7 @@ def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     )
     assert workspace_run_root(settings, workspace_id) == base / "runs"
     assert workspace_run_root(settings, workspace_id, run_id) == base / "runs" / run_id
-    expected_root = (DEFAULT_VENVS_DIR / workspace_id / config_id / "build-1").resolve()
-    assert build_venv_root(settings, workspace_id, config_id, "build-1") == expected_root
-    assert build_venv_path(settings, workspace_id, config_id, "build-1") == expected_root / ".venv"
-    assert (
-        build_venv_temp_path(settings, workspace_id, config_id, "build-1")
-        == expected_root / ".venv.tmp"
-    )
+    assert workspace_venvs_root(settings, workspace_id) == (DEFAULT_VENVS_DIR / workspace_id).resolve()
 
 
 def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
@@ -72,12 +64,7 @@ def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
         workspace_run_root(settings, workspace_id, "run-123")
         == (tmp_path / "runs-override" / workspace_id / "runs" / "run-123").resolve()
     )
-    expected_root = (tmp_path / "venvs-override" / workspace_id / config_id / "build-abc").resolve()
-    assert build_venv_root(settings, workspace_id, config_id, "build-abc") == expected_root
     assert (
-        build_venv_path(settings, workspace_id, config_id, "build-abc") == expected_root / ".venv"
-    )
-    assert (
-        build_venv_temp_path(settings, workspace_id, config_id, "build-abc")
-        == expected_root / ".venv.tmp"
+        workspace_venvs_root(settings, workspace_id)
+        == (tmp_path / "venvs-override" / workspace_id).resolve()
     )

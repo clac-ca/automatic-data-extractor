@@ -1,4 +1,4 @@
-"""ADE worker - minimal, reliable, DB-backed build/run runner (SQLite + Azure SQL).
+"""ADE worker - minimal, reliable, DB-backed environment/run runner (SQLite + Azure SQL).
 
 This package intentionally avoids external dependencies (Redis, brokers, etc).
 """

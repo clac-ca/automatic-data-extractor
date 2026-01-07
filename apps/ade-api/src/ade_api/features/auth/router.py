@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.routing import APIRoute
 from fastapi_users.authentication.strategy import DatabaseStrategy
+from fastapi_users.password import PasswordHelper
 from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,7 +82,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         payload: AuthSetupRequest,
         service: Annotated[AuthService, Depends(get_auth_service)],
         db: Annotated[AsyncSession, Depends(get_db_session)],
-        password_helper=Depends(get_password_helper),
+        password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
     ) -> Response:
         password_hash = password_helper.hash(payload.password.get_secret_value())
 

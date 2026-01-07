@@ -7,18 +7,17 @@ serialize JSON to a compact string instead of raw bytes.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator
-
 import asyncio
 import json
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 from watchfiles import awatch
 
-from ade_api.common.events import strip_sequence
-
 from ade_api.common.encoding import json_dumps
+from ade_api.common.events import strip_sequence
 
 WATCH_DEBOUNCE_MS = 50
 WATCH_STEP_MS = 50

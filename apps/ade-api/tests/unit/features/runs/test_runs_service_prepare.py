@@ -23,7 +23,8 @@ async def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.QUEUED
-    assert run.build_id is not None
+    assert run.engine_spec == str(_settings.engine_spec)
+    assert run.deps_digest.startswith("sha256:")
     assert run.input_document_id == document.id
     assert run.input_sheet_names is None
     assert run.run_options is not None
@@ -92,4 +93,3 @@ async def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
         configuration_id=configuration.id,
     )
     assert second == 0
-

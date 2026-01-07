@@ -47,7 +47,7 @@ export interface WorkbenchConsoleLine {
   readonly id?: string;
   readonly level: WorkbenchConsoleLevel;
   readonly message: string;
-  readonly origin?: "run" | "build" | "raw";
+  readonly origin?: "run" | "environment" | "raw";
   readonly timestamp?: string;
   readonly raw?: unknown;
 }

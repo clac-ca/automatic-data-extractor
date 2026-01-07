@@ -1,6 +1,6 @@
 # ADE Events v1 – EventRecord NDJSON logs
 
-ADE standardises run/build telemetry as **EventRecord** lines written by the worker. The engine emits NDJSON `EventRecord` objects to **stderr**; the **worker** captures and appends them to `events.ndjson` for each build or run. The API serves those logs over JSON, NDJSON, and SSE.
+ADE standardises run/environment telemetry as **EventRecord** lines written by the worker. The engine emits NDJSON `EventRecord` objects to **stderr**; the **worker** captures and appends them to `events.ndjson` for each environment or run. The API serves those logs over JSON, NDJSON, and SSE.
 
 ## EventRecord envelope
 
@@ -17,7 +17,7 @@ Top-level keys match the engine schema; the worker adds optional context inside 
   "data": {
     "jobId": "<run_id>",
     "workspaceId": "<workspace_id>",
-    "buildId": "<build_id>",
+    "environmentId": "<environment_id>",
     "configurationId": "<configuration_id>",
     "...": "source-specific payload"
   },
@@ -25,23 +25,23 @@ Top-level keys match the engine schema; the worker adds optional context inside 
 }
 ```
 
-- Context (`jobId`, `workspaceId`, `buildId`, `configurationId`) is merged into `data` when present.
-- `event` names are dot-delimited (`run.complete`, `build.start`, `engine.phase.start`, `console.line`).
+- Context (`jobId`, `workspaceId`, `environmentId`, `configurationId`) is merged into `data` when present.
+- `event` names are dot-delimited (`run.complete`, `environment.start`, `engine.phase.start`, `console.line`).
 
 ## Sources
 - **Engine NDJSON stderr** — primary source; each line is a JSON object with an `event` field.
-- **Worker-origin events** — orchestration emits `run.*`, `build.*`, and `console.line` records using the same envelope.
-- **Console fallback** — non-JSON stdout/stderr lines are wrapped as `console.line` events with `data.scope` = `run` or `build`.
+- **Worker-origin events** — orchestration emits `run.*`, `environment.*`, and `console.line` records using the same envelope.
+- **Console fallback** — non-JSON stdout/stderr lines are wrapped as `console.line` events with `data.scope` = `run` or `environment`.
 
 ## Flow (happy path)
-1. API creates `builds`/`runs` rows (status = `queued`).
-2. Worker claims a build or run (lease + heartbeat) and writes `events.ndjson` as it executes.
-3. Worker updates status (`ready`, `succeeded`, `failed`) on completion.
+1. API creates `runs` rows (status = `queued`).
+2. Worker claims an environment or run (lease + heartbeat) and writes `events.ndjson` as it executes.
+3. Worker updates status (`ready`, `failed`, `succeeded`) on completion.
 4. API streams the NDJSON logs over SSE or returns paged event lists.
 
 ## Persistence, replay, and SSE
 - **Run logs**: `<runs_root>/<workspace>/<run_id>/logs/events.ndjson` (one stream per run).
-- **Build logs**: `<venvs_root>/<workspace>/<configuration>/<build>/logs/events.ndjson`.
+- **Environment logs**: `<venvs_root>/<workspace>/<configuration>/<deps_digest>/<environment_id>/logs/events.ndjson`.
 - SSE frames always include `id: <sequence>`; if the event already has a numeric `sequence`, that value is reused. Otherwise, the API assigns a monotonic counter as it tails the file.
 - Replay reads the NDJSON log in order, skips entries until the cursor (`Last-Event-ID` or `after_sequence`) is reached, then continues live on the same stream.
 

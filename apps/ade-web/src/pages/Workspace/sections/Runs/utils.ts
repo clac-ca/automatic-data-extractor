@@ -36,7 +36,6 @@ export function formatDuration(seconds: number | null | undefined, status: RunRe
 
   if (status === "queued") return "Queued";
   if (status === "running") return "Running";
-  if (status === "cancelled") return "Cancelled";
 
   return "—";
 }
@@ -57,7 +56,7 @@ export function formatResultLabel(run: RunRecord): string {
 
 export function coerceStatus(value: string | null): RunsStatusFilter {
   if (!value || value === "all") return "all";
-  if (["queued", "running", "succeeded", "failed", "cancelled"].includes(value)) {
+  if (["queued", "running", "succeeded", "failed"].includes(value)) {
     return value as RunsStatusFilter;
   }
   return "all";
@@ -78,7 +77,6 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
     failed: number;
     running: number;
     queued: number;
-    cancelled: number;
     active: number;
   } = {
     total: 0,
@@ -87,7 +85,6 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
     failed: 0,
     running: 0,
     queued: 0,
-    cancelled: 0,
     active: 0,
   };
 
@@ -95,7 +92,6 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
     counts.total += 1;
     if (run.status === "succeeded") counts.success += 1;
     if (run.status === "failed") counts.failed += 1;
-    if (run.status === "cancelled") counts.cancelled += 1;
     if (run.status === "running") counts.running += 1;
     if (run.status === "queued") counts.queued += 1;
 
@@ -115,7 +111,7 @@ export function buildRunRecord(run: RunResource): RunRecord {
   const outputName = run.output?.filename ?? null;
   const startedAtLabel = formatTimestamp(run.started_at ?? run.created_at);
   const durationLabel = formatDuration(run.duration_seconds ?? null, run.status);
-  const configLabel = run.config_version ?? run.configuration_id ?? "—";
+  const configLabel = run.configuration_id ?? "—";
 
   return {
     id: run.id,
@@ -132,7 +128,7 @@ export function buildRunRecord(run: RunResource): RunRecord {
     quality: null,
     ownerLabel: "—",
     triggerLabel: "—",
-    engineLabel: run.engine_version ?? "—",
+    engineLabel: "—",
     regionLabel: "—",
     notes: run.failure_message ?? null,
     raw: run,

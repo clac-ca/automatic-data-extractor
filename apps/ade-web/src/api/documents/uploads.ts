@@ -1,19 +1,9 @@
 import type { components } from "@schema";
-import { apiFetch, client } from "@api/client";
-import { ApiError, tryParseProblemDetails } from "@api/errors";
 import { createIdempotencyKey } from "@api/idempotency";
 import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
 export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];
-export type DocumentUploadSessionCreateRequest =
-  components["schemas"]["DocumentUploadSessionCreateRequest"];
-export type DocumentUploadSessionCreateResponse =
-  components["schemas"]["DocumentUploadSessionCreateResponse"];
-export type DocumentUploadSessionStatusResponse =
-  components["schemas"]["DocumentUploadSessionStatusResponse"];
-export type DocumentUploadSessionUploadResponse =
-  components["schemas"]["DocumentUploadSessionUploadResponse"];
 
 interface UploadDocumentOptions {
   readonly onProgress?: (progress: UploadProgress) => void;
@@ -39,120 +29,6 @@ export function uploadWorkspaceDocument(
         "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey("document-upload"),
       },
       onProgress: options.onProgress,
-    },
-  );
-}
-
-export async function createDocumentUploadSession(
-  workspaceId: string,
-  payload: DocumentUploadSessionCreateRequest,
-  signal?: AbortSignal,
-): Promise<DocumentUploadSessionCreateResponse> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/uploadSessions", {
-    params: { path: { workspaceId } },
-    body: payload,
-    signal,
-  });
-  if (!data) {
-    throw new Error("Expected upload session response.");
-  }
-  return data;
-}
-
-export async function uploadDocumentUploadSessionRange(
-  workspaceId: string,
-  sessionId: string,
-  options: {
-    start: number;
-    end: number;
-    total: number;
-    body: Blob;
-    signal?: AbortSignal;
-  },
-): Promise<DocumentUploadSessionUploadResponse> {
-  const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/documents/uploadSessions/${sessionId}`,
-    {
-      method: "PUT",
-      body: options.body,
-      headers: {
-        "Content-Range": `bytes ${options.start}-${options.end}/${options.total}`,
-        "Content-Type": "application/octet-stream",
-      },
-      signal: options.signal,
-    },
-  );
-
-  if (!response.ok) {
-    const problem = await tryParseProblemDetails(response);
-    const message = problem?.title ?? `Request failed with status ${response.status}`;
-    throw new ApiError(message, response.status, problem);
-  }
-
-  const data = (await response.json().catch(() => null)) as DocumentUploadSessionUploadResponse | null;
-  if (!data) {
-    throw new Error("Expected upload range response.");
-  }
-  return data;
-}
-
-export async function getDocumentUploadSessionStatus(
-  workspaceId: string,
-  sessionId: string,
-  signal?: AbortSignal,
-): Promise<DocumentUploadSessionStatusResponse> {
-  const { data } = await client.GET(
-    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}",
-    {
-      params: { path: { workspaceId, uploadSessionId: sessionId } },
-      signal,
-    },
-  );
-  if (!data) {
-    throw new Error("Expected upload session status response.");
-  }
-  return data;
-}
-
-export async function commitDocumentUploadSession(
-  workspaceId: string,
-  sessionId: string,
-  options: {
-    idempotencyKey?: string;
-    signal?: AbortSignal;
-    clientRequestId?: string | null;
-  } = {},
-): Promise<DocumentUploadResponse> {
-  const headers: Record<string, string> = {
-    "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey("document-commit"),
-  };
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
-  }
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}/commit",
-    {
-      params: { path: { workspaceId, uploadSessionId: sessionId } },
-      headers,
-      signal: options.signal,
-    },
-  );
-  if (!data) {
-    throw new Error("Expected upload commit response.");
-  }
-  return data as DocumentUploadResponse;
-}
-
-export async function cancelDocumentUploadSession(
-  workspaceId: string,
-  sessionId: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  await client.DELETE(
-    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}",
-    {
-      params: { path: { workspaceId, uploadSessionId: sessionId } },
-      signal,
     },
   );
 }

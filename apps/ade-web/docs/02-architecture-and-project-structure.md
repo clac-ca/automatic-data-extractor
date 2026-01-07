@@ -348,7 +348,6 @@ Example structure:
 ```text
 src/types/
   index.ts
-  builds.ts
   configurations.ts
   presence.ts
   runs.ts

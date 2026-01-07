@@ -4,8 +4,8 @@ import type { RunsCounts } from "../types";
 import { formatNumber } from "../utils";
 
 export function RunsMetrics({ counts, rangeLabel }: { counts: RunsCounts; rangeLabel: string }) {
-  const completed = counts.success + counts.failed + counts.cancelled;
-  const failedTotal = counts.failed + counts.cancelled;
+  const completed = counts.success + counts.failed;
+  const failedTotal = counts.failed;
   const successRate = completed > 0 ? Math.round((counts.success / completed) * 100) : 0;
   const warningsLabel = counts.warning === null ? "—" : formatNumber(counts.warning);
 
@@ -32,7 +32,7 @@ export function RunsMetrics({ counts, rangeLabel }: { counts: RunsCounts; rangeL
         <SummaryBlock
           label="Failed"
           value={formatNumber(failedTotal)}
-          meta="Failed or cancelled runs"
+          meta="Failed runs"
           tone="danger"
         />
         <SummaryBlock

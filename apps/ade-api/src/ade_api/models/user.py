@@ -101,7 +101,13 @@ class OAuthAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user: Mapped[User] = relationship("User", back_populates="oauth_accounts")
 
-    __table_args__ = (UniqueConstraint("oauth_name", "account_id", name="uq_oauth_accounts_name_account"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "oauth_name",
+            "account_id",
+            name="uq_oauth_accounts_name_account",
+        ),
+    )
 
 
 class AccessToken(UUIDPrimaryKeyMixin, Base):

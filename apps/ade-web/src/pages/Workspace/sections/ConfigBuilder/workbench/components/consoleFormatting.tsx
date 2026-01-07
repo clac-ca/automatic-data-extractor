@@ -124,7 +124,7 @@ function formatEventRecord(event: Record<string, unknown>) {
     return <span className="break-words">{parsed.text || " "}</span>;
   }
 
-  if (name.startsWith("build.") || name.startsWith("run.")) {
+  if (name.startsWith("environment.") || name.startsWith("run.")) {
     const status = typeof data.status === "string" ? data.status : undefined;
     const reason = typeof data.reason === "string" ? data.reason : undefined;
     const phase = typeof data.phase === "string" ? data.phase : undefined;
@@ -139,17 +139,14 @@ function formatEventRecord(event: Record<string, unknown>) {
       return `${minutes}m ${seconds}s`;
     };
 
-    if (name === "build.phase.start") {
-      return <span className="break-words">{phaseMessage || (phase ? `Build: ${phase}` : "Build phase started")}</span>;
+    if (name === "environment.start") {
+      return <span className="break-words">{`Environment build started${reason ? ` (${reason})` : ""}`}</span>;
     }
-    if (name === "build.start") {
-      return <span className="break-words">{`Build started${reason ? ` (${reason})` : ""}`}</span>;
+    if (name === "environment.complete") {
+      return <span className="break-words">{`Environment ${status ?? "ready"}`}</span>;
     }
-    if (name === "build.queued") {
-      return <span className="break-words">{`Build queued${reason ? ` (${reason})` : ""}`}</span>;
-    }
-    if (name === "build.complete") {
-      return <span className="break-words">{`Build ${status ?? "completed"}`}</span>;
+    if (name === "environment.failed") {
+      return <span className="break-words">Environment failed</span>;
     }
 
     if (name === "run.queued") {
@@ -172,7 +169,7 @@ function formatEventRecord(event: Record<string, unknown>) {
     }
 
     // Default: keep it compact but readable.
-    if (name.startsWith("build.")) {
+    if (name.startsWith("environment.")) {
       return <span className="break-words">{phaseMessage || phase || status || name}</span>;
     }
     return <span className="break-words">{status || name}</span>;

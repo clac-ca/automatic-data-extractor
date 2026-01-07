@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable
 
 from fastapi import FastAPI
 from starlette.responses import FileResponse, Response

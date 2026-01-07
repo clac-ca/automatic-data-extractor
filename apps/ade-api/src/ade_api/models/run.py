@@ -26,7 +26,6 @@ class RunStatus(str, Enum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 class Run(UUIDPrimaryKeyMixin, Base):
@@ -40,15 +39,14 @@ class Run(UUIDPrimaryKeyMixin, Base):
     workspace_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
-    build_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True
-    )
     input_document_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False
     )
     run_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     output_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    engine_spec: Mapped[str] = mapped_column(String(255), nullable=False)
+    deps_digest: Mapped[str] = mapped_column(String(128), nullable=False)
     available_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=utc_now
     )
@@ -79,7 +77,6 @@ class Run(UUIDPrimaryKeyMixin, Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
-    cancelled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -89,6 +86,8 @@ class Run(UUIDPrimaryKeyMixin, Base):
         Index("ix_runs_status", "status"),
         Index("ix_runs_input_document", "input_document_id"),
         Index("ix_runs_claim", "status", "available_at", "created_at"),
+        Index("ix_runs_claim_expires", "status", "claim_expires_at"),
+        Index("ix_runs_status_completed", "status", "completed_at"),
         Index(
             "uq_runs_active_job",
             "workspace_id",
@@ -106,7 +105,6 @@ class Run(UUIDPrimaryKeyMixin, Base):
             "started_at",
         ),
         Index("ix_runs_workspace_created", "workspace_id", "created_at"),
-        Index("ix_runs_build", "build_id"),
     )
 
 

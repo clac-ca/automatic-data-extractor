@@ -224,7 +224,4 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
     )
     assert response.status_code == 410, response.text
     payload = response.json()
-    detail = payload.get("detail") or {}
-    assert detail.get("error") == "resync_required"
-    assert detail.get("oldestCursor") == str(old_change.cursor)
-    assert detail.get("latestCursor") == str(fresh_change.cursor)
+    assert payload.get("type") == "resync_required"

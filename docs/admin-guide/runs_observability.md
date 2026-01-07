@@ -66,21 +66,15 @@ Track ADE-CLI-11 to add `scripts/npm-runs.mjs` with helpers for
 commands land so on-call engineers can rely on them instead of raw HTTP
 calls.
 
-## 5. Monitoring configuration builds
+## 5. Monitoring environments
 
-Build activity is emitted through the build event stream. Use the same
-troubleshooting workflow you use for runs:
+Environment provisioning is worker-owned and not exposed via a public API.
+For visibility:
 
-1. Trigger a build using
-   `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`.
-   Watch for `build.queued`, `build.start`, `build.complete`, and
-   `console.line` events (`payload.scope: \"build\"`).
-2. For status snapshots, hit `/api/v1/builds/{buildId}`. For history,
-   use `GET /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`
-   with the canonical list contract (`filters`, `q`, `sort`). For live logs/events,
-   attach to `/api/v1/builds/{buildId}/events/stream?after_sequence=<cursor>`.
-3. Database fallbacks mirror runs: inspect the `builds` table if the API is
-   unavailable.
+1. Inspect worker logs for `environment.*` events.
+2. Check environment log files on disk:
+   `.../venvs/<workspace>/<config>/<deps_digest>/<environment_id>/logs/events.ndjson`.
+3. Use the `environments` table for status snapshots and troubleshooting.
 
 Refer to the event catalog in `.workpackages/ade-event-system-refactor/020-EVENT-TYPES-REFERENCE.md`
 for canonical payloads and the decision log in `docs/workpackages/WP12_ade_runs.md`

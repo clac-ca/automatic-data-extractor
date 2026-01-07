@@ -21,7 +21,6 @@ import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { Explorer } from "./components/Explorer";
 import { PanelResizeHandle } from "./components/PanelResizeHandle";
-import { SplitButton } from "./components/SplitButton";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
@@ -321,7 +320,6 @@ export function Workbench({
     onRunComplete: handleRunComplete,
   });
   const [runDialogOpen, setRunDialogOpen] = useState(false);
-  const [forceRun, setForceRun] = useState(false);
 
   const tabPersistence = useMemo(
     () => (seed ? null : createScopedStorage(buildTabStorageKey(workspaceId, configId))),
@@ -365,7 +363,6 @@ export function Workbench({
   const [paneAreaEl, setPaneAreaEl] = useState<HTMLDivElement | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
-  const [testMenu, setTestMenu] = useState<{ x: number; y: number } | null>(null);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -1003,7 +1000,6 @@ export function Workbench({
       logLevel: RunLogLevel;
     }) => {
       setRunDialogOpen(false);
-      setForceRun(false);
       if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
         return;
       }
@@ -1024,7 +1020,7 @@ export function Workbench({
           documentName: selection.documentName,
           sheetNames: worksheetList,
         },
-        { forceRebuild: forceRun, prepare: prepareRun },
+        { prepare: prepareRun },
       );
     },
     [
@@ -1033,7 +1029,6 @@ export function Workbench({
       filesQuery.isLoading,
       filesQuery.isError,
       startRun,
-      forceRun,
       prepareRun,
       saveDirtyTabsBeforeRun,
     ],
@@ -1807,21 +1802,6 @@ export function Workbench({
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
   const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
   const toggleConsoleShortcutLabel = isMacPlatform ? "⌘`" : "Ctrl+`";
-  const testMenuItems = useMemo<ContextMenuItem[]>(() => {
-    const disabled = !canRunExtraction;
-    return [
-      {
-        id: "test-force",
-        label: "Force build and test",
-        disabled,
-        onSelect: () => {
-          setForceRun(true);
-          setRunDialogOpen(true);
-          setTestMenu(null);
-        },
-      },
-    ];
-  }, [canRunExtraction, setForceRun, setRunDialogOpen, setTestMenu]);
 
   if (!seed && filesQuery.isLoading) {
     return (
@@ -1878,16 +1858,14 @@ export function Workbench({
           isSavingFiles={isSavingTabs}
           onSaveFile={handleSaveActiveTab}
           saveShortcutLabel={saveShortcutLabel}
-          onOpenTestMenu={(position) => setTestMenu(position)}
           onOpenActionsMenu={handleOpenActionsMenu}
           canRunValidation={canRunValidation}
           isRunningValidation={isRunningValidation}
           onRunValidation={handleRunValidation}
           canRunExtraction={canRunExtraction}
           isRunningExtraction={isRunningExtraction}
-          onRunExtraction={(force) => {
+          onRunExtraction={() => {
             if (!canRunExtraction) return;
-            setForceRun(force);
             setRunDialogOpen(true);
           }}
           explorerVisible={showExplorerPane}
@@ -2137,7 +2115,6 @@ export function Workbench({
           workspaceId={workspaceId}
           onClose={() => {
             setRunDialogOpen(false);
-            setForceRun(false);
           }}
           onRun={handleRunExtraction}
         />
@@ -2357,13 +2334,6 @@ export function Workbench({
         appearance={menuAppearance}
       />
       <ContextMenu
-        open={Boolean(testMenu)}
-        position={testMenu}
-        onClose={() => setTestMenu(null)}
-        items={testMenuItems}
-        appearance={menuAppearance}
-      />
-      <ContextMenu
         open={Boolean(settingsMenu)}
         position={settingsMenu}
         onClose={closeSettingsMenu}
@@ -2405,7 +2375,6 @@ function WorkbenchChrome({
   isSavingFiles,
   onSaveFile,
   saveShortcutLabel,
-  onOpenTestMenu,
   onOpenActionsMenu,
   canRunValidation,
   isRunningValidation,
@@ -2431,14 +2400,13 @@ function WorkbenchChrome({
   readonly isSavingFiles: boolean;
   readonly onSaveFile: () => void;
   readonly saveShortcutLabel: string;
-  readonly onOpenTestMenu: (position: { x: number; y: number }) => void;
   readonly onOpenActionsMenu: (position: { x: number; y: number }) => void;
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
   readonly canRunExtraction: boolean;
   readonly isRunningExtraction: boolean;
-  readonly onRunExtraction: (force: boolean) => void;
+  readonly onRunExtraction: () => void;
   readonly explorerVisible: boolean;
   readonly onToggleExplorer: () => void;
   readonly consoleOpen: boolean;
@@ -2500,29 +2468,19 @@ function WorkbenchChrome({
           {isRunningValidation ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
           {isRunningValidation ? "Running…" : "Run validation"}
         </button>
-        <SplitButton
-          label={isRunningExtraction ? "Running…" : "Test run"}
-          icon={isRunningExtraction ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
+        <button
+          type="button"
+          onClick={onRunExtraction}
           disabled={!canRunExtraction}
-          isLoading={isRunningExtraction}
+          className={clsx(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            runButtonClass,
+          )}
           title="Run test run"
-          primaryClassName={clsx(
-            runButtonClass,
-            "rounded-r-none focus-visible:ring-offset-0",
-          )}
-          menuClassName={clsx(
-            runButtonClass,
-            "rounded-l-none px-2",
-            "border-border-strong",
-          )}
-          menuAriaLabel="Open test options"
-          onPrimaryClick={() => onRunExtraction(false)}
-          onOpenMenu={(position) => onOpenTestMenu(position)}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            onOpenTestMenu({ x: event.clientX, y: event.clientY });
-          }}
-        />
+        >
+          {isRunningExtraction ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
+          {isRunningExtraction ? "Running…" : "Test run"}
+        </button>
         <div className="flex items-center gap-1">
           <ChromeIconButton
             ariaLabel={explorerVisible ? "Hide explorer" : "Show explorer"}

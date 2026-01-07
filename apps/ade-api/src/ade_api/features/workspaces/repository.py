@@ -11,12 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ade_api.models import (
-    Build,
     Configuration,
     Document,
     DocumentEvent,
     DocumentTag,
-    DocumentUploadSession,
+    Environment,
     Run,
     RunField,
     RunMetrics,
@@ -194,16 +193,14 @@ class WorkspacesRepository:
 
         # Delete in dependency order to satisfy FK constraints across workspace data.
         await self._session.execute(
-            update(Configuration)
-            .where(Configuration.workspace_id == workspace_id)
-            .values(active_build_id=None, active_build_fingerprint=None)
-        )
-        await self._session.execute(
             delete(RunTableColumn).where(RunTableColumn.run_id.in_(run_ids))
         )
         await self._session.execute(delete(RunField).where(RunField.run_id.in_(run_ids)))
         await self._session.execute(delete(RunMetrics).where(RunMetrics.run_id.in_(run_ids)))
         await self._session.execute(delete(Run).where(Run.workspace_id == workspace_id))
+        await self._session.execute(
+            delete(Environment).where(Environment.workspace_id == workspace_id)
+        )
 
         await self._session.execute(
             delete(DocumentTag).where(DocumentTag.document_id.in_(document_ids))
@@ -212,15 +209,9 @@ class WorkspacesRepository:
             delete(DocumentEvent).where(DocumentEvent.workspace_id == workspace_id)
         )
         await self._session.execute(
-            delete(DocumentUploadSession).where(
-                DocumentUploadSession.workspace_id == workspace_id
-            )
-        )
-        await self._session.execute(
             delete(Document).where(Document.workspace_id == workspace_id)
         )
 
-        await self._session.execute(delete(Build).where(Build.workspace_id == workspace_id))
         await self._session.execute(
             delete(Configuration).where(Configuration.workspace_id == workspace_id)
         )

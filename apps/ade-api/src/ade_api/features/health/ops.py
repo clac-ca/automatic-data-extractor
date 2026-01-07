@@ -41,8 +41,8 @@ async def read_readiness(settings: SettingsDep) -> HealthCheckResponse:
     """Return readiness status after checking critical dependencies."""
 
     try:
-        async with db.engine.connect() as connection:
-            await connection.execute(text("SELECT 1"))
+        async with db.sessionmaker() as session:
+            await session.execute(text("SELECT 1"))
     except Exception as exc:  # pragma: no cover - exercised in integration tests
         raise ApiError(
             error_type="service_unavailable",

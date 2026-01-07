@@ -60,12 +60,4 @@ export const RUN_STATUS_META: Record<
     textClass: "text-danger-700",
     surfaceClass: "bg-danger-50",
   },
-  cancelled: {
-    label: "Cancelled",
-    badgeClass: "bg-muted text-muted-foreground",
-    dotClass: "bg-muted-foreground",
-    ringClass: "ring-border",
-    textClass: "text-muted-foreground",
-    surfaceClass: "bg-muted",
-  },
 };

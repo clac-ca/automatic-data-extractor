@@ -175,12 +175,10 @@ export function useRunSessionModel({
     async (
       options: RunStreamOptions,
       metadata: JobStreamMetadata,
-      extras?: { prepare?: () => boolean; forceRebuild?: boolean },
+      extras?: { prepare?: () => boolean },
     ) => {
       lastRunMetadataRef.current = metadata;
-      const effectiveOptions =
-        extras?.forceRebuild ? { ...options, force_rebuild: true } : options;
-      const result = await startJob(effectiveOptions, metadata, { prepare: extras?.prepare });
+      const result = await startJob(options, metadata, { prepare: extras?.prepare });
       if (result && metadata.mode === "extraction") {
         setLatestRun(null);
       }

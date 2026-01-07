@@ -4,22 +4,13 @@ from __future__ import annotations
 
 import json
 import secrets
-import tempfile
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
-from pydantic import (
-    AliasChoices,
-    Field,
-    PrivateAttr,
-    SecretStr,
-    ValidationInfo,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
 from sqlalchemy.engine import URL, make_url
@@ -277,10 +268,7 @@ class Settings(BaseSettings):
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     openapi_url: str = "/openapi.json"
-    logging_level: str = Field(
-        default="INFO",
-        validation_alias=AliasChoices("ADE_API_LOG_LEVEL", "ADE_LOG_LEVEL"),
-    )
+    log_level: str = Field(default="INFO", validation_alias="ADE_LOG_LEVEL")
     safe_mode: bool = False
 
     # Server
@@ -305,17 +293,15 @@ class Settings(BaseSettings):
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
-    documents_upload_session_ttl: timedelta = Field(default=timedelta(minutes=10))
-    documents_upload_session_chunk_bytes: int = Field(5 * 1024 * 1024, gt=0)
 
-    # Builds
-    engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
+    # Engine
+    engine_spec: str = Field(
+        default=DEFAULT_ENGINE_SPEC,
+        validation_alias="ADE_ENGINE_PACKAGE_PATH",
+    )
 
     # Database
-    database_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("DATABASE_URL", "DATABASE_DSN", "database_url"),
-    )
+    database_url: str | None = None
     database_echo: bool = False
     database_log_level: str | None = None
     database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
@@ -399,7 +385,7 @@ class Settings(BaseSettings):
             raise ValueError("ADE_FRONTEND_URL must be an http(s) URL")
         return s.rstrip("/")
 
-    @field_validator("logging_level", mode="before")
+    @field_validator("log_level", mode="before")
     @classmethod
     def _v_log_level(cls, v: Any) -> str:
         s = ("" if v is None else str(v).strip()).upper()
@@ -474,7 +460,6 @@ class Settings(BaseSettings):
         "failed_login_lock_duration",
         "storage_document_retention_period",
         "documents_change_feed_retention_period",
-        "documents_upload_session_ttl",
         "idempotency_key_ttl",
         mode="before",
     )

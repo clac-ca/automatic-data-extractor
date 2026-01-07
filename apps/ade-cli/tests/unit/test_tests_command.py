@@ -12,7 +12,7 @@ def test_conflicting_flags_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tests_cmd.common, "refresh_paths", lambda: None)
 
     with pytest.raises(typer.Exit) as excinfo:
-        tests_cmd.run_tests(backend_only=True, frontend_only=True)
+        tests_cmd.run_tests(api_only=True, web_only=True)
 
     assert excinfo.value.exit_code == 1
 
@@ -31,6 +31,7 @@ def test_backend_suite_runs_when_selected(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr(tests_cmd.common, "CLI_DIR", tmp_path / "apps" / "ade-cli")
     monkeypatch.setattr(tests_cmd.common, "CLI_SRC", tmp_path / "apps" / "ade-cli" / "src" / "ade_cli")
     monkeypatch.setattr(tests_cmd.common, "FRONTEND_DIR", tmp_path / "apps" / "ade-web")
+    monkeypatch.setattr(tests_cmd.common, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(tests_cmd.common, "require_python_module", lambda *_, **__: None)
 
     def fake_run(cmd, cwd=None, env=None):
@@ -38,7 +39,7 @@ def test_backend_suite_runs_when_selected(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     monkeypatch.setattr(tests_cmd.common, "run", fake_run)
 
-    tests_cmd.run_tests(frontend=False)
+    tests_cmd.run_tests(web=False)
 
     assert commands == [([sys.executable, "-m", "pytest"], backend_dir)]
 
@@ -62,7 +63,7 @@ def test_frontend_suite_runs_when_script_present(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(tests_cmd.common, "run", fake_run)
 
-    tests_cmd.run_tests(backend=False, frontend=True)
+    tests_cmd.run_tests(api=False, web=True)
 
     assert commands == [(["npm-bin", "run", "test"], frontend_dir)]
 
@@ -79,6 +80,6 @@ def test_exit_when_no_suites_run(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
     monkeypatch.setattr(tests_cmd.common, "load_frontend_package_json", lambda: {"scripts": {}})
 
     with pytest.raises(typer.Exit) as excinfo:
-        tests_cmd.run_tests(backend=False, frontend=True)
+        tests_cmd.run_tests(api=False, web=True)
 
     assert excinfo.value.exit_code == 1

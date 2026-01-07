@@ -65,13 +65,23 @@ WORKSPACE_MEMBER_FILTER_REGISTRY = FilterRegistry(
         FilterField(
             id="userId",
             column=UserRoleAssignment.user_id,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
             value_type=FilterValueType.UUID,
         ),
         FilterField(
             id="roleId",
             column=UserRoleAssignment.role_id,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
             value_type=FilterValueType.UUID,
         ),
         FilterField(

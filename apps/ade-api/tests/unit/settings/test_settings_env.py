@@ -95,21 +95,10 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_logging_level_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ADE_LOG_LEVEL should provide the default log level."""
+    """ADE_LOG_LEVEL should set the API log level."""
     monkeypatch.setenv("ADE_LOG_LEVEL", "warning")
     reload_settings()
 
     settings = get_settings()
 
-    assert settings.logging_level == "WARNING"
-
-
-def test_logging_level_prefers_api_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ADE_API_LOG_LEVEL should override the global log level."""
-    monkeypatch.setenv("ADE_LOG_LEVEL", "info")
-    monkeypatch.setenv("ADE_API_LOG_LEVEL", "debug")
-    reload_settings()
-
-    settings = get_settings()
-
-    assert settings.logging_level == "DEBUG"
+    assert settings.log_level == "WARNING"

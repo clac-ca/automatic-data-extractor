@@ -183,10 +183,14 @@ def _role_permissions(role: Role) -> tuple[str, ...]:
 
 
 _ALL_GLOBAL_PERMISSIONS = frozenset(
-    key for key, definition in PERMISSION_REGISTRY.items() if definition.scope_type == ScopeType.GLOBAL
+    key
+    for key, definition in PERMISSION_REGISTRY.items()
+    if definition.scope_type == ScopeType.GLOBAL
 )
 _ALL_WORKSPACE_PERMISSIONS = frozenset(
-    key for key, definition in PERMISSION_REGISTRY.items() if definition.scope_type == ScopeType.WORKSPACE
+    key
+    for key, definition in PERMISSION_REGISTRY.items()
+    if definition.scope_type == ScopeType.WORKSPACE
 )
 
 
@@ -747,7 +751,10 @@ class RbacService:
         if user.is_service_account:
             return frozenset()
         if user.is_superuser:
-            return _expand_implications(_all_permissions_for_scope(ScopeType.GLOBAL), scope=ScopeType.GLOBAL)
+            return _expand_implications(
+                _all_permissions_for_scope(ScopeType.GLOBAL),
+                scope=ScopeType.GLOBAL,
+            )
 
         cache_key = ("global_permissions", str(user.id))
         cached = self._get_cached(cache_key)

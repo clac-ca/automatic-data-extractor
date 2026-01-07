@@ -125,8 +125,7 @@ def setup_logging(settings: Settings) -> None:
     """Configure root logging for the ADE API process.
 
     This installs a single console-style StreamHandler on stdout and sets the
-    root log level from ``settings.logging_level`` (env: ``ADE_API_LOG_LEVEL`` or
-    ``ADE_LOG_LEVEL``).
+    root log level from ``settings.log_level`` (env: ``ADE_LOG_LEVEL``).
 
     It also wires common third-party loggers (uvicorn, alembic, sqlalchemy) to
     propagate into the same root logger so that all logs share a consistent
@@ -134,7 +133,7 @@ def setup_logging(settings: Settings) -> None:
     """
     root_logger = logging.getLogger()
 
-    level_name = settings.logging_level.upper()
+    level_name = settings.log_level.upper()
     level = getattr(logging, level_name, logging.INFO)
 
     configured = getattr(root_logger, _CONFIGURED_FLAG, False)
@@ -197,7 +196,6 @@ def log_context(
     workspace_id: UUID | None = None,
     configuration_id: UUID | None = None,
     run_id: UUID | None = None,
-    build_id: UUID | None = None,
     document_id: UUID | None = None,
     user_id: UUID | None = None,
     **extra: Any,
@@ -223,8 +221,6 @@ def log_context(
         ctx["configuration_id"] = str(configuration_id)
     if run_id is not None:
         ctx["run_id"] = str(run_id)
-    if build_id is not None:
-        ctx["build_id"] = str(build_id)
     if document_id is not None:
         ctx["document_id"] = str(document_id)
     if user_id is not None:

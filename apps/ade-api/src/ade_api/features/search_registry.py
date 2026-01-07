@@ -7,7 +7,6 @@ from sqlalchemy import String, case, cast
 from ade_api.common.search import SearchField, SearchRegistry, build_like_predicate
 from ade_api.models import (
     ApiKey,
-    Build,
     Configuration,
     Document,
     DocumentStatus,
@@ -79,12 +78,6 @@ SEARCH_REGISTRY = SearchRegistry(
         "configurations": [
             _field("displayName", Configuration.display_name),
             _field_cast("status", Configuration.status),
-        ],
-        "builds": [
-            _field_cast("id", Build.id),
-            _field_cast("status", Build.status),
-            _field("summary", Build.summary),
-            _field("errorMessage", Build.error_message),
         ],
         "users": [
             _field("email", User.email),

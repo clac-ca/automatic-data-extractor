@@ -74,6 +74,12 @@ class WorkerSettings:
     cleanup_interval: float
     log_level: str
 
+    # Garbage collection
+    enable_gc: bool
+    gc_interval_seconds: float
+    env_ttl_days: int
+    run_artifact_ttl_days: int | None
+
     # Queue leasing / retries
     lease_seconds: int
     backoff_base_seconds: int
@@ -85,7 +91,7 @@ class WorkerSettings:
     engine_spec: str
 
     # Timeouts
-    build_timeout_seconds: int
+    environment_timeout_seconds: int
     run_timeout_seconds: int | None
 
     @classmethod
@@ -94,6 +100,9 @@ class WorkerSettings:
 
         run_timeout_raw = _env("ADE_WORKER_RUN_TIMEOUT_SECONDS")
         run_timeout_seconds = int(run_timeout_raw) if run_timeout_raw else None
+        run_artifact_ttl_days = _env_int("ADE_WORKER_RUN_ARTIFACT_TTL_DAYS", 30)
+        if run_artifact_ttl_days <= 0:
+            run_artifact_ttl_days = None
 
         return cls(
             database_url=_env("ADE_DATABASE_URL", "sqlite:///./data/db/ade.sqlite") or "sqlite:///./data/db/ade.sqlite",
@@ -109,15 +118,20 @@ class WorkerSettings:
             cleanup_interval=_env_float("ADE_WORKER_CLEANUP_INTERVAL", 30.0),
             log_level=(_env("ADE_WORKER_LOG_LEVEL", "INFO") or "INFO").upper(),
 
+            enable_gc=_env_bool("ADE_WORKER_ENABLE_GC", default=True),
+            gc_interval_seconds=_env_float("ADE_WORKER_GC_INTERVAL_SECONDS", 3600.0),
+            env_ttl_days=_env_int("ADE_WORKER_ENV_TTL_DAYS", 30),
+            run_artifact_ttl_days=run_artifact_ttl_days,
+
             lease_seconds=_env_int("ADE_WORKER_LEASE_SECONDS", 900),
             backoff_base_seconds=_env_int("ADE_WORKER_BACKOFF_BASE_SECONDS", 5),
             backoff_max_seconds=_env_int("ADE_WORKER_BACKOFF_MAX_SECONDS", 300),
             max_attempts_default=_env_int("ADE_WORKER_MAX_ATTEMPTS_DEFAULT", 3),
 
             data_dir=data_dir,
-            engine_spec=_env("ADE_WORKER_ENGINE_SPEC", "apps/ade-engine") or "apps/ade-engine",
+            engine_spec=_env("ADE_ENGINE_PACKAGE_PATH", "apps/ade-engine") or "apps/ade-engine",
 
-            build_timeout_seconds=_env_int("ADE_WORKER_BUILD_TIMEOUT_SECONDS", 600),
+            environment_timeout_seconds=_env_int("ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS", 600),
             run_timeout_seconds=run_timeout_seconds,
         )
 

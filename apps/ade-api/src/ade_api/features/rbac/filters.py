@@ -28,32 +28,57 @@ PERMISSION_FILTER_REGISTRY = FilterRegistry(
         FilterField(
             id="scopeType",
             column=Permission.scope_type,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
             value_type=FilterValueType.ENUM,
             enum_type=ScopeType,
         ),
         FilterField(
             id="key",
             column=Permission.key,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.ILIKE, FilterOperator.NOT_ILIKE},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+            },
             value_type=FilterValueType.STRING,
         ),
         FilterField(
             id="resource",
             column=Permission.resource,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.ILIKE, FilterOperator.NOT_ILIKE},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+            },
             value_type=FilterValueType.STRING,
         ),
         FilterField(
             id="action",
             column=Permission.action,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.ILIKE, FilterOperator.NOT_ILIKE},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+            },
             value_type=FilterValueType.STRING,
         ),
         FilterField(
             id="label",
             column=Permission.label,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.ILIKE, FilterOperator.NOT_ILIKE},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+            },
             value_type=FilterValueType.STRING,
         ),
     ]
@@ -64,20 +89,35 @@ ROLE_FILTER_REGISTRY = FilterRegistry(
         FilterField(
             id="scopeType",
             column=Role.id,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
             value_type=FilterValueType.ENUM,
             enum_type=ScopeType,
         ),
         FilterField(
             id="name",
             column=Role.name,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.ILIKE, FilterOperator.NOT_ILIKE},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+            },
             value_type=FilterValueType.STRING,
         ),
         FilterField(
             id="slug",
             column=Role.slug,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.ILIKE, FilterOperator.NOT_ILIKE},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+            },
             value_type=FilterValueType.STRING,
         ),
         FilterField(
@@ -100,13 +140,23 @@ ASSIGNMENT_FILTER_REGISTRY = FilterRegistry(
         FilterField(
             id="userId",
             column=UserRoleAssignment.user_id,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
             value_type=FilterValueType.UUID,
         ),
         FilterField(
             id="roleId",
             column=UserRoleAssignment.role_id,
-            operators={FilterOperator.EQ, FilterOperator.NE, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
             value_type=FilterValueType.UUID,
         ),
         FilterField(

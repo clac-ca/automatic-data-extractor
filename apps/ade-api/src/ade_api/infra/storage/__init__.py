@@ -3,10 +3,6 @@
 from .base import StorageAdapter, StorageError, StorageLimitError, StoredObject
 from .filesystem import FilesystemStorage
 from .layout import (
-    build_venv_marker_path,
-    build_venv_path,
-    build_venv_root,
-    build_venv_temp_path,
     workspace_config_root,
     workspace_documents_root,
     workspace_root,
@@ -15,10 +11,6 @@ from .layout import (
 )
 
 __all__ = [
-    "build_venv_marker_path",
-    "build_venv_path",
-    "build_venv_root",
-    "build_venv_temp_path",
     "FilesystemStorage",
     "StorageAdapter",
     "StorageError",

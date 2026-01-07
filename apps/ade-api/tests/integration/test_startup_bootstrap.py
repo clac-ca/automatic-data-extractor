@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import os
 from pathlib import Path
 
 import pytest
@@ -23,29 +21,11 @@ async def test_app_startup_bootstraps_database(tmp_path: Path, monkeypatch: pyte
     settings = Settings.model_validate({
         "workspaces_dir": str(workspaces_dir),
         "documents_dir": str(workspaces_dir),
+        "database_url": f"sqlite:///{database_path}",
     })
 
     app = create_app(settings=settings)
 
-    async with app.router.lifespan_context(app):
-        pass
-
-    assert database_path.exists()
-
-    result = await asyncio.to_thread(
-        _table_exists,
-        database_path,
-        "users",
-    )
-    assert result is True
-
-
-def _table_exists(database_path: Path, table_name: str) -> bool:
-    import sqlite3
-
-    with sqlite3.connect(database_path) as conn:
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-            (table_name,),
-        )
-        return cursor.fetchone() is not None
+    with pytest.raises(RuntimeError, match="Database schema is not initialized"):
+        async with app.router.lifespan_context(app):
+            pass

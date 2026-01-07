@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.models import (
-    Build,
-    BuildStatus,
     Configuration,
     ConfigurationStatus,
     Document,
@@ -43,17 +41,6 @@ async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Confi
 async def test_run_defaults(session: AsyncSession) -> None:
     workspace, configuration = await _create_configuration(session)
 
-    build = Build(
-        id=generate_uuid7(),
-        workspace_id=workspace.id,
-        configuration_id=configuration.id,
-        fingerprint="fingerprint",
-        status=BuildStatus.READY,
-        created_at=utc_now(),
-    )
-    session.add(build)
-    await session.flush()
-
     document = Document(
         id=generate_uuid7(),
         workspace_id=workspace.id,
@@ -73,8 +60,9 @@ async def test_run_defaults(session: AsyncSession) -> None:
     run = Run(
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        build_id=build.id,
         input_document_id=document.id,
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
     )
     session.add(run)
     await session.commit()
@@ -92,4 +80,3 @@ async def test_run_defaults(session: AsyncSession) -> None:
     assert run.run_options is None
     assert run.started_at is None
     assert run.completed_at is None
-    assert run.cancelled_at is None

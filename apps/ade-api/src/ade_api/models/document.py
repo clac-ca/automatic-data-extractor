@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
@@ -17,17 +18,18 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.ext.mutable import MutableDict, MutableList
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
+if TYPE_CHECKING:
+    from .user import User
+    from .workspace import Workspace
+
 
 def _enum_values(enum_cls: type[Enum]) -> list[str]:
     return [member.value for member in enum_cls]
-
-from .user import User
-from .workspace import Workspace
 
 
 class DocumentStatus(str, Enum):
@@ -54,28 +56,9 @@ class DocumentEventType(str, Enum):
     DELETED = "document.deleted"
 
 
-class DocumentUploadConflictBehavior(str, Enum):
-    """Conflict handling modes for upload sessions."""
-
-    RENAME = "rename"
-    REPLACE = "replace"
-    FAIL = "fail"
-
-
-class DocumentUploadSessionStatus(str, Enum):
-    """Lifecycle states for document upload sessions."""
-
-    ACTIVE = "active"
-    COMPLETE = "complete"
-    COMMITTED = "committed"
-    CANCELLED = "cancelled"
-
-
 DOCUMENT_STATUS_VALUES = tuple(status.value for status in DocumentStatus)
 DOCUMENT_SOURCE_VALUES = tuple(source.value for source in DocumentSource)
 DOCUMENT_EVENT_TYPE_VALUES = tuple(change.value for change in DocumentEventType)
-DOCUMENT_UPLOAD_CONFLICT_VALUES = tuple(mode.value for mode in DocumentUploadConflictBehavior)
-DOCUMENT_UPLOAD_SESSION_STATUS_VALUES = tuple(status.value for status in DocumentUploadSessionStatus)
 
 
 class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -265,96 +248,14 @@ class DocumentEvent(Base):
     )
 
 
-class DocumentUploadSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Resumable upload session metadata for large document uploads."""
-
-    __tablename__ = "document_upload_sessions"
-
-    workspace_id: Mapped[UUID] = mapped_column(
-        GUID(),
-        ForeignKey("workspaces.id", ondelete="NO ACTION"),
-        nullable=False,
-    )
-    created_by_user_id: Mapped[UUID | None] = mapped_column(
-        GUID(),
-        ForeignKey("users.id", ondelete="NO ACTION"),
-        nullable=True,
-    )
-    document_id: Mapped[UUID | None] = mapped_column(
-        GUID(),
-        ForeignKey("documents.id", ondelete="NO ACTION"),
-        nullable=True,
-    )
-    filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    # "metadata" is reserved by SQLAlchemy declarative base.
-    upload_metadata: Mapped[dict[str, object]] = mapped_column(
-        "metadata",
-        MutableDict.as_mutable(JSON),
-        nullable=False,
-        default=dict,
-    )
-    conflict_behavior: Mapped[DocumentUploadConflictBehavior] = mapped_column(
-        SAEnum(
-            DocumentUploadConflictBehavior,
-            name="document_upload_conflict_behavior",
-            native_enum=False,
-            length=20,
-            values_callable=_enum_values,
-        ),
-        nullable=False,
-        default=DocumentUploadConflictBehavior.RENAME,
-        server_default=DocumentUploadConflictBehavior.RENAME.value,
-    )
-    folder_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    temp_stored_uri: Mapped[str] = mapped_column(String(512), nullable=False)
-    received_bytes: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
-        server_default="0",
-    )
-    received_ranges: Mapped[list[str]] = mapped_column(
-        MutableList.as_mutable(JSON),
-        nullable=False,
-        default=list,
-    )
-    status: Mapped[DocumentUploadSessionStatus] = mapped_column(
-        SAEnum(
-            DocumentUploadSessionStatus,
-            name="document_upload_session_status",
-            native_enum=False,
-            length=20,
-            values_callable=_enum_values,
-        ),
-        nullable=False,
-        default=DocumentUploadSessionStatus.ACTIVE,
-        server_default=DocumentUploadSessionStatus.ACTIVE.value,
-    )
-    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
-
-    __table_args__ = (
-        Index("ix_document_upload_sessions_workspace", "workspace_id"),
-        Index("ix_document_upload_sessions_expires", "expires_at"),
-        Index("ix_document_upload_sessions_status", "status"),
-        Index("ix_document_upload_sessions_document", "document_id"),
-    )
-
-
 __all__ = [
     "DOCUMENT_EVENT_TYPE_VALUES",
     "DOCUMENT_SOURCE_VALUES",
     "DOCUMENT_STATUS_VALUES",
-    "DOCUMENT_UPLOAD_CONFLICT_VALUES",
-    "DOCUMENT_UPLOAD_SESSION_STATUS_VALUES",
     "DocumentEvent",
     "DocumentEventType",
     "Document",
     "DocumentSource",
     "DocumentStatus",
     "DocumentTag",
-    "DocumentUploadConflictBehavior",
-    "DocumentUploadSession",
-    "DocumentUploadSessionStatus",
 ]

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ade-worker"
 version = "0.2.0"
-description = "ADE background worker (runs/builds)"
+description = "ADE background worker (runs/environments)"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "CLAC IT Team" }]

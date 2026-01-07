@@ -38,7 +38,6 @@ export const RUNS_PAGE_SIZE = 50;
 const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   dry_run: false,
   validate_only: false,
-  force_rebuild: false,
   log_level: "INFO",
   active_sheet_only: false,
 };
@@ -204,7 +203,6 @@ export async function createRunForDocument(
       options: {
         dry_run: false,
         validate_only: false,
-        force_rebuild: false,
         active_sheet_only: false,
         input_document_id: documentId,
       },

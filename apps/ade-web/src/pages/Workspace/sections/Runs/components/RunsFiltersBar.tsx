@@ -43,7 +43,6 @@ export function RunsFiltersBar({
             <option value="failed">Failed</option>
             <option value="running">Running</option>
             <option value="queued">Queued</option>
-            <option value="cancelled">Cancelled</option>
           </select>
           <select
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"

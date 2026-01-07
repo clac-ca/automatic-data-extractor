@@ -224,7 +224,10 @@ def apply_document_filters(
                 stmt = stmt.join(latest_runs, latest_runs.c.document_id == Document.id)
             values = parsed.value
             status_values = values if isinstance(values, list) else [values]
-            status_list = [value.value if isinstance(value, RunStatus) else str(value) for value in status_values]
+            status_list = [
+                value.value if isinstance(value, RunStatus) else str(value)
+                for value in status_values
+            ]
             if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
                 predicate = and_(
                     latest_runs.c.rank == 1,

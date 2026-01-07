@@ -13,8 +13,9 @@ from ade_cli.commands.migrate import run_migrate
 
 
 def run_start(
-    api_port: int = 8000,
-    api_host: str = "0.0.0.0",
+    api_port: int | None = None,
+    api_host: str | None = None,
+    api_workers: int | None = None,
     web: bool = True,
     worker: bool = True,
 ) -> None:
@@ -64,22 +65,29 @@ def run_start(
         env["ADE_FRONTEND_DIST_DIR"] = dist_env
         typer.echo(f"🧭 Frontend dist:        {dist_env}")
 
+    api_port = int(api_port if api_port is not None else os.getenv("ADE_API_PORT", "8000") or "8000")
+    api_host = api_host or os.getenv("ADE_API_HOST", "0.0.0.0")
+    api_workers = int(api_workers if api_workers is not None else os.getenv("ADE_API_WORKERS", "3") or "3")
+
     typer.echo("🗄️  Running migrations…")
     run_migrate()
 
     uvicorn_bin = common.uvicorn_path()
+    api_cmd = [
+        uvicorn_bin,
+        "ade_api.main:create_app",
+        "--factory",
+        "--host",
+        api_host,
+        "--port",
+        str(api_port),
+    ]
+    if api_workers and api_workers > 1:
+        api_cmd.extend(["--workers", str(api_workers)])
     tasks: list[tuple[str, list[str], Path | None, dict[str, str]]] = [
         (
             "api",
-            [
-                uvicorn_bin,
-                "ade_api.main:create_app",
-                "--factory",
-                "--host",
-                api_host,
-                "--port",
-                str(api_port),
-            ],
+            api_cmd,
             common.REPO_ROOT,
             env,
         )
@@ -108,14 +116,22 @@ def register(app: typer.Typer) -> None:
     )
     def start(
         api_port: int = typer.Option(
-            8000,
+            None,
             "--api-port",
             help="Port for the API server.",
+            envvar="ADE_API_PORT",
         ),
         api_host: str = typer.Option(
-            "0.0.0.0",
+            None,
             "--api-host",
             help="Host/interface for the API server.",
+            envvar="ADE_API_HOST",
+        ),
+        api_workers: int = typer.Option(
+            None,
+            "--api-workers",
+            help="Number of API worker processes (uvicorn).",
+            envvar="ADE_API_WORKERS",
         ),
         web: bool = typer.Option(
             True,
@@ -131,6 +147,7 @@ def register(app: typer.Typer) -> None:
         run_start(
             api_port=api_port,
             api_host=api_host,
+            api_workers=api_workers,
             web=web,
             worker=worker,
         )

@@ -237,7 +237,10 @@ async def revoke_my_api_key(
             raise ApiKeyAccessDeniedError(
                 f"API key {api_key_id} is not owned by user {principal.user_id}"
             )
-        require_if_match(request.headers.get("if-match"), expected_token=_api_key_etag_token(record))
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=_api_key_etag_token(record),
+        )
         await service.revoke_for_user(
             api_key_id=api_key_id,
             user_id=principal.user_id,
@@ -410,7 +413,10 @@ async def revoke_user_api_key(
         record = await service.get_by_id(api_key_id)
         if record.user_id != user_id:
             raise ApiKeyAccessDeniedError("API key not found")
-        require_if_match(request.headers.get("if-match"), expected_token=_api_key_etag_token(record))
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=_api_key_etag_token(record),
+        )
         await service.revoke_for_user(
             api_key_id=api_key_id,
             user_id=user_id,

@@ -3,7 +3,7 @@
  * Do not make direct changes to the file.
  */
 
-export interface paths {
+export type paths = {
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -31,7 +31,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Build/runtime metadata */
+        /** Runtime metadata */
         get: operations["read_info_api_v1_info_get"];
         put?: never;
         post?: never;
@@ -684,53 +684,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions": {
+    "/api/v1/workspaces/{workspaceId}/documents/changes/stream": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Stream document changes */
+        get: operations["stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get"];
         put?: never;
-        /** Create a resumable upload session */
-        post: operations["create_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get upload session status */
-        get: operations["get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__get"];
-        /** Upload a byte range to a session */
-        put: operations["upload_session_range_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__put"];
         post?: never;
-        /** Cancel an upload session */
-        delete: operations["cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/uploadSessions/{uploadSessionId}/commit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Commit an upload session */
-        post: operations["commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__commit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1137,58 +1101,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Builds Endpoint */
-        get: operations["list_builds_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__builds_get"];
-        put?: never;
-        /** Create Build Endpoint */
-        post: operations["create_build_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__builds_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/builds/{buildId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Build Endpoint */
-        get: operations["get_build_endpoint_api_v1_builds__buildId__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/builds/{buildId}/events/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream Build Events Endpoint */
-        get: operations["stream_build_events_endpoint_api_v1_builds__buildId__events_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/configurations/{configurationId}/runs": {
         parameters: {
             query?: never;
@@ -1499,9 +1411,9 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-}
+};
 export type webhooks = Record<string, never>;
-export interface components {
+export type components = {
     schemas: {
         /**
          * ApiKeyCreateRequest
@@ -1781,118 +1693,6 @@ export interface components {
             run_options?: string | null;
         };
         /**
-         * BuildCreateOptions
-         * @description Options controlling build orchestration.
-         */
-        BuildCreateOptions: {
-            /**
-             * Force
-             * @description Force rebuild even if fingerprints match
-             * @default false
-             */
-            force: boolean;
-            /**
-             * Wait
-             * @description Wait for in-progress builds to complete before starting a new one
-             * @default false
-             */
-            wait: boolean;
-        };
-        /**
-         * BuildCreateRequest
-         * @description Request body for POST /builds.
-         */
-        BuildCreateRequest: {
-            options?: components["schemas"]["BuildCreateOptions"];
-        };
-        /**
-         * BuildLinks
-         * @description Hypermedia links for build-related resources.
-         */
-        BuildLinks: {
-            /** Self */
-            self: string;
-            /** Events Stream */
-            events_stream: string;
-        };
-        /**
-         * BuildPage
-         * @description Paginated collection of ``BuildResource`` items.
-         */
-        BuildPage: {
-            /** Items */
-            items: components["schemas"]["BuildResource"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
-        };
-        /**
-         * BuildResource
-         * @description API representation of a build row.
-         */
-        BuildResource: {
-            /**
-             * Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            id: string;
-            /**
-             * Object
-             * @default ade.build
-             * @constant
-             */
-            object: "ade.build";
-            /**
-             * Workspace Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            workspace_id: string;
-            /**
-             * Configuration Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            configuration_id: string;
-            status: components["schemas"]["BuildStatus"];
-            /**
-             * Created
-             * @description Unix timestamp when the build request was created
-             */
-            created: number;
-            /**
-             * Started
-             * @description Unix timestamp when execution started
-             */
-            started?: number | null;
-            /**
-             * Finished
-             * @description Unix timestamp when execution completed
-             */
-            finished?: number | null;
-            /** Exit Code */
-            exit_code?: number | null;
-            /** Summary */
-            summary?: string | null;
-            /** Error Message */
-            error_message?: string | null;
-            links: components["schemas"]["BuildLinks"];
-        };
-        /**
-         * BuildStatus
-         * @description Lifecycle states for API-facing build resources.
-         * @enum {string}
-         */
-        BuildStatus: "queued" | "building" | "ready" | "failed" | "cancelled";
-        /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
          */
@@ -2108,7 +1908,11 @@ export interface components {
              * @enum {string}
              */
             type: "document.changed" | "document.deleted";
-            /** Documentid */
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             documentId: string;
             /**
              * Occurredat
@@ -2416,128 +2220,6 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
-        };
-        /**
-         * DocumentUploadConflictBehavior
-         * @description Conflict handling modes for upload sessions.
-         * @enum {string}
-         */
-        DocumentUploadConflictBehavior: "rename" | "replace" | "fail";
-        /**
-         * DocumentUploadRunOptions
-         * @description Run-specific options captured at upload time.
-         */
-        DocumentUploadRunOptions: {
-            /**
-             * Inputsheetnames
-             * @description Optional worksheet names to ingest when processing XLSX files.
-             */
-            inputSheetNames?: string[] | null;
-            /**
-             * Activesheetonly
-             * @description If true, process only the active worksheet when ingesting XLSX files.
-             * @default false
-             */
-            activeSheetOnly: boolean;
-        };
-        /**
-         * DocumentUploadSessionCreateRequest
-         * @description Create a resumable upload session for a document.
-         */
-        DocumentUploadSessionCreateRequest: {
-            /** Filename */
-            filename: string;
-            /** Bytesize */
-            byteSize: number;
-            /** Contenttype */
-            contentType?: string | null;
-            /** @default rename */
-            conflictBehavior: components["schemas"]["DocumentUploadConflictBehavior"];
-            /** Folderid */
-            folderId?: string | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            } | null;
-            runOptions?: components["schemas"]["DocumentUploadRunOptions"] | null;
-        };
-        /**
-         * DocumentUploadSessionCreateResponse
-         * @description Response payload for a new upload session.
-         */
-        DocumentUploadSessionCreateResponse: {
-            /**
-             * Uploadsessionid
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            uploadSessionId: string;
-            /**
-             * Documentid
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            documentId: string;
-            row?: components["schemas"]["DocumentListRow"] | null;
-            /**
-             * Expiresat
-             * Format: date-time
-             */
-            expiresAt: string;
-            /** Chunksizebytes */
-            chunkSizeBytes: number;
-            /** Nextexpectedranges */
-            nextExpectedRanges: string[];
-            /** Uploadurl */
-            uploadUrl: string;
-        };
-        /**
-         * DocumentUploadSessionStatus
-         * @description Lifecycle states for document upload sessions.
-         * @enum {string}
-         */
-        DocumentUploadSessionStatus: "active" | "complete" | "committed" | "cancelled";
-        /**
-         * DocumentUploadSessionStatusResponse
-         * @description Status payload for an upload session.
-         */
-        DocumentUploadSessionStatusResponse: {
-            /**
-             * Uploadsessionid
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            uploadSessionId: string;
-            /**
-             * Expiresat
-             * Format: date-time
-             */
-            expiresAt: string;
-            /** Bytesize */
-            byteSize: number;
-            /** Receivedbytes */
-            receivedBytes: number;
-            /** Nextexpectedranges */
-            nextExpectedRanges: string[];
-            /**
-             * Uploadcomplete
-             * @default false
-             */
-            uploadComplete: boolean;
-            status: components["schemas"]["DocumentUploadSessionStatus"];
-        };
-        /**
-         * DocumentUploadSessionUploadResponse
-         * @description Response payload after uploading a range.
-         */
-        DocumentUploadSessionUploadResponse: {
-            /** Nextexpectedranges */
-            nextExpectedRanges: string[];
-            /**
-             * Uploadcomplete
-             * @default false
-             */
-            uploadComplete: boolean;
         };
         /**
          * EffectivePermissions
@@ -3098,12 +2780,6 @@ export interface components {
              */
             validate_only: boolean;
             /**
-             * Force Rebuild
-             * @description If true, rebuild the configuration environment before running.
-             * @default false
-             */
-            force_rebuild: boolean;
-            /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
              */
@@ -3195,12 +2871,6 @@ export interface components {
              */
             validate_only: boolean;
             /**
-             * Force Rebuild
-             * @description If true, rebuild the configuration environment before running.
-             * @default false
-             */
-            force_rebuild: boolean;
-            /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
              */
@@ -3245,12 +2915,6 @@ export interface components {
              * @default false
              */
             validate_only: boolean;
-            /**
-             * Force Rebuild
-             * @description If true, rebuild the configuration environment before running.
-             * @default false
-             */
-            force_rebuild: boolean;
             /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
@@ -3496,8 +3160,6 @@ export interface components {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
-            /** Build Id */
-            build_id?: string | null;
             status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
@@ -3505,14 +3167,6 @@ export interface components {
             failure_stage?: string | null;
             /** Failure Message */
             failure_message?: string | null;
-            /** Engine Version */
-            engine_version?: string | null;
-            /** Config Version */
-            config_version?: string | null;
-            /** Env Reason */
-            env_reason?: string | null;
-            /** Env Reused */
-            env_reused?: boolean | null;
             /**
              * Created At
              * Format: date-time
@@ -3539,7 +3193,7 @@ export interface components {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+        RunStatus: "queued" | "running" | "succeeded" | "failed";
         /**
          * RunWorkspaceBatchCreateRequest
          * @description Payload accepted by the workspace batch run creation endpoint.
@@ -4061,7 +3715,7 @@ export interface components {
         ETag: string;
     };
     pathItems: never;
-}
+};
 export type $defs = Record<string, never>;
 export interface operations {
     read_health_api_v1_health_get: {
@@ -6607,56 +6261,16 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    create_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions_post: {
+    stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get: {
         parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
+            query?: {
+                /** @description Cursor token. */
+                cursor?: string | null;
             };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentUploadSessionCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentUploadSessionCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    get_upload_session_status_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__get: {
-        parameters: {
-            query?: never;
             header?: never;
             path: {
                 /** @description Workspace identifier */
                 workspaceId: string;
-                /** @description Upload session identifier */
-                uploadSessionId: string;
             };
             cookie?: never;
         };
@@ -6669,125 +6283,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentUploadSessionStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    upload_session_range_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Content-Range"?: string | null;
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Upload session identifier */
-                uploadSessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentUploadSessionUploadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    cancel_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Upload session identifier */
-                uploadSessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    commit_upload_session_api_v1_workspaces__workspaceId__documents_uploadSessions__uploadSessionId__commit_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Client-Request-Id"?: string | null;
-                "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Upload session identifier */
-                uploadSessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentOut"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -8475,172 +7971,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    list_builds_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__builds_get: {
-        parameters: {
-            query?: {
-                /** @description 1-based page number */
-                page?: number;
-                /** @description Items per page (max 200) */
-                perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
-                sort?: string | null;
-                /** @description URL-encoded JSON array of filter objects. */
-                filters?: string | null;
-                /** @description Logical operator to join filters (and/or). */
-                joinOperator?: components["schemas"]["FilterJoinOperator"];
-                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
-                q?: string | null;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Configuration identifier */
-                configurationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    create_build_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__builds_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Configuration identifier */
-                configurationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BuildCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildResource"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    get_build_endpoint_api_v1_builds__buildId__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Build identifier */
-                buildId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildResource"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    stream_build_events_endpoint_api_v1_builds__buildId__events_stream_get: {
-        parameters: {
-            query?: {
-                after_sequence?: number | null;
-            };
-            header?: never;
-            path: {
-                /** @description Build identifier */
-                buildId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
             };
             /** @description Validation Error */
             422: {

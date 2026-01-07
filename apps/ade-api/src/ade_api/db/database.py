@@ -121,6 +121,13 @@ class DatabaseConfig:
         if begin_mode and begin_mode not in {"DEFERRED", "IMMEDIATE", "EXCLUSIVE"}:
             raise ValueError("ADE_DATABASE_SQLITE_BEGIN_MODE must be DEFERRED|IMMEDIATE|EXCLUSIVE")
 
+        sqlite_journal_mode = (
+            os.getenv("ADE_DATABASE_SQLITE_JOURNAL_MODE") or "WAL"
+        ).strip().upper()
+        sqlite_synchronous = (
+            os.getenv("ADE_DATABASE_SQLITE_SYNCHRONOUS") or "NORMAL"
+        ).strip().upper()
+
         return cls(
             url=url,
             echo=_bool("ADE_DATABASE_ECHO", default=False),
@@ -130,8 +137,8 @@ class DatabaseConfig:
             max_overflow=_int("ADE_DATABASE_MAX_OVERFLOW", 10),
             pool_timeout=_int("ADE_DATABASE_POOL_TIMEOUT", 30),
             pool_recycle=_int("ADE_DATABASE_POOL_RECYCLE", 1800),
-            sqlite_journal_mode=(os.getenv("ADE_DATABASE_SQLITE_JOURNAL_MODE") or "WAL").strip().upper(),
-            sqlite_synchronous=(os.getenv("ADE_DATABASE_SQLITE_SYNCHRONOUS") or "NORMAL").strip().upper(),
+            sqlite_journal_mode=sqlite_journal_mode,
+            sqlite_synchronous=sqlite_synchronous,
             sqlite_busy_timeout_ms=_int("ADE_DATABASE_SQLITE_BUSY_TIMEOUT_MS", 30_000),
             sqlite_begin_mode=begin_mode,  # type: ignore[assignment]
         )
@@ -140,6 +147,9 @@ class DatabaseConfig:
     def from_settings(cls, settings: Settings) -> DatabaseConfig:
         """Load config from Settings (which reads .env natively)."""
         url = settings.database_url or "sqlite:///./data/db/ade.sqlite"
+        sqlite_journal_mode = (settings.database_sqlite_journal_mode or "WAL").strip().upper()
+        sqlite_synchronous = (settings.database_sqlite_synchronous or "NORMAL").strip().upper()
+
         return cls(
             url=url,
             echo=bool(settings.database_echo),
@@ -148,8 +158,8 @@ class DatabaseConfig:
             pool_size=int(settings.database_pool_size),
             max_overflow=int(settings.database_max_overflow),
             pool_timeout=int(settings.database_pool_timeout),
-            sqlite_journal_mode=(settings.database_sqlite_journal_mode or "WAL").strip().upper(),
-            sqlite_synchronous=(settings.database_sqlite_synchronous or "NORMAL").strip().upper(),
+            sqlite_journal_mode=sqlite_journal_mode,
+            sqlite_synchronous=sqlite_synchronous,
             sqlite_busy_timeout_ms=int(settings.database_sqlite_busy_timeout_ms),
             sqlite_begin_mode=settings.database_sqlite_begin_mode,
         )
@@ -192,7 +202,7 @@ def _mssql_with_defaults(url: URL) -> URL:
 
 def _sanitize_mssql_for_managed_identity(url: URL) -> URL:
     # Remove username/password from URL for clarity; token will be injected
-    url = url.set(username=None, password=None)
+    url = url._replace(username=None, password=None)
 
     query = dict(url.query or {})
     # Remove parameters that conflict with token auth
@@ -401,7 +411,11 @@ class Database:
                     conn.exec_driver_sql(f"BEGIN {begin_mode}")
 
         self._engine = engine
-        self._sessionmaker = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+        self._sessionmaker = async_sessionmaker(
+            bind=engine,
+            expire_on_commit=False,
+            autoflush=False,
+        )
 
     async def dispose(self) -> None:
         """Dispose engine (call on shutdown)."""

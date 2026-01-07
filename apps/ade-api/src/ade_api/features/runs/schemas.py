@@ -41,10 +41,6 @@ class RunCreateOptionsBase(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
-    force_rebuild: bool = Field(
-        default=False,
-        description="If true, rebuild the configuration environment before running.",
-    )
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -103,10 +99,6 @@ class RunBatchCreateOptions(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
-    force_rebuild: bool = Field(
-        default=False,
-        description="If true, rebuild the configuration environment before running.",
-    )
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -274,17 +266,11 @@ class RunResource(BaseSchema):
     object: RunObjectType = Field(default="ade.run", alias="object")
     workspace_id: UUIDStr
     configuration_id: UUIDStr
-    build_id: UUIDStr | None = None
 
     status: RunStatus
     failure_code: str | None = None
     failure_stage: str | None = None
     failure_message: str | None = None
-
-    engine_version: str | None = None
-    config_version: str | None = None
-    env_reason: str | None = None
-    env_reused: bool | None = None
 
     created_at: datetime
     started_at: datetime | None = None
@@ -303,4 +289,3 @@ class RunPage(ListPage[RunResource]):
     """Paginated collection of ``RunResource`` items."""
 
     items: list[RunResource]
-

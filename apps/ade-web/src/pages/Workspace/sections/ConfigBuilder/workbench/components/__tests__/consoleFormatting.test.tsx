@@ -42,13 +42,13 @@ describe("renderConsoleLine", () => {
     const line: WorkbenchConsoleLine = {
       level: "info",
       message: "fallback",
-      origin: "build",
+      origin: "environment",
       timestamp: new Date().toISOString(),
       raw: {
         event: "console.line",
         message: "",
         data: {
-          scope: "build",
+          scope: "environment",
           stream: "stdout",
           level: "info",
           message: "Installing collected packages",

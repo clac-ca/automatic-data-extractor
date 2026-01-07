@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
-import os
-import re
 import unicodedata
-import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -22,13 +19,12 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.ids import generate_uuid7
 from ade_api.common.etag import build_etag_token, format_weak_etag
+from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.listing import paginate_query
 from ade_api.common.logging import log_context
 from ade_api.common.sorting import resolve_sort
-from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
 from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
@@ -41,8 +37,6 @@ from ade_api.models import (
     DocumentSource,
     DocumentStatus,
     DocumentTag,
-    DocumentUploadSession,
-    DocumentUploadSessionStatus,
     Run,
     RunStatus,
     User,
@@ -56,11 +50,6 @@ from .exceptions import (
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
-    DocumentTooLargeError,
-    DocumentUploadRangeError,
-    DocumentUploadSessionExpiredError,
-    DocumentUploadSessionNotFoundError,
-    DocumentUploadSessionNotReadyError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
@@ -79,13 +68,8 @@ from .schemas import (
     DocumentSheet,
     DocumentUpdateRequest,
     DocumentUploadRunOptions,
-    DocumentUploadSessionCreateRequest,
-    DocumentUploadSessionCreateResponse,
-    DocumentUploadSessionStatusResponse,
-    DocumentUploadSessionUploadResponse,
     TagCatalogItem,
     TagCatalogPage,
-    UserSummary,
 )
 from .storage import DocumentStorage
 from .tags import (
@@ -101,9 +85,6 @@ UPLOAD_RUN_OPTIONS_KEY = "__ade_run_options"
 
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
-_UPLOAD_SESSION_PREFIX = "upload_sessions"
-_CONTENT_RANGE_PATTERN = re.compile(r"^bytes (\d+)-(\d+)/(\d+)$")
-_UPLOAD_PLACEHOLDER_SHA256 = "0" * 64
 
 
 
@@ -330,292 +311,6 @@ class DocumentsService:
         ]
         return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
 
-    async def create_upload_session(
-        self,
-        *,
-        workspace_id: UUID,
-        payload: DocumentUploadSessionCreateRequest,
-        actor: User | None,
-    ) -> DocumentUploadSessionCreateResponse:
-        if payload.byte_size > self._settings.storage_upload_max_bytes:
-            raise DocumentTooLargeError(
-                limit=self._settings.storage_upload_max_bytes,
-                received=payload.byte_size,
-            )
-
-        now = utc_now()
-        expires_at = now + self._settings.documents_upload_session_ttl
-        session_id = generate_uuid7()
-        document_id = generate_uuid7()
-        upload_storage = self._upload_session_storage(workspace_id)
-        stored_uri = upload_storage.make_stored_uri(str(session_id))
-
-        session = DocumentUploadSession(
-            id=session_id,
-            workspace_id=workspace_id,
-            created_by_user_id=actor.id if actor else None,
-            document_id=document_id,
-            filename=payload.filename,
-            content_type=payload.content_type,
-            byte_size=payload.byte_size,
-            upload_metadata=self.build_upload_metadata(payload.metadata, payload.run_options),
-            conflict_behavior=payload.conflict_behavior,
-            folder_id=payload.folder_id,
-            temp_stored_uri=stored_uri,
-            received_bytes=0,
-            received_ranges=["0-"],
-            status=DocumentUploadSessionStatus.ACTIVE,
-            expires_at=expires_at,
-        )
-        self._session.add(session)
-        document_storage = self._storage_for(workspace_id)
-        document_stored_uri = document_storage.make_stored_uri(str(document_id))
-        metadata_payload = dict(session.upload_metadata or {})
-        document = Document(
-            id=document_id,
-            workspace_id=workspace_id,
-            original_filename=self._normalise_filename(payload.filename),
-            content_type=self._normalise_content_type(payload.content_type),
-            byte_size=payload.byte_size,
-            sha256=_UPLOAD_PLACEHOLDER_SHA256,
-            stored_uri=document_stored_uri,
-            attributes=metadata_payload,
-            uploaded_by_user_id=actor.id if actor else session.created_by_user_id,
-            status=DocumentStatus.UPLOADING,
-            source=DocumentSource.MANUAL_UPLOAD,
-            expires_at=self._resolve_expiration(None, now),
-            last_run_at=None,
-        )
-        self._session.add(document)
-        await self._session.flush()
-
-        row = self._build_upload_session_row(
-            document_id=document_id,
-            workspace_id=workspace_id,
-            filename=payload.filename,
-            byte_size=payload.byte_size,
-            actor=actor,
-            created_at=now,
-        )
-        await self._events.record_changed(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=row.version,
-        )
-
-        return DocumentUploadSessionCreateResponse(
-            upload_session_id=str(session_id),
-            document_id=str(document_id),
-            row=row,
-            expires_at=expires_at,
-            chunk_size_bytes=self._settings.documents_upload_session_chunk_bytes,
-            next_expected_ranges=self._next_expected_ranges(session),
-            upload_url=f"/workspaces/{workspace_id}/documents/uploadSessions/{session_id}",
-        )
-
-    async def upload_session_range(
-        self,
-        *,
-        workspace_id: UUID,
-        upload_session_id: UUID,
-        content_range: str | None,
-        body: AsyncIterator[bytes],
-    ) -> DocumentUploadSessionUploadResponse:
-        session = await self._require_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-        expected_ranges = self._next_expected_ranges(session)
-        if content_range is None:
-            raise DocumentUploadRangeError(
-                "Content-Range header is required",
-                next_expected_ranges=expected_ranges,
-            )
-
-        try:
-            start, end, total = self._parse_content_range(content_range)
-        except ValueError as exc:
-            raise DocumentUploadRangeError(
-                str(exc),
-                next_expected_ranges=expected_ranges,
-            ) from exc
-        if total != session.byte_size:
-            raise DocumentUploadRangeError(
-                "Content-Range total does not match session byte_size",
-                next_expected_ranges=expected_ranges,
-            )
-        if start != session.received_bytes:
-            raise DocumentUploadRangeError(
-                "Content-Range start does not match next expected byte",
-                next_expected_ranges=expected_ranges,
-            )
-
-        chunk_size = end - start + 1
-        if chunk_size <= 0:
-            raise DocumentUploadRangeError(
-                "Content-Range specifies an empty range",
-                next_expected_ranges=expected_ranges,
-            )
-        if chunk_size > self._settings.documents_upload_session_chunk_bytes:
-            raise DocumentUploadRangeError(
-                "Content-Range exceeds chunk size limit",
-                next_expected_ranges=expected_ranges,
-            )
-
-        await self._write_upload_range(
-            session=session,
-            start=start,
-            expected_size=chunk_size,
-            body=body,
-        )
-
-        session.received_bytes = end + 1
-        if session.received_bytes >= session.byte_size:
-            session.status = DocumentUploadSessionStatus.COMPLETE
-
-        session.received_ranges = self._next_expected_ranges(session)
-        await self._session.flush()
-
-        return DocumentUploadSessionUploadResponse(
-            next_expected_ranges=session.received_ranges,
-            upload_complete=session.status == DocumentUploadSessionStatus.COMPLETE,
-        )
-
-    async def get_upload_session_status(
-        self,
-        *,
-        workspace_id: UUID,
-        upload_session_id: UUID,
-    ) -> DocumentUploadSessionStatusResponse:
-        session = await self._require_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-        return DocumentUploadSessionStatusResponse(
-            upload_session_id=str(session.id),
-            expires_at=session.expires_at,
-            byte_size=session.byte_size,
-            received_bytes=session.received_bytes,
-            next_expected_ranges=self._next_expected_ranges(session),
-            upload_complete=session.status == DocumentUploadSessionStatus.COMPLETE,
-            status=session.status,
-        )
-
-    async def commit_upload_session(
-        self,
-        *,
-        workspace_id: UUID,
-        upload_session_id: UUID,
-        actor: User | None,
-        client_request_id: str | None = None,
-    ) -> tuple[DocumentOut, DocumentUploadRunOptions | None]:
-        session = await self._require_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-        if session.status != DocumentUploadSessionStatus.COMPLETE:
-            raise DocumentUploadSessionNotReadyError(upload_session_id)
-
-        now = utc_now()
-        document_id = session.document_id or generate_uuid7()
-        session.document_id = document_id
-        storage = self._storage_for(workspace_id)
-        stored_uri = storage.make_stored_uri(str(document_id))
-
-        temp_path = self._upload_session_storage(workspace_id).path_for(session.temp_stored_uri)
-        sha, size = await self._compute_sha256(temp_path)
-        if size != session.byte_size:
-            raise DocumentUploadSessionNotReadyError(upload_session_id)
-
-        final_path = storage.path_for(stored_uri)
-        await run_in_threadpool(final_path.parent.mkdir, parents=True, exist_ok=True)
-        await run_in_threadpool(temp_path.replace, final_path)
-
-        run_options = self.read_upload_run_options(session.upload_metadata)
-        metadata_payload = dict(session.upload_metadata or {})
-        document = await self._repository.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            include_deleted=True,
-        )
-        if document is None:
-            document = Document(
-                id=document_id,
-                workspace_id=workspace_id,
-                original_filename=self._normalise_filename(session.filename),
-                content_type=self._normalise_content_type(session.content_type),
-                byte_size=size,
-                sha256=sha,
-                stored_uri=stored_uri,
-                attributes=metadata_payload,
-                uploaded_by_user_id=actor.id if actor else session.created_by_user_id,
-                status=DocumentStatus.UPLOADED,
-                source=DocumentSource.MANUAL_UPLOAD,
-                expires_at=self._resolve_expiration(None, now),
-                last_run_at=None,
-            )
-            self._session.add(document)
-        else:
-            document.original_filename = self._normalise_filename(session.filename)
-            document.content_type = self._normalise_content_type(session.content_type)
-            document.byte_size = size
-            document.sha256 = sha
-            document.stored_uri = stored_uri
-            document.attributes = metadata_payload
-            if actor:
-                document.uploaded_by_user_id = actor.id
-            document.status = DocumentStatus.UPLOADED
-            document.source = DocumentSource.MANUAL_UPLOAD
-            document.expires_at = self._resolve_expiration(None, now)
-            document.last_run_at = None
-            document.version += 1
-
-        session.status = DocumentUploadSessionStatus.COMMITTED
-        await self._session.flush()
-
-        stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
-        result = await self._session.execute(stmt)
-        hydrated = result.scalar_one()
-
-        payload = DocumentOut.model_validate(hydrated)
-        self._apply_derived_fields(payload)
-        await self._events.record_changed(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=payload.version,
-            client_request_id=client_request_id,
-        )
-        return payload, run_options
-
-    async def cancel_upload_session(
-        self,
-        *,
-        workspace_id: UUID,
-        upload_session_id: UUID,
-    ) -> None:
-        session = await self._require_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-        storage = self._upload_session_storage(workspace_id)
-        await storage.delete(session.temp_stored_uri)
-        if session.document_id:
-            document = await self._repository.get_document(
-                workspace_id=workspace_id,
-                document_id=session.document_id,
-                include_deleted=True,
-            )
-            if document is not None and document.status == DocumentStatus.UPLOADING:
-                document.status = DocumentStatus.FAILED
-                document.version += 1
-                await self._session.flush()
-                await self._events.record_changed(
-                    workspace_id=workspace_id,
-                    document_id=document.id,
-                    document_version=document.version,
-                )
-        await self._session.delete(session)
-
     async def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
@@ -639,7 +334,12 @@ class DocumentsService:
         )
         return payload
 
-    async def get_document_list_row(self, *, workspace_id: UUID, document_id: UUID) -> DocumentListRow:
+    async def get_document_list_row(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+    ) -> DocumentListRow:
         """Return a table-ready row projection for ``document_id``."""
 
         logger.debug(
@@ -897,7 +597,7 @@ class DocumentsService:
                     ),
                 )
                 return sheets
-            except asyncio.TimeoutError as exc:
+            except TimeoutError as exc:
                 raise DocumentWorksheetParseError(
                     document_id=document_id,
                     stored_uri=document.stored_uri,
@@ -1003,7 +703,7 @@ class DocumentsService:
                 document_id=document_id,
                 sheet=requested,
             ) from exc
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise DocumentPreviewParseError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -1487,43 +1187,6 @@ class DocumentsService:
             latest_result=document.latest_result,
         )
 
-    def _build_upload_session_row(
-        self,
-        *,
-        document_id: UUID,
-        workspace_id: UUID,
-        filename: str,
-        byte_size: int,
-        actor: User | None,
-        created_at: datetime,
-    ) -> DocumentListRow:
-        uploader = None
-        if actor is not None:
-            uploader = UserSummary(id=actor.id, name=actor.display_name, email=actor.email)
-
-        version = 1
-        etag = format_weak_etag(build_etag_token(document_id, version))
-        name = self._normalise_filename(filename)
-        return DocumentListRow(
-            id=str(document_id),
-            workspace_id=str(workspace_id),
-            name=name,
-            file_type=self._derive_file_type(name),
-            status=DocumentStatus.UPLOADING,
-            uploader=uploader,
-            assignee=None,
-            tags=[],
-            byte_size=byte_size,
-            created_at=created_at,
-            updated_at=created_at,
-            activity_at=created_at,
-            version=version,
-            etag=etag,
-            latest_run=None,
-            latest_successful_run=None,
-            latest_result=None,
-        )
-
     @staticmethod
     def _derive_file_type(name: str) -> DocumentFileType:
         suffix = Path(name).suffix.lower().lstrip(".")
@@ -1551,7 +1214,9 @@ class DocumentsService:
     def _derive_latest_result(cls, document: DocumentOut) -> DocumentResultSummary:
         metadata = document.metadata or {}
         candidate = (
-            metadata.get("mapping") or metadata.get("mapping_health") or metadata.get("mapping_quality")
+            metadata.get("mapping")
+            or metadata.get("mapping_health")
+            or metadata.get("mapping_quality")
         )
         if isinstance(candidate, Mapping):
             attention = cls._coerce_int(candidate.get("issues"))
@@ -1588,7 +1253,7 @@ class DocumentsService:
     def _status_from_last_run(status: RunStatus | None) -> DocumentStatus:
         if status == RunStatus.SUCCEEDED:
             return DocumentStatus.PROCESSED
-        if status in (RunStatus.FAILED, RunStatus.CANCELLED):
+        if status == RunStatus.FAILED:
             return DocumentStatus.FAILED
         if status == RunStatus.RUNNING:
             return DocumentStatus.PROCESSING
@@ -1623,7 +1288,10 @@ class DocumentsService:
             .subquery()
         )
 
-        stmt = select(ranked_runs.c.document_id, ranked_runs.c.status).where(ranked_runs.c.rank == 1)
+        stmt = (
+            select(ranked_runs.c.document_id, ranked_runs.c.status)
+            .where(ranked_runs.c.rank == 1)
+        )
         result = await self._session.execute(stmt)
 
         latest: dict[UUID, RunStatus] = {}
@@ -1819,112 +1487,6 @@ class DocumentsService:
     def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)
         return DocumentStorage(base)
-
-    def _upload_session_storage(self, workspace_id: UUID) -> DocumentStorage:
-        base = workspace_documents_root(self._settings, workspace_id)
-        return DocumentStorage(base, upload_prefix=_UPLOAD_SESSION_PREFIX)
-
-    @staticmethod
-    def _parse_content_range(content_range: str) -> tuple[int, int, int]:
-        match = _CONTENT_RANGE_PATTERN.match(content_range.strip())
-        if not match:
-            raise ValueError("Content-Range must be formatted as 'bytes start-end/total'")
-        start = int(match.group(1))
-        end = int(match.group(2))
-        total = int(match.group(3))
-        if start < 0 or end < start or total <= 0 or end >= total:
-            raise ValueError("Content-Range values are invalid")
-        return start, end, total
-
-    def _next_expected_ranges(self, session: DocumentUploadSession) -> list[str]:
-        if session.received_bytes >= session.byte_size:
-            return []
-        return [f"{session.received_bytes}-"]
-
-    async def _require_upload_session(
-        self,
-        *,
-        workspace_id: UUID,
-        upload_session_id: UUID,
-    ) -> DocumentUploadSession:
-        session = await self._session.get(DocumentUploadSession, upload_session_id)
-        if session is None or session.workspace_id != workspace_id:
-            raise DocumentUploadSessionNotFoundError(upload_session_id)
-        if session.expires_at <= utc_now():
-            raise DocumentUploadSessionExpiredError(upload_session_id)
-        if session.status in {DocumentUploadSessionStatus.CANCELLED, DocumentUploadSessionStatus.COMMITTED}:
-            raise DocumentUploadSessionNotFoundError(upload_session_id)
-        return session
-
-    async def _write_upload_range(
-        self,
-        *,
-        session: DocumentUploadSession,
-        start: int,
-        expected_size: int,
-        body: AsyncIterator[bytes],
-    ) -> None:
-        storage = self._upload_session_storage(session.workspace_id)
-        path = storage.path_for(session.temp_stored_uri)
-
-        def _open() -> Any:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            if path.exists():
-                return path.open("r+b")
-            return path.open("wb")
-
-        file_handle = await run_in_threadpool(_open)
-        try:
-            def _truncate_to_start() -> None:
-                file_handle.seek(0, os.SEEK_END)
-                current_size = file_handle.tell()
-                if current_size > start:
-                    file_handle.truncate(start)
-                file_handle.seek(start)
-
-            await run_in_threadpool(_truncate_to_start)
-
-            written = 0
-            async for chunk in body:
-                if not chunk:
-                    continue
-
-                chunk_size = len(chunk)
-                next_written = written + chunk_size
-                if next_written > expected_size:
-                    await run_in_threadpool(_truncate_to_start)
-                    raise DocumentUploadRangeError(
-                        "Uploaded bytes exceed Content-Range size",
-                        next_expected_ranges=self._next_expected_ranges(session),
-                    )
-
-                await run_in_threadpool(file_handle.write, chunk)
-                written = next_written
-
-            await run_in_threadpool(file_handle.flush)
-            if written != expected_size:
-                await run_in_threadpool(_truncate_to_start)
-                raise DocumentUploadRangeError(
-                    "Uploaded bytes do not match Content-Range size",
-                    next_expected_ranges=self._next_expected_ranges(session),
-                )
-        finally:
-            await run_in_threadpool(file_handle.close)
-
-    async def _compute_sha256(self, path: Path) -> tuple[str, int]:
-        def _read() -> tuple[str, int]:
-            digest = sha256()
-            size = 0
-            with path.open("rb") as handle:
-                while True:
-                    chunk = handle.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    digest.update(chunk)
-            return digest.hexdigest(), size
-
-        return await run_in_threadpool(_read)
 
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:

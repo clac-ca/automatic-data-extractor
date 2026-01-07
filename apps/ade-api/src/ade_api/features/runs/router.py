@@ -818,7 +818,10 @@ async def preview_run_output_endpoint(
         str | None,
         Query(
             alias="sheetName",
-            description="Optional worksheet name to preview (defaults to the first sheet when omitted).",
+            description=(
+                "Optional worksheet name to preview "
+                "(defaults to the first sheet when omitted)."
+            ),
         ),
     ] = None,
     sheet_index: Annotated[
@@ -826,7 +829,10 @@ async def preview_run_output_endpoint(
         Query(
             ge=0,
             alias="sheetIndex",
-            description="Optional worksheet index to preview (0-based, defaults to the first sheet when omitted).",
+            description=(
+                "Optional worksheet index to preview "
+                "(0-based, defaults to the first sheet when omitted)."
+            ),
         ),
     ] = None,
 ) -> WorkbookSheetPreview:

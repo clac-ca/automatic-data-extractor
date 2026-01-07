@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ApiError } from "@api/errors";
-
 import {
-  cancelDocumentUploadSession,
-  commitDocumentUploadSession,
-  createDocumentUploadSession,
-  getDocumentUploadSessionStatus,
-  uploadDocumentUploadSessionRange,
   uploadWorkspaceDocument,
   type DocumentUploadResponse,
   type DocumentUploadRunOptions,
 } from "@api/documents/uploads";
-import type { components } from "@schema";
 
 export type UploadManagerStatus =
   | "queued"
@@ -36,12 +28,6 @@ export interface UploadManagerItem<TResponse> {
   readonly runOptions?: DocumentUploadRunOptions;
   readonly response?: TResponse;
   readonly error?: string;
-  readonly mode?: "simple" | "session";
-  readonly sessionId?: string;
-  readonly chunkSizeBytes?: number;
-  readonly nextExpectedRanges?: string[];
-  readonly documentId?: string;
-  readonly row?: components["schemas"]["DocumentListRow"] | null;
 }
 
 export type UploadManagerQueueItem = {
@@ -67,17 +53,13 @@ export type UploadManagerSummary = {
 interface UseUploadManagerOptions {
   readonly workspaceId: string;
   readonly concurrency?: number;
-  readonly sessionThresholdBytes?: number;
 }
 
 const DEFAULT_CONCURRENCY = 3;
-const DEFAULT_SESSION_THRESHOLD_BYTES = 10 * 1024 * 1024;
-const FALLBACK_CHUNK_BYTES = 5 * 1024 * 1024;
 
 export function useUploadManager({
   workspaceId,
   concurrency = DEFAULT_CONCURRENCY,
-  sessionThresholdBytes = DEFAULT_SESSION_THRESHOLD_BYTES,
 }: UseUploadManagerOptions) {
   const [items, setItems] = useState<UploadManagerItem<DocumentUploadResponse>[]>([]);
   const inFlightRef = useRef(new Set<string>());
@@ -122,14 +104,11 @@ export function useUploadManager({
       current.map((item) => {
         if (item.id !== itemId) return item;
         if (item.status !== "paused") return item;
-        if (item.mode === "simple") {
-          return {
-            ...item,
-            status: "queued",
-            progress: resetProgress(item.file),
-          };
-        }
-        return { ...item, status: "queued" };
+        return {
+          ...item,
+          status: "queued",
+          progress: resetProgress(item.file),
+        };
       }),
     );
   }, []);
@@ -139,19 +118,12 @@ export function useUploadManager({
       current.map((item) => {
         if (item.id !== itemId) return item;
         if (item.status !== "failed") return item;
-        if (item.mode === "simple") {
-          return {
-            ...item,
-            status: "queued",
-            progress: resetProgress(item.file),
-            error: undefined,
-            response: undefined,
-          };
-        }
         return {
           ...item,
           status: "queued",
+          progress: resetProgress(item.file),
           error: undefined,
+          response: undefined,
         };
       }),
     );
@@ -171,12 +143,8 @@ export function useUploadManager({
             : item,
         ),
       );
-      const item = items.find((entry) => entry.id === itemId);
-      if (item?.sessionId) {
-        void cancelDocumentUploadSession(workspaceId, item.sessionId).catch(() => null);
-      }
     },
-    [items, workspaceId],
+    [],
   );
 
   const remove = useCallback(
@@ -212,14 +180,12 @@ export function useUploadManager({
         continue;
       }
       inFlightRef.current.add(item.id);
-      const mode = item.mode ?? (item.file.size >= sessionThresholdBytes ? "session" : "simple");
       setItems((current) =>
         current.map((entry) =>
           entry.id === item.id
             ? {
                 ...entry,
                 status: "uploading",
-                mode,
               }
             : entry,
         ),
@@ -228,31 +194,21 @@ export function useUploadManager({
       const controller = new AbortController();
       abortHandlesRef.current.set(item.id, () => controller.abort());
 
-      const uploadPromise =
-        mode === "session"
-          ? runSessionUpload(item, {
-              workspaceId,
-              controller,
-              updateItem: (patch) =>
-                setItems((current) =>
-                  current.map((entry) => (entry.id === item.id ? { ...entry, ...patch } : entry)),
-                ),
-            })
-          : runSimpleUpload(item, {
-              workspaceId,
-              controller,
-              onProgress: (progress) =>
-                setItems((current) =>
-                  current.map((entry) =>
-                    entry.id === item.id
-                      ? {
-                          ...entry,
-                          progress: normalizeProgress(entry.file, progress),
-                        }
-                      : entry,
-                  ),
-                ),
-            });
+      const uploadPromise = runSimpleUpload(item, {
+        workspaceId,
+        controller,
+        onProgress: (progress) =>
+          setItems((current) =>
+            current.map((entry) =>
+              entry.id === item.id
+                ? {
+                    ...entry,
+                    progress: normalizeProgress(entry.file, progress),
+                  }
+                : entry,
+            ),
+          ),
+      });
 
       uploadPromise
         .then((result) => {
@@ -297,7 +253,7 @@ export function useUploadManager({
           abortReasonsRef.current.delete(item.id);
         });
     }
-  }, [concurrency, items, sessionThresholdBytes, workspaceId]);
+  }, [concurrency, items, workspaceId]);
 
   const summary = useMemo<UploadManagerSummary>(() => {
     let totalBytes = 0;
@@ -417,126 +373,4 @@ async function runSimpleUpload(
     throw new Error("Expected upload response.");
   }
   return result.data;
-}
-
-async function runSessionUpload(
-  item: UploadManagerItem<DocumentUploadResponse>,
-  options: {
-    workspaceId: string;
-    controller: AbortController;
-    updateItem: (patch: Partial<UploadManagerItem<DocumentUploadResponse>>) => void;
-  },
-) {
-  const total = Math.max(item.file.size, 0);
-  let sessionId = item.sessionId;
-  let chunkSize = item.chunkSizeBytes ?? FALLBACK_CHUNK_BYTES;
-  let receivedBytes = Math.min(item.progress.loaded, total);
-
-  try {
-    if (sessionId) {
-      try {
-        const status = await getDocumentUploadSessionStatus(
-          options.workspaceId,
-          sessionId,
-          options.controller.signal,
-        );
-        receivedBytes = Math.min(status.receivedBytes ?? receivedBytes, total);
-        options.updateItem({
-          sessionId: status.uploadSessionId,
-          nextExpectedRanges: status.nextExpectedRanges,
-          progress: {
-            loaded: receivedBytes,
-            total,
-            percent: total > 0 ? Math.min(100, Math.round((receivedBytes / total) * 100)) : 0,
-          },
-        });
-      } catch (error) {
-        if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
-          sessionId = undefined;
-          receivedBytes = 0;
-          options.updateItem({
-            sessionId: undefined,
-            nextExpectedRanges: undefined,
-            progress: resetProgress(item.file),
-          });
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    if (!sessionId) {
-      const created = await createDocumentUploadSession(
-        options.workspaceId,
-        {
-          filename: item.file.name,
-          byteSize: total,
-          contentType: item.file.type || undefined,
-          conflictBehavior: "rename",
-          runOptions: item.runOptions,
-        },
-        options.controller.signal,
-      );
-      sessionId = created.uploadSessionId;
-      chunkSize = created.chunkSizeBytes ?? chunkSize;
-      receivedBytes = 0;
-      options.updateItem({
-        sessionId,
-        chunkSizeBytes: chunkSize,
-        nextExpectedRanges: created.nextExpectedRanges,
-        documentId: created.documentId,
-        row: created.row ?? null,
-        progress: resetProgress(item.file),
-      });
-    }
-
-    if (!sessionId) {
-      throw new Error("Upload session id was not initialized.");
-    }
-
-    while (receivedBytes < total) {
-      if (options.controller.signal.aborted) {
-        throw new DOMException("Aborted", "AbortError");
-      }
-      const end = Math.min(receivedBytes + chunkSize - 1, total - 1);
-      const chunk = item.file.slice(receivedBytes, end + 1);
-      const response = await uploadDocumentUploadSessionRange(
-        options.workspaceId,
-        sessionId,
-        {
-          start: receivedBytes,
-          end,
-          total,
-          body: chunk,
-          signal: options.controller.signal,
-        },
-      );
-      receivedBytes = end + 1;
-      options.updateItem({
-        nextExpectedRanges: response.nextExpectedRanges,
-        progress: {
-          loaded: receivedBytes,
-          total,
-          percent: total > 0 ? Math.min(100, Math.round((receivedBytes / total) * 100)) : 0,
-        },
-      });
-    }
-
-    const committed = await commitDocumentUploadSession(options.workspaceId, sessionId, {
-      idempotencyKey: item.id,
-      clientRequestId: item.id,
-      signal: options.controller.signal,
-    });
-    return committed;
-  } catch (error) {
-    const isAbort = error instanceof Error && error.name === "AbortError";
-    if (!isAbort && sessionId) {
-      try {
-        await cancelDocumentUploadSession(options.workspaceId, sessionId);
-      } catch {
-        // Best-effort cleanup; the caller handles the failure state.
-      }
-    }
-    throw error;
-  }
 }

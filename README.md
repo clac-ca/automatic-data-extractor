@@ -26,7 +26,7 @@ automatic-data-extractor/
 │  ├─ ade-api/         # FastAPI backend (API only)
 │  ├─ ade-web/         # React (Vite) frontend SPA
 │  ├─ ade-cli/         # Python CLI (console entry: `ade`)
-│  ├─ ade-worker/      # Background worker (builds + runs)
+│  ├─ ade-worker/      # Background worker (runs + environments)
 │  └─ ade-engine/      # Engine runtime used by the worker/CLI
 ├─ docs/               # Developer docs & runbooks
 ├─ examples/           # Sample input/output files
@@ -253,15 +253,18 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 | `ADE_WORKSPACES_DIR`      | `./data/workspaces`      | Root for all workspace storage             |
 | `ADE_DOCUMENTS_DIR`       | `./data/workspaces`      | Base for documents (`<ws>/documents/...`)  |
 | `ADE_CONFIGS_DIR`         | `./data/workspaces`      | Base for configs (`<ws>/config_packages/`) |
-| `ADE_VENVS_DIR`           | `./data/venvs`           | Local base for build venvs (`<ws>/<cfg>/<build>/.venv`) |
+| `ADE_VENVS_DIR`           | `./data/venvs`           | Local base for environment venvs (`<ws>/<cfg>/<deps>/<env>/.venv`) |
 | `ADE_RUNS_DIR`            | `./data/workspaces`      | Base for runs (`<ws>/runs/<run_id>/...`)   |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                   |
 | `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
 | `ADE_WORKER_CONCURRENCY`  | `1`                      | Worker concurrency per process             |
 | `ADE_QUEUE_SIZE`          | `10`                     | Queue length before HTTP 429 backpressure  |
-| `ADE_WORKER_POLL_INTERVAL`| `2`                      | Worker idle poll interval (seconds)        |
-| `ADE_BUILD_TIMEOUT`       | `600`                    | Wall‑clock timeout per build               |
-| `ADE_RUN_TIMEOUT_SECONDS` | `300`                    | Wall‑clock timeout per run                 |
+| `ADE_WORKER_POLL_INTERVAL`| `0.5`                    | Worker idle poll interval (seconds)        |
+| `ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS` | `600`       | Wall‑clock timeout per environment build   |
+| `ADE_WORKER_RUN_TIMEOUT_SECONDS` | `300`           | Wall‑clock timeout per run                 |
+| `ADE_WORKER_ENABLE_GC`    | `1`                      | Enable worker GC (single-host default)     |
+| `ADE_WORKER_ENV_TTL_DAYS` | `30`                     | Environment GC TTL (days)                  |
+| `ADE_WORKER_RUN_ARTIFACT_TTL_DAYS` | `30`           | Run artifact GC TTL (days)                 |
 | `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best‑effort CPU limit per run              |
 | `ADE_WORKER_MEM_MB`       | `512`                    | Best‑effort memory limit per run (MB)      |
 | `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a run may create |

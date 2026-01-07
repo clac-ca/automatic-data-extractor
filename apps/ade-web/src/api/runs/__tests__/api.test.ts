@@ -49,7 +49,6 @@ const sampleRunResource = {
   object: "ade.run",
   workspace_id: "ws-1",
   configuration_id: "config-123",
-  build_id: "build-123",
   status: "queued",
   created_at: "2025-01-01T00:00:00Z",
   links: {
@@ -165,7 +164,6 @@ describe("createRun", () => {
         options: {
           dry_run: true,
           validate_only: false,
-          force_rebuild: false,
           log_level: "INFO",
           active_sheet_only: false,
         },

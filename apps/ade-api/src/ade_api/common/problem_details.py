@@ -187,7 +187,9 @@ def error_items_from_pydantic(errors: Iterable[dict[str, Any]]) -> list[ProblemD
     return items
 
 
-def coerce_detail_and_errors(detail: Any) -> tuple[str | None, list[ProblemDetailsErrorItem] | None]:
+def coerce_detail_and_errors(
+    detail: Any,
+) -> tuple[str | None, list[ProblemDetailsErrorItem] | None]:
     """Normalize mixed ``detail`` payloads into a detail string + error items."""
 
     if detail is None:
@@ -259,9 +261,11 @@ def coerce_detail_and_errors(detail: Any) -> tuple[str | None, list[ProblemDetai
                 detail_text = (detail_text or "Resync required") + suffix
 
         if "limit" in detail:
-            detail_text = (
-                f"{detail_text} (limit={detail['limit']})" if detail_text else f"Limit {detail['limit']}"
-            )
+            limit = detail["limit"]
+            if detail_text:
+                detail_text = f"{detail_text} (limit={limit})"
+            else:
+                detail_text = f"Limit {limit}"
 
         return detail_text, errors
 

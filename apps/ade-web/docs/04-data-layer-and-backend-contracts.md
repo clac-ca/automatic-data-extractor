@@ -509,15 +509,15 @@ Streaming:
 
 ---
 
-### 4.7 Configurations & builds (`configurationsApi`, `buildsApi`)
+### 4.7 Configurations & environments (`configurationsApi`)
 
 **Responsibilities**
 
 * Configuration entities & versions.
 * Configuration file tree (for the workbench).
-* Builds & build logs (mostly implicit via runs).
+* Worker-owned environments (implicit via runs).
 
-> For day‑to‑day flows, builds are **implicit**: starting a run will rebuild the environment if needed. The explicit `/builds` API is mainly for admin/backfill/debug flows.
+> For day‑to‑day flows, environments are **implicit**: starting a run will provision the environment if needed. There is no explicit environment API in v1.
 
 #### Configuration entities
 
@@ -541,18 +541,11 @@ Streaming:
 
 Directory creation is idempotent: `PUT` returns `201` when the folder is first created and `200` if it already exists.
 
-#### Builds
+#### Environments
 
-* `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/builds`
-* `GET  /api/v1/builds/{buildId}`
-* Build logs are observed via the run event stream (`/runs/{runId}/events/stream`, `console.line` with `data.scope:"build"`).
-
-The backend may rebuild environments automatically when:
-
-* a run starts,
-* the environment is missing or stale,
-* content has changed, or
-* a run includes `force_rebuild` (`RunOptions.forceRebuild`).
+Environments are created on-demand by the worker when runs start. They are keyed
+by configuration + dependency digest and cached for reuse. The API does not
+expose environment endpoints in v1.
 
 **Example functions**
 
@@ -577,11 +570,6 @@ Config files:
 * `createConfigDirectory(workspaceId, configurationId, dirPath)`
 * `deleteConfigDirectory(workspaceId, configurationId, dirPath)`
 
-Builds:
-
-* `createBuild(workspaceId, configurationId, options)`  // returns `buildId`
-* `readBuild(buildId)` (for metadata/status; events are streamed via runs)
-
 Hooks:
 
 * `useConfigurationsQuery(workspaceId)`
@@ -589,7 +577,6 @@ Hooks:
 * `useMakeActiveConfigurationMutation(workspaceId)`
 * `useArchiveConfigurationMutation(workspaceId)`
 * `useConfigurationFilesQuery(workspaceId, configurationId)`
-* `useCreateBuildMutation(workspaceId, configurationId)` (triggers build; observe via run event stream)
 
 ---
 
@@ -690,59 +677,19 @@ Benefits:
 
 ## 6. Streaming events (SSE + NDJSON archive)
 
-The app supports **one-shot job streaming** for the workbench console, plus an NDJSON archive for post-run analysis.
+The app streams **run** events to the workbench console and relies on NDJSON archives for full history.
 
-### 6.1 Workbench job stream (preferred)
+### 6.1 Run stream
 
-The Configuration Builder uses a single SSE stream that covers the full job lifecycle (environment build + run):
+* `GET /api/v1/runs/{runId}/events/stream`
+* Supports `after_sequence` for resume.
+* Each SSE frame carries an `EventRecord` payload (`event:` is the record name).
 
-* `GET /api/v1/configurations/{configurationId}/jobs/stream`
+Environment provisioning logs are not streamed separately in v1.
 
-This stream is intentionally **live-only**:
+### 6.2 NDJSON archive
 
-* No replay.
-* No resume (`Last-Event-ID` is ignored / unsupported).
-* The UI keeps a bounded in-memory tail (e.g. last 2k lines) and relies on archived logs for full history.
-
-### 6.2 SSE event types
-
-The server uses **standard SSE `event:` dispatch** where each SSE message carries a single JSON
-`EventRecord` payload (the same envelope used by the engine’s NDJSON logs).
-
-* `event: job.meta` (JSON `EventRecord`) – emitted once at connect time
-
-  `data` contains stream-level context. These identifiers are **not repeated** on every event.
-
-  ```jsonc
-  {
-    "event": "job.meta",
-    "timestamp": "2025-12-15T19:45:05.637Z",
-    "level": "info",
-    "message": "connected",
-    "data": {
-      "jobId": "019b238b-8836-767d-a452-094a81a917eb",
-      "workspaceId": "019b2334-e5e8-75c5-b342-734630c9531a",
-      "configurationId": "019b2380-78bf-76ee-8b22-60ba3d86062c",
-      "buildId": "019b238b-884a-712e-982a-2765b9c147b2"
-    }
-  }
-  ```
-
-* `event: <event_name>` (JSON `EventRecord`) – all subsequent build/run/engine events
-
-  Examples: `build.phase.start`, `console.line`, `engine.detector.column_result`, `run.complete`.
-
-  Each SSE message uses:
-
-  * `id:` = the run stream `sequence` number (monotonic within the job)
-  * `event:` = the EventRecord `event` name
-  * `data:` = compact JSON `EventRecord`
-
-  Completion is indicated by `event: run.complete` (final event).
-
-### 6.3 NDJSON archive
-
-For full-fidelity logs and offline inspection, the backend still persists NDJSON event logs and exposes them via the run download endpoints (e.g. `GET /api/v1/runs/{runId}/events/download`).
+For full-fidelity logs and offline inspection, the backend persists NDJSON event logs and exposes them via run download endpoints (for example `GET /api/v1/runs/{runId}/events/download`).
 
 ---
 

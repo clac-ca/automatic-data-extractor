@@ -11,8 +11,8 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.time import utc_now
 from ade_api.common.logging import current_request_id
+from ade_api.common.time import utc_now
 from ade_api.db import db
 from ade_api.models import DocumentEvent, DocumentEventType
 from ade_api.settings import Settings
@@ -71,7 +71,20 @@ class DocumentEventsService:
         oldest = await self.oldest_cursor(workspace_id=workspace_id)
         latest = await self.current_cursor(workspace_id=workspace_id)
         if oldest is not None and cursor < oldest:
-            raise DocumentEventCursorTooOld(oldest_cursor=oldest, latest_cursor=latest)
+            too_old = oldest > 1
+            retention = self._settings.documents_change_feed_retention_period
+            if not too_old and retention and retention.total_seconds() > 0:
+                stmt = (
+                    select(DocumentEvent.occurred_at)
+                    .where(DocumentEvent.workspace_id == workspace_id)
+                    .order_by(DocumentEvent.cursor.asc())
+                    .limit(1)
+                )
+                oldest_occurred_at = (await self._session.execute(stmt)).scalar_one_or_none()
+                if oldest_occurred_at and utc_now() - oldest_occurred_at > retention:
+                    too_old = True
+            if too_old:
+                raise DocumentEventCursorTooOld(oldest_cursor=oldest, latest_cursor=latest)
 
         if max_cursor is not None and max_cursor > latest:
             max_cursor = latest
@@ -204,8 +217,11 @@ async def run_document_events_pruner(
             logger.warning("document_events.prune.failed", exc_info=True)
 
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=DOCUMENT_EVENTS_PRUNE_INTERVAL_SECONDS)
-        except asyncio.TimeoutError:
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=DOCUMENT_EVENTS_PRUNE_INTERVAL_SECONDS,
+            )
+        except TimeoutError:
             continue
 
 

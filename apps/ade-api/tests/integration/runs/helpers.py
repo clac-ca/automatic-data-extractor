@@ -7,8 +7,6 @@ from httpx import AsyncClient
 from ade_api.common.time import utc_now
 from ade_api.common.ids import generate_uuid7
 from ade_api.models import (
-    Build,
-    BuildStatus,
     Configuration,
     ConfigurationStatus,
     Document,
@@ -38,23 +36,6 @@ def make_configuration(
     )
 
 
-def make_build(
-    *,
-    workspace_id: UUID,
-    configuration_id: UUID,
-    status: BuildStatus = BuildStatus.READY,
-    fingerprint: str = "fingerprint",
-) -> Build:
-    return Build(
-        id=generate_uuid7(),
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        fingerprint=fingerprint,
-        status=status,
-        created_at=utc_now(),
-    )
-
-
 def make_document(
     *,
     workspace_id: UUID,
@@ -81,15 +62,17 @@ def make_run(
     *,
     workspace_id: UUID,
     configuration_id: UUID,
-    build_id: UUID,
     document_id: UUID,
     status: RunStatus,
+    engine_spec: str = "apps/ade-engine",
+    deps_digest: str = "sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
 ) -> Run:
     return Run(
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        build_id=build_id,
         input_document_id=document_id,
+        engine_spec=engine_spec,
+        deps_digest=deps_digest,
         status=status,
         created_at=utc_now(),
     )

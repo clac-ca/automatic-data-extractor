@@ -8,8 +8,6 @@ from uuid import uuid4
 from ade_api.core.security.hashing import hash_password
 from ade_api.common.ids import generate_uuid7
 from ade_api.models import (
-    Build,
-    BuildStatus,
     Configuration,
     ConfigurationStatus,
     Document,
@@ -194,28 +192,18 @@ async def build_tag_filter_fixture(session):
 async def seed_failed_run(session, *, workspace_id, document_id, uploader_id):
     now = datetime.now(tz=UTC)
     configuration_id = await ensure_configuration(session, workspace_id)
-    build = Build(
-        id=generate_uuid7(),
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        fingerprint="fingerprint",
-        status=BuildStatus.READY,
-        created_at=now - timedelta(minutes=15),
-    )
-    session.add(build)
-    await session.flush()
     run = Run(
         id=generate_uuid7(),
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        build_id=build.id,
         submitted_by_user_id=uploader_id,
         status=RunStatus.FAILED,
         input_document_id=document_id,
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
         created_at=now - timedelta(minutes=10),
         started_at=now - timedelta(minutes=5),
         completed_at=now - timedelta(minutes=1),
-        cancelled_at=None,
         error_message="Request failed with status 404",
     )
     session.add(run)

@@ -69,7 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     logger.info(
         "ade_api.startup",
         extra=log_context(
-            logging_level=settings.logging_level,
+            logging_level=settings.log_level,
             safe_mode=bool(settings.safe_mode),
             auth_disabled=bool(settings.auth_disabled),
             version=settings.app_version,
