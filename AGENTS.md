@@ -24,6 +24,37 @@ Docs to know:
 - Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI)
 - Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing)
 
+## Ownership boundaries
+
+### `ade-api` (control plane)
+- Auth and user/domain workflows
+- Configurations lifecycle (draft/active/archived)
+- Documents upload/storage metadata
+- Create run intent (insert `runs` rows)
+- Read/report run status/results and stream run events
+
+### `ade-worker` (data plane)
+- Claim/leasing semantics, retries/backoff, timeouts
+- Environment provisioning and reuse
+- Subprocess execution and NDJSON event logs
+- Artifact storage paths and cleanup decisions
+- Updating run results and statuses
+
+### `ade-engine` (runtime engine)
+- Core normalization/processing pipeline and domain logic
+- CLI commands (`process`, `config`, `version`) and engine runtime APIs
+- IO, mapping, validation, normalization rules, telemetry hooks
+
+### `ade-config` (config packages)
+- User-authored configuration package contents (mappings, schemas, rules, assets)
+- Dependency manifests that drive `deps_digest` (e.g. `pyproject.toml`, `requirements*.txt`)
+- Installs into the environment via editable install for rapid iteration
+
+### `ade-web` (frontend SPA)
+- UI/UX, routing, client-side state management
+- Auth integration and API consumption
+- Live updates via run/document event streams when available
+
 ## ade CLI essentials
 
 Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
