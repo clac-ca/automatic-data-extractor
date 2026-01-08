@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Sequence
 from uuid import uuid4
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
-from .schema import document_events, documents, environments, runs
+from .schema import document_events, documents, environments, run_fields, run_metrics, run_table_columns, runs
 
 
 class Repo:
@@ -162,7 +162,7 @@ class Repo:
         conn.execute(
             update(documents)
             .where(documents.c.id == document_id)
-            .values(status=status, updated_at=now, version=version)
+            .values(status=status, updated_at=now, last_run_at=now, version=version)
         )
         conn.execute(
             insert(document_events).values(
@@ -198,6 +198,46 @@ class Repo:
                 error_message=error_message,
             )
         )
+
+    def replace_run_metrics(
+        self,
+        *,
+        conn,
+        run_id: str,
+        metrics: dict[str, Any] | None,
+    ) -> None:
+        conn.execute(delete(run_metrics).where(run_metrics.c.run_id == run_id))
+        if not metrics:
+            return
+        payload = dict(metrics)
+        payload["run_id"] = run_id
+        conn.execute(insert(run_metrics).values(**payload))
+
+    def replace_run_fields(
+        self,
+        *,
+        conn,
+        run_id: str,
+        rows: Sequence[dict[str, Any]],
+    ) -> None:
+        conn.execute(delete(run_fields).where(run_fields.c.run_id == run_id))
+        if not rows:
+            return
+        payload = [dict(row, run_id=run_id) for row in rows]
+        conn.execute(insert(run_fields), payload)
+
+    def replace_run_table_columns(
+        self,
+        *,
+        conn,
+        run_id: str,
+        rows: Sequence[dict[str, Any]],
+    ) -> None:
+        conn.execute(delete(run_table_columns).where(run_table_columns.c.run_id == run_id))
+        if not rows:
+            return
+        payload = [dict(row, run_id=run_id) for row in rows]
+        conn.execute(insert(run_table_columns), payload)
 
 
 __all__ = ["Repo"]

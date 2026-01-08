@@ -9,7 +9,7 @@ engine successfully.
 
 The runs API exposes newline-delimited JSON events via the run events stream.
 Create the run first, then attach to `/runs/{runId}/events/stream` for live
-updates (`run.queued`, `run.start`, `console.line`, `run.complete`) and all
+updates (`run.start`, `run.engine.*`, `console.line`, `run.complete`) and all
 `engine.*` telemetry.
 
 ```bash
@@ -23,11 +23,10 @@ http --stream GET :8000/api/v1/runs/$RUN_ID/events/stream
 
 Key things to watch while streaming:
 
-- The first `run.queued` event confirms the database row exists; `run.start` arrives when the worker claims the job.
+- `run.start` arrives when the worker claims the job.
 - `console.line` events include the ADE engine stdout; store the NDJSON output
   alongside ticket timelines when escalating to engineering.
-- `engine.run.completed` carries the full run payload (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine
-  failed. Capture those payloads in the incident record.
+- `engine.run.completed` carries the full run payload (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` is the worker’s terminal event with `status`, `exit_code`, and optional `error_message`. `run.engine.*` events are subprocess telemetry. Capture those payloads in the incident record.
 
 ## 2. Polling run status without streaming
 

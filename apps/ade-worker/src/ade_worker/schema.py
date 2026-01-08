@@ -11,8 +11,10 @@ from __future__ import annotations
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
+    Float,
     Integer,
     MetaData,
     String,
@@ -98,12 +100,13 @@ documents = Table(
     Column("status", String(20), nullable=False),        # uploaded|processing|processed|failed
     Column("version", Integer, nullable=False),
     Column("updated_at", DateTime, nullable=False),
+    Column("last_run_at", DateTime, nullable=True),
 )
 
 document_events = Table(
     "document_events",
     metadata,
-    Column("cursor", BigInteger, primary_key=True, autoincrement=True),
+    Column("cursor", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
     Column("workspace_id", String(36), nullable=False),
     Column("document_id", String(36), nullable=False),
     Column("event_type", String(40), nullable=False),
@@ -117,6 +120,91 @@ document_events = Table(
     Index("ix_document_events_workspace_occurred", "workspace_id", "occurred_at"),
 )
 
-REQUIRED_TABLES = ["environments", "runs", "documents", "document_events"]
+run_metrics = Table(
+    "run_metrics",
+    metadata,
+    Column("run_id", String(36), primary_key=True),
+    Column("evaluation_outcome", String(20), nullable=True),
+    Column("evaluation_findings_total", Integer, nullable=True),
+    Column("evaluation_findings_info", Integer, nullable=True),
+    Column("evaluation_findings_warning", Integer, nullable=True),
+    Column("evaluation_findings_error", Integer, nullable=True),
+    Column("validation_issues_total", Integer, nullable=True),
+    Column("validation_issues_info", Integer, nullable=True),
+    Column("validation_issues_warning", Integer, nullable=True),
+    Column("validation_issues_error", Integer, nullable=True),
+    Column("validation_max_severity", String(10), nullable=True),
+    Column("workbook_count", Integer, nullable=True),
+    Column("sheet_count", Integer, nullable=True),
+    Column("table_count", Integer, nullable=True),
+    Column("row_count_total", Integer, nullable=True),
+    Column("row_count_empty", Integer, nullable=True),
+    Column("column_count_total", Integer, nullable=True),
+    Column("column_count_empty", Integer, nullable=True),
+    Column("column_count_mapped", Integer, nullable=True),
+    Column("column_count_unmapped", Integer, nullable=True),
+    Column("field_count_expected", Integer, nullable=True),
+    Column("field_count_detected", Integer, nullable=True),
+    Column("field_count_not_detected", Integer, nullable=True),
+    Column("cell_count_total", Integer, nullable=True),
+    Column("cell_count_non_empty", Integer, nullable=True),
+)
 
-__all__ = ["metadata", "environments", "runs", "documents", "document_events", "REQUIRED_TABLES"]
+run_fields = Table(
+    "run_fields",
+    metadata,
+    Column("run_id", String(36), primary_key=True),
+    Column("field", String(128), primary_key=True),
+    Column("label", String(255), nullable=True),
+    Column("detected", Boolean, nullable=False),
+    Column("best_mapping_score", Float, nullable=True),
+    Column("occurrences_tables", Integer, nullable=False),
+    Column("occurrences_columns", Integer, nullable=False),
+    Index("ix_run_fields_run", "run_id"),
+    Index("ix_run_fields_field", "field"),
+)
+
+run_table_columns = Table(
+    "run_table_columns",
+    metadata,
+    Column("run_id", String(36), primary_key=True),
+    Column("workbook_index", Integer, primary_key=True),
+    Column("workbook_name", String(255), nullable=False),
+    Column("sheet_index", Integer, primary_key=True),
+    Column("sheet_name", String(255), nullable=False),
+    Column("table_index", Integer, primary_key=True),
+    Column("column_index", Integer, primary_key=True),
+    Column("header_raw", Text, nullable=True),
+    Column("header_normalized", Text, nullable=True),
+    Column("non_empty_cells", Integer, nullable=False),
+    Column("mapping_status", String(32), nullable=False),
+    Column("mapped_field", String(128), nullable=True),
+    Column("mapping_score", Float, nullable=True),
+    Column("mapping_method", String(32), nullable=True),
+    Column("unmapped_reason", String(64), nullable=True),
+    Index("ix_run_table_columns_run", "run_id"),
+    Index("ix_run_table_columns_run_sheet", "run_id", "sheet_name"),
+    Index("ix_run_table_columns_run_mapped_field", "run_id", "mapped_field"),
+)
+
+REQUIRED_TABLES = [
+    "environments",
+    "runs",
+    "documents",
+    "document_events",
+    "run_metrics",
+    "run_fields",
+    "run_table_columns",
+]
+
+__all__ = [
+    "metadata",
+    "environments",
+    "runs",
+    "documents",
+    "document_events",
+    "run_metrics",
+    "run_fields",
+    "run_table_columns",
+    "REQUIRED_TABLES",
+]

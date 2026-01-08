@@ -12,6 +12,7 @@ Do **not** add app-specific composites here—place those in feature folders (fo
 | file-upload | DiceUI | `npx shadcn@latest add "@diceui/file-upload"` | `src/components/ui/file-upload.tsx`. |
 | avatar-group | DiceUI | `npx shadcn@latest add "@diceui/avatar-group"` | `src/components/ui/avatar-group.tsx`. Local patch: avoid root Slot/asChild (multiple children) and wrap non-element item children to prevent Slot crashes. |
 | action-bar | DiceUI | `npx shadcn@latest add "@diceui/action-bar"` | `src/components/ui/action-bar.tsx`. |
+| select | shadcn | `npx shadcn@latest add select` | Local patch: raise `SelectContent` z-index above modal overlays (z-[95]) so dropdowns are clickable. |
 
 ## Maintenance / Updating
 

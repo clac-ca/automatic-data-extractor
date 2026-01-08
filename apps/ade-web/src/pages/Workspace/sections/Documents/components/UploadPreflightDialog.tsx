@@ -535,13 +535,23 @@ async function inspectWorkbookFile(file: File): Promise<{ names: string[]; activ
 function resolveActiveSheetName(
   workbook: {
     SheetNames?: string[];
-    Workbook?: { Views?: unknown[] };
+    Workbook?: { WBView?: unknown[]; Views?: unknown[]; WorkbookView?: unknown[] };
   },
   names: string[],
 ) {
-  const activeTab = (workbook.Workbook?.Views?.[0] as { activeTab?: number } | undefined)?.activeTab;
-  if (typeof activeTab === "number" && activeTab >= 0 && activeTab < names.length) {
-    return names[activeTab];
+  const viewCandidates = [
+    workbook.Workbook?.WBView,
+    workbook.Workbook?.Views,
+    workbook.Workbook?.WorkbookView,
+  ];
+  for (const views of viewCandidates) {
+    if (!Array.isArray(views) || views.length === 0) continue;
+    const view = views[0] as { activeTab?: number | string; activetab?: number | string } | undefined;
+    const raw = view?.activeTab ?? view?.activetab;
+    const activeTab = typeof raw === "string" ? Number(raw) : raw;
+    if (Number.isFinite(activeTab) && activeTab >= 0 && activeTab < names.length) {
+      return names[activeTab];
+    }
   }
   return names[0] ?? null;
 }

@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { fetchRunOutputPreview, fetchRunOutputSheets } from "@api/runs/api";
+import { fetchRunColumns, fetchRunOutputPreview, fetchRunOutputSheets } from "@api/runs/api";
 import { ApiError } from "@api/errors";
 import { columnLabel } from "@pages/Workspace/sections/Documents/utils";
 
@@ -16,7 +16,7 @@ import type { RunOutputSheet } from "@api/runs/api";
 type PreviewRow = Record<string, string>;
 
 const PREVIEW_MAX_ROWS = 200;
-const PREVIEW_MAX_COLUMNS = 50;
+const PREVIEW_MAX_COLUMNS = 200;
 
 interface DocumentPreviewGridProps {
   document: DocumentListRow;
@@ -70,7 +70,34 @@ export function DocumentPreviewGrid({
     enabled: Boolean(runId),
   });
 
+  const columnsQuery = useQuery({
+    queryKey: ["run-output-columns", runId, activeSheetIndex],
+    queryFn: ({ signal }) =>
+      fetchRunColumns(
+        runId ?? "",
+        { sheet_index: activeSheetIndex },
+        signal,
+      ),
+    staleTime: 30_000,
+    enabled: Boolean(runId),
+  });
+
   const sheet = previewQuery.data ?? null;
+  const mappingSummary = useMemo(() => {
+    const columns = columnsQuery.data;
+    if (!columns || !Array.isArray(columns)) {
+      return null;
+    }
+    const totals = columns.reduce(
+      (acc, column) => {
+        if (column.mapping_status === "mapped") acc.mapped += 1;
+        if (column.mapping_status === "unmapped") acc.unmapped += 1;
+        return acc;
+      },
+      { mapped: 0, unmapped: 0 },
+    );
+    return totals;
+  }, [columnsQuery.data]);
   const columnCount = useMemo(() => {
     if (!sheet) return 0;
     const maxRowLength = sheet.rows.reduce(
@@ -127,7 +154,7 @@ export function DocumentPreviewGrid({
     },
   });
 
-  const sheetMeta = sheet ? formatSheetMeta(sheet) : null;
+  const sheetMeta = sheet ? formatSheetMeta(sheet, mappingSummary) : null;
   const sheetTabs = sheets.length ? (
     <SheetTabs
       sheets={sheets}
@@ -224,12 +251,22 @@ function PreviewShell({
   );
 }
 
-function formatSheetMeta(sheet: WorkbookSheetPreview) {
-  const parts = [
-    sheet.name,
-    `${sheet.totalRows.toLocaleString()} rows`,
-    `${sheet.totalColumns.toLocaleString()} columns`,
-  ];
+function formatSheetMeta(
+  sheet: WorkbookSheetPreview,
+  mappingSummary: { mapped: number; unmapped: number } | null,
+) {
+  const parts = [sheet.name];
+  if (mappingSummary) {
+    parts.push(
+      `${mappingSummary.mapped.toLocaleString()} matched columns`,
+      `${mappingSummary.unmapped.toLocaleString()} unmatched columns`,
+    );
+  } else {
+    parts.push(
+      `${sheet.totalRows.toLocaleString()} rows`,
+      `${sheet.totalColumns.toLocaleString()} columns`,
+    );
+  }
 
   if (sheet.truncatedRows || sheet.truncatedColumns) {
     const truncations: string[] = [];

@@ -389,6 +389,7 @@ class DocumentsService:
 
         if changed:
             await self._session.flush()
+            await self._session.refresh(document, attribute_names=["assignee_user"])
 
         updated = DocumentOut.model_validate(document)
         self._apply_derived_fields(updated)

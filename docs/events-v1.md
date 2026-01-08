@@ -26,12 +26,14 @@ Top-level keys match the engine schema; the worker adds optional context inside 
 ```
 
 - Context (`jobId`, `workspaceId`, `environmentId`, `configurationId`) is merged into `data` when present.
-- `event` names are dot-delimited (`run.complete`, `environment.start`, `engine.phase.start`, `console.line`).
+- `event` names are dot-delimited (`run.complete`, `run.engine.complete`, `environment.start`, `engine.phase.start`, `console.line`).
 
 ## Sources
 - **Engine NDJSON stderr** — primary source; each line is a JSON object with an `event` field.
-- **Worker-origin events** — orchestration emits `run.*`, `environment.*`, and `console.line` records using the same envelope.
+- **Worker-origin events** — orchestration emits `run.*` (including terminal `run.complete` and subprocess `run.engine.*`), `environment.*`, and `console.line` records using the same envelope.
 - **Console fallback** — non-JSON stdout/stderr lines are wrapped as `console.line` events with `data.scope` = `run` or `environment`.
+
+`run.complete` is the authoritative terminal event for a run and should carry `status` and exit/diagnostic details in `data`.
 
 ## Flow (happy path)
 1. API creates `runs` rows (status = `queued`).

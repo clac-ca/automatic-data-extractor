@@ -16,6 +16,7 @@ Supported databases:
 - Runs use a **lease** (`claim_expires_at`) with periodic **heartbeats** and retry backoff.
 - Environments transition to `ready`/`failed`; runs transition to `succeeded`/`failed`.
 - Dependency changes create **new environments** (no in-place rebuilds).
+- Successful runs persist `run_metrics`, `run_fields`, and `run_table_columns` from `engine.run.completed`.
 
 ## Run
 

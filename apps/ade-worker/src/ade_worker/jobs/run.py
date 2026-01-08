@@ -7,13 +7,14 @@ import logging
 import os
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from ..paths import PathManager
 from ..queue import RunClaim, RunQueue
 from ..repo import Repo
+from ..run_results import parse_run_fields, parse_run_metrics, parse_run_table_columns
 from ..settings import WorkerSettings
 from ..subprocess_runner import EventLog, SubprocessRunner
 
@@ -99,6 +100,50 @@ def _as_str_list(v: Any) -> list[str]:
     if isinstance(v, str):
         return [v.strip()] if v.strip() else []
     return []
+
+
+def _as_datetime(value: Any) -> datetime | None:
+    return value if isinstance(value, datetime) else None
+
+
+def _execution_payload(started_at: datetime, completed_at: datetime) -> dict[str, Any]:
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    if completed_at.tzinfo is None:
+        completed_at = completed_at.replace(tzinfo=timezone.utc)
+    duration_ms = max(0, int((completed_at - started_at).total_seconds() * 1000))
+    return {
+        "started_at": started_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+        "duration_ms": duration_ms,
+    }
+
+
+def _emit_run_complete(
+    event_log: EventLog,
+    *,
+    status: str,
+    message: str,
+    context: dict[str, Any],
+    started_at: datetime,
+    completed_at: datetime,
+    exit_code: int | None,
+    error_message: str | None = None,
+    output_path: str | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "status": status,
+        "execution": _execution_payload(started_at, completed_at),
+    }
+    if exit_code is not None:
+        payload["exit_code"] = exit_code
+    if error_message:
+        payload["error_message"] = error_message
+    if output_path:
+        payload["output_path"] = output_path
+
+    level = "error" if status == "failed" else "info"
+    event_log.emit(event="run.complete", level=level, message=message, data=payload, context=context)
 
 
 @dataclass(slots=True)
@@ -257,6 +302,8 @@ class RunJob:
             logger.error("run not found: %s", run_id)
             return
 
+        run_started_at = _as_datetime(run.get("started_at")) or now
+
         workspace_id = str(run["workspace_id"])
         configuration_id = str(run["configuration_id"])
         document_id = str(run["input_document_id"])
@@ -307,6 +354,7 @@ class RunJob:
                 event_log,
                 ctx,
                 now,
+                run_started_at,
                 2,
                 f"Missing config package dir: {config_dir}",
             )
@@ -333,7 +381,15 @@ class RunJob:
                     output_path=None,
                     error_message="Dry run",
                 )
-            event_log.emit(event="run.complete", message="Dry run complete", context=ctx)
+            _emit_run_complete(
+                event_log,
+                status="succeeded",
+                message="Dry run complete",
+                context=ctx,
+                started_at=run_started_at,
+                completed_at=finished_at,
+                exit_code=0,
+            )
             return
 
         if options.validate_only:
@@ -364,7 +420,15 @@ class RunJob:
                         output_path=None,
                         error_message=None,
                     )
-                event_log.emit(event="run.complete", message="Validation succeeded", context=ctx)
+                _emit_run_complete(
+                    event_log,
+                    status="succeeded",
+                    message="Validation succeeded",
+                    context=ctx,
+                    started_at=run_started_at,
+                    completed_at=finished_at,
+                    exit_code=0,
+                )
             else:
                 self._handle_run_failure(
                     claim,
@@ -373,6 +437,7 @@ class RunJob:
                     event_log,
                     ctx,
                     finished_at,
+                    run_started_at,
                     res.exit_code,
                     f"Validation failed (exit {res.exit_code})",
                 )
@@ -381,12 +446,32 @@ class RunJob:
         # Stage document input
         doc = self.repo.load_document(document_id)
         if not doc:
-            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Document not found: {document_id}")
+            self._handle_run_failure(
+                claim,
+                run_id,
+                document_id,
+                event_log,
+                ctx,
+                now,
+                run_started_at,
+                2,
+                f"Document not found: {document_id}",
+            )
             return
 
         source_path = self.paths.document_storage_path(workspace_id=workspace_id, stored_uri=str(doc.get("stored_uri") or ""))
         if not source_path.exists():
-            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, now, 2, f"Document file missing: {source_path}")
+            self._handle_run_failure(
+                claim,
+                run_id,
+                document_id,
+                event_log,
+                ctx,
+                now,
+                run_started_at,
+                2,
+                f"Document file missing: {source_path}",
+            )
             return
 
         input_dir = self.paths.run_input_dir(workspace_id, run_id)
@@ -432,7 +517,7 @@ class RunJob:
         res = self.runner.run(
             cmd,
             event_log=event_log,
-            scope="run",
+            scope="run.engine",
             timeout_seconds=float(self.settings.run_timeout_seconds) if self.settings.run_timeout_seconds else None,
             cwd=None,
             env=self._pip_env(),
@@ -445,11 +530,25 @@ class RunJob:
         finished_at = utcnow()
 
         if res.timed_out:
-            self._handle_run_failure(claim, run_id, document_id, event_log, ctx, finished_at, res.exit_code, "Run timed out")
+            self._handle_run_failure(
+                claim,
+                run_id,
+                document_id,
+                event_log,
+                ctx,
+                finished_at,
+                run_started_at,
+                res.exit_code,
+                "Run timed out",
+            )
             return
 
         if res.exit_code == 0:
             output_path = _extract_output_path(engine_payload)
+            results_payload = engine_payload if isinstance(engine_payload, dict) else None
+            metrics = parse_run_metrics(results_payload) if results_payload else None
+            fields = parse_run_fields(results_payload) if results_payload else []
+            columns = parse_run_table_columns(results_payload) if results_payload else []
             with self.engine.begin() as conn:
                 ok = self.queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
                 if not ok:
@@ -471,7 +570,27 @@ class RunJob:
                     now=finished_at,
                 )
 
-            event_log.emit(event="run.complete", message="Run succeeded", context=ctx)
+                if results_payload is None:
+                    logger.warning("run.results.missing_payload run_id=%s", run_id)
+                else:
+                    try:
+                        with conn.begin_nested():
+                            self.repo.replace_run_metrics(conn=conn, run_id=run_id, metrics=metrics)
+                            self.repo.replace_run_fields(conn=conn, run_id=run_id, rows=fields)
+                            self.repo.replace_run_table_columns(conn=conn, run_id=run_id, rows=columns)
+                    except Exception:
+                        logger.exception("run.results.persist_failed run_id=%s", run_id)
+
+            _emit_run_complete(
+                event_log,
+                status="succeeded",
+                message="Run succeeded",
+                context=ctx,
+                started_at=run_started_at,
+                completed_at=finished_at,
+                exit_code=0,
+                output_path=output_path,
+            )
             return
 
         # Failure
@@ -482,6 +601,7 @@ class RunJob:
             event_log,
             ctx,
             finished_at,
+            run_started_at,
             res.exit_code,
             f"Engine failed (exit {res.exit_code})",
         )
@@ -494,6 +614,7 @@ class RunJob:
         event_log: EventLog,
         ctx: dict[str, Any],
         now: datetime,
+        started_at: datetime,
         exit_code: int,
         error_message: str,
     ) -> None:
@@ -538,9 +659,29 @@ class RunJob:
                 )
 
         if retry_at is not None:
-            event_log.emit(event="run.retry", level="error", message=f"Retry scheduled at {retry_at.isoformat()}", context=ctx)
-        else:
-            event_log.emit(event="run.failed", level="error", message=error_message, context=ctx)
+            event_log.emit(
+                event="run.retry",
+                level="error",
+                message=f"Retry scheduled at {retry_at.isoformat()}",
+                data={
+                    "error_message": error_message,
+                    "retry_at": retry_at.isoformat(),
+                    "exit_code": exit_code,
+                },
+                context=ctx,
+            )
+            return
+
+        _emit_run_complete(
+            event_log,
+            status="failed",
+            message=error_message,
+            context=ctx,
+            started_at=started_at,
+            completed_at=now,
+            exit_code=exit_code,
+            error_message=error_message,
+        )
 
 
 __all__ = ["RunJob", "RunOptions", "parse_run_options"]

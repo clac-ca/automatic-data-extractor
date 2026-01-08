@@ -5,7 +5,16 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine, insert, select
 
 from ade_worker.repo import Repo
-from ade_worker.schema import environments, metadata, runs
+from ade_worker.schema import (
+    document_events,
+    documents,
+    environments,
+    metadata,
+    run_fields,
+    run_metrics,
+    run_table_columns,
+    runs,
+)
 
 
 def _engine():
@@ -47,6 +56,22 @@ def _insert_run(
                 created_at=now - timedelta(minutes=5),
                 started_at=None,
                 completed_at=None,
+            )
+        )
+
+
+def _insert_document(engine, *, document_id: str, workspace_id: str, now: datetime) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            insert(documents).values(
+                id=document_id,
+                workspace_id=workspace_id,
+                original_filename="input.xlsx",
+                stored_uri="file:documents/input.xlsx",
+                status="uploaded",
+                version=1,
+                updated_at=now - timedelta(minutes=1),
+                last_run_at=None,
             )
         )
 
@@ -94,3 +119,201 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
         rows = conn.execute(select(environments.c.deps_digest)).mappings().all()
     digests = sorted(row["deps_digest"] for row in rows)
     assert digests == ["sha256:aaa", "sha256:bbb"]
+
+
+def test_update_document_status_updates_version_and_last_run_at() -> None:
+    engine = _engine()
+    repo = Repo(engine)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+
+    _insert_document(engine, document_id="doc-1", workspace_id="ws-1", now=now)
+
+    with engine.begin() as conn:
+        repo.update_document_status(
+            conn=conn,
+            document_id="doc-1",
+            status="processing",
+            now=now,
+        )
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            select(documents.c.status, documents.c.version, documents.c.updated_at, documents.c.last_run_at)
+            .where(documents.c.id == "doc-1")
+        ).first()
+        event = conn.execute(
+            select(document_events.c.event_type, document_events.c.document_version)
+            .where(document_events.c.document_id == "doc-1")
+        ).first()
+
+    assert row is not None
+    assert row.status == "processing"
+    assert row.version == 2
+    assert row.updated_at == now
+    assert row.last_run_at == now
+    assert event is not None
+    assert event.event_type == "document.changed"
+    assert event.document_version == 2
+
+
+def test_replace_run_metrics_overwrites() -> None:
+    engine = _engine()
+    repo = Repo(engine)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+
+    _insert_run(
+        engine,
+        run_id="run-4",
+        workspace_id="ws-4",
+        configuration_id="cfg-4",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:aaa",
+        now=now,
+    )
+
+    with engine.begin() as conn:
+        repo.replace_run_metrics(
+            conn=conn,
+            run_id="run-4",
+            metrics={
+                "evaluation_outcome": "partial",
+                "evaluation_findings_total": 2,
+                "validation_issues_total": 0,
+            },
+        )
+
+    with engine.begin() as conn:
+        row = conn.execute(select(run_metrics)).mappings().first()
+    assert row is not None
+    assert row["run_id"] == "run-4"
+    assert row["evaluation_outcome"] == "partial"
+    assert row["evaluation_findings_total"] == 2
+
+    with engine.begin() as conn:
+        repo.replace_run_metrics(
+            conn=conn,
+            run_id="run-4",
+            metrics={
+                "evaluation_outcome": "succeeded",
+                "evaluation_findings_total": 0,
+            },
+        )
+
+    with engine.begin() as conn:
+        rows = conn.execute(select(run_metrics)).mappings().all()
+    assert len(rows) == 1
+    assert rows[0]["evaluation_outcome"] == "succeeded"
+    assert rows[0]["evaluation_findings_total"] == 0
+
+
+def test_replace_run_fields_is_idempotent() -> None:
+    engine = _engine()
+    repo = Repo(engine)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+
+    _insert_run(
+        engine,
+        run_id="run-5",
+        workspace_id="ws-5",
+        configuration_id="cfg-5",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:bbb",
+        now=now,
+    )
+
+    rows = [
+        {
+            "field": "email",
+            "label": "Email",
+            "detected": False,
+            "best_mapping_score": None,
+            "occurrences_tables": 0,
+            "occurrences_columns": 0,
+        },
+        {
+            "field": "first_name",
+            "label": "First Name",
+            "detected": True,
+            "best_mapping_score": 1.0,
+            "occurrences_tables": 1,
+            "occurrences_columns": 1,
+        },
+    ]
+
+    with engine.begin() as conn:
+        repo.replace_run_fields(conn=conn, run_id="run-5", rows=rows)
+
+    with engine.begin() as conn:
+        first = conn.execute(select(run_fields)).mappings().all()
+    assert len(first) == 2
+
+    with engine.begin() as conn:
+        repo.replace_run_fields(
+            conn=conn,
+            run_id="run-5",
+            rows=[
+                {
+                    "field": "last_name",
+                    "label": "Last Name",
+                    "detected": True,
+                    "best_mapping_score": 0.9,
+                    "occurrences_tables": 1,
+                    "occurrences_columns": 1,
+                }
+            ],
+        )
+
+    with engine.begin() as conn:
+        second = conn.execute(select(run_fields)).mappings().all()
+    assert len(second) == 1
+    assert second[0]["field"] == "last_name"
+
+
+def test_replace_run_table_columns_is_idempotent() -> None:
+    engine = _engine()
+    repo = Repo(engine)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+
+    _insert_run(
+        engine,
+        run_id="run-6",
+        workspace_id="ws-6",
+        configuration_id="cfg-6",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:ccc",
+        now=now,
+    )
+
+    columns = [
+        {
+            "workbook_index": 0,
+            "workbook_name": "Book1.xlsx",
+            "sheet_index": 0,
+            "sheet_name": "Sheet1",
+            "table_index": 0,
+            "column_index": 0,
+            "header_raw": "Email",
+            "header_normalized": "email",
+            "non_empty_cells": 10,
+            "mapping_status": "mapped",
+            "mapped_field": "email",
+            "mapping_score": 1.0,
+            "mapping_method": "classifier",
+            "unmapped_reason": None,
+        }
+    ]
+
+    with engine.begin() as conn:
+        repo.replace_run_table_columns(conn=conn, run_id="run-6", rows=columns)
+
+    with engine.begin() as conn:
+        first = conn.execute(select(run_table_columns)).mappings().all()
+    assert len(first) == 1
+    assert first[0]["mapped_field"] == "email"
+
+    with engine.begin() as conn:
+        repo.replace_run_table_columns(conn=conn, run_id="run-6", rows=[])
+
+    with engine.begin() as conn:
+        second = conn.execute(select(run_table_columns)).mappings().all()
+    assert second == []

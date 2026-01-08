@@ -497,6 +497,7 @@ export function DocumentsTableView({
           workspaceId,
           documentId,
           hasTag ? { remove: [tag] } : { add: [tag] },
+          undefined,
           { clientRequestId: requestId, ifMatch },
         );
         applyDocumentUpdate(documentId, updated);

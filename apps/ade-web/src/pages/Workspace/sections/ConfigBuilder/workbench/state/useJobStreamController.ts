@@ -30,6 +30,44 @@ type UseJobStreamControllerOptions = {
   readonly onError?: (error: unknown) => void;
 };
 
+function coerceNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function resolveRunCompletionStatus(payload: Record<string, unknown>): JobStreamStatus {
+  const statusRaw = typeof payload.status === "string" ? payload.status.toLowerCase() : "";
+  if (statusRaw === "succeeded" || statusRaw === "success") {
+    return "succeeded";
+  }
+  if (statusRaw === "failed" || statusRaw === "cancelled") {
+    return "failed";
+  }
+
+  const exitCode = coerceNumber(payload.exit_code ?? payload.exitCode);
+  if (typeof exitCode === "number") {
+    return exitCode === 0 ? "succeeded" : "failed";
+  }
+
+  const timedOut =
+    typeof payload.timed_out === "boolean"
+      ? payload.timed_out
+      : typeof payload.timedOut === "boolean"
+        ? payload.timedOut
+        : null;
+  if (timedOut) {
+    return "failed";
+  }
+
+  return "succeeded";
+}
+
 export function useJobStreamController({
   workspaceId,
   configId,
@@ -127,13 +165,9 @@ export function useJobStreamController({
       consoleStoreRef.current.append(line);
 
       if (name === "run.complete") {
-        setCompletedDetails(payload);
-        const status = typeof payload.status === "string" ? payload.status.toLowerCase() : "";
-        if (status === "succeeded" || status === "success") {
-          setJobStatus("succeeded");
-        } else {
-          setJobStatus("failed");
-        }
+        const resolvedStatus = resolveRunCompletionStatus(payload);
+        setCompletedDetails({ ...payload, status: resolvedStatus });
+        setJobStatus(resolvedStatus);
       }
     },
     [],
