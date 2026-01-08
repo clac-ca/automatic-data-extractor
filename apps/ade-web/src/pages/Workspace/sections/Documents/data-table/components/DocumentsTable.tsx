@@ -11,13 +11,7 @@ import { useDataTable } from "@/hooks/use-data-table";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useSearchParams } from "@app/navigation/urlState";
@@ -45,6 +39,8 @@ interface DocumentsTableProps {
   onArchive: (documentId: string) => void;
   onRestore: (documentId: string) => void;
   onDeleteRequest: (document: DocumentRow) => void;
+  onDownloadOutput: (document: DocumentRow) => void;
+  onDownloadOriginal: (document: DocumentRow) => void;
   expandedRowId: string | null;
   onTogglePreview: (documentId: string) => void;
   isRowActionPending?: (documentId: string) => boolean;
@@ -54,6 +50,15 @@ interface DocumentsTableProps {
   scrollFooter?: ReactNode;
   onVisibleRangeChange?: (range: { startIndex: number; endIndex: number; total: number }) => void;
 }
+
+const STATUS_BADGE_STYLES: Record<DocumentStatus, string> = {
+  uploading: "border-info-200 bg-info-50 text-info-700",
+  uploaded: "border-border bg-muted text-muted-foreground",
+  processing: "border-warning-200 bg-warning-50 text-warning-700",
+  processed: "border-success-200 bg-success-50 text-success-700",
+  failed: "border-danger-200 bg-danger-50 text-danger-700",
+  archived: "border-warning-200 bg-warning-50 text-warning-900",
+};
 
 export function DocumentsTable({
   data,
@@ -67,6 +72,8 @@ export function DocumentsTable({
   onArchive,
   onRestore,
   onDeleteRequest,
+  onDownloadOutput,
+  onDownloadOriginal,
   expandedRowId,
   onTogglePreview,
   isRowActionPending,
@@ -78,6 +85,10 @@ export function DocumentsTable({
 }: DocumentsTableProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(() => searchParams.get("q") ?? "");
+  const [contextMenu, setContextMenu] = useState<{
+    rowId: string;
+    position: { x: number; y: number };
+  } | null>(null);
 
   useEffect(() => {
     setSearchValue(searchParams.get("q") ?? "");
@@ -145,6 +156,93 @@ export function DocumentsTable({
     },
     [onTogglePreview],
   );
+
+  const contextRow = useMemo(
+    () => (contextMenu ? data.find((row) => row.id === contextMenu.rowId) ?? null : null),
+    [contextMenu, data],
+  );
+  const activeMenuRowId = contextMenu?.rowId ?? null;
+
+  useEffect(() => {
+    if (contextMenu && !contextRow) {
+      setContextMenu(null);
+    }
+  }, [contextMenu, contextRow]);
+
+  const openContextMenu = useCallback((rowId: string, event: MouseEvent<HTMLElement>) => {
+    if (event.type === "contextmenu") {
+      event.preventDefault();
+    }
+    event.stopPropagation();
+    setContextMenu({ rowId, position: { x: event.clientX, y: event.clientY } });
+  }, []);
+
+  const onRowContextMenu = useCallback(
+    (row: Row<DocumentRow>, event: MouseEvent<HTMLTableRowElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+      openContextMenu(row.original.id, event);
+    },
+    [openContextMenu],
+  );
+
+  const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
+    if (!contextRow) return [];
+    const isArchived = contextRow.status === "archived";
+    const isPreviewable = Boolean(contextRow.latestSuccessfulRun?.id);
+    const isExpanded = contextRow.id === expandedRowId;
+    const isBusy = isRowActionPending?.(contextRow.id) ?? false;
+    const canDownloadOutput = Boolean(contextRow.latestSuccessfulRun?.id);
+
+    return [
+      {
+        id: "preview",
+        label: isExpanded ? "Hide preview" : "Show preview",
+        onSelect: () => togglePreview(contextRow.id),
+        disabled: !isPreviewable,
+      },
+      {
+        id: "download-normalized",
+        label: "Download normalized",
+        onSelect: () => onDownloadOutput(contextRow),
+        disabled: !canDownloadOutput,
+      },
+      {
+        id: "download-original",
+        label: "Download original",
+        onSelect: () => onDownloadOriginal(contextRow),
+      },
+      {
+        id: isArchived ? "restore" : "archive",
+        label: isArchived ? "Restore" : "Archive",
+        onSelect: () => (isArchived ? onRestore(contextRow.id) : onArchive(contextRow.id)),
+        disabled: isBusy,
+        dividerAbove: true,
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        onSelect: () => onDeleteRequest(contextRow),
+        disabled: isBusy,
+        danger: true,
+        dividerAbove: true,
+      },
+    ];
+  }, [
+    contextRow,
+    expandedRowId,
+    isRowActionPending,
+    onArchive,
+    onDeleteRequest,
+    onDownloadOriginal,
+    onDownloadOutput,
+    onRestore,
+    togglePreview,
+  ]);
 
   const columns = useMemo<ColumnDef<DocumentRow>[]>(
     () => [
@@ -225,16 +323,16 @@ export function DocumentsTable({
           const status = row.getValue<string>("status");
           const flash = status === "archived" && (archivedFlashIds?.has(row.original.id) ?? false);
           const uploadProgress = row.original.uploadProgress ?? null;
+          const statusTone =
+            STATUS_BADGE_STYLES[status as DocumentStatus] ?? "border-border bg-muted text-muted-foreground";
           return (
             <div className="flex min-w-[120px] flex-col gap-1">
               <Badge
                 variant="outline"
                 className={cn(
                   "capitalize",
-                  status === "archived" &&
-                    "border-warning-200 text-warning-900 dark:border-warning-500/60 dark:text-warning-100",
-                  flash &&
-                    "bg-warning-50 ring-1 ring-warning-300/70 animate-pulse dark:bg-warning-500/15",
+                  statusTone,
+                  flash && "ring-1 ring-warning-300/70 animate-pulse",
                 )}
               >
                 {status}
@@ -492,55 +590,24 @@ export function DocumentsTable({
       {
         id: "actions",
         cell: ({ row }) => {
-          const isArchived = row.original.status === "archived";
-          const isPreviewable = Boolean(row.original.latestSuccessfulRun?.id);
-          const isExpanded = row.id === expandedRowId;
-          const isBusy = isRowActionPending?.(row.original.id) ?? false;
-
           return (
-            <div className="flex justify-end" data-ignore-row-click>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label="Open menu"
-                    variant="ghost"
-                    className="flex size-8 p-0 data-[state=open]:bg-muted"
-                  >
-                    <Ellipsis className="size-4" aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem
-                    onSelect={() => togglePreview(row.id)}
-                    disabled={!isPreviewable}
-                  >
-                    {isExpanded ? "Hide preview" : "Show preview"}
-                  </DropdownMenuItem>
-                  {isArchived ? (
-                    <DropdownMenuItem
-                      onSelect={() => onRestore(row.original.id)}
-                      disabled={isBusy}
-                    >
-                      Restore
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem
-                      onSelect={() => onArchive(row.original.id)}
-                      disabled={isBusy}
-                    >
-                      Archive
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => onDeleteRequest(row.original)}
-                    disabled={isBusy}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div
+              className="flex justify-end"
+              data-ignore-row-click
+              onContextMenu={(event) => openContextMenu(row.original.id, event)}
+            >
+              <Button
+                aria-label="Open menu"
+                variant="ghost"
+                type="button"
+                className="flex size-8 p-0 data-[state=open]:bg-muted"
+                data-state={activeMenuRowId === row.original.id ? "open" : "closed"}
+                onClick={(event) => openContextMenu(row.original.id, event)}
+                aria-expanded={activeMenuRowId === row.original.id}
+                aria-haspopup="menu"
+              >
+                <Ellipsis className="size-4" aria-hidden="true" />
+              </Button>
             </div>
           );
         },
@@ -552,23 +619,19 @@ export function DocumentsTable({
     [
       archivedFlashIds,
       assigneeOptions,
+      activeMenuRowId,
       fileTypeOptions,
-      expandedRowId,
       isRowActionPending,
       memberOptions,
       onAssign,
-      onArchive,
-      onDeleteRequest,
+      openContextMenu,
       rowPresence,
-      onRestore,
       onToggleTag,
-      onTogglePreview,
       people,
       runStatusOptions,
       sourceOptions,
       statusOptions,
       tagFilterOptions,
-      togglePreview,
       workspaceId,
     ],
   );
@@ -581,6 +644,8 @@ export function DocumentsTable({
       sorting: [{ id: "createdAt", desc: true }],
       pagination: { pageSize: DEFAULT_PAGE_SIZE },
       columnVisibility: {
+        id: false,
+        workspaceId: false,
         runStatus: false,
         hasOutput: false,
         source: false,
@@ -699,6 +764,7 @@ export function DocumentsTable({
           showPagination={false}
           className="inline-flex min-w-full w-max overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-20 [&_[data-slot=table-head]]:bg-background/95 [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))]"
           onRowClick={onRowClick}
+          onRowContextMenu={onRowContextMenu}
           isRowExpanded={isRowExpanded}
           expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-visible"
           virtualize={{
@@ -732,6 +798,13 @@ export function DocumentsTable({
         />
         {scrollFooter}
       </div>
+      <ContextMenu
+        open={Boolean(contextMenu && contextRow)}
+        position={contextMenu && contextRow ? contextMenu.position : null}
+        onClose={() => setContextMenu(null)}
+        items={contextMenuItems}
+        appearance="light"
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   actionBar?: React.ReactNode;
   showPagination?: boolean;
   onRowClick?: (row: Row<TData>, event: React.MouseEvent<HTMLTableRowElement>) => void;
+  onRowContextMenu?: (row: Row<TData>, event: React.MouseEvent<HTMLTableRowElement>) => void;
   isRowExpanded?: (row: Row<TData>) => boolean;
   renderExpandedRow?: (row: Row<TData>) => React.ReactNode;
   expandedRowCellClassName?: string;
@@ -36,6 +37,7 @@ export function DataTable<TData>({
   actionBar,
   showPagination = true,
   onRowClick,
+  onRowContextMenu,
   isRowExpanded,
   renderExpandedRow,
   expandedRowCellClassName,
@@ -132,6 +134,9 @@ export function DataTable<TData>({
                         aria-expanded={expanded || undefined}
                         className={cn(onRowClick && "cursor-pointer")}
                         onClick={onRowClick ? (event) => onRowClick(row, event) : undefined}
+                        onContextMenu={
+                          onRowContextMenu ? (event) => onRowContextMenu(row, event) : undefined
+                        }
                       >
                         {row.getVisibleCells().map((cell) => (
                           <TableCell

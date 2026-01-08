@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
+import { DownloadIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { resolveApiUrl } from "@api/client";
 import { fetchRunColumns, fetchRunOutputPreview, fetchRunOutputSheets } from "@api/runs/api";
 import { ApiError } from "@api/errors";
 import { columnLabel } from "@pages/Workspace/sections/Documents/utils";
@@ -26,6 +28,12 @@ export function DocumentPreviewGrid({
   document: doc,
 }: DocumentPreviewGridProps) {
   const runId = doc.latestSuccessfulRun?.id ?? null;
+  const normalizedDownloadUrl = runId
+    ? resolveApiUrl(`/api/v1/runs/${runId}/output/download`)
+    : null;
+  const originalDownloadUrl = resolveApiUrl(
+    `/api/v1/workspaces/${doc.workspaceId}/documents/${doc.id}/download`,
+  );
 
   const sheetsQuery = useQuery({
     queryKey: ["run-output-sheets", runId],
@@ -162,20 +170,43 @@ export function DocumentPreviewGrid({
       onSelect={setSelectedSheetIndex}
     />
   ) : null;
+  const downloadActions = (
+    <>
+      {normalizedDownloadUrl ? (
+        <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-xs">
+          <a href={normalizedDownloadUrl} target="_blank" rel="noreferrer">
+            <DownloadIcon className="h-3.5 w-3.5" />
+            Normalized
+          </a>
+        </Button>
+      ) : (
+        <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-xs" disabled>
+          <DownloadIcon className="h-3.5 w-3.5" />
+          Normalized
+        </Button>
+      )}
+      <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-xs">
+        <a href={originalDownloadUrl} target="_blank" rel="noreferrer">
+          <DownloadIcon className="h-3.5 w-3.5" />
+          Original
+        </a>
+      </Button>
+    </>
+  );
 
   if (!runId) {
     return (
-      <PreviewShell title={doc.name} meta={sheetMeta}>
-        <div className="text-xs text-muted-foreground">No successful run output available yet.</div>
-      </PreviewShell>
+    <PreviewShell actions={downloadActions} meta={sheetMeta}>
+      <div className="text-xs text-muted-foreground">No successful run output available yet.</div>
+    </PreviewShell>
     );
   }
 
   if (previewQuery.isLoading) {
     return (
-      <PreviewShell title={doc.name} meta={sheetMeta}>
-        <div className="text-xs text-muted-foreground">Loading preview...</div>
-      </PreviewShell>
+    <PreviewShell actions={downloadActions} meta={sheetMeta}>
+      <div className="text-xs text-muted-foreground">Loading preview...</div>
+    </PreviewShell>
     );
   }
 
@@ -184,7 +215,7 @@ export function DocumentPreviewGrid({
     const message =
       error instanceof ApiError ? error.message : "Unable to load preview.";
     return (
-      <PreviewShell title={doc.name} meta={sheetMeta}>
+      <PreviewShell actions={downloadActions} meta={sheetMeta}>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{message}</span>
           <Button
@@ -202,14 +233,14 @@ export function DocumentPreviewGrid({
 
   if (!sheet) {
     return (
-      <PreviewShell title={doc.name} meta={sheetMeta}>
+      <PreviewShell actions={downloadActions} meta={sheetMeta}>
         <div className="text-xs text-muted-foreground">No preview data available.</div>
       </PreviewShell>
     );
   }
 
   return (
-    <PreviewShell title={doc.name} meta={sheetMeta}>
+    <PreviewShell actions={downloadActions} meta={sheetMeta}>
       <div className="flex flex-col gap-2">
         <DataTable
           table={table}
@@ -224,13 +255,21 @@ export function DocumentPreviewGrid({
 
 function PreviewShell({
   title,
+  actions,
   meta,
   children,
 }: {
-  title: string;
+  title?: ReactNode;
+  actions?: ReactNode;
   meta?: string | null;
   children: ReactNode;
 }) {
+  const headerContent = actions ? (
+    <div className="mt-1 flex flex-wrap items-center gap-2">{actions}</div>
+  ) : title ? (
+    <div className="truncate text-sm font-medium text-foreground">{title}</div>
+  ) : null;
+
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm [contain:inline-size]">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
@@ -238,9 +277,7 @@ function PreviewShell({
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Preview
           </div>
-          <div className="truncate text-sm font-medium text-foreground">
-            {title}
-          </div>
+          {headerContent}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {meta ? <div className="text-xs text-muted-foreground">{meta}</div> : null}

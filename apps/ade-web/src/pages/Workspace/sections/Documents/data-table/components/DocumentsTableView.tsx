@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { resolveApiUrl } from "@api/client";
 import {
   archiveWorkspaceDocument,
   deleteWorkspaceDocument,
@@ -129,6 +130,41 @@ export function DocumentsTableView({
       setVisibleRange(range);
     },
     [],
+  );
+
+  const openDownload = useCallback((url: string) => {
+    if (typeof window === "undefined") return;
+    const opened = window.open(url, "_blank", "noopener");
+    if (!opened) {
+      window.location.assign(url);
+    }
+  }, []);
+
+  const handleDownloadOutput = useCallback(
+    (document: DocumentRow) => {
+      const runId = document.latestSuccessfulRun?.id ?? null;
+      if (!runId) {
+        notifyToast({
+          title: "Output not available",
+          description: "No successful run output exists for this document yet.",
+          intent: "warning",
+        });
+        return;
+      }
+      const url = resolveApiUrl(`/api/v1/runs/${runId}/output/download`);
+      openDownload(url);
+    },
+    [notifyToast, openDownload],
+  );
+
+  const handleDownloadOriginal = useCallback(
+    (document: DocumentRow) => {
+      const url = resolveApiUrl(
+        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`,
+      );
+      openDownload(url);
+    },
+    [openDownload, workspaceId],
   );
 
   useEffect(() => {
@@ -784,6 +820,8 @@ export function DocumentsTableView({
         onArchive={onArchive}
         onRestore={onRestore}
         onDeleteRequest={onDeleteRequest}
+        onDownloadOutput={handleDownloadOutput}
+        onDownloadOriginal={handleDownloadOriginal}
         expandedRowId={expandedRowId}
         onTogglePreview={handleTogglePreview}
         isRowActionPending={isRowMutationPending}
