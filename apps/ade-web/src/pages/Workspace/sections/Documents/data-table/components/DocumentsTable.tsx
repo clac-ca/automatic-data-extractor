@@ -263,6 +263,7 @@ export function DocumentsTable({
         meta: {
           label: "ID",
         },
+        size: 120,
         enableHiding: true,
       },
       {
@@ -282,6 +283,7 @@ export function DocumentsTable({
         meta: {
           label: "Workspace",
         },
+        size: 120,
         enableSorting: false,
         enableHiding: true,
       },
@@ -310,6 +312,7 @@ export function DocumentsTable({
           placeholder: "Search documents...",
           variant: "text",
         },
+        size: 260,
         enableColumnFilter: false,
         enableHiding: false,
       },
@@ -356,6 +359,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: statusOptions,
         },
+        size: 120,
         enableColumnFilter: true,
         enableHiding: false,
       },
@@ -372,6 +376,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: fileTypeOptions,
         },
+        size: 100,
         enableColumnFilter: true,
         enableSorting: false,
       },
@@ -387,6 +392,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: memberOptions,
         },
+        size: 160,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -413,6 +419,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: assigneeOptions,
         },
+        size: 160,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: false,
@@ -438,6 +445,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: tagFilterOptions,
         },
+        size: 180,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -454,6 +462,7 @@ export function DocumentsTable({
           variant: "number",
           unit: "bytes",
         },
+        size: 110,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -467,6 +476,7 @@ export function DocumentsTable({
         meta: {
           label: "Result",
         },
+        size: 140,
         enableSorting: false,
         enableHiding: true,
       },
@@ -484,6 +494,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: runStatusOptions,
         },
+        size: 120,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -499,6 +510,7 @@ export function DocumentsTable({
           label: "Has Output",
           variant: "boolean",
         },
+        size: 110,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -515,6 +527,7 @@ export function DocumentsTable({
           variant: "multiSelect",
           options: sourceOptions,
         },
+        size: 120,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -530,8 +543,9 @@ export function DocumentsTable({
           label: "Created",
           variant: "date",
         },
+        size: 150,
         enableColumnFilter: true,
-        enableHiding: false,
+        enableHiding: true,
       },
       {
         id: "updatedAt",
@@ -544,6 +558,7 @@ export function DocumentsTable({
           label: "Updated",
           variant: "date",
         },
+        size: 150,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -558,6 +573,7 @@ export function DocumentsTable({
           label: "Activity",
           variant: "date",
         },
+        size: 150,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -571,6 +587,7 @@ export function DocumentsTable({
         meta: {
           label: "Latest Run",
         },
+        size: 180,
         enableHiding: true,
       },
       {
@@ -584,6 +601,7 @@ export function DocumentsTable({
         meta: {
           label: "Latest Success",
         },
+        size: 180,
         enableSorting: false,
         enableHiding: true,
       },
@@ -611,7 +629,7 @@ export function DocumentsTable({
             </div>
           );
         },
-        size: 40,
+        size: 56,
         enableSorting: false,
         enableHiding: false,
       },
@@ -640,15 +658,27 @@ export function DocumentsTable({
     data,
     columns,
     pageCount,
+    enableColumnResizing: true,
+    columnSizingKey: `documents-table:${workspaceId}`,
+    defaultColumn: {
+      size: 140,
+      minSize: 90,
+    },
     initialState: {
       sorting: [{ id: "createdAt", desc: true }],
       pagination: { pageSize: DEFAULT_PAGE_SIZE },
       columnVisibility: {
         id: false,
         workspaceId: false,
+        fileType: false,
+        uploaderId: false,
+        byteSize: false,
         runStatus: false,
         hasOutput: false,
         source: false,
+        createdAt: false,
+        updatedAt: false,
+        latestSuccessfulRun: false,
       },
       columnPinning: { right: ["actions"] },
     },
@@ -765,6 +795,7 @@ export function DocumentsTable({
           className="inline-flex min-w-full w-max overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-20 [&_[data-slot=table-head]]:bg-background/95 [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))]"
           onRowClick={onRowClick}
           onRowContextMenu={onRowContextMenu}
+          stretchColumnId="name"
           isRowExpanded={isRowExpanded}
           expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-visible"
           virtualize={{

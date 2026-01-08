@@ -1,4 +1,4 @@
-import { flexRender, type Row, type Table as TanstackTable } from "@tanstack/react-table";
+import { flexRender, type Column, type Row, type Table as TanstackTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 
@@ -20,6 +20,7 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   showPagination?: boolean;
   onRowClick?: (row: Row<TData>, event: React.MouseEvent<HTMLTableRowElement>) => void;
   onRowContextMenu?: (row: Row<TData>, event: React.MouseEvent<HTMLTableRowElement>) => void;
+  stretchColumnId?: string;
   isRowExpanded?: (row: Row<TData>) => boolean;
   renderExpandedRow?: (row: Row<TData>) => React.ReactNode;
   expandedRowCellClassName?: string;
@@ -38,6 +39,7 @@ export function DataTable<TData>({
   showPagination = true,
   onRowClick,
   onRowContextMenu,
+  stretchColumnId,
   isRowExpanded,
   renderExpandedRow,
   expandedRowCellClassName,
@@ -51,8 +53,47 @@ export function DataTable<TData>({
     ? table.getRowModel().rows
     : table.getPrePaginationRowModel().rows;
   const visibleColumnCount = Math.max(1, table.getVisibleLeafColumns().length);
+  const baseTableWidth = Math.max(1, table.getTotalSize());
   const virtualizeEnabled = Boolean(virtualize?.enabled);
   const onRangeChange = virtualize?.onRangeChange;
+  const [containerWidth, setContainerWidth] = React.useState<number | null>(null);
+  const columnSizing = table.getState().columnSizing ?? {};
+  const hasManualSizing = Object.keys(columnSizing).length > 0;
+
+  React.useEffect(() => {
+    const element = virtualize?.getScrollElement?.() ?? containerRef.current;
+    if (!element) return;
+
+    const updateWidth = () => {
+      setContainerWidth(element.clientWidth);
+    };
+    updateWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => updateWidth());
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [virtualize?.getScrollElement]);
+
+  const canStretch =
+    Boolean(stretchColumnId) &&
+    !hasManualSizing &&
+    typeof containerWidth === "number" &&
+    containerWidth > baseTableWidth;
+  const extraWidth = canStretch && containerWidth ? containerWidth - baseTableWidth : 0;
+  const tableWidth = baseTableWidth + extraWidth;
+  const resolveColumnWidth = React.useCallback(
+    (column: Column<TData>, size: number) => {
+      if (canStretch && column.id === stretchColumnId) {
+        return size + extraWidth;
+      }
+      return size;
+    },
+    [canStretch, extraWidth, stretchColumnId],
+  );
 
   const rowVirtualizer = useVirtualizer({
     count: virtualizeEnabled ? rows.length : 0,
@@ -90,7 +131,12 @@ export function DataTable<TData>({
     >
       {children}
       <div className="overflow-hidden rounded-md border">
-        <Table>
+        <Table
+          style={{
+            width: tableWidth,
+            minWidth: tableWidth,
+          }}
+        >
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -100,7 +146,11 @@ export function DataTable<TData>({
                     colSpan={header.colSpan}
                     style={{
                       ...getCommonPinningStyles({ column: header.column }),
+                      width: resolveColumnWidth(header.column, header.getSize()),
+                      minWidth: header.column.columnDef.minSize,
+                      maxWidth: header.column.columnDef.maxSize,
                     }}
+                    className="relative"
                   >
                     {header.isPlaceholder
                       ? null
@@ -108,6 +158,19 @@ export function DataTable<TData>({
                           header.column.columnDef.header,
                           header.getContext(),
                         )}
+                    {header.column.getCanResize() ? (
+                      <div
+                        role="separator"
+                        tabIndex={-1}
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        onDoubleClick={() => header.column.resetSize()}
+                        className={cn(
+                          "absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none select-none hover:bg-border/70",
+                          header.column.getIsResizing() && "bg-brand-500/40",
+                        )}
+                      />
+                    ) : null}
                   </TableHead>
                 ))}
               </TableRow>
@@ -143,6 +206,9 @@ export function DataTable<TData>({
                             key={cell.id}
                             style={{
                               ...getCommonPinningStyles({ column: cell.column }),
+                              width: resolveColumnWidth(cell.column, cell.column.getSize()),
+                              minWidth: cell.column.columnDef.minSize,
+                              maxWidth: cell.column.columnDef.maxSize,
                             }}
                           >
                             {flexRender(

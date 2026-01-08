@@ -2,6 +2,7 @@
 
 import {
   type ColumnFiltersState,
+  type ColumnSizingState,
   getCoreRowModel,
   getFacetedMinMaxValues,
   getFacetedRowModel,
@@ -87,6 +88,8 @@ interface UseDataTableProps<TData>
   throttleMs?: number;
   clearOnDefault?: boolean;
   enableAdvancedFilter?: boolean;
+  enableColumnResizing?: boolean;
+  columnSizingKey?: string;
   scroll?: boolean;
   shallow?: boolean;
   startTransition?: React.TransitionStartFunction;
@@ -103,6 +106,8 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     throttleMs = THROTTLE_MS,
     clearOnDefault = false,
     enableAdvancedFilter = false,
+    enableColumnResizing = false,
+    columnSizingKey,
     scroll: _scroll = false,
     shallow = true,
     startTransition,
@@ -124,6 +129,22 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>(initialState?.columnVisibility ?? {});
+  const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>(() => {
+    if (!columnSizingKey || typeof window === "undefined") {
+      return initialState?.columnSizing ?? {};
+    }
+    try {
+      const raw = window.localStorage.getItem(columnSizingKey);
+      if (!raw) return initialState?.columnSizing ?? {};
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        return parsed as ColumnSizingState;
+      }
+    } catch {
+      return initialState?.columnSizing ?? {};
+    }
+    return initialState?.columnSizing ?? {};
+  });
 
   const page = React.useMemo(
     () => parseNumberParam(searchParams.get(pageKey), 1),
@@ -371,6 +392,13 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     [debouncedSetFilterValues, filterableColumns, enableAdvancedFilter],
   );
 
+  React.useEffect(() => {
+    if (!columnSizingKey || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(columnSizingKey, JSON.stringify(columnSizing));
+  }, [columnSizing, columnSizingKey]);
+
   const table = useReactTable({
     ...tableProps,
     columns,
@@ -382,17 +410,22 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
       columnVisibility,
       rowSelection,
       columnFilters,
+      columnSizing,
     },
     defaultColumn: {
       ...tableProps.defaultColumn,
       enableColumnFilter: false,
     },
+    enableColumnResizing,
+    columnResizeMode: enableColumnResizing ? "onChange" : undefined,
+    columnResizeDirection: "ltr",
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onPaginationChange,
     onSortingChange,
     onColumnFiltersChange,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

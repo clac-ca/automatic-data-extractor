@@ -160,6 +160,7 @@ export function DocumentPreviewGrid({
       minSize: 100,
       maxSize: 240,
     },
+    enableColumnResizing: false,
   });
 
   const sheetMeta = sheet ? formatSheetMeta(sheet, mappingSummary) : null;
