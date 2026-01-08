@@ -28,6 +28,13 @@ class ChangeFeedPage:
     next_cursor: int
 
 
+@dataclass(slots=True)
+class ChangeCursorResolution:
+    cursor: int
+    oldest: int | None
+    latest: int
+
+
 class DocumentEventCursorError(Exception):
     """Base error for invalid change feed cursors."""
 
@@ -60,14 +67,7 @@ class DocumentEventsService:
         value = (await self._session.execute(stmt)).scalar_one_or_none()
         return int(value) if value is not None else None
 
-    async def list_changes(
-        self,
-        *,
-        workspace_id: UUID,
-        cursor: int,
-        limit: int,
-        max_cursor: int | None = None,
-    ) -> ChangeFeedPage:
+    async def resolve_cursor(self, *, workspace_id: UUID, cursor: int) -> ChangeCursorResolution:
         oldest = await self.oldest_cursor(workspace_id=workspace_id)
         latest = await self.current_cursor(workspace_id=workspace_id)
         if oldest is not None and cursor < oldest:
@@ -85,6 +85,21 @@ class DocumentEventsService:
                     too_old = True
             if too_old:
                 raise DocumentEventCursorTooOld(oldest_cursor=oldest, latest_cursor=latest)
+        if cursor > latest:
+            cursor = latest
+        return ChangeCursorResolution(cursor=cursor, oldest=oldest, latest=latest)
+
+    async def list_changes(
+        self,
+        *,
+        workspace_id: UUID,
+        cursor: int,
+        limit: int,
+        max_cursor: int | None = None,
+    ) -> ChangeFeedPage:
+        resolution = await self.resolve_cursor(workspace_id=workspace_id, cursor=cursor)
+        latest = resolution.latest
+        cursor = resolution.cursor
 
         if max_cursor is not None and max_cursor > latest:
             max_cursor = latest

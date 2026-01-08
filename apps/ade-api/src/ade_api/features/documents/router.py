@@ -150,16 +150,21 @@ DocumentManager = Annotated[
 
 def _resolve_change_cursor(request: Request, cursor: str | None) -> int:
     last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
-    token = last_event_id if last_event_id is not None else cursor
-    if token is None:
+    tokens: list[str] = []
+    if cursor is not None:
+        tokens.append(cursor)
+    if last_event_id is not None:
+        tokens.append(last_event_id)
+    if not tokens:
         return 0
     try:
-        return int(token)
+        values = [int(token) for token in tokens]
     except ValueError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="cursor must be an integer string",
         ) from exc
+    return max(values)
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -462,22 +467,22 @@ async def stream_document_changes(
 
         async with db.sessionmaker() as session:
             events_service = DocumentEventsService(session=session, settings=settings)
-            oldest_cursor = await events_service.oldest_cursor(workspace_id=workspace_id)
-            latest_cursor = await events_service.current_cursor(workspace_id=workspace_id)
-
-        if oldest_cursor is not None and cursor_value < oldest_cursor:
-            yield sse_json(
-                "error",
-                {
-                    "code": "resync_required",
-                    "oldestCursor": str(oldest_cursor),
-                    "latestCursor": str(latest_cursor),
-                },
-            )
-            return
-
-        if cursor_value > latest_cursor:
-            cursor_value = latest_cursor
+            try:
+                resolution = await events_service.resolve_cursor(
+                    workspace_id=workspace_id,
+                    cursor=cursor_value,
+                )
+            except DocumentEventCursorTooOld as exc:
+                yield sse_json(
+                    "error",
+                    {
+                        "code": "resync_required",
+                        "oldestCursor": str(exc.oldest_cursor),
+                        "latestCursor": str(exc.latest_cursor),
+                    },
+                )
+                return
+            cursor_value = resolution.cursor
 
         yield sse_json("ready", {"cursor": str(cursor_value)})
 
