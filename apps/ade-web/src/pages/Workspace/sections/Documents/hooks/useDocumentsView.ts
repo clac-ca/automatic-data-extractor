@@ -138,6 +138,7 @@ export function useDocumentsView({
   visibleStartIndex?: number | null;
 }) {
   const [state, setState] = useState<DocumentsState>(DEFAULT_STATE);
+  const inFlightPagesRef = useRef(new Set<string>());
   const pendingRequestIdsRef = useRef(new Set<string>());
   const isAtTopRef = useRef(isAtTop);
   const visibleStartIndexRef = useRef<number | null>(visibleStartIndex ?? null);
@@ -153,6 +154,11 @@ export function useDocumentsView({
       ].join("|"),
     [workspaceId, perPage, sort, filters, joinOperator, q],
   );
+  const viewKeyRef = useRef(viewKey);
+
+  useEffect(() => {
+    viewKeyRef.current = viewKey;
+  }, [viewKey]);
 
   useEffect(() => {
     isAtTopRef.current = isAtTop;
@@ -424,6 +430,9 @@ export function useDocumentsView({
   const loadPage = useCallback(
     async (page: number) => {
       if (!workspaceId || !enabled) return;
+      const requestKey = `${viewKey}:${page}`;
+      if (inFlightPagesRef.current.has(requestKey)) return;
+      inFlightPagesRef.current.add(requestKey);
       const isInitial = page === 1;
       setState((prev) => ({
         ...prev,
@@ -440,6 +449,7 @@ export function useDocumentsView({
           joinOperator: joinOperator ?? undefined,
           q,
         });
+        if (viewKeyRef.current !== viewKey) return;
         const items = result.items ?? [];
         setState((prev) => {
           const nextById = { ...prev.documentsById };
@@ -470,12 +480,15 @@ export function useDocumentsView({
           };
         });
       } catch (error) {
+        if (viewKeyRef.current !== viewKey) return;
         setState((prev) => ({
           ...prev,
           isLoading: false,
           isFetchingNextPage: false,
           error: error instanceof Error ? error.message : "Unable to load documents.",
         }));
+      } finally {
+        inFlightPagesRef.current.delete(requestKey);
       }
     },
     [
@@ -487,6 +500,7 @@ export function useDocumentsView({
       q,
       sort,
       sortSupported,
+      viewKey,
       workspaceId,
     ],
   );

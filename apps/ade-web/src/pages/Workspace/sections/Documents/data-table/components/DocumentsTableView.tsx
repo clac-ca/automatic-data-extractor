@@ -49,6 +49,8 @@ type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 
 type RowMutation = "archive" | "restore" | "delete" | "assign" | "tags";
 
+const LOAD_MORE_SCROLL_THRESHOLD = 200;
+
 export function DocumentsTableView({
   workspaceId,
   currentUser,
@@ -65,8 +67,8 @@ export function DocumentsTableView({
   uploadItems?: UploadItem[];
 }) {
   const { notifyToast } = useNotifications();
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const hasUserScrolledRef = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
   const [archivedFlashIds, setArchivedFlashIds] = useState<Set<string>>(() => new Set());
@@ -125,6 +127,9 @@ export function DocumentsTableView({
   } = documentsView;
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
+  useEffect(() => {
+    hasUserScrolledRef.current = false;
+  }, [workspaceId, perPage, effectiveSort, normalizedFilters, joinOperator, q]);
   const handleVisibleRangeChange = useCallback(
     (range: { startIndex: number; endIndex: number; total: number }) => {
       setVisibleRange(range);
@@ -171,14 +176,24 @@ export function DocumentsTableView({
     const container = scrollContainerRef.current;
     if (!container) return;
     const handleScroll = () => {
-      setIsAtTop(container.scrollTop <= 8);
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      setIsAtTop(scrollTop <= 8);
+      if (scrollTop > 0) {
+        hasUserScrolledRef.current = true;
+      }
+      if (!hasNextPage || isFetchingNextPage || isLoading) return;
+      if (!hasUserScrolledRef.current) return;
+      if (scrollHeight <= clientHeight) return;
+      if (scrollHeight - scrollTop - clientHeight <= LOAD_MORE_SCROLL_THRESHOLD) {
+        fetchNextPage();
+      }
     };
     handleScroll();
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       container.removeEventListener("scroll", handleScroll);
     };
-  }, [documents.length, isLoading]);
+  }, [documents.length, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading]);
 
   useEffect(() => {
     if (!expandedRowId) return;
@@ -707,27 +722,6 @@ export function DocumentsTableView({
     workspaceId,
   ]);
 
-  useEffect(() => {
-    if (!loadMoreRef.current) return;
-    if (!hasNextPage) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        if (isFetchingNextPage) return;
-        void fetchNextPage();
-      },
-      {
-        root: scrollContainerRef.current,
-        rootMargin: "200px",
-      },
-    );
-
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
   if (isLoading) {
     return (
       <div className="min-h-[240px]">
@@ -836,7 +830,7 @@ export function DocumentsTableView({
                 {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
               </div>
             ) : null}
-            <div ref={loadMoreRef} className="h-1 w-full" />
+            <div className="h-1 w-full" />
           </>
         }
       />

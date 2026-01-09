@@ -121,7 +121,7 @@ export function WorkspaceNav({
   return (
     <aside
       className={clsx(
-        "relative hidden min-h-0 flex-shrink-0 bg-sidebar text-sidebar-foreground lg:flex",
+        "relative hidden min-h-0 flex-shrink-0 bg-sidebar-rail text-sidebar-foreground lg:flex",
         "border-r border-sidebar-border",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
         className,
@@ -134,9 +134,10 @@ export function WorkspaceNav({
       {/* The panel is absolutely positioned so it can expand over the page without shifting layout when unpinned */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-[var(--app-z-nav)] flex min-h-0 flex-col bg-sidebar text-sidebar-foreground",
+          "absolute inset-y-0 left-0 z-[var(--app-z-nav)] flex min-h-0 flex-col text-sidebar-foreground",
           "border-r border-sidebar-border",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
+          panelExpanded ? "bg-sidebar" : "bg-sidebar-rail",
           // When unpinned and expanded, add depth to communicate “overlay”
           overlayActive && "bg-sidebar/95 shadow-2xl ring-1 ring-sidebar-border/50 backdrop-blur-sm",
         )}

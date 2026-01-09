@@ -97,7 +97,7 @@ export function WorkspaceSwitcher({
             {isRail ? null : (
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-semibold">{workspace.name}</span>
-                <span className="truncate text-xs text-muted-foreground group-hover:text-sidebar-accent-foreground/80 group-data-[state=open]:text-sidebar-accent-foreground/80">
+                <span className="truncate text-xs text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground/80 group-data-[state=open]:text-sidebar-accent-foreground/80">
                   Switch workspace
                 </span>
               </span>
@@ -107,7 +107,7 @@ export function WorkspaceSwitcher({
                 <ChevronDownSmallIcon className="h-3 w-3" />
               </span>
             ) : (
-              <ChevronDownIcon className="ml-auto h-4 w-4 text-muted-foreground group-hover:text-sidebar-accent-foreground group-data-[state=open]:text-sidebar-accent-foreground" />
+              <ChevronDownIcon className="ml-auto h-4 w-4 text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground group-data-[state=open]:text-sidebar-accent-foreground" />
             )}
           </button>
         </PopoverTrigger>
