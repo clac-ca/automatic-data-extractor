@@ -4,11 +4,9 @@ import type { HTMLAttributes, ReactNode } from "react";
 export type AlertTone = "info" | "success" | "warning" | "danger";
 
 const TONE_STYLE: Record<AlertTone, string> = {
-  info: "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-200 dark:ring-sky-500/20",
-  success:
-    "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20",
-  warning:
-    "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/20",
+  info: "bg-muted text-muted-foreground ring-border/60",
+  success: "bg-primary/10 text-primary ring-primary/20",
+  warning: "bg-accent text-accent-foreground ring-accent/60",
   danger: "bg-destructive/10 text-destructive ring-destructive/20 dark:bg-destructive/20",
 };
 

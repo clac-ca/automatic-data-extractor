@@ -939,7 +939,7 @@ function ExplorerNode({
         className={clsx(
           "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition hover:bg-[var(--tree-hover-bg)]",
           focusRingClass,
-          isActive && "shadow-inner shadow-black/10",
+          isActive && "shadow-inner",
           isDeleting && "opacity-60",
         )}
         style={fileStyle}

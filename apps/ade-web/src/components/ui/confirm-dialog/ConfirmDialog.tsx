@@ -91,7 +91,8 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 px-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/50"
+        // Use theme overlay tokens instead of hard-coded black.
+        className="absolute inset-0 bg-overlay"
         onClick={onCancel}
         aria-label="Close dialog"
       />

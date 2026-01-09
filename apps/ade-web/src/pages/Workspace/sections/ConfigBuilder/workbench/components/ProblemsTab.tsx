@@ -35,7 +35,7 @@ function validationMessageClass(level: WorkbenchValidationState["messages"][numb
     case "error":
       return "text-destructive";
     case "warning":
-      return "text-amber-600 dark:text-amber-300";
+      return "text-accent-foreground";
     default:
       return "text-muted-foreground";
   }

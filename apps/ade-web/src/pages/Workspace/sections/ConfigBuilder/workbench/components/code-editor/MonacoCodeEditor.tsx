@@ -191,7 +191,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
           readOnly,
           minimap: { enabled: false },
           fontSize: 13,
-          fontFamily: "'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', monospace",
+          fontFamily: "var(--app-font-mono)",
           scrollBeyondLastLine: false,
           smoothScrolling: true,
           automaticLayout: true,

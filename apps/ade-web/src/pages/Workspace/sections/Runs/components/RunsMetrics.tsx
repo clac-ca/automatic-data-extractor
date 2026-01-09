@@ -59,13 +59,13 @@ function SummaryBlock({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-emerald-700 dark:text-emerald-200"
+      ? "text-primary"
       : tone === "warning"
-        ? "text-amber-700 dark:text-amber-200"
+        ? "text-accent-foreground"
         : tone === "danger"
           ? "text-destructive"
           : tone === "info"
-            ? "text-sky-700 dark:text-sky-200"
+            ? "text-muted-foreground"
             : "text-foreground";
 
   return (

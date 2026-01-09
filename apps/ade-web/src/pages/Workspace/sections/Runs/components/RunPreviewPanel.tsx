@@ -441,7 +441,7 @@ function DetectionBadge({ detected }: { detected: boolean }) {
     <span
       className={clsx(
         "inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold",
-        detected ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200" : "bg-muted text-muted-foreground",
+        detected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
       )}
     >
       {detected ? "Detected" : "Not detected"}
@@ -450,7 +450,7 @@ function DetectionBadge({ detected }: { detected: boolean }) {
 }
 
 const COLUMN_STATUS_META: Record<string, { label: string; className: string }> = {
-  mapped: { label: "Mapped", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200" },
+  mapped: { label: "Mapped", className: "bg-primary/10 text-primary" },
   unmapped: { label: "Unmapped", className: "bg-muted text-muted-foreground" },
 };
 

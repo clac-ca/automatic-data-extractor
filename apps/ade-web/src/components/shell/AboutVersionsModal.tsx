@@ -61,7 +61,7 @@ export function AboutVersionsModal({ open, onClose }: AboutVersionsModalProps) {
 
   const content = (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay-strong px-4"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {

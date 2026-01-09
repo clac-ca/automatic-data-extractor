@@ -29,12 +29,9 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _hardlink_or_copy(src: Path, dst: Path) -> None:
+def _copy_file(src: Path, dst: Path) -> None:
     _ensure_dir(dst.parent)
-    try:
-        os.link(src, dst)
-    except OSError:
-        shutil.copy2(src, dst)
+    shutil.copy2(src, dst)
 
 
 def _json_loads(value: Any) -> Any:
@@ -481,7 +478,7 @@ class RunJob:
 
         original_name = Path(str(doc.get("original_filename") or "input")).name
         staged_input = input_dir / original_name
-        _hardlink_or_copy(source_path, staged_input)
+        _copy_file(source_path, staged_input)
 
         # Mark document processing (best effort; not fatal if it fails).
         try:

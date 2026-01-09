@@ -179,9 +179,8 @@ export function DataGridCellWrapper<TData>({
         "size-full px-2 py-1.5 text-start text-sm outline-none has-data-[slot=checkbox]:pt-2.5",
         {
           "ring-1 ring-ring ring-inset": isFocused,
-          "bg-yellow-100 dark:bg-yellow-900/30":
-            isSearchMatch && !isActiveSearchMatch,
-          "bg-orange-200 dark:bg-orange-900/50": isActiveSearchMatch,
+          "bg-accent/60": isSearchMatch && !isActiveSearchMatch,
+          "bg-accent": isActiveSearchMatch,
           "bg-primary/10": isSelected && !isEditing,
           "cursor-default": !isEditing,
           "**:data-[slot=grid-cell-content]:line-clamp-1":

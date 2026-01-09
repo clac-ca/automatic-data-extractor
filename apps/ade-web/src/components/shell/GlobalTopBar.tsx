@@ -77,11 +77,12 @@ export function GlobalTopBar({
   return (
     <header
       className={clsx(
-        "sticky top-0 z-50",
-        "border-b border-border/70",
-        "bg-background/80 text-foreground backdrop-blur",
-        "transition-shadow duration-200 motion-reduce:transition-none",
-        isScrolled ? "shadow-[0_12px_40px_-30px_rgb(0_0_0_/_0.45)]" : "shadow-none",
+        "sticky top-0 z-50 relative",
+        "border-b border-border/60",
+        "bg-card/80 text-foreground backdrop-blur-md",
+        "bg-gradient-to-r from-card/90 via-accent/45 to-card/90",
+        "transition-[box-shadow,background-color] duration-200 motion-reduce:transition-none",
+        isScrolled ? "shadow-md" : "shadow-sm",
       )}
       role="banner"
     >
@@ -98,7 +99,7 @@ export function GlobalTopBar({
         Skip to content
       </a>
 
-      <div className="flex flex-col gap-3 px-4 py-3 sm:px-6 lg:px-10">
+      <div className="relative z-10 flex flex-col gap-3 px-4 py-3 sm:px-6 lg:px-10">
         <div
           className={clsx(
             "grid min-h-[3.5rem] w-full items-center gap-3 sm:gap-4",

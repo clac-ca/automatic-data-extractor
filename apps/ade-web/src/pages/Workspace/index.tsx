@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactElement } from "react";
 
 import clsx from "clsx";
 
@@ -16,7 +16,12 @@ import { GlobalTopBar } from "@components/shell/GlobalTopBar";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";
 import { ProfileDropdown } from "@components/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
-import { WorkspaceNav, WorkspaceNavList } from "@pages/Workspace/components/WorkspaceNav";
+import {
+  WorkspaceNav,
+  WorkspaceNavList,
+  WORKSPACE_NAV_DRAWER_WIDTH,
+  WORKSPACE_NAV_RAIL_WIDTH,
+} from "@pages/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@pages/Workspace/components/workspaceNavigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
 import { Alert } from "@/components/ui/alert";
@@ -155,9 +160,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const safeModeEnabled = safeMode.data?.enabled ?? false;
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
   const shortcutHint = useShortcutHint();
-  const [topBarHeight, setTopBarHeight] = useState(0);
   const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
-  const topBarRef = useRef<HTMLDivElement | null>(null);
   const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
     setScrollContainer(node);
   }, []);
@@ -257,29 +260,6 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     }
   }, [immersiveWorkbenchActive]);
 
-  useLayoutEffect(() => {
-    if (immersiveWorkbenchActive) {
-      setTopBarHeight(0);
-      return;
-    }
-    const node = topBarRef.current;
-    if (!node) return;
-
-    const update = () => {
-      const next = Math.round(node.getBoundingClientRect().height);
-      setTopBarHeight((prev) => (prev === next ? prev : next));
-    };
-
-    update();
-
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => update());
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [immersiveWorkbenchActive]);
 
   const handleWorkspaceSearchSubmit = useCallback(() => {
     if (!workspaceSearchNormalized) {
@@ -482,44 +462,63 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
 
   const fullHeightLayout = section.fullHeight ?? false;
 
+  const workspaceNavWidth = immersiveWorkbenchActive
+    ? "0px"
+    : isNavPinned
+      ? WORKSPACE_NAV_DRAWER_WIDTH
+      : WORKSPACE_NAV_RAIL_WIDTH;
+
   return (
     <>
       <AboutVersionsModal open={isVersionsModalOpen} onClose={() => setIsVersionsModalOpen(false)} />
       <div
         className={clsx(
-          "flex min-w-0 flex-col bg-background text-foreground h-screen overflow-hidden",
+          "grid min-w-0 h-screen grid-rows-[auto_1fr] grid-cols-1 bg-background text-foreground overflow-hidden",
         )}
-        style={{ "--workspace-topbar-height": `${topBarHeight}px` } as CSSProperties}
+        style={
+          {
+            "--workspace-nav-width": workspaceNavWidth,
+          } as CSSProperties
+        }
       >
         {!immersiveWorkbenchActive ? (
-          <div ref={topBarRef}>
-            <GlobalTopBar
-              brand={topBarBrand}
-              trailing={topBarTrailing}
-              search={topBarSearch}
-              scrollContainer={scrollContainer}
+          <div className="row-start-1 col-start-1 grid grid-cols-1 lg:grid-cols-[var(--workspace-nav-width)_1fr]">
+            <div
+              className="hidden lg:block border-b border-sidebar-border border-r border-sidebar-border bg-sidebar"
+              aria-hidden="true"
             />
+            <div className="col-start-1 lg:col-start-2">
+              <GlobalTopBar
+                brand={topBarBrand}
+                trailing={topBarTrailing}
+                search={topBarSearch}
+                scrollContainer={scrollContainer}
+              />
+            </div>
           </div>
         ) : null}
-        <div className="relative flex min-h-0 min-w-0 flex-1">
+        <div className="relative row-start-2 col-start-1 min-h-0 min-w-0 grid grid-cols-1 overflow-hidden lg:grid-cols-[var(--workspace-nav-width)_1fr]">
           {!immersiveWorkbenchActive ? (
-            <WorkspaceNav
-              workspace={workspace}
-              items={workspaceNavItems}
-              isPinned={isNavPinned}
-              onTogglePinned={() => setIsNavPinned((current) => !current)}
-            />
+            <div className="min-h-0 min-w-0">
+              <WorkspaceNav
+                workspace={workspace}
+                items={workspaceNavItems}
+                isPinned={isNavPinned}
+                onTogglePinned={() => setIsNavPinned((current) => !current)}
+                className="h-full"
+              />
+            </div>
           ) : null}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 min-w-0 flex flex-col lg:col-start-2">
             {!immersiveWorkbenchActive && isMobileNavOpen ? (
               <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
                 <button
                   type="button"
-                  className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                  className="absolute inset-0 bg-overlay backdrop-blur-sm"
                   onClick={closeMobileNav}
                   aria-label="Close navigation"
                 />
-                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_45px_90px_-50px_rgb(0_0_0_/_0.85)]">
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl">
                   <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
                     <div className="flex flex-col leading-tight">
                       <span className="text-sm font-semibold text-sidebar-foreground">{workspace.name}</span>
@@ -564,9 +563,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                       </Alert>
                     </div>
                   ) : null}
-                  <div
-                    className="flex min-h-0 min-w-0 flex-1 flex-col"
-                  >
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     {section.element}
                   </div>
                 </div>

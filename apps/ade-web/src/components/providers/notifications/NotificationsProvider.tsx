@@ -295,7 +295,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
   return (
     <div
       className={clsx(
-        "pointer-events-auto w-full max-w-sm rounded-lg border px-3.5 py-2.5 shadow-[0_16px_32px_rgb(0_0_0_/_0.35)] sm:min-w-[300px]",
+        "pointer-events-auto w-full max-w-sm rounded-lg border px-3.5 py-2.5 shadow-lg sm:min-w-[300px]",
         theme.container,
         theme.border,
       )}
@@ -396,26 +396,26 @@ const TOAST_THEMES: Record<
   info: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-sky-500/15 text-sky-500",
-    progress: "bg-gradient-to-r from-sky-500 to-sky-400",
+    icon: "bg-muted text-muted-foreground",
+    progress: "bg-muted-foreground/40",
   },
   success: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-emerald-500/15 text-emerald-500",
-    progress: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    icon: "bg-primary/15 text-primary",
+    progress: "bg-primary/80",
   },
   warning: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-amber-400/20 text-amber-500",
-    progress: "bg-gradient-to-r from-amber-400 to-amber-300",
+    icon: "bg-accent text-accent-foreground",
+    progress: "bg-accent-foreground/40",
   },
   danger: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
     icon: "bg-destructive/15 text-destructive",
-    progress: "bg-gradient-to-r from-destructive to-destructive/70",
+    progress: "bg-destructive/80",
   },
 };
 
@@ -426,29 +426,29 @@ const BANNER_THEMES: Record<
   info: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-sky-500/15 text-sky-500",
-    progress: "bg-gradient-to-r from-sky-500 to-sky-400",
+    icon: "bg-muted text-muted-foreground",
+    progress: "bg-muted-foreground/40",
     dismiss: "hover:bg-muted",
   },
   success: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-emerald-500/15 text-emerald-500",
-    progress: "bg-gradient-to-r from-emerald-500 to-emerald-400",
+    icon: "bg-primary/15 text-primary",
+    progress: "bg-primary/80",
     dismiss: "hover:bg-muted",
   },
   warning: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-amber-500/15 text-amber-500",
-    progress: "bg-gradient-to-r from-amber-400 to-amber-300",
+    icon: "bg-accent text-accent-foreground",
+    progress: "bg-accent-foreground/40",
     dismiss: "hover:bg-muted",
   },
   danger: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
     icon: "bg-destructive/15 text-destructive",
-    progress: "bg-gradient-to-r from-destructive to-destructive/70",
+    progress: "bg-destructive/80",
     dismiss: "hover:bg-muted",
   },
 };

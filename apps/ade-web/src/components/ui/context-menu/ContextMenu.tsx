@@ -163,7 +163,7 @@ export function ContextMenu({
       ? {
           bg: "bg-popover text-foreground",
           border: "border-border/70",
-          shadow: "shadow-[0_12px_28px_rgb(0_0_0_/_0.5)]",
+          shadow: "shadow-md",
           item: "hover:bg-muted focus-visible:bg-muted",
           disabled: "text-muted-foreground",
           danger: "text-destructive hover:bg-destructive/20 focus-visible:bg-destructive/20",
@@ -173,7 +173,7 @@ export function ContextMenu({
       : {
           bg: "bg-popover text-foreground",
           border: "border-border/80",
-          shadow: "shadow-[0_12px_28px_rgb(0_0_0_/_0.18)]",
+          shadow: "shadow-md",
           item: "hover:bg-muted focus-visible:bg-muted",
           disabled: "text-muted-foreground",
           danger: "text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10",

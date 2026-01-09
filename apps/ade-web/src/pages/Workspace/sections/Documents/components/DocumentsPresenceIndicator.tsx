@@ -13,8 +13,8 @@ const STATE_LABELS: Record<PresenceConnectionState, string> = {
 
 const STATE_DOT_CLASSES: Record<PresenceConnectionState, string> = {
   idle: "bg-muted-foreground/40",
-  connecting: "bg-amber-400 animate-pulse",
-  open: "bg-emerald-500",
+  connecting: "bg-accent-foreground/60 animate-pulse",
+  open: "bg-primary",
   closed: "bg-muted-foreground/40",
 };
 

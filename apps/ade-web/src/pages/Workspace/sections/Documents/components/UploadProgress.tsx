@@ -49,12 +49,12 @@ function uploadProgressClass(status: UploadItem["status"]) {
     case "failed":
       return "bg-destructive";
     case "paused":
-      return "bg-amber-500";
+      return "bg-accent-foreground/60";
     case "cancelled":
-      return "bg-muted-foreground";
+      return "bg-muted-foreground/60";
     case "succeeded":
-      return "bg-emerald-500";
-    default:
       return "bg-primary";
+    default:
+      return "bg-muted-foreground";
   }
 }

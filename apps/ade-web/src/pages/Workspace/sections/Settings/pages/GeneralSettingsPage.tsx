@@ -31,7 +31,7 @@ export function GeneralSettingsPage() {
   const { workspace, hasPermission } = useWorkspaceContext();
   const updateWorkspace = useUpdateWorkspaceMutation(workspace.id);
   const setDefaultWorkspace = useSetDefaultWorkspaceMutation();
-  const { modePreference, setModePreference, theme, setTheme } = useTheme();
+  const { modePreference, setModePreference, theme, setTheme, setPreviewTheme } = useTheme();
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
   const canManageWorkspace = hasPermission("workspace.settings.manage");
 
@@ -176,7 +176,12 @@ export function GeneralSettingsPage() {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold text-foreground">Theme</p>
-            <ThemeSelect theme={theme} onThemeChange={setTheme} label="Theme" />
+            <ThemeSelect
+              theme={theme}
+              onThemeChange={setTheme}
+              onThemePreview={setPreviewTheme}
+              label="Theme"
+            />
           </div>
         </div>
       </SettingsSection>

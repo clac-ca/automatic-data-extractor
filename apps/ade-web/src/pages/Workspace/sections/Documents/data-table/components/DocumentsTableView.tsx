@@ -777,7 +777,7 @@ export function DocumentsTableView({
         <DocumentsInlineBanner
           title="No active configuration"
           description="Uploads will be stored, but runs won't start until you activate a configuration."
-          className="border-amber-200 bg-amber-50/60 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+          className="border-border/60 bg-accent text-accent-foreground"
           actions={
             <Button asChild variant="outline" size="sm">
               <Link to={configBuilderPath}>Open config builder</Link>
@@ -789,7 +789,7 @@ export function DocumentsTableView({
         <DocumentsInlineBanner
           title="Processing paused"
           description="Uploads are queued and won't start until processing is resumed."
-          className="border-amber-200 bg-amber-50/60 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+          className="border-border/60 bg-accent text-accent-foreground"
           actions={
             <Button asChild variant="outline" size="sm">
               <Link to={processingSettingsPath}>Open processing settings</Link>

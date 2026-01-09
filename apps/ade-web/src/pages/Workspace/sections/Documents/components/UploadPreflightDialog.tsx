@@ -249,7 +249,7 @@ export function UploadPreflightDialog({
 
   const content = (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4 py-6"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay-strong px-4 py-6"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -482,7 +482,7 @@ export function UploadPreflightDialog({
                       onChange={(event) => setActiveOnly(event.target.checked)}
                     />
                     <span className="h-5 w-9 rounded-full bg-muted transition peer-checked:bg-primary peer-disabled:cursor-not-allowed" />
-                    <span className="absolute left-0.5 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-4" />
+                    <span className="absolute left-0.5 h-4 w-4 rounded-full bg-background transition peer-checked:translate-x-4" />
                   </span>
                 </label>
 

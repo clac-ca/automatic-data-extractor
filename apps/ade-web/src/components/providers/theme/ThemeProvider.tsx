@@ -26,7 +26,7 @@ export const ThemeContext = createContext<ThemeContextValue | null>(null);
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 
 export function ThemeProvider({ children }: { readonly children: ReactNode }) {
-  const [modePreference, setModePreferenceState] = useState<ModePreference>(() => readStoredModePreference() ?? "system");
+  const [modePreference, setModePreferenceState] = useState<ModePreference>(() => readStoredModePreference() ?? "light");
   const [theme, setThemeState] = useState<ThemeId>(() => normalizeThemeId(readStoredThemePreference()));
   const [previewTheme, setPreviewThemeState] = useState<ThemeId | null>(null);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
@@ -91,7 +91,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
         if (next === "light" || next === "dark" || next === "system") {
           setModePreferenceState(next);
         } else if (next === null) {
-          setModePreferenceState("system");
+          setModePreferenceState("light");
         }
         return;
       }

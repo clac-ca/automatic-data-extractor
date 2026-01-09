@@ -6,6 +6,7 @@ import { CheckIcon } from "@components/icons";
 interface ThemeSelectProps {
   readonly theme: ThemeId;
   readonly onThemeChange: (value: ThemeId) => void;
+  readonly onThemePreview?: (value: ThemeId | null) => void;
   readonly themes?: Array<{ id: ThemeId; label: string; description: string }>;
   readonly className?: string;
   readonly label?: string;
@@ -14,6 +15,7 @@ interface ThemeSelectProps {
 export function ThemeSelect({
   theme,
   onThemeChange,
+  onThemePreview,
   themes = BUILTIN_THEMES,
   className,
   label = "Theme",
@@ -32,6 +34,10 @@ export function ThemeSelect({
               aria-checked={isSelected}
               data-menu-item
               onClick={() => onThemeChange(option.id)}
+              onMouseEnter={() => onThemePreview?.(option.id)}
+              onMouseLeave={() => onThemePreview?.(null)}
+              onFocus={() => onThemePreview?.(option.id)}
+              onBlur={() => onThemePreview?.(null)}
               className={clsx(
                 "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-medium transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",

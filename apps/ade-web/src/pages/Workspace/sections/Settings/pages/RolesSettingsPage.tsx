@@ -168,7 +168,7 @@ export function RolesSettingsPage() {
                         {!role.is_editable ? (
                           <Badge
                             variant="outline"
-                            className="border-amber-200 text-[11px] uppercase tracking-wide text-amber-700 dark:border-amber-500/40 dark:text-amber-200"
+                            className="border-border/60 text-[11px] uppercase tracking-wide text-accent-foreground"
                           >
                             Locked
                           </Badge>

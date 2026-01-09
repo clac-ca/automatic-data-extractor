@@ -1854,7 +1854,7 @@ export function Workbench({
       onDragOver={handleWorkbenchDragOver}
       onDrop={handleWorkbenchDrop}
     >
-      {isMaximized ? <div className="fixed inset-0 z-40 bg-black/60" /> : null}
+      {isMaximized ? <div className="fixed inset-0 z-40 bg-overlay-strong" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
           configName={configName}
@@ -1914,7 +1914,7 @@ export function Workbench({
                     {activeConfiguration ? ` The current active configuration “${activeConfiguration.display_name}” will be archived.` : ""}
                   </p>
                   {!canMakeActive && files.isDirty ? (
-                    <p className="text-xs font-medium text-amber-600 dark:text-amber-300">Save changes before making active.</p>
+                    <p className="text-xs font-medium text-accent-foreground">Save changes before making active.</p>
                   ) : null}
                 </div>
                 <Button
@@ -2133,7 +2133,7 @@ export function Workbench({
         className="hidden"
       />
       {replaceConfirmOpen ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay-strong px-4">
           <div
             className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
             role="dialog"
@@ -2152,7 +2152,7 @@ export function Workbench({
                 <p className="text-sm font-medium text-destructive">Only draft configurations can be replaced.</p>
               ) : null}
               {files.isDirty ? (
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-200">You have unsaved changes that will be lost.</p>
+                <p className="text-sm font-medium text-accent-foreground">You have unsaved changes that will be lost.</p>
               ) : null}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -2427,7 +2427,7 @@ function WorkbenchChrome({
   const surfaceClass = "border-border bg-card text-foreground";
   const metaTextClass = "text-muted-foreground";
   const saveButtonClass =
-    "bg-emerald-600 text-white hover:bg-emerald-500 disabled:bg-muted disabled:text-muted-foreground";
+    "bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground";
   const runButtonClass =
     "bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground";
   const isMaximized = windowState === "maximized";
@@ -2640,7 +2640,7 @@ function RunExtractionDialog({
   const sheetsAvailable = sheetOptions.length > 0;
 
   const content = (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay-strong px-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -2873,7 +2873,7 @@ function ChromeIconButton({
 
 function WorkbenchBadgeIcon() {
   return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_12px_24px_rgb(0_0_0_/_0.35)]">
+    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md">
       <GridIcon className="h-4 w-4" />
     </span>
   );

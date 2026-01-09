@@ -59,7 +59,7 @@ export function DangerSettingsPage() {
           <Alert tone="warning">You need additional permissions to delete this workspace.</Alert>
         ) : null}
         {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
-        <p className="text-sm text-amber-700 dark:text-amber-200">
+        <p className="text-sm text-accent-foreground">
           All workspace configurations, documents, runs, and history will be removed.
         </p>
       </SettingsSection>

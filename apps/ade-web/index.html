@@ -16,8 +16,10 @@
           var resolvedMode = resolvedPref === "system" ? (prefersDark ? "dark" : "light") : resolvedPref;
           var root = document.documentElement;
           root.dataset.theme = resolvedTheme;
-          root.dataset.mode = resolvedMode;
-          root.style.colorScheme = resolvedMode;
+          root.classList.toggle("dark", resolvedMode === "dark");
+          root.classList.toggle("light", resolvedMode !== "dark");
+          root.style.colorScheme = resolvedMode === "dark" ? "dark" : "light";
+          root.removeAttribute("data-mode");
         } catch (error) {
           // no-op: allow app to hydrate and handle errors gracefully
         }

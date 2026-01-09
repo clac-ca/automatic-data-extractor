@@ -14,10 +14,10 @@ export function StatusPill({ status }: { readonly status: ConfigurationStatus })
           : status;
   const styles =
     normalized === "active"
-      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200"
+      ? "bg-primary/10 text-primary"
       : normalized === "draft"
-        ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
-        : "bg-muted text-foreground";
+        ? "bg-accent text-accent-foreground"
+        : "bg-secondary text-secondary-foreground";
   return (
     <span
       className={clsx(

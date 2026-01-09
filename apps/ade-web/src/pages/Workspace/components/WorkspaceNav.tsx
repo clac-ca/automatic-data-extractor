@@ -9,8 +9,8 @@ import {
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { GearIcon, PinIcon, UnpinIcon } from "@components/icons";
 
-const NAV_RAIL_WIDTH = "4.5rem";
-const NAV_DRAWER_WIDTH = "16rem";
+export const WORKSPACE_NAV_RAIL_WIDTH = "4.5rem";
+export const WORKSPACE_NAV_DRAWER_WIDTH = "16rem";
 
 // Hover timings tuned to feel intentional (avoid flicker when moving across the rail)
 const HOVER_OPEN_DELAY_MS = 70;
@@ -24,6 +24,7 @@ export interface WorkspaceNavProps {
   readonly isPinned: boolean;
   readonly onTogglePinned: () => void;
   readonly items?: readonly WorkspaceNavigationItem[];
+  readonly className?: string;
 }
 
 export function WorkspaceNav({
@@ -31,6 +32,7 @@ export function WorkspaceNav({
   isPinned,
   onTogglePinned,
   items,
+  className,
 }: WorkspaceNavProps) {
   const allItems = items ?? getWorkspacePrimaryNavigation(workspace);
 
@@ -106,23 +108,23 @@ export function WorkspaceNav({
   }, []);
 
   const panelExpanded = isPinned || isPeekOpen;
+  const overlayActive = !isPinned && panelExpanded;
 
   // Key design choice:
   // - Layout width depends ONLY on pin state.
   // - Unpinned: layout stays rail width (no page shift), panel overlays when expanded.
   // - Pinned: layout becomes drawer width (pushes content).
-  const layoutWidth = isPinned ? NAV_DRAWER_WIDTH : NAV_RAIL_WIDTH;
-  const panelWidth = panelExpanded ? NAV_DRAWER_WIDTH : NAV_RAIL_WIDTH;
-  const navHeight = "calc(100vh - var(--workspace-topbar-height, 0px))";
-
+  const layoutWidth = isPinned ? WORKSPACE_NAV_DRAWER_WIDTH : WORKSPACE_NAV_RAIL_WIDTH;
+  const panelWidth = panelExpanded ? WORKSPACE_NAV_DRAWER_WIDTH : WORKSPACE_NAV_RAIL_WIDTH;
   return (
     <aside
       className={clsx(
         "relative hidden min-h-0 flex-shrink-0 bg-sidebar text-sidebar-foreground lg:flex",
         "border-r border-sidebar-border",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
+        className,
       )}
-      style={{ width: layoutWidth, height: navHeight, willChange: "width" }}
+      style={{ width: layoutWidth, willChange: "width" }}
       aria-label="Primary workspace navigation"
       data-pinned={isPinned ? "true" : "false"}
       data-expanded={panelExpanded ? "true" : "false"}
@@ -134,7 +136,7 @@ export function WorkspaceNav({
           "border-r border-sidebar-border",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
           // When unpinned and expanded, add depth to communicate “overlay”
-          !isPinned && panelExpanded && "shadow-xl",
+          overlayActive && "bg-sidebar/95 shadow-2xl ring-1 ring-sidebar-border/50 backdrop-blur-sm",
         )}
         style={{ width: panelWidth, willChange: "width" }}
         onMouseEnter={() => {
@@ -190,7 +192,14 @@ function WorkspaceNavPanel({
   return (
     <>
       {/* Nav */}
-      <nav className={clsx("flex-1 overflow-y-auto", "overflow-x-hidden", expanded ? "px-3 py-4" : "px-2 py-3")} aria-label="Workspace sections">
+      <nav
+        className={clsx(
+          "flex-1 overflow-y-auto",
+          "overflow-x-hidden",
+          expanded ? "px-3 pt-3 pb-4" : "px-2 pt-3 pb-3",
+        )}
+        aria-label="Workspace sections"
+      >
         <WorkspaceNavList items={items} variant={variant} />
       </nav>
 
@@ -225,7 +234,7 @@ export function WorkspaceNavList({
   return (
     <>
       {showHeading && expanded ? (
-        <p className="mb-3 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-sidebar-foreground">
+        <p className="mb-2 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-sidebar-foreground">
           Workspace
         </p>
       ) : null}

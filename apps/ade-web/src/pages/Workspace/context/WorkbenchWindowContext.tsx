@@ -362,7 +362,7 @@ interface WorkbenchDockProps {
 function WorkbenchDock({ configName, onRestore, onDismiss }: WorkbenchDockProps) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">
-      <div className="pointer-events-auto border-t border-border bg-card/95 shadow-[0_-12px_40px_rgb(0_0_0_/_0.15)] backdrop-blur">
+      <div className="pointer-events-auto border-t border-border bg-card/95 shadow-top backdrop-blur">
         <div className="relative mx-auto flex h-14 max-w-6xl items-center px-4 text-foreground">
           <button
             type="button"

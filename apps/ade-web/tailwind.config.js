@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       boxShadow: {
-        soft: "0 20px 45px -25px rgb(0 0 0 / 0.45)",
+        soft: "var(--app-shadow-xl)",
       },
     },
   },

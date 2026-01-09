@@ -161,7 +161,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card font-mono text-[13px] leading-relaxed text-foreground shadow-[0_8px_24px_rgb(0_0_0_/_0.25)]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card font-mono text-[13px] leading-relaxed text-foreground shadow">
       <div className="flex flex-col border-b border-border bg-muted/30">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2">
           <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
@@ -211,7 +211,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               className={clsx(
                 "rounded px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 follow
-                  ? "border border-emerald-500/60 bg-emerald-500/10 text-emerald-500"
+                  ? "border border-primary/40 bg-primary/10 text-primary"
                   : "border border-border bg-transparent text-muted-foreground hover:border-border/80 hover:text-foreground",
               )}
               title="Auto-scroll to newest logs"
@@ -229,7 +229,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   className={clsx(
                     "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-ring",
                     viewMode === "parsed"
-                      ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-500"
+                      ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground",
                   )}
                 >
@@ -243,7 +243,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   className={clsx(
                     "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-ring",
                     viewMode === "ndjson"
-                      ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-500"
+                      ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground",
                   )}
                 >
@@ -257,7 +257,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               className={clsx(
                 "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 copied
-                  ? "border border-emerald-500/60 bg-emerald-500/10 text-emerald-500"
+                  ? "border border-primary/40 bg-primary/10 text-primary"
                   : "border border-border bg-transparent text-muted-foreground hover:border-border/80 hover:text-foreground",
               )}
               disabled={!hasConsoleLines}
@@ -399,9 +399,9 @@ function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] 
   const cancelled = isCancelledStatus(status);
   const tone =
     status === "succeeded"
-      ? "bg-emerald-500"
+      ? "bg-primary"
       : status === "running" || status === "queued"
-        ? "bg-amber-400"
+        ? "bg-accent-foreground/60"
         : cancelled
           ? "bg-muted-foreground"
           : "bg-destructive";
@@ -412,11 +412,11 @@ function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] 
 function consoleMessageClass(level: WorkbenchConsoleLine["level"]) {
   switch (level) {
     case "warning":
-      return "text-amber-500";
+      return "text-accent-foreground";
     case "error":
       return "text-destructive";
     case "success":
-      return "text-emerald-500";
+      return "text-primary";
     default:
       return "text-foreground";
   }
@@ -471,11 +471,11 @@ function levelBadge(level: WorkbenchConsoleLine["level"]) {
 function prefixTone(level: WorkbenchConsoleLine["level"]) {
   switch (level) {
     case "warning":
-      return "text-amber-500";
+      return "text-accent-foreground";
     case "error":
       return "text-destructive";
     case "success":
-      return "text-emerald-500";
+      return "text-primary";
     default:
       return "text-muted-foreground/70";
   }

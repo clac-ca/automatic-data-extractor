@@ -183,9 +183,9 @@ function ResultBadge({ run }: { run: RunRecord }) {
     typeof run.errors === "number" && run.errors > 0
       ? "bg-destructive/10 text-destructive dark:bg-destructive/20"
       : typeof run.warnings === "number" && run.warnings > 0
-        ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
+        ? "bg-accent text-accent-foreground"
         : isClean
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200"
+          ? "bg-primary/10 text-primary"
           : "bg-muted text-muted-foreground";
 
   return (
