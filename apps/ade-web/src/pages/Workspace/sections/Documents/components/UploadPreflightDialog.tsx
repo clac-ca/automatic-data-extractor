@@ -249,7 +249,7 @@ export function UploadPreflightDialog({
 
   const content = (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay/60 px-4 py-6"
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4 py-6"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -377,7 +377,7 @@ export function UploadPreflightDialog({
                           className={clsx(
                             "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition",
                             sheetMode === option.value
-                              ? "border-brand-500 bg-brand-500/10"
+                              ? "border-ring bg-muted"
                               : "border-border bg-card hover:border-muted-foreground/40",
                             option.disabled && "cursor-not-allowed opacity-60",
                           )}
@@ -385,7 +385,7 @@ export function UploadPreflightDialog({
                           <input
                             type="radio"
                             name="sheet-mode"
-                            className="mt-1 h-4 w-4 border-border text-brand-600 focus:ring-brand-500"
+                            className="mt-1 h-4 w-4 border-border text-primary focus:ring-ring"
                             checked={sheetMode === option.value}
                             onChange={() => setSheetMode(option.value)}
                             disabled={option.disabled}
@@ -431,7 +431,7 @@ export function UploadPreflightDialog({
                               >
                                 <input
                                   type="checkbox"
-                                  className="h-4 w-4 rounded border-border text-brand-600 focus:ring-brand-500"
+                                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
                                   checked={checked}
                                   onChange={() =>
                                     setSelectedSheets((current) =>
@@ -481,7 +481,7 @@ export function UploadPreflightDialog({
                       disabled={spreadsheetCount === 0}
                       onChange={(event) => setActiveOnly(event.target.checked)}
                     />
-                    <span className="h-5 w-9 rounded-full bg-muted transition peer-checked:bg-brand-600 peer-disabled:cursor-not-allowed" />
+                    <span className="h-5 w-9 rounded-full bg-muted transition peer-checked:bg-primary peer-disabled:cursor-not-allowed" />
                     <span className="absolute left-0.5 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-4" />
                   </span>
                 </label>

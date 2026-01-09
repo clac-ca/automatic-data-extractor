@@ -109,7 +109,7 @@ export function UploadManager({
           </div>
           <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
             <div
-              className="h-1.5 rounded-full bg-brand-500"
+              className="h-1.5 rounded-full bg-primary"
               style={{ width: `${Math.max(0, Math.min(100, summary.percent))}%` }}
             />
           </div>
@@ -154,7 +154,7 @@ export function UploadManager({
                   <UploadProgress upload={item} />
                 </div>
                 {item.error ? (
-                  <p className="mt-2 text-[10px] font-semibold text-danger-500">{item.error}</p>
+                  <p className="mt-2 text-[10px] font-semibold text-destructive">{item.error}</p>
                 ) : null}
               </div>
             ))}

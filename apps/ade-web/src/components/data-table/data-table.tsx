@@ -167,7 +167,7 @@ export function DataTable<TData>({
                         onDoubleClick={() => header.column.resetSize()}
                         className={cn(
                           "absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none select-none hover:bg-border/70",
-                          header.column.getIsResizing() && "bg-brand-500/40",
+                          header.column.getIsResizing() && "bg-ring/40",
                         )}
                       />
                     ) : null}

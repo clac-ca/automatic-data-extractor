@@ -14,9 +14,9 @@ export function StatusPill({ status }: { readonly status: ConfigurationStatus })
           : status;
   const styles =
     normalized === "active"
-      ? "bg-success-100 text-success-700"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200"
       : normalized === "draft"
-        ? "bg-warning-100 text-warning-700"
+        ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
         : "bg-muted text-foreground";
   return (
     <span

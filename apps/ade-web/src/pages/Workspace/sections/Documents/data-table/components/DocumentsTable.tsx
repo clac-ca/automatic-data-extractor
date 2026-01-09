@@ -52,12 +52,12 @@ interface DocumentsTableProps {
 }
 
 const STATUS_BADGE_STYLES: Record<DocumentStatus, string> = {
-  uploading: "border-info-200 bg-info-50 text-info-700",
+  uploading: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200",
   uploaded: "border-border bg-muted text-muted-foreground",
-  processing: "border-warning-200 bg-warning-50 text-warning-700",
-  processed: "border-success-200 bg-success-50 text-success-700",
-  failed: "border-danger-200 bg-danger-50 text-danger-700",
-  archived: "border-warning-200 bg-warning-50 text-warning-900",
+  processing: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
+  processed: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200",
+  failed: "border-destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20",
+  archived: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100",
 };
 
 export function DocumentsTable({
@@ -335,7 +335,7 @@ export function DocumentsTable({
                 className={cn(
                   "capitalize",
                   statusTone,
-                  flash && "ring-1 ring-warning-300/70 animate-pulse",
+                  flash && "ring-1 ring-amber-300/70 animate-pulse",
                 )}
               >
                 {status}
@@ -344,7 +344,7 @@ export function DocumentsTable({
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                   <div className="h-1.5 w-16 rounded-full bg-muted">
                     <div
-                      className="h-1.5 rounded-full bg-brand-500"
+                      className="h-1.5 rounded-full bg-primary"
                       style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }}
                     />
                   </div>
@@ -792,7 +792,7 @@ export function DocumentsTable({
         <DataTable
           table={table}
           showPagination={false}
-          className="inline-flex min-w-full w-max overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-20 [&_[data-slot=table-head]]:bg-background/95 [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_rgb(var(--sys-color-border))]"
+          className="inline-flex min-w-full w-max overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-20 [&_[data-slot=table-head]]:bg-background/95 [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_var(--border)]"
           onRowClick={onRowClick}
           onRowContextMenu={onRowContextMenu}
           stretchColumnId="name"

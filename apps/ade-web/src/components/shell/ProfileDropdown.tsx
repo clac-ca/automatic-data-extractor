@@ -176,11 +176,11 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
         ref={triggerRef}
         type="button"
         className={clsx(
-          "focus-ring inline-flex items-center gap-3 rounded-xl border px-2.5 py-1.5 text-left text-sm font-semibold transition",
+          "inline-flex items-center gap-3 rounded-xl border px-2.5 py-1.5 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isHeaderTone
-            ? "border-header-border/40 bg-header/25 text-header-foreground shadow-none hover:border-header-border/70 hover:bg-header/30"
-            : "border-border bg-card text-muted-foreground shadow-sm hover:border-border-strong hover:text-foreground",
-          open && (isHeaderTone ? "border-header-ring ring-2 ring-header-ring/30" : "border-brand-400 ring-2 ring-brand-500/10"),
+            ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
+            : "border-border bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",
+          open && "border-ring ring-2 ring-ring/30",
         )}
         aria-haspopup="menu"
         aria-controls={menuId}
@@ -194,21 +194,17 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
           }
         }}
       >
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-on-brand shadow-sm">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
           {initials}
         </span>
         <span className="hidden min-w-0 flex-col xl:flex">
-          <span className={clsx("truncate text-sm font-semibold", isHeaderTone ? "text-header-foreground" : "text-foreground")}>
-            {displayName}
-          </span>
-          <span className={clsx("truncate text-xs", isHeaderTone ? "text-header-muted" : "text-muted-foreground")}>
-            {email}
-          </span>
+          <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+          <span className="truncate text-xs text-muted-foreground">{email}</span>
         </span>
         <ChevronDownIcon
           className={clsx(
             "h-4 w-4 transition-transform duration-150",
-            isHeaderTone ? "text-header-muted" : "text-muted-foreground",
+            "text-muted-foreground",
             open && "rotate-180",
           )}
         />
@@ -234,7 +230,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
                       left: menuPosition.left,
                       position: "fixed",
                       zIndex: 90,
-                      backgroundColor: "rgb(var(--sys-color-surface-elevated))",
+                      backgroundColor: "var(--popover)",
                     }
                   : { top: 0, left: 0, visibility: "hidden" }
               }
@@ -300,12 +296,12 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
                   type="button"
                   role="menuitem"
                   data-menu-item
-                  className="focus-ring flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:border-ring/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleSignOut}
                   disabled={isSigningOut}
                 >
                   <span>Sign out</span>
-                  {isSigningOut ? <SpinnerIcon className="h-4 w-4 animate-spin text-brand-600" /> : null}
+                  {isSigningOut ? <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
                 </button>
               </div>
             </div>,

@@ -164,7 +164,7 @@ export default function LoginScreen() {
     <div className="mx-auto flex min-h-screen flex-col justify-center bg-background px-6 py-16">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-10 shadow-soft">
         <header className="space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Welcome back</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Welcome back</p>
           <h1 className="text-3xl font-semibold text-foreground">Sign in to ADE</h1>
           <p className="text-sm text-muted-foreground">
             Enter your email and password or continue with a connected provider.
@@ -184,7 +184,7 @@ export default function LoginScreen() {
               <a
                 key={provider.id}
                 href={buildSsoHref(provider.start_url, redirectTo)}
-                className="flex w-full items-center justify-center rounded-lg border border-border-strong bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="flex w-full items-center justify-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Continue with {provider.label}
               </a>

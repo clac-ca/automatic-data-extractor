@@ -1724,13 +1724,13 @@ export function Workbench({
       {
         id: "toggle-explorer",
         label: explorer.collapsed ? "Show Explorer" : "Hide Explorer",
-        icon: explorer.collapsed ? blankIcon : <CheckIcon className="h-4 w-4 text-brand-400" />,
+        icon: explorer.collapsed ? blankIcon : <CheckIcon className="h-4 w-4 text-foreground" />,
         onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed })),
       },
       {
         id: "toggle-console",
         label: outputCollapsed ? "Show Console" : "Hide Console",
-        icon: outputCollapsed ? blankIcon : <CheckIcon className="h-4 w-4 text-brand-400" />,
+        icon: outputCollapsed ? blankIcon : <CheckIcon className="h-4 w-4 text-foreground" />,
         onSelect: handleToggleOutput,
       },
     ];
@@ -1845,7 +1845,7 @@ export function Workbench({
   const collapsedConsoleTheme = {
     bar: "border-border bg-card text-foreground",
     hint: "text-muted-foreground",
-    button: "border-border-strong bg-popover text-foreground hover:border-border-strong hover:bg-muted",
+    button: "border-border bg-popover text-foreground hover:border-ring/40 hover:bg-muted",
   };
 
   return (
@@ -1854,7 +1854,7 @@ export function Workbench({
       onDragOver={handleWorkbenchDragOver}
       onDrop={handleWorkbenchDrop}
     >
-      {isMaximized ? <div className="fixed inset-0 z-40 bg-overlay/60" /> : null}
+      {isMaximized ? <div className="fixed inset-0 z-40 bg-black/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
           configName={configName}
@@ -1914,7 +1914,7 @@ export function Workbench({
                     {activeConfiguration ? ` The current active configuration “${activeConfiguration.display_name}” will be archived.` : ""}
                   </p>
                   {!canMakeActive && files.isDirty ? (
-                    <p className="text-xs font-medium text-warning-500">Save changes before making active.</p>
+                    <p className="text-xs font-medium text-amber-600 dark:text-amber-300">Save changes before making active.</p>
                   ) : null}
                 </div>
                 <Button
@@ -2133,7 +2133,7 @@ export function Workbench({
         className="hidden"
       />
       {replaceConfirmOpen ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4">
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
           <div
             className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
             role="dialog"
@@ -2149,10 +2149,10 @@ export function Workbench({
                 will be discarded.
               </p>
               {!canReplaceFromArchive ? (
-                <p className="text-sm font-medium text-danger-600">Only draft configurations can be replaced.</p>
+                <p className="text-sm font-medium text-destructive">Only draft configurations can be replaced.</p>
               ) : null}
               {files.isDirty ? (
-                <p className="text-sm font-medium text-warning-700">You have unsaved changes that will be lost.</p>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-200">You have unsaved changes that will be lost.</p>
               ) : null}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -2197,7 +2197,7 @@ export function Workbench({
             disabled={duplicateToEdit.isPending}
           />
         </FormField>
-        {duplicateError ? <p className="text-sm font-medium text-danger-600">{duplicateError}</p> : null}
+        {duplicateError ? <p className="text-sm font-medium text-destructive">{duplicateError}</p> : null}
       </ConfirmDialog>
 
       <ConfirmDialog
@@ -2243,7 +2243,7 @@ export function Workbench({
       >
         {makeActiveDialogState?.stage === "checking" ? (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
             <span>Validating…</span>
           </div>
         ) : makeActiveDialogState?.stage === "issues" ? (
@@ -2259,7 +2259,7 @@ export function Workbench({
             </ul>
           </div>
         ) : makeActiveDialogState?.stage === "error" ? (
-          <p className="text-sm font-medium text-danger-600">{makeActiveDialogState.message}</p>
+          <p className="text-sm font-medium text-destructive">{makeActiveDialogState.message}</p>
         ) : null}
       </ConfirmDialog>
 
@@ -2427,9 +2427,9 @@ function WorkbenchChrome({
   const surfaceClass = "border-border bg-card text-foreground";
   const metaTextClass = "text-muted-foreground";
   const saveButtonClass =
-    "bg-success-600 text-on-success hover:bg-success-500 disabled:bg-muted disabled:text-muted-foreground";
+    "bg-emerald-600 text-white hover:bg-emerald-500 disabled:bg-muted disabled:text-muted-foreground";
   const runButtonClass =
-    "bg-brand-600 text-on-brand hover:bg-brand-500 disabled:bg-muted disabled:text-muted-foreground";
+    "bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground";
   const isMaximized = windowState === "maximized";
   return (
     <div className={clsx("flex items-center justify-between border-b px-4 py-2", surfaceClass)}>
@@ -2640,7 +2640,7 @@ function RunExtractionDialog({
   const sheetsAvailable = sheetOptions.length > 0;
 
   const content = (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4">
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -2767,7 +2767,7 @@ function RunExtractionDialog({
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-border text-success-600 focus:ring-success-500"
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
                             checked={checked}
                             onChange={() => toggleWorksheet(sheet.name)}
                           />
@@ -2850,8 +2850,8 @@ function ChromeIconButton({
   readonly disabled?: boolean;
 }) {
   const baseClass =
-    "text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border-strong focus-visible:ring-ring/40";
-  const activeClass = "text-foreground border-border-strong bg-muted";
+    "text-muted-foreground hover:text-foreground hover:bg-muted hover:border-ring/40 focus-visible:ring-ring/40";
+  const activeClass = "text-foreground border-ring bg-muted";
   return (
     <button
       type="button"
@@ -2873,7 +2873,7 @@ function ChromeIconButton({
 
 function WorkbenchBadgeIcon() {
   return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 text-on-brand shadow-[0_12px_24px_rgb(var(--sys-color-shadow)/0.35)]">
+    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[0_12px_24px_rgb(0_0_0_/_0.35)]">
       <GridIcon className="h-4 w-4" />
     </span>
   );

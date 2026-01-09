@@ -527,7 +527,7 @@ export default function ConfigBuilderScreen() {
                 />
               </FormField>
               {renderTemplateField(createConfig.isPending)}
-              {creationError ? <p className="text-sm font-medium text-danger-600">{creationError}</p> : null}
+              {creationError ? <p className="text-sm font-medium text-destructive">{creationError}</p> : null}
               <Button type="submit" className="w-full" disabled={!canSubmit} isLoading={createConfig.isPending}>
                 Create from template
               </Button>
@@ -560,7 +560,7 @@ export default function ConfigBuilderScreen() {
                     </p>
                   ) : null}
                 </FormField>
-                {importError ? <p className="text-sm font-medium text-danger-600">{importError}</p> : null}
+                {importError ? <p className="text-sm font-medium text-destructive">{importError}</p> : null}
                 <Button type="submit" className="w-full" disabled={!canImport} isLoading={importConfig.isPending}>
                   Import archive
                 </Button>
@@ -597,7 +597,7 @@ export default function ConfigBuilderScreen() {
               <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background">
                 <button
                   type="button"
-                  className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   onClick={() => handleOpenConfig(activeConfiguration.id)}
                 >
                   <div className="flex flex-wrap items-center gap-2">
@@ -648,14 +648,14 @@ export default function ConfigBuilderScreen() {
                   >
                     <button
                       type="button"
-                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       onClick={() => handleOpenConfig(config.id)}
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
                         <StatusPill status={config.status} />
                         {lastOpenedConfig?.id === config.id ? (
-                          <span className="text-xs font-medium uppercase tracking-wide text-brand-600">
+                          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             Last opened
                           </span>
                         ) : null}
@@ -700,7 +700,7 @@ export default function ConfigBuilderScreen() {
 	                  >
 	                    <button
 	                      type="button"
-	                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+	                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 	                      onClick={() => handleOpenConfig(config.id)}
 	                    >
 	                      <div className="flex flex-wrap items-center gap-2">
@@ -748,7 +748,7 @@ export default function ConfigBuilderScreen() {
             />
           </FormField>
           {renderTemplateField(createConfig.isPending)}
-          {creationError ? <p className="text-sm font-medium text-danger-600">{creationError}</p> : null}
+          {creationError ? <p className="text-sm font-medium text-destructive">{creationError}</p> : null}
           <Button type="submit" className="w-full" disabled={!canSubmit} isLoading={createConfig.isPending}>
             Create from template
           </Button>
@@ -781,7 +781,7 @@ export default function ConfigBuilderScreen() {
                 </p>
               ) : null}
             </FormField>
-            {importError ? <p className="text-sm font-medium text-danger-600">{importError}</p> : null}
+            {importError ? <p className="text-sm font-medium text-destructive">{importError}</p> : null}
             <Button type="submit" className="w-full" disabled={!canImport} isLoading={importConfig.isPending}>
               Import archive
             </Button>
@@ -845,7 +845,7 @@ export default function ConfigBuilderScreen() {
       >
         {makeActiveDialogState?.stage === "checking" ? (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
             <span>Validating…</span>
           </div>
         ) : makeActiveDialogState?.stage === "issues" ? (
@@ -861,7 +861,7 @@ export default function ConfigBuilderScreen() {
             </ul>
           </div>
         ) : makeActiveDialogState?.stage === "error" ? (
-          <p className="text-sm font-medium text-danger-600">{makeActiveDialogState.message}</p>
+          <p className="text-sm font-medium text-destructive">{makeActiveDialogState.message}</p>
         ) : null}
       </ConfirmDialog>
 
@@ -878,7 +878,7 @@ export default function ConfigBuilderScreen() {
         confirmDisabled={archiveConfig.isPending}
       >
         {archiveConfig.error ? (
-          <p className="text-sm font-medium text-danger-600">
+          <p className="text-sm font-medium text-destructive">
             {archiveConfig.error instanceof Error ? archiveConfig.error.message : "Unable to archive configuration."}
           </p>
         ) : null}
@@ -903,7 +903,7 @@ export default function ConfigBuilderScreen() {
             disabled={duplicateConfig.isPending}
           />
         </FormField>
-        {duplicateNameError ? <p className="text-sm font-medium text-danger-600">{duplicateNameError}</p> : null}
+        {duplicateNameError ? <p className="text-sm font-medium text-destructive">{duplicateNameError}</p> : null}
       </ConfirmDialog>
     </div>
   );

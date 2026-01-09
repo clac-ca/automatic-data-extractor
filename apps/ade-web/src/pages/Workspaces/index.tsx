@@ -199,7 +199,7 @@ function WorkspacesIndexContent() {
             return (
               <div
                 key={workspace.id}
-                className="group relative rounded-xl border border-border bg-card p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 focus-within:ring-offset-background"
+                className="group relative rounded-xl border border-border bg-card p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
               >
                 <button
                   type="button"
@@ -220,7 +220,7 @@ function WorkspacesIndexContent() {
                 </button>
                 <div className="absolute right-5 top-5">
                   {workspace.is_default ? (
-                    <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600">Default</span>
+                    <span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground">Default</span>
                   ) : (
                     <Button
                       variant="secondary"
@@ -287,7 +287,7 @@ function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreat
 
 function EmptyStateCreate({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-border-strong bg-card p-10 text-center shadow-soft">
+    <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-border bg-card p-10 text-center shadow-soft">
       <h1 id="page-title" className="text-2xl font-semibold text-foreground">No workspaces yet</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Create your first workspace to start uploading configuration sets and documents.

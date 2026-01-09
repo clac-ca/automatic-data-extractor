@@ -295,7 +295,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
   return (
     <div
       className={clsx(
-        "pointer-events-auto w-full max-w-sm rounded-lg border px-3.5 py-2.5 shadow-[0_16px_32px_rgb(var(--sys-color-shadow)/0.35)] sm:min-w-[300px]",
+        "pointer-events-auto w-full max-w-sm rounded-lg border px-3.5 py-2.5 shadow-[0_16px_32px_rgb(0_0_0_/_0.35)] sm:min-w-[300px]",
         theme.container,
         theme.border,
       )}
@@ -396,26 +396,26 @@ const TOAST_THEMES: Record<
   info: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-info-500/15 text-info-500",
-    progress: "bg-gradient-to-r from-info-500 to-info-400",
+    icon: "bg-sky-500/15 text-sky-500",
+    progress: "bg-gradient-to-r from-sky-500 to-sky-400",
   },
   success: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-success-500/15 text-success-500",
-    progress: "bg-gradient-to-r from-success-500 to-success-400",
+    icon: "bg-emerald-500/15 text-emerald-500",
+    progress: "bg-gradient-to-r from-emerald-500 to-emerald-400",
   },
   warning: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-warning-400/20 text-warning-500",
-    progress: "bg-gradient-to-r from-warning-400 to-warning-300",
+    icon: "bg-amber-400/20 text-amber-500",
+    progress: "bg-gradient-to-r from-amber-400 to-amber-300",
   },
   danger: {
     container: "bg-popover text-foreground",
     border: "border-border/70",
-    icon: "bg-danger-500/15 text-danger-500",
-    progress: "bg-gradient-to-r from-danger-500 to-danger-400",
+    icon: "bg-destructive/15 text-destructive",
+    progress: "bg-gradient-to-r from-destructive to-destructive/70",
   },
 };
 
@@ -426,29 +426,29 @@ const BANNER_THEMES: Record<
   info: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-info-500/15 text-info-500",
-    progress: "bg-gradient-to-r from-info-500 to-info-400",
+    icon: "bg-sky-500/15 text-sky-500",
+    progress: "bg-gradient-to-r from-sky-500 to-sky-400",
     dismiss: "hover:bg-muted",
   },
   success: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-success-500/15 text-success-500",
-    progress: "bg-gradient-to-r from-success-500 to-success-400",
+    icon: "bg-emerald-500/15 text-emerald-500",
+    progress: "bg-gradient-to-r from-emerald-500 to-emerald-400",
     dismiss: "hover:bg-muted",
   },
   warning: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-warning-500/15 text-warning-500",
-    progress: "bg-gradient-to-r from-warning-400 to-warning-300",
+    icon: "bg-amber-500/15 text-amber-500",
+    progress: "bg-gradient-to-r from-amber-400 to-amber-300",
     dismiss: "hover:bg-muted",
   },
   danger: {
     container: "bg-popover text-foreground",
     border: "border-border/60",
-    icon: "bg-danger-500/15 text-danger-500",
-    progress: "bg-gradient-to-r from-danger-500 to-danger-400",
+    icon: "bg-destructive/15 text-destructive",
+    progress: "bg-gradient-to-r from-destructive to-destructive/70",
     dismiss: "hover:bg-muted",
   },
 };

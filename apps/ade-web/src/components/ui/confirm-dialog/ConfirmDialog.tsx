@@ -79,11 +79,11 @@ export function ConfirmDialog({
   const toneStyles =
     tone === "danger"
       ? {
-          badge: "bg-danger-500/15 text-danger-400",
-          confirmVariant: "danger" as const,
+          badge: "bg-destructive/10 text-destructive",
+          confirmVariant: "destructive" as const,
         }
       : {
-          badge: "bg-brand-500/10 text-brand-500",
+          badge: "bg-muted text-foreground",
           confirmVariant: "primary" as const,
         };
 
@@ -91,7 +91,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 px-4">
       <button
         type="button"
-        className="absolute inset-0 bg-overlay/50"
+        className="absolute inset-0 bg-black/50"
         onClick={onCancel}
         aria-label="Close dialog"
       />
@@ -128,7 +128,6 @@ export function ConfirmDialog({
               onClick={onConfirm}
               isLoading={isConfirming}
               disabled={confirmDisabled || isConfirming}
-              className={tone === "danger" ? "hover:bg-danger-600" : undefined}
             >
               {confirmLabel}
             </Button>

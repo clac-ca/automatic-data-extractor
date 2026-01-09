@@ -14,18 +14,17 @@ apps/ade-web/
    │  └─ navigation/               # History-based navigation helpers
    ├─ api/                         # HTTP client + domain API calls
    ├─ pages/                       # Route-level pages (Home, Login, Workspace, …)
-   ├─ components/                  # Shared UI primitives + layouts + providers
-   │  ├─ ui/                        # Buttons, inputs, tabs, dialogs, etc.
-   │  ├─ layouts/                   # Layout scaffolding (PageState, etc.)
-   │  ├─ providers/                 # Auth, theme, notifications
-   │  ├─ shell/                     # Global chrome (top bar, profile menu, etc.)
-   │  ├─ icons.tsx                  # Icon exports
-   ├─ styles/                      # Global styles + theme tokens
-   │  └─ globals.css
-   ├─ vite-env.d.ts                # Vite client typings + globals
-   ├─ hooks/                       # React Query + shared app hooks
-   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
-   ├─ types/                       # Curated, app-facing type exports
+	   ├─ components/                  # Shared UI primitives + layouts + providers
+	   │  ├─ ui/                        # Buttons, inputs, tabs, dialogs, etc.
+	   │  ├─ layouts/                   # Layout scaffolding (PageState, etc.)
+	   │  ├─ providers/                 # Auth, theme, notifications
+	   │  ├─ shell/                     # Global chrome (top bar, profile menu, etc.)
+	   │  ├─ icons.tsx                  # Icon exports
+	   ├─ globals.css                  # Global styles + theme tokens
+	   ├─ vite-env.d.ts                # Vite client typings + globals
+	   ├─ hooks/                       # React Query + shared app hooks
+	   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
+	   ├─ types/                       # Curated, app-facing type exports
    │  └─ generated/                # Raw OpenAPI-derived types
    └─ test/                        # Vitest setup + helpers
 ```
@@ -91,7 +90,7 @@ Screens are thin: they **compose** things, they don’t invent new infra.
   - Shared React hooks (React Query hooks, global app hooks).
 - `src/lib/`
   - Cross-cutting helpers (storage, uploads, local preferences).
-- `src/styles/globals.css`
+- `src/globals.css`
   - Global styles and theme tokens.
 - `src/types/`
   - Human-authored, app-facing types (and curated re-exports from generated types).

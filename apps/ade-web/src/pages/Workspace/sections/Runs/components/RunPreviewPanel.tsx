@@ -441,7 +441,7 @@ function DetectionBadge({ detected }: { detected: boolean }) {
     <span
       className={clsx(
         "inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold",
-        detected ? "bg-success-100 text-success-700" : "bg-muted text-muted-foreground",
+        detected ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200" : "bg-muted text-muted-foreground",
       )}
     >
       {detected ? "Detected" : "Not detected"}
@@ -450,7 +450,7 @@ function DetectionBadge({ detected }: { detected: boolean }) {
 }
 
 const COLUMN_STATUS_META: Record<string, { label: string; className: string }> = {
-  mapped: { label: "Mapped", className: "bg-success-100 text-success-700" },
+  mapped: { label: "Mapped", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200" },
   unmapped: { label: "Unmapped", className: "bg-muted text-muted-foreground" },
 };
 
@@ -480,7 +480,7 @@ function TabButton({ value, label, active }: { value: RunPreviewTab; label: stri
       value={value}
       className={clsx(
         "rounded-full border px-3 py-1 text-xs font-semibold transition",
-        active ? "border-transparent bg-brand-600 text-on-brand" : "border-border bg-background text-muted-foreground",
+        active ? "border-transparent bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground",
       )}
     >
       {label}

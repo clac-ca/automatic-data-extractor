@@ -254,8 +254,8 @@ export function WorkspaceNavList({
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
                   expanded ? "px-3 py-2" : "justify-center px-2 py-2",
                   isActive
-                    ? "bg-sidebar-item-active text-sidebar-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-item-hover hover:text-sidebar-foreground",
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 )
               }
             >
@@ -266,14 +266,13 @@ export function WorkspaceNavList({
                       "flex h-10 w-10 items-center justify-center rounded-xl",
                       "transition-colors duration-150 motion-reduce:transition-none",
                       isActive
-                        ? "bg-sidebar-item-active text-sidebar-foreground"
-                        : "bg-sidebar-item-hover/70 text-sidebar-foreground group-hover:bg-sidebar-item-hover group-hover:text-sidebar-foreground",
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "bg-sidebar-accent/70 text-sidebar-foreground group-hover:bg-sidebar-accent group-hover:text-sidebar-accent-foreground",
                     )}
                   >
                     <item.icon
                       className={clsx(
                         "h-5 w-5 transition-colors duration-150",
-                        "text-sidebar-foreground",
                       )}
                       aria-hidden
                     />
@@ -284,7 +283,7 @@ export function WorkspaceNavList({
                       "min-w-0 overflow-hidden truncate",
                       "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
                       expanded ? "ml-3 max-w-[14rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-                      "text-sm font-semibold text-sidebar-foreground",
+                      "text-sm font-semibold",
                     )}
                     aria-hidden={!expanded}
                   >
@@ -321,8 +320,8 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
           expanded ? "px-2 py-2" : "justify-center px-2 py-2",
           isActive
-            ? "bg-sidebar-item-active text-sidebar-foreground"
-            : "text-sidebar-foreground hover:bg-sidebar-item-hover hover:text-sidebar-foreground",
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         )
       }
     >
@@ -333,8 +332,8 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
               "flex h-10 w-10 items-center justify-center rounded-xl",
               "transition-colors duration-150 motion-reduce:transition-none",
               isActive
-                ? "bg-sidebar-item-active text-sidebar-foreground"
-                : "bg-sidebar-item-hover/70 text-sidebar-foreground group-hover:bg-sidebar-item-hover group-hover:text-sidebar-foreground",
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "bg-sidebar-accent/70 text-sidebar-foreground group-hover:bg-sidebar-accent group-hover:text-sidebar-accent-foreground",
             )}
             aria-hidden
           >
@@ -346,7 +345,7 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
               "min-w-0 overflow-hidden truncate",
               "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
               expanded ? "ml-3 max-w-[14rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-              "text-xs font-semibold text-sidebar-foreground",
+              "text-xs font-semibold",
             )}
             aria-hidden={!expanded}
           >
@@ -382,12 +381,12 @@ function NavPinButton({
         "transition-colors duration-150 motion-reduce:transition-none",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
         expanded ? "px-2 py-2" : "justify-center px-2 py-2",
-        "text-sidebar-foreground hover:bg-sidebar-item-hover hover:text-sidebar-foreground",
+        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       )}
     >
       <span
         className={clsx(
-          "flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-item-hover/70 text-sidebar-foreground transition-colors duration-150 group-hover:bg-sidebar-item-hover group-hover:text-sidebar-foreground",
+          "flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-accent/70 text-sidebar-foreground transition-colors duration-150 group-hover:bg-sidebar-accent group-hover:text-sidebar-accent-foreground",
         )}
         aria-hidden
       >
@@ -399,7 +398,7 @@ function NavPinButton({
           "min-w-0 overflow-hidden truncate",
           "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
           expanded ? "ml-3 max-w-[14rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-          "text-xs font-semibold text-sidebar-foreground",
+          "text-xs font-semibold",
         )}
         aria-hidden={!expanded}
       >

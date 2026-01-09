@@ -12,6 +12,12 @@ import { UploadManager } from "./components/UploadManager";
 import { UploadPreflightDialog } from "./components/UploadPreflightDialog";
 import { DocumentsTableView } from "./data-table/components/DocumentsTableView";
 
+const XLSX_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function isXlsxFile(file: File) {
+  return file.name.toLowerCase().endsWith(".xlsx");
+}
+
 export default function DocumentsScreen() {
   const session = useSession();
   const { workspace } = useWorkspaceContext();
@@ -46,11 +52,28 @@ export default function DocumentsScreen() {
 
   const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
-    if (selected.length > 0) {
-      setUploadPreflightFiles(selected);
+    const accepted = selected.filter(isXlsxFile);
+    const rejected = selected.filter((file) => !isXlsxFile(file));
+
+    if (rejected.length > 0) {
+      const skippedLabel =
+        rejected.length === 1
+          ? `Skipped ${rejected[0].name}.`
+          : `Skipped ${rejected.length} files.`;
+
+      notifyToast({
+        title: "Only .xlsx files are supported.",
+        description: skippedLabel,
+        intent: "warning",
+        duration: 6000,
+      });
+    }
+
+    if (accepted.length > 0) {
+      setUploadPreflightFiles(accepted);
     }
     event.target.value = "";
-  }, []);
+  }, [notifyToast]);
 
   const handleUploadConfirm = useCallback(
     (items: UploadManagerQueueItem[]) => {
@@ -99,6 +122,7 @@ export default function DocumentsScreen() {
       <input
         ref={fileInputRef}
         type="file"
+        accept={XLSX_ACCEPT}
         multiple
         className="hidden"
         onChange={handleFileInputChange}

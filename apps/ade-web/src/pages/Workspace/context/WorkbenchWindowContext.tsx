@@ -362,14 +362,14 @@ interface WorkbenchDockProps {
 function WorkbenchDock({ configName, onRestore, onDismiss }: WorkbenchDockProps) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">
-      <div className="pointer-events-auto border-t border-border bg-card/95 shadow-[0_-12px_40px_rgb(var(--sys-color-shadow)/0.15)] backdrop-blur">
+      <div className="pointer-events-auto border-t border-border bg-card/95 shadow-[0_-12px_40px_rgb(0_0_0_/_0.15)] backdrop-blur">
         <div className="relative mx-auto flex h-14 max-w-6xl items-center px-4 text-foreground">
           <button
             type="button"
             onClick={onRestore}
-            className="group flex min-w-0 flex-1 items-center gap-4 rounded-md px-3 py-1.5 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40"
+            className="group flex min-w-0 flex-1 items-center gap-4 rounded-md px-3 py-1.5 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-brand-600 shadow-inner">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-inner">
               <DockWindowIcon className="h-4 w-4" />
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
@@ -380,7 +380,7 @@ function WorkbenchDock({ configName, onRestore, onDismiss }: WorkbenchDockProps)
                 {configName}
               </span>
             </span>
-            <span className="ml-auto inline-flex items-center rounded border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition group-hover:border-border-strong group-hover:bg-background">
+            <span className="ml-auto inline-flex items-center rounded border border-border bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition group-hover:bg-muted">
               Restore
             </span>
           </button>
@@ -415,8 +415,8 @@ function DockActionButton({
       aria-label={ariaLabel}
       onClick={onClick}
       className={clsx(
-        "flex h-full w-12 items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40",
-        destructive ? "text-danger-600 hover:bg-danger-50" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "flex h-full w-12 items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        destructive ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {children}

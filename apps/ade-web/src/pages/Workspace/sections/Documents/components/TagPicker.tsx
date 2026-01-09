@@ -115,7 +115,7 @@ export function TagPicker({
         disabled={disabled}
         ref={triggerRef}
         className={clsx(
-          "inline-flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
+          "inline-flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
           disabled
             ? "border-border bg-background text-muted-foreground"
             : "border-border bg-card text-foreground hover:bg-background dark:hover:bg-muted/40",
@@ -170,7 +170,7 @@ export function TagPicker({
                   key={t}
                   type="button"
                   onClick={() => onToggle(t)}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-foreground hover:text-danger-700"
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-foreground hover:text-destructive"
                   title="Remove tag"
                 >
                   {t}
@@ -213,14 +213,14 @@ export function TagPicker({
                     className={clsx(
                       "flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold transition",
                       isSelected
-                        ? "bg-brand-50 text-foreground dark:bg-brand-500/20 dark:text-brand-200"
+                        ? "bg-muted text-foreground"
                         : "text-foreground hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="truncate">{item.tag}</span>
                     <span className="ml-3 flex items-center gap-2 text-[11px] text-muted-foreground">
                       {item.document_count}
-                      {isSelected ? <CheckIcon className="h-3.5 w-3.5 text-brand-600" /> : null}
+                      {isSelected ? <CheckIcon className="h-3.5 w-3.5 text-foreground" /> : null}
                     </span>
                   </button>
                 );

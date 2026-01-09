@@ -289,7 +289,7 @@ High-level layout (under `apps/ade-web/src`):
 - `components/` – shared UI primitives, layouts, providers, and shell chrome.
 - `hooks/` – shared React hooks (React Query + app hooks).
 - `lib/` – cross-cutting helpers (storage, uploads, local preferences).
-- `styles/globals.css` – global styles and theme tokens.
+- `globals.css` – global styles and theme tokens.
 - `types/` – curated domain models and re-exports.
 - `types/generated/` – OpenAPI-generated types.
 - `vite-env.d.ts` – Vite client typings + globals.

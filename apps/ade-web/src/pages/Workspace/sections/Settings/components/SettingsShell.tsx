@@ -48,8 +48,8 @@ export function SettingsShell({
                     const toneClasses =
                       item.tone === "danger"
                         ? {
-                            active: "bg-danger-50 text-danger-700",
-                            idle: "text-danger-600 hover:bg-danger-50/60",
+                            active: "bg-destructive/10 text-destructive dark:bg-destructive/20",
+                            idle: "text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/20",
                           }
                         : {
                             active: "bg-accent text-foreground",
@@ -94,7 +94,7 @@ export function SettingsShell({
           <div
             className={clsx(
               "mb-6 border-b border-border pb-4",
-              activeTone === "danger" && "border-danger-200",
+              activeTone === "danger" && "border-destructive/40",
             )}
           >
             <h2 className="text-xl font-semibold text-foreground">{activeSectionLabel}</h2>

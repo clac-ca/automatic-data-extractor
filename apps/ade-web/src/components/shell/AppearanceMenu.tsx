@@ -56,7 +56,7 @@ export function AppearanceMenu({
         setModePreference(option.value);
         closeMenu();
       },
-      icon: modePreference === option.value ? <CheckIcon className="h-3.5 w-3.5 text-brand-500" /> : undefined,
+      icon: modePreference === option.value ? <CheckIcon className="h-3.5 w-3.5 text-foreground" /> : undefined,
     }));
 
     const themeItems = BUILTIN_THEMES.map((entry, index) => ({
@@ -67,7 +67,7 @@ export function AppearanceMenu({
         closeMenu();
       },
       onHover: () => setPreviewTheme(entry.id),
-      icon: theme === entry.id ? <CheckIcon className="h-3.5 w-3.5 text-brand-500" /> : undefined,
+      icon: theme === entry.id ? <CheckIcon className="h-3.5 w-3.5 text-foreground" /> : undefined,
       dividerAbove: index === 0,
     }));
 
@@ -84,14 +84,14 @@ export function AppearanceMenu({
         aria-label="Appearance settings"
         title="Appearance"
         className={clsx(
-          "focus-ring inline-flex h-9 items-center gap-2 rounded-xl border px-2.5 text-xs transition",
+          "inline-flex h-9 items-center gap-2 rounded-xl border px-2.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isHeaderTone
-            ? "border-header-border/40 bg-header/25 text-header-foreground shadow-none hover:border-header-border/70 hover:bg-header/30"
-            : "border-border/80 bg-card text-muted-foreground shadow-sm hover:border-border-strong hover:text-foreground",
+            ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
+            : "border-border/80 bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",
           open &&
             (isHeaderTone
-              ? "border-header-ring ring-2 ring-header-ring/30"
-              : "border-brand-400 ring-2 ring-brand-500/10 text-foreground"),
+              ? "border-ring ring-2 ring-ring/30"
+              : "border-ring ring-2 ring-ring/30 text-foreground"),
         )}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {
@@ -101,11 +101,7 @@ export function AppearanceMenu({
           }
         }}
       >
-        <span
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ backgroundColor: "rgb(var(--sys-color-accent))" }}
-          aria-hidden
-        />
+        <span className="h-2.5 w-2.5 rounded-full bg-primary" aria-hidden />
         <SettingsIcon className="h-4 w-4" />
         <span className="hidden xl:inline">Appearance</span>
         <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />

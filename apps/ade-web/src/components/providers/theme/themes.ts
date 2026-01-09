@@ -1,17 +1,33 @@
+export const THEME_IDS = [
+  "default",
+  "ocean",
+  "forest",
+  "sunset",
+  "rose",
+  "grape",
+  "sand",
+  "carbon",
+] as const
+
+export type ThemeId = (typeof THEME_IDS)[number]
+
 export type BuiltInTheme = {
-  id: string;
-  label: string;
-  description: string;
-  kind: "accent" | "full";
-};
+  id: ThemeId
+  label: string
+  description: string
+}
 
 export const BUILT_IN_THEMES: BuiltInTheme[] = [
-  { id: "default", label: "Default", description: "Slate neutrals + indigo accent.", kind: "accent" },
-  { id: "ocean", label: "Ocean", description: "Cyan accent on slate neutrals.", kind: "accent" },
-  { id: "forest", label: "Forest", description: "Emerald accent on slate neutrals.", kind: "accent" },
-  { id: "sunset", label: "Sunset", description: "Orange accent on slate neutrals.", kind: "accent" },
-  { id: "rose", label: "Rose", description: "Rose accent on slate neutrals.", kind: "accent" },
-  { id: "grape", label: "Grape", description: "Violet accent on slate neutrals.", kind: "accent" },
-  { id: "sand", label: "Sand", description: "Stone neutrals + teal accent.", kind: "full" },
-  { id: "carbon", label: "Carbon", description: "Zinc neutrals + blue accent.", kind: "full" },
-];
+  { id: "default", label: "Default", description: "Indigo accent on clean neutrals." },
+  { id: "ocean", label: "Ocean", description: "Cyan/teal accent — crisp and modern." },
+  { id: "forest", label: "Forest", description: "Emerald accent — calm and grounded." },
+  { id: "sunset", label: "Sunset", description: "Orange accent — warm and energetic." },
+  { id: "rose", label: "Rose", description: "Rose accent — bold and expressive." },
+  { id: "grape", label: "Grape", description: "Violet accent — premium and creative." },
+  { id: "sand", label: "Sand", description: "Teal accent on warm neutrals." },
+  { id: "carbon", label: "Carbon", description: "Blue accent — minimal and enterprise." },
+]
+
+export function isThemeId(value: string): value is ThemeId {
+  return (THEME_IDS as readonly string[]).includes(value)
+}

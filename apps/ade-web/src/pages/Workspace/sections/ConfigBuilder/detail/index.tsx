@@ -315,7 +315,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
       <section className="space-y-3 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Configuration</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Configuration</p>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-semibold text-foreground">{config.display_name}</h1>
               <StatusPill status={config.status} />
@@ -373,7 +373,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
           ) : null}
         </dl>
       </section>
-      <section className="flex-1 rounded-2xl border border-dashed border-border-strong bg-background p-6">
+      <section className="flex-1 rounded-2xl border border-dashed border-border bg-background p-6">
         <h2 className="text-base font-semibold text-foreground">Overview</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           The refreshed config workbench will eventually surface manifest summaries, validation history, and deployment metrics
@@ -437,7 +437,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
       >
         {makeActiveState?.stage === "checking" ? (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
             <span>Validating…</span>
           </div>
         ) : makeActiveState?.stage === "issues" ? (
@@ -453,7 +453,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
             </ul>
           </div>
         ) : makeActiveState?.stage === "error" ? (
-          <p className="text-sm font-medium text-danger-600">{makeActiveState.message}</p>
+          <p className="text-sm font-medium text-destructive">{makeActiveState.message}</p>
         ) : null}
       </ConfirmDialog>
 
@@ -470,7 +470,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
         confirmDisabled={archiveConfig.isPending}
       >
         {archiveConfig.error ? (
-          <p className="text-sm font-medium text-danger-600">
+          <p className="text-sm font-medium text-destructive">
             {archiveConfig.error instanceof Error ? archiveConfig.error.message : "Unable to archive configuration."}
           </p>
         ) : null}
@@ -495,7 +495,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
             disabled={duplicateConfig.isPending}
           />
         </FormField>
-        {duplicateError ? <p className="text-sm font-medium text-danger-600">{duplicateError}</p> : null}
+        {duplicateError ? <p className="text-sm font-medium text-destructive">{duplicateError}</p> : null}
       </ConfirmDialog>
     </div>
   );

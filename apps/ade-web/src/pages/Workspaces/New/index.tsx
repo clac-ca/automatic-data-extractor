@@ -197,7 +197,7 @@ function WorkspaceCreateContent() {
                   clearErrors("ownerUserId");
                 }}
                 disabled={ownerSelectDisabled}
-                className="rounded-lg border border-border-strong bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >
                 <option value={session.user.id ?? ""}>{currentUserLabel}</option>
                 {filteredOwnerOptions.map((user) => (

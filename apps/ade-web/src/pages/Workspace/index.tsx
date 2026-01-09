@@ -114,7 +114,7 @@ function WorkspaceContent() {
         />
         <button
           type="button"
-          className="focus-ring rounded-lg border border-border-strong bg-card px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+          className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           onClick={() => workspacesQuery.refetch()}
         >
           Retry
@@ -315,9 +315,10 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         type="button"
         onClick={openMobileNav}
         className={clsx(
-          "focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border lg:hidden",
-          "border-header-border/40 bg-header/20 text-header-muted transition",
-          "hover:border-header-border/70 hover:bg-header/30 hover:text-header-foreground",
+          "inline-flex h-11 w-11 items-center justify-center rounded-xl border lg:hidden",
+          "border-border/50 bg-background/60 text-muted-foreground transition",
+          "hover:border-border/70 hover:bg-background/80 hover:text-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         )}
         aria-label="Open workspace navigation"
       >
@@ -331,18 +332,18 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         className={clsx(
           "group inline-flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
           "w-fit max-w-full sm:max-w-[16rem] lg:max-w-[18rem] sm:shrink-0",
-          "border-header-border/40 bg-header/20 text-header-foreground hover:border-header-border/70 hover:bg-header/30",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-header-ring focus-visible:ring-offset-2 focus-visible:ring-offset-header",
+          "border-border/50 bg-background/60 text-foreground hover:border-border/70 hover:bg-background/80",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         )}
       >
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-on-brand shadow-sm transition-colors group-hover:bg-brand-600">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-semibold uppercase text-primary-foreground shadow-sm transition-colors group-hover:bg-primary/90">
           {workspaceInitials}
         </span>
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-semibold text-header-foreground">{workspace.name}</span>
-          <span className="hidden truncate text-xs text-header-muted sm:block">Switch workspace</span>
+          <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
+          <span className="hidden truncate text-xs text-muted-foreground sm:block">Switch workspace</span>
         </span>
-        <span className="hidden text-header-muted sm:inline-flex" aria-hidden>
+        <span className="hidden text-muted-foreground sm:inline-flex" aria-hidden>
           <ChevronDownIcon className="h-4 w-4" />
         </span>
       </button>
@@ -514,11 +515,11 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
               <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
                 <button
                   type="button"
-                  className="absolute inset-0 bg-overlay/40 backdrop-blur-sm"
+                  className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                   onClick={closeMobileNav}
                   aria-label="Close navigation"
                 />
-                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_45px_90px_-50px_rgb(var(--sys-color-shadow)/0.85)]">
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_45px_90px_-50px_rgb(0_0_0_/_0.85)]">
                   <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
                     <div className="flex flex-col leading-tight">
                       <span className="text-sm font-semibold text-sidebar-foreground">{workspace.name}</span>
@@ -527,7 +528,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                     <button
                       type="button"
                       onClick={closeMobileNav}
-                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-item-hover text-sidebar-foreground/80 hover:bg-sidebar-item-active hover:text-sidebar-foreground"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground transition hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                       aria-label="Close navigation"
                     >
                       <CloseIcon className="h-4 w-4" />

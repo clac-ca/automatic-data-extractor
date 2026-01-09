@@ -47,14 +47,14 @@ function uploadStatusLabel(status: UploadItem["status"], percent: number) {
 function uploadProgressClass(status: UploadItem["status"]) {
   switch (status) {
     case "failed":
-      return "bg-danger-500";
+      return "bg-destructive";
     case "paused":
-      return "bg-warning-500";
+      return "bg-amber-500";
     case "cancelled":
       return "bg-muted-foreground";
     case "succeeded":
-      return "bg-success-500";
+      return "bg-emerald-500";
     default:
-      return "bg-brand-500";
+      return "bg-primary";
   }
 }

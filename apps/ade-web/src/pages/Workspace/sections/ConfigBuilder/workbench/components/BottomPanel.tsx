@@ -41,12 +41,12 @@ export function BottomPanel({
       ? {
           surface: "border-border bg-card text-foreground",
           header: "border-border bg-card",
-          hideButton: "border-border-strong bg-popover text-foreground hover:border-border-strong hover:bg-muted",
+          hideButton: "border-border bg-popover text-foreground hover:border-ring/40 hover:bg-muted",
         }
       : {
           surface: "border-border bg-muted text-foreground",
           header: "border-border bg-muted",
-          hideButton: "border-border-strong bg-card text-foreground hover:border-border-strong hover:bg-muted",
+          hideButton: "border-border bg-card text-foreground hover:border-ring/40 hover:bg-muted",
         };
 
   return (
@@ -76,7 +76,7 @@ export function BottomPanel({
             >
               Problems
               {hasProblems ? (
-                <span className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-danger-600 px-1 text-[10px] font-semibold text-on-danger">
+                <span className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                   {validation.messages.length}
                 </span>
               ) : null}

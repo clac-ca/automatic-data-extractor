@@ -408,7 +408,7 @@ function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmittin
                 >
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-border-strong"
+                    className="h-4 w-4 rounded border-border"
                     checked={selectedRoleIds.includes(role.id)}
                     onChange={(event) =>
                       setSelectedRoleIds((current) =>
@@ -556,7 +556,7 @@ function MemberDrawer({
                     >
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-border-strong"
+                        className="h-4 w-4 rounded border-border"
                         checked={roleDraft.includes(role.id)}
                         onChange={(event) =>
                           setRoleDraft((current) =>

@@ -4,10 +4,12 @@ import type { HTMLAttributes, ReactNode } from "react";
 export type AlertTone = "info" | "success" | "warning" | "danger";
 
 const TONE_STYLE: Record<AlertTone, string> = {
-  info: "bg-brand-50 text-brand-700 ring-brand-100",
-  success: "bg-success-50 text-success-700 ring-success-100",
-  warning: "bg-warning-50 text-warning-700 ring-warning-100",
-  danger: "bg-danger-50 text-danger-700 ring-danger-100",
+  info: "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-200 dark:ring-sky-500/20",
+  success:
+    "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-500/20",
+  warning:
+    "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/20",
+  danger: "bg-destructive/10 text-destructive ring-destructive/20 dark:bg-destructive/20",
 };
 
 export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { applyThemeToDocument, resolveMode, DEFAULT_THEME_ID, type ResolvedMode, type ThemeId } from "./index";
+import { applyThemeToDocument, normalizeThemeId, resolveMode, DEFAULT_THEME_ID, type ResolvedMode, type ThemeId } from "./index";
 import {
   MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -26,10 +26,8 @@ export const ThemeContext = createContext<ThemeContextValue | null>(null);
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 
 export function ThemeProvider({ children }: { readonly children: ReactNode }) {
-  const storedMode = useMemo(() => readStoredModePreference(), []);
-  const storedTheme = useMemo(() => readStoredThemePreference(), []);
-  const [modePreference, setModePreferenceState] = useState<ModePreference>(storedMode ?? "system");
-  const [theme, setThemeState] = useState<ThemeId>(storedTheme ?? DEFAULT_THEME_ID);
+  const [modePreference, setModePreferenceState] = useState<ModePreference>(() => readStoredModePreference() ?? "system");
+  const [theme, setThemeState] = useState<ThemeId>(() => normalizeThemeId(readStoredThemePreference()));
   const [previewTheme, setPreviewThemeState] = useState<ThemeId | null>(null);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -99,8 +97,8 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
       }
       if (event.key === THEME_STORAGE_KEY) {
         const next = event.newValue;
-        if (typeof next === "string" && next.length > 0) {
-          setThemeState(next as ThemeId);
+        if (typeof next === "string") {
+          setThemeState(normalizeThemeId(next));
           setPreviewThemeState(null);
         } else if (next === null) {
           setThemeState(DEFAULT_THEME_ID);

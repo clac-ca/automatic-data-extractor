@@ -47,7 +47,7 @@ export function FormField({
         >
           {label}
           {required ? (
-            <span className="ml-1 text-danger-600" aria-hidden="true">
+            <span className="ml-1 text-destructive" aria-hidden="true">
               *
             </span>
           ) : null}
@@ -67,7 +67,7 @@ export function FormField({
         </p>
       ) : null}
       {error ? (
-        <p id={errorId} className="text-xs font-medium text-danger-600">
+        <p id={errorId} className="text-xs font-medium text-destructive">
           {error}
         </p>
       ) : null}

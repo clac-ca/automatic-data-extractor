@@ -31,14 +31,14 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
             <button
               type="button"
               onClick={() => navigate("/workspaces")}
-              className="focus-ring inline-flex items-center gap-3 rounded-xl border border-header-border/40 bg-header/20 px-3 py-2 text-left text-sm font-semibold text-header-foreground transition hover:border-header-border/70 hover:bg-header/30"
+              className="inline-flex items-center gap-3 rounded-xl border border-border/50 bg-background/60 px-3 py-2 text-left text-sm font-semibold text-foreground transition hover:border-border/70 hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-on-brand shadow-sm">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                 <DirectoryIcon className="h-5 w-5" aria-hidden />
               </span>
               <span className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-header-foreground">Workspace directory</span>
-                <span className="text-xs text-header-muted">Automatic Data Extractor</span>
+                <span className="text-sm font-semibold text-foreground">Workspace directory</span>
+                <span className="text-xs text-muted-foreground">Automatic Data Extractor</span>
               </span>
             </button>
           }

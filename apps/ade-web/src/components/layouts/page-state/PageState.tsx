@@ -12,9 +12,9 @@ interface PageStateProps {
 }
 
 const VARIANT_ICON: Record<PageStateVariant, string> = {
-  loading: "animate-spin border-2 border-brand-500 border-t-transparent",
+  loading: "animate-spin border-2 border-primary border-t-transparent",
   empty: "bg-border",
-  error: "bg-danger-500",
+  error: "bg-destructive",
 };
 
 export function PageState({

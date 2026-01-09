@@ -127,7 +127,7 @@ export default function SetupScreen() {
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center bg-background px-6 py-16">
       <div className="rounded-2xl border border-border bg-card p-10 shadow-soft">
         <header className="space-y-3 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             First-run configuration
           </p>
           <h1 className="text-3xl font-semibold text-foreground">Create the first administrator</h1>

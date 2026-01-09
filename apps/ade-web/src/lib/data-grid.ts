@@ -123,19 +123,19 @@ export function getCommonPinningStyles<TData>(params: {
     boxShadow: withBorder
       ? isLastLeftPinnedColumn
         ? isRtl
-          ? "4px 0 4px -4px rgb(var(--sys-color-border)) inset"
-          : "-4px 0 4px -4px rgb(var(--sys-color-border)) inset"
+          ? "4px 0 4px -4px var(--border) inset"
+          : "-4px 0 4px -4px var(--border) inset"
         : isFirstRightPinnedColumn
           ? isRtl
-            ? "-4px 0 4px -4px rgb(var(--sys-color-border)) inset"
-            : "4px 0 4px -4px rgb(var(--sys-color-border)) inset"
+            ? "-4px 0 4px -4px var(--border) inset"
+            : "4px 0 4px -4px var(--border) inset"
           : undefined
       : undefined,
     left: isRtl ? rightPosition : leftPosition,
     right: isRtl ? leftPosition : rightPosition,
     opacity: isPinned ? 0.97 : 1,
     position: isPinned ? "sticky" : "relative",
-    background: isPinned ? "rgb(var(--sys-color-bg))" : undefined,
+    background: isPinned ? "var(--background)" : undefined,
     width: column.getSize(),
     zIndex: isPinned ? 1 : undefined,
   };

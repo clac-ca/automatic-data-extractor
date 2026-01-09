@@ -62,9 +62,9 @@ export function EditorTab({
         }}
         className={clsx(
           "relative flex min-w-[3rem] max-w-[16rem] items-center gap-2 overflow-hidden rounded-t-lg border px-2 py-1.5 pr-8 text-sm font-medium transition-[background-color,border-color,color] duration-150",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isActive
-            ? "border-border border-b-card bg-card text-foreground shadow-[0_1px_0_rgb(var(--sys-color-shadow)/0.08)]"
+            ? "border-border border-b-card bg-card text-foreground shadow-[0_1px_0_rgb(0_0_0_/_0.08)]"
             : "border-transparent border-b-border text-muted-foreground hover:border-border hover:bg-card/70 hover:text-foreground",
           isPinned ? "min-w-[4rem] max-w-[8rem] justify-center" : "min-w-[9rem] justify-start px-3",
         )}
@@ -85,7 +85,7 @@ export function EditorTab({
         ) : null}
         {tab.status === "error" ? (
           <span
-            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-danger-600"
+            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-destructive"
             aria-label="Load failed"
           >
             !
@@ -98,19 +98,19 @@ export function EditorTab({
         ) : null}
         {tab.saveError ? (
           <span
-            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-danger-600"
+            className="flex-none text-[10px] font-semibold uppercase tracking-wide text-destructive"
             aria-label="Save failed"
             title={tab.saveError}
           >
             !
           </span>
         ) : null}
-        {isDirty ? <span className="flex-none text-xs leading-none text-brand-600">●</span> : null}
+        {isDirty ? <span className="flex-none text-xs leading-none text-foreground">●</span> : null}
       </TabsTrigger>
       <button
         type="button"
         className={clsx(
-          "absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-xs transition focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+          "absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-xs transition focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
           isActive
             ? "text-muted-foreground hover:bg-muted hover:text-foreground"
             : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-foreground",

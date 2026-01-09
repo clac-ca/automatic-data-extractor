@@ -184,12 +184,12 @@ export function PeoplePicker({
                     className={clsx(
                       "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
                       selected
-                        ? "bg-brand-50 text-foreground dark:bg-brand-500/20 dark:text-brand-200"
+                        ? "bg-muted text-foreground"
                         : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="min-w-0 truncate font-semibold text-foreground">{person.label}</span>
-                    {selected ? <CheckIcon className="h-4 w-4 text-brand-600" /> : null}
+                    {selected ? <CheckIcon className="h-4 w-4 text-foreground" /> : null}
                   </button>
                 );
               })
@@ -205,7 +205,7 @@ export function PeoplePicker({
               >
                 Clear
               </button>
-              <button type="button" onClick={close} className="text-xs font-semibold text-brand-600">
+              <button type="button" onClick={close} className="text-xs font-semibold text-foreground">
                 Done
               </button>
             </div>

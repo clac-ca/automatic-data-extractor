@@ -168,7 +168,7 @@ export function RolesSettingsPage() {
                         {!role.is_editable ? (
                           <Badge
                             variant="outline"
-                            className="border-warning-200 text-[11px] uppercase tracking-wide text-warning-700"
+                            className="border-amber-200 text-[11px] uppercase tracking-wide text-amber-700 dark:border-amber-500/40 dark:text-amber-200"
                           >
                             Locked
                           </Badge>
@@ -466,7 +466,7 @@ function RoleDrawer({
                         <input
                           id={checkboxId}
                           type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-border-strong"
+                          className="mt-1 h-4 w-4 rounded border-border"
                           checked={values.permissions.includes(permission.key)}
                           onChange={(event) => togglePermission(permission.key, event.target.checked)}
                           disabled={isSaving || !canEditRole}

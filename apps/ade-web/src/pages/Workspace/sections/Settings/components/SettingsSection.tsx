@@ -20,7 +20,7 @@ export function SettingsSection({
     <section
       className={clsx(
         "rounded-xl border border-border bg-card p-6",
-        tone === "danger" && "border-danger-200 bg-danger-50/20",
+        tone === "danger" && "border-destructive/40 bg-destructive/5 dark:bg-destructive/10",
         className,
       )}
     >

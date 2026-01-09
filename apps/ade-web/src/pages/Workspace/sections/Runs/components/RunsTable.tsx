@@ -81,7 +81,7 @@ export function RunsTable({
 
       <div
         ref={listRef}
-        className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         tabIndex={0}
         role="listbox"
         aria-label="Runs"
@@ -119,8 +119,8 @@ export function RunsTable({
                     onSelect(run.id);
                   }}
                   className={clsx(
-                    "grid cursor-pointer grid-cols-[120px_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_minmax(0,0.6fr)] items-center gap-3 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                    isActive ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
+                    "grid cursor-pointer grid-cols-[120px_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_minmax(0,0.6fr)] items-center gap-3 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    isActive ? "bg-muted" : "hover:bg-background dark:hover:bg-muted/40",
                   )}
                   aria-selected={isActive}
                   aria-expanded={isExpanded}
@@ -181,11 +181,11 @@ function ResultBadge({ run }: { run: RunRecord }) {
   const isClean = label === "Clean";
   const toneClass =
     typeof run.errors === "number" && run.errors > 0
-      ? "bg-danger-100 text-danger-700"
+      ? "bg-destructive/10 text-destructive dark:bg-destructive/20"
       : typeof run.warnings === "number" && run.warnings > 0
-        ? "bg-warning-100 text-warning-700"
+        ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200"
         : isClean
-          ? "bg-success-100 text-success-700"
+          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200"
           : "bg-muted text-muted-foreground";
 
   return (
@@ -222,7 +222,7 @@ function ActionButton({
         className={clsx(
           "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition",
           "hover:bg-background hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         )}
       >
         {icon}

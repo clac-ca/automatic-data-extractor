@@ -39,7 +39,7 @@ export function Avatar({ name, email, size = "md", className }: AvatarProps) {
     <span
       aria-hidden="true"
       className={clsx(
-        "inline-flex select-none items-center justify-center rounded-full bg-gradient-to-br from-brand-100 via-brand-200 to-brand-300 font-semibold text-brand-900 shadow-sm",
+        "inline-flex select-none items-center justify-center rounded-full bg-muted font-semibold text-foreground shadow-sm",
         SIZE_STYLES[size],
         className,
       )}

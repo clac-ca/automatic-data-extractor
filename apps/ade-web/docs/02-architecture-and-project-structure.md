@@ -42,8 +42,7 @@ apps/ade-web/
     components/       # Shared UI primitives, layouts, providers, shell
     hooks/            # Shared React hooks (React Query + app hooks)
     lib/              # Cross-cutting utilities (storage, uploads, preferences)
-    styles/           # Global styles and theme tokens
-      globals.css
+    globals.css       # Global styles and theme tokens
     vite-env.d.ts     # Vite client typings + globals
     types/            # Hand-written domain models / schemas
       generated/      # Types generated from backend schemas

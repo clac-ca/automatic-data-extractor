@@ -24,9 +24,9 @@ export function ActivityBar({ activeView, onSelectView, onOpenSettings, appearan
     bg: "bg-card",
     border: "border-border",
     iconIdle: "text-muted-foreground",
-    iconActive: "text-brand-400",
+    iconActive: "text-primary",
     hover: "hover:text-foreground hover:bg-muted focus-visible:text-foreground",
-    indicator: "bg-brand-500",
+    indicator: "bg-primary",
   };
 
   return (

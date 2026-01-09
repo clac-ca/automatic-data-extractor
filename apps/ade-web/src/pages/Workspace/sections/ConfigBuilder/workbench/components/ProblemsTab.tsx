@@ -33,9 +33,9 @@ export function ProblemsTab({ validation }: { readonly validation: WorkbenchVali
 function validationMessageClass(level: WorkbenchValidationState["messages"][number]["level"]) {
   switch (level) {
     case "error":
-      return "text-danger-600";
+      return "text-destructive";
     case "warning":
-      return "text-warning-600";
+      return "text-amber-600 dark:text-amber-300";
     default:
       return "text-muted-foreground";
   }

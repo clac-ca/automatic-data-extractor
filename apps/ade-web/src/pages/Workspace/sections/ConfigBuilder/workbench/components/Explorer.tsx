@@ -56,22 +56,22 @@ interface ExplorerThemeTokens {
 }
 
 const EXPLORER_TOKENS: ExplorerThemeTokens = {
-  surface: "rgb(var(--sys-color-surface))",
-  border: "rgb(var(--sys-color-border))",
-  heading: "rgb(var(--sys-color-fg))",
-  label: "rgb(var(--sys-color-fg-muted))",
-  textPrimary: "rgb(var(--sys-color-fg))",
-  textMuted: "rgb(var(--sys-color-fg-muted))",
-  rowHover: "rgb(var(--sys-color-surface-muted))",
+  surface: "var(--card)",
+  border: "var(--border)",
+  heading: "var(--foreground)",
+  label: "var(--muted-foreground)",
+  textPrimary: "var(--foreground)",
+  textMuted: "var(--muted-foreground)",
+  rowHover: "var(--muted)",
   folderActiveBg: "transparent",
-  selectionBg: "rgb(var(--sys-color-surface-muted))",
-  selectionText: "rgb(var(--sys-color-fg))",
-  badgeActive: "rgb(var(--sys-color-ring))",
-  badgeOpen: "rgb(var(--sys-color-fg-muted))",
-  folderIcon: "rgb(var(--sys-color-ring))",
-  folderIconActive: "rgb(var(--sys-color-ring))",
-  chevronIdle: "rgb(var(--sys-color-fg-muted))",
-  chevronActive: "rgb(var(--sys-color-fg))",
+  selectionBg: "var(--muted)",
+  selectionText: "var(--foreground)",
+  badgeActive: "var(--ring)",
+  badgeOpen: "var(--muted-foreground)",
+  folderIcon: "var(--ring)",
+  folderIconActive: "var(--ring)",
+  chevronIdle: "var(--muted-foreground)",
+  chevronActive: "var(--foreground)",
 };
 
 const EXPLORER_THEME_TOKENS: Record<ExplorerTheme, ExplorerThemeTokens> = {
@@ -706,12 +706,11 @@ export function Explorer({
           {dropActive ? (
             <div
               className={clsx(
-                "pointer-events-none absolute inset-2 rounded-xl border border-dashed p-3 transition",
+                "pointer-events-none absolute inset-2 rounded-xl border border-dashed bg-card/85 p-3 transition",
                 canDropUpload ? "opacity-100" : "opacity-90",
               )}
               style={{
                 borderColor: tokens.badgeActive,
-                backgroundColor: "rgb(var(--sys-color-surface) / 0.85)",
               }}
               aria-hidden={!dropActive}
             >
@@ -1025,7 +1024,7 @@ function CreateEntryRow({
   return (
     <div className="rounded-md border border-border bg-muted px-2 py-1">
       <div className="flex items-center gap-2">
-        <span className="inline-flex w-4 justify-center text-brand-500">{icon ?? <NewFileIcon className={MENU_ICON_CLASS} />}</span>
+        <span className="inline-flex w-4 justify-center text-foreground">{icon ?? <NewFileIcon className={MENU_ICON_CLASS} />}</span>
         <input
           ref={inputRef}
           value={value}
@@ -1051,7 +1050,7 @@ function CreateEntryRow({
           type="button"
           className={clsx(
             "rounded-sm px-2 py-1 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            isSubmitting ? "cursor-wait bg-muted text-muted-foreground" : "bg-brand-600 text-on-brand hover:bg-brand-500",
+            isSubmitting ? "cursor-wait bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90",
           )}
           onClick={handleSubmit}
           disabled={isSubmitting}
@@ -1068,7 +1067,7 @@ function CreateEntryRow({
         </button>
       </div>
       <div className={clsx("mt-1 text-[11px]", muted)}>Enter a name and press Enter. Escape to cancel.</div>
-      {error ? <div className="mt-1 text-[11px] font-semibold text-danger-500">{error}</div> : null}
+      {error ? <div className="mt-1 text-[11px] font-semibold text-destructive">{error}</div> : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import clsx from "clsx";
 
 import { GlobalSearchField, type GlobalSearchFieldProps } from "./GlobalSearchField";
@@ -78,12 +78,11 @@ export function GlobalTopBar({
     <header
       className={clsx(
         "sticky top-0 z-50",
-        "border-b border-header-border",
-        "bg-header text-header-foreground",
+        "border-b border-border/70",
+        "bg-background/80 text-foreground backdrop-blur",
         "transition-shadow duration-200 motion-reduce:transition-none",
-        isScrolled ? "shadow-[0_12px_40px_-30px_rgb(var(--sys-color-shadow)/0.45)]" : "shadow-none",
+        isScrolled ? "shadow-[0_12px_40px_-30px_rgb(0_0_0_/_0.45)]" : "shadow-none",
       )}
-      style={{ "--focus-ring-offset": "rgb(var(--sys-color-header-bg) / 1)" } as CSSProperties}
       role="banner"
     >
       {/* Skip link (small detail, big polish for keyboard users) */}
@@ -92,8 +91,8 @@ export function GlobalTopBar({
         className={clsx(
           "sr-only",
           "focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-[60]",
-          "rounded-lg border border-header-border bg-card px-3 py-2 text-sm font-semibold text-foreground shadow",
-          "focus:outline-none focus:ring-2 focus:ring-header-ring focus:ring-offset-2 focus:ring-offset-header",
+          "rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground shadow",
+          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background",
         )}
       >
         Skip to content
