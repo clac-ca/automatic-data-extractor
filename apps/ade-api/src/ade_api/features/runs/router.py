@@ -14,6 +14,7 @@ from fastapi import (
     Path,
     Query,
     Request,
+    Response,
     Security,
     status,
 )
@@ -780,6 +781,7 @@ async def list_run_output_sheets_endpoint(
 )
 async def preview_run_output_endpoint(
     run_id: RunPath,
+    response: Response,
     service: RunsService = runs_service_dependency,
     *,
     max_rows: Annotated[
@@ -844,6 +846,7 @@ async def preview_run_output_endpoint(
     if sheet_name is None and sheet_index is None:
         sheet_index = 0
     try:
+        response.headers["Cache-Control"] = "no-store"
         return await service.get_run_output_preview(
             run_id=run_id,
             max_rows=max_rows,

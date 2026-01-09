@@ -74,8 +74,9 @@ export function DocumentPreviewGrid({
         },
         signal,
       ),
-    staleTime: 30_000,
     enabled: Boolean(runId),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const columnsQuery = useQuery({
