@@ -39,7 +39,7 @@ export function SettingsDrawer({
         <DialogPrimitive.Content
           aria-label={title}
           className={clsx(
-            "fixed inset-y-0 right-0 left-auto top-0 z-50 flex h-full w-full flex-col gap-0 rounded-none border-l bg-card p-0 shadow-2xl",
+            "fixed inset-y-0 right-0 left-auto top-0 z-[var(--app-z-modal)] flex h-full w-full flex-col gap-0 rounded-none border-l bg-card p-0 shadow-2xl",
             "data-[state=closed]:slide-out-to-right-2 data-[state=open]:slide-in-from-right-2 data-[state=closed]:animate-out data-[state=open]:animate-in",
             widthClassName,
           )}

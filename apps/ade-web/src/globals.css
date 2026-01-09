@@ -59,6 +59,17 @@
   --overlay: oklch(0 0 0 / 0.5);
   --overlay-strong: oklch(0 0 0 / 0.6);
 
+  /* Layering */
+  --app-z-base: 0;
+  --app-z-header: 30;
+  --app-z-nav: 40;
+  --app-z-overlay: 50;
+  --app-z-popover: 60;
+  --app-z-tooltip: 70;
+  --app-z-modal: 90;
+  --app-z-select: 100;
+  --app-z-toast: 200;
+
   /* charts */
   --chart-1: oklch(0.5462 0.25 264.376);
   --chart-2: oklch(0.6 0.118 184.704);

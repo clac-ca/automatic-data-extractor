@@ -77,7 +77,7 @@ export function GlobalTopBar({
   return (
     <header
       className={clsx(
-        "sticky top-0 z-50 relative",
+        "sticky top-0 z-[var(--app-z-header)] relative",
         "border-b border-border/60",
         "bg-card/80 text-foreground backdrop-blur-md",
         "bg-gradient-to-r from-card/90 via-accent/45 to-card/90",
@@ -91,7 +91,7 @@ export function GlobalTopBar({
         href="#main-content"
         className={clsx(
           "sr-only",
-          "focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-[60]",
+          "focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-[var(--app-z-popover)]",
           "rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground shadow",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background",
         )}

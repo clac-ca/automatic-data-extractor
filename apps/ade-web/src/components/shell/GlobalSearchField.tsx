@@ -383,7 +383,7 @@ export function GlobalSearchField({
       </div>
 
       {showDropdown ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl ring-1 ring-inset ring-border/30">
+        <div className="absolute left-0 right-0 top-full z-[var(--app-z-header)] mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl ring-1 ring-inset ring-border/30">
           {hasSuggestions ? (
             <ul id={suggestionsListId} role="listbox" aria-label="Search suggestions" className="divide-y divide-border/60">
               {suggestions.map((suggestion, index) => {

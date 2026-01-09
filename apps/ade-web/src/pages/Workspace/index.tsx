@@ -22,11 +22,12 @@ import {
   WORKSPACE_NAV_DRAWER_WIDTH,
   WORKSPACE_NAV_RAIL_WIDTH,
 } from "@pages/Workspace/components/WorkspaceNav";
+import { WorkspaceSwitcher } from "@pages/Workspace/components/WorkspaceSwitcher";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@pages/Workspace/components/workspaceNavigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
 import { Alert } from "@/components/ui/alert";
 import { PageState } from "@components/layouts/page-state";
-import { ChevronDownIcon, CloseIcon, MenuIcon } from "@components/icons";
+import { CloseIcon, MenuIcon } from "@components/icons";
 import { useShortcutHint } from "@hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 
@@ -286,9 +287,6 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const openMobileNav = useCallback(() => setIsMobileNavOpen(true), []);
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
 
-  const workspaceSwitcherLabel = `Switch workspace: ${workspace.name}`;
-  const workspaceInitials = getWorkspaceInitials(workspace.name);
-
   const topBarBrand = (
     <div className="flex min-w-0 items-center gap-3">
       <button
@@ -304,29 +302,12 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       >
         <MenuIcon className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        onClick={() => navigate("/workspaces")}
-        aria-label={workspaceSwitcherLabel}
-        title={workspaceSwitcherLabel}
-        className={clsx(
-          "group inline-flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-          "w-fit max-w-full sm:max-w-[16rem] lg:max-w-[18rem] sm:shrink-0",
-          "border-border/50 bg-background/60 text-foreground hover:border-border/70 hover:bg-background/80",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        )}
-      >
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-semibold uppercase text-primary-foreground shadow-sm transition-colors group-hover:bg-primary/90">
-          {workspaceInitials}
+      <div className="hidden min-w-0 max-w-[14rem] flex-col leading-tight sm:flex lg:hidden">
+        <span className="text-[0.63rem] font-semibold uppercase tracking-[0.35em] text-muted-foreground">
+          Workspace
         </span>
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
-          <span className="hidden truncate text-xs text-muted-foreground sm:block">Switch workspace</span>
-        </span>
-        <span className="hidden text-muted-foreground sm:inline-flex" aria-hidden>
-          <ChevronDownIcon className="h-4 w-4" />
-        </span>
-      </button>
+        <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
+      </div>
     </div>
   );
 
@@ -474,6 +455,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <div
         className={clsx(
           "grid min-w-0 h-screen grid-rows-[auto_1fr] grid-cols-1 bg-background text-foreground overflow-hidden",
+          "lg:grid-cols-[var(--workspace-nav-width)_1fr]",
         )}
         style={
           {
@@ -482,36 +464,30 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         }
       >
         {!immersiveWorkbenchActive ? (
-          <div className="row-start-1 col-start-1 grid grid-cols-1 lg:grid-cols-[var(--workspace-nav-width)_1fr]">
-            <div
-              className="hidden lg:block border-b border-sidebar-border border-r border-sidebar-border bg-sidebar"
-              aria-hidden="true"
+          <div className="row-span-2 hidden min-h-0 min-w-0 lg:block">
+            <WorkspaceNav
+              workspace={workspace}
+              items={workspaceNavItems}
+              isPinned={isNavPinned}
+              onTogglePinned={() => setIsNavPinned((current) => !current)}
+              className="h-full"
             />
-            <div className="col-start-1 lg:col-start-2">
-              <GlobalTopBar
-                brand={topBarBrand}
-                trailing={topBarTrailing}
-                search={topBarSearch}
-                scrollContainer={scrollContainer}
-              />
-            </div>
           </div>
         ) : null}
-        <div className="relative row-start-2 col-start-1 min-h-0 min-w-0 grid grid-cols-1 overflow-hidden lg:grid-cols-[var(--workspace-nav-width)_1fr]">
-          {!immersiveWorkbenchActive ? (
-            <div className="min-h-0 min-w-0">
-              <WorkspaceNav
-                workspace={workspace}
-                items={workspaceNavItems}
-                isPinned={isNavPinned}
-                onTogglePinned={() => setIsNavPinned((current) => !current)}
-                className="h-full"
-              />
-            </div>
-          ) : null}
-          <div className="min-h-0 min-w-0 flex flex-col lg:col-start-2">
+        {!immersiveWorkbenchActive ? (
+          <div className="row-start-1 col-start-1 lg:col-start-2">
+            <GlobalTopBar
+              brand={topBarBrand}
+              trailing={topBarTrailing}
+              search={topBarSearch}
+              scrollContainer={scrollContainer}
+            />
+          </div>
+        ) : null}
+        <div className="relative row-start-2 col-start-1 min-h-0 min-w-0 overflow-hidden lg:col-start-2">
+          <div className="min-h-0 min-w-0 flex flex-col">
             {!immersiveWorkbenchActive && isMobileNavOpen ? (
-              <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+              <div className="fixed inset-0 z-[var(--app-z-overlay)] lg:hidden" role="dialog" aria-modal="true">
                 <button
                   type="button"
                   className="absolute inset-0 bg-overlay backdrop-blur-sm"
@@ -519,11 +495,13 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                   aria-label="Close navigation"
                 />
                 <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-sm font-semibold text-sidebar-foreground">{workspace.name}</span>
-                      <span className="text-xs text-sidebar-foreground">Workspace navigation</span>
-                    </div>
+                  <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-3">
+                    <WorkspaceSwitcher
+                      variant="drawer"
+                      showLabel={false}
+                      onNavigate={closeMobileNav}
+                      className="min-w-0 flex-1"
+                    />
                     <button
                       type="button"
                       onClick={closeMobileNav}
@@ -610,13 +588,6 @@ function buildCanonicalPath(pathname: string, search: string, resolvedId: string
   const trailing = pathname.startsWith(base) ? pathname.slice(base.length) : "";
   const normalized = trailing && trailing !== "/" ? trailing : `/${defaultWorkspaceSection.path}`;
   return `/workspaces/${resolvedId}${normalized}${search}`;
-}
-
-function getWorkspaceInitials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "WS";
-  const initials = parts.slice(0, 2).map((part) => part[0] ?? "");
-  return initials.join("").toUpperCase();
 }
 
 export function resolveWorkspaceSection(

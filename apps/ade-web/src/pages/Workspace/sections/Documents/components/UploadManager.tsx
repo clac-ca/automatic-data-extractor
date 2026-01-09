@@ -79,7 +79,7 @@ export function UploadManager({
       </Button>
 
       {open ? (
-        <div className="absolute right-0 z-30 mt-2 w-[22rem] rounded-2xl border border-border bg-card p-4 shadow-lg">
+        <div className="absolute right-0 z-[var(--app-z-popover)] mt-2 w-[22rem] rounded-2xl border border-border bg-card p-4 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">Upload manager</p>

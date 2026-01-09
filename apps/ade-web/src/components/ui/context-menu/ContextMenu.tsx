@@ -186,7 +186,7 @@ export function ContextMenu({
       ref={menuRef}
       role="menu"
       className={clsx(
-        "z-[60] min-w-[200px] rounded-sm border",
+        "z-[var(--app-z-popover)] min-w-[200px] rounded-sm border",
         palette.bg,
         palette.border,
         palette.shadow,

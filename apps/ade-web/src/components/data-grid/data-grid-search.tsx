@@ -166,7 +166,7 @@ function DataGridSearchImpl({
     <div
       role="search"
       data-slot="grid-search"
-      className="fade-in-0 slide-in-from-top-2 absolute end-4 top-4 z-50 flex animate-in flex-col gap-2 rounded-lg border bg-background p-2 shadow-lg"
+      className="fade-in-0 slide-in-from-top-2 absolute end-4 top-4 z-[var(--app-z-popover)] flex animate-in flex-col gap-2 rounded-lg border bg-background p-2 shadow-lg"
     >
       <div className="flex items-center gap-2">
         <Input

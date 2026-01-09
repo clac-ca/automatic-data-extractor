@@ -2133,7 +2133,7 @@ export function Workbench({
         className="hidden"
       />
       {replaceConfirmOpen ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay-strong px-4">
+        <div className="fixed inset-0 z-[var(--app-z-modal)] flex items-center justify-center bg-overlay-strong px-4">
           <div
             className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
             role="dialog"
@@ -2640,7 +2640,7 @@ function RunExtractionDialog({
   const sheetsAvailable = sheetOptions.length > 0;
 
   const content = (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay-strong px-4">
+    <div className="fixed inset-0 z-[var(--app-z-modal)] flex items-center justify-center bg-overlay-strong px-4">
       <div
         ref={dialogRef}
         role="dialog"

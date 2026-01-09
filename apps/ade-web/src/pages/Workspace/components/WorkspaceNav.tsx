@@ -6,6 +6,7 @@ import {
   getWorkspacePrimaryNavigation,
   type WorkspaceNavigationItem,
 } from "@pages/Workspace/components/workspaceNavigation";
+import { WorkspaceSwitcher } from "@pages/Workspace/components/WorkspaceSwitcher";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { GearIcon, PinIcon, UnpinIcon } from "@components/icons";
 
@@ -47,6 +48,7 @@ export function WorkspaceNav({
   const [isHovering, setIsHovering] = React.useState(false);
   const [isFocusWithin, setIsFocusWithin] = React.useState(false);
   const [isPeekOpen, setIsPeekOpen] = React.useState(false);
+  const [isSwitcherOpen, setIsSwitcherOpen] = React.useState(false);
 
   const openTimer = React.useRef<number | null>(null);
   const closeTimer = React.useRef<number | null>(null);
@@ -64,7 +66,7 @@ export function WorkspaceNav({
 
   // Only let focus keep it open for keyboard navigation.
   // This prevents the “I clicked a link and it stayed open until I clicked the page” effect.
-  const wantsOpen = !isPinned && (isHovering || (isFocusWithin && inputMode === "keyboard"));
+  const wantsOpen = !isPinned && (isHovering || isSwitcherOpen || (isFocusWithin && inputMode === "keyboard"));
 
   React.useEffect(() => {
     if (isPinned) {
@@ -107,7 +109,7 @@ export function WorkspaceNav({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const panelExpanded = isPinned || isPeekOpen;
+  const panelExpanded = isPinned || isPeekOpen || isSwitcherOpen;
   const overlayActive = !isPinned && panelExpanded;
 
   // Key design choice:
@@ -132,7 +134,7 @@ export function WorkspaceNav({
       {/* The panel is absolutely positioned so it can expand over the page without shifting layout when unpinned */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-40 flex min-h-0 flex-col bg-sidebar text-sidebar-foreground",
+          "absolute inset-y-0 left-0 z-[var(--app-z-nav)] flex min-h-0 flex-col bg-sidebar text-sidebar-foreground",
           "border-r border-sidebar-border",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
           // When unpinned and expanded, add depth to communicate “overlay”
@@ -168,6 +170,7 @@ export function WorkspaceNav({
           expanded={panelExpanded}
           isPinned={isPinned}
           onTogglePinned={onTogglePinned}
+          onSwitcherOpenChange={setIsSwitcherOpen}
         />
       </div>
     </aside>
@@ -180,27 +183,37 @@ function WorkspaceNavPanel({
   expanded,
   isPinned,
   onTogglePinned,
+  onSwitcherOpenChange,
 }: {
   readonly items: readonly WorkspaceNavigationItem[];
   readonly settingsItem?: WorkspaceNavigationItem;
   readonly expanded: boolean;
   readonly isPinned: boolean;
   readonly onTogglePinned: () => void;
+  readonly onSwitcherOpenChange: (open: boolean) => void;
 }) {
   const variant: NavVariant = expanded ? "drawer" : "rail";
 
   return (
     <>
+      <div
+        className={clsx(
+          "border-b border-sidebar-border",
+          expanded ? "px-3 py-3" : "px-2 py-3",
+        )}
+      >
+        <WorkspaceSwitcher variant={variant} onOpenChange={onSwitcherOpenChange} />
+      </div>
       {/* Nav */}
       <nav
         className={clsx(
           "flex-1 overflow-y-auto",
           "overflow-x-hidden",
-          expanded ? "px-3 pt-3 pb-4" : "px-2 pt-3 pb-3",
+          expanded ? "px-3 pt-2 pb-4" : "px-2 pt-2 pb-3",
         )}
         aria-label="Workspace sections"
       >
-        <WorkspaceNavList items={items} variant={variant} />
+        <WorkspaceNavList items={items} variant={variant} showHeading={false} />
       </nav>
 
       {/* Footer */}

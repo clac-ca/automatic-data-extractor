@@ -178,7 +178,7 @@ function NotificationHost() {
   }
   return createPortal(
     <>
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-[205] flex flex-col items-center gap-3 px-4 pt-3 sm:items-end sm:pr-6">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-[var(--app-z-toast)] flex flex-col items-center gap-3 px-4 pt-3 sm:items-end sm:pr-6">
         {banners
           .slice()
           .sort((a, b) => a.createdAt - b.createdAt)
@@ -186,7 +186,7 @@ function NotificationHost() {
             <BannerCard key={banner.id} banner={banner} onDismiss={dismiss} />
           ))}
       </div>
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[210] flex flex-col items-center gap-3 px-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:items-end sm:px-0">
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[var(--app-z-toast)] flex flex-col items-center gap-3 px-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:items-end sm:px-0">
         {toasts
           .slice()
           .sort((a, b) => a.createdAt - b.createdAt)

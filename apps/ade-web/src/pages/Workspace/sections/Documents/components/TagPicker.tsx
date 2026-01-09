@@ -106,7 +106,7 @@ export function TagPicker({
   return (
     <div
       ref={containerRef}
-      className={clsx("relative", open ? "z-50" : "z-0")}
+      className={clsx("relative", open ? "z-[var(--app-z-popover)]" : "z-0")}
       data-ignore-row-click="true"
     >
       <button
@@ -141,7 +141,7 @@ export function TagPicker({
 
       {open ? (
         <div
-          className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-[20rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
+          className="absolute left-0 top-[calc(100%+0.5rem)] z-[var(--app-z-popover)] w-[20rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
           data-ignore-row-click="true"
           role="listbox"
           id={listId}

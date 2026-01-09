@@ -88,7 +88,7 @@ export function ConfirmDialog({
         };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 px-4">
+    <div className="fixed inset-0 z-[var(--app-z-modal)] px-4">
       <button
         type="button"
         // Use theme overlay tokens instead of hard-coded black.

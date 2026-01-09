@@ -119,7 +119,7 @@ export function PeoplePicker({
   return (
     <div
       ref={containerRef}
-      className={clsx("relative", open ? "z-50" : "z-0")}
+      className={clsx("relative", open ? "z-[var(--app-z-popover)]" : "z-0")}
       data-ignore-row-click="true"
     >
       <button
@@ -151,7 +151,7 @@ export function PeoplePicker({
 
       {open ? (
         <div
-          className="absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg"
+          className="absolute left-0 z-[var(--app-z-popover)] mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg"
           role="listbox"
           id={listId}
           aria-multiselectable={multiple || undefined}
