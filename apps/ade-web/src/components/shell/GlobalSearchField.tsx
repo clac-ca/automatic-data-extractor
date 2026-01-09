@@ -238,6 +238,7 @@ export function GlobalSearchField({
 
   const formTextClass = "text-muted-foreground";
   const inputTextClass = "text-foreground placeholder:text-muted-foreground";
+  const formPaddingClass = isHeaderVariant ? "px-3.5 py-1.5 sm:px-4 sm:py-2" : "px-4 py-2 sm:px-5 sm:py-2.5";
   const shortcutClass = isHeaderVariant
     ? "border-border/40 bg-background/80 text-foreground"
     : "border-border/70 bg-card/80 text-muted-foreground";
@@ -248,6 +249,7 @@ export function GlobalSearchField({
   const leadingIconClass = isHeaderVariant
     ? "bg-background/60 text-muted-foreground ring-border/40"
     : "bg-card text-muted-foreground ring-border/40";
+  const leadingIconSizeClass = isHeaderVariant ? "h-8 w-8 sm:h-9 sm:w-9" : "h-9 w-9 sm:h-10 sm:w-10";
 
   return (
     <div
@@ -288,7 +290,7 @@ export function GlobalSearchField({
         )}
       >
         <form
-          className={clsx("flex w-full items-center gap-3 px-4 py-2 text-sm sm:px-5 sm:py-2.5", formTextClass)}
+          className={clsx("flex w-full items-center gap-3 text-sm", formPaddingClass, formTextClass)}
           role="search"
           aria-label={searchAriaLabel}
           onSubmit={handleSearchSubmit}
@@ -300,7 +302,8 @@ export function GlobalSearchField({
           {leadingIcon ?? (
             <span
               className={clsx(
-                "inline-flex h-9 w-9 items-center justify-center rounded-xl shadow-inner ring-1 ring-inset sm:h-10 sm:w-10",
+                "inline-flex items-center justify-center rounded-xl shadow-inner ring-1 ring-inset",
+                leadingIconSizeClass,
                 leadingIconClass,
               )}
             >
