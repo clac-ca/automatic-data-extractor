@@ -6,7 +6,7 @@ from ade_worker.paths import PathManager
 
 
 def test_environment_path_is_stable(tmp_path: Path) -> None:
-    paths = PathManager(tmp_path)
+    paths = PathManager(tmp_path, tmp_path / "venvs")
     path_a = paths.environment_root(
         workspace_id="ws-1",
         configuration_id="cfg-1",

@@ -1,10 +1,10 @@
 """Filesystem layout for the worker.
 
-Align with the API storage layout:
+Align with the API storage layout (venvs root is configurable):
 - data/workspaces/<workspace_id>/config_packages/<configuration_id>
 - data/workspaces/<workspace_id>/documents/<stored_uri>
 - data/workspaces/<workspace_id>/runs/<run_id>
-- data/venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
+- venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
 """
 
 from __future__ import annotations
@@ -78,6 +78,7 @@ def _deps_digest_segment(deps_digest: str) -> str:
 @dataclass(frozen=True, slots=True)
 class PathManager:
     data_dir: Path
+    venvs_dir: Path
 
     # --- roots ---
     def workspaces_root(self) -> Path:
@@ -93,7 +94,7 @@ class PathManager:
         return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "runs")
 
     def venvs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.data_dir, "venvs", _normalize_uuid(workspace_id))
+        return _safe_join(self.venvs_dir, _normalize_uuid(workspace_id))
 
     def pip_cache_dir(self) -> Path:
         return _safe_join(self.data_dir, "cache", "pip")

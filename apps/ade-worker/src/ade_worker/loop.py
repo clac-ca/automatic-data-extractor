@@ -47,9 +47,10 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _ensure_runtime_dirs(data_dir: Path) -> None:
-    for sub in ["db", "workspaces", "venvs", "cache/pip"]:
+def _ensure_runtime_dirs(data_dir: Path, venvs_dir: Path) -> None:
+    for sub in ["db", "workspaces", "cache/pip"]:
         _ensure_dir(data_dir / sub)
+    _ensure_dir(venvs_dir)
 
 
 def _next_gc_deadline(now_mono: float, interval_seconds: float) -> float:
@@ -204,7 +205,7 @@ def main() -> int:
     settings = WorkerSettings.load()
     _setup_logging(settings.log_level)
 
-    _ensure_runtime_dirs(settings.data_dir)
+    _ensure_runtime_dirs(settings.data_dir, settings.venvs_dir)
 
     engine = create_db_engine(
         settings.database_url,
@@ -221,7 +222,7 @@ def main() -> int:
 
     worker_id = settings.worker_id or _default_worker_id()
 
-    paths = PathManager(settings.data_dir)
+    paths = PathManager(settings.data_dir, settings.venvs_dir)
     repo = Repo(engine)
 
     env_queue = EnvironmentQueue(engine)

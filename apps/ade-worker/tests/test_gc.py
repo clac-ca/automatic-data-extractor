@@ -118,7 +118,7 @@ def _engine() -> object:
 def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
     engine = _engine()
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data")
+    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
     _insert_configuration(engine, config_id="cfg-1", status="draft")
     _insert_environment(
@@ -162,7 +162,7 @@ def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
 def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
     engine = _engine()
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data")
+    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
     _insert_configuration(engine, config_id="cfg-2", status="archived")
     _insert_environment(
@@ -196,7 +196,7 @@ def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
 def test_gc_env_idempotent(tmp_path: Path) -> None:
     engine = _engine()
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data")
+    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
     _insert_configuration(engine, config_id="cfg-3", status="draft")
     _insert_environment(

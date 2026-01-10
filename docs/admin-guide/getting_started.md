@@ -119,30 +119,27 @@ Registry soon.
 git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
 cp .env.example .env
-docker compose up --build
+docker build -t ade:local -f Dockerfile .
 ```
 
-### 5.2 Run the stack
+### 5.2 Run the container
 ```bash
-docker compose up -d
+mkdir -p data
+docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
 ```
 
 The volume keeps the SQLite database and documents on the host so they
 survive container restarts. The API container runs migrations on startup
-via `ade start --no-worker --no-web`. Check health the same way:
+via `ade start`. Check health the same way:
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-The web server (nginx) serves the compiled React frontend and proxies `/api/v1` to the FastAPI service.
-
-When you deploy the frontend in production, compile it once (`ade build` or `npm run build` in `apps/ade-web/`) and serve `apps/ade-web/dist/` from your web server or reverse proxy. Configure the reverse proxy to forward `/api/v1` requests to the FastAPI service.
-
-To stop and remove the stack:
+To stop and remove the container:
 
 ```bash
-docker compose down
+docker rm -f ade
 ```
 
 ## 6. Where ADE Stores Data

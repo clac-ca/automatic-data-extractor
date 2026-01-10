@@ -91,6 +91,7 @@ class WorkerSettings:
 
     # Runtime filesystem
     data_dir: Path
+    venvs_dir: Path
     engine_spec: str
 
     # Timeouts
@@ -100,6 +101,7 @@ class WorkerSettings:
     @classmethod
     def load(cls) -> "WorkerSettings":
         data_dir = _env_path("ADE_WORKER_DATA_DIR", Path("./data"))
+        venvs_dir = _env_path("ADE_VENVS_DIR", data_dir / "venvs")
 
         run_timeout_raw = _env("ADE_WORKER_RUN_TIMEOUT_SECONDS")
         run_timeout_seconds = int(run_timeout_raw) if run_timeout_raw else None
@@ -135,6 +137,7 @@ class WorkerSettings:
             max_attempts_default=_env_int("ADE_WORKER_MAX_ATTEMPTS_DEFAULT", 3),
 
             data_dir=data_dir,
+            venvs_dir=venvs_dir,
             engine_spec=_env("ADE_ENGINE_PACKAGE_PATH", "apps/ade-engine") or "apps/ade-engine",
 
             environment_timeout_seconds=_env_int("ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS", 600),
