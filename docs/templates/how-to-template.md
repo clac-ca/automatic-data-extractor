@@ -22,7 +22,7 @@ Prerequisites (optional):
 1. Step 1 — Describe the action precisely. For example, enable a feature:
 
    ```bash
-   curl -X POST http://localhost:8000/api/features/enable -d '{"name":"logging"}' -H 'Content-Type: application/json'
+   curl -X POST http://localhost:8000/api/v1/features/enable -d '{"name":"logging"}' -H 'Content-Type: application/json'
    ```
 
    Expected result: the API returns `{"ok": true}`.

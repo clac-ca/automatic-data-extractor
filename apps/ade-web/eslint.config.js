@@ -60,7 +60,7 @@ export default defineConfig([
         {
           paths: [
             {
-              name: "@generated-types/openapi",
+              name: "@schema/openapi",
               message: "Import app-facing types from @schema, not the raw generated file.",
             },
           ],
@@ -69,7 +69,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/schema/**/*.{ts,tsx}"],
+    files: ["src/types/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": "off",
     },

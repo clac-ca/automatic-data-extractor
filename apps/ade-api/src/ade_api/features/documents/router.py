@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import random
-from collections.abc import AsyncIterator
-from typing import Annotated, Any, Literal
+import time
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import (
@@ -24,36 +23,55 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
-from sse_starlette.sse import EventSourceResponse
 from pydantic import ValidationError
-from ade_api.api.deps import get_documents_service, get_runs_service
+from sse_starlette.sse import EventSourceResponse
+
+from ade_api.api.deps import (
+    SettingsDep,
+    get_documents_service,
+    get_idempotency_service,
+    get_runs_service,
+)
+from ade_api.common.concurrency import require_if_match
 from ade_api.common.downloads import build_content_disposition
+from ade_api.common.etag import build_etag_token, format_weak_etag
+from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.logging import log_context
-from ade_api.common.pagination import PageParams
+from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import sse_json
-from ade_api.common.sorting import make_sort_dependency
-from ade_api.common.types import OrderBy
+from ade_api.common.workbook_preview import (
+    DEFAULT_PREVIEW_COLUMNS,
+    DEFAULT_PREVIEW_ROWS,
+    MAX_PREVIEW_COLUMNS,
+    MAX_PREVIEW_ROWS,
+    WorkbookSheetPreview,
+)
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.db import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.runs.schemas import RunCreateOptionsBase
+from ade_api.features.idempotency import (
+    IdempotencyService,
+    build_request_hash,
+    build_scope_key,
+    require_idempotency_key,
+)
 from ade_api.features.runs.exceptions import RunQueueFullError
+from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
-from .change_feed import DocumentChangeCursorTooOld
+from .change_feed import DocumentEventCursorTooOld, DocumentEventsService
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
+    DocumentPreviewParseError,
+    DocumentPreviewSheetNotFoundError,
+    DocumentPreviewUnsupportedError,
     DocumentTooLargeError,
-    DocumentUploadRangeError,
-    DocumentUploadSessionExpiredError,
-    DocumentUploadSessionNotFoundError,
-    DocumentUploadSessionNotReadyError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
 )
-from .filters import DocumentFilters
 from .schemas import (
     DocumentBatchArchiveRequest,
     DocumentBatchArchiveResponse,
@@ -62,47 +80,53 @@ from .schemas import (
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
     DocumentChangesPage,
-    DocumentOut,
     DocumentListPage,
     DocumentListRow,
+    DocumentOut,
     DocumentSheet,
     DocumentTagsPatch,
     DocumentTagsReplace,
     DocumentUpdateRequest,
     DocumentUploadRunOptions,
-    DocumentUploadSessionCreateRequest,
-    DocumentUploadSessionCreateResponse,
-    DocumentUploadSessionStatusResponse,
-    DocumentUploadSessionUploadResponse,
     TagCatalogPage,
 )
 from .service import DocumentsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
-    prefix="/workspaces/{workspace_id}/documents",
+    prefix="/workspaces/{workspaceId}/documents",
     tags=["documents"],
     dependencies=[Security(require_authenticated)],
 )
 tags_router = APIRouter(
-    prefix="/workspaces/{workspace_id}",
+    prefix="/workspaces/{workspaceId}/documents",
     tags=["documents"],
     dependencies=[Security(require_authenticated)],
 )
 
 logger = logging.getLogger(__name__)
 
+TAILER_POLL_INTERVAL_SECONDS = 0.25
+TAILER_POLL_MAX_INTERVAL_SECONDS = 2.0
+TAILER_BATCH_LIMIT = 200
+KEEPALIVE_SECONDS = 15.0
+TAILER_POLL_CONCURRENCY = 8
+_TAILER_POLL_SEMAPHORE = asyncio.Semaphore(TAILER_POLL_CONCURRENCY)
+
 
 WorkspacePath = Annotated[
     UUID,
     Path(
         description="Workspace identifier",
+        alias="workspaceId",
     ),
 ]
+ClientRequestIdHeader = Annotated[str | None, Header(alias="X-Client-Request-Id")]
 DocumentPath = Annotated[
     UUID,
     Path(
         description="Document identifier",
+        alias="documentId",
     ),
 ]
 DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
@@ -111,96 +135,35 @@ DocumentReader = Annotated[
     User,
     Security(
         require_workspace("workspace.documents.read"),
-        scopes=["{workspace_id}"],
+        scopes=["{workspaceId}"],
     ),
 ]
 DocumentManager = Annotated[
     User,
     Security(
         require_workspace("workspace.documents.manage"),
-        scopes=["{workspace_id}"],
+        scopes=["{workspaceId}"],
     ),
 ]
 
 
-get_sort_order = make_sort_dependency(
-    allowed=SORT_FIELDS,
-    default=DEFAULT_SORT,
-    id_field=ID_FIELD,
-)
-
-_FILTER_KEYS = {
-    "q",
-    "status",
-    "status_in",
-    "display_status",
-    "display_status_in",
-    "run_status",
-    "source_in",
-    "tags",
-    "tag_mode",
-    "tags_match",
-    "tags_not",
-    "tags_empty",
-    "uploader",
-    "uploader_id",
-    "uploader_id_in",
-    "uploader_email",
-    "assignee_user_id",
-    "assignee_user_id_in",
-    "assignee_unassigned",
-    "folder_id",
-    "created_after",
-    "created_before",
-    "updated_after",
-    "updated_before",
-    "created_at_from",
-    "created_at_to",
-    "last_run_from",
-    "last_run_to",
-    "activity_after",
-    "activity_before",
-    "activity_at_from",
-    "activity_at_to",
-    "byte_size_from",
-    "byte_size_to",
-    "file_type",
-    "has_output",
-}
-
-
-def get_document_filters(
-    request: Request,
-) -> DocumentFilters:
-    allowed = _FILTER_KEYS
-    allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
-    extras = sorted({key for key in request.query_params.keys() if key not in allowed_with_shared})
-    if extras:
-        detail = [
-            {
-                "type": "extra_forbidden",
-                "loc": ["query", key],
-                "msg": "Extra inputs are not permitted",
-                "input": request.query_params.get(key),
-            }
-            for key in extras
-        ]
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
-
-    data: dict[str, object] = {}
-    for key in allowed:
-        values = request.query_params.getlist(key)
-        if not values:
-            continue
-        data[key] = values if len(values) > 1 else values[0]
-
+def _resolve_change_cursor(request: Request, cursor: str | None) -> int:
+    last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    tokens: list[str] = []
+    if cursor is not None:
+        tokens.append(cursor)
+    if last_event_id is not None:
+        tokens.append(last_event_id)
+    if not tokens:
+        return 0
     try:
-        return DocumentFilters.model_validate(data)
-    except ValidationError as exc:
+        values = [int(token) for token in tokens]
+    except ValueError as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=exc.errors(),
+            status.HTTP_400_BAD_REQUEST,
+            detail="cursor must be an integer string",
         ) from exc
+    return max(values)
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -251,7 +214,7 @@ def _parse_run_options(run_options: str | None) -> DocumentUploadRunOptions | No
         ) from exc
 
 
-async def _try_enqueue_run(
+def _try_enqueue_run(
     *,
     runs_service: RunsService,
     workspace_id: UUID,
@@ -259,7 +222,7 @@ async def _try_enqueue_run(
     run_options: DocumentUploadRunOptions | None = None,
 ) -> None:
     try:
-        if await runs_service.is_processing_paused(workspace_id=workspace_id):
+        if runs_service.is_processing_paused(workspace_id=workspace_id):
             return
         options = None
         if run_options:
@@ -267,7 +230,7 @@ async def _try_enqueue_run(
                 input_sheet_names=run_options.input_sheet_names,
                 active_sheet_only=run_options.active_sheet_only,
             )
-        await runs_service.prepare_run_for_workspace(
+        runs_service.prepare_run_for_workspace(
             workspace_id=workspace_id,
             input_document_id=document_id,
             configuration_id=None,
@@ -309,10 +272,13 @@ async def _try_enqueue_run(
         },
     },
 )
-async def upload_document(
+def upload_document(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
     runs_service: RunsServiceDep,
+    request: Request,
+    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
+    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     _actor: DocumentManager,
     *,
     file: Annotated[UploadFile, File(...)],
@@ -320,29 +286,82 @@ async def upload_document(
     expires_at: Annotated[str | None, Form()] = None,
     run_options: Annotated[str | None, Form()] = None,
 ) -> DocumentOut:
+    upload_slot_acquired = False
+    upload_semaphore = getattr(request.app.state, "documents_upload_semaphore", None)
+    if upload_semaphore is not None:
+        upload_slot_acquired = upload_semaphore.acquire(blocking=False)
+        if not upload_slot_acquired:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many concurrent uploads. Please retry shortly.",
+            )
     payload = _parse_metadata(metadata)
     upload_run_options = _parse_run_options(run_options)
     metadata_payload = service.build_upload_metadata(payload, upload_run_options)
+    staged = None
+    scope_key = build_scope_key(
+        principal_id=str(_actor.id),
+        workspace_id=str(workspace_id),
+    )
     try:
-        document = await service.create_document(
+        staged = service.stage_upload(workspace_id=workspace_id, upload=file)
+        request_hash = build_request_hash(
+            method=request.method,
+            path=request.url.path,
+            payload={
+                "metadata": metadata_payload,
+                "expires_at": expires_at,
+                "run_options": upload_run_options.model_dump() if upload_run_options else None,
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "file_sha256": staged.stored.sha256,
+                "file_size": staged.stored.byte_size,
+            },
+        )
+        replay = idempotency.resolve_replay(
+            key=idempotency_key,
+            scope_key=scope_key,
+            request_hash=request_hash,
+        )
+        if replay:
+            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+            return replay.to_response()
+        document = service.create_document(
             workspace_id=workspace_id,
             upload=file,
             metadata=metadata_payload,
             expires_at=expires_at,
             actor=_actor,
+            staged=staged,
         )
     except DocumentTooLargeError as exc:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
     except InvalidDocumentExpirationError as exc:
+        if staged is not None:
+            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception:
+        if staged is not None:
+            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+        raise
+    finally:
+        if upload_slot_acquired:
+            upload_semaphore.release()
 
-    await _try_enqueue_run(
+    _try_enqueue_run(
         runs_service=runs_service,
         workspace_id=workspace_id,
         document_id=document.id,
         run_options=upload_run_options,
     )
 
+    idempotency.store_response(
+        key=idempotency_key,
+        scope_key=scope_key,
+        request_hash=request_hash,
+        status_code=status.HTTP_201_CREATED,
+        body=document,
+    )
     return document
 
 
@@ -352,6 +371,7 @@ async def upload_document(
     status_code=status.HTTP_200_OK,
     summary="List documents",
     response_model_exclude_none=True,
+    dependencies=[Depends(strict_list_query_guard())],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list documents.",
@@ -359,28 +379,32 @@ async def upload_document(
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document access.",
         },
-        status.HTTP_400_BAD_REQUEST: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Query parameters are invalid or unsupported.",
         },
     },
 )
-async def list_documents(
+def list_documents(
     workspace_id: WorkspacePath,
-    page: Annotated[PageParams, Depends()],
-    filters: Annotated[DocumentFilters, Depends(get_document_filters)],
-    order_by: Annotated[OrderBy, Depends(get_sort_order)],
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     service: DocumentsServiceDep,
     response: Response,
     actor: DocumentReader,
 ) -> DocumentListPage:
-    page_result = await service.list_documents(
+    order_by = resolve_sort(
+        list_query.sort,
+        allowed=SORT_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
+    )
+    page_result = service.list_documents(
         workspace_id=workspace_id,
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
+        page=list_query.page,
+        per_page=list_query.per_page,
         order_by=order_by,
-        filters=filters,
-        actor=actor,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
     )
     response.headers["X-Ade-Changes-Cursor"] = page_result.changes_cursor
     return page_result
@@ -392,185 +416,37 @@ async def list_documents(
     status_code=status.HTTP_200_OK,
     summary="List document changes",
     response_model_exclude_none=True,
+    dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit", "includeRows"}))],
 )
-async def list_document_changes(
+def list_document_changes(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
     *,
-    cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
+    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
 ) -> DocumentChangesPage:
     if cursor is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="cursor is required; use cursor=latest to sync from now",
+            detail="cursor is required",
         )
     try:
-        return await service.list_document_changes(
+        page = service.list_document_changes(
             workspace_id=workspace_id,
             cursor_token=cursor,
             limit=limit,
+            include_rows=include_rows,
         )
-    except DocumentChangeCursorTooOld as exc:
+        return DocumentChangesPage(items=page.items, next_cursor=page.next_cursor)
+    except DocumentEventCursorTooOld as exc:
         raise HTTPException(
             status.HTTP_410_GONE,
-            detail={"error": "resync_required", "latest_cursor": str(exc.latest_cursor)},
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-
-@router.get("/changes/stream")
-async def stream_document_changes(
-    workspace_id: WorkspacePath,
-    request: Request,
-    service: DocumentsServiceDep,
-    _actor: DocumentReader,
-    *,
-    cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
-    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
-) -> EventSourceResponse:
-    last_event_id = request.headers.get("Last-Event-ID") or request.headers.get("last-event-id")
-    if last_event_id and cursor and last_event_id != cursor:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="cursor and Last-Event-ID must match when both are provided",
-        )
-    start_token = last_event_id or cursor or "latest"
-
-    try:
-        initial_page = await service.list_document_changes(
-            workspace_id=workspace_id,
-            cursor_token=start_token,
-            limit=limit,
-        )
-    except DocumentChangeCursorTooOld as exc:
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            detail={"error": "resync_required", "latest_cursor": str(exc.latest_cursor)},
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    async def event_stream() -> AsyncIterator[dict[str, str]]:
-        base_interval = 2.0
-        max_interval = 30.0
-        backoff = 1.6
-        jitter_ratio = 0.2
-        poll_interval = base_interval
-
-        cursor_value = 0
-        pending = initial_page.changes
-        if start_token != "latest":
-            try:
-                cursor_value = int(start_token)
-            except (TypeError, ValueError):
-                cursor_value = 0
-        if start_token == "latest":
-            cursor_value = int(initial_page.next_cursor)
-
-        while True:
-            if pending:
-                for change in pending:
-                    cursor_value = int(change.cursor)
-                    yield sse_json(
-                        change.type,
-                        change.model_dump(),
-                        event_id=change.cursor,
-                    )
-                pending = []
-                continue
-
-            if await request.is_disconnected():
-                return
-
-            try:
-                page = await service.list_document_changes(
-                    workspace_id=workspace_id,
-                    cursor_token=str(cursor_value),
-                    limit=limit,
-                )
-            except DocumentChangeCursorTooOld:
-                return
-
-            if page.changes:
-                pending = page.changes
-                poll_interval = base_interval
-                continue
-
-            jitter = poll_interval * jitter_ratio
-            delay = max(0.0, poll_interval + random.uniform(-jitter, jitter))
-            await asyncio.sleep(delay)
-            poll_interval = min(max_interval, poll_interval * backoff)
-
-    return EventSourceResponse(
-        event_stream(),
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-        ping=15,
-    )
-
-
-@router.post(
-    "/uploadSessions",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentUploadSessionCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a resumable upload session",
-    response_model_exclude_none=True,
-)
-async def create_upload_session(
-    workspace_id: WorkspacePath,
-    payload: DocumentUploadSessionCreateRequest,
-    service: DocumentsServiceDep,
-    actor: DocumentManager,
-) -> DocumentUploadSessionCreateResponse:
-    try:
-        return await service.create_upload_session(
-            workspace_id=workspace_id,
-            payload=payload,
-            actor=actor,
-        )
-    except DocumentTooLargeError as exc:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
-
-
-@router.put(
-    "/uploadSessions/{upload_session_id}",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentUploadSessionUploadResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Upload a byte range to a session",
-    response_model_exclude_none=True,
-)
-async def upload_session_range(
-    workspace_id: WorkspacePath,
-    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
-    request: Request,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-    content_range: Annotated[str | None, Header(alias="Content-Range")] = None,
-) -> DocumentUploadSessionUploadResponse:
-    try:
-        return await service.upload_session_range(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-            content_range=content_range,
-            body=request.stream(),
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-    except DocumentUploadRangeError as exc:
-        raise HTTPException(
-            status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
             detail={
-                "detail": str(exc),
-                "next_expected_ranges": exc.next_expected_ranges,
+                "error": "resync_required",
+                "oldestCursor": str(exc.oldest_cursor),
+                "latestCursor": str(exc.latest_cursor),
             },
         ) from exc
     except ValueError as exc:
@@ -578,93 +454,100 @@ async def upload_session_range(
 
 
 @router.get(
-    "/uploadSessions/{upload_session_id}",
-    response_model=DocumentUploadSessionStatusResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Get upload session status",
-    response_model_exclude_none=True,
+    "/changes/stream",
+    summary="Stream document changes",
 )
-async def get_upload_session_status(
+async def stream_document_changes(
     workspace_id: WorkspacePath,
-    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
-    service: DocumentsServiceDep,
+    request: Request,
+    settings: SettingsDep,
     _actor: DocumentReader,
-) -> DocumentUploadSessionStatusResponse:
-    try:
-        return await service.get_upload_session_status(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
+    *,
+    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
+    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
+) -> EventSourceResponse:
+    start_cursor = _resolve_change_cursor(request, cursor)
+    session_factory = get_sessionmaker(request)
 
+    async def event_stream():
+        cursor_value = start_cursor
+        last_send = time.monotonic()
+        poll_interval = TAILER_POLL_INTERVAL_SECONDS
 
-@router.post(
-    "/uploadSessions/{upload_session_id}/commit",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Commit an upload session",
-    response_model_exclude_none=True,
-)
-async def commit_upload_session(
-    workspace_id: WorkspacePath,
-    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
-    service: DocumentsServiceDep,
-    runs_service: RunsServiceDep,
-    actor: DocumentManager,
-) -> DocumentOut:
-    try:
-        document, upload_run_options = await service.commit_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-            actor=actor,
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-    except DocumentUploadSessionNotReadyError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        def _resolve_cursor() -> int:
+            with session_factory() as session:
+                events_service = DocumentEventsService(session=session, settings=settings)
+                resolution = events_service.resolve_cursor(
+                    workspace_id=workspace_id,
+                    cursor=cursor_value,
+                )
+                return resolution.cursor
 
-    await _try_enqueue_run(
-        runs_service=runs_service,
-        workspace_id=workspace_id,
-        document_id=document.id,
-        run_options=upload_run_options,
+        try:
+            cursor_value = await asyncio.to_thread(_resolve_cursor)
+        except DocumentEventCursorTooOld as exc:
+            yield sse_json(
+                "error",
+                {
+                    "code": "resync_required",
+                    "oldestCursor": str(exc.oldest_cursor),
+                    "latestCursor": str(exc.latest_cursor),
+                },
+            )
+            return
+
+        yield sse_json("ready", {"cursor": str(cursor_value)})
+
+        while True:
+            if await request.is_disconnected():
+                return
+
+            def _fetch_changes(current_cursor: int):
+                with session_factory() as session:
+                    events_service = DocumentEventsService(session=session, settings=settings)
+                    events = events_service.fetch_changes_after(
+                        workspace_id=workspace_id,
+                        cursor=current_cursor,
+                        limit=TAILER_BATCH_LIMIT,
+                    )
+                    service = DocumentsService(session=session, settings=settings)
+                    return service.build_change_entries(
+                        workspace_id=workspace_id,
+                        events=events,
+                        include_rows=include_rows,
+                    )
+
+            async with _TAILER_POLL_SEMAPHORE:
+                events = await asyncio.to_thread(_fetch_changes, cursor_value)
+
+            if events:
+                poll_interval = TAILER_POLL_INTERVAL_SECONDS
+                for change in events:
+                    payload = change.model_dump(by_alias=True, exclude_none=True)
+                    yield sse_json(change.type, payload, event_id=change.cursor)
+                    cursor_value = int(change.cursor)
+                    last_send = time.monotonic()
+                continue
+
+            now = time.monotonic()
+            if now - last_send >= KEEPALIVE_SECONDS:
+                last_send = now
+                yield sse_json("keepalive", {})
+
+            poll_interval = min(TAILER_POLL_MAX_INTERVAL_SECONDS, poll_interval * 1.5)
+            await asyncio.sleep(poll_interval)
+
+    return EventSourceResponse(
+        event_stream(),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
-
-    return document
-
-
-@router.delete(
-    "/uploadSessions/{upload_session_id}",
-    dependencies=[Security(require_csrf)],
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Cancel an upload session",
-)
-async def cancel_upload_session(
-    workspace_id: WorkspacePath,
-    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> Response:
-    try:
-        await service.cancel_upload_session(
-            workspace_id=workspace_id,
-            upload_session_id=upload_session_id,
-        )
-    except DocumentUploadSessionNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except DocumentUploadSessionExpiredError as exc:
-        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch(
-    "/{document_id}",
+    "/{documentId}",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
@@ -682,19 +565,35 @@ async def cancel_upload_session(
         },
     },
 )
-async def update_document(
+def update_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentUpdateRequest,
+    request: Request,
+    response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        return await service.update_document(
+        current = service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
+        updated = service.update_document(
             workspace_id=workspace_id,
             document_id=document_id,
             payload=payload,
+            client_request_id=client_request_id,
         )
+        etag = format_weak_etag(build_etag_token(updated.id, updated.version))
+        if etag:
+            response.headers["ETag"] = etag
+        return updated
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -721,18 +620,20 @@ async def update_document(
         },
     },
 )
-async def patch_document_tags_batch(
+def patch_document_tags_batch(
     workspace_id: WorkspacePath,
     payload: DocumentBatchTagsRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchTagsResponse:
     try:
-        documents = await service.patch_document_tags_batch(
+        documents = service.patch_document_tags_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             add=payload.add,
             remove=payload.remove,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -761,16 +662,18 @@ async def patch_document_tags_batch(
         },
     },
 )
-async def archive_documents_batch_endpoint(
+def archive_documents_batch_endpoint(
     workspace_id: WorkspacePath,
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
-        documents = await service.archive_documents_batch(
+        documents = service.archive_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -797,16 +700,18 @@ async def archive_documents_batch_endpoint(
         },
     },
 )
-async def restore_documents_batch_endpoint(
+def restore_documents_batch_endpoint(
     workspace_id: WorkspacePath,
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
-        documents = await service.restore_documents_batch(
+        documents = service.restore_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -815,7 +720,7 @@ async def restore_documents_batch_endpoint(
 
 
 @router.post(
-    "/{document_id}/archive",
+    "/{documentId}/archive",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
@@ -833,23 +738,34 @@ async def restore_documents_batch_endpoint(
         },
     },
 )
-async def archive_document_endpoint(
+def archive_document_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        return await service.archive_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
+        return service.archive_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post(
-    "/{document_id}/restore",
+    "/{documentId}/restore",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
@@ -867,23 +783,34 @@ async def archive_document_endpoint(
         },
     },
 )
-async def restore_document_endpoint(
+def restore_document_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        return await service.restore_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
+        return service.restore_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.put(
-    "/{document_id}/tags",
+    "/{documentId}/tags",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
@@ -904,18 +831,29 @@ async def restore_document_endpoint(
         },
     },
 )
-async def replace_document_tags(
+def replace_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsReplace,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        return await service.replace_document_tags(
+        current = service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
+        return service.replace_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             tags=payload.tags,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -924,7 +862,7 @@ async def replace_document_tags(
 
 
 @router.patch(
-    "/{document_id}/tags",
+    "/{documentId}/tags",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
@@ -945,19 +883,30 @@ async def replace_document_tags(
         },
     },
 )
-async def patch_document_tags(
+def patch_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsPatch,
+    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        return await service.patch_document_tags(
+        current = service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
+        return service.patch_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             add=payload.add,
             remove=payload.remove,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -966,7 +915,7 @@ async def patch_document_tags(
 
 
 @router.get(
-    "/{document_id}",
+    "/{documentId}",
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
     summary="Retrieve document metadata",
@@ -983,23 +932,28 @@ async def patch_document_tags(
         },
     },
 )
-async def read_document(
+def read_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
+    response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
 ) -> DocumentOut:
     try:
-        return await service.get_document(
+        document = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
+        etag = format_weak_etag(build_etag_token(document.id, document.version))
+        if etag:
+            response.headers["ETag"] = etag
+        return document
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(
-    "/{document_id}/listRow",
+    "/{documentId}/listrow",
     response_model=DocumentListRow,
     status_code=status.HTTP_200_OK,
     summary="Retrieve document list row",
@@ -1016,14 +970,14 @@ async def read_document(
         },
     },
 )
-async def read_document_list_row(
+def read_document_list_row(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
 ) -> DocumentListRow:
     try:
-        return await service.get_document_list_row(
+        return service.get_document_list_row(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -1032,7 +986,7 @@ async def read_document_list_row(
 
 
 @router.get(
-    "/{document_id}/download",
+    "/{documentId}/download",
     summary="Download a stored document",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -1046,30 +1000,141 @@ async def read_document_list_row(
         },
     },
 )
-async def download_document(
+def download_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    service: DocumentsServiceDep,
+    request: Request,
+    settings: SettingsDep,
     _actor: DocumentReader,
 ) -> StreamingResponse:
+    session_factory = get_sessionmaker(request)
     try:
-        record, stream = await service.stream_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
+        with session_factory() as session:
+            service = DocumentsService(session=session, settings=settings)
+            record, stream = service.stream_document(
+                workspace_id=workspace_id,
+                document_id=document_id,
+            )
+            media_type = record.content_type or "application/octet-stream"
+            disposition = build_content_disposition(record.name)
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentFileMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    media_type = record.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = build_content_disposition(record.name)
+    response.headers["Content-Disposition"] = disposition
     return response
 
 
 @router.get(
-    "/{document_id}/sheets",
+    "/{documentId}/preview",
+    response_model=WorkbookSheetPreview,
+    summary="Preview a document worksheet",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: {
+            "description": "Preview is not supported for this file type.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "The workbook exists but could not be parsed for preview.",
+        },
+    },
+)
+def preview_document(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+    *,
+    max_rows: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PREVIEW_ROWS,
+            alias="maxRows",
+            description="Maximum rows per sheet to include in the preview.",
+        ),
+    ] = DEFAULT_PREVIEW_ROWS,
+    max_columns: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PREVIEW_COLUMNS,
+            alias="maxColumns",
+            description="Maximum columns per sheet to include in the preview.",
+        ),
+    ] = DEFAULT_PREVIEW_COLUMNS,
+    trim_empty_columns: Annotated[
+        bool,
+        Query(
+            alias="trimEmptyColumns",
+            description="If true, trims columns with no data within the preview window.",
+        ),
+    ] = False,
+    trim_empty_rows: Annotated[
+        bool,
+        Query(
+            alias="trimEmptyRows",
+            description="If true, trims rows with no data within the preview window.",
+        ),
+    ] = False,
+    sheet_name: Annotated[
+        str | None,
+        Query(
+            alias="sheetName",
+            description=(
+                "Optional worksheet name to preview "
+                "(defaults to the first sheet when omitted)."
+            ),
+        ),
+    ] = None,
+    sheet_index: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            alias="sheetIndex",
+            description=(
+                "Optional worksheet index to preview "
+                "(0-based, defaults to the first sheet when omitted)."
+            ),
+        ),
+    ] = None,
+) -> WorkbookSheetPreview:
+    if sheet_name and sheet_index is not None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="sheetName and sheetIndex are mutually exclusive",
+        )
+    if sheet_name is None and sheet_index is None:
+        sheet_index = 0
+    try:
+        return service.get_document_preview(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            max_rows=max_rows,
+            max_columns=max_columns,
+            trim_empty_columns=trim_empty_columns,
+            trim_empty_rows=trim_empty_rows,
+            sheet_name=sheet_name,
+            sheet_index=sheet_index,
+        )
+    except (DocumentNotFoundError, DocumentFileMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentPreviewUnsupportedError as exc:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except (DocumentPreviewParseError, DocumentPreviewSheetNotFoundError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{documentId}/sheets",
     response_model=list[DocumentSheet],
     summary="List worksheets for a document",
     responses={
@@ -1081,14 +1146,14 @@ async def download_document(
         },
     },
 )
-async def list_document_sheets_endpoint(
+def list_document_sheets_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
 ) -> list[DocumentSheet]:
     try:
-        return await service.list_document_sheets(
+        return service.list_document_sheets(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -1099,7 +1164,7 @@ async def list_document_sheets_endpoint(
 
 
 @router.delete(
-    "/{document_id}",
+    "/{documentId}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Soft delete a document",
@@ -1115,17 +1180,28 @@ async def list_document_sheets_endpoint(
         },
     },
 )
-async def delete_document(
+def delete_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
+    request: Request,
     service: DocumentsServiceDep,
     actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> None:
     try:
-        await service.delete_document(
+        current = service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        require_if_match(
+            request.headers.get("if-match"),
+            expected_token=build_etag_token(current.id, current.version),
+        )
+        service.delete_document(
             workspace_id=workspace_id,
             document_id=document_id,
             actor=actor,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1149,25 +1225,24 @@ async def delete_document(
         },
     },
 )
-async def delete_documents_batch(
+def delete_documents_batch(
     workspace_id: WorkspacePath,
     payload: DocumentBatchDeleteRequest,
     service: DocumentsServiceDep,
     actor: DocumentManager,
+    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchDeleteResponse:
     try:
-        deleted_ids = await service.delete_documents_batch(
+        deleted_ids = service.delete_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             actor=actor,
+            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return DocumentBatchDeleteResponse(document_ids=deleted_ids)
-
-
-TagCatalogSort = Literal["name", "-count"]
 
 
 @tags_router.get(
@@ -1176,6 +1251,7 @@ TagCatalogSort = Literal["name", "-count"]
     status_code=status.HTTP_200_OK,
     summary="List document tags",
     response_model_exclude_none=True,
+    dependencies=[Depends(strict_list_query_guard())],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list tags.",
@@ -1188,23 +1264,24 @@ TagCatalogSort = Literal["name", "-count"]
         },
     },
 )
-async def list_document_tags(
+def list_document_tags(
     workspace_id: WorkspacePath,
-    page: Annotated[PageParams, Depends()],
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     service: DocumentsServiceDep,
     _actor: DocumentReader,
-    *,
-    q: Annotated[str | None, Query(description="Search tags (min length 2).")] = None,
-    sort: Annotated[TagCatalogSort, Query()] = "name",
 ) -> TagCatalogPage:
     try:
-        return await service.list_tag_catalog(
+        if list_query.filters:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Tag listings do not support filters.",
+            )
+        return service.list_tag_catalog(
             workspace_id=workspace_id,
-            page=page.page,
-            page_size=page.page_size,
-            include_total=page.include_total,
-            q=q,
-            sort=sort,
+            page=list_query.page,
+            per_page=list_query.per_page,
+            q=list_query.q,
+            sort=list_query.sort,
         )
     except InvalidDocumentTagsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc

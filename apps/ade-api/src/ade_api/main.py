@@ -5,14 +5,24 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api.v1.router import create_api_router
 from .app.lifecycles import create_application_lifespan
-from .common.exceptions import http_exception_handler, unhandled_exception_handler
+from .common.exceptions import (
+    api_error_handler,
+    http_exception_handler,
+    request_validation_exception_handler,
+    unhandled_exception_handler,
+)
 from .common.logging import log_context, setup_logging
 from .common.middleware import register_middleware
 from .common.openapi import configure_openapi
+from .common.problem_details import ApiError
+from .common.time import utc_now
 from .core.http.errors import register_auth_exception_handlers
+from .features.health.ops import router as ops_router
 from .settings import Settings, get_settings
 from .web.spa import mount_spa
 
@@ -44,18 +54,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     # Global exception handlers.
+    app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
     register_auth_exception_handlers(app)
 
     # Application state and startup metadata.
     app.state.settings = settings
     app.state.safe_mode = bool(settings.safe_mode)
+    app.state.started_at = utc_now()
 
     logger.info(
         "ade_api.startup",
         extra=log_context(
-            logging_level=settings.logging_level,
+            logging_level=settings.log_level,
             safe_mode=bool(settings.safe_mode),
             auth_disabled=bool(settings.auth_disabled),
             version=settings.app_version,
@@ -85,11 +99,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             extra=log_context(auth_disabled=True),
         )
 
-    # Middleware, routers, SPA, and OpenAPI configuration.
+    # Middleware, routers, and OpenAPI configuration.
     register_middleware(app, settings=settings)
+    app.include_router(ops_router, include_in_schema=False)
     app.include_router(create_api_router(settings), prefix=API_PREFIX)
-    mount_spa(app, api_prefix=API_PREFIX, static_dir=settings.web_dir / "static")
     configure_openapi(app, settings)
+
+    mount_spa(app, settings.frontend_dist_dir)
 
     return app
 

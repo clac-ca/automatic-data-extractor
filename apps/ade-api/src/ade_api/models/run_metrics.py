@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.db import Base, UUIDType
+from ade_api.db import GUID, Base
 
 
 class RunMetrics(Base):
@@ -16,7 +16,7 @@ class RunMetrics(Base):
     __tablename__ = "run_metrics"
 
     run_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("runs.id", ondelete="NO ACTION"), primary_key=True
+        GUID(), ForeignKey("runs.id", ondelete="NO ACTION"), primary_key=True
     )
 
     evaluation_outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)

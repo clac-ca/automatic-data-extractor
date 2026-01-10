@@ -1,10 +1,10 @@
-# ADE Events v1 – Unified EventRecord streams
+# ADE Events v1 – EventRecord NDJSON logs
 
-ADE standardises run/build telemetry on a single canonical stream owned by the API. The engine emits NDJSON `EventRecord` objects to **stderr**; the API ingests them, enriches context, persists `events.ndjson`, and fans out over SSE.
+ADE standardises run/environment telemetry as **EventRecord** lines written by the worker. The engine emits NDJSON `EventRecord` objects to **stderr**; the **worker** captures and appends them to `events.ndjson` for each environment or run. The API serves those logs over JSON, NDJSON, and SSE.
 
 ## EventRecord envelope
 
-Top-level keys match the engine schema; the API only adds optional context inside `data`:
+Top-level keys match the engine schema; the worker adds optional context inside `data`:
 
 ```jsonc
 {
@@ -17,7 +17,7 @@ Top-level keys match the engine schema; the API only adds optional context insid
   "data": {
     "jobId": "<run_id>",
     "workspaceId": "<workspace_id>",
-    "buildId": "<build_id>",
+    "environmentId": "<environment_id>",
     "configurationId": "<configuration_id>",
     "...": "source-specific payload"
   },
@@ -25,26 +25,27 @@ Top-level keys match the engine schema; the API only adds optional context insid
 }
 ```
 
-- Context (`jobId`, `workspaceId`, `buildId`, `configurationId`) is merged into `data` when present.
-- `event` names are dot-delimited (`run.complete`, `build.start`, `engine.phase.start`, `console.line`).
+- Context (`jobId`, `workspaceId`, `environmentId`, `configurationId`) is merged into `data` when present.
+- `event` names are dot-delimited (`run.complete`, `run.engine.complete`, `environment.start`, `engine.phase.start`, `console.line`).
 
 ## Sources
-- **Engine NDJSON stderr** – primary source; each line is a JSON object with an `event` field.
-- **API-origin events** – orchestration emits `run.*`, `build.*`, and `console.line` records using the same envelope.
-- **Console fallback** – non-JSON stdout/stderr lines are wrapped as `console.line` events with `data.scope` = `run` or `build`.
+- **Engine NDJSON stderr** — primary source; each line is a JSON object with an `event` field.
+- **Worker-origin events** — orchestration emits `run.*` (including terminal `run.complete` and subprocess `run.engine.*`), `environment.*`, and `console.line` records using the same envelope.
+- **Console fallback** — non-JSON stdout/stderr lines are wrapped as `console.line` events with `data.scope` = `run` or `environment`.
+
+`run.complete` is the authoritative terminal event for a run and should carry `status` and exit/diagnostic details in `data`.
 
 ## Flow (happy path)
-1. API creates a `RunEventStream` for `<runs_root>/<workspace>/<run_id>/logs/events.ndjson`.
-2. API emits `run.queued`; runs remain queued while builds are pending.
-3. If a build is required, `BuildsService.stream_build` emits `build.*` + `console.line scope=build` events **into the same stream** before engine events.
-4. API spawns the engine with NDJSON stderr; each parsed line becomes an EventRecord, enriched with run/build/workspace IDs, persisted, and streamed to subscribers with server-generated SSE IDs.
-5. API emits `run.complete` once supervision finishes (success, failure, or cancellation).
+1. API creates `runs` rows (status = `queued`).
+2. Worker claims an environment or run (lease + heartbeat) and writes `events.ndjson` as it executes.
+3. Worker updates status (`ready`, `failed`, `succeeded`) on completion.
+4. API streams the NDJSON logs over SSE or returns paged event lists.
 
 ## Persistence, replay, and SSE
-- **Run logs**: `<runs_root>/<workspace>/<run_id>/logs/events.ndjson` (single canonical stream per run).
-- **Build-only logs**: `<venvs_root>/<workspace>/<configuration>/<build>/logs/events.ndjson` reuse the same EventRecord format.
-- SSE frames always prefix `id: <string>`; the API assigns a monotonically increasing counter per stream and uses it for `Last-Event-ID` resume.
-- Replay reads the NDJSON log in order, skips entries until the SSE cursor (`Last-Event-ID`) is reached, then continues live on the same stream.
+- **Run logs**: `<runs_root>/<workspace>/<run_id>/logs/events.ndjson` (one stream per run).
+- **Environment logs**: `<venvs_root>/<workspace>/<configuration>/<deps_digest>/<environment_id>/logs/events.ndjson`.
+- SSE frames always include `id: <byte_offset>`; the value is the byte offset after the last fully processed newline.
+- Replay seeks to the cursor (`Last-Event-ID` or `after_sequence`) and continues live; the cursor value is a byte offset into the NDJSON log.
 
 ## Naming & versioning
 - Envelope name stays `EventRecord`; add new fields under `data` to avoid breaking changes.

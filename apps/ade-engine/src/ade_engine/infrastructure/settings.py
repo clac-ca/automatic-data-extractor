@@ -6,7 +6,7 @@ Supported sources (lowest → highest precedence):
 1) `settings.toml` (current working directory)
 2) `settings.toml` (config package directory; when provided)
 3) `.env` (current working directory)
-4) environment variables (prefix: `ADE_ENGINE_`)
+4) environment variables (prefix: `ADE_ENGINE_`, plus shared `ADE_LOG_LEVEL`)
 5) explicit overrides (`Settings(...)` / CLI)
 
 `settings.toml` is intentionally flat: keys map 1:1 to `Settings` fields.
@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource, TomlConfigSettingsSource
 
@@ -89,7 +89,10 @@ class Settings(BaseSettings):
 
     # Logging
     log_format: Literal["text", "ndjson"] = Field(default="text")
-    log_level: int = Field(default=logging.INFO)
+    log_level: int = Field(
+        default=logging.INFO,
+        validation_alias=AliasChoices("ADE_ENGINE_LOG_LEVEL", "ADE_LOG_LEVEL"),
+    )
 
     # Scan limits
     max_empty_rows_run: int | None = Field(default=1000, ge=1)

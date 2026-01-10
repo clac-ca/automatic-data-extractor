@@ -10,17 +10,17 @@ def test_managed_identity_requires_mssql_url() -> None:
 
 def test_mssql_driver_defaults_to_odbc_18() -> None:
     settings = Settings(
-        database_dsn="mssql+pyodbc://user:pass@example.database.windows.net:1433/ade",
+        database_url="mssql+pyodbc://user:pass@example.database.windows.net:1433/ade",
     )
 
-    assert "driver=ODBC+Driver+18+for+SQL+Server" in settings.database_dsn
+    assert "driver=ODBC+Driver+18+for+SQL+Server" in settings.database_url
 
 
 def test_managed_identity_strips_credentials_from_dsn() -> None:
     settings = Settings(
-        database_dsn="mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade",
+        database_url="mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade",
         database_auth_mode="managed_identity",
     )
 
-    assert "user:secret" not in settings.database_dsn
-    assert settings.database_dsn.startswith("mssql+aioodbc://contoso.database.windows.net:1433/ade")
+    assert "user:secret" not in settings.database_url
+    assert settings.database_url.startswith("mssql+pyodbc://contoso.database.windows.net:1433/ade")

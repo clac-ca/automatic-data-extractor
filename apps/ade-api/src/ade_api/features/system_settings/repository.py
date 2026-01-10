@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.models import SystemSetting
 
@@ -13,23 +13,23 @@ from ade_api.models import SystemSetting
 class SystemSettingsRepository:
     """Simple persistence helpers for ``SystemSetting`` records."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: Session) -> None:
         self._session = session
 
-    async def get(self, key: str) -> SystemSetting | None:
+    def get(self, key: str) -> SystemSetting | None:
         stmt = select(SystemSetting).where(SystemSetting.key == key).limit(1)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_for_update(self, key: str) -> SystemSetting | None:
+    def get_for_update(self, key: str) -> SystemSetting | None:
         stmt = select(SystemSetting).where(SystemSetting.key == key).with_for_update(nowait=False)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def create(self, *, key: str, value: Mapping[str, object] | None = None) -> SystemSetting:
+    def create(self, *, key: str, value: Mapping[str, object] | None = None) -> SystemSetting:
         setting = SystemSetting(key=key, value=dict(value or {}))
         self._session.add(setting)
-        await self._session.flush()
+        self._session.flush()
         return setting
 
 

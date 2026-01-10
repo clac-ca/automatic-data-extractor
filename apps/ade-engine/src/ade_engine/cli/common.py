@@ -185,7 +185,7 @@ LOGS_DIR_OPTION = typer.Option(
     file_okay=False,
     dir_okay=True,
     resolve_path=True,
-    help="Directory for per-run log files (default: alongside outputs).",
+    help="Directory for per-run log files (optional).",
 )
 
 LOG_FORMAT_OPTION = typer.Option(

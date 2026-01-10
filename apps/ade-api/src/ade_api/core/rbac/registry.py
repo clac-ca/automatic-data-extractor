@@ -231,6 +231,15 @@ SYSTEM_ROLE_BY_SLUG: dict[str, SystemRoleDef] = {
     definition.slug: definition for definition in SYSTEM_ROLES
 }
 
+
+def role_allows_scope(role_slug: str, scope: ScopeType) -> bool:
+    """Return True if the role slug is allowed to be used in the given scope."""
+    definition = SYSTEM_ROLE_BY_SLUG.get(role_slug)
+    if definition is None:
+        return True
+    return scope in definition.allowed_scopes
+
+
 __all__ = [
     "PERMISSION_REGISTRY",
     "PERMISSIONS",
@@ -239,4 +248,5 @@ __all__ = [
     "SYSTEM_ROLE_BY_SLUG",
     "SYSTEM_ROLES",
     "SystemRoleDef",
+    "role_allows_scope",
 ]

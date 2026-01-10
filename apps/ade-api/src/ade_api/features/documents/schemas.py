@@ -10,40 +10,13 @@ from typing import Any, Literal
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.pagination import Page
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import (
     DocumentSource,
     DocumentStatus,
-    DocumentUploadConflictBehavior,
-    DocumentUploadSessionStatus,
     RunStatus,
 )
-
-
-class DocumentDisplayStatus(str, Enum):
-    """UI-friendly status derived from document + run state."""
-
-    QUEUED = "queued"
-    PROCESSING = "processing"
-    READY = "ready"
-    FAILED = "failed"
-    ARCHIVED = "archived"
-
-
-class DocumentQueueState(str, Enum):
-    """Queue lifecycle for documents that are not yet processing."""
-
-    WAITING = "waiting"
-    QUEUED = "queued"
-
-
-class DocumentQueueReason(str, Enum):
-    """Reason for documents waiting to enter the run queue."""
-
-    NO_ACTIVE_CONFIGURATION = "no_active_configuration"
-    QUEUE_FULL = "queue_full"
-    PROCESSING_PAUSED = "processing_paused"
 
 
 class DocumentFileType(str, Enum):
@@ -56,66 +29,55 @@ class DocumentFileType(str, Enum):
     UNKNOWN = "unknown"
 
 
-def _fallback_display_status(status: DocumentStatus) -> DocumentDisplayStatus:
-    if status == DocumentStatus.ARCHIVED:
-        return DocumentDisplayStatus.ARCHIVED
-    if status == DocumentStatus.FAILED:
-        return DocumentDisplayStatus.FAILED
-    if status == DocumentStatus.PROCESSED:
-        return DocumentDisplayStatus.READY
-    if status == DocumentStatus.PROCESSING:
-        return DocumentDisplayStatus.PROCESSING
-    return DocumentDisplayStatus.QUEUED
-
-
-class UploaderOut(BaseSchema):
-    """Minimal representation of the user who uploaded the document."""
+class UserSummary(BaseSchema):
+    """Minimal representation of a user for list/detail payloads."""
 
     id: UUIDStr = Field(
-        description="Uploader UUID (RFC 9562 UUIDv7).",
+        description="User UUID (RFC 9562 UUIDv7).",
     )
     name: str | None = Field(
         default=None,
         alias="display_name",
         serialization_alias="name",
-        description="Uploader display name when provided.",
+        description="Display name when provided.",
     )
-    email: str = Field(description="Uploader email address.")
+    email: str = Field(description="User email address.")
 
 
 class DocumentOut(BaseSchema):
     """Serialised representation of a stored document."""
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
-    workspace_id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
     name: str = Field(
         alias="original_filename",
         serialization_alias="name",
         description="Display name mapped from the original filename.",
     )
-    content_type: str | None = None
-    byte_size: int
+    content_type: str | None = Field(default=None, alias="contentType")
+    byte_size: int = Field(alias="byteSize")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         alias="attributes",
         serialization_alias="metadata",
     )
     status: DocumentStatus
-    display_status: DocumentDisplayStatus = DocumentDisplayStatus.QUEUED
-    queue_state: DocumentQueueState | None = None
-    queue_reason: DocumentQueueReason | None = None
     source: DocumentSource
-    expires_at: datetime
-    last_run_at: datetime | None = None
-    activity_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
-    assignee_user_id: UUIDStr | None = None
+    expires_at: datetime = Field(alias="expiresAt")
+    activity_at: datetime | None = Field(default=None, alias="activityAt")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    version: int = Field(description="Monotonic document version.")
+    etag: str | None = Field(
+        default=None,
+        description="Weak ETag for optimistic concurrency checks.",
+    )
+    deleted_at: datetime | None = Field(default=None, alias="deletedAt")
+    assignee_user_id: UUIDStr | None = Field(default=None, alias="assigneeId")
     deleted_by: UUIDStr | None = Field(
         default=None,
         alias="deleted_by_user_id",
-        serialization_alias="deleted_by",
+        serialization_alias="deletedBy",
     )
     tags: list[str] = Field(
         default_factory=list,
@@ -123,19 +85,37 @@ class DocumentOut(BaseSchema):
         serialization_alias="tags",
         description="Tags applied to the document (empty list when none).",
     )
-    uploader: UploaderOut | None = Field(
+    uploader: UserSummary | None = Field(
         default=None,
         alias="uploaded_by_user",
         serialization_alias="uploader",
         description="Summary of the uploading user when available.",
     )
-    last_run: DocumentLastRun | None = Field(
+    assignee: UserSummary | None = Field(
         default=None,
+        alias="assignee_user",
+        serialization_alias="assignee",
+        description="Summary of the assigned user when available.",
+    )
+    latest_run: DocumentRunSummary | None = Field(
+        default=None,
+        alias="latestRun",
         description="Latest run execution associated with the document when available.",
     )
-    last_successful_run: DocumentLastRun | None = Field(
+    latest_successful_run: DocumentRunSummary | None = Field(
         default=None,
+        alias="latestSuccessfulRun",
         description="Latest successful run execution associated with the document when available.",
+    )
+    latest_result: DocumentResultSummary | None = Field(
+        default=None,
+        alias="latestResult",
+        description="Summary of the latest result metadata, when available.",
+    )
+    list_row: DocumentListRow | None = Field(
+        default=None,
+        alias="listRow",
+        description="Optional list row projection for table updates.",
     )
 
     @field_validator("tags", mode="before")
@@ -159,14 +139,9 @@ class DocumentOut(BaseSchema):
         return data
 
     @model_validator(mode="after")
-    def _derive_defaults(self) -> "DocumentOut":
+    def _derive_defaults(self) -> DocumentOut:
         if self.activity_at is None:
-            candidate = self.updated_at
-            if self.last_run_at is not None and self.last_run_at > candidate:
-                candidate = self.last_run_at
-            self.activity_at = candidate
-        if self.display_status is None:
-            self.display_status = _fallback_display_status(self.status)
+            self.activity_at = self.updated_at
         return self
 
 
@@ -203,6 +178,7 @@ class DocumentUpdateRequest(BaseSchema):
 
     assignee_user_id: UUIDStr | None = Field(
         default=None,
+        alias="assigneeId",
         description="Assign the document to a user (null clears assignment).",
     )
     metadata: dict[str, Any] | None = Field(
@@ -211,10 +187,10 @@ class DocumentUpdateRequest(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _ensure_changes(self) -> "DocumentUpdateRequest":
+    def _ensure_changes(self) -> DocumentUpdateRequest:
         assignee_set = "assignee_user_id" in self.model_fields_set
         if not assignee_set and self.metadata is None:
-            raise ValueError("assignee_user_id or metadata is required")
+            raise ValueError("assigneeId or metadata is required")
         return self
 
 
@@ -224,6 +200,7 @@ class DocumentBatchTagsRequest(BaseSchema):
     document_ids: list[UUIDStr] = Field(
         ...,
         min_length=1,
+        alias="documentIds",
         description="Documents to update tags for (all-or-nothing).",
     )
     add: list[str] | None = Field(
@@ -254,6 +231,7 @@ class DocumentBatchDeleteRequest(BaseSchema):
     document_ids: list[UUIDStr] = Field(
         ...,
         min_length=1,
+        alias="documentIds",
         description="Documents to delete (soft delete, all-or-nothing).",
     )
 
@@ -261,7 +239,7 @@ class DocumentBatchDeleteRequest(BaseSchema):
 class DocumentBatchDeleteResponse(BaseSchema):
     """Response envelope for batch deletions."""
 
-    document_ids: list[UUIDStr] = Field(default_factory=list)
+    document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
 
 
 class DocumentBatchArchiveRequest(BaseSchema):
@@ -270,6 +248,7 @@ class DocumentBatchArchiveRequest(BaseSchema):
     document_ids: list[UUIDStr] = Field(
         ...,
         min_length=1,
+        alias="documentIds",
         description="Documents to archive or restore (all-or-nothing).",
     )
 
@@ -287,27 +266,34 @@ class TagCatalogItem(BaseSchema):
     document_count: int = Field(ge=0)
 
 
-class TagCatalogPage(Page[TagCatalogItem]):
+class TagCatalogPage(ListPage[TagCatalogItem]):
     """Paginated tag catalog."""
 
 
-class DocumentLastRun(BaseSchema):
-    """Minimal representation of the last engine execution for a document."""
+class DocumentRunSummary(BaseSchema):
+    """Minimal representation of a run associated with a document."""
 
-    run_id: UUIDStr = Field(description="Latest run identifier for the execution.")
+    id: UUIDStr = Field(description="Run identifier.")
     status: RunStatus
-    run_at: datetime | None = Field(
+    started_at: datetime | None = Field(
         default=None,
-        description="Timestamp for the latest run event (completion/start).",
+        alias="startedAt",
+        description="Timestamp for when the run started, if available.",
     )
-    message: str | None = Field(
+    completed_at: datetime | None = Field(
         default=None,
-        description="Optional status or error message associated with the execution.",
+        alias="completedAt",
+        description="Timestamp for when the run completed, if available.",
+    )
+    error_summary: str | None = Field(
+        default=None,
+        alias="errorSummary",
+        description="Optional error summary from the run.",
     )
 
 
-class DocumentMappingHealth(BaseSchema):
-    """Mapping health summary for a document."""
+class DocumentResultSummary(BaseSchema):
+    """Summary of the latest document result metadata."""
 
     attention: int = Field(ge=0)
     unmapped: int = Field(ge=0)
@@ -318,32 +304,36 @@ class DocumentListRow(BaseSchema):
     """Table-ready projection for document list rows."""
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
-    workspace_id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
     name: str = Field(description="Display name mapped from the original filename.")
-    file_type: DocumentFileType
-    status: DocumentDisplayStatus
-    stage: str | None = None
-    uploader_label: str | None = None
-    assignee_user_id: UUIDStr | None = None
-    assignee_key: str | None = None
+    file_type: DocumentFileType = Field(alias="fileType")
+    status: DocumentStatus
+    uploader: UserSummary | None = None
+    assignee: UserSummary | None = None
     tags: list[str] = Field(default_factory=list)
-    byte_size: int
-    size_label: str
-    queue_state: DocumentQueueState | None = None
-    queue_reason: DocumentQueueReason | None = None
-    mapping_health: DocumentMappingHealth
-    created_at: datetime
-    updated_at: datetime
-    activity_at: datetime
-    last_run: DocumentLastRun | None = None
-    last_successful_run: DocumentLastRun | None = None
+    byte_size: int = Field(alias="byteSize")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    activity_at: datetime = Field(alias="activityAt")
+    version: int = Field(description="Monotonic document version.")
+    etag: str | None = Field(
+        default=None,
+        description="Weak ETag for optimistic concurrency checks.",
+    )
+    latest_run: DocumentRunSummary | None = Field(default=None, alias="latestRun")
+    latest_successful_run: DocumentRunSummary | None = Field(
+        default=None,
+        alias="latestSuccessfulRun",
+    )
+    latest_result: DocumentResultSummary | None = Field(default=None, alias="latestResult")
 
 
-class DocumentListPage(Page[DocumentListRow]):
+class DocumentListPage(ListPage[DocumentListRow]):
     """Paginated envelope of document list rows."""
 
     changes_cursor: str = Field(
         description="Watermark cursor for the documents change feed at response time.",
+        alias="changesCursor",
     )
 
 
@@ -351,25 +341,23 @@ class DocumentChangeEntry(BaseSchema):
     """Single entry from the documents change feed."""
 
     cursor: str
-    type: Literal["document.upsert", "document.deleted"]
-    row: DocumentListRow | None = None
-    document_id: UUIDStr | None = None
-    occurred_at: datetime
-
-    @model_validator(mode="after")
-    def _validate_payload(self) -> "DocumentChangeEntry":
-        if self.type == "document.deleted" and not self.document_id:
-            raise ValueError("document_id is required for document.deleted changes")
-        if self.type == "document.upsert" and self.row is None:
-            raise ValueError("row is required for document.upsert changes")
-        return self
+    type: Literal["document.changed", "document.deleted"]
+    document_id: UUIDStr = Field(alias="documentId")
+    occurred_at: datetime = Field(alias="occurredAt")
+    document_version: int = Field(alias="documentVersion")
+    request_id: str | None = Field(default=None, alias="requestId")
+    client_request_id: str | None = Field(default=None, alias="clientRequestId")
+    row: DocumentListRow | None = Field(
+        default=None,
+        description="Optional list row snapshot for changed documents.",
+    )
 
 
 class DocumentChangesPage(BaseSchema):
     """Envelope for cursor-based change feed results."""
 
-    changes: list[DocumentChangeEntry] = Field(default_factory=list)
-    next_cursor: str
+    items: list[DocumentChangeEntry] = Field(default_factory=list)
+    next_cursor: str = Field(alias="nextCursor")
 
 
 class DocumentUploadRunOptions(BaseSchema):
@@ -377,59 +365,20 @@ class DocumentUploadRunOptions(BaseSchema):
 
     input_sheet_names: list[str] | None = Field(
         default=None,
+        alias="inputSheetNames",
         description="Optional worksheet names to ingest when processing XLSX files.",
     )
     active_sheet_only: bool = Field(
         default=False,
+        alias="activeSheetOnly",
         description="If true, process only the active worksheet when ingesting XLSX files.",
     )
 
     @model_validator(mode="after")
-    def _validate_sheet_options(self) -> "DocumentUploadRunOptions":
+    def _validate_sheet_options(self) -> DocumentUploadRunOptions:
         if self.active_sheet_only and self.input_sheet_names:
             raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
         return self
-
-
-class DocumentUploadSessionCreateRequest(BaseSchema):
-    """Create a resumable upload session for a document."""
-
-    filename: str
-    byte_size: int = Field(ge=1)
-    content_type: str | None = None
-    conflict_behavior: DocumentUploadConflictBehavior = DocumentUploadConflictBehavior.RENAME
-    folder_id: str | None = None
-    metadata: dict[str, Any] | None = None
-    run_options: DocumentUploadRunOptions | None = None
-
-
-class DocumentUploadSessionCreateResponse(BaseSchema):
-    """Response payload for a new upload session."""
-
-    upload_session_id: UUIDStr
-    expires_at: datetime
-    chunk_size_bytes: int
-    next_expected_ranges: list[str]
-    upload_url: str
-
-
-class DocumentUploadSessionStatusResponse(BaseSchema):
-    """Status payload for an upload session."""
-
-    upload_session_id: UUIDStr
-    expires_at: datetime
-    byte_size: int
-    received_bytes: int
-    next_expected_ranges: list[str]
-    upload_complete: bool = False
-    status: DocumentUploadSessionStatus
-
-
-class DocumentUploadSessionUploadResponse(BaseSchema):
-    """Response payload after uploading a range."""
-
-    next_expected_ranges: list[str]
-    upload_complete: bool = False
 
 
 class DocumentSheet(BaseSchema):
@@ -450,25 +399,18 @@ __all__ = [
     "DocumentBatchTagsResponse",
     "DocumentChangeEntry",
     "DocumentChangesPage",
-    "DocumentDisplayStatus",
     "DocumentFileType",
     "DocumentListPage",
     "DocumentListRow",
-    "DocumentMappingHealth",
-    "DocumentQueueReason",
-    "DocumentQueueState",
-    "DocumentLastRun",
     "DocumentOut",
+    "DocumentResultSummary",
+    "DocumentRunSummary",
     "DocumentSheet",
     "DocumentTagsPatch",
     "DocumentTagsReplace",
     "DocumentUpdateRequest",
     "DocumentUploadRunOptions",
-    "DocumentUploadSessionCreateRequest",
-    "DocumentUploadSessionCreateResponse",
-    "DocumentUploadSessionStatusResponse",
-    "DocumentUploadSessionUploadResponse",
     "TagCatalogItem",
     "TagCatalogPage",
-    "UploaderOut",
+    "UserSummary",
 ]

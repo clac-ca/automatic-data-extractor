@@ -11,8 +11,8 @@ python -m ade_engine --help # engine CLI (invoked directly)
 Fast reference (run `--help` for details):
 
 - `ade setup` — one-time repo setup (env, hooks).
-- `ade dev [--backend-only|--frontend-only] [--backend-port 9000]` — run dev servers.
-- `ade start` — serve API + built SPA. `ade build` — build frontend assets.
+- `ade dev [--api-only|--web-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
+- `ade start` — serve the API + built frontend + worker (runs migrations first; builds frontend if missing; add `--no-web` to skip). `ade worker` — run the worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
 - `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade clean` / `ade reset`.
@@ -28,9 +28,10 @@ Options:
 
 Commands:
   setup     Bootstrap repo env and hooks
-  dev       Run backend/frontend dev servers
-  start     Serve API + built SPA
-  build     Build frontend assets
+  dev       Run API/web dev servers (+ worker, runs migrations first)
+  start     Serve API + built frontend + worker (runs migrations first, builds if missing)
+  worker    Run the background worker only
+  build     Build web assets
   tests     Run Python/JS tests
   lint      Lint/format helpers
   bundle    Bundle files into Markdown
@@ -71,13 +72,19 @@ Notes for agents:
 Quick examples:
 
 ```bash
-# Run both dev servers (backend+frontend)
+# Run dev services (api+web+worker)
 ade dev
 
-# Backend-only dev server on a custom port
-ade dev --backend-only --backend-port 9000
+# API-only dev server on a custom port
+ade dev --api-only --api-port 9000
 
-# Build frontend assets
+# Dev without the worker
+ade dev --no-worker
+
+# Run the worker
+ade worker
+
+# Build web assets
 ade build
 
 # Run all tests

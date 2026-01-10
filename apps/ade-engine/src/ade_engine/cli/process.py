@@ -125,7 +125,7 @@ def process_file(
         request_output_dir = None
         request_output_path = None
 
-    # Logs default to the output directory unless overridden
+    # Logs are written to files only when --logs-dir is provided.
     resolved_logs_dir = logs_dir.expanduser().resolve() if logs_dir is not None else None
 
     result = engine.run(
@@ -226,7 +226,7 @@ def process_batch(
         raise BadParameter("No inputs found under --input-dir after filters.", param_hint="input_dir")
 
     resolved_output_dir = output_dir.expanduser().resolve()
-    resolved_logs_dir = logs_dir.expanduser().resolve() if logs_dir is not None else resolved_output_dir
+    resolved_logs_dir = logs_dir.expanduser().resolve() if logs_dir is not None else None
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     any_failed = False

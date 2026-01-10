@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.routing import APIRoute
 from fastapi_users.authentication.strategy import DatabaseStrategy
-from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from fastapi_users.password import PasswordHelper
 from ade_api.api.deps import get_auth_service
 from ade_api.core.auth.users import (
+    SyncAccessTokenDatabase,
     UserCreate,
     UserRead,
     build_user_router_factory,
@@ -19,23 +19,24 @@ from ade_api.core.auth.users import (
 )
 from ade_api.core.http import require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db.session import get_session
+from ade_api.db import get_sessionmaker
 from ade_api.models import AccessToken
 from ade_api.settings import Settings
 
-from .schemas import AuthSetupRequest, AuthSetupStatusResponse, AuthProviderListResponse
 from .oidc_router import router as oidc_router
+from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
 from .service import AuthService, SetupAlreadyCompletedError
+
 
 def _add_csrf_logout_dependency(auth_router: APIRouter) -> None:
     for route in auth_router.routes:
         if isinstance(route, APIRoute) and route.path.endswith("/logout"):
             route.dependencies.append(Depends(require_csrf))
 
-async def _require_open_registration(
+def _require_open_registration(
     service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> None:
-    status_payload = await service.get_setup_status()
+    status_payload = service.get_setup_status()
     if status_payload.registration_mode != "open":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
@@ -66,10 +67,10 @@ def create_auth_router(settings: Settings) -> APIRouter:
         status_code=status.HTTP_200_OK,
         summary="Return setup status for the first admin user",
     )
-    async def get_setup_status(
+    def get_setup_status(
         service: Annotated[AuthService, Depends(get_auth_service)],
     ) -> AuthSetupStatusResponse:
-        return await service.get_setup_status()
+        return service.get_setup_status()
 
     @router.post(
         "/setup",
@@ -78,18 +79,28 @@ def create_auth_router(settings: Settings) -> APIRouter:
     )
     async def complete_setup(
         payload: AuthSetupRequest,
-        service: Annotated[AuthService, Depends(get_auth_service)],
-        db: Annotated[AsyncSession, Depends(get_session)],
-        password_helper=Depends(get_password_helper),
+        request: Request,
+        password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
     ) -> Response:
         password_hash = password_helper.hash(payload.password.get_secret_value())
 
         try:
-            user = await service.create_first_admin(payload, password_hash=password_hash)
+            session_factory = get_sessionmaker(request)
+
+            def _create_admin():
+                with session_factory() as session:
+                    with session.begin():
+                        local_service = AuthService(session=session, settings=settings)
+                        return local_service.create_first_admin(
+                            payload,
+                            password_hash=password_hash,
+                        )
+
+            user = await run_in_threadpool(_create_admin)
         except SetupAlreadyCompletedError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-        access_token_db = SQLAlchemyAccessTokenDatabase(db, AccessToken)
+        access_token_db = SyncAccessTokenDatabase(get_sessionmaker(request), AccessToken)
         strategy = DatabaseStrategy(
             access_token_db,
             lifetime_seconds=int(settings.session_access_ttl.total_seconds()),
@@ -105,7 +116,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         status_code=status.HTTP_200_OK,
         summary="Return configured authentication providers",
     )
-    async def list_auth_providers(
+    def list_auth_providers(
         service: Annotated[AuthService, Depends(get_auth_service)],
     ) -> AuthProviderListResponse:
         return service.list_auth_providers()

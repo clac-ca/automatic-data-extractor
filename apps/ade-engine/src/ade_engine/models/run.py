@@ -48,8 +48,9 @@ class RunRequest:
     output_path: Path | None = None
 
     # Logging:
-    # - logs_dir defaults to output_dir (or input dir when output_dir is not provided).
-    # - logs_path defaults to <logs_dir>/<input_stem>_engine.log|engine_events.ndjson (based on log_format).
+    # - logs_dir/logs_path are optional; if omitted, the engine logs only to stderr/stdout.
+    # - if logs_dir is provided, logs_path defaults to <logs_dir>/<input_stem>_engine.log|engine_events.ndjson
+    #   (based on log_format).
     logs_dir: Path | None = None
     logs_path: Path | None = None
 

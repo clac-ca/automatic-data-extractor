@@ -125,7 +125,7 @@ def setup_logging(settings: Settings) -> None:
     """Configure root logging for the ADE API process.
 
     This installs a single console-style StreamHandler on stdout and sets the
-    root log level from ``settings.logging_level`` (env: ``ADE_LOGGING_LEVEL``).
+    root log level from ``settings.log_level`` (env: ``ADE_LOG_LEVEL``).
 
     It also wires common third-party loggers (uvicorn, alembic, sqlalchemy) to
     propagate into the same root logger so that all logs share a consistent
@@ -133,20 +133,18 @@ def setup_logging(settings: Settings) -> None:
     """
     root_logger = logging.getLogger()
 
-    level_name = settings.logging_level.upper()
+    level_name = settings.log_level.upper()
     level = getattr(logging, level_name, logging.INFO)
 
-    # Only fully configure once per process; subsequent calls just adjust level.
-    if getattr(root_logger, _CONFIGURED_FLAG, False):
-        root_logger.setLevel(level)
-        return
-
-    handler = logging.StreamHandler()
-    handler.setFormatter(ConsoleLogFormatter())
-
-    # Replace any existing handlers to avoid duplicate logs.
-    root_logger.handlers = [handler]
+    configured = getattr(root_logger, _CONFIGURED_FLAG, False)
+    if not configured:
+        handler = logging.StreamHandler()
+        handler.setFormatter(ConsoleLogFormatter())
+        # Replace any existing handlers to avoid duplicate logs.
+        root_logger.handlers = [handler]
+        setattr(root_logger, _CONFIGURED_FLAG, True)
     root_logger.setLevel(level)
+    handler = root_logger.handlers[0] if root_logger.handlers else None
 
     # Let common third-party loggers propagate into our root logger.
     for name in (
@@ -161,7 +159,16 @@ def setup_logging(settings: Settings) -> None:
         logger.handlers.clear()
         logger.propagate = True
 
-    setattr(root_logger, _CONFIGURED_FLAG, True)
+    # Optional: dedicated DB logger level for SQLAlchemy noise control.
+    db_level_name = settings.database_log_level
+    if db_level_name:
+        db_level = getattr(logging, db_level_name.upper(), logging.DEBUG)
+        for name in ("sqlalchemy.engine", "sqlalchemy.pool"):
+            logger = logging.getLogger(name)
+            logger.setLevel(db_level)
+            if handler is not None:
+                logger.handlers = [handler]
+            logger.propagate = False
 
 
 # ---------------------------------------------------------------------------
@@ -179,12 +186,16 @@ def clear_request_context() -> None:
     _CORRELATION_ID.set(None)
 
 
+def current_request_id() -> str | None:
+    """Return the current request/correlation ID if bound."""
+    return _CORRELATION_ID.get()
+
+
 def log_context(
     *,
     workspace_id: UUID | None = None,
     configuration_id: UUID | None = None,
     run_id: UUID | None = None,
-    build_id: UUID | None = None,
     document_id: UUID | None = None,
     user_id: UUID | None = None,
     **extra: Any,
@@ -210,8 +221,6 @@ def log_context(
         ctx["configuration_id"] = str(configuration_id)
     if run_id is not None:
         ctx["run_id"] = str(run_id)
-    if build_id is not None:
-        ctx["build_id"] = str(build_id)
     if document_id is not None:
         ctx["document_id"] = str(document_id)
     if user_id is not None:
@@ -242,6 +251,7 @@ __all__ = [
     "ConsoleLogFormatter",
     "bind_request_context",
     "clear_request_context",
+    "current_request_id",
     "log_context",
     "setup_logging",
 ]

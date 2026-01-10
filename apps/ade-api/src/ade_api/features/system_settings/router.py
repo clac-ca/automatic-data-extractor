@@ -20,33 +20,33 @@ router = APIRouter(
 
 
 @router.get(
-    "/safeMode",
+    "/safemode",
     response_model=SafeModeStatus,
     status_code=status.HTTP_200_OK,
     summary="Read ADE safe mode status",
 )
-async def read_safe_mode(
+def read_safe_mode(
     service: Annotated[SafeModeService, Depends(get_safe_mode_service)],
 ) -> SafeModeStatus:
     """Return the current ADE safe mode status."""
 
-    return await service.get_status()
+    return service.get_status()
 
 
 @router.put(
-    "/safeMode",
+    "/safemode",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Toggle ADE safe mode",
     dependencies=[Security(require_csrf)],
 )
-async def update_safe_mode(
+def update_safe_mode(
     payload: SafeModeUpdateRequest,
     service: Annotated[SafeModeService, Depends(get_safe_mode_service)],
     _actor: Annotated[object, Security(require_global("system.settings.manage"))],
 ) -> Response:
     """Persist and broadcast an updated ADE safe mode state."""
 
-    await service.update_status(
+    service.update_status(
         enabled=payload.enabled,
         detail=payload.detail,
     )

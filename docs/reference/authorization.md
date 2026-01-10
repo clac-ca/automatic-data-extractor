@@ -51,14 +51,14 @@ ease future CSRF enforcement.
 
 All RBAC administration lives under `/api/v1`:
 
-- Permission catalog: `GET /rbac/permissions`.
+- Permission catalog: `GET /permissions`.
 - Role catalog and CRUD (global or workspace-scoped via query params):
-  `GET/POST /rbac/roles`, `GET/PATCH/DELETE /rbac/roles/{role_id}`.
-- Global role assignments (admin listing/upserts): `GET /rbac/roleAssignments`.
-- Global roles for a specific user: `GET /users/{user_id}/roles`,
-  `PUT/DELETE /users/{user_id}/roles/{role_id}`.
+  `GET/POST /roles`, `GET/PATCH/DELETE /roles/{roleId}`.
+- Global role assignments (admin listing/upserts): `GET /roleassignments`.
+- Global roles for a specific user: `GET /users/{userId}/roles`,
+  `PUT/DELETE /users/{userId}/roles/{roleId}`.
 - Workspace membership + role bindings:
-  `/workspaces/{workspace_id}/members` (list/create/update/delete).
+  `/workspaces/{workspaceId}/members` (list/create/update/delete).
 - Effective permission introspection via `/me/permissions` and
   `/me/permissions/check`.
 

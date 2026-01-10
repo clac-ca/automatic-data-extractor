@@ -1,5 +1,14 @@
-# ADE Web Build Artefacts
+# ADE Web Assets
 
-This directory is populated by the frontend build step (`ade build` or `npm run build` under `apps/ade-web/`).
-The generated files are ignored in git to keep the repository free of compiled assets.
-Run `ade build` from the repository root to refresh the contents when working locally.
+The API can serve the built SPA bundle when `ADE_FRONTEND_DIST_DIR` is set.
+
+Example (repo root):
+
+```bash
+ade build
+ADE_FRONTEND_DIST_DIR=apps/ade-web/dist uvicorn ade_api.main:create_app --factory
+```
+
+When running via `ade start`, the CLI sets `ADE_FRONTEND_DIST_DIR` for you.
+If you prefer a dedicated web server or reverse proxy, serve the `dist/`
+directory separately and run `ade start --no-web`.

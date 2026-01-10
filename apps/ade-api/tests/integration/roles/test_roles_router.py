@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import anyio
+import json
 from typing import Any
 
 import pytest
@@ -25,8 +27,12 @@ async def test_permission_catalog_requires_global_permission(
     token, _ = await login(async_client, email=member.email, password=member.password)
 
     response = await async_client.get(
-        "/api/v1/rbac/permissions",
-        params={"scope": "workspace"},
+        "/api/v1/permissions",
+        params={
+            "filters": json.dumps(
+                [{"id": "scopeType", "operator": "eq", "value": "workspace"}]
+            )
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -41,8 +47,12 @@ async def test_permission_catalog_global_admin(
     token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     response = await async_client.get(
-        "/api/v1/rbac/permissions",
-        params={"scope": "global"},
+        "/api/v1/permissions",
+        params={
+            "filters": json.dumps(
+                [{"id": "scopeType", "operator": "eq", "value": "global"}]
+            )
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -62,8 +72,7 @@ async def test_roles_crud_and_delete(
     token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     create_response = await async_client.post(
-        "/api/v1/rbac/roles",
-        params={"scope": "global"},
+        "/api/v1/roles",
         json={
             "name": "Data Steward",
             "permissions": ["users.read_all"],
@@ -76,28 +85,44 @@ async def test_roles_crud_and_delete(
     assert created["slug"] == "data-steward"
     assert created["permissions"] == ["users.read_all"]
 
+    read_response = await async_client.get(
+        f"/api/v1/roles/{role_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert read_response.status_code == 200, read_response.text
+    role_etag = read_response.headers.get("ETag")
+    assert role_etag is not None
+
     update_response = await async_client.patch(
-        f"/api/v1/rbac/roles/{role_id}",
+        f"/api/v1/roles/{role_id}",
         json={
             "name": "Data Steward",
             "description": "Manages user directory",
             "permissions": ["users.read_all", "roles.read_all"],
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "If-Match": role_etag,
+        },
     )
     assert update_response.status_code == 200, update_response.text
     updated = update_response.json()
     assert sorted(updated["permissions"]) == ["roles.read_all", "users.read_all"]
     assert updated["description"] == "Manages user directory"
+    updated_etag = update_response.headers.get("ETag")
+    assert updated_etag is not None
 
     delete_response = await async_client.delete(
-        f"/api/v1/rbac/roles/{role_id}",
-        headers={"Authorization": f"Bearer {token}"},
+        f"/api/v1/roles/{role_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "If-Match": updated_etag,
+        },
     )
     assert delete_response.status_code == 204
 
     missing_response = await async_client.get(
-        f"/api/v1/rbac/roles/{role_id}",
+        f"/api/v1/roles/{role_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert missing_response.status_code == 404
@@ -142,10 +167,10 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
     admin = seed_identity.admin
     member = seed_identity.member
     token, _ = await login(async_client, email=admin.email, password=admin.password)
-    user = await session.get(User, member.id)
+    user = await anyio.to_thread.run_sync(session.get, User, member.id)
     assert user is not None
     user.is_active = False
-    await session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     base_url = f"/api/v1/workspaces/{seed_identity.workspace_id}/members"
 
@@ -160,7 +185,15 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
     inclusive = await async_client.get(
         base_url,
         headers={"Authorization": f"Bearer {token}"},
-        params={"include_inactive": True},
+        params={
+            "filters": json.dumps(
+                [
+                    {"id": "isActive", "operator": "eq", "value": True},
+                    {"id": "isActive", "operator": "eq", "value": False},
+                ]
+            ),
+            "joinOperator": "or",
+        },
     )
     assert inclusive.status_code == 200, inclusive.text
     inclusive_members = {str(item["user_id"]) for item in _items(inclusive.json())}
@@ -190,8 +223,12 @@ async def test_assign_workspace_member_roles(
 
     # Load workspace-member role id
     roles_response = await async_client.get(
-        "/api/v1/rbac/roles",
-        params={"scope": "workspace"},
+        "/api/v1/roles",
+        params={
+            "filters": json.dumps(
+                [{"id": "scopeType", "operator": "eq", "value": "workspace"}]
+            )
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert roles_response.status_code == 200

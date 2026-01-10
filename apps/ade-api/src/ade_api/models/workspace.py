@@ -9,7 +9,7 @@ from sqlalchemy import JSON, Boolean, ForeignKey, String
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
+from ade_api.db import GUID, Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 from .user import User
 
@@ -36,10 +36,10 @@ class WorkspaceMembership(TimestampMixin, Base):
 
     __tablename__ = "workspace_memberships"
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), primary_key=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), primary_key=True
     )
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), primary_key=True
+        GUID(), ForeignKey("workspaces.id", ondelete="NO ACTION"), primary_key=True
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")

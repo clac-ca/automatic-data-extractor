@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import secrets
 import sys
-from contextlib import asynccontextmanager
+from contextlib import contextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 from uuid import UUID
 
 import typer
@@ -18,13 +17,13 @@ from ade_cli.commands import common
 if TYPE_CHECKING:
     from ade_api.models import Role, User, UserRoleAssignment
     from ade_api.settings import Settings
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Session
 
 
 class UserCommandContext:
     """Bundle DB session + services used by the user CLI commands."""
 
-    def __init__(self, *, session: "AsyncSession", settings: "Settings") -> None:
+    def __init__(self, *, session: "Session", settings: "Settings") -> None:
         from ade_api.features.rbac.service import RbacService
         from ade_api.features.users.repository import UsersRepository
         from ade_api.features.users.service import UsersService
@@ -35,30 +34,30 @@ class UserCommandContext:
         self.users_service = UsersService(session=session, settings=settings)
         self.rbac = RbacService(session=session)
 
-    async def sync_rbac_registry(self) -> None:
-        await self.rbac.sync_registry()
+    def sync_rbac_registry(self) -> None:
+        self.rbac.sync_registry()
 
-    async def resolve_user(self, ref: str) -> "User":
+    def resolve_user(self, ref: str) -> "User":
         """Resolve a user by UUID or email."""
 
         user = None
         user_id = _coerce_uuid(ref)
         if user_id:
-            user = await self.repo.get_by_id(user_id)
+            user = self.repo.get_by_id(user_id)
         if user is None:
-            user = await self.repo.get_by_email(ref)
+            user = self.repo.get_by_email(ref)
         if user is None:
             raise LookupError(f"User not found: {ref}")
         return user
 
-    async def resolve_role(self, ref: str) -> "Role":
+    def resolve_role(self, ref: str) -> "Role":
         """Resolve a role by UUID or slug."""
 
         role_id = _coerce_uuid(ref)
         role = (
-            await self.rbac.get_role(role_id)
+            self.rbac.get_role(role_id)
             if role_id
-            else await self.rbac.get_role_by_slug(slug=ref)
+            else self.rbac.get_role_by_slug(slug=ref)
         )
         if role is None:
             raise LookupError(f"Role not found: {ref}")
@@ -76,26 +75,44 @@ def _ensure_backend() -> None:
     )
 
 
-@asynccontextmanager
-async def _user_context() -> AsyncIterator[UserCommandContext]:
-    """Async context manager that yields a ``UserCommandContext`` and commits on success."""
+@contextmanager
+def _user_context() -> Iterator[UserCommandContext]:
+    """Context manager that yields a ``UserCommandContext`` and commits on success."""
 
     _ensure_backend()
-    from ade_api.db import get_sessionmaker
+    from sqlalchemy.orm import sessionmaker
+
+    from ade_api.db import DatabaseSettings, build_engine
     from ade_api.settings import Settings
 
     settings = Settings()
-    session_factory = get_sessionmaker(settings=settings)
-    session = session_factory()
+    db_settings = DatabaseSettings(
+        url=settings.database_url,
+        echo=settings.database_echo,
+        auth_mode=settings.database_auth_mode,
+        managed_identity_client_id=settings.database_mi_client_id,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=settings.database_pool_timeout,
+        pool_recycle=settings.database_pool_recycle,
+        sqlite_journal_mode=settings.database_sqlite_journal_mode,
+        sqlite_synchronous=settings.database_sqlite_synchronous,
+        sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
+        sqlite_begin_mode=settings.database_sqlite_begin_mode,
+    )
+    engine = build_engine(db_settings)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session = SessionLocal()
     ctx = UserCommandContext(session=session, settings=settings)
     try:
         yield ctx
-        await session.commit()
+        session.commit()
     except Exception:
-        await session.rollback()
+        session.rollback()
         raise
     finally:
-        await session.close()
+        session.close()
+        engine.dispose()
 
 
 def _coerce_uuid(value: str | None) -> UUID | None:
@@ -156,19 +173,19 @@ def _echo_error(message: str) -> None:
     typer.echo(f"Error: {message}", err=True)
 
 
-async def _list_users(
+def _list_users(
     *,
     include_inactive: bool,
     humans_only: bool,
     query: str | None,
     json_output: bool,
 ) -> None:
-    async with _user_context() as ctx:
-        users = await ctx.repo.list_users()
+    with _user_context() as ctx:
+        users = ctx.repo.list_users()
         rows: list[dict[str, Any]] = []
 
-        async def _global_roles(user: "User") -> list[str]:
-            roles = await ctx.rbac.get_global_role_slugs_for_user(user=user)
+        def _global_roles(user: "User") -> list[str]:
+            roles = ctx.rbac.get_global_role_slugs_for_user(user=user)
             return sorted(roles)
 
         for user in users:
@@ -187,7 +204,7 @@ async def _list_users(
                     "display_name": user.display_name,
                     "is_active": user.is_active,
                     "is_service_account": user.is_service_account,
-                    "roles": await _global_roles(user),
+                    "roles": _global_roles(user),
                 }
             )
 
@@ -222,7 +239,7 @@ async def _list_users(
         )
 
 
-async def _create_user(
+def _create_user(
     *,
     email: str,
     password: str | None,
@@ -244,8 +261,8 @@ async def _create_user(
         _echo_error("Email is required.")
         raise typer.Exit(code=1)
 
-    async with _user_context() as ctx:
-        existing = await ctx.repo.get_by_email(email_clean)
+    with _user_context() as ctx:
+        existing = ctx.repo.get_by_email(email_clean)
         if existing is not None:
             _echo_error("Email already in use.")
             raise typer.Exit(code=1)
@@ -255,7 +272,7 @@ async def _create_user(
         else:
             password_hash = hash_password(secrets.token_urlsafe(32))
         try:
-            user = await ctx.repo.create(
+            user = ctx.repo.create(
                 email=email_clean,
                 hashed_password=password_hash,
                 display_name=display_name.strip() if display_name else None,
@@ -274,7 +291,7 @@ async def _create_user(
         if not is_active:
             payload = UserUpdate(is_active=False)
             try:
-                await ctx.users_service.update_user(
+                ctx.users_service.update_user(
                     user_id=user.id,
                     payload=payload,
                     actor=None,
@@ -292,17 +309,17 @@ async def _create_user(
         desired_roles = list(dict.fromkeys(desired_roles))
 
         if desired_roles:
-            await ctx.sync_rbac_registry()
+            ctx.sync_rbac_registry()
             for role_ref in desired_roles:
-                role = await ctx.resolve_role(role_ref)
-                assignment = await ctx.rbac.assign_role_if_missing(
+                role = ctx.resolve_role(role_ref)
+                assignment = ctx.rbac.assign_role_if_missing(
                     user_id=user.id,
                     role_id=role.id,
                     workspace_id=None,
                 )
                 assignments.append(assignment)
 
-        profile = await ctx.users_service.get_user(user_id=user.id)
+        profile = ctx.users_service.get_user(user_id=user.id)
 
     if json_output:
         payload = profile.model_dump()
@@ -334,21 +351,21 @@ async def _create_user(
             )
 
 
-async def _show_user(*, user_ref: str, json_output: bool) -> None:
+def _show_user(*, user_ref: str, json_output: bool) -> None:
     from ade_api.models import UserRoleAssignment
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    async with _user_context() as ctx:
-        user = await ctx.resolve_user(user_ref)
-        profile = await ctx.users_service.get_user(user_id=user.id)
+    with _user_context() as ctx:
+        user = ctx.resolve_user(user_ref)
+        profile = ctx.users_service.get_user(user_id=user.id)
 
         stmt = (
             select(UserRoleAssignment)
             .options(selectinload(UserRoleAssignment.role))
             .where(UserRoleAssignment.user_id == user.id)
         )
-        result = await ctx.session.execute(stmt)
+        result = ctx.session.execute(stmt)
         assignments = list(result.scalars().all())
 
     if json_output:
@@ -387,7 +404,7 @@ async def _show_user(*, user_ref: str, json_output: bool) -> None:
             )
 
 
-async def _update_user(
+def _update_user(
     *,
     user_ref: str,
     display_name: str | None,
@@ -406,10 +423,10 @@ async def _update_user(
         _echo_error(str(exc))
         raise typer.Exit(code=1) from exc
 
-    async with _user_context() as ctx:
-        user = await ctx.resolve_user(user_ref)
+    with _user_context() as ctx:
+        user = ctx.resolve_user(user_ref)
         try:
-            updated = await ctx.users_service.update_user(
+            updated = ctx.users_service.update_user(
                 user_id=user.id,
                 payload=payload,
                 actor=None,
@@ -427,20 +444,20 @@ async def _update_user(
     typer.echo(f"  name:   {updated.display_name or '-'}")
 
 
-async def _set_password(*, user_ref: str, password: str) -> None:
+def _set_password(*, user_ref: str, password: str) -> None:
     from ade_api.core.security.hashing import hash_password
 
-    async with _user_context() as ctx:
-        user = await ctx.resolve_user(user_ref)
+    with _user_context() as ctx:
+        user = ctx.resolve_user(user_ref)
         password_hash = hash_password(password)
-        await ctx.repo.set_password(user, password_hash)
+        ctx.repo.set_password(user, password_hash)
         label = user.email or str(user.id)
     typer.echo(f"Rotated password for {label}")
 
 
-async def _delete_user(*, user_ref: str, yes: bool) -> None:
-    async with _user_context() as ctx:
-        user = await ctx.resolve_user(user_ref)
+def _delete_user(*, user_ref: str, yes: bool) -> None:
+    with _user_context() as ctx:
+        user = ctx.resolve_user(user_ref)
         label = user.email or str(user.id)
         if not yes:
             confirmed = typer.confirm(
@@ -450,12 +467,12 @@ async def _delete_user(*, user_ref: str, yes: bool) -> None:
             if not confirmed:
                 typer.echo("Deletion cancelled.")
                 return
-        await ctx.session.delete(user)
-        await ctx.session.flush()
+        ctx.session.delete(user)
+        ctx.session.flush()
     typer.echo(f"Deleted user {label}")
 
 
-async def _list_roles(
+def _list_roles(
     *,
     user_ref: str,
     scope: str,
@@ -463,24 +480,50 @@ async def _list_roles(
     limit: int,
     json_output: bool,
 ) -> None:
+    from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
+    from ade_api.common.sorting import resolve_sort
+    from ade_api.features.rbac.sorting import (
+        ASSIGNMENT_DEFAULT_SORT,
+        ASSIGNMENT_ID_FIELD,
+        ASSIGNMENT_SORT_FIELDS,
+    )
+
     try:
         scope_value, workspace_uuid = _scope_and_workspace(scope, workspace_id)
     except ValueError as exc:
         _echo_error(str(exc))
         raise typer.Exit(code=1) from exc
 
-    async with _user_context() as ctx:
-        user = await ctx.resolve_user(user_ref)
+    with _user_context() as ctx:
+        user = ctx.resolve_user(user_ref)
         user_label = user.email or str(user.id)
         workspace_filter = _workspace_id_for_scope(scope_value, workspace_uuid)
-        page = await ctx.rbac.list_assignments(
-            workspace_id=workspace_filter,
-            user_id=user.id,
-            role_id=None,
+        filters = [
+            FilterItem(id="userId", operator=FilterOperator.EQ, value=str(user.id)),
+            FilterItem(
+                id="scopeId",
+                operator=(
+                    FilterOperator.IS_EMPTY
+                    if workspace_filter is None
+                    else FilterOperator.EQ
+                ),
+                value=None if workspace_filter is None else str(workspace_filter),
+            ),
+        ]
+        order_by = resolve_sort(
+            [],
+            allowed=ASSIGNMENT_SORT_FIELDS,
+            default=ASSIGNMENT_DEFAULT_SORT,
+            id_field=ASSIGNMENT_ID_FIELD,
+        )
+        page = ctx.rbac.list_assignments(
+            filters=filters,
+            join_operator=FilterJoinOperator.AND,
+            q=None,
+            order_by=order_by,
             page=1,
-            page_size=limit,
-            include_total=False,
-            include_inactive=True,
+            per_page=limit,
+            default_active_only=False,
         )
         assignments = list(page.items)
 
@@ -512,7 +555,7 @@ async def _list_roles(
         )
 
 
-async def _assign_role(
+def _assign_role(
     *,
     user_ref: str,
     role_ref: str,
@@ -528,22 +571,22 @@ async def _assign_role(
         _echo_error(str(exc))
         raise typer.Exit(code=1) from exc
 
-    async with _user_context() as ctx:
-        await ctx.sync_rbac_registry()
-        user = await ctx.resolve_user(user_ref)
-        role = await ctx.resolve_role(role_ref)
+    with _user_context() as ctx:
+        ctx.sync_rbac_registry()
+        user = ctx.resolve_user(user_ref)
+        role = ctx.resolve_role(role_ref)
         user_label = user.email or str(user.id)
         role_label = role.slug
         workspace_target = _workspace_id_for_scope(scope_value, workspace_uuid)
         try:
             if if_missing:
-                assignment = await ctx.rbac.assign_role_if_missing(
+                assignment = ctx.rbac.assign_role_if_missing(
                     user_id=user.id,
                     role_id=role.id,
                     workspace_id=workspace_target,
                 )
             else:
-                assignment = await ctx.rbac.assign_role(
+                assignment = ctx.rbac.assign_role(
                     user_id=user.id,
                     role_id=role.id,
                     workspace_id=workspace_target,
@@ -560,7 +603,7 @@ async def _assign_role(
     )
 
 
-async def _remove_role(
+def _remove_role(
     *,
     user_ref: str | None,
     role_ref: str | None,
@@ -570,13 +613,13 @@ async def _remove_role(
     ) -> None:
     from ade_api.features.rbac.service import AssignmentNotFoundError, ScopeMismatchError
 
-    async with _user_context() as ctx:
+    with _user_context() as ctx:
         if assignment_id:
             assignment_uuid = _coerce_uuid(assignment_id)
             if assignment_uuid is None:
                 _echo_error("assignment-id must be a valid UUID.")
                 raise typer.Exit(code=1)
-            assignment = await ctx.rbac.get_assignment(assignment_id=assignment_uuid)
+            assignment = ctx.rbac.get_assignment(assignment_id=assignment_uuid)
             if assignment is None:
                 _echo_error("Role assignment not found.")
                 raise typer.Exit(code=1)
@@ -591,9 +634,9 @@ async def _remove_role(
                 _echo_error(str(exc))
                 raise typer.Exit(code=1) from exc
             workspace_uuid = _workspace_id_for_scope(scope_value, workspace_uuid)
-            user = await ctx.resolve_user(user_ref)
-            role = await ctx.resolve_role(role_ref)
-            assignment = await ctx.rbac.get_assignment_for_user_role(
+            user = ctx.resolve_user(user_ref)
+            role = ctx.resolve_role(role_ref)
+            assignment = ctx.rbac.get_assignment_for_user_role(
                 user_id=user.id,
                 role_id=role.id,
                 workspace_id=workspace_uuid,
@@ -603,7 +646,7 @@ async def _remove_role(
                 raise typer.Exit(code=1)
         assignment_id = str(assignment.id)
         try:
-            await ctx.rbac.delete_assignment(
+            ctx.rbac.delete_assignment(
                 assignment_id=assignment.id,
                 workspace_id=workspace_uuid,
             )
@@ -646,13 +689,11 @@ def register(app: typer.Typer) -> None:
             help="Emit JSON instead of a table.",
         ),
     ) -> None:
-        asyncio.run(
-            _list_users(
-                include_inactive=include_inactive,
-                humans_only=humans_only,
-                query=query,
-                json_output=json_output,
-            )
+        _list_users(
+            include_inactive=include_inactive,
+            humans_only=humans_only,
+            query=query,
+            json_output=json_output,
         )
 
     @users_app.command("show", help="Show a single user by ID or email.")
@@ -660,7 +701,7 @@ def register(app: typer.Typer) -> None:
         user: str = typer.Argument(..., help="User UUID or email address."),
         json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
     ) -> None:
-        asyncio.run(_show_user(user_ref=user, json_output=json_output))
+        _show_user(user_ref=user, json_output=json_output)
 
     @users_app.command("create", help="Create a user and optionally assign global roles.")
     def create_user(
@@ -725,18 +766,16 @@ def register(app: typer.Typer) -> None:
             _echo_error("Password cannot be empty.")
             raise typer.Exit(code=1)
 
-        asyncio.run(
-            _create_user(
-                email=email,
-                password=password,
-                display_name=display_name,
-                service_account=service_account,
-                is_active=not inactive,
-                roles=roles,
-                assign_admin=admin or superuser,
-                is_superuser=superuser,
-                json_output=json_output,
-            )
+        _create_user(
+            email=email,
+            password=password,
+            display_name=display_name,
+            service_account=service_account,
+            is_active=not inactive,
+            roles=roles,
+            assign_admin=admin or superuser,
+            is_superuser=superuser,
+            json_output=json_output,
         )
 
     @users_app.command(
@@ -787,39 +826,33 @@ def register(app: typer.Typer) -> None:
         ),
         json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
     ) -> None:
-        asyncio.run(
-            _update_user(
-                user_ref=user,
-                display_name=display_name,
-                active_flag=active,
-                json_output=json_output,
-            )
+        _update_user(
+            user_ref=user,
+            display_name=display_name,
+            active_flag=active,
+            json_output=json_output,
         )
 
     @users_app.command("activate", help="Activate a user account.")
     def activate(
         user: str = typer.Argument(..., help="User UUID or email address."),
     ) -> None:
-        asyncio.run(
-            _update_user(
-                user_ref=user,
-                display_name=None,
-                active_flag=True,
-                json_output=False,
-            )
+        _update_user(
+            user_ref=user,
+            display_name=None,
+            active_flag=True,
+            json_output=False,
         )
 
     @users_app.command("deactivate", help="Deactivate a user account and revoke access.")
     def deactivate(
         user: str = typer.Argument(..., help="User UUID or email address."),
     ) -> None:
-        asyncio.run(
-            _update_user(
-                user_ref=user,
-                display_name=None,
-                active_flag=False,
-                json_output=False,
-            )
+        _update_user(
+            user_ref=user,
+            display_name=None,
+            active_flag=False,
+            json_output=False,
         )
 
     @users_app.command("set-password", help="Rotate a user's password.")
@@ -844,7 +877,7 @@ def register(app: typer.Typer) -> None:
         if not chosen.strip():
             _echo_error("Password cannot be empty.")
             raise typer.Exit(code=1)
-        asyncio.run(_set_password(user_ref=user, password=chosen))
+        _set_password(user_ref=user, password=chosen)
 
     @users_app.command("delete", help="Delete a user and all related credentials/assignments.")
     def delete_user(
@@ -856,7 +889,7 @@ def register(app: typer.Typer) -> None:
             help="Skip confirmation prompts.",
         ),
     ) -> None:
-        asyncio.run(_delete_user(user_ref=user, yes=yes))
+        _delete_user(user_ref=user, yes=yes)
 
     @roles_app.command("list", help="List role assignments for a user.")
     def list_roles(
@@ -879,14 +912,12 @@ def register(app: typer.Typer) -> None:
         ),
         json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
     ) -> None:
-        asyncio.run(
-            _list_roles(
-                user_ref=user,
-                scope=scope,
-                workspace_id=workspace_id,
-                limit=limit,
-                json_output=json_output,
-            )
+        _list_roles(
+            user_ref=user,
+            scope=scope,
+            workspace_id=workspace_id,
+            limit=limit,
+            json_output=json_output,
         )
 
     @roles_app.command("assign", help="Assign a role to a user.")
@@ -909,14 +940,12 @@ def register(app: typer.Typer) -> None:
             help="Skip duplicates when already assigned.",
         ),
     ) -> None:
-        asyncio.run(
-            _assign_role(
-                user_ref=user,
-                role_ref=role,
-                scope=scope,
-                workspace_id=workspace_id,
-                if_missing=if_missing,
-            )
+        _assign_role(
+            user_ref=user,
+            role_ref=role,
+            scope=scope,
+            workspace_id=workspace_id,
+            if_missing=if_missing,
         )
 
     @roles_app.command("remove", help="Remove a role assignment.")
@@ -947,14 +976,12 @@ def register(app: typer.Typer) -> None:
             help="Workspace ID (required for workspace scope).",
         ),
     ) -> None:
-        asyncio.run(
-            _remove_role(
-                user_ref=user,
-                role_ref=role,
-                assignment_id=assignment_id,
-                scope=scope,
-                workspace_id=workspace_id,
-            )
+        _remove_role(
+            user_ref=user,
+            role_ref=role,
+            assignment_id=assignment_id,
+            scope=scope,
+            workspace_id=workspace_id,
         )
 
     app.add_typer(users_app, name="users")

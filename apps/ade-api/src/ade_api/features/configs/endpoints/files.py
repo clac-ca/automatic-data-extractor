@@ -6,7 +6,18 @@ import base64
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, Security, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    Security,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -41,6 +52,9 @@ from ..service import (
 )
 
 router = APIRouter()
+
+FilePathParam = Annotated[str, Path(alias="filePath")]
+DirectoryPathParam = Annotated[str, Path(alias="directoryPath")]
 
 
 def _accepts_json(request: Request, override: str | None) -> bool:
@@ -99,12 +113,12 @@ def _upsert_response(
 
 
 @router.get(
-    "/configurations/{configuration_id}/files",
+    "/configurations/{configurationId}/files",
     response_model=FileListing,
     response_model_exclude_none=True,
     summary="List editable files and directories",
 )
-async def list_config_files(
+def list_config_files(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     request: Request,
@@ -113,7 +127,7 @@ async def list_config_files(
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     prefix: str = "",
@@ -121,12 +135,12 @@ async def list_config_files(
     include: Annotated[list[str] | None, Query(alias="include")] = None,
     exclude: Annotated[list[str] | None, Query(alias="exclude")] = None,
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
-    page_token: str | None = None,
+    cursor: str | None = None,
     sort: Literal["path", "name", "mtime", "size"] = "path",
     order: Literal["asc", "desc"] = "asc",
 ) -> Response:
     try:
-        listing = await service.list_files(
+        listing = service.list_files(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             prefix=prefix,
@@ -134,7 +148,7 @@ async def list_config_files(
             include=include or [],
             exclude=exclude or [],
             limit=limit,
-            page_token=page_token,
+            cursor=cursor,
             sort=sort,
             order=order,
         )
@@ -148,9 +162,9 @@ async def list_config_files(
         )
     except InvalidPageTokenError:
         raise_problem(
-            "invalid_page_token",
+            "invalid_cursor",
             status.HTTP_400_BAD_REQUEST,
-            detail="page_token is invalid",
+            detail="cursor is invalid",
         )
 
     weak_etag = format_weak_etag(listing["fileset_hash"])
@@ -170,24 +184,24 @@ async def list_config_files(
 
 
 @router.get(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     responses={
         status.HTTP_200_OK: {"content": {"application/octet-stream": {}}},
         status.HTTP_206_PARTIAL_CONTENT: {"content": {"application/octet-stream": {}}},
         status.HTTP_304_NOT_MODIFIED: {"model": None},
     },
 )
-async def read_config_file(
+def read_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     format: str | None = None,
@@ -195,7 +209,7 @@ async def read_config_file(
     if not file_path:
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
     try:
-        info = await service.read_file(
+        info = service.read_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -274,26 +288,26 @@ async def read_config_file(
 
 
 @router.head(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     responses={status.HTTP_200_OK: {"model": None}},
 )
-async def head_config_file(
+def head_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
     if not file_path:
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
     try:
-        info = await service.read_file(
+        info = service.read_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -320,7 +334,7 @@ async def head_config_file(
 
 
 @router.put(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileWriteResponse,
     responses={
@@ -328,28 +342,29 @@ async def head_config_file(
         status.HTTP_201_CREATED: {"model": FileWriteResponse},
     },
 )
-async def upsert_config_file(
+def upsert_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
+    body: bytes = Body(...),
     parents: bool = False,
 ) -> Response:
     if not file_path:
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
-    data = await request.body()
+    data = body
     if_match = request.headers.get("if-match")
     if_none_match = request.headers.get("if-none-match")
     try:
-        result = await service.write_file(
+        result = service.write_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -399,21 +414,21 @@ async def upsert_config_file(
 
 
 @router.delete(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_config_file(
+def delete_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
@@ -421,7 +436,7 @@ async def delete_config_file(
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
     if_match = request.headers.get("if-match")
     try:
-        await service.delete_file(
+        service.delete_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -449,7 +464,7 @@ async def delete_config_file(
 
 
 @router.put(
-    "/configurations/{configuration_id}/directories/{directory_path:path}",
+    "/configurations/{configurationId}/directories/{directoryPath:path}",
     dependencies=[Security(require_csrf)],
     response_model=DirectoryWriteResponse,
     responses={
@@ -463,24 +478,24 @@ async def delete_config_file(
         },
     },
 )
-async def create_config_directory(
+def create_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    directory_path: str,
+    directory_path: DirectoryPathParam,
     request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
-        _, created = await service.create_directory(
+        _, created = service.create_directory(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=directory_path,
@@ -498,20 +513,20 @@ async def create_config_directory(
 
 
 @router.delete(
-    "/configurations/{configuration_id}/directories/{directory_path:path}",
+    "/configurations/{configurationId}/directories/{directoryPath:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_config_directory(
+def delete_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    directory_path: str,
+    directory_path: DirectoryPathParam,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     recursive: bool = False,
@@ -519,7 +534,7 @@ async def delete_config_directory(
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
-        await service.delete_directory(
+        service.delete_directory(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=directory_path,
@@ -539,22 +554,22 @@ async def delete_config_directory(
 
 
 @router.patch(
-    "/configurations/{configuration_id}/files/{file_path:path}",
+    "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileRenameResponse,
     summary="Rename or move a file",
 )
-async def rename_config_file(
+def rename_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    file_path: str,
+    file_path: FilePathParam,
     payload: FileRenameRequest,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> Response:
@@ -567,7 +582,7 @@ async def rename_config_file(
             detail="op must be 'move'",
         )
     try:
-        result = await service.rename_entry(
+        result = service.rename_entry(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             source_path=file_path,

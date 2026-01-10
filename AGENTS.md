@@ -9,9 +9,10 @@ If you are operating inside a subdirectory with its own `AGENTS.md`, follow the 
 ```
 automatic-data-extractor/
 ├─ apps/
-│  ├─ ade-api/      # FastAPI backend (serves /api + built SPA)
+│  ├─ ade-api/      # FastAPI backend (API only)
 │  ├─ ade-web/      # React/Vite SPA
 │  ├─ ade-engine/   # Engine runtime (Python package + Typer CLI)
+│  ├─ ade-worker/   # Background worker (builds + runs)
 │  └─ ade-cli/      # Orchestration CLI (console script: ade)
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
@@ -23,13 +24,44 @@ Docs to know:
 - Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI)
 - Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing)
 
+## Ownership boundaries
+
+### `ade-api` (control plane)
+- Auth and user/domain workflows
+- Configurations lifecycle (draft/active/archived)
+- Documents upload/storage metadata
+- Create run intent (insert `runs` rows)
+- Read/report run status/results and stream run events
+
+### `ade-worker` (data plane)
+- Claim/leasing semantics, retries/backoff, timeouts
+- Environment provisioning and reuse
+- Subprocess execution and NDJSON event logs
+- Artifact storage paths and cleanup decisions
+- Updating run results and statuses
+
+### `ade-engine` (runtime engine)
+- Core normalization/processing pipeline and domain logic
+- CLI commands (`process`, `config`, `version`) and engine runtime APIs
+- IO, mapping, validation, normalization rules, telemetry hooks
+
+### `ade-config` (config packages)
+- User-authored configuration package contents (mappings, schemas, rules, assets)
+- Dependency manifests that drive `deps_digest` (e.g. `pyproject.toml`, `requirements*.txt`)
+- Installs into the environment via editable install for rapid iteration
+
+### `ade-web` (frontend SPA)
+- UI/UX, routing, client-side state management
+- Auth integration and API consumption
+- Live updates via run/document event streams when available
+
 ## ade CLI essentials
 
 Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
 
 - `ade setup` — one-time bootstrap (venv, hooks).
-- `ade dev [--backend-only|--frontend-only] [--backend-port 9000]` — run dev servers.
-- `ade start` — serve API + built SPA. `ade build` — build frontend assets.
+- `ade dev [--api-only|--web-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; disable worker if needed).
+- `ade start` — serve the API + worker (run `ade migrate` first). `ade worker` — run the worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
 - `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
 - Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
@@ -45,9 +77,10 @@ Options:
 
 Commands:
   setup     Bootstrap repo env and hooks
-  dev       Run backend/frontend dev servers
-  start     Serve API + built SPA
-  build     Build frontend assets
+  dev       Run API/web dev servers (+ worker)
+  start     Serve API + worker
+  worker    Run the background worker only
+  build     Build web assets
   tests     Run Python/JS tests
   lint      Lint/format helpers
   bundle    Bundle files into Markdown
@@ -121,9 +154,9 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 
 ## Frontend API types
 
-- Generated types: `apps/ade-web/src/generated-types/openapi.d.ts`.
+- Generated types: `apps/ade-web/src/types/openapi.d.ts`.
 - If missing/stale, run `ade types` before touching frontend API code.
-- Import shapes via curated schema module (`@schema`) instead of `@generated-types/*`.
+- Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
 ## 🤖 Agent rules
 

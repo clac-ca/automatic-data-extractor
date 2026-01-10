@@ -74,7 +74,8 @@ class Engine:
 
         plan: RunPlan = plan_run(request, log_format=self.settings.log_format)
         plan.output_dir.mkdir(parents=True, exist_ok=True)
-        plan.logs_dir.mkdir(parents=True, exist_ok=True)
+        if plan.logs_dir is not None:
+            plan.logs_dir.mkdir(parents=True, exist_ok=True)
 
         report_builder = RunCompletionReportBuilder(input_file=plan.request.input_file, settings=self.settings)
 
@@ -115,7 +116,7 @@ class Engine:
                         "output_file": str(plan.output_path),
                         "output_dir": str(plan.output_dir),
                         "logs_file": str(plan.logs_path) if plan.logs_path is not None else None,
-                        "logs_dir": str(plan.logs_dir),
+                        "logs_dir": str(plan.logs_dir) if plan.logs_dir is not None else None,
                     },
                 )
 

@@ -12,10 +12,6 @@ from uuid import UUID
 from ade_api.settings import Settings
 
 __all__ = [
-    "build_venv_marker_path",
-    "build_venv_path",
-    "build_venv_root",
-    "build_venv_temp_path",
     "workspace_config_root",
     "workspace_documents_root",
     "workspace_root",
@@ -66,47 +62,3 @@ def workspace_venvs_root(settings: Settings, workspace_id: UUID) -> Path:
     """Root of all venvs for a workspace under ADE_VENVS_DIR."""
 
     return _workspace_base(settings.venvs_dir, workspace_id)
-
-
-def build_venv_root(
-    settings: Settings,
-    workspace_id: UUID,
-    configuration_id: UUID,
-    build_id: UUID,
-) -> Path:
-    """Root folder reserved for a specific build."""
-
-    return workspace_venvs_root(settings, workspace_id) / str(configuration_id) / str(build_id)
-
-
-def build_venv_path(
-    settings: Settings,
-    workspace_id: UUID,
-    configuration_id: UUID,
-    build_id: UUID,
-) -> Path:
-    """Path to the finalized virtual environment directory for a build."""
-
-    return build_venv_root(settings, workspace_id, configuration_id, build_id) / ".venv"
-
-
-def build_venv_temp_path(
-    settings: Settings,
-    workspace_id: UUID,
-    configuration_id: UUID,
-    build_id: UUID,
-) -> Path:
-    """Temporary venv path used during build before atomic rename."""
-
-    return build_venv_root(settings, workspace_id, configuration_id, build_id) / ".venv.tmp"
-
-
-def build_venv_marker_path(
-    settings: Settings,
-    workspace_id: UUID,
-    configuration_id: UUID,
-    build_id: UUID,
-) -> Path:
-    """Marker file capturing build metadata inside the venv."""
-
-    return build_venv_path(settings, workspace_id, configuration_id, build_id) / "ade_build.json"

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
-
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -35,8 +37,8 @@ async def test_admin_can_issue_api_key_for_user(
     )
 
     response = await async_client.post(
-        f"/api/v1/users/{target.id}/api-keys",
-        headers=headers,
+        f"/api/v1/users/{target.id}/apikeys",
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={
             "name": "Integration key",
             "expires_in_days": 30,
@@ -48,7 +50,7 @@ async def test_admin_can_issue_api_key_for_user(
     assert payload["secret"].startswith(f"{payload['prefix']}.")
 
     listing = await async_client.get(
-        f"/api/v1/users/{target.id}/api-keys",
+        f"/api/v1/users/{target.id}/apikeys",
         headers=headers,
     )
     assert listing.status_code == 200, listing.text
@@ -58,11 +60,11 @@ async def test_admin_can_issue_api_key_for_user(
     assert "secret" not in summary
 
 
-async def test_me_api_keys_include_revoked_and_paginate(
+async def test_me_api_keys_filters_and_paginate(
     async_client: AsyncClient,
     seed_identity,
 ) -> None:
-    """Self-service listing should honor include_revoked and pagination params."""
+    """Self-service listing should honor filter DSL and pagination params."""
 
     member = seed_identity.member
     headers = await _auth_headers(
@@ -72,37 +74,52 @@ async def test_me_api_keys_include_revoked_and_paginate(
     )
 
     first = await async_client.post(
-        "/api/v1/users/me/api-keys",
-        headers=headers,
+        "/api/v1/users/me/apikeys",
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={"name": "First key"},
     )
     assert first.status_code == 201, first.text
     first_id = first.json()["id"]
 
     second = await async_client.post(
-        "/api/v1/users/me/api-keys",
-        headers=headers,
+        "/api/v1/users/me/apikeys",
+        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
         json={"name": "Second key"},
     )
     assert second.status_code == 201, second.text
     second_id = second.json()["id"]
 
-    revoke = await async_client.delete(
-        f"/api/v1/users/me/api-keys/{first_id}",
+    first_read = await async_client.get(
+        f"/api/v1/users/me/apikeys/{first_id}",
         headers=headers,
+    )
+    assert first_read.status_code == 200, first_read.text
+    etag = first_read.headers.get("ETag")
+    assert etag is not None
+    revoke = await async_client.delete(
+        f"/api/v1/users/me/apikeys/{first_id}",
+        headers={**headers, "If-Match": etag},
     )
     assert revoke.status_code == 204, revoke.text
 
     # Idempotent revoke should still return 204 when already revoked.
-    revoke_repeat = await async_client.delete(
-        f"/api/v1/users/me/api-keys/{first_id}",
+    reread = await async_client.get(
+        f"/api/v1/users/me/apikeys/{first_id}",
         headers=headers,
+    )
+    assert reread.status_code == 200, reread.text
+    reread_etag = reread.headers.get("ETag")
+    revoke_repeat = await async_client.delete(
+        f"/api/v1/users/me/apikeys/{first_id}",
+        headers={**headers, "If-Match": reread_etag or ""},
     )
     assert revoke_repeat.status_code == 204, revoke_repeat.text
 
+    active_filters = json.dumps([{"id": "revokedAt", "operator": "isEmpty"}])
     active_response = await async_client.get(
-        "/api/v1/users/me/api-keys",
+        "/api/v1/users/me/apikeys",
         headers=headers,
+        params={"filters": active_filters},
     )
     assert active_response.status_code == 200, active_response.text
     active_payload = active_response.json()
@@ -112,9 +129,8 @@ async def test_me_api_keys_include_revoked_and_paginate(
     assert all(item["revoked_at"] is None for item in active_payload["items"])
 
     all_response = await async_client.get(
-        "/api/v1/users/me/api-keys",
+        "/api/v1/users/me/apikeys",
         headers=headers,
-        params={"include_revoked": True},
     )
     assert all_response.status_code == 200, all_response.text
     all_payload = all_response.json()
@@ -122,12 +138,12 @@ async def test_me_api_keys_include_revoked_and_paginate(
     assert {first_id, second_id}.issubset(all_ids)
 
     paged = await async_client.get(
-        "/api/v1/users/me/api-keys",
+        "/api/v1/users/me/apikeys",
         headers=headers,
-        params={"include_revoked": True, "page_size": 1},
+        params={"perPage": 1},
     )
     assert paged.status_code == 200, paged.text
     paged_payload = paged.json()
     assert paged_payload["page"] == 1
-    assert paged_payload["page_size"] == 1
-    assert paged_payload["has_next"] is True
+    assert paged_payload["perPage"] == 1
+    assert paged_payload["pageCount"] >= 2

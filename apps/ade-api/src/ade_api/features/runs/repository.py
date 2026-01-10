@@ -5,13 +5,14 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import Select, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from ade_api.common.pagination import Page, paginate_sql
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import ListPage, paginate_query
 from ade_api.common.types import OrderBy
 from ade_api.models import Run, RunField, RunMetrics, RunStatus, RunTableColumn
 
-from .filters import RunColumnFilters, RunFilters, apply_run_column_filters, apply_run_filters
+from .filters import RunColumnFilters, apply_run_column_filters, apply_run_filters
 
 __all__ = ["RunsRepository"]
 
@@ -19,42 +20,48 @@ __all__ = ["RunsRepository"]
 class RunsRepository:
     """Encapsulate read/write operations for runs."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: Session) -> None:
         self._session = session
 
-    async def get(self, run_id: UUID) -> Run | None:
+    def get(self, run_id: UUID) -> Run | None:
         """Return the ``Run`` identified by ``run_id`` if it exists."""
 
-        return await self._session.get(Run, run_id)
+        return self._session.get(Run, run_id)
 
-    async def list_by_workspace(
+    def list_by_workspace(
         self,
         *,
         workspace_id: UUID,
         configuration_id: UUID | None,
-        filters: RunFilters,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
         order_by: OrderBy,
         page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> Page[Run]:
+        per_page: int,
+    ) -> ListPage[Run]:
         """Return paginated runs for ``workspace_id`` filtered by config, status, or document."""
 
         stmt: Select = select(Run).where(Run.workspace_id == workspace_id)
         if configuration_id:
             stmt = stmt.where(Run.configuration_id == configuration_id)
-        stmt = apply_run_filters(stmt, filters)
+        stmt = apply_run_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
 
-        return await paginate_sql(
+        return paginate_query(
             self._session,
             stmt,
             page=page,
-            page_size=page_size,
-            include_total=include_total,
+            per_page=per_page,
             order_by=order_by,
+            changes_cursor="0",
         )
 
-    async def count_queued(self) -> int:
+    def count_queued(self) -> int:
         stmt = (
             select(func.count())
             .select_from(Run)
@@ -63,10 +70,10 @@ class RunsRepository:
                 Run.attempt_count < Run.max_attempts,
             )
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return int(result.scalar_one())
 
-    async def list_active_for_documents(
+    def list_active_for_documents(
         self,
         *,
         configuration_id: UUID,
@@ -79,22 +86,22 @@ class RunsRepository:
             Run.input_document_id.in_(document_ids),
             Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]),
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_metrics(self, run_id: UUID) -> RunMetrics | None:
-        return await self._session.get(RunMetrics, run_id)
+    def get_metrics(self, run_id: UUID) -> RunMetrics | None:
+        return self._session.get(RunMetrics, run_id)
 
-    async def list_fields(self, run_id: UUID) -> list[RunField]:
+    def list_fields(self, run_id: UUID) -> list[RunField]:
         stmt = (
             select(RunField)
             .where(RunField.run_id == run_id)
             .order_by(RunField.field.asc())
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_columns(
+    def list_columns(
         self,
         *,
         run_id: UUID,
@@ -108,5 +115,5 @@ class RunsRepository:
             RunTableColumn.table_index.asc(),
             RunTableColumn.column_index.asc(),
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())

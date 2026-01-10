@@ -10,10 +10,10 @@ pytestmark = pytest.mark.asyncio
 
 async def test_health_endpoint_returns_ok(async_client: AsyncClient) -> None:
     """The /health endpoint should return a successful payload."""
-    response = await async_client.get("/api/v1/health")
+    response = await async_client.get("/health")
 
     assert response.status_code == 200
-    assert response.headers.get("X-Request-ID")
+    assert response.headers.get("X-Request-Id")
     payload = response.json()
     assert payload["status"] == "ok"
     assert any(component["name"] == "api" for component in payload["components"])
@@ -28,7 +28,7 @@ async def test_health_endpoint_includes_safe_mode_component(
     """The /health endpoint should flag safe mode when enabled."""
 
     override_app_settings(safe_mode=True)
-    response = await async_client.get("/api/v1/health")
+    response = await async_client.get("/health")
 
     assert response.status_code == 200
     payload = response.json()
@@ -39,3 +39,12 @@ async def test_health_endpoint_includes_safe_mode_component(
     assert safe_mode_component is not None
     assert safe_mode_component["status"] == "degraded"
     assert "ADE_SAFE_MODE" in safe_mode_component["detail"]
+
+
+async def test_ready_endpoint_returns_ok(async_client: AsyncClient) -> None:
+    response = await async_client.get("/ready")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert any(component["name"] == "database" for component in payload["components"])

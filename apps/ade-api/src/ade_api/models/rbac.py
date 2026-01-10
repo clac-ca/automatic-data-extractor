@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint, false, true
@@ -9,18 +10,21 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ade_api.core.rbac.types import ScopeType
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
-from ade_api.db.enums import enum_values
+from ade_api.db import GUID, Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 from .user import User
 from .workspace import Workspace
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 permission_scope_enum = SAEnum(
     ScopeType,
     name="permission_scope",
     native_enum=False,
     length=20,
-    values_callable=enum_values,
+    values_callable=_enum_values,
 )
 
 
@@ -64,10 +68,10 @@ class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=true(),
     )
     created_by_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     updated_by_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
 
     permissions: Mapped[list[RolePermission]] = relationship(
@@ -90,10 +94,10 @@ class RolePermission(Base):
     __tablename__ = "role_permissions"
 
     role_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("roles.id", ondelete="NO ACTION"), primary_key=True
+        GUID(), ForeignKey("roles.id", ondelete="NO ACTION"), primary_key=True
     )
     permission_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("permissions.id", ondelete="NO ACTION"), primary_key=True
+        GUID(), ForeignKey("permissions.id", ondelete="NO ACTION"), primary_key=True
     )
 
     role: Mapped[Role] = relationship("Role", back_populates="permissions")
@@ -112,13 +116,13 @@ class UserRoleAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_role_assignments"
 
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
+        GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
     )
     role_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("roles.id", ondelete="NO ACTION"), nullable=False
+        GUID(), ForeignKey("roles.id", ondelete="NO ACTION"), nullable=False
     )
     workspace_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=True,
     )

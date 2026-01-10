@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
 
 from sqlalchemy import MetaData, inspect
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
-from ade_api.db import build_database_url, get_engine, reset_database_state
+from ade_api.db import DatabaseSettings, build_engine
 
 from ..settings import Settings
 
@@ -137,27 +136,42 @@ def _describe_database_target(database_url: URL, sqlite_path: Path | None) -> No
         print(f"  - {backend} database: {rendered}")
 
 
-async def _drop_all_tables(settings: Settings) -> int:
-    engine = get_engine(settings=settings)
+def _build_db_settings(settings: Settings) -> DatabaseSettings:
+    return DatabaseSettings(
+        url=settings.database_url,
+        echo=settings.database_echo,
+        auth_mode=settings.database_auth_mode,
+        managed_identity_client_id=settings.database_mi_client_id,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=settings.database_pool_timeout,
+        pool_recycle=settings.database_pool_recycle,
+        sqlite_journal_mode=settings.database_sqlite_journal_mode,
+        sqlite_synchronous=settings.database_sqlite_synchronous,
+        sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
+        sqlite_begin_mode=settings.database_sqlite_begin_mode,
+    )
 
-    async with engine.begin() as connection:
 
-        def _reflect_and_drop(sync_connection) -> int:
-            inspector = inspect(sync_connection)
+def _drop_all_tables(db_settings: DatabaseSettings) -> int:
+    engine = build_engine(db_settings)
+    try:
+        with engine.begin() as connection:
+            inspector = inspect(connection)
             dropped = 0
 
             for schema in inspector.get_schema_names():
                 if schema in {"information_schema", "pg_catalog"}:
                     continue
                 metadata = MetaData(schema=schema)
-                metadata.reflect(bind=sync_connection, schema=schema)
+                metadata.reflect(bind=connection, schema=schema)
                 if metadata.tables:
                     dropped += len(metadata.tables)
-                    metadata.drop_all(bind=sync_connection)
+                    metadata.drop_all(bind=connection)
 
             return dropped
-
-        return await connection.run_sync(_reflect_and_drop)
+    finally:
+        engine.dispose()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -178,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = Settings()
-    database_url = build_database_url(settings)
+    db_settings = _build_db_settings(settings)
+    database_url = make_url(db_settings.url)
     sqlite_path = _resolve_sqlite_database_path(database_url)
     targets = _gather_storage_targets(settings, database_url)
 
@@ -212,11 +227,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("Dropping database tables...")
         try:
-            dropped_tables = asyncio.run(_drop_all_tables(settings))
+            dropped_tables = _drop_all_tables(db_settings)
         except Exception as exc:  # noqa: BLE001
             drop_error = exc
-        finally:
-            reset_database_state()
 
         if drop_error is None:
             if dropped_tables:

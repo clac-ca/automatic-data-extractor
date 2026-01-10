@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import Iterator
 from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO
-
-from fastapi.concurrency import run_in_threadpool
 
 from .base import StorageAdapter, StorageError, StorageLimitError, StoredObject
 
@@ -38,7 +36,7 @@ class FilesystemStorage(StorageAdapter):
             raise StorageError("Storage URI escapes the configured base directory.") from exc
         return candidate
 
-    async def write(
+    def write(
         self,
         uri: str,
         stream: BinaryIO,
@@ -80,29 +78,28 @@ class FilesystemStorage(StorageAdapter):
 
             return StoredObject(uri=uri, sha256=digest.hexdigest(), byte_size=size)
 
-        return await run_in_threadpool(_write)
+        return _write()
 
-    async def stream(
+    def stream(
         self,
         uri: str,
         *,
         chunk_size: int = _DEFAULT_CHUNK_SIZE,
-    ) -> AsyncIterator[bytes]:
+    ) -> Iterator[bytes]:
         """Yield chunks for ``uri``."""
 
         path = self.path_for(uri)
-        exists = await run_in_threadpool(path.exists)
-        if not exists:
+        if not path.exists():
             raise FileNotFoundError(uri)
 
         with path.open("rb") as source:
             while True:
-                chunk = await run_in_threadpool(source.read, chunk_size)
+                chunk = source.read(chunk_size)
                 if not chunk:
                     break
                 yield chunk
 
-    async def delete(self, uri: str) -> None:
+    def delete(self, uri: str) -> None:
         """Delete ``uri`` if it exists."""
 
         path = self.path_for(uri)
@@ -113,4 +110,4 @@ class FilesystemStorage(StorageAdapter):
             except FileNotFoundError:
                 return
 
-        await run_in_threadpool(_remove)
+        _remove()

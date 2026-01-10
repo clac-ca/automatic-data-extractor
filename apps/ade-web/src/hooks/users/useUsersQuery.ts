@@ -1,0 +1,51 @@
+import { useCallback } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+
+import { fetchUsers, type FetchUsersOptions, type UserListPage } from "@api/users/api";
+import { useFlattenedPages } from "@api/pagination";
+
+export interface UseUsersQueryOptions {
+  readonly enabled?: boolean;
+  readonly search?: string;
+  readonly pageSize?: number;
+}
+
+export function useUsersQuery(options: UseUsersQueryOptions = {}) {
+  const {
+    enabled = true,
+    search = "",
+    pageSize,
+  } = options;
+
+  const trimmedSearch = search.trim();
+  const effectiveSearch = trimmedSearch.length >= 2 ? trimmedSearch : "";
+
+  const query = useInfiniteQuery<UserListPage, Error>({
+    queryKey: ["users", "all", { search: trimmedSearch, pageSize }],
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) =>
+      fetchUsers(normalizeFetchOptions({
+        page: typeof pageParam === "number" ? pageParam : 1,
+        pageSize,
+        search: effectiveSearch || undefined,
+        signal,
+      })),
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
+    enabled,
+    staleTime: 60_000,
+  });
+
+  const getUserKey = useCallback((user: UserListPage["items"][number]) => user.id, []);
+  const users = useFlattenedPages(query.data?.pages, getUserKey);
+
+  return {
+    ...query,
+    users,
+  };
+}
+
+function normalizeFetchOptions(options: FetchUsersOptions): FetchUsersOptions {
+  const page = !options.page || options.page < 1 ? 1 : options.page;
+  return { ...options, page };
+}

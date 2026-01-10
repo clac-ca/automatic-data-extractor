@@ -16,23 +16,23 @@ ADE Web is intentionally **backend-agnostic**. This README describes **what** th
 Use these as your “don’t break the mental model” guardrails:
 
 - **Name things after the domain**  
-  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `screens/workspace-shell/sections`.  
+  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `pages/Workspace/sections`.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
-  Build URLs via `@shared/nav/routes`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
+  Build URLs via helpers in `@app/navigation`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
-  Do not import “upwards”: `shared/` and `ui/` must not depend on `screens/` or `app/`. ESLint enforces this.  
+  Do not import “upwards”: `api/`, `hooks/`, `lib/`, and `components/` must not depend on `pages/` or the app shell (`app/`). ESLint enforces this.  
   See: [`docs/02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)
 
 - **Reuse existing patterns**  
-  New list/detail flows should copy Documents/Runs; NDJSON streaming should use the shared helper and `ade.event/v1` model; permissions should go through `@schema/permissions` + helpers in `@shared/permissions`.  
+  New list/detail flows should copy Documents/Runs; NDJSON streaming should use `api/ndjson` and the `ade.event/v1` model; permissions should go through `@schema` and the workspace context helpers.  
   See: [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Check RBAC & Safe mode rules**  
-  All run/build/activation actions must be permission-aware and Safe-mode-aware.  
+  All run/activation actions must be permission-aware and Safe-mode-aware.  
   See: [`docs/05-auth-session-rbac-and-safe-mode.md`](./docs/05-auth-session-rbac-and-safe-mode.md)
 
 For contribution workflow, linting, scripts, and local dev setup, see `CONTRIBUTING.md` plus the docs referenced above.
@@ -44,7 +44,7 @@ For contribution workflow, linting, scripts, and local dev setup, see `CONTRIBUT
 ADE Web has two major UX layers:
 
 1. **Workspace directory** (`/workspaces`) – where users discover and create workspaces.
-2. **Workspace shell** (`/workspaces/:workspaceId/...`) – where users operate *inside* a workspace (Documents, Runs, Configuration Builder, Settings, optional Overview).
+2. **Workspace shell** (`/workspaces/:workspaceId/...`) – where users operate *inside* a workspace (Documents, Runs, Configuration Builder, Settings).
 
 Both layers share:
 
@@ -72,8 +72,7 @@ Inside a workspace, the **workspace shell** provides:
   - Documents  
   - Runs  
   - Configurations (**Configuration Builder**)  
-  - Settings  
-  (and optional Overview)
+  - Settings
 
 - **Top bar**  
   Workspace name, optional environment label (`Production`, `Staging`), section-aware search (`GlobalSearchField`), and `ProfileDropdown`.
@@ -82,7 +81,7 @@ Inside a workspace, the **workspace shell** provides:
   Left nav becomes a slide-in drawer opened via a menu button and closed on navigation, outside click, or Esc.
 
 - **Safe mode banner**  
-  Persistent when Safe mode is enabled, explaining why new runs/builds/activations are blocked.
+  Persistent when Safe mode is enabled, explaining why new runs/validations/activations are blocked.
 
 - **Notifications**  
   Toasts for transient success/error; banners for cross-cutting issues (Safe mode, connectivity, console auto-collapse, etc).
@@ -107,23 +106,23 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
 
 - **Run**  
   Single execution of ADE against one or more documents using a particular configuration. The UI concept is **Run** with `runId`; the HTTP API uses `/runs` routes.  
-  Supports `RunOptions` (camelCase in the UI; snake_case in the API) for `dryRun`, `validateOnly`, `forceRebuild`, and `inputSheetNames`, with an optional `mode` view-model helper (`"normal" | "validation" | "test"`).  
+  Supports `RunOptions` (camelCase in the UI; snake_case in the API) for `dryRun`, `validateOnly`, and `inputSheetNames`, with an optional `mode` view-model helper (`"normal" | "validation" | "test"`).  
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-runs)
 
 - **Configuration & configuration package**  
   Workspace concept that describes how ADE interprets and transforms documents. Backed by an installable Python `ade_config` package; versions are exposed as **Configuration versions** with a simple lifecycle: **Draft → Active → Archived**.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#33-configuration), [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md)
 
-- **Build**  
-  Environment build for a given configuration (virtualenv with `ade_engine` + configuration). Builds are backend entities; ADE Web mostly interacts with them indirectly via runs and streaming events.  
-  See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#34-build), [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md#47-configurations--builds-configurationsapi-buildsapi)
+- **Environment**  
+  Worker-owned execution cache for a given configuration + dependency digest (virtualenv with `ade_engine` + configuration). Environments are provisioned automatically as runs start.  
+  See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#34-environment), [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md#47-configurations--environments)
 
 - **Manifest & schema**  
   Structured description of expected outputs (tables, columns, transforms, validators) surfaced in the Configuration Builder. ADE Web patches the manifest without dropping unknown fields so the backend can evolve independently.  
   See: [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md#7-manifest-and-schema-integration)
 
 - **Safe mode**  
-  Global kill switch for engine execution. When enabled, new runs, builds, validations, and activations are blocked; read-only operations continue to work. Safe mode is toggled from a system-level Settings surface (permission-gated), and ADE Web shows a workspace banner and disables run/build controls with explanatory tooltips.  
+  Global kill switch for engine execution. When enabled, new runs, validations, and activations are blocked; read-only operations continue to work. Safe mode is toggled from a system-level Settings surface (permission-gated), and ADE Web shows a workspace banner and disables run/validation controls with explanatory tooltips.  
   See: [`docs/05-auth-session-rbac-and-safe-mode.md`](./docs/05-auth-session-rbac-and-safe-mode.md#6-safe-mode)
 
 - **Roles & permissions (RBAC)**  
@@ -155,9 +154,8 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/runs`
 - `/workspaces/:workspaceId/config-builder`
 - `/workspaces/:workspaceId/settings`
-- Optional `/workspaces/:workspaceId/overview`
 
-Route builders live in `@shared/nav/routes.ts` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
+Route helpers live in `@app/navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
 
 See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)
 
@@ -182,7 +180,7 @@ Important UI state is encoded in **query parameters**, not local component state
 - Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
-Utilities for this live in `@shared/url-state`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
+Utilities for this live in `@app/navigation/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
 
 ---
 
@@ -225,7 +223,7 @@ Run creation, options (`RunOptions`), and event streaming (`ade.event/v1`) are d
 The **Configurations** section (Configuration Builder) is where workspace owners and engineers manage configuration packages.
 
 **Route:** `/workspaces/:workspaceId/config-builder`  
-**Folder:** `screens/workspace-shell/sections/config-builder`  
+**Folder:** `pages/Workspace/sections/ConfigBuilder`  
 **Nav label:** “Configuration Builder”
 
 Responsibilities:
@@ -240,15 +238,14 @@ The workbench is a dedicated editing window with:
 
 - File tree (`WorkbenchFileNode`) built from backend listings.
 - Tabbed Monaco editor (`CodeEditor`) with ADE-specific Python helpers.
-- Bottom console/validation panel for streaming build/run logs and validation issues.
-- Inspector panel for file metadata.
+- Bottom console/validation panel for streaming run logs and validation issues.
 - Window states: restored, maximised, docked; plus navigation blockers for unsaved changes.
 - URL-driven layout (`file`, `pane`, `console`, `view`) and persisted layout/theme preferences.
 
 Environment readiness is handled automatically when runs start:
 
 - **Validation run** – run validators only (`RunOptions.validateOnly: true`).
-- **Test run** – run against a sample document; the **Test** split button offers “Test” vs “Force build and test” (the latter sets `RunOptions.forceRebuild`, backend rebuilds inline before running).
+- **Test run** – run against a sample document with selected run options and stream logs into the console.
 
 See:
 
@@ -273,7 +270,7 @@ Key concepts:
 - Email/password and SSO login, with safe `redirectTo` handling.
 - Separate global vs workspace-scoped roles and role assignments.
 - `useEffectivePermissionsQuery` + helpers like `useCanInWorkspace` / `useCanStartRuns`.
-- Safe mode status (`enabled`, `detail`) from `/system/safeMode` with a workspace banner and disabled run/build/activation controls.
+- Safe mode status (`enabled`, `detail`) from `/system/safeMode` with a workspace banner and disabled run/validation/activation controls.
 
 See: [`docs/05-auth-session-rbac-and-safe-mode.md`](./docs/05-auth-session-rbac-and-safe-mode.md)
 
@@ -285,17 +282,22 @@ ADE Web is a React + TypeScript SPA built with Vite and React Query.
 
 High-level layout (under `apps/ade-web/src`):
 
-- `app/` – application shell, providers, and top-level routing.
-- `screens/` (aliased as `@screens`) – feature/screen slices (auth, workspace directory, workspace shell, sections).
-- `ui/` – presentational component library (buttons, forms, top bar, search, tabs, context menus, code editor).
-- `shared/` – cross-cutting utilities and API modules (HTTP client, nav helpers, URL state, NDJSON streaming, permissions).
-- `schema/` – handwritten domain models and mapping from generated types.
-- `generated-types/` – OpenAPI-generated types.
+- `main.tsx` – Vite entry point.
+- `app/` – application shell (App.tsx, providers, navigation).
+- `api/` – HTTP client + domain API calls.
+- `pages/` (aliased as `@pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
+- `components/` – shared UI primitives, layouts, providers, and shell chrome.
+- `hooks/` – shared React hooks (React Query + app hooks).
+- `lib/` – cross-cutting helpers (storage, uploads, local preferences).
+- `globals.css` – global styles and theme tokens.
+- `types/` – curated domain models and re-exports.
+- `types/generated/` – OpenAPI-generated types.
+- `vite-env.d.ts` – Vite client typings + globals.
 - `test/` – Vitest setup and helpers.
 
 Data layer:
 
-- Shared HTTP client → domain API modules (`workspacesApi`, `documentsApi`, `runsApi`, `configurationsApi`, `buildsApi`, `systemApi`, `authApi`, `permissionsApi`, `rolesApi`, `apiKeysApi`) → feature-local React Query hooks.
+- Shared HTTP client → domain API modules (`workspacesApi`, `documentsApi`, `runsApi`, `configurationsApi`, `systemApi`, `authApi`, `permissionsApi`, `rolesApi`, `apiKeysApi`) → feature-local React Query hooks.
 
 Tooling highlights:
 
@@ -320,7 +322,6 @@ ADE Web is backend-agnostic but assumes a set of HTTP APIs and behaviours under 
 - **Documents** – upload, list with filters, download, optional worksheet metadata.
 - **Runs** – workspace run ledger (`/workspaces/{workspace_id}/runs` for list/create), run detail/outputs/logs (`/runs/{run_id}/...`), streaming NDJSON event streams using the `ade.event/v1` envelope.
 - **Configurations & Configuration Builder** – configuration metadata, version lifecycle, file listing and content APIs, validation endpoint, configuration-scoped runs.
-- **Builds** – build entities and logs (used primarily by admin/specialised flows; day-to-day workbench flows rely on run creation with auto-rebuilds and `force_rebuild`).
 - **Safe mode** – status and toggle endpoints, permission-gated.
 - **Security** – strict tenant isolation, safe `redirectTo` handling, and compatible CORS/CSRF for browser SPAs.
 
@@ -335,7 +336,7 @@ See: [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-ba
 The numbered docs under `apps/ade-web/docs` are the **source of truth** for ADE Web’s behaviour:
 
 1. [`01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)  
-   Domain concepts and naming contract (Workspace, Document, Run, Configuration, Build, Artifact, etc.).
+   Domain concepts and naming contract (Workspace, Document, Run, Configuration, Environment, Artifact, etc.).
 
 2. [`02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)  
    On-disk layout, layers, and dependency rules.

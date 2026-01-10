@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from ade_api.db.mixins import generate_uuid7
+from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.models import (
-    Build,
-    BuildStatus,
     Configuration,
     ConfigurationStatus,
     Document,
@@ -21,10 +18,10 @@ from ade_api.models import (
 )
 
 
-async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Configuration]:
+def _create_configuration(session: Session) -> tuple[Workspace, Configuration]:
     workspace = Workspace(name="Acme", slug=f"acme-{generate_uuid7().hex[:8]}")
     session.add(workspace)
-    await session.flush()
+    session.flush()
 
     configuration_id = generate_uuid7()
     configuration = Configuration(
@@ -35,24 +32,12 @@ async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Confi
         content_digest="digest",
     )
     session.add(configuration)
-    await session.flush()
+    session.flush()
     return workspace, configuration
 
 
-@pytest.mark.asyncio()
-async def test_run_defaults(session: AsyncSession) -> None:
-    workspace, configuration = await _create_configuration(session)
-
-    build = Build(
-        id=generate_uuid7(),
-        workspace_id=workspace.id,
-        configuration_id=configuration.id,
-        fingerprint="fingerprint",
-        status=BuildStatus.READY,
-        created_at=utc_now(),
-    )
-    session.add(build)
-    await session.flush()
+def test_run_defaults(session: Session) -> None:
+    workspace, configuration = _create_configuration(session)
 
     document = Document(
         id=generate_uuid7(),
@@ -68,17 +53,18 @@ async def test_run_defaults(session: AsyncSession) -> None:
         expires_at=utc_now(),
     )
     session.add(document)
-    await session.flush()
+    session.flush()
 
     run = Run(
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        build_id=build.id,
         input_document_id=document.id,
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
     )
     session.add(run)
-    await session.commit()
-    await session.refresh(run)
+    session.commit()
+    session.refresh(run)
 
     assert run.status is RunStatus.QUEUED
     assert run.input_document_id == document.id
@@ -92,4 +78,3 @@ async def test_run_defaults(session: AsyncSession) -> None:
     assert run.run_options is None
     assert run.started_at is None
     assert run.completed_at is None
-    assert run.cancelled_at is None

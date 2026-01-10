@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy import Select, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
 from ade_api.models import Document
@@ -15,7 +15,7 @@ from ade_api.models import Document
 class DocumentsRepository:
     """Encapsulate database access for workspace documents."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: Session) -> None:
         self._session = session
 
     def base_query(self, workspace_id: UUID) -> Select[tuple[Document]]:
@@ -25,12 +25,13 @@ class DocumentsRepository:
             select(Document)
             .options(
                 selectinload(Document.uploaded_by_user),
+                selectinload(Document.assignee_user),
                 selectinload(Document.tags),
             )
             .where(Document.workspace_id == workspace_id)
         )
 
-    async def get_document(
+    def get_document(
         self,
         *,
         workspace_id: UUID,
@@ -42,10 +43,10 @@ class DocumentsRepository:
         stmt = self.base_query(workspace_id).where(Document.id == document_id)
         if not include_deleted:
             stmt = stmt.where(Document.deleted_at.is_(None))
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_documents(
+    def list_documents(
         self,
         *,
         base_query: Select[tuple[Document]],
@@ -54,7 +55,7 @@ class DocumentsRepository:
         """Execute ``base_query`` applying ``order_by`` and return documents."""
 
         stmt = base_query.order_by(*order_by)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars())
 
 

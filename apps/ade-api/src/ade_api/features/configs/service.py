@@ -19,13 +19,15 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from uuid import UUID
 
-from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.ids import generate_uuid7
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
+from ade_api.common.listing import paginate_query
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
+from ade_api.common.types import OrderBy
 from ade_api.models import Configuration, ConfigurationStatus
 
 from .etag import canonicalize_etag
@@ -36,8 +38,16 @@ from .exceptions import (
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
 )
+from .filters import apply_config_filters
 from .repository import ConfigurationsRepository
-from .schemas import ConfigSource, ConfigSourceClone, ConfigSourceTemplate, ConfigValidationIssue
+from .schemas import (
+    ConfigSource,
+    ConfigSourceClone,
+    ConfigSourceTemplate,
+    ConfigurationPage,
+    ConfigurationRecord,
+    ConfigValidationIssue,
+)
 from .storage import ConfigStorage
 
 logger = logging.getLogger(__name__)
@@ -71,24 +81,61 @@ class ValidationResult:
 class ConfigurationsService:
     """Coordinate persistence, validation, and lifecycle operations."""
 
-    def __init__(self, *, session: AsyncSession, storage: ConfigStorage) -> None:
+    def __init__(self, *, session: Session, storage: ConfigStorage) -> None:
         self._session = session
         self._repo = ConfigurationsRepository(session)
         self._storage = storage
 
-    async def list_configurations(self, *, workspace_id: UUID) -> list[Configuration]:
+    def list_configurations(
+        self,
+        *,
+        workspace_id: UUID,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        order_by: OrderBy,
+        page: int,
+        per_page: int,
+    ) -> ConfigurationPage:
         logger.debug(
             "config.list.start",
-            extra=log_context(workspace_id=workspace_id),
+            extra=log_context(
+                workspace_id=workspace_id,
+                page=page,
+                per_page=per_page,
+                q=q,
+            ),
         )
-        configs = list(await self._repo.list_for_workspace(workspace_id))
+        stmt = self._repo.base_query().where(Configuration.workspace_id == workspace_id)
+        stmt = apply_config_filters(stmt, filters, join_operator=join_operator, q=q)
+        page_result = paginate_query(
+            self._session,
+            stmt,
+            page=page,
+            per_page=per_page,
+            order_by=order_by,
+            changes_cursor="0",
+        )
+        items = [ConfigurationRecord.model_validate(item) for item in page_result.items]
+        response = ConfigurationPage(
+            items=items,
+            page=page_result.page,
+            per_page=page_result.per_page,
+            page_count=page_result.page_count,
+            total=page_result.total,
+            changes_cursor=page_result.changes_cursor,
+        )
         logger.debug(
             "config.list.success",
-            extra=log_context(workspace_id=workspace_id, count=len(configs)),
+            extra=log_context(
+                workspace_id=workspace_id,
+                count=len(response.items),
+                total=response.total,
+            ),
         )
-        return configs
+        return response
 
-    async def get_configuration(
+    def get_configuration(
         self,
         *,
         workspace_id: UUID,
@@ -98,7 +145,7 @@ class ConfigurationsService:
             "config.get.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -112,7 +159,7 @@ class ConfigurationsService:
         )
         return configuration
 
-    async def create_configuration(
+    def create_configuration(
         self,
         *,
         workspace_id: UUID,
@@ -130,7 +177,7 @@ class ConfigurationsService:
             ),
         )
         try:
-            await self._materialize_source(
+            self._materialize_source(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 source=source,
@@ -156,7 +203,7 @@ class ConfigurationsService:
                     source_type=getattr(source, "type", None),
                 ),
             )
-            await self._storage.delete_config(
+            self._storage.delete_config(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 missing_ok=True,
@@ -170,8 +217,8 @@ class ConfigurationsService:
             status=ConfigurationStatus.DRAFT,
         )
         self._session.add(record)
-        await self._session.flush()
-        await self._session.refresh(record)
+        self._session.flush()
+        self._session.refresh(record)
 
         logger.info(
             "config.create.success",
@@ -184,7 +231,7 @@ class ConfigurationsService:
         )
         return record
 
-    async def clone_configuration(
+    def clone_configuration(
         self,
         *,
         workspace_id: UUID,
@@ -200,7 +247,7 @@ class ConfigurationsService:
             ),
         )
         source = ConfigSourceClone(type="clone", configuration_id=source_configuration_id)
-        config = await self.create_configuration(
+        config = self.create_configuration(
             workspace_id=workspace_id,
             display_name=display_name,
             source=source,
@@ -216,7 +263,7 @@ class ConfigurationsService:
         )
         return config
 
-    async def import_configuration_from_archive(
+    def import_configuration_from_archive(
         self,
         *,
         workspace_id: UUID,
@@ -233,13 +280,13 @@ class ConfigurationsService:
             ),
         )
         try:
-            digest = await self._storage.import_archive(
+            digest = self._storage.import_archive(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 archive=archive,
             )
         except Exception:
-            await self._storage.delete_config(
+            self._storage.delete_config(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 missing_ok=True,
@@ -254,8 +301,8 @@ class ConfigurationsService:
             content_digest=digest,
         )
         self._session.add(record)
-        await self._session.flush()
-        await self._session.refresh(record)
+        self._session.flush()
+        self._session.refresh(record)
 
         logger.info(
             "config.import.success",
@@ -268,7 +315,7 @@ class ConfigurationsService:
         )
         return record
 
-    async def validate_configuration(
+    def validate_configuration(
         self,
         *,
         workspace_id: UUID,
@@ -278,12 +325,12 @@ class ConfigurationsService:
             "config.validate.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
-        issues, digest = await self._storage.validate_path(config_path)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
+        issues, digest = self._storage.validate_path(config_path)
 
         logger.info(
             "config.validate.completed",
@@ -296,7 +343,7 @@ class ConfigurationsService:
         )
         return ValidationResult(configuration=configuration, issues=issues, content_digest=digest)
 
-    async def make_active_configuration(
+    def make_active_configuration(
         self,
         *,
         workspace_id: UUID,
@@ -306,7 +353,7 @@ class ConfigurationsService:
             "config.make_active.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -322,8 +369,8 @@ class ConfigurationsService:
             )
             raise ConfigStateError("Configuration must be a draft before making it active")
 
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
-        issues, digest = await self._storage.validate_path(config_path)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
+        issues, digest = self._storage.validate_path(config_path)
         if issues:
             logger.warning(
                 "config.make_active.validation_failed",
@@ -335,16 +382,14 @@ class ConfigurationsService:
             )
             raise ConfigValidationFailedError(issues)
 
-        await self._archive_active(workspace_id=workspace_id, exclude=configuration_id)
+        self._archive_active(workspace_id=workspace_id, exclude=configuration_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
         configuration.content_digest = digest
         configuration.activated_at = utc_now()
         try:
-            await self._session.flush()
-            await self._session.commit()
+            self._session.flush()
         except IntegrityError as exc:
-            await self._session.rollback()
             logger.warning(
                 "config.make_active.conflict",
                 extra=log_context(
@@ -353,7 +398,7 @@ class ConfigurationsService:
                 ),
             )
             raise ConfigStateError("active_configuration_conflict") from exc
-        await self._session.refresh(configuration)
+        self._session.refresh(configuration)
 
         logger.info(
             "config.make_active.success",
@@ -365,7 +410,7 @@ class ConfigurationsService:
         )
         return configuration
 
-    async def archive_configuration(
+    def archive_configuration(
         self,
         *,
         workspace_id: UUID,
@@ -375,7 +420,7 @@ class ConfigurationsService:
             "config.archive.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -403,8 +448,8 @@ class ConfigurationsService:
             raise ConfigStateError("Only the active configuration can be archived")
 
         configuration.status = ConfigurationStatus.ARCHIVED
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        self._session.flush()
+        self._session.refresh(configuration)
 
         logger.info(
             "config.archive.success",
@@ -416,7 +461,7 @@ class ConfigurationsService:
         )
         return configuration
 
-    async def replace_configuration_from_archive(
+    def replace_configuration_from_archive(
         self,
         *,
         workspace_id: UUID,
@@ -428,13 +473,13 @@ class ConfigurationsService:
             "config.import.replace.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
-        current_fileset_hash = await self._current_fileset_hash(config_path)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
+        current_fileset_hash = self._current_fileset_hash(config_path)
 
         if not if_match:
             raise PreconditionRequiredError()
@@ -443,15 +488,15 @@ class ConfigurationsService:
         if current_fileset_hash and client_token != current_fileset_hash:
             raise PreconditionFailedError(current_fileset_hash)
 
-        digest = await self._storage.replace_from_archive(
+        digest = self._storage.replace_from_archive(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             archive=archive,
         )
         configuration.content_digest = digest
         configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        self._session.flush()
+        self._session.refresh(configuration)
 
         logger.info(
             "config.import.replace.success",
@@ -463,7 +508,7 @@ class ConfigurationsService:
         )
         return configuration
 
-    async def list_files(
+    def list_files(
         self,
         *,
         workspace_id: UUID,
@@ -473,7 +518,7 @@ class ConfigurationsService:
         include: list[str] | None,
         exclude: list[str] | None,
         limit: int,
-        page_token: str | None,
+        cursor: str | None,
         sort: str,
         order: str,
     ) -> dict:
@@ -489,12 +534,12 @@ class ConfigurationsService:
                 order=order,
             ),
         )
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
-        index = await run_in_threadpool(_build_file_index, config_path)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
+        index = _build_file_index(config_path)
 
         normalized_prefix, prefix_is_file = _normalize_prefix_argument(
             prefix,
@@ -503,7 +548,7 @@ class ConfigurationsService:
         )
 
         depth_limit = _coerce_depth(depth)
-        offset = _decode_page_token(page_token)
+        offset = _decode_page_token(cursor)
 
         filtered = _filter_entries(
             index["entries"],
@@ -520,9 +565,9 @@ class ConfigurationsService:
         sorted_entries = _sort_entries(filtered, sort, order)
         window = sorted_entries[offset : offset + limit]
 
-        next_token = None
+        next_cursor = None
         if offset + limit < len(sorted_entries):
-            next_token = _encode_page_token(offset + limit)
+            next_cursor = _encode_page_token(offset + limit)
 
         fileset_hash = _compute_fileset_hash(sorted_entries)
 
@@ -547,7 +592,7 @@ class ConfigurationsService:
                 "asset_max_bytes": _MAX_ASSET_FILE_SIZE,
             },
             "count": len(window),
-            "next_token": next_token,
+            "next_cursor": next_cursor,
             "entries": window,
         }
 
@@ -565,7 +610,7 @@ class ConfigurationsService:
         )
         return listing
 
-    async def read_file(
+    def read_file(
         self,
         *,
         workspace_id: UUID,
@@ -582,7 +627,7 @@ class ConfigurationsService:
                 include_content=include_content,
             ),
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
         if not file_path.is_file():
@@ -595,7 +640,7 @@ class ConfigurationsService:
                 ),
             )
             raise FileNotFoundError(relative_path)
-        info = await run_in_threadpool(_read_file_info, file_path, rel_path, include_content)
+        info = _read_file_info(file_path, rel_path, include_content)
         logger.info(
             "config.files.read.success",
             extra=log_context(
@@ -607,7 +652,7 @@ class ConfigurationsService:
         )
         return info
 
-    async def write_file(
+    def write_file(
         self,
         *,
         workspace_id: UUID,
@@ -618,12 +663,12 @@ class ConfigurationsService:
         if_match: str | None,
         if_none_match: str | None,
     ) -> dict:
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
         size_limit = _MAX_ASSET_FILE_SIZE if _is_assets_path(rel_path) else _MAX_FILE_SIZE
@@ -653,8 +698,7 @@ class ConfigurationsService:
             )
             raise PayloadTooLargeError(size_limit)
 
-        result = await run_in_threadpool(
-            _write_file_atomic,
+        result = _write_file_atomic(
             file_path,
             rel_path,
             content,
@@ -663,8 +707,8 @@ class ConfigurationsService:
             if_none_match,
         )
         configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        self._session.flush()
+        self._session.refresh(configuration)
 
         logger.info(
             "config.files.write.success",
@@ -678,7 +722,7 @@ class ConfigurationsService:
         )
         return result
 
-    async def delete_file(
+    def delete_file(
         self,
         *,
         workspace_id: UUID,
@@ -686,12 +730,12 @@ class ConfigurationsService:
         relative_path: str,
         if_match: str | None,
     ) -> None:
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         file_path = _ensure_allowed_file_path(config_path, rel_path)
 
@@ -704,10 +748,10 @@ class ConfigurationsService:
             ),
         )
 
-        await run_in_threadpool(_delete_file_checked, file_path, if_match)
+        _delete_file_checked(file_path, if_match)
         configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        self._session.flush()
+        self._session.refresh(configuration)
 
         logger.info(
             "config.files.delete.success",
@@ -718,19 +762,19 @@ class ConfigurationsService:
             ),
         )
 
-    async def create_directory(
+    def create_directory(
         self,
         *,
         workspace_id: UUID,
         configuration_id: UUID,
         relative_path: str,
     ) -> tuple[Path, bool]:
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         dir_path = _ensure_allowed_directory_path(config_path, rel_path)
         created = not dir_path.exists()
@@ -744,11 +788,11 @@ class ConfigurationsService:
             ),
         )
 
-        await run_in_threadpool(dir_path.mkdir, mode=0o755, parents=True, exist_ok=True)
+        dir_path.mkdir(mode=0o755, parents=True, exist_ok=True)
         if created:
             configuration.updated_at = utc_now()
-            await self._session.flush()
-            await self._session.refresh(configuration)
+            self._session.flush()
+            self._session.refresh(configuration)
 
         logger.info(
             "config.directories.create.success",
@@ -761,7 +805,7 @@ class ConfigurationsService:
         )
         return dir_path, created
 
-    async def delete_directory(
+    def delete_directory(
         self,
         *,
         workspace_id: UUID,
@@ -769,12 +813,12 @@ class ConfigurationsService:
         relative_path: str,
         recursive: bool,
     ) -> None:
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         dir_path = _ensure_allowed_directory_path(config_path, rel_path)
 
@@ -800,13 +844,13 @@ class ConfigurationsService:
             raise FileNotFoundError(relative_path)
 
         if recursive:
-            await run_in_threadpool(shutil.rmtree, dir_path)
+            shutil.rmtree(dir_path)
         else:
-            await run_in_threadpool(dir_path.rmdir)
+            dir_path.rmdir()
 
         configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        self._session.flush()
+        self._session.refresh(configuration)
 
         logger.info(
             "config.directories.delete.success",
@@ -818,7 +862,7 @@ class ConfigurationsService:
             ),
         )
 
-    async def rename_entry(
+    def rename_entry(
         self,
         *,
         workspace_id: UUID,
@@ -828,12 +872,12 @@ class ConfigurationsService:
         overwrite: bool,
         dest_if_match: str | None,
     ) -> dict:
-        configuration = await self._require_configuration(
+        configuration = self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         _ensure_editable_status(configuration)
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
 
         logger.debug(
             "config.entries.rename.start",
@@ -936,8 +980,8 @@ class ConfigurationsService:
         etag = _compute_file_etag(dest_abs) if dest_abs.is_file() else ""
 
         configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        self._session.flush()
+        self._session.refresh(configuration)
 
         result = {
             "from": _stringify_path(src_rel, src_is_dir),
@@ -959,7 +1003,7 @@ class ConfigurationsService:
         )
         return result
 
-    async def export_zip(
+    def export_zip(
         self,
         *,
         workspace_id: UUID,
@@ -969,8 +1013,8 @@ class ConfigurationsService:
             "config.export_zip.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
-        data = await run_in_threadpool(_build_zip_bytes, config_path)
+        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
+        data = _build_zip_bytes(config_path)
 
         logger.info(
             "config.export_zip.success",
@@ -982,7 +1026,7 @@ class ConfigurationsService:
         )
         return data
 
-    async def _materialize_source(
+    def _materialize_source(
         self,
         *,
         workspace_id: UUID,
@@ -997,7 +1041,7 @@ class ConfigurationsService:
                     configuration_id=configuration_id,
                 ),
             )
-            await self._storage.materialize_from_template(
+            self._storage.materialize_from_template(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
             )
@@ -1012,7 +1056,7 @@ class ConfigurationsService:
                     source_configuration_id=source.configuration_id,
                 ),
             )
-            await self._storage.materialize_from_clone(
+            self._storage.materialize_from_clone(
                 workspace_id=workspace_id,
                 source_configuration_id=source.configuration_id,
                 new_configuration_id=configuration_id,
@@ -1029,8 +1073,8 @@ class ConfigurationsService:
         )
         raise ConfigSourceNotFoundError("Unsupported source reference")
 
-    async def _archive_active(self, workspace_id: UUID, exclude: UUID) -> None:
-        existing = await self._repo.get_active(workspace_id)
+    def _archive_active(self, workspace_id: UUID, exclude: UUID) -> None:
+        existing = self._repo.get_active(workspace_id)
         if existing is None or existing.id == exclude:
             return
         logger.debug(
@@ -1042,19 +1086,19 @@ class ConfigurationsService:
             ),
         )
         existing.status = ConfigurationStatus.ARCHIVED
-        await self._session.flush()
+        self._session.flush()
 
-    async def _current_fileset_hash(self, config_path: Path) -> str:
-        index = await run_in_threadpool(_build_file_index, config_path)
+    def _current_fileset_hash(self, config_path: Path) -> str:
+        index = _build_file_index(config_path)
         return _compute_fileset_hash(index["entries"])
 
-    async def _require_configuration(
+    def _require_configuration(
         self,
         *,
         workspace_id: UUID,
         configuration_id: UUID,
     ) -> Configuration:
-        configuration = await self._repo.get(
+        configuration = self._repo.get(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )

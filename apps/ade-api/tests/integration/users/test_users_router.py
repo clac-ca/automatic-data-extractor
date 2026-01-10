@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -43,12 +44,12 @@ async def test_list_users_admin_success(
         response = await async_client.get(
             "/api/v1/users",
             headers={"Authorization": f"Bearer {token}"},
-            params={"page": page, "page_size": 100},
+            params={"page": page, "perPage": 100},
         )
         assert response.status_code == 200
         data = response.json()
         emails.update(item["email"] for item in data["items"])
-        if not data["has_next"]:
+        if data["pageCount"] == 0 or page >= data["pageCount"]:
             break
         page += 1
         assert page < 10, "unexpectedly large number of pages"
@@ -199,8 +200,11 @@ async def test_deactivate_user_revokes_api_keys(
     admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     create_key = await async_client.post(
-        f"/api/v1/users/{target.id}/api-keys",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        f"/api/v1/users/{target.id}/apikeys",
+        headers={
+            "Authorization": f"Bearer {admin_token}",
+            "Idempotency-Key": f"idem-{uuid4().hex}",
+        },
         json={"name": "Target key"},
     )
     assert create_key.status_code == 201, create_key.text
@@ -220,10 +224,11 @@ async def test_deactivate_user_revokes_api_keys(
     payload = deactivate.json()
     assert payload["is_active"] is False
 
+    revoked_filters = json.dumps([{"id": "revokedAt", "operator": "isNotEmpty"}])
     key_list = await async_client.get(
-        f"/api/v1/users/{target.id}/api-keys",
+        f"/api/v1/users/{target.id}/apikeys",
         headers={"Authorization": f"Bearer {admin_token}"},
-        params={"include_revoked": True},
+        params={"filters": revoked_filters},
     )
     assert key_list.status_code == 200, key_list.text
     records = key_list.json()["items"]

@@ -11,19 +11,19 @@ SORT_FIELDS = {
         func.lower(User.email).asc(),
         func.lower(User.email).desc(),
     ),
-    "display_name": (
+    "displayName": (
         tuple(nulls_last(func.lower(User.display_name).asc())),
         tuple(nulls_last(func.lower(User.display_name).desc())),
     ),
-    "created_at": (User.created_at.asc(), User.created_at.desc()),
-    "updated_at": (User.updated_at.asc(), User.updated_at.desc()),
-    "last_login_at": (
+    "createdAt": (User.created_at.asc(), User.created_at.desc()),
+    "updatedAt": (User.updated_at.asc(), User.updated_at.desc()),
+    "lastLoginAt": (
         tuple(nulls_last(User.last_login_at.asc())),
         tuple(nulls_last(User.last_login_at.desc())),
     ),
-    "failed_login_count": (User.failed_login_count.asc(), User.failed_login_count.desc()),
-    "is_active": (User.is_active.asc(), User.is_active.desc()),
-    "is_service_account": (
+    "failedLoginCount": (User.failed_login_count.asc(), User.failed_login_count.desc()),
+    "isActive": (User.is_active.asc(), User.is_active.desc()),
+    "isServiceAccount": (
         User.is_service_account.asc(),
         User.is_service_account.desc(),
     ),

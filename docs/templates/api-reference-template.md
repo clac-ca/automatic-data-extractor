@@ -4,7 +4,7 @@ Overview: Brief description of the API (or section) covered.
 
 Base URL
 
-- Base: `http://localhost:8000/api`
+- Base: `http://localhost:8000/api/v1`
 - Auth: <Describe (for example, API key in `Authorization` header)>
 - Content type: `application/json`
 
@@ -17,7 +17,7 @@ Description: Returns service health.
 Example request:
 
 ```bash
-curl -s http://localhost:8000/api/health
+curl -s http://localhost:8000/api/v1/health
 ```
 
 Example response:
@@ -48,7 +48,7 @@ Request body:
 Example request:
 
 ```bash
-curl -s -X POST http://localhost:8000/api/runs \
+curl -s -X POST http://localhost:8000/api/v1/runs \
   -H 'Content-Type: application/json' \
   -d '{"name":"example","priority":5}'
 ```
@@ -74,4 +74,3 @@ Run object:
 - `name` (string) — Human‑readable name
 - `status` (string) — Current state (for example, `queued`, `running`, `done`)
 - `createdAt` (string, ISO 8601) — Creation timestamp
-

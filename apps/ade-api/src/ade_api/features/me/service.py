@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.core.auth.principal import AuthenticatedPrincipal, PrincipalType
 from ade_api.core.rbac.registry import PERMISSION_REGISTRY
@@ -18,7 +18,6 @@ from .schemas import (
     EffectivePermissions,
     MeContext,
     MeProfile,
-    MeWorkspacePage,
     MeWorkspaceSummary,
     PermissionCheckRequest,
     PermissionCheckResponse,
@@ -38,13 +37,13 @@ class WorkspaceAccess:
 class MeService:
     """Business logic for the `/me` feature."""
 
-    session: AsyncSession
+    session: Session
     rbac: RbacService
 
-    async def get_profile(self, principal: AuthenticatedPrincipal) -> MeProfile:
+    def get_profile(self, principal: AuthenticatedPrincipal) -> MeProfile:
         """Return the user profile for the current principal."""
 
-        user, roles, permissions, access = await self._load_principal_state(principal)
+        user, roles, permissions, access = self._load_principal_state(principal)
         return self._to_me_profile(
             user=user,
             roles=roles,
@@ -52,24 +51,15 @@ class MeService:
             preferred_workspace_id=access.default_workspace_id,
         )
 
-    async def get_context(
+    def get_context(
         self,
         principal: AuthenticatedPrincipal,
-        *,
-        page: int,
-        page_size: int,
-        include_total: bool = True,
     ) -> MeContext:
         """Return a consolidated bootstrap/context payload for the SPA."""
 
-        user, roles, permissions, access = await self._load_principal_state(principal)
+        user, roles, permissions, access = self._load_principal_state(principal)
 
-        workspaces_page = self._build_workspace_page(
-            access=access,
-            page=page,
-            page_size=page_size,
-            include_total=include_total,
-        )
+        workspaces = self._build_workspace_list(access=access)
 
         profile = self._to_me_profile(
             user=user,
@@ -82,21 +72,21 @@ class MeService:
             user=profile,
             roles=roles,
             permissions=permissions,
-            workspaces=workspaces_page,
+            workspaces=workspaces,
         )
 
-    async def get_effective_permissions(
+    def get_effective_permissions(
         self,
         principal: AuthenticatedPrincipal,
     ) -> EffectivePermissions:
         """Return the full effective permission sets for the principal."""
 
-        global_permissions = sorted(await self.rbac.get_global_permissions(principal=principal))
+        global_permissions = sorted(self.rbac.get_global_permissions(principal=principal))
 
-        access = await self._resolve_workspace_access(principal)
+        access = self._resolve_workspace_access(principal)
         workspace_permissions: dict[str, list[str]] = {}
         for workspace in access.workspaces:
-            permissions = await self.rbac.get_workspace_permissions(
+            permissions = self.rbac.get_workspace_permissions(
                 principal=principal,
                 workspace_id=workspace.id,
             )
@@ -107,7 +97,7 @@ class MeService:
             workspaces=workspace_permissions,
         )
 
-    async def check_permissions(
+    def check_permissions(
         self,
         principal: AuthenticatedPrincipal,
         payload: PermissionCheckRequest,
@@ -140,12 +130,12 @@ class MeService:
                 detail=("workspace_id is required when checking workspace-scoped permissions."),
             )
 
-        global_perms = await self.rbac.get_global_permissions(principal=principal)
+        global_perms = self.rbac.get_global_permissions(principal=principal)
 
         workspace_perms: set[str] = set()
         if workspace_id is not None:
-            await self._ensure_workspace_exists(workspace_id)
-            workspace_perms = await self.rbac.get_workspace_permissions(
+            self._ensure_workspace_exists(workspace_id)
+            workspace_perms = self.rbac.get_workspace_permissions(
                 principal=principal,
                 workspace_id=workspace_id,
             )
@@ -164,7 +154,7 @@ class MeService:
 
         return PermissionCheckResponse(results=results)
 
-    async def _load_principal_state(
+    def _load_principal_state(
         self, principal: AuthenticatedPrincipal
     ) -> tuple[User, list[str], list[str], WorkspaceAccess]:
         """Resolve the persisted user, role/permission sets, and workspace access."""
@@ -175,14 +165,14 @@ class MeService:
                 detail="Service account principals cannot access /me.",
             )
 
-        user = await self._get_user_or_404(principal.user_id)
-        roles = sorted(await self.rbac.get_global_role_slugs(principal=principal))
-        permissions = sorted(await self.rbac.get_global_permissions(principal=principal))
-        access = await self._resolve_workspace_access(principal)
+        user = self._get_user_or_404(principal.user_id)
+        roles = sorted(self.rbac.get_global_role_slugs(principal=principal))
+        permissions = sorted(self.rbac.get_global_permissions(principal=principal))
+        access = self._resolve_workspace_access(principal)
         return user, roles, permissions, access
 
-    async def _get_user_or_404(self, user_id: UUID) -> User:
-        user = await self.session.get(User, user_id)
+    def _get_user_or_404(self, user_id: UUID) -> User:
+        user = self.session.get(User, user_id)
         if user is None or not getattr(user, "is_active", True):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -190,15 +180,15 @@ class MeService:
             )
         return user
 
-    async def _ensure_workspace_exists(self, workspace_id: UUID) -> None:
-        workspace = await self.session.get(Workspace, workspace_id)
+    def _ensure_workspace_exists(self, workspace_id: UUID) -> None:
+        workspace = self.session.get(Workspace, workspace_id)
         if workspace is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Workspace not found.",
             )
 
-    async def _resolve_workspace_access(self, principal: AuthenticatedPrincipal) -> WorkspaceAccess:
+    def _resolve_workspace_access(self, principal: AuthenticatedPrincipal) -> WorkspaceAccess:
         """Return all workspaces visible to the principal (memberships + assignments)."""
 
         membership_stmt = (
@@ -206,7 +196,7 @@ class MeService:
             .join(Workspace, Workspace.id == WorkspaceMembership.workspace_id)
             .where(WorkspaceMembership.user_id == principal.user_id)
         )
-        membership_result = await self.session.execute(membership_stmt)
+        membership_result = self.session.execute(membership_stmt)
 
         memberships: dict[UUID, WorkspaceMembership] = {}
         workspace_map: dict[UUID, Workspace] = {}
@@ -226,13 +216,13 @@ class MeService:
             )
             .distinct()
         )
-        assignments_result = await self.session.execute(assignments_stmt)
+        assignments_result = self.session.execute(assignments_stmt)
         assigned_ids = {row[0] for row in assignments_result.all() if row[0] is not None}
         missing_ids = [ws_id for ws_id in assigned_ids if ws_id not in workspace_map]
 
         if missing_ids:
             workspaces_stmt = select(Workspace).where(Workspace.id.in_(missing_ids))
-            workspaces_result = await self.session.execute(workspaces_stmt)
+            workspaces_result = self.session.execute(workspaces_stmt)
             for workspace in workspaces_result.scalars().all():
                 workspace_map[workspace.id] = workspace
 
@@ -247,22 +237,15 @@ class MeService:
             default_workspace_id=default_workspace_id,
         )
 
-    def _build_workspace_page(
+    def _build_workspace_list(
         self,
         *,
         access: WorkspaceAccess,
-        page: int,
-        page_size: int,
-        include_total: bool,
-    ) -> MeWorkspacePage:
-        """Build workspace pagination metadata and summaries."""
-
-        total = len(access.workspaces) if include_total else None
-        offset = max(0, (page - 1) * page_size)
-        slice_items = access.workspaces[offset : offset + page_size]
+    ) -> list[MeWorkspaceSummary]:
+        """Build workspace summaries for the bootstrap payload."""
 
         summaries: list[MeWorkspaceSummary] = []
-        for workspace in slice_items:
+        for workspace in access.workspaces:
             membership = access.memberships.get(workspace.id)
             summaries.append(
                 MeWorkspaceSummary(
@@ -276,18 +259,7 @@ class MeService:
                     joined_at=membership.created_at if membership else None,
                 )
             )
-
-        has_previous = page > 1
-        has_next = (offset + len(slice_items)) < len(access.workspaces)
-
-        return MeWorkspacePage(
-            items=summaries,
-            page=page,
-            page_size=page_size,
-            total=total,
-            has_next=has_next,
-            has_previous=has_previous,
-        )
+        return summaries
 
     @staticmethod
     def _to_me_profile(

@@ -1,9 +1,8 @@
 import type { ReactElement, ReactNode } from "react";
 import { render as rtlRender, type RenderOptions } from "@testing-library/react";
 
-import { NavProvider } from "@app/nav/history";
-
-import { AppProviders } from "../app/AppProviders";
+import { NavProvider } from "@app/navigation/history";
+import { AppProviders } from "@app/providers/AppProviders";
 
 export * from "@testing-library/react";
 

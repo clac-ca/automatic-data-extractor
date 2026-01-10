@@ -49,7 +49,7 @@ alembic upgrade head
 - Check health:
 
 ```bash
-curl -s http://localhost:8000/api/health
+curl -s http://localhost:8000/api/v1/health
 ```
 
 3. Permission denied
@@ -64,4 +64,3 @@ Fix: Adjust file permissions, avoid privileged ports, verify container volume ow
 
 - Check related docs or FAQ
 - Open a discussion with logs and reproduction steps
-

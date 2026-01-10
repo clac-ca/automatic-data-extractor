@@ -33,7 +33,7 @@ class HealthService:
         self._settings = settings
         self._safe_mode_service = safe_mode_service
 
-    async def status(self) -> HealthCheckResponse:
+    def status(self) -> HealthCheckResponse:
         """Return the overall system health."""
         logger.debug(
             "health.status.start",
@@ -52,7 +52,7 @@ class HealthService:
                 ),
             ]
 
-            safe_mode = await self._safe_mode_status()
+            safe_mode = self._safe_mode_status()
             if safe_mode.enabled:
                 components.append(
                     HealthComponentStatus(
@@ -94,7 +94,7 @@ class HealthService:
             )
             raise HealthCheckError("Failed to compute health status") from exc
 
-    async def _safe_mode_status(self) -> SafeModeStatus:
+    def _safe_mode_status(self) -> SafeModeStatus:
         if self._safe_mode_service is not None:
             logger.debug(
                 "health.safe_mode.fetch_from_service",
@@ -102,7 +102,7 @@ class HealthService:
                     source="service",
                 ),
             )
-            return await self._safe_mode_service.get_status()
+            return self._safe_mode_service.get_status()
 
         logger.debug(
             "health.safe_mode.derived_from_settings",

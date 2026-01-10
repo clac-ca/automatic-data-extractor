@@ -1,57 +1,104 @@
 from __future__ import annotations
 
-from pydantic import Field, field_validator
-from sqlalchemy import func, or_
 from sqlalchemy.sql import Select
 
-from ade_api.common.filters import FilterBase
+from ade_api.common.list_filters import (
+    FilterField,
+    FilterItem,
+    FilterJoinOperator,
+    FilterOperator,
+    FilterRegistry,
+    FilterValueType,
+    build_predicate,
+    combine_predicates,
+    prepare_filters,
+)
+from ade_api.common.search import build_q_predicate
+from ade_api.features.search_registry import SEARCH_REGISTRY
 from ade_api.models import User
-from ade_api.settings import MAX_SEARCH_LEN, MIN_SEARCH_LEN
+
+USER_FILTER_REGISTRY = FilterRegistry(
+    [
+        FilterField(
+            id="isActive",
+            column=User.is_active,
+            operators={FilterOperator.EQ, FilterOperator.NE},
+            value_type=FilterValueType.BOOL,
+        ),
+        FilterField(
+            id="isServiceAccount",
+            column=User.is_service_account,
+            operators={FilterOperator.EQ, FilterOperator.NE},
+            value_type=FilterValueType.BOOL,
+        ),
+        FilterField(
+            id="createdAt",
+            column=User.created_at,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.LT,
+                FilterOperator.LTE,
+                FilterOperator.GT,
+                FilterOperator.GTE,
+                FilterOperator.BETWEEN,
+            },
+            value_type=FilterValueType.DATETIME,
+        ),
+        FilterField(
+            id="lastLoginAt",
+            column=User.last_login_at,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.LT,
+                FilterOperator.LTE,
+                FilterOperator.GT,
+                FilterOperator.GTE,
+                FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
+            value_type=FilterValueType.DATETIME,
+        ),
+        FilterField(
+            id="failedLoginCount",
+            column=User.failed_login_count,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.LT,
+                FilterOperator.LTE,
+                FilterOperator.GT,
+                FilterOperator.GTE,
+                FilterOperator.BETWEEN,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+            },
+            value_type=FilterValueType.INT,
+        ),
+    ]
+)
 
 
-class UserFilters(FilterBase):
-    """Query parameters supported by the user listing endpoint."""
+def apply_user_filters(
+    stmt: Select,
+    filters: list[FilterItem],
+    *,
+    join_operator: FilterJoinOperator,
+    q: str | None,
+) -> Select:
+    parsed_filters = prepare_filters(filters, USER_FILTER_REGISTRY)
+    predicates: list = [build_predicate(parsed) for parsed in parsed_filters]
 
-    q: str | None = Field(
-        None,
-        min_length=MIN_SEARCH_LEN,
-        max_length=MAX_SEARCH_LEN,
-        description="Free text search across email and display name.",
-    )
-    is_active: bool | None = Field(
-        None,
-        description="Filter by active/inactive status.",
-    )
-    is_service_account: bool | None = Field(
-        None,
-        description="Filter by service account flag.",
-    )
+    combined = combine_predicates(predicates, join_operator)
+    if combined is not None:
+        stmt = stmt.where(combined)
 
-    @field_validator("q")
-    @classmethod
-    def _trim_query(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        candidate = value.strip()
-        return candidate or None
-
-
-def apply_user_filters(stmt: Select, filters: UserFilters) -> Select:
-    """Apply ``filters`` to a user query."""
-
-    if filters.q:
-        pattern = f"%{filters.q.lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(User.email).like(pattern),
-                func.lower(User.display_name).like(pattern),
-            )
-        )
-    if filters.is_active is not None:
-        stmt = stmt.where(User.is_active == filters.is_active)
-    if filters.is_service_account is not None:
-        stmt = stmt.where(User.is_service_account == filters.is_service_account)
+    q_predicate = build_q_predicate(resource="users", q=q, registry=SEARCH_REGISTRY)
+    if q_predicate is not None:
+        stmt = stmt.where(q_predicate)
     return stmt
 
 
-__all__ = ["UserFilters", "apply_user_filters"]
+__all__ = ["USER_FILTER_REGISTRY", "apply_user_filters"]

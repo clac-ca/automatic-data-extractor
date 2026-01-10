@@ -8,7 +8,25 @@ from typing import Any
 import jwt
 
 
-def decode_token(token: str, *, secret: str, algorithms: Sequence[str]) -> dict[str, Any]:
+def decode_token(
+    token: str,
+    *,
+    secret: str,
+    algorithms: Sequence[str],
+    audience: Sequence[str] | None = None,
+) -> dict[str, Any]:
     """Decode a JWT and return its payload."""
 
-    return jwt.decode(token, secret, algorithms=list(algorithms))
+    if audience:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=list(algorithms),
+            audience=list(audience),
+        )
+    return jwt.decode(
+        token,
+        secret,
+        algorithms=list(algorithms),
+        options={"verify_aud": False},
+    )

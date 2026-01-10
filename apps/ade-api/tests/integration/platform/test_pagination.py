@@ -2,40 +2,37 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from sqlalchemy import select
 
-from ade_api.common.pagination import paginate_sql
+from ade_api.common.listing import paginate_query
 from ade_api.models import Workspace
 
-pytestmark = pytest.mark.asyncio
 
-
-async def test_paginate_returns_envelope_with_optional_total(session) -> None:
+def test_paginate_returns_canonical_envelope(session) -> None:
     suffix = uuid.uuid4().hex[:8]
     records = [
         Workspace(name=f"Workspace {index}", slug=f"pagination-{suffix}-{index}") for index in range(3)
     ]
     session.add_all(records)
-    await session.commit()
+    session.commit()
 
     query = select(Workspace).where(Workspace.slug.like(f"pagination-{suffix}-%"))
-    page = await paginate_sql(
+    page = paginate_query(
         session,
         query,
         page=1,
-        page_size=2,
+        per_page=2,
         order_by=(
             Workspace.created_at.asc(),
             Workspace.id.asc(),
         ),
-        include_total=True,
     )
 
     assert page.page == 1
-    assert page.page_size == 2
-    assert page.has_next is True
+    assert page.per_page == 2
+    assert page.page_count == 2
     assert page.total == 3
+    assert page.changes_cursor == "0"
     assert [item.slug for item in page.items] == [
         records[0].slug,
         records[1].slug,

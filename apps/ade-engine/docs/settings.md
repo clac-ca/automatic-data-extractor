@@ -29,6 +29,7 @@
 
 - `log_format: "text" | "ndjson"` — output format. Default `text`.
 - `log_level: int` — standard logging level. Accepts an integer (e.g., `20`) or a level name (e.g., `INFO`, `DEBUG`).
+- Log files are only written when `--logs-dir` is provided; otherwise logs are emitted to stderr/stdout only.
 
 ## Scan limits
 

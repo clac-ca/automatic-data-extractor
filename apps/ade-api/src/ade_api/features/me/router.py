@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, Security, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Response, Security, status
+from sqlalchemy.orm import Session
 
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, get_rbac_service, require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
 from ade_api.core.rbac.service_interface import RbacService
-from ade_api.db.session import get_session
+from ade_api.db import get_db
 from ade_api.settings import Settings, get_settings
 
 from .schemas import (
@@ -28,7 +28,7 @@ router = APIRouter(
 
 
 def get_me_service(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[Session, Depends(get_db)],
     rbac: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> MeService:
     """Per-request MeService factory."""
@@ -54,13 +54,13 @@ def get_me_service(
         },
     },
 )
-async def get_me(
+def get_me(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
 ) -> MeProfile:
     """Return the current principal's profile."""
 
-    return await service.get_profile(principal)
+    return service.get_profile(principal)
 
 
 @router.get(
@@ -77,38 +77,17 @@ async def get_me(
         },
     },
 )
-async def get_me_bootstrap(
+def get_me_bootstrap(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
     response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
-    page: Annotated[
-        int,
-        Query(ge=1, description="Workspace page number (1-based)."),
-    ] = 1,
-    page_size: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=200,
-            description="Number of workspaces to include in the page.",
-        ),
-    ] = 50,
-    include_total: Annotated[
-        bool,
-        Query(
-            description=("When true, includes the total workspace count in the response."),
-        ),
-    ] = True,
 ) -> MeContext:
     """Return a consolidated bootstrap payload for the current principal."""
 
     set_csrf_cookie(response, settings)
-    return await service.get_context(
+    return service.get_context(
         principal,
-        page=page,
-        page_size=page_size,
-        include_total=include_total,
     )
 
 
@@ -123,13 +102,13 @@ async def get_me_bootstrap(
         },
     },
 )
-async def get_me_permissions(
+def get_me_permissions(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
 ) -> EffectivePermissions:
     """Return the effective permissions for the current principal."""
 
-    return await service.get_effective_permissions(principal=principal)
+    return service.get_effective_permissions(principal=principal)
 
 
 @router.post(
@@ -150,14 +129,14 @@ async def get_me_permissions(
         },
     },
 )
-async def check_permissions(
+def check_permissions(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
     payload: PermissionCheckRequest,
 ) -> PermissionCheckResponse:
     """Evaluate a set of permission keys for the current principal."""
 
-    return await service.check_permissions(
+    return service.check_permissions(
         principal=principal,
         payload=payload,
     )

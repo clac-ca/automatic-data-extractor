@@ -397,6 +397,8 @@ class Pipeline:
         max_empty_rows = self.settings.max_empty_rows_run
         max_empty_cols = self.settings.max_empty_cols_run
         row_limit_hit = False
+        col_truncated_rows = 0
+        col_truncated_samples: list[int] = []
 
         for row_index, row in enumerate(sheet.iter_rows(values_only=True)):
             last_value_idx = -1
@@ -418,16 +420,9 @@ class Pipeline:
                         break
 
             if truncated_cols:
-                self.logger.warning(
-                    "Truncated row after long empty column run",
-                    extra={
-                        "data": {
-                            "sheet_name": sheet.title,
-                            "row_index": row_index,
-                            "max_empty_cols_run": max_empty_cols,
-                        }
-                    },
-                )
+                col_truncated_rows += 1
+                if len(col_truncated_samples) < 5:
+                    col_truncated_samples.append(row_index)
 
             if last_value_idx == -1:
                 empty_row_run += 1
@@ -449,6 +444,19 @@ class Pipeline:
                         "sheet_name": sheet.title,
                         "rows_emitted": len(rows),
                         "max_empty_rows_run": max_empty_rows,
+                    }
+                },
+            )
+
+        if col_truncated_rows:
+            self.logger.warning(
+                "Truncated rows after long empty column run",
+                extra={
+                    "data": {
+                        "sheet_name": sheet.title,
+                        "truncated_rows": col_truncated_rows,
+                        "sample_row_indices": col_truncated_samples,
+                        "max_empty_cols_run": max_empty_cols,
                     }
                 },
             )

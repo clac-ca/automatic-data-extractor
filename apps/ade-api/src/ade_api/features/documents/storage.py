@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
@@ -56,7 +56,7 @@ class DocumentStorage:
             # assert ValueError on invalid storage URIs.
             raise ValueError(str(exc)) from exc
 
-    async def write(
+    def write(
         self,
         stored_uri: str,
         stream: BinaryIO,
@@ -66,27 +66,26 @@ class DocumentStorage:
         """Persist ``stream`` to ``stored_uri`` returning metadata about the write."""
 
         try:
-            stored = await self._adapter.write(stored_uri, stream, max_bytes=max_bytes)
+            stored = self._adapter.write(stored_uri, stream, max_bytes=max_bytes)
         except StorageLimitError as exc:
             raise DocumentTooLargeError(limit=exc.limit, received=exc.received) from exc
 
         return StoredDocument.from_stored_object(stored)
 
-    async def stream(
+    def stream(
         self,
         stored_uri: str,
         *,
         chunk_size: int = _DEFAULT_CHUNK_SIZE,
-    ) -> AsyncIterator[bytes]:
+    ) -> Iterator[bytes]:
         """Yield the bytes stored at ``stored_uri`` in ``chunk_size`` chunks."""
 
-        async for chunk in self._adapter.stream(stored_uri, chunk_size=chunk_size):
-            yield chunk
+        yield from self._adapter.stream(stored_uri, chunk_size=chunk_size)
 
-    async def delete(self, stored_uri: str) -> None:
+    def delete(self, stored_uri: str) -> None:
         """Remove ``stored_uri`` from disk if it exists."""
 
-        await self._adapter.delete(stored_uri)
+        self._adapter.delete(stored_uri)
 
 
 __all__ = ["DocumentStorage", "StoredDocument"]

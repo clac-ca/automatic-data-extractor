@@ -16,12 +16,11 @@ This doc is for people working on `ade-web` internals. It explains how the workb
 >   `apps/ade-engine/docs/11-ade-event-model.md` (event schemas)
 
 Workbench run actions always use the canonical **`RunOptions`** shape (camelCase:
-`dryRun`, `validateOnly`, `forceRebuild`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
-Environment builds stay as backend `Build` entities but are triggered automatically when runs start if:
+`dryRun`, `validateOnly`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
+Environments are provisioned automatically when runs start if:
 
 * the environment is missing or stale,
-* the environment was built from outdated content, or
-* the user explicitly requested `force_rebuild`.
+* the environment was built from outdated dependency metadata.
 
 Validation runs and test runs are always `Run` entities.
 
@@ -150,12 +149,12 @@ The workbench mimics familiar IDE/editor layouts so new users can orient fast:
 +-------------------------------------------------------------+
 | Activity |           Editor & Tabs                          |
 |   Bar    |                                                 |
-|         Explorer     Editor       Inspector                |
-|         Panel        Area         Panel                    |
-|                       |             |                      |
-|                       |             |                      |
-+-----------------------+-------------+----------------------+
-|                       Console / Validation                 |
+|         Explorer     Editor                                 |
+|         Panel        Area                                   |
+|                       |                                     |
+|                       |                                     |
++-----------------------+------------------------------------+
+|                       Console / Validation                  |
 +-------------------------------------------------------------+
 ```
 
@@ -164,8 +163,7 @@ High‑level pieces:
 1. **Activity bar** — left vertical mode switcher.
 2. **Explorer** — configuration file tree.
 3. **Editor & tabs** — Monaco editor + tab strip.
-4. **Inspector** — metadata about the active file.
-5. **Console / Validation** — bottom panel for run output and validation issues.
+4. **Console / Validation** — bottom panel for run output and validation issues.
 
 ### 2.1 Activity bar
 
@@ -222,20 +220,7 @@ The center pane hosts the Monaco editor and tab strip.
   * Uses the resolved editor theme for the `(workspaceId, configurationId)` pair.
   * Applies language‑appropriate syntax highlighting (`language` from the tab/file).
 
-### 2.4 Inspector (right sidebar)
-
-The **Inspector** is an optional right sidebar that shows metadata for the current file:
-
-* Path and display name.
-* Size and last modified timestamp.
-* Content type and ETag.
-* Load state (loading / ready / error).
-* Dirty vs saved.
-* Last saved timestamp.
-
-The inspector is **read‑only**: it never modifies file content.
-
-### 2.5 Console / Validation panel (bottom)
+### 2.4 Console / Validation panel (bottom)
 
 The bottom panel can be toggled and resized. It has two logical tabs:
 
@@ -528,45 +513,36 @@ URL query parameters encode **shareable view state**—the bits we want to survi
 ### 5.1 Search state model
 
 ```ts
-export type ConfigBuilderTab = "editor";
-export type ConfigBuilderPane = "terminal" | "problems";
-export type ConfigBuilderConsole = "open" | "closed";
-export type ConfigBuilderView = "editor" | "split" | "zen";
+export type WorkbenchPane = "terminal" | "problems";
+export type WorkbenchConsoleState = "open" | "closed";
 
-export interface ConfigBuilderSearchState {
-  readonly tab: ConfigBuilderTab;
-  readonly pane: ConfigBuilderPane;
-  readonly console: ConfigBuilderConsole;
-  readonly view: ConfigBuilderView;
-  readonly file?: string;             // file id/path
-  readonly runId?: string;            // currently viewed run
+export interface WorkbenchSearchState {
+  readonly pane: WorkbenchPane;
+  readonly console: WorkbenchConsoleState;
+  readonly fileId?: string;           // file id/path
 }
 ```
 
 Defaults:
 
 ```ts
-export const DEFAULT_CONFIG_BUILDER_SEARCH: ConfigBuilderSearchState = {
-  tab: "editor",
+export const DEFAULT_WORKBENCH_SEARCH: WorkbenchSearchState = {
   pane: "terminal",
   console: "closed",
-  view: "editor",
 };
 ```
 
 ### 5.2 Reading from the URL
 
-`readConfigBuilderSearch(source)` returns a **normalized** snapshot:
+`readWorkbenchSearchParams(source)` returns a **normalized** snapshot:
 
 ```ts
-export interface ConfigBuilderSearchSnapshot
-  extends ConfigBuilderSearchState {
+export interface WorkbenchSearchSnapshot
+  extends WorkbenchSearchState {
   readonly present: {
-    readonly tab: boolean;
     readonly pane: boolean;
     readonly console: boolean;
-    readonly view: boolean;
-    readonly file: boolean;
+    readonly fileId: boolean;
   };
 }
 ```
@@ -580,9 +556,9 @@ Responsibilities:
 
 ### 5.3 Writing to the URL
 
-`mergeConfigBuilderSearch(currentParams, patch)`:
+`mergeWorkbenchSearchParams(currentParams, patch)`:
 
-1. Reads the current state via `readConfigBuilderSearch`.
+1. Reads the current state via `readWorkbenchSearchParams`.
 2. Merges:
 
    * Hard defaults,
@@ -590,7 +566,7 @@ Responsibilities:
    * Given `patch`.
 3. Produces new `URLSearchParams` by:
 
-   * Removing all builder‑related keys (`tab`, `pane`, `console`, `view`, `file`, `runId`).
+   * Removing all builder‑related keys (`pane`, `console`, `file`).
    * Writing new keys **only when they differ from defaults**.
    * Omitting `file` when empty.
 
@@ -603,12 +579,12 @@ A small hook wraps `useSearchParams` and the helpers:
 ```ts
 interface WorkbenchUrlState {
   readonly fileId?: string;
-  readonly pane: ConfigBuilderPane;
-  readonly console: ConfigBuilderConsole;
+  readonly pane: WorkbenchPane;
+  readonly console: WorkbenchConsoleState;
   readonly consoleExplicit: boolean;
   readonly setFileId: (fileId: string | undefined) => void;
-  readonly setPane: (pane: ConfigBuilderPane) => void;
-  readonly setConsole: (console: ConfigBuilderConsole) => void;
+  readonly setPane: (pane: WorkbenchPane) => void;
+  readonly setConsole: (console: WorkbenchConsoleState) => void;
 }
 ```
 
@@ -619,7 +595,7 @@ Behavior:
 * `setFileId`, `setPane`, `setConsole`:
 
   * No‑op when the value is unchanged.
-  * Use `mergeConfigBuilderSearch` to compute new params.
+  * Use `mergeWorkbenchSearchParams` to compute new params.
   * Call `setSearchParams(next, { replace: true })` to avoid polluting history.
 
 * `consoleExplicit` is `true` when the URL explicitly contains a `console` key (`present.console`):
@@ -639,7 +615,7 @@ The console panel has its own local preferences, separate from URL state.
 interface ConsolePanelPreferences {
   readonly version: 2;
   readonly fraction: number;              // 0–1 of vertical space
-  readonly state: ConfigBuilderConsole;   // "open" | "closed"
+  readonly state: WorkbenchConsoleState;   // "open" | "closed"
 }
 ```
 
@@ -685,16 +661,14 @@ All workbench run actions use the canonical `RunOptions` shape (see `07-document
 
 * `dryRun`
 * `validateOnly`
-* `forceRebuild`
 * `inputSheetNames`
 * Optional `mode` (e.g. `"validation"`)
 
-Environment builds remain `Build` entities on the backend, but are triggered automatically at run start if:
+Environments are provisioned automatically at run start if:
 
 * the environment is missing,
 * stale,
-* built from outdated content, or
-* `force_rebuild: true` is set (e.g. user chooses **Force build and test**).
+* built from outdated dependency metadata.
 
 ### 7.2 Test runs
 
@@ -709,7 +683,6 @@ The **Test** split button in the workbench:
    * Builds a `RunOptions` object.
    * Sends a run request to the backend (camelCase → snake_case).
    * Starts streaming events to the **Console**.
-   * Includes `force_rebuild: true` if the user selected that option.
 
 The console shows:
 
@@ -730,7 +703,7 @@ While the run is active:
 
 On completion:
 
-* Structured validation issues are extracted and shown in the **Validation** tab as `ValidationIssue` objects (see §2.5).
+* Structured validation issues are extracted and shown in the **Validation** tab as `ValidationIssue` objects (see §2.4).
 * The tab and console both reflect success/failure.
 
 ### 7.4 Stream errors
@@ -753,7 +726,7 @@ The workbench uses a shared Monaco wrapper component plus per‑configuration th
 
 ### 8.1 `CodeEditor` component
 
-`CodeEditor` lives under `src/ui` and wraps the Monaco editor. Its props:
+`CodeEditor` lives under `src/components/ui/code-editor` and wraps the Monaco editor. Its props:
 
 ```ts
 interface CodeEditorProps {
@@ -1078,7 +1051,7 @@ When extending or refactoring the workbench, keep these principles in mind:
 
   * `WorkbenchFileNode`
   * `WorkbenchFileTab`
-  * `ConfigBuilderSearchState`
+  * `WorkbenchSearchState`
   * `ConsolePanelPreferences`
 
   are effectively **architectural contracts**. If they change, update:
@@ -1089,7 +1062,7 @@ When extending or refactoring the workbench, keep these principles in mind:
 
 * **Separation of concerns**
 
-  * Layout components (Explorer, Editor, Console, Inspector) should not talk directly to the backend.
+  * Layout components (Explorer, Editor, Console) should not talk directly to the backend.
   * All IO goes through:
 
     * API modules (REST clients, streaming helpers).
@@ -1099,7 +1072,7 @@ When extending or refactoring the workbench, keep these principles in mind:
 
   * Use **URL query parameters** for state that impacts navigation and deep linking:
 
-    * `file`, `pane`, `console`, `view`.
+    * `file`, `pane`, `console`.
   * Use **local storage** for per‑user, per‑configuration preferences:
 
     * Open tabs, pinning, MRU.

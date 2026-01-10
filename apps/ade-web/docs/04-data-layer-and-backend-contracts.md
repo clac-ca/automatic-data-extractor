@@ -39,7 +39,7 @@ Flow:
 [ API modules ]         e.g. workspacesApi, documentsApi, runsApi
         │
         ▼
-[ HTTP client ]         shared/api/client.ts
+[ HTTP client ]         api/client.ts
         │
         ▼
 [ ADE API ]             /api/v1/...
@@ -52,17 +52,17 @@ Design goals:
 * **Predictable caching** – React Query keys follow consistent patterns.
 * **Clear boundaries**:
 
-  * Screens know about **hooks + domain types**.
+  * Pages know about **hooks + domain types**.
   * Hooks know about **API modules**.
   * API modules know about **HTTP + paths**.
 
-> **Rule:** UI code never calls `fetch` directly. All network calls go through the shared HTTP client.
+> **Rule:** UI code never calls `fetch` directly. All network calls go through the shared HTTP client in `api/`.
 
 ---
 
 ## 2. HTTP client
 
-All HTTP calls go through `src/shared/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
+All HTTP calls go through `src/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
 
 ### 2.1 Responsibilities
 
@@ -89,7 +89,7 @@ Rules:
 * **401 (Unauthenticated)**
   Handled globally (session invalidation, redirect to `/login`, etc.).
 * **403 (Forbidden)**
-  Exposed to the UI as a permissions error; screens decide how to present it.
+  Exposed to the UI as a permissions error; pages decide how to present it.
 
 The HTTP client itself does not manage sessions; the auth layer handles cookie login and bootstrap.
 
@@ -145,7 +145,7 @@ Example patterns:
   * `['workspace', workspaceId, 'runs', canonicaliseRunsFilters(filters)]`
     (workspace ledger from `/workspaces/{id}/runs`)
   * `['run', runId]`
-    (canonical detail via `/runs/{run_id}`)
+    (canonical detail via `/runs/{runId}`)
   * `['workspace', workspaceId, 'run', runId]`
     (optional workspace-scoped variant)
   * `['run', runId, 'output']`
@@ -193,25 +193,37 @@ Per domain:
   * Queries: `useWorkspaceRunsQuery(workspaceId, filters)`, `useDocumentsQuery(workspaceId, filters)`
   * Mutations: `useCreateWorkspaceRunMutation(workspaceId)`, `useUploadDocumentMutation(workspaceId)`
 
-Hooks live next to the screens that use them (e.g. `features/workspace-shell/runs/useWorkspaceRunsQuery.ts`) and depend only on the shared API modules.
+Shared hooks live under `src/hooks/`, while page-specific hooks stay under the owning page (e.g. `pages/Workspace/sections/Runs/hooks/useWorkspaceRunsQuery.ts`). They depend only on the API modules.
 
 ---
 
 ## 4. Domain API modules
 
-Domain modules live under `src/shared/api/`. Each one:
+Domain modules live under `src/api/`. Each one:
 
 * owns a set of related endpoints, and
 * exposes typed functions named `<verb><Noun>`.
 
 Examples:
 
-* `authApi`, `permissionsApi`, `rolesApi`
-* `workspacesApi`, `documentsApi`, `runsApi`
-* `configurationsApi`, `buildsApi`
-* `systemApi`, `usersApi`, `apiKeysApi`
+* `auth/api.ts`
+* `workspaces/api.ts`
+* `documents/index.ts`, `documents/uploads.ts`
+* `runs/api.ts`, `configurations/api.ts`
+* `system/api.ts`, `users/api.ts`, `api-keys/api.ts`
 
 You should be able to navigate from a backend route to its module and function without guessing.
+
+### 4.0 Canonical list contract
+
+All list endpoints share the same query keys and response envelope.
+
+**Query params**: `page`, `perPage`, `sort`, `filters`, `joinOperator`, `q`
+
+**Envelope**: `items`, `page`, `perPage`, `pageCount`, `total`, `changesCursor`
+
+`filters` is a URL-encoded JSON array of `{ id, operator, value }` items using
+the Tablecn-compatible DSL. Unknown query params return `422`.
 
 ### 4.1 Auth & session (`authApi`)
 
@@ -299,20 +311,20 @@ Global roles are separate from permissions, and parallel the workspace-scoped ro
 
 Roles:
 
-* `GET    /api/v1/rbac/roles`
-* `POST   /api/v1/rbac/roles`
-* `GET    /api/v1/rbac/roles/{role_id}`
-* `PATCH  /api/v1/rbac/roles/{role_id}`
-* `DELETE /api/v1/rbac/roles/{role_id}`
+* `GET    /api/v1/roles`
+* `POST   /api/v1/roles`
+* `GET    /api/v1/roles/{roleId}`
+* `PATCH  /api/v1/roles/{roleId}`
+* `DELETE /api/v1/roles/{roleId}`
 
 Assignments:
 
-* `GET    /api/v1/rbac/roleAssignments`
-* `POST   /api/v1/rbac/roleAssignments`
-* `DELETE /api/v1/rbac/roleAssignments/{assignment_id}`
-* `GET    /api/v1/users/{user_id}/roles`
-* `PUT    /api/v1/users/{user_id}/roles/{role_id}`
-* `DELETE /api/v1/users/{user_id}/roles/{role_id}`
+* `GET    /api/v1/roleassignments`
+* `POST   /api/v1/roleassignments`
+* `DELETE /api/v1/roleassignments/{assignmentId}`
+* `GET    /api/v1/users/{userId}/roles`
+* `PUT    /api/v1/users/{userId}/roles/{roleId}`
+* `DELETE /api/v1/users/{userId}/roles/{roleId}`
 
 **Example functions**
 
@@ -347,22 +359,22 @@ Workspaces:
 
 * `GET    /api/v1/workspaces`
 * `POST   /api/v1/workspaces`
-* `GET    /api/v1/workspaces/{workspace_id}`
-* `PATCH  /api/v1/workspaces/{workspace_id}`
-* `DELETE /api/v1/workspaces/{workspace_id}`
-* `PUT    /api/v1/workspaces/{workspace_id}/default`
+* `GET    /api/v1/workspaces/{workspaceId}`
+* `PATCH  /api/v1/workspaces/{workspaceId}`
+* `DELETE /api/v1/workspaces/{workspaceId}`
+* `PUT    /api/v1/workspaces/{workspaceId}/default`
 
 Members:
 
-* `GET    /api/v1/workspaces/{workspace_id}/members`
-* `POST   /api/v1/workspaces/{workspace_id}/members`
-* `PUT    /api/v1/workspaces/{workspace_id}/members/{user_id}`
-* `DELETE /api/v1/workspaces/{workspace_id}/members/{user_id}`
+* `GET    /api/v1/workspaces/{workspaceId}/members`
+* `POST   /api/v1/workspaces/{workspaceId}/members`
+* `PUT    /api/v1/workspaces/{workspaceId}/members/{userId}`
+* `DELETE /api/v1/workspaces/{workspaceId}/members/{userId}`
 
 Workspace roles & assignments:
 
-* Workspace role definitions reuse `/api/v1/rbac/roles` with `scope=workspace`.
-* Role bindings are managed via workspace members (`/api/v1/workspaces/{workspace_id}/members`).
+* Workspace role definitions reuse `/api/v1/roles` with `scope=workspace`.
+* Role bindings are managed via workspace members (`/api/v1/workspaces/{workspaceId}/members`).
 
 **Example functions**
 
@@ -406,12 +418,12 @@ Hooks:
 
 **Key routes**
 
-* `GET    /api/v1/workspaces/{workspace_id}/documents`
-* `POST   /api/v1/workspaces/{workspace_id}/documents`
-* `GET    /api/v1/workspaces/{workspace_id}/documents/{document_id}`
-* `DELETE /api/v1/workspaces/{workspace_id}/documents/{document_id}`
-* `GET    /api/v1/workspaces/{workspace_id}/documents/{document_id}/download`
-* `GET    /api/v1/workspaces/{workspace_id}/documents/{document_id}/sheets`
+* `GET    /api/v1/workspaces/{workspaceId}/documents`
+* `POST   /api/v1/workspaces/{workspaceId}/documents`
+* `GET    /api/v1/workspaces/{workspaceId}/documents/{documentId}`
+* `DELETE /api/v1/workspaces/{workspaceId}/documents/{documentId}`
+* `GET    /api/v1/workspaces/{workspaceId}/documents/{documentId}/download`
+* `GET    /api/v1/workspaces/{workspaceId}/documents/{documentId}/sheets`
 
 **Example functions**
 
@@ -449,23 +461,24 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 
 **Two key ideas:**
 
-1. Run creation is **configuration-scoped**: `POST /configurations/{id}/runs`.
-2. Use workspace-scoped `/workspaces/{id}/runs` for **listing** runs.
-3. Use global `/runs/{run_id}` for **detail, events, output, and logs** once you know `runId`.
+1. Run creation is **configuration-scoped**: `POST /configurations/{configurationId}/runs`.
+2. Use workspace-scoped `/workspaces/{workspaceId}/runs` for **listing** runs.
+3. Use global `/runs/{runId}` for **detail, output, and logs** once you know `runId`.
 
 #### Workspace run ledger (list only)
 
-* `GET  /api/v1/workspaces/{workspace_id}/runs` – list runs in a workspace.
+* `GET  /api/v1/workspaces/{workspaceId}/runs` – list runs in a workspace.
 
 #### Canonical run detail & assets (global)
 
-- `GET  /api/v1/runs/{run_id}` – canonical run detail.
-- `GET  /api/v1/runs/{run_id}/events` – poll/stream events; `GET /runs/{run_id}/events/download` downloads NDJSON.
-- `GET  /api/v1/runs/{run_id}/input` – input metadata; `GET /runs/{run_id}/input/download` downloads the source file.
-- `GET  /api/v1/runs/{run_id}/output` – output metadata; `GET /runs/{run_id}/output/download` downloads once ready (returns 409 if not).
+- `GET  /api/v1/runs/{runId}` – canonical run detail.
+- `GET  /api/v1/runs/{runId}/events/stream` – live SSE event stream.
+- `GET  /api/v1/runs/{runId}/events/download` – download NDJSON event log.
+- `GET  /api/v1/runs/{runId}/input` – input metadata; `GET /runs/{runId}/input/download` downloads the source file.
+- `GET  /api/v1/runs/{runId}/output` – output metadata; `GET /runs/{runId}/output/download` downloads once ready (returns 409 if not).
 #### Configuration-scoped triggers
 
-* `POST /api/v1/configurations/{configuration_id}/runs` – start a run for a configuration.
+* `POST /api/v1/configurations/{configurationId}/runs` – start a run for a configuration.
 
 **Example functions**
 
@@ -496,50 +509,43 @@ Streaming:
 
 ---
 
-### 4.7 Configurations & builds (`configurationsApi`, `buildsApi`)
+### 4.7 Configurations & environments (`configurationsApi`)
 
 **Responsibilities**
 
 * Configuration entities & versions.
 * Configuration file tree (for the workbench).
-* Builds & build logs (mostly implicit via runs).
+* Worker-owned environments (implicit via runs).
 
-> For day‑to‑day flows, builds are **implicit**: starting a run will rebuild the environment if needed. The explicit `/builds` API is mainly for admin/backfill/debug flows.
+> For day‑to‑day flows, environments are **implicit**: starting a run will provision the environment if needed. There is no explicit environment API in v1.
 
 #### Configuration entities
 
-* `GET  /api/v1/workspaces/{workspace_id}/configurations`
-* `POST /api/v1/workspaces/{workspace_id}/configurations`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish` (make active)
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export`
+* `GET  /api/v1/workspaces/{workspaceId}/configurations`
+* `POST /api/v1/workspaces/{workspaceId}/configurations`
+* `GET  /api/v1/workspaces/{workspaceId}/configurations/{configurationId}`
+* `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/publish` (make active)
+* `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive`
+* `POST /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/validate`
+* `GET  /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/export`
 
 #### Configuration file tree
 
-* `GET    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files`
-* `GET    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
-* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
-* `PATCH  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
-* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
-* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
-* `DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
+* `GET    /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files`
+* `GET    /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}`
+* `PUT    /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}`
+* `PATCH  /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}`
+* `DELETE /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}`
+* `PUT    /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}`
+* `DELETE /api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}`
 
 Directory creation is idempotent: `PUT` returns `201` when the folder is first created and `200` if it already exists.
 
-#### Builds
+#### Environments
 
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
-* `GET  /api/v1/builds/{build_id}`
-* Build logs are observed via the run event stream (`/runs/{run_id}/events/stream`, `console.line` with `data.scope:"build"`).
-
-The backend may rebuild environments automatically when:
-
-* a run starts,
-* the environment is missing or stale,
-* content has changed, or
-* a run includes `force_rebuild` (`RunOptions.forceRebuild`).
+Environments are created on-demand by the worker when runs start. They are keyed
+by configuration + dependency digest and cached for reuse. The API does not
+expose environment endpoints in v1.
 
 **Example functions**
 
@@ -564,11 +570,6 @@ Config files:
 * `createConfigDirectory(workspaceId, configurationId, dirPath)`
 * `deleteConfigDirectory(workspaceId, configurationId, dirPath)`
 
-Builds:
-
-* `createBuild(workspaceId, configurationId, options)`  // returns `buildId`
-* `readBuild(buildId)` (for metadata/status; events are streamed via runs)
-
 Hooks:
 
 * `useConfigurationsQuery(workspaceId)`
@@ -576,7 +577,6 @@ Hooks:
 * `useMakeActiveConfigurationMutation(workspaceId)`
 * `useArchiveConfigurationMutation(workspaceId)`
 * `useConfigurationFilesQuery(workspaceId, configurationId)`
-* `useCreateBuildMutation(workspaceId, configurationId)` (triggers build; observe via run event stream)
 
 ---
 
@@ -621,8 +621,8 @@ Users:
 
 API keys:
 
-* Self-service: `GET /api/v1/users/me/api-keys`, `POST /api/v1/users/me/api-keys`, `DELETE /api/v1/users/me/api-keys/{api_key_id}`
-* Admin (per user): `GET /api/v1/users/{user_id}/api-keys`, `POST /api/v1/users/{user_id}/api-keys`, `DELETE /api/v1/users/{user_id}/api-keys/{api_key_id}`
+* Self-service: `GET /api/v1/users/me/apikeys`, `POST /api/v1/users/me/apikeys`, `DELETE /api/v1/users/me/apikeys/{apiKeyId}`
+* Admin (per user): `GET /api/v1/users/{userId}/apikeys`, `POST /api/v1/users/{userId}/apikeys`, `DELETE /api/v1/users/{userId}/apikeys/{apiKeyId}`
 
 **Example functions**
 
@@ -633,7 +633,7 @@ API keys:
 Hooks:
 
 * `useUsersQuery()`
-* (API keys hooks not yet defined; call `@shared/api-keys/api` directly from screens as needed.)
+* (API keys hooks not yet defined; call `@api/api-keys/api` directly from pages as needed.)
 
 ---
 
@@ -641,8 +641,8 @@ Hooks:
 
 The data layer uses TypeScript types from two places:
 
-1. **Generated types** (if available) in `src/generated-types/`
-2. **Domain models** in `src/schema/`
+1. **Generated types** (if available) in `src/types/`
+2. **Domain models** in `src/types/`
 
 ### 5.1 Generated types (wire format)
 
@@ -659,7 +659,7 @@ They are typically used in:
 
 ### 5.2 Domain models (UI-facing)
 
-Domain models in `src/schema/` define the curated shapes the UI actually consumes, e.g.:
+Domain models in `src/types/` define the curated shapes the UI actually consumes, e.g.:
 
 * `WorkspaceOut`, `DocumentOut`
 * `RunResource`, `RunStatus`
@@ -670,66 +670,26 @@ When mapping is required, helpers live alongside the domain types to keep snake_
 
 Benefits:
 
-* Screens & hooks only see **camelCase**, front-end-friendly types.
+* Pages & hooks only see **camelCase**, front-end-friendly types.
 * Backend field changes are localised to mapping functions, not scattered across features.
 
 ---
 
 ## 6. Streaming events (SSE + NDJSON archive)
 
-The app supports **one-shot job streaming** for the workbench console, plus an NDJSON archive for post-run analysis.
+The app streams **run** events to the workbench console and relies on NDJSON archives for full history.
 
-### 6.1 Workbench job stream (preferred)
+### 6.1 Run stream
 
-The Configuration Builder uses a single SSE stream that covers the full job lifecycle (environment build + run):
+* `GET /api/v1/runs/{runId}/events/stream`
+* Supports `after_sequence` for resume (byte offset; same semantics as `Last-Event-ID`).
+* Each SSE frame carries an `EventRecord` payload (`event:` is the record name).
 
-* `GET /api/v1/configurations/{configuration_id}/jobs/stream`
+Environment provisioning logs are not streamed separately in v1.
 
-This stream is intentionally **live-only**:
+### 6.2 NDJSON archive
 
-* No replay.
-* No resume (`Last-Event-ID` is ignored / unsupported).
-* The UI keeps a bounded in-memory tail (e.g. last 2k lines) and relies on archived logs for full history.
-
-### 6.2 SSE event types
-
-The server uses **standard SSE `event:` dispatch** where each SSE message carries a single JSON
-`EventRecord` payload (the same envelope used by the engine’s NDJSON logs).
-
-* `event: job.meta` (JSON `EventRecord`) – emitted once at connect time
-
-  `data` contains stream-level context. These identifiers are **not repeated** on every event.
-
-  ```jsonc
-  {
-    "event": "job.meta",
-    "timestamp": "2025-12-15T19:45:05.637Z",
-    "level": "info",
-    "message": "connected",
-    "data": {
-      "jobId": "019b238b-8836-767d-a452-094a81a917eb",
-      "workspaceId": "019b2334-e5e8-75c5-b342-734630c9531a",
-      "configurationId": "019b2380-78bf-76ee-8b22-60ba3d86062c",
-      "buildId": "019b238b-884a-712e-982a-2765b9c147b2"
-    }
-  }
-  ```
-
-* `event: <event_name>` (JSON `EventRecord`) – all subsequent build/run/engine events
-
-  Examples: `build.phase.start`, `console.line`, `engine.detector.column_result`, `run.complete`.
-
-  Each SSE message uses:
-
-  * `id:` = the run stream `sequence` number (monotonic within the job)
-  * `event:` = the EventRecord `event` name
-  * `data:` = compact JSON `EventRecord`
-
-  Completion is indicated by `event: run.complete` (final event).
-
-### 6.3 NDJSON archive
-
-For full-fidelity logs and offline inspection, the backend still persists NDJSON event logs and exposes them via the run download endpoints (e.g. `GET /api/v1/runs/{run_id}/events/download`).
+For full-fidelity logs and offline inspection, the backend persists NDJSON event logs and exposes them via run download endpoints (for example `GET /api/v1/runs/{runId}/events/download`).
 
 ---
 
@@ -807,7 +767,7 @@ To keep the data layer predictable:
 * **Run-centric language**
 
   * Everything that executes is a **run** in UI types and hooks.
-  * Once you have a `runId`, favour global `/runs/{run_id}` endpoints for detail/events/output downloads.
+  * Once you have a `runId`, favour global `/runs/{runId}` endpoints for detail/events/output downloads.
   * Workspace IDs are primarily for listing/creating runs, not reading them.
 
 * **Backend-agnostic**
@@ -822,7 +782,7 @@ When backend adds a route:
 1. **Pick a module**
 
    * Does it belong to workspaces, documents, runs, configurations, roles, auth, system, …?
-   * If no good fit, create a new module in `shared/api`.
+   * If no good fit, create a new module in `api/`.
 
 2. **Add a typed function**
 
@@ -836,7 +796,7 @@ When backend adds a route:
 
 4. **Update types**
 
-   * Add/adjust domain types in `schema/`.
+   * Add/adjust domain types in `types/`.
    * Wire in generated types if available.
 
 5. **Update docs**

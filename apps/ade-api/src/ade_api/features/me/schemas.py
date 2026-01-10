@@ -60,26 +60,6 @@ class MeWorkspaceSummary(BaseSchema):
     )
 
 
-class MeWorkspacePage(BaseSchema):
-    """Paged collection of workspaces for the current principal."""
-
-    items: list[MeWorkspaceSummary] = Field(
-        default_factory=list,
-        description="Workspace entries.",
-    )
-    page: int = Field(ge=1, description="Current page (1-based).")
-    page_size: int = Field(ge=1, description="Page size used for the query.")
-    total: int | None = Field(
-        default=None,
-        ge=0,
-        description="Total number of workspaces, when requested.",
-    )
-    has_next: bool = Field(description="True when a subsequent page exists.")
-    has_previous: bool = Field(
-        description="True when a previous page exists.",
-    )
-
-
 class MeContext(BaseSchema):
     """Full bootstrap payload for SPA initialization."""
 
@@ -92,7 +72,8 @@ class MeContext(BaseSchema):
         default_factory=list,
         description="Global permission keys granted to the principal.",
     )
-    workspaces: MeWorkspacePage = Field(
+    workspaces: list[MeWorkspaceSummary] = Field(
+        default_factory=list,
         description="Workspaces visible to the principal.",
     )
 
@@ -140,7 +121,6 @@ __all__ = [
     "EffectivePermissions",
     "MeContext",
     "MeProfile",
-    "MeWorkspacePage",
     "MeWorkspaceSummary",
     "PermissionCheckRequest",
     "PermissionCheckResponse",

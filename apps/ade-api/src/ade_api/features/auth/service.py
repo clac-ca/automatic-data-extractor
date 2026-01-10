@@ -6,13 +6,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.features.rbac import RbacService
 from ade_api.models import User
 from ade_api.settings import Settings
 
-from .schemas import AuthProvider, AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
+from .schemas import (
+    AuthProvider,
+    AuthProviderListResponse,
+    AuthSetupRequest,
+    AuthSetupStatusResponse,
+)
 
 
 class SetupAlreadyCompletedError(RuntimeError):
@@ -23,11 +28,11 @@ class SetupAlreadyCompletedError(RuntimeError):
 class AuthService:
     """Authentication helpers for setup + provider metadata."""
 
-    session: AsyncSession
+    session: Session
     settings: Settings
 
-    async def get_setup_status(self) -> AuthSetupStatusResponse:
-        setup_required = await self.is_setup_required()
+    def get_setup_status(self) -> AuthSetupStatusResponse:
+        setup_required = self.is_setup_required()
         registration_mode = self._registration_mode(setup_required)
         providers = self.list_auth_providers().providers
         return AuthSetupStatusResponse(
@@ -37,8 +42,8 @@ class AuthService:
             providers=providers,
         )
 
-    async def is_setup_required(self) -> bool:
-        result = await self.session.execute(select(func.count(User.id)))
+    def is_setup_required(self) -> bool:
+        result = self.session.execute(select(func.count(User.id)))
         count = int(result.scalar_one() or 0)
         return count == 0
 
@@ -70,8 +75,8 @@ class AuthService:
             force_sso=bool(self.settings.auth_force_sso),
         )
 
-    async def create_first_admin(self, payload: AuthSetupRequest, *, password_hash: str) -> User:
-        if not await self.is_setup_required():
+    def create_first_admin(self, payload: AuthSetupRequest, *, password_hash: str) -> User:
+        if not self.is_setup_required():
             raise SetupAlreadyCompletedError("Initial setup has already been completed.")
 
         email = str(payload.email).strip()
@@ -91,19 +96,19 @@ class AuthService:
             locked_until=None,
         )
         self.session.add(user)
-        await self.session.flush()
+        self.session.flush()
 
         rbac = RbacService(session=self.session)
-        await rbac.sync_registry()
-        admin_role = await rbac.get_role_by_slug(slug="global-admin")
+        rbac.sync_registry()
+        admin_role = rbac.get_role_by_slug(slug="global-admin")
         if admin_role is not None:
-            await rbac.assign_role_if_missing(
+            rbac.assign_role_if_missing(
                 user_id=user.id,
                 role_id=admin_role.id,
                 workspace_id=None,
             )
 
-        await self.session.flush()
+        self.session.flush()
         return user
 
     def _registration_mode(self, setup_required: bool) -> str:

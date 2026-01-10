@@ -2,4 +2,6 @@
 
 from __future__ import annotations
 
-__all__ = ["spa"]
+from .spa import mount_spa
+
+__all__ = ["mount_spa"]

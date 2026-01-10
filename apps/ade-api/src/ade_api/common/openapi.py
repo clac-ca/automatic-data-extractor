@@ -20,6 +20,7 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
     ]
     public_routes: set[tuple[str, str]] = {
         ("/api/v1/health", "GET"),
+        ("/api/v1/info", "GET"),
         ("/api/v1/auth/providers", "GET"),
         ("/api/v1/auth/setup", "GET"),
         ("/api/v1/auth/setup", "POST"),
@@ -43,17 +44,15 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         )
         schema["servers"] = [{"url": settings.server_public_url}]
 
-        components = schema.setdefault("components", {}).setdefault(
-            "securitySchemes",
-            {},
-        )
-        components["SessionCookie"] = {
+        components = schema.setdefault("components", {})
+        security_schemes = components.setdefault("securitySchemes", {})
+        security_schemes["SessionCookie"] = {
             "type": "apiKey",
             "in": "cookie",
             "name": settings.session_cookie_name,
             "description": "Browser session cookie issued after interactive sign-in.",
         }
-        components.setdefault(
+        security_schemes.setdefault(
             "HTTPBearer",
             {
                 "type": "http",
@@ -62,7 +61,7 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                 "description": "Bearer access token returned by ADE or an identity provider.",
             },
         )
-        components.setdefault(
+        security_schemes.setdefault(
             "APIKeyHeader",
             {
                 "type": "apiKey",
@@ -72,7 +71,137 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             },
         )
 
+        schemas = components.setdefault("schemas", {})
+        schemas.setdefault(
+            "ProblemDetailsErrorItem",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "nullable": True},
+                    "message": {"type": "string"},
+                    "code": {"type": "string", "nullable": True},
+                },
+                "required": ["message"],
+            },
+        )
+        schemas.setdefault(
+            "ProblemDetails",
+            {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string"},
+                    "title": {"type": "string"},
+                    "status": {"type": "integer"},
+                    "detail": {"type": "string", "nullable": True},
+                    "instance": {"type": "string"},
+                    "requestId": {"type": "string", "nullable": True},
+                    "errors": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/ProblemDetailsErrorItem"},
+                        "nullable": True,
+                    },
+                },
+                "required": ["type", "title", "status", "instance"],
+            },
+        )
+
+        headers = components.setdefault("headers", {})
+        headers.setdefault(
+            "X-Request-Id",
+            {
+                "schema": {"type": "string"},
+                "description": "Unique request identifier for tracing and support.",
+            },
+        )
+        headers.setdefault(
+            "ETag",
+            {
+                "schema": {"type": "string"},
+                "description": "Entity tag for the current representation.",
+            },
+        )
+
+        responses = components.setdefault("responses", {})
+        responses.setdefault(
+            "ProblemDetails",
+            {
+                "description": "Problem Details error response.",
+                "headers": {
+                    "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"},
+                },
+                "content": {
+                    "application/problem+json": {
+                        "schema": {"$ref": "#/components/schemas/ProblemDetails"},
+                    }
+                },
+            },
+        )
+
+        parameters = components.setdefault("parameters", {})
+        parameters.setdefault(
+            "IfMatch",
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string"},
+                "description": "ETag value required for optimistic concurrency checks.",
+            },
+        )
+        parameters.setdefault(
+            "IdempotencyKey",
+            {
+                "name": "Idempotency-Key",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string", "maxLength": 128},
+                "description": "Unique key for replaying POST requests safely.",
+            },
+        )
+
         schema["security"] = auth_security
+
+        etag_routes = {
+            ("/api/v1/workspaces/{workspaceId}/documents/{documentId}", "GET"),
+            ("/api/v1/workspaces/{workspaceId}/configurations/{configurationId}", "GET"),
+            ("/api/v1/users/me/apikeys/{apiKeyId}", "GET"),
+            ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "GET"),
+            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "GET"),
+            ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "GET"),
+        }
+        if_match_routes = {
+            ("/api/v1/workspaces/{workspaceId}/documents/{documentId}", "PATCH"),
+            ("/api/v1/workspaces/{workspaceId}/documents/{documentId}", "DELETE"),
+            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "PATCH"),
+            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "DELETE"),
+            ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "DELETE"),
+            ("/api/v1/users/me/apikeys/{apiKeyId}", "DELETE"),
+            ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "DELETE"),
+        }
+        idempotency_routes = {
+            ("/api/v1/workspaces/{workspaceId}/documents", "POST"),
+            ("/api/v1/configurations/{configurationId}/runs", "POST"),
+            ("/api/v1/configurations/{configurationId}/runs/batch", "POST"),
+            ("/api/v1/workspaces/{workspaceId}/runs", "POST"),
+            ("/api/v1/workspaces/{workspaceId}/runs/batch", "POST"),
+            ("/api/v1/users/me/apikeys", "POST"),
+            ("/api/v1/users/{userId}/apikeys", "POST"),
+        }
+
+        def _add_parameter(operation: dict[str, Any], ref: str, name: str | None = None) -> None:
+            params = operation.setdefault("parameters", [])
+            if not isinstance(params, list):
+                return
+            if any(isinstance(item, dict) and item.get("$ref") == ref for item in params):
+                return
+            if name and any(
+                isinstance(item, dict)
+                and item.get("name") == name
+                and item.get("in") == "header"
+                for item in params
+            ):
+                return
+            params.append({"$ref": ref})
 
         for path, operations in schema.get("paths", {}).items():
             for method, operation in operations.items():
@@ -86,6 +215,40 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                 else:
                     if "security" not in operation or operation["security"] is None:
                         operation["security"] = list(auth_security)
+
+                responses = operation.setdefault("responses", {})
+                responses.setdefault("default", {"$ref": "#/components/responses/ProblemDetails"})
+
+                for response in responses.values():
+                    if not isinstance(response, dict) or "$ref" in response:
+                        continue
+                    headers = response.setdefault("headers", {})
+                    headers.setdefault(
+                        "X-Request-Id",
+                        {"$ref": "#/components/headers/X-Request-Id"},
+                    )
+
+                if (path, method_upper) in etag_routes:
+                    for status_code, response in responses.items():
+                        if not isinstance(response, dict) or "$ref" in response:
+                            continue
+                        if (
+                            isinstance(status_code, str)
+                            and status_code.isdigit()
+                            and status_code.startswith("2")
+                        ):
+                            headers = response.setdefault("headers", {})
+                            headers.setdefault("ETag", {"$ref": "#/components/headers/ETag"})
+
+                if (path, method_upper) in if_match_routes:
+                    _add_parameter(operation, "#/components/parameters/IfMatch", "If-Match")
+
+                if (path, method_upper) in idempotency_routes:
+                    _add_parameter(
+                        operation,
+                        "#/components/parameters/IdempotencyKey",
+                        "Idempotency-Key",
+                    )
 
         app.openapi_schema = schema
         return schema

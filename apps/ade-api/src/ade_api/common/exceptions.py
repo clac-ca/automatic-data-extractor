@@ -5,12 +5,52 @@ from __future__ import annotations
 import logging
 
 from fastapi import HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 
 from ade_api.common.logging import log_context
+from ade_api.common.problem_details import (
+    ApiError,
+    build_problem_details,
+    coerce_detail_and_errors,
+    error_items_from_pydantic,
+    resolve_error_definition,
+)
 
 _UNHANDLED_LOGGER = logging.getLogger("ade_api.errors")
 _HTTP_LOGGER = logging.getLogger("ade_api.http")
+_PROBLEM_MEDIA_TYPE = "application/problem+json"
+
+
+def _request_id(request: Request) -> str | None:
+    return getattr(request.state, "request_id", None)
+
+
+def _problem_response(
+    *,
+    request: Request,
+    status_code: int,
+    detail: str | None,
+    errors,
+    error_type: str | None = None,
+    title: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    problem = build_problem_details(
+        status_code=status_code,
+        instance=str(request.url.path),
+        request_id=_request_id(request),
+        detail=detail,
+        errors=errors,
+        error_type=error_type,
+        title=title,
+    )
+    return JSONResponse(
+        status_code=problem.status,
+        content=problem.model_dump(by_alias=True, exclude_none=True),
+        media_type=_PROBLEM_MEDIA_TYPE,
+        headers=headers,
+    )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -32,9 +72,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         ),
     )
 
-    return JSONResponse(
+    return _problem_response(
+        request=request,
         status_code=500,
-        content={"detail": "Internal server error"},
+        detail="Internal server error",
+        errors=None,
+        error_type=resolve_error_definition(500).type,
     )
 
 
@@ -55,14 +98,60 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             ),
         )
 
-    return JSONResponse(
+    error_type: str | None = None
+    title: str | None = None
+    if isinstance(exc.detail, dict):
+        error_type = exc.detail.get("type") if isinstance(exc.detail.get("type"), str) else None
+        title = exc.detail.get("title") if isinstance(exc.detail.get("title"), str) else None
+
+    detail_text, errors = coerce_detail_and_errors(exc.detail)
+    if errors and detail_text is None and exc.status_code == 422:
+        detail_text = "Invalid request"
+    if exc.status_code >= 500:
+        detail_text = "Internal server error"
+        errors = None
+
+    return _problem_response(
+        request=request,
         status_code=exc.status_code,
-        content={"detail": exc.detail},
+        detail=detail_text,
+        errors=errors,
+        error_type=error_type,
+        title=title,
         headers=getattr(exc, "headers", None),
     )
 
 
+async def request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    errors = error_items_from_pydantic(exc.errors())
+    return _problem_response(
+        request=request,
+        status_code=422,
+        detail="Invalid request",
+        errors=errors,
+        error_type=resolve_error_definition(422).type,
+    )
+
+
+async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+    detail_text, errors = coerce_detail_and_errors(exc.detail)
+    return _problem_response(
+        request=request,
+        status_code=exc.status_code,
+        detail=detail_text,
+        errors=errors or exc.errors,
+        error_type=exc.error_type,
+        title=exc.title,
+        headers=exc.headers,
+    )
+
+
 __all__ = [
+    "api_error_handler",
     "http_exception_handler",
+    "request_validation_exception_handler",
     "unhandled_exception_handler",
 ]

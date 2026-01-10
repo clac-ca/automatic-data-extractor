@@ -10,28 +10,29 @@ and WP12 when planning the UI work.
 The documents screen already references "runs" in copy and state but still
 relies on older runs endpoints. Key touchpoints:
 
-- `apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx`
+- `apps/ade-web/src/pages/Workspace/sections/Documents/index.tsx`
   - Uploads now use an XHR-backed queue (progress, cancel, retry) and support an optional "Run on upload" toggle that queues runs after each successful upload.
-  - Bulk "Run selected" actions now call `POST /api/v1/configurations/{configuration_id}/runs/batch` and skip sheet selection.
+  - Bulk "Run selected" actions now call `POST /api/v1/configurations/{configurationId}/runs/batch` and skip sheet selection.
   - `DocumentRunsDrawer` keeps run drawer state in `document_runs` storage
     keys and displays the "Run" button per document. Update the request
-    handlers to call `POST /api/v1/configurations/{configuration_id}/runs` and stream
+    handlers to call `POST /api/v1/configurations/{configurationId}/runs` and stream
     events into the console once the backend is wired up.
   - `useDocumentRunsQuery` (search for `runsQuery`) polls the runs router
     to show historical runs. Replace it with the workspace runs list endpoint
     and add pagination/`after_id` handling.
   - The "Safe mode" tooltips gate run buttons. Surface the new run status
-    states (queued, running, succeeded, failed, cancelled) and error
+    states (queued, running, succeeded, failed) and error
     messaging in the drawer summary.
 
 ## Config Builder panel (Terminal | Run | Problems)
 
-- `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/` now
-  consumes run/build NDJSON streams: `Terminal` shows raw logs, `Problems`
-  shows validation issues, and `Run` hosts output and event log cards.
+- `apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/` now
+  consumes run NDJSON streams (`/runs/{runId}/events/stream`): `Terminal` shows
+  raw logs, `Problems` shows validation issues, and `Run` hosts output and event
+  log cards.
 - `BottomPanel.tsx` already accepts console lines with `origin` and supports
-  origin/level filters, follow toggle, and clear. Keep feeding it build/run
-  events via `describeRunEvent`/`describeBuildEvent`.
+  origin/level filters, follow toggle, and clear. Keep feeding it run events
+  via `describeRunEvent`.
 - `Workbench.tsx` keeps `validationState.status/lastRunAt` and the latest run
   metadata. Ensure these hydrate from the streaming runs endpoints and the
   follow-up fetches (`fetchRun`, `runOutputUrl`, `runLogsUrl`).
@@ -40,10 +41,10 @@ relies on older runs endpoints. Key touchpoints:
 
 ## Generated API types
 
-Once the backend endpoints are available, run `ade openapi-types`
-to regenerate `apps/ade-web/src/generated-types/openapi.d.ts` and add curated
-schema exports under `apps/ade-web/src/schema/`. Update the React hooks to use
-those types instead of ad-hoc interfaces.
+Once the backend endpoints are available, run `ade types` to regenerate
+`apps/ade-web/src/types/generated/openapi.d.ts` and add curated schema exports
+under `apps/ade-web/src/types/`. Update the React hooks to use those types
+instead of ad-hoc interfaces.
 
 ## Follow-up work items
 

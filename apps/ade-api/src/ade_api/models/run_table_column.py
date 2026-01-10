@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.db import Base, UUIDType
+from ade_api.db import GUID, Base
 
 
 class RunTableColumn(Base):
@@ -16,7 +16,7 @@ class RunTableColumn(Base):
     __tablename__ = "run_table_columns"
 
     run_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("runs.id", ondelete="NO ACTION"), primary_key=True
+        GUID(), ForeignKey("runs.id", ondelete="NO ACTION"), primary_key=True
     )
     workbook_index: Mapped[int] = mapped_column(Integer, primary_key=True)
     workbook_name: Mapped[str] = mapped_column(String(255), nullable=False)

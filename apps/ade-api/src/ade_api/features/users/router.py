@@ -8,25 +8,17 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 
 from ade_api.api.deps import get_users_service
-from ade_api.common.pagination import PageParams
-from ade_api.common.sorting import make_sort_dependency
-from ade_api.common.types import OrderBy
+from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
+from ade_api.common.sorting import resolve_sort
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 from ade_api.models import User
 
-from .filters import UserFilters
 from .schemas import UserOut, UserPage, UserUpdate
 from .service import UsersService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["users"], dependencies=[Security(require_authenticated)])
 
-
-get_sort_order = make_sort_dependency(
-    allowed=SORT_FIELDS,
-    default=DEFAULT_SORT,
-    id_field=ID_FIELD,
-)
 
 USER_UPDATE_BODY = Body(
     ...,
@@ -36,6 +28,7 @@ USER_ID_PARAM = Annotated[
     UUID,
     Path(
         description="User identifier.",
+        alias="userId",
     ),
 ]
 
@@ -47,24 +40,30 @@ USER_ID_PARAM = Annotated[
     summary="List all users (administrator only)",
     response_model_exclude_none=True,
 )
-async def list_users(
+def list_users(
     _: Annotated[User, Security(require_global("users.read_all"))],
-    page: Annotated[PageParams, Depends()],
-    filters: Annotated[UserFilters, Depends()],
-    order_by: Annotated[OrderBy, Depends(get_sort_order)],
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserPage:
-    return await service.list_users(
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
+    order_by = resolve_sort(
+        list_query.sort,
+        allowed=SORT_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
+    )
+    return service.list_users(
+        page=list_query.page,
+        per_page=list_query.per_page,
         order_by=order_by,
-        filters=filters,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
     )
 
 
 @router.get(
-    "/users/{user_id}",
+    "/users/{userId}",
     response_model=UserOut,
     status_code=status.HTTP_200_OK,
     summary="Retrieve a user (administrator only)",
@@ -81,16 +80,16 @@ async def list_users(
         },
     },
 )
-async def get_user(
+def get_user(
     _: Annotated[User, Security(require_global("users.read_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserOut:
-    return await service.get_user(user_id=user_id)
+    return service.get_user(user_id=user_id)
 
 
 @router.patch(
-    "/users/{user_id}",
+    "/users/{userId}",
     dependencies=[Security(require_csrf)],
     response_model=UserOut,
     status_code=status.HTTP_200_OK,
@@ -111,17 +110,17 @@ async def get_user(
         },
     },
 )
-async def update_user(
+def update_user(
     actor: Annotated[User, Security(require_global("users.manage_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
     payload: UserUpdate = USER_UPDATE_BODY,
 ) -> UserOut:
-    return await service.update_user(user_id=user_id, payload=payload, actor=actor)
+    return service.update_user(user_id=user_id, payload=payload, actor=actor)
 
 
 @router.post(
-    "/users/{user_id}/deactivate",
+    "/users/{userId}/deactivate",
     dependencies=[Security(require_csrf)],
     response_model=UserOut,
     status_code=status.HTTP_200_OK,
@@ -139,12 +138,12 @@ async def update_user(
         },
     },
 )
-async def deactivate_user(
+def deactivate_user(
     actor: Annotated[User, Security(require_global("users.manage_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserOut:
-    return await service.deactivate_user(user_id=user_id, actor=actor)
+    return service.deactivate_user(user_id=user_id, actor=actor)
 
 
 __all__ = ["router"]

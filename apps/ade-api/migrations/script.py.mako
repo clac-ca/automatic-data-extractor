@@ -12,5 +12,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    ${downgrades if downgrades else "pass"}
-
+    raise NotImplementedError("Downgrades are not supported.")

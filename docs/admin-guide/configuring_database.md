@@ -69,8 +69,16 @@ Infrastructure admins choose the backend by setting environment variables before
 
 ADE reads database settings from environment variables (prefix `ADE_`):
 
-* `ADE_DATABASE_DSN`
+* `ADE_DATABASE_URL`
   Full SQLAlchemy DSN string (URL). If omitted, ADE defaults to SQLite.
+
+* `ADE_DATABASE_ECHO`
+  Enables SQLAlchemy "echo" logging (prints SQL statements and parameters).
+  Use only for short-lived troubleshooting; it is very noisy and can expose data in logs.
+
+* `ADE_DATABASE_LOG_LEVEL`
+  Sets the SQLAlchemy logger level (e.g., `DEBUG`) without changing overall app logging.
+  Useful for targeted SQL troubleshooting; still noisy and can expose data in logs.
 
 * `ADE_DATABASE_AUTH_MODE`
   Chooses authentication mode for SQL Server/Azure SQL:
@@ -81,10 +89,22 @@ ADE reads database settings from environment variables (prefix `ADE_`):
 * `ADE_DATABASE_MI_CLIENT_ID`
   Optional GUID of a **user‑assigned** managed identity, if you use one. Leave unset for system‑assigned managed identity.
 
-ADE automatically:
+* `ADE_DATABASE_POOL_SIZE`
+  Base connection pool size for SQL Server/Azure SQL (default `5`). Ignored for SQLite.
 
-* Runs Alembic migrations against the configured database at startup.
-* Uses the same configuration (DSN + auth mode) for both runtime and migrations.
+* `ADE_DATABASE_MAX_OVERFLOW`
+  Extra connections allowed above the base pool size (default `10`). Ignored for SQLite.
+
+* `ADE_DATABASE_POOL_TIMEOUT`
+  Seconds to wait for a pooled connection before failing (default `30`). Ignored for SQLite.
+
+* `ADE_DATABASE_POOL_RECYCLE`
+  Seconds before recycling pooled connections (default `1800`). Ignored for SQLite.
+
+ADE expects:
+
+* Migrations to be applied before starting the API/worker (`ade start` and `ade dev` run them automatically; otherwise use `ade migrate`).
+* The same configuration (DSN + auth mode) for both runtime and migrations.
 
 ---
 
@@ -95,7 +115,7 @@ ADE automatically:
 You don’t need to set any DB env vars:
 
 ```env
-# No ADE_DATABASE_DSN set → ADE uses SQLite automatically
+# No ADE_DATABASE_URL set → ADE uses SQLite automatically
 ```
 
 ADE will create (or reuse) a file‑based SQLite database under the `data/db/` directory mounted into the container.
@@ -105,10 +125,29 @@ ADE will create (or reuse) a file‑based SQLite database under the `data/db/` d
 If you want to override the path:
 
 ```env
-ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite
+ADE_DATABASE_URL=sqlite:///./data/db/ade.sqlite
 ```
 
 Use this only for single‑instance setups. For Container Apps with multiple revisions/replicas, prefer Azure SQL.
+
+### 3.1 Optional: SQLite concurrency tuning
+
+ADE applies safe SQLite defaults for mixed read/write workloads. You can override them if you need to reduce
+`database is locked` errors or tune durability/performance tradeoffs:
+
+* `ADE_DATABASE_SQLITE_JOURNAL_MODE` (default `WAL`) – allows readers to proceed during writes.
+* `ADE_DATABASE_SQLITE_BUSY_TIMEOUT_MS` (default `30000`) – how long SQLite waits on locks before failing.
+* `ADE_DATABASE_SQLITE_SYNCHRONOUS` (default `NORMAL`) – set `FULL` for maximum durability.
+* `ADE_DATABASE_SQLITE_BEGIN_MODE` (optional `DEFERRED|IMMEDIATE|EXCLUSIVE`) – `IMMEDIATE` grabs the write
+  reservation up front, which can prevent lock errors for queue/worker claims.
+
+Example:
+
+```env
+ADE_DATABASE_SQLITE_BUSY_TIMEOUT_MS=30000
+ADE_DATABASE_SQLITE_BEGIN_MODE=IMMEDIATE
+ADE_DATABASE_SQLITE_SYNCHRONOUS=NORMAL
+```
 
 ---
 
@@ -129,7 +168,7 @@ If you see `Login timeout expired (HYT00)` during startup/migrations:
 * Verify the host/port is reachable (e.g., `nc -vz <server> 1433` or `sqlcmd -S <server> -U <user> -P <pass>`).
 * Check firewall/private endpoint rules to ensure your machine/container can reach the SQL Server endpoint.
 * Confirm the DSN matches your auth mode (SQL password vs managed identity) and has `driver=ODBC Driver 18 for SQL Server` plus `Encrypt`/`TrustServerCertificate` as required.
-* For local dev, switch to SQLite: `ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite`.
+* For local dev, switch to SQLite: `ADE_DATABASE_URL=sqlite:///./data/db/ade.sqlite`.
 
 ### 4.1. Prerequisites
 
@@ -157,7 +196,7 @@ On the ADE container (local or Container Apps), set:
 
 ```env
 # Replace PASSWORD with a URL-encoded value if it contains special characters.
-ADE_DATABASE_DSN=mssql+pyodbc://svc_automaticdataextractor:URL_ENCODED_PASSWORD@sql-automaticdataextractor.database.windows.net:1433/sqldb-automaticdataextractor-prod?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
+ADE_DATABASE_URL=mssql+pyodbc://svc_automaticdataextractor:URL_ENCODED_PASSWORD@sql-automaticdataextractor.database.windows.net:1433/sqldb-automaticdataextractor-prod?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
 
 ADE_DATABASE_AUTH_MODE=sql_password
 # ADE_DATABASE_MI_CLIENT_ID is not used in this mode
@@ -166,7 +205,7 @@ ADE_DATABASE_AUTH_MODE=sql_password
 On startup, ADE will:
 
 1. Connect to Azure SQL with the supplied credentials.
-2. Run Alembic migrations to ensure the schema is up to date.
+2. Expect the schema to be migrated already (`ade migrate`).
 3. Serve traffic using Azure SQL as the backing store.
 
 **Recommended use**: staging, early production, or where managed identity is not yet available. Long‑term, consider switching to managed identity for secretless auth.
@@ -203,7 +242,7 @@ Managed identity lets ADE authenticate to Azure SQL without embedding passwords.
 **System‑assigned managed identity**
 
 ```env
-ADE_DATABASE_DSN=mssql+pyodbc://@sql-automaticdataextractor.database.windows.net:1433/sqldb-automaticdataextractor-prod?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
+ADE_DATABASE_URL=mssql+pyodbc://@sql-automaticdataextractor.database.windows.net:1433/sqldb-automaticdataextractor-prod?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
 ADE_DATABASE_AUTH_MODE=managed_identity
 
 # For system-assigned MI, leave this unset:
@@ -213,7 +252,7 @@ ADE_DATABASE_AUTH_MODE=managed_identity
 **User‑assigned managed identity**
 
 ```env
-ADE_DATABASE_DSN=mssql+pyodbc://@sql-automaticdataextractor.database.windows.net:1433/sqldb-automaticdataextractor-prod?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
+ADE_DATABASE_URL=mssql+pyodbc://@sql-automaticdataextractor.database.windows.net:1433/sqldb-automaticdataextractor-prod?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
 ADE_DATABASE_AUTH_MODE=managed_identity
 ADE_DATABASE_MI_CLIENT_ID=<your-user-assigned-mi-client-id>
 
@@ -225,7 +264,7 @@ On startup, ADE will:
 
 * Use `DefaultAzureCredential` inside the container to obtain an access token for `https://database.windows.net/.default`.
 * Pass that token to the SQL Server ODBC driver in the correct format.
-* Run migrations and serve traffic with **no credentials in the DSN**.
+* Serve traffic with **no credentials in the DSN** after migrations are applied (`ade migrate`).
 
 **Recommended use**: production ADE deployments on Azure Container Apps.
 
@@ -250,4 +289,4 @@ On startup, ADE will:
 * Start with **`sql_password`** if you need a simple bring‑up.
 * Move to **`managed_identity`** as your long‑term, secure, secretless configuration.
 
-Once the environment variables are set and the image includes the required ODBC driver (as in the provided Dockerfile), ADE will bootstrap the database automatically on startup.
+Once the environment variables are set and the image includes the required ODBC driver (as in the provided Dockerfile), `ade start` will run migrations automatically. If you are launching the API/worker manually, run `ade migrate` to bootstrap the schema first.

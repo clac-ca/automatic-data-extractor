@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
 import time
+import threading
+import sys
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -140,6 +143,61 @@ def ensure_node_modules(frontend_dir: Path | None = None) -> None:
         raise typer.Exit(code=1)
 
 
+def _strip_inline_comment(value: str) -> str:
+    """Strip inline comments while respecting simple quoting."""
+    in_single = False
+    in_double = False
+    for idx, ch in enumerate(value):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
+            return value[:idx].rstrip()
+    return value
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def load_dotenv(path: Path | None = None) -> dict[str, str]:
+    """Load key/value pairs from a .env file."""
+    dotenv_path = path or (REPO_ROOT / ".env")
+    if not dotenv_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        if "=" not in line:
+            continue
+        key, raw_value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        value = _strip_inline_comment(raw_value.strip())
+        value = _unquote(value.strip())
+        if value == "":
+            continue
+        values.setdefault(key, value)
+    return values
+
+
+def build_env(dotenv_path: Path | None = None) -> dict[str, str]:
+    """Build a process env with .env defaults merged in (env wins)."""
+    env = os.environ.copy()
+    for key, value in load_dotenv(dotenv_path).items():
+        env.setdefault(key, value)
+    return env
+
+
 def uvicorn_path() -> str:
     """Return the uvicorn executable in the current environment."""
     import sys
@@ -166,11 +224,42 @@ def npm_path() -> str:
     )
 
 
+def _stream_lines(name: str, stream, target) -> None:
+    prefix = f"[{name}] "
+    for line in iter(stream.readline, ""):
+        target.write(f"{prefix}{line}")
+        target.flush()
+    stream.close()
+
+
 def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]) -> None:
     """Run multiple long-lived commands in parallel until one exits."""
 
-    processes: list[tuple[str, subprocess.Popen[bytes]]] = []
+    processes: list[tuple[str, subprocess.Popen[str]]] = []
+    threads: list[threading.Thread] = []
+    use_process_groups = hasattr(os, "killpg")
     interrupted = False
+    received_signal: int | None = None
+    previous_handlers: dict[int, object] = {}
+
+    def _handle_signal(signum: int, _frame) -> None:
+        nonlocal interrupted, received_signal
+        interrupted = True
+        received_signal = signum
+        raise KeyboardInterrupt
+
+    handled_signals = [signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        handled_signals.append(signal.SIGHUP)
+    if hasattr(signal, "SIGQUIT"):
+        handled_signals.append(signal.SIGQUIT)
+    for signum in handled_signals:
+        try:
+            previous_handlers[signum] = signal.signal(signum, _handle_signal)
+        except (ValueError, OSError):
+            # ValueError if not in main thread; OSError on unsupported signals.
+            continue
+
     try:
         for name, cmd, cwd, env in tasks:
             typer.echo(f"▶️  starting {name}: {' '.join(cmd)}")
@@ -178,8 +267,29 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 cmd,
                 cwd=cwd,
                 env=env or os.environ.copy(),
+                start_new_session=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
             )
             processes.append((name, proc))
+            if proc.stdout is not None:
+                thread = threading.Thread(
+                    target=_stream_lines,
+                    args=(name, proc.stdout, sys.stdout),
+                    daemon=True,
+                )
+                thread.start()
+                threads.append(thread)
+            if proc.stderr is not None:
+                thread = threading.Thread(
+                    target=_stream_lines,
+                    args=(f"{name}:err", proc.stderr, sys.stderr),
+                    daemon=True,
+                )
+                thread.start()
+                threads.append(thread)
 
         while processes:
             time.sleep(0.25)
@@ -193,18 +303,67 @@ def run_parallel(tasks: list[tuple[str, list[str], Path | None, dict[str, str]]]
                 typer.echo(f"✅ {name} exited")
                 processes.remove((name, proc))
     except KeyboardInterrupt:
-        typer.echo("\n🛑 received interrupt; stopping child processes...")
+        if received_signal is not None:
+            try:
+                signal_name = signal.Signals(received_signal).name
+            except ValueError:
+                signal_name = f"signal {received_signal}"
+            typer.echo(f"\n🛑 received {signal_name}; stopping child processes...")
+        else:
+            typer.echo("\n🛑 received interrupt; stopping child processes...")
         interrupted = True
     finally:
         for name, proc in processes:
             if proc.poll() is None:
                 typer.echo(f"⏹️  terminating {name}")
-                proc.terminate()
+                if use_process_groups:
+                    try:
+                        pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else proc.pid
+                        os.killpg(pgid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                    except Exception:
+                        pass
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+                else:
+                    proc.terminate()
+        for _, proc in processes:
+            if proc.poll() is None:
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    if use_process_groups:
+                        try:
+                            pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else proc.pid
+                            os.killpg(pgid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        except Exception:
+                            pass
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                    else:
+                        proc.kill()
         for _, proc in processes:
             if proc.poll() is None:
                 proc.wait(timeout=5)
+        for thread in threads:
+            thread.join(timeout=1)
+        for signum, handler in previous_handlers.items():
+            try:
+                signal.signal(signum, handler)
+            except (ValueError, OSError):
+                continue
         if interrupted:
-            raise typer.Exit(code=130)
+            exit_code = 130
+            if received_signal is not None:
+                exit_code = 128 + received_signal
+            raise typer.Exit(code=exit_code)
 
 
 def load_frontend_package_json() -> dict:

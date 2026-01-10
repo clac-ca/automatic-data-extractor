@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 from pathlib import Path
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
 from ade_api.features.documents.storage import DocumentStorage
@@ -15,11 +14,11 @@ from ade_api.models import Document
 __all__ = ["stage_document_input"]
 
 
-async def stage_document_input(
+def stage_document_input(
     *,
     document: Document,
     storage: DocumentStorage,
-    session: AsyncSession,
+    session: Session,
     run_dir: Path,
 ) -> Path:
     """Copy ``document`` into ``run_dir/input`` and update access metadata."""
@@ -30,8 +29,8 @@ async def stage_document_input(
     source = storage.path_for(document.stored_uri)
     destination = input_dir / document.original_filename
 
-    await asyncio.to_thread(shutil.copy2, source, destination)
+    shutil.copy2(source, destination)
     document.last_run_at = utc_now()
-    await session.flush()
+    session.flush()
 
     return destination

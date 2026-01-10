@@ -6,13 +6,15 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
-from ade_api.db.enums import enum_values
-from ade_api.db.types import UTCDateTime
+from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
 
 
 class ConfigurationStatus(str, Enum):
@@ -29,7 +31,7 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "configurations"
 
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(),
+        GUID(),
         ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
@@ -40,7 +42,7 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="configuration_status",
             native_enum=False,
             length=20,
-            values_callable=enum_values,
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=ConfigurationStatus.DRAFT,
@@ -52,16 +54,9 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UTCDateTime(),
         nullable=True,
     )
-    active_build_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(),
-        ForeignKey("builds.id", ondelete="NO ACTION"),
-        nullable=True,
-    )
-    active_build_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (
         Index("ix_configurations_workspace_status", "workspace_id", "status"),
-        Index("ix_configurations_active_build_id", "active_build_id"),
     )
 
 

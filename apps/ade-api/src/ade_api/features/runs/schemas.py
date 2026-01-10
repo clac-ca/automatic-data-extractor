@@ -7,9 +7,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
-from ade_api.common.pagination import Page
+from ade_api.common.listing import ListPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import RunStatus
 
@@ -31,9 +30,9 @@ __all__ = [
     "RunColumnResource",
     "RunLinks",
     "RunOutput",
+    "RunOutputSheet",
     "RunPage",
     "RunResource",
-    "RunEventsPage",
 ]
 
 
@@ -42,10 +41,6 @@ class RunCreateOptionsBase(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
-    force_rebuild: bool = Field(
-        default=False,
-        description="If true, rebuild the configuration environment before running.",
-    )
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -64,7 +59,7 @@ class RunCreateOptionsBase(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _validate_sheet_options(self) -> "RunCreateOptionsBase":
+    def _validate_sheet_options(self) -> RunCreateOptionsBase:
         if self.active_sheet_only and self.input_sheet_names:
             raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
         return self
@@ -104,10 +99,6 @@ class RunBatchCreateOptions(BaseSchema):
 
     dry_run: bool = False
     validate_only: bool = False
-    force_rebuild: bool = Field(
-        default=False,
-        description="If true, rebuild the configuration environment before running.",
-    )
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -158,7 +149,6 @@ class RunLinks(BaseSchema):
     """Hypermedia links for run-related resources."""
 
     self: str
-    events: str
     events_stream: str
     events_download: str
     logs: str
@@ -193,6 +183,15 @@ class RunOutput(BaseSchema):
     has_output: bool = False
     output_path: str | None = None
     processed_file: str | None = None
+
+
+class RunOutputSheet(BaseSchema):
+    """Descriptor for a worksheet or single-sheet run output."""
+
+    name: str
+    index: int = Field(ge=0)
+    kind: Literal["worksheet", "file"] = "worksheet"
+    is_active: bool = False
 
 
 class RunMetricsResource(BaseSchema):
@@ -267,17 +266,11 @@ class RunResource(BaseSchema):
     object: RunObjectType = Field(default="ade.run", alias="object")
     workspace_id: UUIDStr
     configuration_id: UUIDStr
-    build_id: UUIDStr | None = None
 
     status: RunStatus
     failure_code: str | None = None
     failure_stage: str | None = None
     failure_message: str | None = None
-
-    engine_version: str | None = None
-    config_version: str | None = None
-    env_reason: str | None = None
-    env_reused: bool | None = None
 
     created_at: datetime
     started_at: datetime | None = None
@@ -288,19 +281,11 @@ class RunResource(BaseSchema):
     input: RunInput = Field(default_factory=RunInput)
     output: RunOutput = Field(default_factory=RunOutput)
     links: RunLinks
-    events_url: str | None = None
     events_stream_url: str | None = None
     events_download_url: str | None = None
 
 
-class RunPage(Page[RunResource]):
+class RunPage(ListPage[RunResource]):
     """Paginated collection of ``RunResource`` items."""
 
     items: list[RunResource]
-
-
-class RunEventsPage(BaseSchema):
-    """Paginated ADE events for a run."""
-
-    items: list[EventRecord]
-    next_after_sequence: int | None = None

@@ -7,13 +7,14 @@ anywhere without provisioning external infrastructure.
 
 ## 1. What ADE Ships With
 - **Self-contained storage** – ADE persists all metadata in
-  `data/db/api.sqlite`. Documents and other artefacts live alongside it
+  `data/db/ade.sqlite`. Documents and other artefacts live alongside it
   under `data/`. No external database service is required.
-- **Deterministic FastAPI backend** – requests are handled by the factory in
-  `apps/ade-api/src/ade_api/main.py`. Background work stays inside the same process.
-- **(TODO)** The forthcoming frontend will guide first-time administrators
-  through setup. Until it lands, rely on the API reference and the docs
-  included in this guide.
+- **FastAPI backend + worker** – the API in
+  `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
+  provisions environments and executes runs from the database queue.
+- **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
+  in development; in production you can serve the built `apps/ade-web/dist`
+  bundle via `ade start` or behind a reverse proxy.
 
 
 ## 2. Prerequisites
@@ -64,28 +65,22 @@ export environment variables in your shell.
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip
-   pip install --no-cache-dir -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
+   pip install --no-cache-dir -e apps/ade-cli -e apps/ade-engine -e apps/ade-api -e apps/ade-worker
 
    cd apps/ade-web
    npm install
    cd ..
    ```
 
-2. Start the application server:
+2. Start the dev services (this runs migrations first):
 
    ```bash
-   ade dev --backend --no-frontend
+   ade dev
    ```
 
-   The FastAPI factory performs an idempotent bootstrap before serving requests:
-
-   - create the SQLite directory (`data/db/`) and its parents if they are missing,
-   - run Alembic migrations in order, logging progress to the console, and
-   - print a summary of the resolved settings (sourced from `.env` and the environment).
-
-   With autoreload, uvicorn watches the repository for changes while still serving the compiled SPA from `apps/ade-api/src/ade_api/web/static/`, so <http://localhost:8000/> delivers both the UI and API. Omit autoreload by running `ade start`. When you need fresh frontend assets, run `ade build` from the repository root; the build step compiles the React app and copies the output into `apps/ade-api/src/ade_api/web/static/`.
-   - Dev flow: `ade dev` (backend autoreload + Vite dev server; no frontend build required).
-   - Prod-ish flow: `ade build` (produces static assets) then `ade start` (serves backend + built SPA). If `ade start` returns `{"detail":"SPA build not found"}`, you skipped `ade build`.
+   Use `ade dev` for the standard dev loop (runs migrations, then API reload + Vite hot module reload + worker). If you only want the API, run `ade dev --api --no-web --no-worker` (or `ade dev --api-only`). If you only want the web server, run `ade dev --web --no-api`. Use `--no-worker` if you want to skip background jobs.
+   - Dev flow: `ade dev` (runs migrations, then API + worker + Vite dev server).
+   - Prod-ish flow: `ade start` (builds frontend if missing, serves frontend + API + worker; runs migrations first).
 
 3. Confirm the API is healthy:
 
@@ -93,20 +88,23 @@ export environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/`. Stop the FastAPI process before deleting files and remove only the pieces you need to refresh. Deleting `data/db/` after the app stops resets the SQLite database; the next bootstrap recreates the directory and reapplies migrations automatically. Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/`. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. Deleting `data/db/` after the services stop resets the SQLite database; `ade dev`/`ade start` will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
 
-### Run backend and frontend manually (optional)
-The uvicorn command above serves the prebuilt SPA. For frontend development with hot module reload, run the backend and the Vite dev server in separate terminals. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
+### Run API and web manually (optional)
+If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
 
 ```bash
 # Terminal 1
-ade dev --backend --no-frontend
+ade dev --api --no-web --no-worker
 
 # Terminal 2
-ade dev --frontend --no-backend
+ade dev --web --no-api
+
+# Terminal 3 (optional)
+ade worker
 ```
 
-Tip: If you frequently switch branches, re-run the editable installs (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`) in your virtualenv (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
+Tip: If you frequently switch branches, re-run the editable installs (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api -e apps/ade-worker`) in your virtualenv (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
@@ -121,38 +119,34 @@ Registry soon.
 git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
 cp .env.example .env
-docker build -t ade:local .
+docker compose up --build
 ```
 
-### 5.2 Run the container
+### 5.2 Run the stack
 ```bash
-docker run -d --name ade-backend \
-  --env-file .env \
-  -p 8000:8000 \
-  -v "$(pwd)/data:/app/data" \
-  ade:local
+docker compose up -d
 ```
 
-The bind mount keeps the SQLite database and documents on the host so they
-survive container restarts. Check health the same way:
+The volume keeps the SQLite database and documents on the host so they
+survive container restarts. The API container runs migrations on startup
+via `ade start --no-worker --no-web`. Check health the same way:
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-The bundled FastAPI server serves both the API and the compiled React frontend from the same container, so reverse proxies only need to forward requests to port 8000.
+The web server (nginx) serves the compiled React frontend and proxies `/api/v1` to the FastAPI service.
 
-When you deploy the frontend in production, compile it once (`ade build` or `npm run build` in `apps/ade-web/`, then copy `apps/ade-web/dist/` into `apps/ade-api/src/ade_api/web/static/`). FastAPI serves those files directly, so your reverse proxy only needs to forward requests to the backend.
+When you deploy the frontend in production, compile it once (`ade build` or `npm run build` in `apps/ade-web/`) and serve `apps/ade-web/dist/` from your web server or reverse proxy. Configure the reverse proxy to forward `/api/v1` requests to the FastAPI service.
 
-To stop and remove the container:
+To stop and remove the stack:
 
 ```bash
-docker stop ade-backend
-docker rm ade-backend
+docker compose down
 ```
 
 ## 6. Where ADE Stores Data
-- `data/db/api.sqlite` – primary metadata database (SQLite).
+- `data/db/ade.sqlite` – primary metadata database (SQLite).
 - `data/workspaces/<workspace_id>/documents/` – uploaded source files.
 - `data/logs/` *(if enabled)* – structured JSON logs.
 
@@ -173,5 +167,5 @@ administrators through the API while the frontend experience is completed.
 ## 8. Troubleshooting
 - **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:create_app --factory`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and copy `apps/ade-web/dist/` into `apps/ade-api/src/ade_api/web/static/`).
-- **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api` prefix.
+- **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and confirm your web server is serving `apps/ade-web/dist/` and forwarding `/api/v1` to the API.
+- **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api/v1` prefix.

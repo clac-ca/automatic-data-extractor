@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
+from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
-from ade_api.db.engine import ensure_database_ready
-from ade_api.db.session import get_sessionmaker
+from ade_api.db import (
+    DatabaseSettings,
+    get_engine,
+    get_sessionmaker_from_app,
+    init_db,
+    shutdown_db,
+)
+from ade_api.features.documents.change_feed import run_document_events_pruner
 from ade_api.features.rbac import RbacService
-from ade_api.features.runs.event_stream import get_run_event_streams
-from ade_api.features.runs.worker_pool import RunWorkerPool
 from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -107,31 +115,89 @@ def create_application_lifespan(
 ) -> Lifespan[FastAPI]:
     """Return the FastAPI lifespan handler used by the app factory."""
 
+    def _build_db_settings() -> DatabaseSettings:
+        return DatabaseSettings(
+            url=settings.database_url,
+            echo=settings.database_echo,
+            auth_mode=settings.database_auth_mode,
+            managed_identity_client_id=settings.database_mi_client_id,
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout=settings.database_pool_timeout,
+            pool_recycle=settings.database_pool_recycle,
+            sqlite_journal_mode=settings.database_sqlite_journal_mode,
+            sqlite_synchronous=settings.database_sqlite_synchronous,
+            sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
+            sqlite_begin_mode=settings.database_sqlite_begin_mode,
+        )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ensure_runtime_dirs(settings)
         app.state.settings = settings
         app.state.safe_mode = bool(settings.safe_mode)
-        await ensure_database_ready(settings)
-        session_factory = get_sessionmaker(settings=settings)
-        async with session_factory() as session:
-            service = RbacService(session=session)
-            try:
-                await service.sync_registry()
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                logger.warning("rbac.registry.sync.failed", exc_info=True)
+        if settings.documents_upload_concurrency_limit:
+            app.state.documents_upload_semaphore = threading.BoundedSemaphore(
+                settings.documents_upload_concurrency_limit
+            )
+        else:
+            app.state.documents_upload_semaphore = None
+        db_settings = _build_db_settings()
+        safe_url = make_url(db_settings.url).render_as_string(hide_password=True)
+        logger.info("db.init.start", extra={"database_url": safe_url})
+        init_db(app, db_settings)
+        logger.info("db.init.complete", extra={"database_url": safe_url})
 
-        run_workers = RunWorkerPool(
-            settings=settings,
-            session_factory=session_factory,
-            event_streams=get_run_event_streams(),
-        )
-        await run_workers.start()
-        app.state.run_workers = run_workers
-        yield
-        await run_workers.stop()
+        engine = get_engine(app)
+        session_factory = get_sessionmaker_from_app(app)
+
+        def _check_schema() -> None:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1 FROM alembic_version"))
+
+        def _sync_rbac_registry() -> None:
+            with session_factory() as session:
+                service = RbacService(session=session)
+                try:
+                    with session.begin():
+                        service.sync_registry()
+                except Exception:
+                    logger.warning("rbac.registry.sync.failed", exc_info=True)
+
+        try:
+            # Fail fast if the schema hasn't been migrated.
+            try:
+                await asyncio.to_thread(_check_schema)
+            except Exception as exc:
+                logger.error(
+                    "db.schema.missing",
+                    extra={"database_url": safe_url},
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    "Database schema is not initialized. Run `ade migrate` before starting the API."
+                ) from exc
+
+            await asyncio.to_thread(_sync_rbac_registry)
+
+            pruner_stop = asyncio.Event()
+            pruner_task = asyncio.create_task(
+                run_document_events_pruner(
+                    settings=settings,
+                    stop_event=pruner_stop,
+                    session_factory=session_factory,
+                )
+            )
+
+            try:
+                yield
+            finally:
+                pruner_stop.set()
+                pruner_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await pruner_task
+        finally:
+            shutdown_db(app)
 
     return lifespan
 

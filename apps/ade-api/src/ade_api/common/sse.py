@@ -7,9 +7,18 @@ serialize JSON to a compact string instead of raw bytes.
 
 from __future__ import annotations
 
+import json
+import time
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from typing import Any
 
+from starlette.concurrency import iterate_in_threadpool
+
 from ade_api.common.encoding import json_dumps
+
+DEFAULT_READ_CHUNK_SIZE = 64 * 1024
+DEFAULT_POLL_INTERVAL = 0.25
 
 
 def _build_event(
@@ -63,4 +72,128 @@ def sse_json(
     return _build_event(json_dumps(data), event=event, event_id=event_id)
 
 
-__all__ = ["sse_bytes", "sse_json", "sse_text"]
+def _stream_ndjson_events_sync(
+    *,
+    path: Path,
+    start_offset: int = 0,
+    stop_events: set[str] | None = None,
+    ping_interval: float = 15.0,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+    read_chunk_size: int = DEFAULT_READ_CHUNK_SIZE,
+) -> Iterator[dict[str, str]]:
+    """Sync tailer for NDJSON logs (runs in a thread)."""
+
+    stop_events = stop_events or set()
+    cursor = max(0, start_offset)
+    last_ping = time.monotonic()
+    buffer = b""
+    wait_step = min(poll_interval, ping_interval)
+
+    while True:
+        if not path.exists():
+            # The worker pre-creates the log file; this only runs if a client connects early.
+            yield sse_text("ping", "waiting")
+            last_ping = time.monotonic()
+            while not path.exists():
+                time.sleep(wait_step)
+                now = time.monotonic()
+                if now - last_ping >= ping_interval:
+                    yield sse_text("ping", "waiting")
+                    last_ping = now
+            last_ping = time.monotonic()
+
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            continue
+
+        if cursor > stat.st_size:
+            cursor = stat.st_size
+            buffer = b""
+
+        file_id = (stat.st_dev, stat.st_ino)
+        with path.open("rb") as handle:
+            handle.seek(cursor)
+            while True:
+                chunk = handle.read(read_chunk_size)
+                if chunk:
+                    buffer += chunk
+                    lines = buffer.splitlines(keepends=True)
+                    buffer = b""
+                    for line in lines:
+                        if not line.endswith(b"\n"):
+                            buffer = line
+                            break
+                        cursor += len(line)
+                        raw = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                        event = _parse_event_line(raw)
+                        if event is None:
+                            continue
+                        event_name = str(event.get("event") or "message")
+                        yield _build_event(raw, event=event_name, event_id=cursor)
+                        if event.get("event") in stop_events:
+                            return
+                    continue
+
+                try:
+                    stat = path.stat()
+                except FileNotFoundError:
+                    buffer = b""
+                    break
+
+                if (stat.st_dev, stat.st_ino) != file_id:
+                    cursor = 0
+                    buffer = b""
+                    break
+
+                if stat.st_size < cursor:
+                    cursor = stat.st_size
+                    buffer = b""
+                    handle.seek(cursor)
+
+                now = time.monotonic()
+                if now - last_ping >= ping_interval:
+                    yield sse_text("ping", "keep-alive")
+                    last_ping = now
+
+                time.sleep(poll_interval)
+
+
+async def stream_ndjson_events(
+    *,
+    path: Path,
+    start_offset: int = 0,
+    stop_events: set[str] | None = None,
+    ping_interval: float = 15.0,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+    read_chunk_size: int = DEFAULT_READ_CHUNK_SIZE,
+) -> AsyncIterator[dict[str, str]]:
+    """Tail an NDJSON event log file and yield SSE messages using byte offsets."""
+
+    iterator = _stream_ndjson_events_sync(
+        path=path,
+        start_offset=start_offset,
+        stop_events=stop_events,
+        ping_interval=ping_interval,
+        poll_interval=poll_interval,
+        read_chunk_size=read_chunk_size,
+    )
+    async for message in iterate_in_threadpool(iterator):
+        yield message
+
+
+def _parse_event_line(raw: str) -> dict[str, Any] | None:
+    if not raw.strip():
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    if "event" not in parsed:
+        return None
+    return parsed
+
+
+__all__ = ["sse_bytes", "sse_json", "sse_text", "stream_ndjson_events"]

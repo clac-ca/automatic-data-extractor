@@ -6,11 +6,11 @@ from fastapi import APIRouter
 
 from ade_api.features.api_keys.router import router as api_keys_router
 from ade_api.features.auth.router import create_auth_router
-from ade_api.features.builds.router import router as builds_router
 from ade_api.features.configs.router import router as configurations_router
 from ade_api.features.documents.router import router as documents_router
 from ade_api.features.documents.router import tags_router as document_tags_router
 from ade_api.features.health.router import router as health_router
+from ade_api.features.info.router import router as info_router
 from ade_api.features.me.router import router as me_router
 from ade_api.features.presence.router import router as presence_router
 from ade_api.features.rbac.router import router as rbac_router
@@ -23,23 +23,24 @@ from ade_api.features.workspaces.router import router as workspaces_router
 from ade_api.meta.router import router as meta_router
 from ade_api.settings import Settings
 
+
 def create_api_router(settings: Settings) -> APIRouter:
     api_router = APIRouter(prefix="/v1")
     api_router.include_router(health_router, prefix="/health", tags=["health"])
+    api_router.include_router(info_router)
     api_router.include_router(meta_router)
     api_router.include_router(create_auth_router(settings), prefix="/auth")
     api_router.include_router(api_keys_router)
     api_router.include_router(users_router)
-    api_router.include_router(rbac_router, prefix="/rbac")
+    api_router.include_router(rbac_router)
     api_router.include_router(rbac_user_roles_router)
     api_router.include_router(me_router)
     api_router.include_router(workspaces_router)
     api_router.include_router(workspace_members_router)
-    api_router.include_router(documents_router)
     api_router.include_router(document_tags_router)
+    api_router.include_router(documents_router)
     api_router.include_router(presence_router)
     api_router.include_router(configurations_router)
-    api_router.include_router(builds_router)
     api_router.include_router(runs_router)
     api_router.include_router(system_router)
     return api_router

@@ -9,12 +9,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from ade_api.db.session import get_session
+from ade_api.db import get_db
 from ade_api.settings import Settings, get_settings
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
@@ -77,45 +77,23 @@ def get_configurations_service(session: SessionDep, settings: SettingsDep):
     return ConfigurationsService(session=session, storage=storage)
 
 
-def get_builds_service(session: SessionDep, settings: SettingsDep):
-    from ade_api.features.builds.service import BuildsService
-    from ade_api.features.runs.event_stream import get_run_event_streams
-
-    event_streams = get_run_event_streams()
-    storage = _build_config_storage(settings)
-    return BuildsService(
-        session=session,
-        settings=settings,
-        storage=storage,
-        event_streams=event_streams,
-    )
-
-
 def get_runs_service(session: SessionDep, settings: SettingsDep):
-    from ade_api.features.runs.event_stream import get_run_event_streams
     from ade_api.features.runs.service import RunsService
-    from ade_api.features.runs.supervisor import RunExecutionSupervisor
-    from ade_api.features.system_settings.service import SafeModeService
 
     storage = _build_config_storage(settings)
-    event_streams = get_run_event_streams()
-    supervisor = RunExecutionSupervisor()
-
-    return RunsService(
-        session=session,
-        settings=settings,
-        supervisor=supervisor,
-        safe_mode_service=SafeModeService(session=session, settings=settings),
-        storage=storage,
-        event_streams=event_streams,
-        build_event_streams=event_streams,
-    )
+    return RunsService(session=session, settings=settings, storage=storage)
 
 
-def get_workspaces_service(session: SessionDep):
+def get_workspaces_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.workspaces.service import WorkspacesService
 
-    return WorkspacesService(session=session)
+    return WorkspacesService(session=session, settings=settings)
+
+
+def get_idempotency_service(session: SessionDep, settings: SettingsDep):
+    from ade_api.features.idempotency.service import IdempotencyService
+
+    return IdempotencyService(session=session, settings=settings)
 
 
 __all__ = [
@@ -127,7 +105,7 @@ __all__ = [
     "get_health_service",
     "get_safe_mode_service",
     "get_configurations_service",
-    "get_builds_service",
     "get_runs_service",
     "get_workspaces_service",
+    "get_idempotency_service",
 ]

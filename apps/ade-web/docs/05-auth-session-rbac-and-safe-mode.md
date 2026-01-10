@@ -51,14 +51,7 @@ export type SessionEnvelope = {
     permissions: string[];  // global permission keys
     preferred_workspace_id: string | null;
   };
-  workspaces: {
-    items: WorkspaceMembershipSummary[];
-    page: number;
-    page_size: number;
-    total: number | null;
-    has_next: boolean;
-    has_previous: boolean;
-  };
+  workspaces: WorkspaceMembershipSummary[];
   roles: string[];
   permissions: string[];
   return_to: string | null;
@@ -80,7 +73,7 @@ Characteristics:
 * Cached with React Query.
 * Treated as the **single source of truth** for “who am I?”; we do not duplicate user identity elsewhere.
 * Sessions are cookie-only; no access tokens are persisted in `localStorage`.
-* Default workspace is server‑backed (`is_default` on memberships) and set via `PUT /api/v1/workspaces/{workspace_id}/default`.
+* Default workspace is server‑backed (`is_default` on memberships) and set via `PUT /api/v1/workspaces/{workspaceId}/default`.
 
 ### 2.2 Effective permissions
 
@@ -128,7 +121,7 @@ export interface SafeModeStatus {
 * Drives:
 
   * A persistent banner inside the workspace shell.
-* Disabling all **run‑invoking** actions (starting new runs, configuration builds, validations, activations that trigger runs).
+* Disabling all **run‑invoking** actions (starting new runs, validations, activations that trigger runs).
 * Status is **system‑wide**; the toggle lives on a system‑level Settings screen that only appears for users with `System.SafeMode.*`.
 
 ### 2.4 Default workspace selection
@@ -142,7 +135,7 @@ export interface SafeModeStatus {
 **How the UI sets it**
 
 - The Workspace directory shows “Set as default” on non‑default cards.
-- That action calls `PUT /api/v1/workspaces/{workspace_id}/default` via a typed helper, then updates cached workspace data and the local hint.
+- That action calls `PUT /api/v1/workspaces/{workspaceId}/default` via a typed helper, then updates cached workspace data and the local hint.
 - The endpoint is **idempotent**—repeated calls keep the same default.
 
 **Redirect behaviour**
@@ -300,9 +293,9 @@ We intentionally separate:
 
 Workspace context comes from:
 
-* `GET /api/v1/workspaces/{workspace_id}` – workspace metadata and membership summary.
-* `GET /api/v1/workspaces/{workspace_id}/members` – detailed list of members and roles.
-* `GET /api/v1/workspaces/{workspace_id}/roles` – workspace role definitions.
+* `GET /api/v1/workspaces/{workspaceId}` – workspace metadata and membership summary.
+* `GET /api/v1/workspaces/{workspaceId}/members` – detailed list of members and roles.
+* `GET /api/v1/roles` – role definitions (filter by scope as needed).
 
 The UI uses:
 
@@ -348,27 +341,27 @@ Roles are defined and assigned via the API; the frontend treats them as named bu
 
 * Endpoints:
 
-  * `GET /api/v1/rbac/roles`
-  * `POST /api/v1/rbac/roles`
-  * `GET /api/v1/rbac/roles/{role_id}`
-  * `PATCH /api/v1/rbac/roles/{role_id}`
-  * `DELETE /api/v1/rbac/roles/{role_id}`
+  * `GET /api/v1/roles`
+  * `POST /api/v1/roles`
+  * `GET /api/v1/roles/{roleId}`
+  * `PATCH /api/v1/roles/{roleId}`
+  * `DELETE /api/v1/roles/{roleId}`
 
 * Assignments:
 
-  * `GET /api/v1/rbac/roleAssignments`
-  * `POST /api/v1/rbac/roleAssignments`
-  * `DELETE /api/v1/rbac/roleAssignments/{assignment_id}`
-  * `GET /api/v1/users/{user_id}/roles`
-  * `PUT /api/v1/users/{user_id}/roles/{role_id}`
-  * `DELETE /api/v1/users/{user_id}/roles/{role_id}`
+  * `GET /api/v1/roleassignments`
+  * `POST /api/v1/roleassignments`
+  * `DELETE /api/v1/roleassignments/{assignmentId}`
+  * `GET /api/v1/users/{userId}/roles`
+  * `PUT /api/v1/users/{userId}/roles/{roleId}`
+  * `DELETE /api/v1/users/{userId}/roles/{roleId}`
 
 * Membership:
 
-  * `GET /api/v1/workspaces/{workspace_id}/members`
-  * `POST /api/v1/workspaces/{workspace_id}/members`
-  * `PUT /api/v1/workspaces/{workspace_id}/members/{user_id}`
-  * `DELETE /api/v1/workspaces/{workspace_id}/members/{user_id}`
+  * `GET /api/v1/workspaces/{workspaceId}/members`
+  * `POST /api/v1/workspaces/{workspaceId}/members`
+  * `PUT /api/v1/workspaces/{workspaceId}/members/{userId}`
+  * `DELETE /api/v1/workspaces/{workspaceId}/members/{userId}`
 
 The **Roles** and **Members** panels in Settings are thin UIs over these endpoints. The core run/document/configuration flows should not depend on the specifics of role assignment; they only consume effective permission keys.
 
@@ -567,8 +560,6 @@ Examples:
   * The Runs ledger (“New run”, if present),
   * The Configuration Builder workbench (“Run extraction” within the editor).
 
-* Starting a **build** of a configuration environment.
-
 * Starting **validate‑only** runs (validation of configurations or manifests).
 
 * Activating/publishing configurations if that triggers background engine work.
@@ -596,7 +587,7 @@ When Safe mode is on:
 * Recommended copy:
 
   ```text
-  Safe mode is enabled. New runs, builds, and validations are temporarily disabled.
+  Safe mode is enabled. New runs and validations are temporarily disabled.
   ```
 
 * If `detail` is provided by the backend, append or incorporate it:
@@ -717,7 +708,7 @@ When adding a feature that touches auth, permissions, or runs:
 
 3. **Respect Safe mode**
 
-  * If the feature starts or schedules new runs or builds, disable it when `SafeModeStatus.enabled === true`.
+  * If the feature starts or schedules new runs, disable it when `SafeModeStatus.enabled === true`.
   * Add an explanatory tooltip mentioning Safe mode.
 
 4. **Handle unauthenticated users**

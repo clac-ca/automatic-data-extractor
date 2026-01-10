@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Response, Security, status
+from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
 from ade_api.api.deps import get_workspaces_service
-from ade_api.common.pagination import PageParams
+from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.core.http import require_authenticated, require_csrf, require_global, require_workspace
 from ade_api.models import User
 
@@ -23,6 +24,14 @@ workspaces_service_dependency = Depends(get_workspaces_service)
 
 WORKSPACE_CREATE_BODY = Body(...)
 WORKSPACE_UPDATE_BODY = Body(...)
+
+WorkspacePath = Annotated[
+    UUID,
+    Path(
+        description="Workspace identifier",
+        alias="workspaceId",
+    ),
+]
 
 
 @router.post(
@@ -50,7 +59,7 @@ WORKSPACE_UPDATE_BODY = Body(...)
         },
     },
 )
-async def create_workspace(
+def create_workspace(
     admin_user: Annotated[
         User,
         Security(require_global("workspaces.create")),
@@ -59,7 +68,7 @@ async def create_workspace(
     *,
     payload: WorkspaceCreate = WORKSPACE_CREATE_BODY,
 ) -> WorkspaceOut:
-    workspace = await service.create_workspace(
+    workspace = service.create_workspace(
         user=admin_user,
         name=payload.name,
         slug=payload.slug,
@@ -84,22 +93,25 @@ async def create_workspace(
         },
     },
 )
-async def list_workspaces(
+def list_workspaces(
     current_user: Annotated[User, Security(require_authenticated)],
-    page: Annotated[PageParams, Depends()],
+    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    _guard: Annotated[None, Depends(strict_list_query_guard())],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspacePage:
-    page_result = await service.list_workspaces(
+    return service.list_workspaces(
         user=current_user,
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
+        sort=list_query.sort,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
+        page=list_query.page,
+        per_page=list_query.per_page,
     )
-    return WorkspacePage(**page_result.model_dump())
 
 
 @router.get(
-    "/workspaces/{workspace_id}",
+    "/workspaces/{workspaceId}",
     response_model=WorkspaceOut,
     status_code=status.HTTP_200_OK,
     summary="Retrieve workspace context by identifier",
@@ -116,13 +128,13 @@ async def list_workspaces(
         },
     },
 )
-async def read_workspace(
+def read_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
 ) -> WorkspaceOut:
@@ -130,7 +142,7 @@ async def read_workspace(
 
 
 @router.patch(
-    "/workspaces/{workspace_id}",
+    "/workspaces/{workspaceId}",
     dependencies=[Security(require_csrf)],
     response_model=WorkspaceOut,
     status_code=status.HTTP_200_OK,
@@ -154,20 +166,20 @@ async def read_workspace(
         },
     },
 )
-async def update_workspace(
+def update_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     actor: Annotated[
         User,
         Security(
             require_workspace("workspace.settings.manage"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: WorkspacesService = workspaces_service_dependency,
     *,
     payload: WorkspaceUpdate = WORKSPACE_UPDATE_BODY,
 ) -> WorkspaceOut:
-    workspace = await service.update_workspace(
+    workspace = service.update_workspace(
         user=actor,
         workspace_id=workspace.id,
         name=payload.name,
@@ -179,7 +191,7 @@ async def update_workspace(
 
 
 @router.delete(
-    "/workspaces/{workspace_id}",
+    "/workspaces/{workspaceId}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a workspace",
@@ -195,23 +207,23 @@ async def update_workspace(
         },
     },
 )
-async def delete_workspace(
+def delete_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     _actor: Annotated[
         User,
         Security(
             require_workspace("workspace.delete"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    await service.delete_workspace(workspace_id=workspace.id)
+    service.delete_workspace(workspace_id=workspace.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put(
-    "/workspaces/{workspace_id}/default",
+    "/workspaces/{workspaceId}/default",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Mark a workspace as the caller's default",
@@ -224,18 +236,18 @@ async def delete_workspace(
         },
     },
 )
-async def set_default_workspace(
+def set_default_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     actor: Annotated[
         User,
         Security(
             require_workspace("workspace.read"),
-            scopes=["{workspace_id}"],
+            scopes=["{workspaceId}"],
         ),
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    await service.set_default_workspace(
+    service.set_default_workspace(
         workspace_id=workspace.id,
         user=actor,
     )

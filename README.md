@@ -17,14 +17,17 @@ It:
 
 ```text
 automatic-data-extractor/
-├─ Dockerfile          # Main app image: API + built SPA
-├─ compose.yaml        # Local Docker stack (single service: ade)
+├─ Dockerfile          # API image (FastAPI only)
+├─ Dockerfile.web      # Web image (Nginx serving apps/ade-web/dist + /api/v1 proxy)
+├─ docker/             # Nginx config for the web image
+├─ compose.yaml        # Local Docker stack (api + web + worker)
 ├─ .env.example        # Example environment configuration
 ├─ apps/
-│  ├─ ade-api/         # FastAPI backend (serves /api + static SPA)
+│  ├─ ade-api/         # FastAPI backend (API only)
 │  ├─ ade-web/         # React (Vite) frontend SPA
 │  ├─ ade-cli/         # Python CLI (console entry: `ade`)
-│  └─ ade-engine/      # Engine runtime used by the API/CLI
+│  ├─ ade-worker/      # Background worker (runs + environments)
+│  └─ ade-engine/      # Engine runtime used by the worker/CLI
 ├─ docs/               # Developer docs & runbooks
 ├─ examples/           # Sample input/output files
 ├─ scripts/            # Helper / legacy scripts
@@ -53,13 +56,15 @@ cd automatic-data-extractor
 # 2. Create local env file (edit as needed)
 cp .env.example .env
 
-# 3. Build and start the app (API + SPA)
+# 3. Build and start the stack (web + api + worker)
 docker compose up --build
 ```
 
 Then open:
 
 * **[http://localhost:8000](http://localhost:8000)**
+
+The compose stack runs the API via `ade start --no-worker --no-web`, which applies migrations on startup before serving requests.
 
 To stop the stack:
 
@@ -99,47 +104,37 @@ docker compose up -d
 If you want to rebuild by hand:
 
 ```bash
-# Build image directly
-docker build -t ghcr.io/clac-ca/automatic-data-extractor:local .
+# Build images directly
+docker build -t ghcr.io/clac-ca/automatic-data-extractor-api:local -f Dockerfile .
+docker build -t ghcr.io/clac-ca/automatic-data-extractor-web:local -f Dockerfile.web .
 
-# Run it
-mkdir -p data
-docker run -d \
-  --name ade \
-  -p 8000:8000 \
-  -v "$(pwd)/data:/app/data" \
-  --env-file .env \
-  ghcr.io/clac-ca/automatic-data-extractor:local
+# Run the stack (use docker compose for the worker)
+docker compose up -d
 ```
 
 ---
 
 ## 4. Using the published image (no local build)
 
-If you don’t want to build from source, you can run a published image from GHCR.
+If you don’t want to build from source, you can run published images from GHCR.
 
 ```bash
 # From inside the repo (for .env and ./data)
 cp .env.example .env
 mkdir -p data
 
-docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
+docker pull ghcr.io/clac-ca/automatic-data-extractor-api:latest
+docker pull ghcr.io/clac-ca/automatic-data-extractor-web:latest
 
-docker run -d \
-  --name ade \
-  -p 8000:8000 \
-  -v "$(pwd)/data:/app/data" \
-  --env-file .env \
-  ghcr.io/clac-ca/automatic-data-extractor:latest
+docker compose up -d
 ```
 
 Then go to **[http://localhost:8000](http://localhost:8000)**.
 
-To stop and remove the container:
+To stop and remove the stack:
 
 ```bash
-docker stop ade
-docker rm ade
+docker compose down
 ```
 
 ---
@@ -174,6 +169,7 @@ pip install -U pip setuptools wheel
 pip install -e apps/ade-cli       # ADE CLI (console: `ade`)
 pip install -e apps/ade-engine
 pip install -e apps/ade-api
+pip install -e apps/ade-worker
 
 # Install frontend dependencies
 (cd apps/ade-web && npm install)
@@ -181,8 +177,12 @@ pip install -e apps/ade-api
 # Quick verification (shows CLI help)
 ade --help
 
-# Start backend + frontend dev servers (FastAPI + Vite)
+# Start API + web dev servers + worker (runs migrations first)
 ade dev
+
+# Optional: skip worker or run it separately
+ade dev --no-worker
+ade worker
 ```
 
 Dev URLs:
@@ -190,7 +190,7 @@ Dev URLs:
 * API: **[http://localhost:8000](http://localhost:8000)**
 * Web (Vite dev server): **[http://localhost:5173](http://localhost:5173)**
 
-If needed, set `VITE_API_URL=http://localhost:8000` in `apps/ade-web/.env.local`.
+If needed, set `VITE_API_BASE_URL=http://localhost:8000` in `apps/ade-web/.env.local`.
 
 ### 5.3 Windows (PowerShell)
 
@@ -208,12 +208,15 @@ pip install -U pip setuptools wheel
 pip install -e apps/ade-cli
 pip install -e apps/ade-engine
 pip install -e apps/ade-api
+pip install -e apps/ade-worker
 
 cd apps/ade-web
 npm install
 cd ../..
 
 ade dev
+ade dev --no-worker  # skip worker if you want to run it separately
+ade worker
 ```
 
 ---
@@ -222,12 +225,15 @@ ade dev
 
 Once installed (locally or inside the container), the `ade` CLI provides useful commands:
 
-* `ade dev` — run backend + frontend dev servers
-* `ade dev --backend-only` / `ade dev --frontend-only` — run just one surface
-* `ade build` — build the frontend and bundle it into the backend static assets
-* `ade start` — run the backend using the built SPA
+* `ade dev` — run API + web dev servers + worker (runs migrations first)
+* `ade dev --api-only` / `ade dev --web-only` — run just one surface
+* `ade build` — build the web app (outputs to apps/ade-web/dist)
+* `ade start` — run the API server + worker + built frontend (runs migrations first; builds frontend if missing; use `--no-web` if serving frontend separately)
+* `ade worker` — run the background worker only
 * `ade ci` — run the full CI suite (lint, tests, build)
 * `ade users ...` — manage users (list/create/update, assign or remove roles)
+
+Tip: `ade dev` and `ade start` run migrations automatically; use `ade migrate` manually when needed.
 
 See `ade --help` for more options.
 
@@ -247,13 +253,18 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 | `ADE_WORKSPACES_DIR`      | `./data/workspaces`      | Root for all workspace storage             |
 | `ADE_DOCUMENTS_DIR`       | `./data/workspaces`      | Base for documents (`<ws>/documents/...`)  |
 | `ADE_CONFIGS_DIR`         | `./data/workspaces`      | Base for configs (`<ws>/config_packages/`) |
-| *(venvs)*                 | _fixed_                  | Virtualenv lives at `<config_root>/.venv/` |
+| `ADE_VENVS_DIR`           | `./data/venvs`           | Local base for environment venvs (`<ws>/<cfg>/<deps>/<env>/.venv`) |
 | `ADE_RUNS_DIR`            | `./data/workspaces`      | Base for runs (`<ws>/runs/<run_id>/...`)   |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                   |
 | `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
-| `ADE_MAX_CONCURRENCY`     | `2`                      | Backend worker concurrency                 |
+| `ADE_WORKER_CONCURRENCY`  | `1`                      | Worker concurrency per process             |
 | `ADE_QUEUE_SIZE`          | `10`                     | Queue length before HTTP 429 backpressure  |
-| `ADE_RUN_TIMEOUT_SECONDS` | `300`                    | Wall‑clock timeout per run                 |
+| `ADE_WORKER_POLL_INTERVAL`| `0.5`                    | Worker idle poll interval (seconds)        |
+| `ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS` | `600`       | Wall‑clock timeout per environment build   |
+| `ADE_WORKER_RUN_TIMEOUT_SECONDS` | `300`           | Wall‑clock timeout per run                 |
+| `ADE_WORKER_ENABLE_GC`    | `1`                      | Enable worker GC (single-host default)     |
+| `ADE_WORKER_ENV_TTL_DAYS` | `30`                     | Environment GC TTL (days)                  |
+| `ADE_WORKER_RUN_ARTIFACT_TTL_DAYS` | `30`           | Run artifact GC TTL (days)                 |
 | `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best‑effort CPU limit per run              |
 | `ADE_WORKER_MEM_MB`       | `512`                    | Best‑effort memory limit per run (MB)      |
 | `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a run may create |

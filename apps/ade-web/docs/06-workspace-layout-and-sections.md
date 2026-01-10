@@ -4,7 +4,7 @@ This document describes the **workspace‑level UI layout** in ADE Web:
 
 - The **Workspace directory** (`/workspaces`) – where users discover and select workspaces.
 - The **Workspace shell** (`/workspaces/:workspaceId/...`) – the frame around a single workspace.
-- The **sections inside a workspace** (Documents, Runs, Configurations / Configuration Builder, Settings, Overview) and how they plug into the shell.
+- The **sections inside a workspace** (Documents, Runs, Configurations / Configuration Builder, Settings) and how they plug into the shell.
 - Where **banners**, **Safe mode messaging**, and **notifications** appear.
 
 It focuses on **layout and responsibilities**, not API details or low‑level component props.
@@ -16,7 +16,7 @@ It focuses on **layout and responsibilities**, not API details or low‑level co
 > - [`08-configurations-and-config-builder.md`](./08-configurations-and-config-builder.md) and [`09-workbench-editor-and-scripting.md`](./09-workbench-editor-and-scripting.md) – Configuration Builder internals.
 > - [`10-ui-components-a11y-and-testing.md`](./10-ui-components-a11y-and-testing.md) – UI primitives, accessibility, and keyboard patterns.
 >
-> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `screens/workspace-shell/sections/{documents|runs|config-builder|settings}` and route builders in `@shared/nav/routes`. Section filters reuse the canonical query param helpers described in `docs/07`.
+> Instant understanding: section names, routes, and folders stay in lockstep—`/documents`, `/runs`, `/config-builder`, `/settings` map to `pages/Workspace/sections/{Documents|Runs|ConfigBuilder|Settings}` and section helpers in `pages/Workspace/components/workspaceNavigation`. Section filters reuse the canonical query param helpers described in `docs/07`.
 
 ---
 
@@ -34,7 +34,7 @@ ADE Web has two distinct workspace layers:
    - Routes: `/workspaces/:workspaceId/...`.  
    - Wraps all activity **inside a single workspace**.  
    - Provides a stable frame: top bar, left nav, banners.  
-   - Hosts section screens: Documents, Runs, Configurations (Configuration Builder), Settings, Overview.
+   - Hosts section screens: Documents, Runs, Configurations (Configuration Builder), Settings.
 
 The rule:
 
@@ -153,7 +153,7 @@ Each workspace is represented by a card that includes:
 - Name.
 - Slug or human‑friendly short ID.
 - Optional **environment label** (e.g. Production, Staging).
-- Optional indication that this is the user’s **default workspace** plus a “Set as default” action on non‑default cards (calls `PUT /api/v1/workspaces/{workspace_id}/default`).
+- Optional indication that this is the user’s **default workspace** plus a “Set as default” action on non‑default cards (calls `PUT /api/v1/workspaces/{workspaceId}/default`).
 - Compact summary of the user’s roles/permissions (e.g. “Owner”, “Editor”).
 
 Clicking a card:
@@ -184,7 +184,7 @@ The Workspace shell renders everything inside a single workspace. It owns the fr
 - Host **section screens** inside the main content area.
 - Handle shell‑level loading/error states (e.g. workspace not found).
 
-The shell is implemented by a dedicated screen component, e.g. `WorkspaceShellScreen`.
+The shell is implemented by a dedicated screen component, e.g. `WorkspaceScreen`.
 
 ### 4.2 Route boundary
 
@@ -202,7 +202,7 @@ The shell:
 - Renders a **workspace‑level error state** if the workspace cannot be loaded (e.g. 404, permission denied).
 - Then resolves the section based on the first path segment after `:workspaceId`.
 
-If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the route helpers (e.g. `shared/nav/routes.ts`) and is consumed by `WorkspaceShellScreen`.
+If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the navigation helpers (e.g. `app/navigation/workspacePaths.ts`) and is consumed by `WorkspaceScreen`.
 
 ### 4.3 Layout regions (desktop)
 
@@ -240,7 +240,6 @@ Typical ordering:
    - Runs.
    - Configurations (Configuration Builder).
    - Settings.
-   - Overview (if enabled).
 
 Section links use `NavLink` so they reflect active state based on the current path.
 
@@ -363,7 +362,7 @@ Responsibilities:
 - Host the **Configuration Builder workbench** for editing configuration code and manifest.
 - Manage the “return path” so users can exit the workbench back to where they came from.
 
-Naming stays consistent: the nav label is **Configuration Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `features/workspace-shell/sections/config-builder` (hosting the Configuration Builder workbench). The section always includes both the configurations list and the workbench editing surface.
+Naming stays consistent: the nav label is **Configuration Builder**, the route segment is `/workspaces/:workspaceId/config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder` (hosting the Configuration Builder workbench). The section always includes both the configurations list and the workbench editing surface.
 
 Shell integration:
 
@@ -393,26 +392,6 @@ Shell integration:
 - Section content is tabbed and controlled by a `view` query parameter.
 
 RBAC and Safe mode are described in [`05-auth-session-rbac-and-safe-mode.md`](./05-auth-session-rbac-and-safe-mode.md).
-
-### 7.5 Overview (optional)
-
-- **Route:** `/workspaces/:workspaceId/overview`  
-- **Screen:** `WorkspaceOverviewScreen` (if implemented).
-
-Responsibilities:
-
-- Provide a **summary** surface for the workspace:
-  - Recent runs.
-  - Documents that need attention.
-  - Current configuration status.
-  - Safe mode state.
-
-Shell integration:
-
-- Typically appears as the first item in the nav or clearly marked as “Home”.
-- Primarily read‑only; actions are delegated to other sections.
-
----
 
 ## 8. Banners and notifications
 
@@ -481,7 +460,7 @@ Layout rules:
 
 ### 9.2 Workspace‑local “Section not found”
 
-The shell deliberately owns the “unknown section” experience. If the path segment after `/workspaces/:workspaceId/` does not map to a known section, `WorkspaceShellScreen` renders its **UnknownSection** state *inside the shell* instead of returning the global 404. This keeps the valid workspace context alive so the user can recover by choosing a known section (e.g. “Documents” or “Runs”) without being kicked back to the directory.
+The shell deliberately owns the “unknown section” experience. If the path segment after `/workspaces/:workspaceId/` does not map to a known section, `WorkspaceScreen` renders its **UnknownSection** state *inside the shell* instead of returning the global 404. This keeps the valid workspace context alive so the user can recover by choosing a known section (e.g. “Documents” or “Runs”) without being kicked back to the directory.
 
 ---
 
@@ -492,7 +471,7 @@ When adding new workspace sections, apply these rules:
 1. **Section lives under the shell**  
    - Route: `/workspaces/:workspaceId/<sectionSlug>`.  
    - Nav item in `WorkspaceNav`.  
-   - Screen component in `features/workspace-shell/<section>/`.
+   - Screen component in `pages/Workspace/sections/<Section>/`.
 
 2. **Use top bar slots rather than custom headers**  
    - `brand` and `leading` communicate where you are.  

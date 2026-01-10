@@ -15,7 +15,7 @@ ade_api/
 ├─ infra/                   # Infrastructure adapters (storage, venv, versioning)
 ├─ features/                # Domain modules (users, workspaces, configs, runs, documents, auth, roles, etc.)
 ├─ templates/               # Config package templates
-├─ web/                     # Bundled SPA assets
+├─ web/                     # Web-related helpers; API can serve built SPA when configured
 └─ scripts/                 # Utility scripts
 ```
 

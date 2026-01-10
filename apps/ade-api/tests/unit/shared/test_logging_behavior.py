@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from starlette.requests import Request
@@ -33,7 +34,7 @@ class _CaptureHandler(logging.Handler):
 
 
 def test_log_context_includes_correlation_and_fields():
-    setup_logging(Settings(logging_level="DEBUG"))
+    setup_logging(Settings(log_level="DEBUG"))
     handler = _CaptureHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(ConsoleLogFormatter())
@@ -59,7 +60,7 @@ def test_log_context_includes_correlation_and_fields():
 
 
 def test_unhandled_exception_handler_logs_with_correlation():
-    setup_logging(Settings(logging_level="DEBUG"))
+    setup_logging(Settings(log_level="DEBUG"))
     handler = _CaptureHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(ConsoleLogFormatter())
@@ -88,11 +89,14 @@ def test_unhandled_exception_handler_logs_with_correlation():
         assert any(rec.getMessage() == "probe.error" for rec in handler.records)
         handler.records.clear()
 
-        response = asyncio.run(
-            unhandled_exception_handler(request=request, exc=RuntimeError("boom"))
-        )
+        response = asyncio.run(unhandled_exception_handler(request=request, exc=RuntimeError("boom")))
         assert response.status_code == 500
-        assert response.body == b'{"detail":"Internal server error"}'
+        payload = json.loads(response.body.decode())
+        assert payload["type"] == "internal_error"
+        assert payload["title"] == "Internal server error"
+        assert payload["status"] == 500
+        assert payload["detail"] == "Internal server error"
+        assert payload["instance"] == "/boom"
 
         error_logs = [record for record in handler.records if record.name == "ade_api.errors"]
         assert error_logs, "Unhandled exception log not captured"
