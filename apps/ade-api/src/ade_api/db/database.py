@@ -24,12 +24,14 @@ Exports:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, Literal
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import MetaData, create_engine, event
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -51,6 +53,8 @@ NAMING_CONVENTION = {
 }
 
 metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -362,8 +366,17 @@ def get_db(request: Request) -> Generator[Session, None, None]:
     try:
         yield session
         session.commit()
-    except BaseException:
+    except BaseException as exc:
         session.rollback()
+        if not isinstance(exc, (HTTPException, RequestValidationError)):
+            logger.warning(
+                "db.session.rollback",
+                extra={
+                    "path": str(request.url.path),
+                    "method": request.method,
+                },
+                exc_info=exc,
+            )
         raise
     finally:
         session.close()

@@ -53,7 +53,7 @@ def _problem_response(
     )
 
 
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all handler for unexpected exceptions.
 
     Registered as the ``Exception`` handler. Ensures that any unhandled error
@@ -81,7 +81,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """Handler for FastAPI HTTPException instances.
 
     4xx responses (client errors) are returned without logging by default.
@@ -122,7 +122,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     )
 
 
-async def request_validation_exception_handler(
+def request_validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
@@ -136,7 +136,7 @@ async def request_validation_exception_handler(
     )
 
 
-async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
     detail_text, errors = coerce_detail_and_errors(exc.detail)
     return _problem_response(
         request=request,

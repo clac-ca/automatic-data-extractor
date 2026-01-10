@@ -64,7 +64,7 @@ def gc_environments(*, engine, paths: PathManager, now: datetime, env_ttl_days: 
         """
     )
 
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         rows = conn.execute(query, {"cutoff": cutoff, "now": now}).mappings().all()
 
     result.scanned = len(rows)
@@ -124,7 +124,7 @@ def gc_run_artifacts(*, engine, paths: PathManager, now: datetime, run_ttl_days:
         """
     )
 
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         rows = conn.execute(query, {"cutoff": cutoff}).mappings().all()
 
     result.scanned = len(rows)

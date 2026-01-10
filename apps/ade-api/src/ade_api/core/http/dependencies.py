@@ -343,7 +343,7 @@ def require_workspace(
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
 
-async def require_csrf(
+def require_csrf(
     request: Request,
     settings: SettingsDep,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],

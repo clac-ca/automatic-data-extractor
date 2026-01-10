@@ -3,14 +3,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, Security, status
-from sqlalchemy.orm import Session
 
+from ade_api.api.deps import SessionDep, SettingsDep
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, get_rbac_service, require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
 from ade_api.core.rbac.service_interface import RbacService
-from ade_api.db import get_db
-from ade_api.settings import Settings, get_settings
 
 from .schemas import (
     EffectivePermissions,
@@ -28,7 +26,7 @@ router = APIRouter(
 
 
 def get_me_service(
-    session: Annotated[Session, Depends(get_db)],
+    session: SessionDep,
     rbac: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> MeService:
     """Per-request MeService factory."""
@@ -81,7 +79,7 @@ def get_me_bootstrap(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
     response: Response,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: SettingsDep,
 ) -> MeContext:
     """Return a consolidated bootstrap payload for the current principal."""
 

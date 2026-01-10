@@ -17,14 +17,14 @@ class Repo:
         self.engine = engine
 
     def load_environment(self, env_id: str) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             row = conn.execute(
                 select(environments).where(environments.c.id == env_id)
             ).mappings().first()
         return dict(row) if row else None
 
     def load_ready_environment_for_run(self, run: dict[str, Any]) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             row = conn.execute(
                 select(environments).where(
                     environments.c.workspace_id == run["workspace_id"],
@@ -37,12 +37,12 @@ class Repo:
         return dict(row) if row else None
 
     def load_run(self, run_id: str) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             row = conn.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
         return dict(row) if row else None
 
     def load_document(self, document_id: str) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             row = conn.execute(
                 select(documents).where(documents.c.id == document_id)
             ).mappings().first()

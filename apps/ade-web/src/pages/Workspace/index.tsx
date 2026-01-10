@@ -29,6 +29,7 @@ import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
 import { Alert } from "@/components/ui/alert";
 import { PageState } from "@components/layouts/page-state";
 import { CloseIcon, MenuIcon } from "@components/icons";
+import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 import { useShortcutHint } from "@hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 
@@ -171,6 +172,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     [workspace],
   );
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
+  const [documentSearchInput, setDocumentSearchInput] = useState("");
+  const [runSearchInput, setRunSearchInput] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isVersionsModalOpen, setIsVersionsModalOpen] = useState(false);
   const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
@@ -322,6 +325,19 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const isRunsSection = section?.kind === "content" && section.key === "runs";
   const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
   const runSearchValue = isRunsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
+
+  useEffect(() => {
+    if (documentSearchValue !== documentSearchInput) {
+      setDocumentSearchInput(documentSearchValue);
+    }
+  }, [documentSearchInput, documentSearchValue]);
+
+  useEffect(() => {
+    if (runSearchValue !== runSearchInput) {
+      setRunSearchInput(runSearchValue);
+    }
+  }, [runSearchInput, runSearchValue]);
+
   const handleDocumentSearchChange = useCallback(
     (nextValue: string) => {
       if (!isDocumentsSection) {
@@ -341,19 +357,29 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     },
     [isDocumentsSection, location.hash, location.pathname, location.search, navigate],
   );
+  const debouncedDocumentSearchChange = useDebouncedCallback(handleDocumentSearchChange, 250);
+  const handleDocumentSearchInputChange = useCallback(
+    (nextValue: string) => {
+      setDocumentSearchInput(nextValue);
+      debouncedDocumentSearchChange(nextValue);
+    },
+    [debouncedDocumentSearchChange],
+  );
   const handleDocumentSearchSubmit = useCallback(
     (value: string) => {
+      setDocumentSearchInput(value);
       handleDocumentSearchChange(value);
     },
     [handleDocumentSearchChange],
   );
   const handleDocumentSearchClear = useCallback(() => {
+    setDocumentSearchInput("");
     handleDocumentSearchChange("");
   }, [handleDocumentSearchChange]);
   const documentsSearch = isDocumentsSection
     ? {
-        value: documentSearchValue,
-        onChange: handleDocumentSearchChange,
+        value: documentSearchInput,
+        onChange: handleDocumentSearchInputChange,
         onSubmit: handleDocumentSearchSubmit,
         onClear: handleDocumentSearchClear,
         placeholder: "Search documents",
@@ -381,19 +407,29 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     },
     [isRunsSection, location.hash, location.pathname, location.search, navigate],
   );
+  const debouncedRunSearchChange = useDebouncedCallback(handleRunSearchChange, 250);
+  const handleRunSearchInputChange = useCallback(
+    (nextValue: string) => {
+      setRunSearchInput(nextValue);
+      debouncedRunSearchChange(nextValue);
+    },
+    [debouncedRunSearchChange],
+  );
   const handleRunSearchSubmit = useCallback(
     (value: string) => {
+      setRunSearchInput(value);
       handleRunSearchChange(value);
     },
     [handleRunSearchChange],
   );
   const handleRunSearchClear = useCallback(() => {
+    setRunSearchInput("");
     handleRunSearchChange("");
   }, [handleRunSearchChange]);
   const runsSearch = isRunsSection
     ? {
-        value: runSearchValue,
-        onChange: handleRunSearchChange,
+        value: runSearchInput,
+        onChange: handleRunSearchInputChange,
         onSubmit: handleRunSearchSubmit,
         onClear: handleRunSearchClear,
         placeholder: "Search runs",
