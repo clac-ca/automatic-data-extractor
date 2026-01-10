@@ -69,7 +69,7 @@ def _validate_venvs_dir(venvs_dir: Path) -> None:
             "venvs_dir.network_like",
             extra={
                 "venvs_dir": str(venvs_dir),
-                "message": "ADE_VENVS_DIR appears to be on a network/SMB mount; "
+                "detail": "ADE_VENVS_DIR appears to be on a network/SMB mount; "
                 "venvs must live on local storage",
             },
         )
