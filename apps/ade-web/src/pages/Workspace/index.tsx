@@ -185,39 +185,35 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     [workspaceNavItems],
   );
 
-  const navPinnedStorage = useMemo(
+  const navPinnedStorage = useMemo(() => createScopedStorage("ade.ui.navPinned"), []);
+  const legacyNavPinnedStorage = useMemo(
     () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navPinned`),
     [workspace.id],
   );
-  const navCollapsedStorage = useMemo(
+  const legacyNavCollapsedStorage = useMemo(
     () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navCollapsed`),
     [workspace.id],
   );
-  const [isNavPinned, setIsNavPinned] = useState(() => {
+  const resolveNavPinned = useCallback(() => {
     const pinned = navPinnedStorage.get<boolean>();
     if (typeof pinned === "boolean") {
       return pinned;
     }
-    const collapsed = navCollapsedStorage.get<boolean>();
-    if (typeof collapsed === "boolean") {
-      return !collapsed;
+    const legacyPinned = legacyNavPinnedStorage.get<boolean>();
+    if (typeof legacyPinned === "boolean") {
+      return legacyPinned;
+    }
+    const legacyCollapsed = legacyNavCollapsedStorage.get<boolean>();
+    if (typeof legacyCollapsed === "boolean") {
+      return !legacyCollapsed;
     }
     return false;
-  });
+  }, [legacyNavCollapsedStorage, legacyNavPinnedStorage, navPinnedStorage]);
+  const [isNavPinned, setIsNavPinned] = useState(resolveNavPinned);
 
   useEffect(() => {
-    const pinned = navPinnedStorage.get<boolean>();
-    if (typeof pinned === "boolean") {
-      setIsNavPinned(pinned);
-      return;
-    }
-    const collapsed = navCollapsedStorage.get<boolean>();
-    if (typeof collapsed === "boolean") {
-      setIsNavPinned(!collapsed);
-    } else {
-      setIsNavPinned(false);
-    }
-  }, [navPinnedStorage, navCollapsedStorage]);
+    setIsNavPinned(resolveNavPinned());
+  }, [resolveNavPinned]);
 
   useEffect(() => {
     navPinnedStorage.set(isNavPinned);

@@ -8,6 +8,7 @@ import time
 from typing import Annotated, Any
 from uuid import UUID
 
+import anyio
 from fastapi import (
     APIRouter,
     Depends,
@@ -465,24 +466,25 @@ async def stream_document_changes(
         cursor_value = start_cursor
         last_send = time.monotonic()
 
-        async with session_scope() as session:
-            events_service = DocumentEventsService(session=session, settings=settings)
-            try:
-                resolution = await events_service.resolve_cursor(
-                    workspace_id=workspace_id,
-                    cursor=cursor_value,
-                )
-            except DocumentEventCursorTooOld as exc:
-                yield sse_json(
-                    "error",
-                    {
-                        "code": "resync_required",
-                        "oldestCursor": str(exc.oldest_cursor),
-                        "latestCursor": str(exc.latest_cursor),
-                    },
-                )
-                return
-            cursor_value = resolution.cursor
+        with anyio.CancelScope(shield=True):
+            async with session_scope() as session:
+                events_service = DocumentEventsService(session=session, settings=settings)
+                try:
+                    resolution = await events_service.resolve_cursor(
+                        workspace_id=workspace_id,
+                        cursor=cursor_value,
+                    )
+                except DocumentEventCursorTooOld as exc:
+                    yield sse_json(
+                        "error",
+                        {
+                            "code": "resync_required",
+                            "oldestCursor": str(exc.oldest_cursor),
+                            "latestCursor": str(exc.latest_cursor),
+                        },
+                    )
+                    return
+                cursor_value = resolution.cursor
 
         yield sse_json("ready", {"cursor": str(cursor_value)})
 
@@ -490,13 +492,14 @@ async def stream_document_changes(
             if await request.is_disconnected():
                 return
 
-            async with session_scope() as session:
-                events_service = DocumentEventsService(session=session, settings=settings)
-                events = await events_service.fetch_changes_after(
-                    workspace_id=workspace_id,
-                    cursor=cursor_value,
-                    limit=TAILER_BATCH_LIMIT,
-                )
+            with anyio.CancelScope(shield=True):
+                async with session_scope() as session:
+                    events_service = DocumentEventsService(session=session, settings=settings)
+                    events = await events_service.fetch_changes_after(
+                        workspace_id=workspace_id,
+                        cursor=cursor_value,
+                        limit=TAILER_BATCH_LIMIT,
+                    )
 
             if events:
                 for change in events:

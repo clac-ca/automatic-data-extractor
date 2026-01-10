@@ -91,7 +91,24 @@ class Repo:
                     conn.execute(insert(environments).values(**env_row))
                     inserted += 1
                 except IntegrityError:
-                    # Environment already exists (unique key).
+                    # Environment already exists (unique key). Requeue failed environments.
+                    conn.execute(
+                        update(environments)
+                        .where(
+                            environments.c.workspace_id == row["workspace_id"],
+                            environments.c.configuration_id == row["configuration_id"],
+                            environments.c.engine_spec == row["engine_spec"],
+                            environments.c.deps_digest == row["deps_digest"],
+                            environments.c.status == "failed",
+                        )
+                        .values(
+                            status="queued",
+                            error_message=None,
+                            claimed_by=None,
+                            claim_expires_at=None,
+                            updated_at=now,
+                        )
+                    )
                     continue
         return inserted
 

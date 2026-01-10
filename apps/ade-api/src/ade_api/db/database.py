@@ -14,7 +14,6 @@ Managed Identity:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import struct
 from collections.abc import AsyncIterator
@@ -32,6 +31,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import StaticPool
+import anyio
 
 # ---- Optional deps (managed identity) ---------------------------------------
 try:
@@ -314,8 +314,21 @@ def attach_managed_identity(sync_engine: Engine, *, client_id: str | None) -> No
         raw = token.encode("utf-16-le")
         return struct.pack("<I", len(raw)) + raw
 
+    def _strip_trusted_connection(conn_str: str) -> str:
+        parts = [part for part in conn_str.split(";") if part]
+        filtered: list[str] = []
+        for part in parts:
+            key = part.split("=", 1)[0].strip().lower()
+            if key == "trusted_connection":
+                continue
+            filtered.append(part)
+        return ";".join(filtered)
+
     @event.listens_for(sync_engine, "do_connect", insert=True)
-    def _inject(_dialect, _conn_rec, _cargs, cparams):
+    def _inject(_dialect, _conn_rec, cargs, cparams):
+        if cargs and isinstance(cargs[0], str):
+            cargs[0] = _strip_trusted_connection(cargs[0])
+
         attrs_before = dict(cparams.pop("attrs_before", {}) or {})
         attrs_before[_SQL_COPT_SS_ACCESS_TOKEN] = _token_bytes()
         cparams["attrs_before"] = attrs_before
@@ -432,26 +445,27 @@ db = Database()
 
 
 async def close_session(session: AsyncSession) -> None:
-    await asyncio.shield(session.close())
+    with anyio.CancelScope(shield=True):
+        await session.close()
 
 
 @asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:
+    """Transaction boundary: commit on success, rollback on error/cancel."""
     session = db.sessionmaker()
     try:
         yield session
+        with anyio.CancelScope(shield=True):
+            await session.commit()
+    except BaseException:
+        with anyio.CancelScope(shield=True):
+            await session.rollback()
+        raise
     finally:
         await close_session(session)
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
     """FastAPI dependency: one AsyncSession per request."""
-    session = db.sessionmaker()
-    try:
+    async with session_scope() as session:
         yield session
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
-    finally:
-        await close_session(session)
