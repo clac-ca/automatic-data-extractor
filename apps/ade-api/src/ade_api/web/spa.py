@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse, Response
 from starlette.staticfiles import StaticFiles
 
@@ -16,13 +17,24 @@ class SpaStaticFiles(StaticFiles):
     """StaticFiles variant that falls back to index.html for SPA routes."""
 
     async def get_response(self, path: str, scope) -> Response:
-        response = await super().get_response(path, scope)
-        if response.status_code != 404:
-            return response
         if scope.get("method") not in {"GET", "HEAD"}:
+            return await super().get_response(path, scope)
+
+        missing_exc: StarletteHTTPException | None = None
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            missing_exc = exc
+            response = None
+
+        if response is not None and response.status_code != 404:
             return response
         index_path = Path(self.directory) / "index.html"
         if not index_path.exists():
+            if missing_exc is not None:
+                raise missing_exc
             return response
         return FileResponse(index_path)
 

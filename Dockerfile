@@ -45,6 +45,19 @@ RUN python -m pip install --prefix=/install \
         ./apps/ade-worker
 
 # =============================================================================
+# Stage 1b: Frontend build (Vite)
+# =============================================================================
+FROM node:20-bookworm AS web-build
+
+WORKDIR /app/apps/ade-web
+
+COPY apps/ade-web/package.json apps/ade-web/package-lock.json ./
+RUN npm ci
+
+COPY apps/ade-web ./
+RUN npm run build
+
+# =============================================================================
 # Stage 2: Runtime image
 # =============================================================================
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
@@ -81,6 +94,7 @@ LABEL org.opencontainers.image.title="automatic-data-extractor" \
 
 COPY --from=backend-build /install /usr/local
 COPY apps ./apps
+COPY --from=web-build /app/apps/ade-web/dist ./apps/ade-web/dist
 
 RUN set -eux; \
     groupadd -r ade; \
@@ -93,4 +107,4 @@ EXPOSE 8000
 
 USER ade
 
-CMD ["uvicorn", "ade_api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["ade", "start"]

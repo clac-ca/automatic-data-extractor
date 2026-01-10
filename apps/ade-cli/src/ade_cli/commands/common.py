@@ -44,14 +44,13 @@ CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
 CLI_SRC = CLI_DIR / "src" / "ade_cli"
 FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
 VENV_DIR = REPO_ROOT / ".venv"
-COMPOSE_FILE = REPO_ROOT / "compose.yaml"
 README_HINT = "See README: Developer Setup."
 
 
 def refresh_paths() -> None:
     """Refresh global path constants based on the current working directory."""
 
-    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, ENGINE_DIR, ENGINE_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR, VENV_DIR, COMPOSE_FILE
+    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, ENGINE_DIR, ENGINE_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR, VENV_DIR
     REPO_ROOT = _find_repo_root()
     BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
     BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
@@ -61,7 +60,6 @@ def refresh_paths() -> None:
     CLI_SRC = CLI_DIR / "src" / "ade_cli"
     FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
     VENV_DIR = REPO_ROOT / ".venv"
-    COMPOSE_FILE = REPO_ROOT / "compose.yaml"
 
 
 def run(command: Iterable[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
@@ -88,14 +86,6 @@ def ensure_frontend_dir() -> None:
 def ensure_backend_dir() -> None:
     if not BACKEND_SRC.exists():
         typer.echo("⚠️  backend directory missing; expected apps/ade-api/src/ade_api", err=True)
-        raise typer.Exit(code=1)
-
-
-def ensure_compose_file() -> None:
-    """Ensure the Docker compose file exists in the expected location."""
-
-    if not COMPOSE_FILE.exists():
-        typer.echo(f"⚠️  docker compose file missing; expected {COMPOSE_FILE}", err=True)
         raise typer.Exit(code=1)
 
 

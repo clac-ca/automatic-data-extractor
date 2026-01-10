@@ -17,10 +17,7 @@ It:
 
 ```text
 automatic-data-extractor/
-├─ Dockerfile          # API image (FastAPI only)
-├─ Dockerfile.web      # Web image (Nginx serving apps/ade-web/dist + /api/v1 proxy)
-├─ docker/             # Nginx config for the web image
-├─ compose.yaml        # Local Docker stack (api + web + worker)
+├─ Dockerfile          # Full app image (API + worker + built web assets)
 ├─ .env.example        # Example environment configuration
 ├─ apps/
 │  ├─ ade-api/         # FastAPI backend (API only)
@@ -44,9 +41,8 @@ Everything ADE produces at runtime (documents, runs, venvs, caches, etc.) goes u
 
 * [Git](https://git-scm.com/downloads)
 * [Docker](https://docs.docker.com/get-docker/)
-* [Docker Compose](https://docs.docker.com/compose/install/) (often included in recent Docker Desktop installs)
 
-### 2.2 Run ADE with Docker Compose
+### 2.2 Build and run the Docker image
 
 ```bash
 # 1. Clone the repo
@@ -56,26 +52,25 @@ cd automatic-data-extractor
 # 2. Create local env file (edit as needed)
 cp .env.example .env
 
-# 3. Build and start the stack (web + api + worker)
-docker compose up --build
+# 3. Build the image
+docker build -t ade:local -f Dockerfile .
+
+# 4. Run the container (API + worker + web)
+mkdir -p data
+docker run --rm -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
 ```
 
 Then open:
 
 * **[http://localhost:8000](http://localhost:8000)**
 
-The compose stack runs the API via `ade start --no-worker --no-web`, which applies migrations on startup before serving requests.
+The container runs `ade start`, which applies migrations on startup and serves the built frontend.
 
-To stop the stack:
-
-```bash
-docker compose down
-```
-
-To start it again without rebuilding:
+To run detached and stop later:
 
 ```bash
-docker compose up -d
+docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
+docker rm -f ade
 ```
 
 ---
@@ -84,58 +79,28 @@ docker compose up -d
 
 When you change backend or frontend code and want a fresh container image:
 
-From the repo root:
-
 ```bash
-# Rebuild the image and recreate the container
-docker compose up --build
-```
-
-or, if the container is already running:
-
-```bash
-# Just rebuild the image
-docker compose build
-
-# Then restart the container
-docker compose up -d
-```
-
-If you want to rebuild by hand:
-
-```bash
-# Build images directly
-docker build -t ghcr.io/clac-ca/automatic-data-extractor-api:local -f Dockerfile .
-docker build -t ghcr.io/clac-ca/automatic-data-extractor-web:local -f Dockerfile.web .
-
-# Run the stack (use docker compose for the worker)
-docker compose up -d
+docker build -t ade:local -f Dockerfile .
+docker rm -f ade 2>/dev/null || true
+docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
 ```
 
 ---
 
 ## 4. Using the published image (no local build)
 
-If you don’t want to build from source, you can run published images from GHCR.
+If you don’t want to build from source, you can run a published image from GHCR (when available).
 
 ```bash
 # From inside the repo (for .env and ./data)
 cp .env.example .env
 mkdir -p data
 
-docker pull ghcr.io/clac-ca/automatic-data-extractor-api:latest
-docker pull ghcr.io/clac-ca/automatic-data-extractor-web:latest
-
-docker compose up -d
+docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
+docker run --rm -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
 Then go to **[http://localhost:8000](http://localhost:8000)**.
-
-To stop and remove the stack:
-
-```bash
-docker compose down
-```
 
 ---
 
