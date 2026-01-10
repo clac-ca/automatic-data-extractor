@@ -211,26 +211,6 @@ class RunsService:
             document_id=input_document_id,
         )
 
-        existing = self._runs.list_active_for_documents(
-            configuration_id=configuration.id,
-            document_ids=[input_document_id],
-        )
-        if existing:
-            run = existing[0]
-            configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-            self._session.flush()
-            logger.info(
-                "run.prepare.noop",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    input_document_id=input_document_id,
-                    status=run.status.value,
-                ),
-            )
-            return run
-
         selected_sheet_names = self._select_input_sheet_names(options)
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
         deps_digest = self._resolve_deps_digest(configuration)
