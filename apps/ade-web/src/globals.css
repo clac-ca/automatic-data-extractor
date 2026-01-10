@@ -60,7 +60,6 @@
   --overlay-strong: oklch(0 0 0 / 0.6);
 
   /* Layering */
-  --app-z-base: 0;
   --app-z-header: 30;
   --app-z-nav: 40;
   --app-z-overlay: 50;
@@ -74,6 +73,16 @@
   --app-shell-header-h: 3.5rem;
   --app-shell-control-h: 2.25rem;
   --app-shell-search-max-w: 42rem;
+
+  /* Monaco editor tokens (derived from theme palette) */
+  --code-editor-bg: var(--background);
+  --code-editor-fg: var(--foreground);
+  --code-editor-cursor: var(--primary);
+  --code-editor-line-highlight: var(--muted);
+  --code-editor-line-number: var(--muted-foreground);
+  --code-editor-selection: var(--accent);
+  --code-editor-selection-inactive: var(--muted);
+  --code-editor-gutter: var(--card);
 
   /* charts */
   --chart-1: oklch(0.5462 0.25 264.376);

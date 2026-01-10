@@ -32,14 +32,14 @@ const ADE_DARK_THEME_FALLBACKS: Record<string, string> = {
 };
 
 const ADE_DARK_THEME_CSS_VARS: Record<string, string> = {
-  "editor.background": "--comp-editor-bg",
-  "editor.foreground": "--comp-editor-fg",
-  "editorCursor.foreground": "--comp-editor-cursor",
-  "editor.lineHighlightBackground": "--comp-editor-line-highlight",
-  "editorLineNumber.foreground": "--comp-editor-line-number",
-  "editor.selectionBackground": "--comp-editor-selection",
-  "editor.inactiveSelectionBackground": "--comp-editor-selection-inactive",
-  "editorGutter.background": "--comp-editor-gutter",
+  "editor.background": "--code-editor-bg",
+  "editor.foreground": "--code-editor-fg",
+  "editorCursor.foreground": "--code-editor-cursor",
+  "editor.lineHighlightBackground": "--code-editor-line-highlight",
+  "editorLineNumber.foreground": "--code-editor-line-number",
+  "editor.selectionBackground": "--code-editor-selection",
+  "editor.inactiveSelectionBackground": "--code-editor-selection-inactive",
+  "editorGutter.background": "--code-editor-gutter",
 };
 
 const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function MonacoCodeEditor(
@@ -176,6 +176,28 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
     monacoInstance.editor.defineTheme(ADE_DARK_THEME_ID, buildAdeDarkTheme());
   }, [theme]);
 
+  useEffect(() => {
+    if (theme !== ADE_DARK_THEME_ID) {
+      return;
+    }
+    if (typeof MutationObserver === "undefined" || typeof document === "undefined") {
+      return;
+    }
+    const root = document.documentElement;
+    if (!root) {
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      const monacoInstance = monacoRef.current;
+      if (!monacoInstance) {
+        return;
+      }
+      monacoInstance.editor.defineTheme(ADE_DARK_THEME_ID, buildAdeDarkTheme());
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    return () => observer.disconnect();
+  }, [theme]);
+
   return (
     <div ref={containerRef} className={clsx("relative h-full w-full min-w-0 overflow-hidden", className)}>
       <Editor
@@ -274,18 +296,50 @@ function resolveCssColor(variable: string, fallback: string): string {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return fallback;
   }
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
-  if (!raw) {
+  const resolved = resolveCssVarColor(variable, fallback);
+  const rgb = parseRgbColor(resolved);
+  if (!rgb) {
     return fallback;
   }
-  const parts = raw
-    .split(/[\s,]+/)
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value));
-  if (parts.length < 3) {
+  return rgbToHex(rgb[0], rgb[1], rgb[2]);
+}
+
+function resolveCssVarColor(variable: string, fallback: string): string {
+  const root = document.documentElement;
+  if (!root) {
     return fallback;
   }
-  return rgbToHex(parts[0], parts[1], parts[2]);
+  const probe = document.createElement("span");
+  probe.style.color = `var(${variable}, ${fallback})`;
+  probe.style.position = "absolute";
+  probe.style.opacity = "0";
+  probe.style.pointerEvents = "none";
+  probe.style.userSelect = "none";
+  root.appendChild(probe);
+  try {
+    const computed = getComputedStyle(probe).color.trim();
+    return computed || fallback;
+  } finally {
+    root.removeChild(probe);
+  }
+}
+
+function parseRgbColor(value: string): [number, number, number] | null {
+  const matches = value.match(/-?\d*\.?\d+/g);
+  if (!matches || matches.length < 3) {
+    return null;
+  }
+  const numbers = matches.slice(0, 3).map((part) => Number(part));
+  if (numbers.some((num) => Number.isNaN(num))) {
+    return null;
+  }
+  let [red, green, blue] = numbers;
+  if (Math.max(red, green, blue) <= 1) {
+    red *= 255;
+    green *= 255;
+    blue *= 255;
+  }
+  return [red, green, blue];
 }
 
 function rgbToHex(red: number, green: number, blue: number): string {
