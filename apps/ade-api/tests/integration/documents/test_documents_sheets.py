@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 async def test_list_document_sheets_ignores_cached_metadata_when_missing(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     """Missing files should not fall back to cached worksheet metadata."""
 
@@ -45,8 +45,8 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=utc_now(),
     )
-    session.add(document)
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add(document)
+    await anyio.to_thread.run_sync(db_session.commit)
 
     listing = await async_client.get(
         f"{workspace_base}/documents/{document.id}/sheets",

@@ -16,7 +16,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import make_url
 
-from .database import DatabaseSettings
+from ade_api.settings import Settings, get_settings
 
 __all__ = [
     "run_migrations",
@@ -48,21 +48,23 @@ def migration_timeout_seconds(value: Any | None = None) -> float | None:
     return timeout
 
 
-def run_migrations(settings: DatabaseSettings | None = None, *, revision: str = "head") -> None:
+def run_migrations(settings: Settings | None = None, *, revision: str = "head") -> None:
     alembic_ini = default_alembic_ini_path()
     if not alembic_ini.exists():
         raise FileNotFoundError(f"Alembic config not found at {alembic_ini}")
 
     alembic_cfg = Config(str(alembic_ini))
     alembic_cfg.set_main_option("script_location", str(alembic_ini.parent / "migrations"))
-    resolved = settings or DatabaseSettings.from_env()
-    _ensure_sqlite_parent_dir(resolved.url)
-    alembic_cfg.set_main_option("sqlalchemy.url", resolved.url)
+    resolved = settings or get_settings()
+    if not resolved.database_url:
+        raise ValueError("Settings.database_url is required.")
+    _ensure_sqlite_parent_dir(resolved.database_url)
+    alembic_cfg.set_main_option("sqlalchemy.url", resolved.database_url)
     command.upgrade(alembic_cfg, revision)
 
 
 async def run_migrations_async(
-    settings: DatabaseSettings | None = None,
+    settings: Settings | None = None,
     *,
     revision: str = "head",
     timeout_seconds: float | None = None,

@@ -19,10 +19,10 @@ from tests.integration.documents.helpers import (
 pytestmark = pytest.mark.asyncio
 
 
-async def test_list_documents_applies_filters_and_sorting(session, settings) -> None:
-    workspace, _, _, processed, uploaded = await build_documents_fixture(session)
+async def test_list_documents_applies_filters_and_sorting(db_session, settings) -> None:
+    workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
 
     filters = [
         FilterItem(
@@ -74,10 +74,10 @@ async def test_list_documents_applies_filters_and_sorting(session, settings) -> 
     assert [item.id for item in name_sorted.items] == [processed.id, uploaded.id]
 
 
-async def test_activity_at_filters_within_range(session, settings) -> None:
-    workspace, _, _, processed, uploaded = await build_documents_fixture(session)
+async def test_activity_at_filters_within_range(db_session, settings) -> None:
+    workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
 
     now = datetime.now(tz=UTC)
     filters = [
@@ -108,10 +108,10 @@ async def test_activity_at_filters_within_range(session, settings) -> None:
     assert processed.id in returned_ids
 
 
-async def test_sorting_last_run_places_nulls_last(session, settings) -> None:
-    workspace, _, _, processed, uploaded = await build_documents_fixture(session)
+async def test_sorting_last_run_places_nulls_last(db_session, settings) -> None:
+    workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
 
     order_by_last_run = resolve_sort(
         ["-latestRunAt"],
@@ -132,16 +132,16 @@ async def test_sorting_last_run_places_nulls_last(session, settings) -> None:
     assert [item.id for item in result.items] == [processed.id, uploaded.id]
 
 
-async def test_list_documents_includes_last_run_message(session, settings) -> None:
-    workspace, uploader, colleague, processed, uploaded = await build_documents_fixture(session)
+async def test_list_documents_includes_last_run_message(db_session, settings) -> None:
+    workspace, uploader, colleague, processed, uploaded = await build_documents_fixture(db_session)
     run = await seed_failed_run(
-        session,
+        db_session,
         workspace_id=workspace.id,
         document_id=processed.id,
         uploader_id=uploader.id,
     )
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
     order_by = resolve_sort(
         [],
         allowed=SORT_FIELDS,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 from sqlalchemy import create_engine, insert, select, text
+from sqlalchemy.orm import sessionmaker
 
 from ade_worker.gc import gc_environments
 from ade_worker.paths import PathManager
@@ -117,6 +118,7 @@ def _engine() -> object:
 
 def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
@@ -150,7 +152,7 @@ def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
         env_id="env-1",
     )
 
-    result = gc_environments(engine=engine, paths=paths, now=now, env_ttl_days=1)
+    result = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
 
     assert result.deleted == 0
     assert env_path.exists()
@@ -161,6 +163,7 @@ def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
 
 def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
@@ -184,7 +187,7 @@ def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
         env_id="env-2",
     )
 
-    result = gc_environments(engine=engine, paths=paths, now=now, env_ttl_days=30)
+    result = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=30)
 
     assert result.deleted == 1
     assert not env_path.exists()
@@ -195,6 +198,7 @@ def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
 
 def test_gc_env_idempotent(tmp_path: Path) -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
@@ -218,8 +222,8 @@ def test_gc_env_idempotent(tmp_path: Path) -> None:
         env_id="env-3",
     )
 
-    first = gc_environments(engine=engine, paths=paths, now=now, env_ttl_days=1)
-    second = gc_environments(engine=engine, paths=paths, now=now, env_ttl_days=1)
+    first = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
+    second = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
 
     assert first.deleted == 1
     assert second.deleted == 0

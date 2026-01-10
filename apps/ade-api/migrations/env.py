@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
-from dataclasses import replace
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy.engine import make_url
 
-from ade_api.db import Base, DatabaseSettings, build_engine
+from ade_api.db import Base, build_engine
+from ade_api.settings import Settings
 
 # Alembic Config object
 config = context.config
@@ -39,18 +39,17 @@ def _get_url_override() -> str | None:
     if override:
         return override
 
-    # 3) fall back to ADE_DATABASE_URL via DatabaseSettings.from_env()
+    # 3) fall back to ADE_DATABASE_URL via Settings
     return None
 
 
-def _build_settings(url_override: str | None) -> DatabaseSettings:
-    settings = DatabaseSettings.from_env()
+def _build_settings(url_override: str | None) -> Settings:
     if url_override:
-        settings = replace(settings, url=url_override)
-    return settings
+        return Settings(database_url=url_override)
+    return Settings()
 
 
-def _normalized_url(settings: DatabaseSettings) -> str:
+def _normalized_url(settings: Settings) -> str:
     engine = build_engine(settings)
     try:
         return engine.url.render_as_string(hide_password=False)

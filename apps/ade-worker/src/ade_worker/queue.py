@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from typing import Callable
 
 from sqlalchemy import text
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 # --- SQL snippets ---
 
@@ -269,8 +270,9 @@ def _row_to_run_claim(row: dict[str, object]) -> RunClaim:
 
 
 class EnvironmentQueue:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: Engine, SessionLocal: sessionmaker[Session]) -> None:
         self._engine = engine
+        self._SessionLocal = SessionLocal
 
     @property
     def dialect(self) -> str:
@@ -285,19 +287,19 @@ class EnvironmentQueue:
         }
 
         if self.dialect == "sqlite":
-            with self._engine.connect() as conn:
+            with self._SessionLocal() as session:
                 try:
-                    conn.exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
-                    row = conn.execute(text(SQLITE_CLAIM_ENVIRONMENT), params).mappings().first()
-                    conn.commit()
+                    session.connection().exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
+                    row = session.execute(text(SQLITE_CLAIM_ENVIRONMENT), params).mappings().first()
+                    session.commit()
                 except Exception:
-                    conn.rollback()
+                    session.rollback()
                     raise
             return EnvironmentClaim(id=str(row["id"])) if row else None
 
         if self.dialect == "mssql":
-            with self._engine.begin() as conn:
-                row = conn.execute(text(MSSQL_CLAIM_ENVIRONMENT), params).mappings().first()
+            with self._SessionLocal.begin() as session:
+                row = session.execute(text(MSSQL_CLAIM_ENVIRONMENT), params).mappings().first()
             return EnvironmentClaim(id=str(row["id"])) if row else None
 
         raise ValueError(f"Unsupported dialect: {self.dialect}")
@@ -305,7 +307,7 @@ class EnvironmentQueue:
     def heartbeat(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         env_id: str,
         worker_id: str,
         now: datetime,
@@ -318,35 +320,35 @@ class EnvironmentQueue:
             "worker_id": worker_id,
             "lease_expires_at": lease_expires_at,
         }
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def ack_success(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         env_id: str,
         worker_id: str,
         now: datetime,
     ) -> bool:
         stmt = text(ENVIRONMENT_ACK_SUCCESS)
         params = {"env_id": env_id, "worker_id": worker_id, "now": now}
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def ack_failure(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         env_id: str,
         worker_id: str,
         now: datetime,
@@ -359,17 +361,17 @@ class EnvironmentQueue:
             "now": now,
             "error_message": error_message,
         }
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def release_for_env(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         run_id: str,
         worker_id: str,
         retry_at: datetime,
@@ -382,27 +384,37 @@ class EnvironmentQueue:
             "retry_at": retry_at,
             "error_message": error_message,
         }
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def expire_stuck(self, *, now: datetime) -> int:
         processed = 0
-        with self._engine.begin() as conn:
-            rows = conn.execute(text(ENVIRONMENT_SELECT_EXPIRED), {"now": now}).mappings().all()
+        with self._SessionLocal.begin() as session:
+            rows = session.execute(text(ENVIRONMENT_SELECT_EXPIRED), {"now": now}).mappings().all()
             for row in rows:
                 processed += 1
                 env_id = str(row["id"])
-                conn.execute(text(ENVIRONMENT_EXPIRE_REQUEUE), {"env_id": env_id, "now": now})
+                session.execute(
+                    text(ENVIRONMENT_EXPIRE_REQUEUE),
+                    {"env_id": env_id, "now": now},
+                )
         return processed
 
 
 class RunQueue:
-    def __init__(self, engine: Engine, *, backoff: Callable[[int], int]) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        SessionLocal: sessionmaker[Session],
+        *,
+        backoff: Callable[[int], int],
+    ) -> None:
         self._engine = engine
+        self._SessionLocal = SessionLocal
         self._backoff = backoff
 
     @property
@@ -419,19 +431,19 @@ class RunQueue:
         }
 
         if self.dialect == "sqlite":
-            with self._engine.connect() as conn:
+            with self._SessionLocal() as session:
                 try:
-                    conn.exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
-                    row = conn.execute(text(SQLITE_CLAIM_RUN), params).mappings().first()
-                    conn.commit()
+                    session.connection().exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
+                    row = session.execute(text(SQLITE_CLAIM_RUN), params).mappings().first()
+                    session.commit()
                 except Exception:
-                    conn.rollback()
+                    session.rollback()
                     raise
             return _row_to_run_claim(row) if row else None
 
         if self.dialect == "mssql":
-            with self._engine.begin() as conn:
-                row = conn.execute(text(MSSQL_CLAIM_RUN), params).mappings().first()
+            with self._SessionLocal.begin() as session:
+                row = session.execute(text(MSSQL_CLAIM_RUN), params).mappings().first()
             return _row_to_run_claim(row) if row else None
 
         raise ValueError(f"Unsupported dialect: {self.dialect}")
@@ -439,7 +451,7 @@ class RunQueue:
     def heartbeat(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         run_id: str,
         worker_id: str,
         now: datetime,
@@ -452,35 +464,35 @@ class RunQueue:
             "worker_id": worker_id,
             "lease_expires_at": lease_expires_at,
         }
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def ack_success(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         run_id: str,
         worker_id: str,
         now: datetime,
     ) -> bool:
         stmt = text(RUN_ACK_SUCCESS)
         params = {"run_id": run_id, "worker_id": worker_id, "now": now}
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def ack_failure(
         self,
         *,
-        conn: Connection | None = None,
+        session: Session | None = None,
         run_id: str,
         worker_id: str,
         now: datetime,
@@ -504,19 +516,19 @@ class RunQueue:
                 "retry_at": retry_at,
             }
 
-        if conn is not None:
-            result = conn.execute(stmt, params)
+        if session is not None:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
-        with self._engine.begin() as tx:
-            result = tx.execute(stmt, params)
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
     def expire_stuck(self, *, now: datetime) -> int:
         """Requeue/terminal-fail expired running runs."""
         processed = 0
-        with self._engine.begin() as conn:
-            rows = conn.execute(text(RUN_SELECT_EXPIRED), {"now": now}).mappings().all()
+        with self._SessionLocal.begin() as session:
+            rows = session.execute(text(RUN_SELECT_EXPIRED), {"now": now}).mappings().all()
             for row in rows:
                 processed += 1
                 run_id = str(row["id"])
@@ -524,10 +536,13 @@ class RunQueue:
                 max_attempts = int(row.get("max_attempts") or 0)
 
                 if attempt_count >= max_attempts:
-                    conn.execute(text(RUN_EXPIRE_TERMINAL), {"run_id": run_id, "now": now})
+                    session.execute(
+                        text(RUN_EXPIRE_TERMINAL),
+                        {"run_id": run_id, "now": now},
+                    )
                 else:
                     delay = int(self._backoff(attempt_count))
-                    conn.execute(
+                    session.execute(
                         text(RUN_EXPIRE_REQUEUE),
                         {"run_id": run_id, "retry_at": now + timedelta(seconds=delay)},
                     )

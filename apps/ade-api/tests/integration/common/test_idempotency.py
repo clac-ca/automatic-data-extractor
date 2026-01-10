@@ -16,7 +16,7 @@ pytestmark = pytest.mark.asyncio
 async def test_idempotency_replays_and_conflicts(
     async_client,
     seed_identity,
-    session,
+    db_session,
     settings,
 ) -> None:
     workspace_id = seed_identity.workspace_id
@@ -24,16 +24,16 @@ async def test_idempotency_replays_and_conflicts(
         workspace_id=workspace_id,
         name="Idempotency Config",
     )
-    session.add(configuration)
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     config_dir = workspace_config_root(settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
 
     document_one = make_document(workspace_id=workspace_id, filename="idempotency-one.csv")
     document_two = make_document(workspace_id=workspace_id, filename="idempotency-two.csv")
-    session.add_all([document_one, document_two])
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add_all([document_one, document_two])
+    await anyio.to_thread.run_sync(db_session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     idempotency_key = f"idem-{uuid4().hex}"
@@ -60,7 +60,7 @@ async def test_idempotency_replays_and_conflicts(
     assert response_two.json()["id"] == run_id
 
     def _load_runs():
-        result = session.execute(
+        result = db_session.execute(
             select(Run).where(
                 Run.configuration_id == configuration.id,
                 Run.input_document_id == document_one.id,

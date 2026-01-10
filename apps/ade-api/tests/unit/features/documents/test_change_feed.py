@@ -1,9 +1,40 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import uuid4
 
 from ade_api.common.time import utc_now
 from ade_api.features.documents.change_feed import DocumentEventsService
+from ade_api.models import Document, DocumentSource, DocumentStatus, Workspace
+
+
+def _seed_workspace(session, workspace_id):
+    workspace = Workspace(
+        id=workspace_id,
+        name="Test Workspace",
+        slug=f"ws-{workspace_id.hex[:8]}",
+    )
+    session.add(workspace)
+    session.flush()
+
+
+def _seed_document(session, workspace_id, document_id, now):
+    document = Document(
+        id=document_id,
+        workspace_id=workspace_id,
+        original_filename="example.txt",
+        content_type="text/plain",
+        byte_size=1,
+        sha256="0" * 64,
+        stored_uri=f"{document_id}.bin",
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=now + timedelta(days=1),
+        last_run_at=None,
+    )
+    session.add(document)
+    session.flush()
 
 
 def test_change_feed_appends_in_order(session, settings) -> None:
@@ -13,6 +44,10 @@ def test_change_feed_appends_in_order(session, settings) -> None:
 
     first_id = uuid4()
     second_id = uuid4()
+
+    _seed_workspace(session, workspace_id)
+    _seed_document(session, workspace_id, first_id, now)
+    _seed_document(session, workspace_id, second_id, now)
 
     service.record_changed(
         workspace_id=workspace_id,
@@ -49,6 +84,11 @@ def test_fetch_changes_after_respects_cursor_and_limit(session, settings) -> Non
     first_id = uuid4()
     second_id = uuid4()
     third_id = uuid4()
+
+    _seed_workspace(session, workspace_id)
+    _seed_document(session, workspace_id, first_id, now)
+    _seed_document(session, workspace_id, second_id, now)
+    _seed_document(session, workspace_id, third_id, now)
 
     service.record_changed(
         workspace_id=workspace_id,

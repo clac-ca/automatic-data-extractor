@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-import os
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -10,13 +9,14 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from asgi_lifespan import LifespanManager
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
-from ade_api.db import DatabaseSettings, build_engine, get_db
+from ade_api.db import build_engine, get_db, get_sessionmaker
 from ade_api.db.migrations import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
@@ -52,11 +52,12 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     data_dir = root / "data"
 
     database_path = data_dir / "db" / "api.sqlite"
+    database_path.parent.mkdir(parents=True, exist_ok=True)
     workspaces_dir = data_dir / "workspaces"
 
-    os.environ["ADE_DATABASE_URL"] = f"sqlite:///{database_path}"
-
     settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{database_path.as_posix()}",
         workspaces_dir=workspaces_dir,
         documents_dir=workspaces_dir,
         configs_dir=workspaces_dir,
@@ -79,7 +80,7 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
 
 @pytest.fixture()
 def settings(base_settings: Settings) -> Settings:
-    return base_settings.model_copy(deep=True)
+    return base_settings.model_copy()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -94,28 +95,11 @@ def _fast_hash_env() -> Iterator[None]:
 def _reset_auth_caches() -> None:
     reset_auth_state()
 
-def _build_db_settings(settings: Settings) -> DatabaseSettings:
-    return DatabaseSettings(
-        url=settings.database_url,
-        echo=settings.database_echo,
-        auth_mode=settings.database_auth_mode,
-        managed_identity_client_id=settings.database_mi_client_id,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_timeout=settings.database_pool_timeout,
-        pool_recycle=settings.database_pool_recycle,
-        sqlite_journal_mode=settings.database_sqlite_journal_mode,
-        sqlite_synchronous=settings.database_sqlite_synchronous,
-        sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
-        sqlite_begin_mode=settings.database_sqlite_begin_mode,
-    )
 
-
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def migrated_db(base_settings: Settings) -> Iterator[Engine]:
-    db_settings = _build_db_settings(base_settings)
-    run_migrations(db_settings)
-    engine = build_engine(db_settings)
+    run_migrations(base_settings)
+    engine = build_engine(base_settings)
 
     with Session(engine) as session:
         service = RbacService(session=session)
@@ -161,18 +145,17 @@ def db_session(db_sessionmaker) -> Iterator[Session]:
 
 
 @pytest.fixture()
-def session(db_session: Session) -> Session:
-    return db_session
-
-
-@pytest.fixture()
 def app(
     settings: Settings,
     db_sessionmaker,
+    migrated_db,
 ) -> FastAPI:
     app = create_app(settings=settings)
 
-    app.dependency_overrides[get_settings] = lambda: cast(Settings, app.state.settings)
+    settings_ref = {"value": settings}
+    app.state.settings_ref = settings_ref
+    app.state.settings = settings_ref["value"]
+    app.dependency_overrides[get_settings] = lambda: settings_ref["value"]
 
     def _get_db_override():
         session = db_sessionmaker()
@@ -186,22 +169,27 @@ def app(
             session.close()
 
     app.dependency_overrides[get_db] = _get_db_override
+    app.dependency_overrides[get_sessionmaker] = lambda: db_sessionmaker
 
     return app
 
 
 @pytest_asyncio.fixture()
-async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client
+async def async_client(app: FastAPI, db_sessionmaker) -> AsyncIterator[AsyncClient]:
+    async with LifespanManager(app):
+        app.state.db_sessionmaker = db_sessionmaker
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client
 
 
 @pytest.fixture()
 def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
     def _apply(**updates: Any) -> Settings:
-        current = cast(Settings, app.state.settings)
+        settings_ref = app.state.settings_ref
+        current = settings_ref["value"]
         updated = current.model_copy(update=updates)
+        settings_ref["value"] = updated
         app.state.settings = updated
         app.state.safe_mode = bool(updated.safe_mode)
         ensure_runtime_dirs(updated)

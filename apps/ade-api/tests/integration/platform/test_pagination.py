@@ -8,17 +8,17 @@ from ade_api.common.listing import paginate_query
 from ade_api.models import Workspace
 
 
-def test_paginate_returns_canonical_envelope(session) -> None:
+def test_paginate_returns_canonical_envelope(db_session) -> None:
     suffix = uuid.uuid4().hex[:8]
     records = [
         Workspace(name=f"Workspace {index}", slug=f"pagination-{suffix}-{index}") for index in range(3)
     ]
-    session.add_all(records)
-    session.commit()
+    db_session.add_all(records)
+    db_session.commit()
 
     query = select(Workspace).where(Workspace.slug.like(f"pagination-{suffix}-%"))
     page = paginate_query(
-        session,
+        db_session,
         query,
         page=1,
         per_page=2,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from sqlalchemy import create_engine, insert, select, update
+from sqlalchemy.orm import sessionmaker
 
 from ade_worker.queue import EnvironmentQueue, RunQueue
 from ade_worker.schema import environments, metadata, runs
@@ -93,6 +94,7 @@ def _insert_run(
 
 def test_run_claim_requires_ready_environment() -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_environment(
@@ -116,7 +118,7 @@ def test_run_claim_requires_ready_environment() -> None:
         now=now,
     )
 
-    queue = RunQueue(engine, backoff=lambda _attempts: 0)
+    queue = RunQueue(engine, SessionLocal, backoff=lambda _attempts: 0)
     claim = queue.claim_next(worker_id="worker-1", now=now, lease_seconds=60)
     assert claim is None
 
@@ -145,6 +147,7 @@ def test_run_claim_requires_ready_environment() -> None:
 
 def test_run_lease_expire_requeues() -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     expired_at = now - timedelta(minutes=5)
 
@@ -162,7 +165,7 @@ def test_run_lease_expire_requeues() -> None:
         claim_expires_at=expired_at,
     )
 
-    queue = RunQueue(engine, backoff=lambda _attempts: 5)
+    queue = RunQueue(engine, SessionLocal, backoff=lambda _attempts: 5)
     processed = queue.expire_stuck(now=now)
     assert processed == 1
 
@@ -188,6 +191,7 @@ def test_run_lease_expire_requeues() -> None:
 
 def test_environment_claim_sets_building() -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_environment(
@@ -201,7 +205,7 @@ def test_environment_claim_sets_building() -> None:
         now=now,
     )
 
-    queue = EnvironmentQueue(engine)
+    queue = EnvironmentQueue(engine, SessionLocal)
     claim = queue.claim_next(worker_id="worker-2", now=now, lease_seconds=120)
     assert claim is not None
     assert claim.id == "env-2"
@@ -218,6 +222,7 @@ def test_environment_claim_sets_building() -> None:
 
 def test_environment_ack_success_clears_claim() -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_environment(
@@ -233,7 +238,7 @@ def test_environment_ack_success_clears_claim() -> None:
         claim_expires_at=now + timedelta(minutes=5),
     )
 
-    queue = EnvironmentQueue(engine)
+    queue = EnvironmentQueue(engine, SessionLocal)
     ok = queue.ack_success(env_id="env-ack", worker_id="worker-3", now=now)
     assert ok is True
 
@@ -253,6 +258,7 @@ def test_environment_ack_success_clears_claim() -> None:
 
 def test_run_ack_failure_requeues() -> None:
     engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     retry_at = now + timedelta(minutes=2)
 
@@ -271,7 +277,7 @@ def test_run_ack_failure_requeues() -> None:
         claimed_by="worker-4",
     )
 
-    queue = RunQueue(engine, backoff=lambda _attempts: 0)
+    queue = RunQueue(engine, SessionLocal, backoff=lambda _attempts: 0)
     ok = queue.ack_failure(
         run_id="run-fail",
         worker_id="worker-4",

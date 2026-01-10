@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from fastapi import Depends, HTTPException
 from httpx import ASGITransport, AsyncClient
+from asgi_lifespan import LifespanManager
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from ade_api.db import get_db
 @pytest.mark.asyncio
 async def test_session_dependency_commits_and_populates_context(
     db_connection,
+    db_sessionmaker,
     settings,
     seed_identity,
 ):
@@ -32,7 +34,21 @@ async def test_session_dependency_commits_and_populates_context(
 
     app = create_app(settings=settings)
 
-    app.dependency_overrides[get_settings] = lambda: app.state.settings
+    app.state.settings = settings
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    def _get_db_override():
+        session = db_sessionmaker()
+        try:
+            yield session
+            session.commit()
+        except BaseException:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _get_db_override
 
     @app.post(route_path)
     def _create_config(
@@ -80,11 +96,13 @@ async def test_session_dependency_commits_and_populates_context(
         )
         return {"session_attached": True, "configuration_id": configuration_id}
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post(route_path)
-        response.raise_for_status()
-        data = response.json()
+    async with LifespanManager(app):
+        app.state.db_sessionmaker = db_sessionmaker
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(route_path)
+            response.raise_for_status()
+            data = response.json()
 
     configuration_id = data["configuration_id"]
     assert data["session_attached"] is True
@@ -99,6 +117,7 @@ async def test_session_dependency_commits_and_populates_context(
 @pytest.mark.asyncio
 async def test_session_dependency_rolls_back_on_error(
     db_connection,
+    db_sessionmaker,
     settings,
     seed_identity,
 ) -> None:
@@ -112,7 +131,21 @@ async def test_session_dependency_rolls_back_on_error(
     from ade_api.settings import get_settings
 
     app = create_app(settings=settings)
-    app.dependency_overrides[get_settings] = lambda: app.state.settings
+    app.state.settings = settings
+    app.dependency_overrides[get_settings] = lambda: settings
+
+    def _get_db_override():
+        session = db_sessionmaker()
+        try:
+            yield session
+            session.commit()
+        except BaseException:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _get_db_override
 
     @app.post(route_path)
     def _create_config(
@@ -158,10 +191,12 @@ async def test_session_dependency_rolls_back_on_error(
         )
         raise HTTPException(status_code=500, detail="boom")
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post(route_path)
-        assert response.status_code == 500
+    async with LifespanManager(app):
+        app.state.db_sessionmaker = db_sessionmaker
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(route_path)
+            assert response.status_code == 500
 
     result = db_connection.execute(
         text("SELECT COUNT(1) FROM configurations WHERE workspace_id = :workspace_id"),

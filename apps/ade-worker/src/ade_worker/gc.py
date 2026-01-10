@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import delete, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from .paths import PathManager
 from .schema import environments, runs
@@ -24,7 +25,13 @@ class GcResult:
     failed: int = 0
 
 
-def gc_environments(*, engine, paths: PathManager, now: datetime, env_ttl_days: int) -> GcResult:
+def gc_environments(
+    *,
+    SessionLocal: sessionmaker[Session],
+    paths: PathManager,
+    now: datetime,
+    env_ttl_days: int,
+) -> GcResult:
     result = GcResult()
     ttl_days = int(env_ttl_days)
     if ttl_days <= 0:
@@ -64,8 +71,8 @@ def gc_environments(*, engine, paths: PathManager, now: datetime, env_ttl_days: 
         """
     )
 
-    with engine.connect() as conn:
-        rows = conn.execute(query, {"cutoff": cutoff, "now": now}).mappings().all()
+    with SessionLocal() as session:
+        rows = session.execute(query, {"cutoff": cutoff, "now": now}).mappings().all()
 
     result.scanned = len(rows)
     for row in rows:
@@ -85,8 +92,8 @@ def gc_environments(*, engine, paths: PathManager, now: datetime, env_ttl_days: 
             result.failed += 1
             continue
 
-        with engine.begin() as conn:
-            deleted = conn.execute(
+        with SessionLocal.begin() as session:
+            deleted = session.execute(
                 delete(environments).where(environments.c.id == env_id)
             ).rowcount or 0
         if deleted:
@@ -107,7 +114,13 @@ def gc_environments(*, engine, paths: PathManager, now: datetime, env_ttl_days: 
     return result
 
 
-def gc_run_artifacts(*, engine, paths: PathManager, now: datetime, run_ttl_days: int) -> GcResult:
+def gc_run_artifacts(
+    *,
+    SessionLocal: sessionmaker[Session],
+    paths: PathManager,
+    now: datetime,
+    run_ttl_days: int,
+) -> GcResult:
     result = GcResult()
     ttl_days = int(run_ttl_days)
     if ttl_days <= 0:
@@ -124,8 +137,8 @@ def gc_run_artifacts(*, engine, paths: PathManager, now: datetime, run_ttl_days:
         """
     )
 
-    with engine.connect() as conn:
-        rows = conn.execute(query, {"cutoff": cutoff}).mappings().all()
+    with SessionLocal() as session:
+        rows = session.execute(query, {"cutoff": cutoff}).mappings().all()
 
     result.scanned = len(rows)
     for row in rows:

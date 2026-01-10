@@ -14,7 +14,7 @@ from ade_api.settings import DEFAULT_VENVS_DIR, Settings
 
 def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ADE_VENVS_DIR", raising=False)
-    settings = Settings(workspaces_dir=tmp_path / "workspaces")
+    settings = Settings(_env_file=None, workspaces_dir=tmp_path / "workspaces")
 
     workspace_id = "acme-ws"
     config_id = "cfg-01"
@@ -38,6 +38,7 @@ def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
     settings = Settings(
+        _env_file=None,
         workspaces_dir=tmp_path / "workspaces",
         documents_dir=tmp_path / "docs-override",
         configs_dir=tmp_path / "configs-override",

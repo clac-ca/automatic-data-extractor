@@ -17,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 async def test_publish_configuration_sets_active_and_digest(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     workspace_id = seed_identity.workspace_id
     owner = seed_identity.workspace_owner
@@ -44,7 +44,7 @@ async def test_publish_configuration_sets_active_and_digest(
     )
 
     def _load_config():
-        return session.execute(stmt).scalar_one()
+        return db_session.execute(stmt).scalar_one()
 
     config = await anyio.to_thread.run_sync(_load_config)
     assert config.status == "active"
@@ -54,7 +54,7 @@ async def test_publish_configuration_sets_active_and_digest(
 async def test_publish_archives_previous_active(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     workspace_id = seed_identity.workspace_id
     owner = seed_identity.workspace_owner
@@ -79,7 +79,7 @@ async def test_publish_archives_previous_active(
     stmt = select(Configuration).where(Configuration.workspace_id == workspace_id)
 
     def _load_configs():
-        result = session.execute(stmt)
+        result = db_session.execute(stmt)
         return {str(row.id): row for row in result.scalars()}
 
     configs = await anyio.to_thread.run_sync(_load_configs)

@@ -1,50 +1,27 @@
 """
-database.py
+ade_worker.db.database
 
-Standard SQLAlchemy engine + session setup for FastAPI.
+SQLAlchemy engine + session helpers for the worker.
 
 Rules:
-- Settings are defined ONLY in ade_api.settings.Settings (Pydantic).
+- Settings are defined ONLY in ade_worker.settings.Settings (Pydantic).
 - This module does NOT read env vars directly.
 - Supports SQLite (dev) and SQL Server/Azure SQL (prod).
 """
 
 from __future__ import annotations
 
-import logging
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
+from typing import Iterable, Iterator
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket
-from fastapi.exceptions import RequestValidationError
-from sqlalchemy import MetaData, create_engine, event
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine, URL, make_url
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
 
-from ade_api.settings import Settings, get_settings
+from ade_worker.settings import Settings, get_settings
 from .azure_sql_auth import attach_azure_sql_managed_identity
-
-
-# --- Naming convention (helps Alembic + keeps constraints consistent) --------
-NAMING_CONVENTION = {
-    "ix": "ix_%(table_name)s_%(column_0_name)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s",
-}
-
-metadata = MetaData(naming_convention=NAMING_CONVENTION)
-
-logger = logging.getLogger(__name__)
-
-
-class Base(DeclarativeBase):
-    metadata = metadata
-
-
-# --- Internal helpers -------------------------------------------------------
 
 
 def _is_sqlite_memory(url: URL) -> bool:
@@ -156,79 +133,36 @@ def build_engine(settings: Settings | None = None) -> Engine:
         return _create_sqlite_engine(url, settings)
     if backend == "mssql":
         return _create_mssql_engine(url, settings)
-
     raise ValueError("Unsupported database backend. Use sqlite:// or mssql+pyodbc://.")
 
 
-# --- FastAPI integration ----------------------------------------------------
+def build_sessionmaker(engine: Engine) -> sessionmaker[Session]:
+    return sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def _resolve_app(app_or_request: FastAPI | Request | WebSocket) -> FastAPI:
-    if isinstance(app_or_request, FastAPI):
-        return app_or_request
-    return app_or_request.app
-
-
-def init_db(app: FastAPI, settings: Settings | None = None) -> None:
-    settings = settings or get_settings()
-
-    engine = build_engine(settings)
-    existing_engine = getattr(app.state, "db_engine", None)
-    if existing_engine is not None:
-        existing_engine.dispose()
-
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    app.state.db_engine = engine
-    app.state.db_sessionmaker = SessionLocal
-
-
-def shutdown_db(app: FastAPI) -> None:
-    engine = getattr(app.state, "db_engine", None)
-    if engine is not None:
-        engine.dispose()
-    app.state.db_engine = None
-    app.state.db_sessionmaker = None
-
-
-def get_engine(app_or_request: FastAPI | Request | WebSocket) -> Engine:
-    app = _resolve_app(app_or_request)
-    engine = getattr(app.state, "db_engine", None)
-    if engine is None:
-        raise RuntimeError("Database not initialized. Call init_db(app, ...) at startup.")
-    return engine
-
-
-def get_sessionmaker_from_app(
-    app_or_request: FastAPI | Request | WebSocket,
-) -> sessionmaker[Session]:
-    app = _resolve_app(app_or_request)
-    SessionLocal = getattr(app.state, "db_sessionmaker", None)
-    if SessionLocal is None:
-        raise RuntimeError("Database not initialized. Call init_db(app, ...) at startup.")
-    return SessionLocal
-
-
-def get_sessionmaker(request: Request) -> sessionmaker[Session]:
-    return get_sessionmaker_from_app(request)
-
-
-def get_db(request: Request) -> Generator[Session, None, None]:
-    SessionLocal = get_sessionmaker(request)
+@contextmanager
+def session_scope(SessionLocal: sessionmaker[Session]) -> Iterator[Session]:
     session = SessionLocal()
     try:
         yield session
         session.commit()
-    except BaseException as exc:
+    except BaseException:
         session.rollback()
-        if not isinstance(exc, (HTTPException, RequestValidationError)):
-            logger.warning(
-                "db.session.rollback",
-                extra={
-                    "path": str(request.url.path),
-                    "method": request.method,
-                },
-                exc_info=exc,
-            )
         raise
     finally:
         session.close()
+
+
+def assert_tables_exist(
+    engine: Engine,
+    required_tables: Iterable[str],
+    *,
+    schema: str | None = None,
+) -> None:
+    inspector = inspect(engine)
+    missing = [t for t in required_tables if not inspector.has_table(t, schema=schema)]
+    if missing:
+        raise RuntimeError(
+            f"Missing required tables: {', '.join(missing)}. "
+            "Run migrations via ade-api before starting ade-worker."
+        )

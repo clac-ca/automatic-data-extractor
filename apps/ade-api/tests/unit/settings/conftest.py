@@ -3,14 +3,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from pydantic import ValidationError
-
-from ade_api.settings import reload_settings
 
 
 @pytest.fixture(autouse=True)
 def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Ensure settings cache and env overrides are cleared between tests."""
+    """Ensure settings-related env vars are cleared between tests."""
 
     for var in (
         "ADE_APP_NAME",
@@ -66,14 +63,4 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_AUTH_SSO_AUTO_PROVISION",
     ):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("ADE_JWT_SECRET", "test-jwt-secret-for-tests-please-change")
-    try:
-        reload_settings()
-    except ValidationError:
-        pass
     yield
-    try:
-        monkeypatch.undo()
-        reload_settings()
-    except ValidationError:
-        pass

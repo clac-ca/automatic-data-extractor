@@ -17,7 +17,7 @@ pytestmark = pytest.mark.asyncio
 async def test_workspace_run_listing_filters_by_status(
     async_client,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     workspace_id = seed_identity.workspace_id
     configuration = make_configuration(
@@ -30,16 +30,16 @@ async def test_workspace_run_listing_filters_by_status(
         name="Other Config",
         status=ConfigurationStatus.DRAFT,
     )
-    session.add_all([configuration, other_configuration])
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add_all([configuration, other_configuration])
+    await anyio.to_thread.run_sync(db_session.flush)
 
     document = make_document(workspace_id=workspace_id, filename="input.csv")
     document_other = make_document(
         workspace_id=seed_identity.secondary_workspace_id,
         filename="other.csv",
     )
-    session.add_all([document, document_other])
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add_all([document, document_other])
+    await anyio.to_thread.run_sync(db_session.flush)
 
     run_ok = make_run(
         workspace_id=workspace_id,
@@ -59,8 +59,8 @@ async def test_workspace_run_listing_filters_by_status(
         document_id=document_other.id,
         status=RunStatus.SUCCEEDED,
     )
-    session.add_all([run_ok, run_failed, run_other_workspace])
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add_all([run_ok, run_failed, run_other_workspace])
+    await anyio.to_thread.run_sync(db_session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
 

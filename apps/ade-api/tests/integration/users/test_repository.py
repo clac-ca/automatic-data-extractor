@@ -7,10 +7,10 @@ from uuid import uuid4
 from ade_api.features.users.repository import UsersRepository
 
 
-def test_create_user_persists_password_hash(session) -> None:
+def test_create_user_persists_password_hash(db_session) -> None:
     """Creating a user with a password should persist the hash."""
 
-    repo = UsersRepository(session)
+    repo = UsersRepository(db_session)
 
     user = repo.create(
         email=f"{uuid4().hex}@example.com",
@@ -24,10 +24,10 @@ def test_create_user_persists_password_hash(session) -> None:
     assert user.is_service_account is False
 
 
-def test_list_users_returns_all_records(session) -> None:
+def test_list_users_returns_all_records(db_session) -> None:
     """The repository should return all users ordered by email."""
 
-    repo = UsersRepository(session)
+    repo = UsersRepository(db_session)
 
     first = repo.create(
         email=f"{uuid4().hex}@example.com",
@@ -43,10 +43,10 @@ def test_list_users_returns_all_records(session) -> None:
     assert {first.id, second.id}.issubset(identifiers)
 
 
-def test_create_service_account_sets_flag(session) -> None:
+def test_create_service_account_sets_flag(db_session) -> None:
     """Creating a service account should store the flag."""
 
-    repo = UsersRepository(session)
+    repo = UsersRepository(db_session)
 
     user = repo.create(
         email=f"{uuid4().hex}@example.com",
@@ -57,10 +57,10 @@ def test_create_service_account_sets_flag(session) -> None:
     assert user.is_service_account is True
 
 
-def test_set_password_updates_hash(session) -> None:
+def test_set_password_updates_hash(db_session) -> None:
     """set_password should update the user's password hash."""
 
-    repo = UsersRepository(session)
+    repo = UsersRepository(db_session)
 
     user = repo.create(
         email=f"{uuid4().hex}@example.com",

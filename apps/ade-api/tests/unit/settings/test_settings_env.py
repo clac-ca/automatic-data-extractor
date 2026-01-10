@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ade_api.settings import get_settings, reload_settings
+from ade_api.settings import Settings
 
 
 def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -22,10 +22,7 @@ ADE_JWT_ACCESS_TTL=5m
 """
     )
 
-    monkeypatch.chdir(tmp_path)
-    reload_settings()
-
-    settings = get_settings()
+    settings = Settings(_env_file=str(env_file))
 
     assert settings.app_name == "ADE Test"
     assert settings.api_docs_enabled is True
@@ -44,9 +41,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_API_DOCS_ENABLED", "true")
     monkeypatch.setenv("ADE_SERVER_PUBLIC_URL", "https://api.local")
     monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", "http://example.com")
-    reload_settings()
-
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
     assert settings.app_name == "Env Override"
     assert settings.api_docs_enabled is True
@@ -61,9 +56,7 @@ def test_cors_accepts_comma_separated_values(monkeypatch: pytest.MonkeyPatch) ->
         "ADE_SERVER_CORS_ORIGINS",
         "http://one.test,http://two.test",
     )
-    reload_settings()
-
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
     assert settings.server_cors_origins == ["http://one.test", "http://two.test"]
 
@@ -75,9 +68,7 @@ def test_cors_deduplicates_origins(monkeypatch: pytest.MonkeyPatch) -> None:
         "ADE_SERVER_CORS_ORIGINS",
         "http://one.test,http://two.test,http://one.test",
     )
-    reload_settings()
-
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
     assert settings.server_cors_origins == ["http://one.test", "http://two.test"]
 
@@ -86,9 +77,7 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
     """HTTPS URLs should be accepted for the public origin."""
 
     monkeypatch.setenv("ADE_SERVER_PUBLIC_URL", "https://secure.example.com")
-    reload_settings()
-
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
     assert settings.server_public_url == "https://secure.example.com"
     assert settings.server_cors_origins == ["http://localhost:5173"]
@@ -97,8 +86,6 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_logging_level_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> None:
     """ADE_LOG_LEVEL should set the API log level."""
     monkeypatch.setenv("ADE_LOG_LEVEL", "warning")
-    reload_settings()
-
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
     assert settings.log_level == "WARNING"

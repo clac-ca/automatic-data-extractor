@@ -14,7 +14,7 @@ pytestmark = pytest.mark.asyncio
 async def test_create_runs_batch_creates_runs(
     async_client,
     seed_identity,
-    session,
+    db_session,
     settings,
 ) -> None:
     workspace_id = seed_identity.workspace_id
@@ -22,8 +22,8 @@ async def test_create_runs_batch_creates_runs(
         workspace_id=workspace_id,
         name="Batch Config",
     )
-    session.add(configuration)
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     config_dir = workspace_config_root(settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -32,8 +32,8 @@ async def test_create_runs_batch_creates_runs(
         make_document(workspace_id=workspace_id, filename="input-a.csv"),
         make_document(workspace_id=workspace_id, filename="input-b.csv", byte_size=14),
     ]
-    session.add_all(documents)
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add_all(documents)
+    await anyio.to_thread.run_sync(db_session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
@@ -53,7 +53,7 @@ async def test_create_runs_batch_creates_runs(
     run_ids = [UUID(item["id"]) for item in runs]
 
     def _load_runs():
-        result = session.execute(select(Run).where(Run.id.in_(run_ids)))
+        result = db_session.execute(select(Run).where(Run.id.in_(run_ids)))
         return list(result.scalars())
 
     stored = await anyio.to_thread.run_sync(_load_runs)
@@ -65,7 +65,7 @@ async def test_create_runs_batch_creates_runs(
 async def test_create_runs_batch_queue_full_all_or_nothing(
     async_client,
     seed_identity,
-    session,
+    db_session,
     override_app_settings,
 ) -> None:
     updated_settings = override_app_settings(queue_size=1)
@@ -74,8 +74,8 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
         workspace_id=workspace_id,
         name="Batch Config",
     )
-    session.add(configuration)
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     config_dir = workspace_config_root(updated_settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -84,8 +84,8 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
         make_document(workspace_id=workspace_id, filename="input-a.csv"),
         make_document(workspace_id=workspace_id, filename="input-b.csv", byte_size=14),
     ]
-    session.add_all(documents)
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add_all(documents)
+    await anyio.to_thread.run_sync(db_session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
@@ -103,7 +103,7 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
     assert any(item.get("code") == "run_queue_full" for item in payload.get("errors", []))
 
     def _load_runs_for_config():
-        result = session.execute(select(Run).where(Run.configuration_id == configuration.id))
+        result = db_session.execute(select(Run).where(Run.configuration_id == configuration.id))
         return result.scalars().all()
 
     stored = await anyio.to_thread.run_sync(_load_runs_for_config)

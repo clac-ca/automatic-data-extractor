@@ -10,7 +10,7 @@ from ade_api.features.users.service import UsersService
 from ade_api.features.users.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_api.models import User
 
-def test_list_users_q_matches_email_and_display_name(session, settings) -> None:
+def test_list_users_q_matches_email_and_display_name(db_session, settings) -> None:
     alpha = User(
         id=generate_uuid7(),
         email="alpha@example.com",
@@ -25,10 +25,10 @@ def test_list_users_q_matches_email_and_display_name(session, settings) -> None:
         hashed_password=hash_password("beta-password"),
         is_active=True,
     )
-    session.add_all([alpha, beta])
-    session.flush()
+    db_session.add_all([alpha, beta])
+    db_session.flush()
 
-    service = UsersService(session=session, settings=settings)
+    service = UsersService(session=db_session, settings=settings)
     order_by = resolve_sort(
         [],
         allowed=SORT_FIELDS,

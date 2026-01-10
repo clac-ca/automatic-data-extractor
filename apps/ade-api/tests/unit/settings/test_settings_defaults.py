@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
-from ade_api.settings import Settings, get_settings, reload_settings
+from ade_api.settings import REPO_ROOT, Settings
 
 
-def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_settings_defaults() -> None:
     """Defaults should mirror the Settings model without .env overrides."""
 
-    monkeypatch.chdir(tmp_path)
-    reload_settings()
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
     assert isinstance(settings, Settings)
     assert settings.app_name == "Automatic Data Extractor API"
@@ -22,7 +19,7 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.server_cors_origins == ["http://localhost:5173"]
     assert settings.database_url.endswith("data/db/ade.sqlite")
     assert settings.jwt_access_ttl == timedelta(minutes=60)
-    expected_root = (tmp_path / "data").resolve()
+    expected_root = (REPO_ROOT / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()
     expected_venvs = (expected_root / "venvs").resolve()
     assert settings.workspaces_dir == expected_workspaces
@@ -34,19 +31,16 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_workspaces_dir_propagates_defaults(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """workspaces_dir should become the default root for workspace-owned storage."""
 
-    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ADE_WORKSPACES_DIR", "./custom/workspaces")
-    reload_settings()
 
-    settings = get_settings()
+    settings = Settings(_env_file=None)
 
-    expected_root = (tmp_path / "custom" / "workspaces").resolve()
-    expected_venvs = (tmp_path / "data" / "venvs").resolve()
+    expected_root = (REPO_ROOT / "custom" / "workspaces").resolve()
+    expected_venvs = (REPO_ROOT / "data" / "venvs").resolve()
     assert settings.workspaces_dir == expected_root
     assert settings.documents_dir == expected_root
     assert settings.configs_dir == expected_root

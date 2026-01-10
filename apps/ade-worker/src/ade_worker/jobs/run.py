@@ -11,11 +11,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.orm import Session, sessionmaker
+
 from ..paths import PathManager
 from ..queue import RunClaim, RunQueue
 from ..repo import Repo
 from ..run_results import parse_run_fields, parse_run_metrics, parse_run_table_columns
-from ..settings import WorkerSettings
+from ..settings import Settings
 from ..subprocess_runner import EventLog, SubprocessRunner
 
 logger = logging.getLogger("ade_worker")
@@ -278,8 +280,8 @@ def _infer_output_path(output_dir: Path, *, run_dir: Path) -> str | None:
 
 @dataclass(slots=True)
 class RunJob:
-    settings: WorkerSettings
-    engine: Any  # sqlalchemy.Engine
+    settings: Settings
+    SessionLocal: sessionmaker[Session]
     queue: RunQueue
     repo: Repo
     paths: PathManager
@@ -300,7 +302,7 @@ class RunJob:
             run_id=run.id,
             worker_id=self.worker_id,
             now=utcnow(),
-            lease_seconds=int(self.settings.lease_seconds),
+            lease_seconds=int(self.settings.worker_lease_seconds),
         )
 
     def _retry_at(self, run: RunClaim, now: datetime) -> datetime | None:
@@ -311,9 +313,9 @@ class RunJob:
 
     def _release_for_env(self, run: RunClaim, *, now: datetime, error_message: str) -> None:
         retry_at = now + timedelta(seconds=5)
-        with self.engine.begin() as conn:
+        with self.SessionLocal.begin() as session:
             ok = self.queue.release_for_env(
-                conn=conn,
+                session=session,
                 run_id=run.id,
                 worker_id=self.worker_id,
                 retry_at=retry_at,
@@ -364,9 +366,9 @@ class RunJob:
         python_bin = self.paths.python_in_venv(venv_dir)
         if not python_bin.exists():
             logger.warning("environment python missing: %s", python_bin)
-            with self.engine.begin() as conn:
+            with self.SessionLocal.begin() as session:
                 self.repo.mark_environment_queued(
-                    conn=conn,
+                    session=session,
                     env_id=environment_id,
                     now=now,
                     error_message="Missing venv python; requeueing environment",
@@ -389,21 +391,33 @@ class RunJob:
             )
             return
 
-        with self.engine.begin() as conn:
-            self.repo.touch_environment_last_used(conn=conn, env_id=environment_id, now=now)
+        with self.SessionLocal.begin() as session:
+            self.repo.touch_environment_last_used(
+                session=session,
+                env_id=environment_id,
+                now=now,
+            )
 
-        options = parse_run_options(run.get("run_options"), default_log_level=self.settings.log_level)
+        options = parse_run_options(
+            run.get("run_options"),
+            default_log_level=self.settings.worker_log_level,
+        )
         sheet_names = options.input_sheet_names or _parse_input_sheet_names(run.get("input_sheet_names"))
 
         if options.dry_run:
             finished_at = utcnow()
-            with self.engine.begin() as conn:
-                ok = self.queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
+            with self.SessionLocal.begin() as session:
+                ok = self.queue.ack_success(
+                    session=session,
+                    run_id=run_id,
+                    worker_id=self.worker_id,
+                    now=finished_at,
+                )
                 if not ok:
                     event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
                     return
                 self.repo.record_run_result(
-                    conn=conn,
+                    session=session,
                     run_id=run_id,
                     completed_at=finished_at,
                     exit_code=0,
@@ -427,22 +441,29 @@ class RunJob:
                 cmd,
                 event_log=event_log,
                 scope="run.validate",
-                timeout_seconds=float(self.settings.run_timeout_seconds) if self.settings.run_timeout_seconds else None,
+                timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+                if self.settings.worker_run_timeout_seconds
+                else None,
                 cwd=None,
                 env=self._pip_env(),
                 heartbeat=lambda: self._heartbeat_run(claim),
-                heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
             )
             finished_at = utcnow()
             if res.exit_code == 0:
-                with self.engine.begin() as conn:
-                    ok = self.queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
+                with self.SessionLocal.begin() as session:
+                    ok = self.queue.ack_success(
+                        session=session,
+                        run_id=run_id,
+                        worker_id=self.worker_id,
+                        now=finished_at,
+                    )
                     if not ok:
                         event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
                         return
                     self.repo.record_run_result(
-                        conn=conn,
+                        session=session,
                         run_id=run_id,
                         completed_at=finished_at,
                         exit_code=0,
@@ -515,9 +536,9 @@ class RunJob:
 
         # Mark document processing (best effort; not fatal if it fails).
         try:
-            with self.engine.begin() as conn:
+            with self.SessionLocal.begin() as session:
                 self.repo.update_document_status(
-                    conn=conn,
+                    session=session,
                     document_id=document_id,
                     status="processing",
                     now=utcnow(),
@@ -548,11 +569,13 @@ class RunJob:
             cmd,
             event_log=event_log,
             scope="run.engine",
-            timeout_seconds=float(self.settings.run_timeout_seconds) if self.settings.run_timeout_seconds else None,
+            timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+            if self.settings.worker_run_timeout_seconds
+            else None,
             cwd=None,
             env=self._pip_env(),
             heartbeat=lambda: self._heartbeat_run(claim),
-            heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+            heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
             context=ctx,
             on_json_event=on_event,
         )
@@ -584,14 +607,19 @@ class RunJob:
             metrics = parse_run_metrics(results_payload) if results_payload else None
             fields = parse_run_fields(results_payload) if results_payload else []
             columns = parse_run_table_columns(results_payload) if results_payload else []
-            with self.engine.begin() as conn:
-                ok = self.queue.ack_success(conn=conn, run_id=run_id, worker_id=self.worker_id, now=finished_at)
+            with self.SessionLocal.begin() as session:
+                ok = self.queue.ack_success(
+                    session=session,
+                    run_id=run_id,
+                    worker_id=self.worker_id,
+                    now=finished_at,
+                )
                 if not ok:
                     event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
                     return
 
                 self.repo.record_run_result(
-                    conn=conn,
+                    session=session,
                     run_id=run_id,
                     completed_at=finished_at,
                     exit_code=0,
@@ -599,7 +627,7 @@ class RunJob:
                     error_message=None,
                 )
                 self.repo.update_document_status(
-                    conn=conn,
+                    session=session,
                     document_id=document_id,
                     status="processed",
                     now=finished_at,
@@ -609,10 +637,22 @@ class RunJob:
                     logger.warning("run.results.missing_payload run_id=%s", run_id)
                 else:
                     try:
-                        with conn.begin_nested():
-                            self.repo.replace_run_metrics(conn=conn, run_id=run_id, metrics=metrics)
-                            self.repo.replace_run_fields(conn=conn, run_id=run_id, rows=fields)
-                            self.repo.replace_run_table_columns(conn=conn, run_id=run_id, rows=columns)
+                        with session.begin_nested():
+                            self.repo.replace_run_metrics(
+                                session=session,
+                                run_id=run_id,
+                                metrics=metrics,
+                            )
+                            self.repo.replace_run_fields(
+                                session=session,
+                                run_id=run_id,
+                                rows=fields,
+                            )
+                            self.repo.replace_run_table_columns(
+                                session=session,
+                                run_id=run_id,
+                                rows=columns,
+                            )
                     except Exception:
                         logger.exception("run.results.persist_failed run_id=%s", run_id)
 
@@ -655,9 +695,9 @@ class RunJob:
     ) -> None:
         retry_at = self._retry_at(claim, now)
 
-        with self.engine.begin() as conn:
+        with self.SessionLocal.begin() as session:
             ok = self.queue.ack_failure(
-                conn=conn,
+                session=session,
                 run_id=run_id,
                 worker_id=self.worker_id,
                 now=now,
@@ -670,7 +710,7 @@ class RunJob:
 
             if retry_at is None:
                 self.repo.record_run_result(
-                    conn=conn,
+                    session=session,
                     run_id=run_id,
                     completed_at=now,
                     exit_code=exit_code,
@@ -678,14 +718,14 @@ class RunJob:
                     error_message=error_message,
                 )
                 self.repo.update_document_status(
-                    conn=conn,
+                    session=session,
                     document_id=document_id,
                     status="failed",
                     now=now,
                 )
             else:
                 self.repo.record_run_result(
-                    conn=conn,
+                    session=session,
                     run_id=run_id,
                     completed_at=None,
                     exit_code=None,

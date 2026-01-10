@@ -5,7 +5,8 @@ import os
 import pytest
 from sqlalchemy import text
 
-from ade_api.db import DatabaseSettings, build_engine
+from ade_api.db import build_engine
+from ade_api.settings import Settings
 
 
 def test_mssql_smoke_select_one() -> None:
@@ -16,7 +17,7 @@ def test_mssql_smoke_select_one() -> None:
     if not url.lower().startswith("mssql"):
         pytest.skip("ADE_DATABASE_URL must be mssql+pyodbc for this test")
 
-    settings = DatabaseSettings.from_env()
+    settings = Settings(_env_file=None)
     engine = build_engine(settings)
     try:
         with engine.connect() as conn:
