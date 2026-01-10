@@ -1,6 +1,7 @@
 import {
   BUILT_IN_THEMES,
   THEME_IDS,
+  LEGACY_THEME_ID_ALIASES,
   isThemeId,
   type BuiltInTheme,
   type ThemeId,
@@ -12,7 +13,7 @@ export type ResolvedMode = "light" | "dark";
 export type { ModePreference };
 export type { ThemeId };
 
-export const DEFAULT_THEME_ID: ThemeId = "default";
+export const DEFAULT_THEME_ID: ThemeId = "indigo";
 export const BUILTIN_THEME_IDS = THEME_IDS satisfies readonly ThemeId[];
 
 export const MODE_OPTIONS: Array<{
@@ -46,6 +47,10 @@ export function normalizeThemeId(value: string | null | undefined): ThemeId {
   }
   if (isThemeId(value)) {
     return value;
+  }
+  const aliased = LEGACY_THEME_ID_ALIASES[value];
+  if (aliased) {
+    return aliased;
   }
   return DEFAULT_THEME_ID;
 }
