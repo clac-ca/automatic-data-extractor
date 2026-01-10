@@ -90,6 +90,8 @@ class WorkerLoop:
         next_gc = _next_gc_deadline(time.monotonic(), gc_interval) if gc_enabled else None
 
         ensure_batch = max(10, int(self.settings.worker_concurrency) * 5)
+        ensure_interval = max(1.0, float(self.settings.worker_poll_interval_max))
+        next_ensure = time.monotonic()
 
         with ThreadPoolExecutor(max_workers=int(self.settings.worker_concurrency)) as executor:
             in_flight: set[Future[None]] = set()
@@ -166,10 +168,16 @@ class WorkerLoop:
                     next_gc = _next_gc_deadline(mono, gc_interval)
 
                 # Ensure environments exist for queued runs (best effort).
-                try:
-                    self.repo.ensure_environment_rows_for_queued_runs(now=now, limit=ensure_batch)
-                except Exception:
-                    logger.exception("failed to ensure environment rows for queued runs")
+                if mono >= next_ensure:
+                    try:
+                        if self.repo.has_queued_runs(now=now):
+                            self.repo.ensure_environment_rows_for_queued_runs(
+                                now=now,
+                                limit=ensure_batch,
+                            )
+                    except Exception:
+                        logger.exception("failed to ensure environment rows for queued runs")
+                    next_ensure = mono + ensure_interval
 
                 # Claim work while capacity remains.
                 claimed_any = False
@@ -200,7 +208,7 @@ class WorkerLoop:
 
                 # Idle backoff.
                 time.sleep(poll)
-                poll = min(max_poll, poll * 1.25 + 0.01)
+                poll = min(max_poll, poll * 1.25 + 0.01 + (random.random() * 0.05))
 
 
 def main() -> int:

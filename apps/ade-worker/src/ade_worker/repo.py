@@ -49,6 +49,20 @@ class Repo:
             ).mappings().first()
         return dict(row) if row else None
 
+    def has_queued_runs(self, *, now: datetime) -> bool:
+        stmt = (
+            select(runs.c.id)
+            .where(
+                runs.c.status == "queued",
+                runs.c.available_at <= now,
+                runs.c.attempt_count < runs.c.max_attempts,
+            )
+            .limit(1)
+        )
+        with self._SessionLocal() as session:
+            row = session.execute(stmt).first()
+        return row is not None
+
     def ensure_environment_rows_for_queued_runs(self, *, now: datetime, limit: int | None = None) -> int:
         stmt = (
             select(

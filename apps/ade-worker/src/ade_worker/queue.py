@@ -20,6 +20,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 SQLITE_BEGIN_IMMEDIATE = "BEGIN IMMEDIATE"
 
+SQLITE_PROBE_ENVIRONMENT = """    SELECT id
+FROM environments
+WHERE status = 'queued'
+ORDER BY created_at ASC
+LIMIT 1;
+"""
+
 SQLITE_CLAIM_ENVIRONMENT = """    UPDATE environments
 SET
     status = 'building',
@@ -52,6 +59,21 @@ SET
     error_message = NULL,
     updated_at = :now
 OUTPUT inserted.id;
+"""
+
+SQLITE_PROBE_RUN = """    SELECT runs.id
+FROM runs
+JOIN environments
+  ON environments.workspace_id = runs.workspace_id
+ AND environments.configuration_id = runs.configuration_id
+ AND environments.engine_spec = runs.engine_spec
+ AND environments.deps_digest = runs.deps_digest
+WHERE runs.status = 'queued'
+  AND runs.available_at <= :now
+  AND runs.attempt_count < runs.max_attempts
+  AND environments.status = 'ready'
+ORDER BY runs.available_at ASC, runs.created_at ASC
+LIMIT 1;
 """
 
 SQLITE_CLAIM_RUN = """    UPDATE runs
@@ -288,6 +310,10 @@ class EnvironmentQueue:
 
         if self.dialect == "sqlite":
             with self._SessionLocal() as session:
+                probe = session.execute(text(SQLITE_PROBE_ENVIRONMENT)).mappings().first()
+            if not probe:
+                return None
+            with self._SessionLocal() as session:
                 try:
                     session.connection().exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
                     row = session.execute(text(SQLITE_CLAIM_ENVIRONMENT), params).mappings().first()
@@ -431,6 +457,10 @@ class RunQueue:
         }
 
         if self.dialect == "sqlite":
+            with self._SessionLocal() as session:
+                probe = session.execute(text(SQLITE_PROBE_RUN), {"now": now}).mappings().first()
+            if not probe:
+                return None
             with self._SessionLocal() as session:
                 try:
                     session.connection().exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
