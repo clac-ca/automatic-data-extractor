@@ -174,8 +174,8 @@ Upload source files for extraction. All document routes are nested under the wor
 
 Trigger and monitor extraction runs. Creation is configuration-scoped; reads are global by run ID.
 
-- `POST /configurations/{configurationId}/runs` – submit a run for the given configuration; requires `input_document_id` and returns a queued `Run` snapshot (returns `429` with `run_queue_full` when the queue is full).
-- `POST /configurations/{configurationId}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection; returns `429` with `run_queue_full` when the full batch does not fit).
+- `POST /configurations/{configurationId}/runs` – submit a run for the given configuration; requires `input_document_id` and returns a queued `Run` snapshot.
+- `POST /configurations/{configurationId}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection).
 - `GET /workspaces/{workspaceId}/runs` – list recent runs for a workspace; use the filter DSL for status or source document filters.
 - `GET /runs/{runId}` – retrieve run metadata (status, timing, configuration, input/output hints).
 - `GET /runs/{runId}/events` – fetch structured events (JSON or NDJSON).

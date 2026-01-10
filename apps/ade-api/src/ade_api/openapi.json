@@ -12906,6 +12906,17 @@
               }
             ],
             "description": "Summary of the latest result metadata, when available."
+          },
+          "listRow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentListRow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional list row projection for table updates."
           }
         },
         "additionalProperties": false,

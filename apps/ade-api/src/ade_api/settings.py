@@ -291,8 +291,7 @@ class Settings(BaseSettings):
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
 
-    # Runs (queue limits)
-    queue_size: int | None = Field(default=200, ge=1)
+    # Runs
     preview_timeout_seconds: float = Field(10, gt=0)
 
     # OIDC
@@ -361,6 +360,7 @@ class Settings(BaseSettings):
         if mode not in {"sql_password", "managed_identity"}:
             raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
         return mode
+
 
     @field_validator("database_mi_client_id", mode="before")
     @classmethod

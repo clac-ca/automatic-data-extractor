@@ -34,7 +34,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_SESSION_COOKIE_DOMAIN",
         "ADE_FAILED_LOGIN_LOCK_THRESHOLD",
         "ADE_FAILED_LOGIN_LOCK_DURATION",
-        "ADE_QUEUE_SIZE",
         "ADE_WORKER_CONCURRENCY",
         "ADE_WORKER_POLL_INTERVAL",
         "ADE_WORKER_POLL_INTERVAL_MAX",

@@ -223,7 +223,6 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                   |
 | `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
 | `ADE_WORKER_CONCURRENCY`  | `1`                      | Worker concurrency per process             |
-| `ADE_QUEUE_SIZE`          | `10`                     | Queue length before HTTP 429 backpressure  |
 | `ADE_WORKER_POLL_INTERVAL`| `0.5`                    | Worker idle poll interval (seconds)        |
 | `ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS` | `600`       | Wall‑clock timeout per environment build   |
 | `ADE_WORKER_RUN_TIMEOUT_SECONDS` | `300`           | Wall‑clock timeout per run                 |
