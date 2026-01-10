@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -184,19 +184,40 @@ class Repo:
         status: str,
         now: datetime,
     ) -> int | None:
-        row = session.execute(
-            select(documents.c.workspace_id, documents.c.version).where(
-                documents.c.id == document_id
+        dialect = session.get_bind().dialect.name
+        params = {"status": status, "now": now, "document_id": document_id}
+
+        if dialect == "sqlite":
+            stmt = text(
+                """
+                UPDATE documents
+                SET status = :status,
+                    updated_at = :now,
+                    last_run_at = :now,
+                    version = version + 1
+                WHERE id = :document_id
+                RETURNING workspace_id, version;
+                """
             )
-        ).mappings().first()
+        elif dialect == "mssql":
+            stmt = text(
+                """
+                UPDATE documents
+                SET status = :status,
+                    updated_at = :now,
+                    last_run_at = :now,
+                    version = version + 1
+                OUTPUT inserted.workspace_id, inserted.version
+                WHERE id = :document_id;
+                """
+            )
+        else:
+            raise ValueError(f"Unsupported dialect: {dialect}")
+
+        row = session.execute(stmt, params).mappings().first()
         if not row:
             return None
-        version = int(row.get("version") or 0) + 1
-        session.execute(
-            update(documents)
-            .where(documents.c.id == document_id)
-            .values(status=status, updated_at=now, last_run_at=now, version=version)
-        )
+        version = int(row.get("version") or 0)
         session.execute(
             insert(document_events).values(
                 workspace_id=row["workspace_id"],

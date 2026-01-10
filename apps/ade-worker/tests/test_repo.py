@@ -207,12 +207,14 @@ def test_update_document_status_updates_version_and_last_run_at() -> None:
     _insert_document(engine, document_id="doc-1", workspace_id="ws-1", now=now)
 
     with SessionLocal.begin() as session:
-        repo.update_document_status(
+        version = repo.update_document_status(
             session=session,
             document_id="doc-1",
             status="processing",
             now=now,
         )
+
+    assert version == 2
 
     with engine.begin() as conn:
         row = conn.execute(
