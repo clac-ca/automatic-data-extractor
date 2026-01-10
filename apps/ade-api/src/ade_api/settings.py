@@ -307,6 +307,7 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
+    database_pool_recycle: int = Field(1800, ge=0)
     database_auth_mode: Literal["sql_password", "managed_identity"] = Field(default="sql_password")
     database_mi_client_id: str | None = None
     database_sqlite_journal_mode: Literal[

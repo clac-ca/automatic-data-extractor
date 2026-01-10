@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     HTTPException,
     Path,
@@ -117,7 +118,7 @@ def _upsert_response(
     response_model_exclude_none=True,
     summary="List editable files and directories",
 )
-async def list_config_files(
+def list_config_files(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     request: Request,
@@ -139,7 +140,7 @@ async def list_config_files(
     order: Literal["asc", "desc"] = "asc",
 ) -> Response:
     try:
-        listing = await service.list_files(
+        listing = service.list_files(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             prefix=prefix,
@@ -190,7 +191,7 @@ async def list_config_files(
         status.HTTP_304_NOT_MODIFIED: {"model": None},
     },
 )
-async def read_config_file(
+def read_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
@@ -208,7 +209,7 @@ async def read_config_file(
     if not file_path:
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
     try:
-        info = await service.read_file(
+        info = service.read_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -290,7 +291,7 @@ async def read_config_file(
     "/configurations/{configurationId}/files/{filePath:path}",
     responses={status.HTTP_200_OK: {"model": None}},
 )
-async def head_config_file(
+def head_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
@@ -306,7 +307,7 @@ async def head_config_file(
     if not file_path:
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
     try:
-        info = await service.read_file(
+        info = service.read_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -341,7 +342,7 @@ async def head_config_file(
         status.HTTP_201_CREATED: {"model": FileWriteResponse},
     },
 )
-async def upsert_config_file(
+def upsert_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
@@ -354,15 +355,16 @@ async def upsert_config_file(
             scopes=["{workspaceId}"],
         ),
     ],
+    body: bytes = Body(...),
     parents: bool = False,
 ) -> Response:
     if not file_path:
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
-    data = await request.body()
+    data = body
     if_match = request.headers.get("if-match")
     if_none_match = request.headers.get("if-none-match")
     try:
-        result = await service.write_file(
+        result = service.write_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -416,7 +418,7 @@ async def upsert_config_file(
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_config_file(
+def delete_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
@@ -434,7 +436,7 @@ async def delete_config_file(
         raise_problem("path_required", status.HTTP_400_BAD_REQUEST, detail="file_path is required")
     if_match = request.headers.get("if-match")
     try:
-        await service.delete_file(
+        service.delete_file(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=file_path,
@@ -476,7 +478,7 @@ async def delete_config_file(
         },
     },
 )
-async def create_config_directory(
+def create_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     directory_path: DirectoryPathParam,
@@ -493,7 +495,7 @@ async def create_config_directory(
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
-        _, created = await service.create_directory(
+        _, created = service.create_directory(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=directory_path,
@@ -515,7 +517,7 @@ async def create_config_directory(
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_config_directory(
+def delete_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     directory_path: DirectoryPathParam,
@@ -532,7 +534,7 @@ async def delete_config_directory(
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
-        await service.delete_directory(
+        service.delete_directory(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=directory_path,
@@ -557,7 +559,7 @@ async def delete_config_directory(
     response_model=FileRenameResponse,
     summary="Rename or move a file",
 )
-async def rename_config_file(
+def rename_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
@@ -580,7 +582,7 @@ async def rename_config_file(
             detail="op must be 'move'",
         )
     try:
-        result = await service.rename_entry(
+        result = service.rename_entry(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             source_path=file_path,

@@ -104,7 +104,7 @@ def _api_key_etag_token(record: ApiKey) -> str:
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
     },
 )
-async def list_my_api_keys(
+def list_my_api_keys(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
@@ -116,7 +116,7 @@ async def list_my_api_keys(
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    result_page = await service.list_for_user(
+    result_page = service.list_for_user(
         user_id=principal.user_id,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
@@ -140,7 +140,7 @@ async def list_my_api_keys(
         status.HTTP_400_BAD_REQUEST: {"description": "Invalid API key payload."},
     },
 )
-async def create_my_api_key(
+def create_my_api_key(
     payload: ApiKeyCreateRequest,
     request: Request,
     idempotency_key: Annotated[str, Depends(require_idempotency_key)],
@@ -154,7 +154,7 @@ async def create_my_api_key(
         path=request.url.path,
         payload=payload,
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -163,7 +163,7 @@ async def create_my_api_key(
         return replay.to_response()
 
     try:
-        result = await service.create_for_user(
+        result = service.create_for_user(
             user_id=principal.user_id,
             name=payload.name,
             expires_in_days=payload.expires_in_days,
@@ -175,7 +175,7 @@ async def create_my_api_key(
         ) from exc
 
     response_payload = _make_create_response(result)
-    await idempotency.store_response(
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -195,14 +195,14 @@ async def create_my_api_key(
         status.HTTP_403_FORBIDDEN: {"description": "API key not owned by caller."},
     },
 )
-async def read_my_api_key(
+def read_my_api_key(
     api_key_id: ApiKeyPath,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
     response: Response,
 ) -> ApiKeySummary:
     try:
-        record = await service.get_by_id(api_key_id)
+        record = service.get_by_id(api_key_id)
     except ApiKeyNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if record.user_id != principal.user_id:
@@ -225,14 +225,14 @@ async def read_my_api_key(
         status.HTTP_403_FORBIDDEN: {"description": "API key not owned by caller."},
     },
 )
-async def revoke_my_api_key(
+def revoke_my_api_key(
     api_key_id: ApiKeyPath,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
     request: Request,
 ) -> Response:
     try:
-        record = await service.get_by_id(api_key_id)
+        record = service.get_by_id(api_key_id)
         if record.user_id != principal.user_id:
             raise ApiKeyAccessDeniedError(
                 f"API key {api_key_id} is not owned by user {principal.user_id}"
@@ -241,7 +241,7 @@ async def revoke_my_api_key(
             request.headers.get("if-match"),
             expected_token=_api_key_etag_token(record),
         )
-        await service.revoke_for_user(
+        service.revoke_for_user(
             api_key_id=api_key_id,
             user_id=principal.user_id,
         )
@@ -273,7 +273,7 @@ async def revoke_my_api_key(
         status.HTTP_403_FORBIDDEN: {"description": "Requires api_keys.read_all global permission."},
     },
 )
-async def list_user_api_keys(
+def list_user_api_keys(
     user_id: UserPath,
     _: Annotated[None, Security(require_global("api_keys.read_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
@@ -286,7 +286,7 @@ async def list_user_api_keys(
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    result_page = await service.list_for_user(
+    result_page = service.list_for_user(
         user_id=user_id,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
@@ -308,7 +308,7 @@ async def list_user_api_keys(
         status.HTTP_404_NOT_FOUND: {"description": "API key not found."},
     },
 )
-async def read_user_api_key(
+def read_user_api_key(
     user_id: UserPath,
     api_key_id: ApiKeyPath,
     _: Annotated[None, Security(require_global("api_keys.read_all"))],
@@ -316,7 +316,7 @@ async def read_user_api_key(
     response: Response,
 ) -> ApiKeySummary:
     try:
-        record = await service.get_by_id(api_key_id)
+        record = service.get_by_id(api_key_id)
     except ApiKeyNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if record.user_id != user_id:
@@ -342,7 +342,7 @@ async def read_user_api_key(
         status.HTTP_400_BAD_REQUEST: {"description": "Invalid API key payload."},
     },
 )
-async def create_user_api_key(
+def create_user_api_key(
     user_id: UserPath,
     payload: ApiKeyCreateRequest,
     request: Request,
@@ -358,7 +358,7 @@ async def create_user_api_key(
         path=request.url.path,
         payload=payload,
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -367,7 +367,7 @@ async def create_user_api_key(
         return replay.to_response()
 
     try:
-        result = await service.create_for_user(
+        result = service.create_for_user(
             user_id=user_id,
             name=payload.name,
             expires_in_days=payload.expires_in_days,
@@ -379,7 +379,7 @@ async def create_user_api_key(
         ) from exc
 
     response_payload = _make_create_response(result)
-    await idempotency.store_response(
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -402,7 +402,7 @@ async def create_user_api_key(
         status.HTTP_404_NOT_FOUND: {"description": "API key not found."},
     },
 )
-async def revoke_user_api_key(
+def revoke_user_api_key(
     user_id: UserPath,
     api_key_id: ApiKeyPath,
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
@@ -410,14 +410,14 @@ async def revoke_user_api_key(
     request: Request,
 ) -> Response:
     try:
-        record = await service.get_by_id(api_key_id)
+        record = service.get_by_id(api_key_id)
         if record.user_id != user_id:
             raise ApiKeyAccessDeniedError("API key not found")
         require_if_match(
             request.headers.get("if-match"),
             expected_token=_api_key_etag_token(record),
         )
-        await service.revoke_for_user(
+        service.revoke_for_user(
             api_key_id=api_key_id,
             user_id=user_id,
         )

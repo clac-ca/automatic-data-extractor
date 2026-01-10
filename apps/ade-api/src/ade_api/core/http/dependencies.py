@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import secrets
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
-from ade_api.db import get_db_session
+from ade_api.db import get_db
 from ade_api.models import AccessToken, User
 from ade_api.settings import Settings, get_settings
 
@@ -27,50 +27,49 @@ from ..auth.principal import AuthVia, PrincipalType
 from ..rbac.service_interface import RbacService as RbacServiceInterface
 from ..security.tokens import decode_token
 
-SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
-WebSocketSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDep = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
-PermissionDependency = Callable[..., Awaitable[User]]
+PermissionDependency = Callable[..., User]
 
 class _RbacAdapter(RbacServiceInterface):
     """Bridge the RBAC feature service to the interface expected by dependencies."""
 
-    def __init__(self, *, session: AsyncSession):
+    def __init__(self, *, session: Session):
         super().__init__(session=session)
 
         from ade_api.features.rbac.service import RbacService
 
         self._service = RbacService(session=session)
 
-    async def _resolve_user(self, principal: AuthenticatedPrincipal) -> User:
-        user = await self.session.get(User, principal.user_id)
+    def _resolve_user(self, principal: AuthenticatedPrincipal) -> User:
+        user = self.session.get(User, principal.user_id)
         if user is None:
             raise AuthenticationError("Unknown principal")
         if not getattr(user, "is_active", True):
             raise AuthenticationError("User account is inactive.")
         return user
 
-    async def sync_registry(self) -> None:
-        await self._service.sync_registry()
+    def sync_registry(self) -> None:
+        self._service.sync_registry()
 
-    async def get_global_role_slugs(
+    def get_global_role_slugs(
         self,
         principal: AuthenticatedPrincipal,
     ) -> set[str]:
-        user = await self._resolve_user(principal)
-        result = await self._service.get_global_role_slugs_for_user(user=user)
+        user = self._resolve_user(principal)
+        result = self._service.get_global_role_slugs_for_user(user=user)
         return set(result)
 
-    async def get_global_permissions(
+    def get_global_permissions(
         self,
         principal: AuthenticatedPrincipal,
     ) -> set[str]:
-        user = await self._resolve_user(principal)
-        result = await self._service.get_global_permissions_for_user(user=user)
+        user = self._resolve_user(principal)
+        result = self._service.get_global_permissions_for_user(user=user)
         return set(result)
 
-    async def get_workspace_permissions(
+    def get_workspace_permissions(
         self,
         principal: AuthenticatedPrincipal,
         workspace_id: UUID | None = None,
@@ -78,29 +77,29 @@ class _RbacAdapter(RbacServiceInterface):
         if workspace_id is None:
             return set()
 
-        user = await self._resolve_user(principal)
-        result = await self._service.get_workspace_permissions_for_user(
+        user = self._resolve_user(principal)
+        result = self._service.get_workspace_permissions_for_user(
             user=user,
             workspace_id=workspace_id,
         )
         return set(result)
 
-    async def get_effective_permissions(
+    def get_effective_permissions(
         self,
         principal: AuthenticatedPrincipal,
         workspace_id: UUID | None = None,
     ) -> set[str]:
-        global_permissions = await self.get_global_permissions(principal=principal)
+        global_permissions = self.get_global_permissions(principal=principal)
         if workspace_id is None:
             return global_permissions
 
-        workspace_permissions = await self.get_workspace_permissions(
+        workspace_permissions = self.get_workspace_permissions(
             principal=principal,
             workspace_id=workspace_id,
         )
         return global_permissions.union(workspace_permissions)
 
-    async def has_permission(
+    def has_permission(
         self,
         principal: AuthenticatedPrincipal,
         permission_key: str,
@@ -109,8 +108,8 @@ class _RbacAdapter(RbacServiceInterface):
         from ade_api.features.rbac.service import AuthorizationError
 
         try:
-            user = await self._resolve_user(principal)
-            decision = await self._service.authorize(
+            user = self._resolve_user(principal)
+            decision = self._service.authorize(
                 user=user,
                 permission_key=permission_key,
                 workspace_id=workspace_id,
@@ -136,7 +135,7 @@ def get_api_key_authenticator(
 
 
 def get_api_key_authenticator_websocket(
-    db: WebSocketSessionDep,
+    db: Session,
     settings: SettingsDep,
 ) -> ApiKeyAuthenticator:
     """Provide the API key authenticator for WebSocket endpoints."""
@@ -153,13 +152,13 @@ def get_cookie_authenticator(
     """Authenticate cookie session tokens against the access_tokens table."""
 
     class _CookieAuthenticator:
-        async def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
+        def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
             candidate = (token or "").strip()
             if not candidate:
                 return None
 
             stmt = select(AccessToken).where(AccessToken.token == candidate).limit(1)
-            result = await db.execute(stmt)
+            result = db.execute(stmt)
             access_token = result.scalar_one_or_none()
             if access_token is None:
                 return None
@@ -169,11 +168,11 @@ def get_cookie_authenticator(
             if expires_at is None:
                 expires_at = access_token.created_at + settings.session_access_ttl
             if expires_at <= now:
-                await db.delete(access_token)
-                await db.flush()
+                db.delete(access_token)
+                db.flush()
                 return None
 
-            user = await db.get(User, access_token.user_id)
+            user = db.get(User, access_token.user_id)
             if user is None:
                 return None
 
@@ -197,7 +196,7 @@ def get_bearer_authenticator(
     """Authenticate JWT bearer tokens for non-browser clients."""
 
     class _BearerAuthenticator:
-        async def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
+        def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
             candidate = (token or "").strip()
             if not candidate:
                 return None
@@ -221,7 +220,7 @@ def get_bearer_authenticator(
             except ValueError:
                 return None
 
-            user = await db.get(User, user_id)
+            user = db.get(User, user_id)
             if user is None:
                 return None
 
@@ -246,7 +245,7 @@ def get_rbac_service(
     return _RbacAdapter(session=db)
 
 
-async def get_current_principal(
+def get_current_principal(
     request: Request,
     db: SessionDep,
     settings: SettingsDep,
@@ -265,7 +264,7 @@ async def get_current_principal(
 ) -> AuthenticatedPrincipal:
     """Authenticate the incoming request and return the current principal."""
 
-    return await authenticate_request(
+    return authenticate_request(
         request=request,
         _db=db,
         settings=settings,
@@ -275,13 +274,13 @@ async def get_current_principal(
     )
 
 
-async def require_authenticated(
+def require_authenticated(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     db: SessionDep,
 ) -> User:
     """Ensure the request is authenticated and return the persisted user."""
 
-    user = await db.get(User, principal.user_id)
+    user = db.get(User, principal.user_id)
     if user is None:
         raise AuthenticationError("Unknown principal")
     if not getattr(user, "is_active", True):
@@ -296,7 +295,7 @@ def require_permission(
 ) -> PermissionDependency:
     """Return a dependency enforcing a specific permission."""
 
-    async def dependency(
+    def dependency(
         request: Request,
         principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
         db: SessionDep,
@@ -312,7 +311,7 @@ def require_permission(
                     workspace_id = None
             else:
                 workspace_id = candidate
-        allowed = await rbac.has_permission(
+        allowed = rbac.has_permission(
             principal=principal,
             permission_key=permission_key,
             workspace_id=workspace_id,
@@ -323,7 +322,7 @@ def require_permission(
                 scope_type="workspace" if workspace_id else "global",
                 scope_id=workspace_id,
             )
-        user = await db.get(User, principal.user_id)
+        user = db.get(User, principal.user_id)
         if user is None:
             raise AuthenticationError("Unknown principal")
         return user

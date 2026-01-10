@@ -54,7 +54,7 @@ async def test_cookie_login_creates_access_token(
     )
     assert response.status_code == 204, response.text
 
-    result = await session.execute(select(AccessToken))
+    result = session.execute(select(AccessToken))
     tokens = list(result.scalars().all())
     assert len(tokens) == 1
     assert tokens[0].user_id == admin.id
@@ -87,7 +87,7 @@ async def test_cookie_logout_clears_access_token(
     assert logout.status_code == 204, logout.text
     assert not async_client.cookies.get(settings.session_cookie_name)
 
-    result = await session.execute(select(AccessToken))
+    result = session.execute(select(AccessToken))
     tokens = list(result.scalars().all())
     assert tokens == []
 
@@ -228,10 +228,10 @@ async def test_login_rejects_inactive_user(
     """Inactive accounts should not receive new sessions."""
 
     member = seed_identity.member
-    user = await session.get(User, member.id)
+    user = session.get(User, member.id)
     assert user is not None
     user.is_active = False
-    await session.flush()
+    session.flush()
 
     response = await async_client.post(
         "/api/v1/auth/cookie/login",
@@ -256,10 +256,10 @@ async def test_access_token_rejected_after_deactivation(
         password=member.password,
     )
 
-    user = await session.get(User, member.id)
+    user = session.get(User, member.id)
     assert user is not None
     user.is_active = False
-    await session.flush()
+    session.flush()
 
     response = await async_client.get(
         "/api/v1/me/bootstrap",

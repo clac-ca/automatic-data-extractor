@@ -9,17 +9,16 @@ from urllib.parse import quote, urlparse
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi_users.authentication.strategy import DatabaseStrategy
 from fastapi_users.password import PasswordHelper
-from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.time import utc_now
-from ade_api.core.auth.users import get_cookie_transport, get_password_helper
+from ade_api.core.auth.users import SyncAccessTokenDatabase, get_cookie_transport, get_password_helper
 from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db import get_db_session
+from ade_api.db import get_sessionmaker
 from ade_api.models import AccessToken, OAuthAccount, User
 from ade_api.settings import Settings, get_settings
 
@@ -143,7 +142,6 @@ async def authorize_oidc(
 async def callback_oidc(
     provider: str,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db_session)],
     password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
     settings: Annotated[Settings, Depends(get_settings)] = None,
     response_mode: Annotated[str | None, Query()] = None,
@@ -195,59 +193,73 @@ async def callback_oidc(
     if not subject:
         return _redirect_error(settings, code="missing_subject")
 
-    stmt = (
-        select(OAuthAccount)
-        .where(OAuthAccount.oauth_name == provider, OAuthAccount.account_id == subject)
-        .limit(1)
-    )
-    existing = await db.execute(stmt)
-    account = existing.scalar_one_or_none()
+    session_factory = get_sessionmaker(request)
 
-    if account is not None:
-        user = await db.get(User, account.user_id)
-        if user is None:
-            return _redirect_error(settings, code="unknown_user")
-    else:
-        if not settings.auth_sso_auto_provision or not email:
-            return _redirect_error(settings, code="auto_provision_disabled")
+    class _OidcProvisionError(Exception):
+        def __init__(self, code: str) -> None:
+            super().__init__(code)
+            self.code = code
 
-        random_password = secrets.token_urlsafe(32)
-        user = User(
-            email=email,
-            hashed_password=password_helper.hash(random_password),
-            display_name=None,
-            is_active=True,
-            is_superuser=False,
-            is_verified=True,
-            is_service_account=False,
-            last_login_at=utc_now(),
-            failed_login_count=0,
-            locked_until=None,
-        )
-        db.add(user)
-        await db.flush()
+    def _resolve_user() -> User:
+        with session_factory() as session:
+            with session.begin():
+                stmt = (
+                    select(OAuthAccount)
+                    .where(OAuthAccount.oauth_name == provider, OAuthAccount.account_id == subject)
+                    .limit(1)
+                )
+                account = session.execute(stmt).scalar_one_or_none()
 
-        account = OAuthAccount(
-            user_id=user.id,
-            oauth_name=provider,
-            account_id=subject,
-            account_email=email,
-            access_token=token.get("access_token", ""),
-            refresh_token=token.get("refresh_token"),
-            expires_at=_normalize_expires(token.get("expires_at")),
-        )
-        db.add(account)
-        await db.flush()
+                if account is not None:
+                    user = session.get(User, account.user_id)
+                    if user is None:
+                        raise _OidcProvisionError("unknown_user")
+                else:
+                    if not settings.auth_sso_auto_provision or not email:
+                        raise _OidcProvisionError("auto_provision_disabled")
 
-    account.access_token = token.get("access_token", "")
-    account.refresh_token = token.get("refresh_token")
-    account.expires_at = _normalize_expires(token.get("expires_at"))
-    if email:
-        account.account_email = email
-    user.last_login_at = utc_now()
-    await db.flush()
+                    random_password = secrets.token_urlsafe(32)
+                    user = User(
+                        email=email,
+                        hashed_password=password_helper.hash(random_password),
+                        display_name=None,
+                        is_active=True,
+                        is_superuser=False,
+                        is_verified=True,
+                        is_service_account=False,
+                        last_login_at=utc_now(),
+                        failed_login_count=0,
+                        locked_until=None,
+                    )
+                    session.add(user)
+                    session.flush()
 
-    access_token_db = SQLAlchemyAccessTokenDatabase(db, AccessToken)
+                    account = OAuthAccount(
+                        user_id=user.id,
+                        oauth_name=provider,
+                        account_id=subject,
+                        account_email=email,
+                        access_token=token.get("access_token", ""),
+                        refresh_token=token.get("refresh_token"),
+                        expires_at=_normalize_expires(token.get("expires_at")),
+                    )
+                    session.add(account)
+
+                account.access_token = token.get("access_token", "")
+                account.refresh_token = token.get("refresh_token")
+                account.expires_at = _normalize_expires(token.get("expires_at"))
+                if email:
+                    account.account_email = email
+                user.last_login_at = utc_now()
+                session.flush()
+                return user
+
+    try:
+        user = await run_in_threadpool(_resolve_user)
+    except _OidcProvisionError as exc:
+        return _redirect_error(settings, code=exc.code)
+
+    access_token_db = SyncAccessTokenDatabase(get_sessionmaker(request), AccessToken)
     strategy = DatabaseStrategy(
         access_token_db,
         lifetime_seconds=int(settings.session_access_ttl.total_seconds()),

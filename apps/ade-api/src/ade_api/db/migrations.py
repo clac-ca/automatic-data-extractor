@@ -16,7 +16,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import make_url
 
-from .database import DatabaseConfig, build_sync_url
+from .database import DatabaseSettings
 
 __all__ = [
     "run_migrations",
@@ -48,21 +48,21 @@ def migration_timeout_seconds(value: Any | None = None) -> float | None:
     return timeout
 
 
-def run_migrations(cfg: DatabaseConfig, *, revision: str = "head") -> None:
+def run_migrations(settings: DatabaseSettings | None = None, *, revision: str = "head") -> None:
     alembic_ini = default_alembic_ini_path()
     if not alembic_ini.exists():
         raise FileNotFoundError(f"Alembic config not found at {alembic_ini}")
 
     alembic_cfg = Config(str(alembic_ini))
     alembic_cfg.set_main_option("script_location", str(alembic_ini.parent / "migrations"))
-    sync_url = build_sync_url(cfg)
-    _ensure_sqlite_parent_dir(sync_url)
-    alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
+    resolved = settings or DatabaseSettings.from_env()
+    _ensure_sqlite_parent_dir(resolved.url)
+    alembic_cfg.set_main_option("sqlalchemy.url", resolved.url)
     command.upgrade(alembic_cfg, revision)
 
 
 async def run_migrations_async(
-    cfg: DatabaseConfig,
+    settings: DatabaseSettings | None = None,
     *,
     revision: str = "head",
     timeout_seconds: float | None = None,
@@ -70,10 +70,10 @@ async def run_migrations_async(
     timeout = migration_timeout_seconds(timeout_seconds)
     try:
         if timeout is None:
-            await asyncio.to_thread(run_migrations, cfg, revision=revision)
+            await asyncio.to_thread(run_migrations, settings, revision=revision)
         else:
             await asyncio.wait_for(
-                asyncio.to_thread(run_migrations, cfg, revision=revision),
+                asyncio.to_thread(run_migrations, settings, revision=revision),
                 timeout=timeout,
             )
     except TimeoutError as exc:

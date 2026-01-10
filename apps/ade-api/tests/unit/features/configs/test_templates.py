@@ -3,20 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import uuid4
 
-import pytest
-
 from ade_api.features.configs.storage import ConfigStorage
 
 
-@pytest.mark.asyncio
-async def test_templates_materialize_and_load(
+def test_templates_materialize_and_load(
     tmp_path: Path,
 ) -> None:
     storage = ConfigStorage(configs_root=tmp_path / "configs")
     workspace_id = uuid4()
     configuration_id = uuid4()
 
-    await storage.materialize_from_template(
+    storage.materialize_from_template(
         workspace_id=workspace_id,
         configuration_id=configuration_id,
     )

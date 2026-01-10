@@ -44,8 +44,8 @@ Top-level keys match the engine schema; the worker adds optional context inside 
 ## Persistence, replay, and SSE
 - **Run logs**: `<runs_root>/<workspace>/<run_id>/logs/events.ndjson` (one stream per run).
 - **Environment logs**: `<venvs_root>/<workspace>/<configuration>/<deps_digest>/<environment_id>/logs/events.ndjson`.
-- SSE frames always include `id: <sequence>`; if the event already has a numeric `sequence`, that value is reused. Otherwise, the API assigns a monotonic counter as it tails the file.
-- Replay reads the NDJSON log in order, skips entries until the cursor (`Last-Event-ID` or `after_sequence`) is reached, then continues live on the same stream.
+- SSE frames always include `id: <byte_offset>`; the value is the byte offset after the last fully processed newline.
+- Replay seeks to the cursor (`Last-Event-ID` or `after_sequence`) and continues live; the cursor value is a byte offset into the NDJSON log.
 
 ## Naming & versioning
 - Envelope name stays `EventRecord`; add new fields under `data` to avoid breaking changes.

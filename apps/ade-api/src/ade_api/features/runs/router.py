@@ -21,7 +21,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
-from ade_api.api.deps import SessionDep, get_idempotency_service, get_runs_service
+from ade_api.api.deps import SessionDep, SettingsDep, get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.listing import (
     ListQueryParams,
@@ -38,6 +38,7 @@ from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
 )
 from ade_api.core.auth import AuthenticatedPrincipal
+from ade_api.db import get_sessionmaker
 from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.idempotency import (
@@ -145,7 +146,7 @@ def get_run_column_filters(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
-async def create_run_endpoint(
+def create_run_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunCreateRequest,
@@ -163,7 +164,7 @@ async def create_run_endpoint(
         path=request.url.path,
         payload=payload,
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -172,7 +173,7 @@ async def create_run_endpoint(
         return replay.to_response()
 
     try:
-        run = await service.prepare_run(
+        run = service.prepare_run(
             configuration_id=configuration_id,
             options=payload.options,
         )
@@ -193,8 +194,8 @@ async def create_run_endpoint(
             },
         ) from exc
 
-    resource = await service.to_resource(run)
-    await idempotency.store_response(
+    resource = service.to_resource(run)
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -210,7 +211,7 @@ async def create_run_endpoint(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
-async def create_runs_batch_endpoint(
+def create_runs_batch_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunBatchCreateRequest,
@@ -228,7 +229,7 @@ async def create_runs_batch_endpoint(
         path=request.url.path,
         payload=payload,
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -237,7 +238,7 @@ async def create_runs_batch_endpoint(
         return replay.to_response()
 
     try:
-        runs = await service.prepare_runs_batch(
+        runs = service.prepare_runs_batch(
             configuration_id=configuration_id,
             document_ids=payload.document_ids,
             options=payload.options,
@@ -257,9 +258,9 @@ async def create_runs_batch_endpoint(
             },
         ) from exc
 
-    resources = [await service.to_resource(run) for run in runs]
+    resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)
-    await idempotency.store_response(
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -275,7 +276,7 @@ async def create_runs_batch_endpoint(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
-async def create_workspace_run_endpoint(
+def create_workspace_run_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceCreateRequest,
@@ -296,7 +297,7 @@ async def create_workspace_run_endpoint(
         path=request.url.path,
         payload=payload,
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -305,7 +306,7 @@ async def create_workspace_run_endpoint(
         return replay.to_response()
 
     try:
-        run = await service.prepare_run_for_workspace(
+        run = service.prepare_run_for_workspace(
             workspace_id=workspace_id,
             configuration_id=payload.configuration_id,
             input_document_id=payload.input_document_id,
@@ -328,8 +329,8 @@ async def create_workspace_run_endpoint(
             },
         ) from exc
 
-    resource = await service.to_resource(run)
-    await idempotency.store_response(
+    resource = service.to_resource(run)
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -345,7 +346,7 @@ async def create_workspace_run_endpoint(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
 )
-async def create_workspace_runs_batch_endpoint(
+def create_workspace_runs_batch_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceBatchCreateRequest,
@@ -366,7 +367,7 @@ async def create_workspace_runs_batch_endpoint(
         path=request.url.path,
         payload=payload,
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -375,7 +376,7 @@ async def create_workspace_runs_batch_endpoint(
         return replay.to_response()
 
     try:
-        runs = await service.prepare_runs_batch_for_workspace(
+        runs = service.prepare_runs_batch_for_workspace(
             workspace_id=workspace_id,
             configuration_id=payload.configuration_id,
             document_ids=payload.document_ids,
@@ -396,9 +397,9 @@ async def create_workspace_runs_batch_endpoint(
             },
         ) from exc
 
-    resources = [await service.to_resource(run) for run in runs]
+    resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)
-    await idempotency.store_response(
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -413,7 +414,7 @@ async def create_workspace_runs_batch_endpoint(
     response_model=RunPage,
     response_model_exclude_none=True,
 )
-async def list_configuration_runs_endpoint(
+def list_configuration_runs_endpoint(
     configuration_id: ConfigurationPath,
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     _guard: Annotated[None, Depends(strict_list_query_guard())],
@@ -426,7 +427,7 @@ async def list_configuration_runs_endpoint(
             default=DEFAULT_SORT,
             id_field=ID_FIELD,
         )
-        return await service.list_runs_for_configuration(
+        return service.list_runs_for_configuration(
             configuration_id=configuration_id,
             filters=list_query.filters,
             join_operator=list_query.join_operator,
@@ -444,7 +445,7 @@ async def list_configuration_runs_endpoint(
     response_model=RunPage,
     response_model_exclude_none=True,
 )
-async def list_workspace_runs_endpoint(
+def list_workspace_runs_endpoint(
     workspace_id: WorkspacePath,
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     _guard: Annotated[None, Depends(strict_list_query_guard())],
@@ -456,7 +457,7 @@ async def list_workspace_runs_endpoint(
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    return await service.list_runs(
+    return service.list_runs(
         workspace_id=workspace_id,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
@@ -468,14 +469,14 @@ async def list_workspace_runs_endpoint(
 
 
 @router.get("/runs/{runId}", response_model=RunResource)
-async def get_run_endpoint(
+def get_run_endpoint(
     run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
-    run = await service.get_run(run_id)
+    run = service.get_run(run_id)
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
-    return await service.to_resource(run)
+    return service.to_resource(run)
 
 
 @router.get(
@@ -483,12 +484,12 @@ async def get_run_endpoint(
     response_model=RunMetricsResource,
     response_model_exclude_none=True,
 )
-async def get_run_metrics_endpoint(
+def get_run_metrics_endpoint(
     run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunMetricsResource:
     try:
-        metrics = await service.get_run_metrics(run_id=run_id)
+        metrics = service.get_run_metrics(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if metrics is None:
@@ -501,12 +502,12 @@ async def get_run_metrics_endpoint(
     response_model=list[RunFieldResource],
     response_model_exclude_none=True,
 )
-async def list_run_fields_endpoint(
+def list_run_fields_endpoint(
     run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> list[RunFieldResource]:
     try:
-        fields = await service.list_run_fields(run_id=run_id)
+        fields = service.list_run_fields(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [RunFieldResource.model_validate(item) for item in fields]
@@ -517,13 +518,13 @@ async def list_run_fields_endpoint(
     response_model=list[RunColumnResource],
     response_model_exclude_none=True,
 )
-async def list_run_columns_endpoint(
+def list_run_columns_endpoint(
     run_id: RunPath,
     filters: Annotated[RunColumnFilters, Depends(get_run_column_filters)],
     service: RunsService = runs_service_dependency,
 ) -> list[RunColumnResource]:
     try:
-        columns = await service.list_run_columns(run_id=run_id, filters=filters)
+        columns = service.list_run_columns(run_id=run_id, filters=filters)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return [RunColumnResource.model_validate(item) for item in columns]
@@ -535,12 +536,12 @@ async def list_run_columns_endpoint(
     response_model_exclude_none=True,
     summary="Get run input metadata",
 )
-async def get_run_input_endpoint(
+def get_run_input_endpoint(
     run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunInput:
     try:
-        return await service.get_run_input_metadata(run_id=run_id)
+        return service.get_run_input_metadata(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
@@ -553,55 +554,58 @@ async def get_run_input_endpoint(
     "/runs/{runId}/input/download",
     summary="Download run input file",
 )
-async def download_run_input_endpoint(
+def download_run_input_endpoint(
     run_id: RunPath,
-    db_session: SessionDep,
-    service: RunsService = runs_service_dependency,
+    request: Request,
+    settings: SettingsDep,
 ) -> StreamingResponse:
+    session_factory = get_sessionmaker(request)
     try:
-        run, document, stream = await service.stream_run_input(run_id=run_id)
+        with session_factory() as session:
+            service = RunsService(session=session, settings=settings)
+            _, document, stream = service.stream_run_input(run_id=run_id)
+            media_type = document.content_type or "application/octet-stream"
+            disposition = document.original_filename
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except (RunDocumentMissingError, RunInputMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    await db_session.close()
-    media_type = document.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    disposition = document.original_filename
     response.headers["Content-Disposition"] = disposition
     return response
 
 
 @router.get("/runs/{runId}/events/stream")
-async def stream_run_events_endpoint(
+def stream_run_events_endpoint(
     run_id: RunPath,
     request: Request,
-    db_session: SessionDep,
+    settings: SettingsDep,
     after_sequence: int | None = Query(default=None, ge=0),
-    service: RunsService = runs_service_dependency,
 ) -> EventSourceResponse:
     last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
         "Last-Event-ID"
     )
-    start_sequence = after_sequence
-    if start_sequence is None and last_event_id_header:
+    start_offset = after_sequence
+    if start_offset is None and last_event_id_header:
         try:
-            start_sequence = int(last_event_id_header)
+            start_offset = int(last_event_id_header)
         except ValueError:
-            start_sequence = None
-    start_sequence = start_sequence or 0
+            start_offset = None
+    start_offset = start_offset or 0
 
+    session_factory = get_sessionmaker(request)
     try:
-        log_path = await service.get_event_log_path(run_id=run_id)
+        with session_factory() as session:
+            service = RunsService(session=session, settings=settings)
+            log_path = service.get_event_log_path(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    await db_session.close()
 
     return EventSourceResponse(
         stream_ndjson_events(
             path=log_path,
-            start_sequence=start_sequence,
+            start_offset=start_offset,
             stop_events={"run.complete"},
             ping_interval=15,
         ),
@@ -618,16 +622,18 @@ async def stream_run_events_endpoint(
     responses={status.HTTP_404_NOT_FOUND: {"description": "Events unavailable"}},
     summary="Download run events (NDJSON log)",
 )
-async def download_run_events_file_endpoint(
+def download_run_events_file_endpoint(
     run_id: RunPath,
-    db_session: SessionDep,
-    service: RunsService = runs_service_dependency,
+    request: Request,
+    settings: SettingsDep,
 ):
+    session_factory = get_sessionmaker(request)
     try:
-        path = await service.get_logs_file_path(run_id=run_id)
+        with session_factory() as session:
+            service = RunsService(session=session, settings=settings)
+            path = service.get_logs_file_path(run_id=run_id)
     except (RunNotFoundError, RunLogsFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    await db_session.close()
     return FileResponse(
         path=path,
         media_type="application/x-ndjson",
@@ -645,12 +651,12 @@ async def download_run_events_file_endpoint(
     },
     summary="Get run output metadata",
 )
-async def get_run_output_metadata_endpoint(
+def get_run_output_metadata_endpoint(
     run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> RunOutput:
     try:
-        return await service.get_run_output_metadata(run_id=run_id)
+        return service.get_run_output_metadata(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -664,40 +670,42 @@ async def get_run_output_metadata_endpoint(
     },
     summary="Download run output file",
 )
-async def download_run_output_endpoint(
+def download_run_output_endpoint(
     run_id: RunPath,
-    db_session: SessionDep,
-    service: RunsService = runs_service_dependency,
+    request: Request,
+    settings: SettingsDep,
 ):
+    session_factory = get_sessionmaker(request)
     try:
-        run, path = await service.resolve_output_for_download(run_id=run_id)
+        with session_factory() as session:
+            service = RunsService(session=session, settings=settings)
+            try:
+                _, path = service.resolve_output_for_download(run_id=run_id)
+            except RunOutputNotReadyError as exc:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail={
+                        "error": {
+                            "code": "OUTPUT_NOT_READY",
+                            "message": str(exc),
+                        }
+                    },
+                ) from exc
+            except RunOutputMissingError as exc:
+                run_record = service.get_run(run_id)  # type: ignore[arg-type]
+                if run_record and run_record.status is RunStatus.FAILED:
+                    detail = {
+                        "error": {
+                            "code": "RUN_FAILED_NO_OUTPUT",
+                            "message": str(exc),
+                        }
+                    }
+                else:
+                    detail = str(exc)
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunOutputNotReadyError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "OUTPUT_NOT_READY",
-                    "message": str(exc),
-                }
-            },
-        ) from exc
-    except RunOutputMissingError as exc:
-        status_code = status.HTTP_404_NOT_FOUND
-        run_record = await service.get_run(run_id)  # type: ignore[arg-type]
-        if run_record and run_record.status is RunStatus.FAILED:
-            detail = {
-                "error": {
-                    "code": "RUN_FAILED_NO_OUTPUT",
-                    "message": str(exc),
-                }
-            }
-        else:
-            detail = str(exc)
-        raise HTTPException(status_code, detail=detail) from exc
 
-    await db_session.close()
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return FileResponse(
         path=path,
@@ -723,12 +731,12 @@ async def download_run_output_endpoint(
     },
     summary="List run output worksheets",
 )
-async def list_run_output_sheets_endpoint(
+def list_run_output_sheets_endpoint(
     run_id: RunPath,
     service: RunsService = runs_service_dependency,
 ) -> list[RunOutputSheet]:
     try:
-        return await service.list_run_output_sheets(run_id=run_id)
+        return service.list_run_output_sheets(run_id=run_id)
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunOutputNotReadyError as exc:
@@ -743,7 +751,7 @@ async def list_run_output_sheets_endpoint(
         ) from exc
     except RunOutputMissingError as exc:
         status_code = status.HTTP_404_NOT_FOUND
-        run_record = await service.get_run(run_id)  # type: ignore[arg-type]
+        run_record = service.get_run(run_id)  # type: ignore[arg-type]
         if run_record and run_record.status is RunStatus.FAILED:
             detail = {
                 "error": {
@@ -779,7 +787,7 @@ async def list_run_output_sheets_endpoint(
         },
     },
 )
-async def preview_run_output_endpoint(
+def preview_run_output_endpoint(
     run_id: RunPath,
     response: Response,
     service: RunsService = runs_service_dependency,
@@ -847,7 +855,7 @@ async def preview_run_output_endpoint(
         sheet_index = 0
     try:
         response.headers["Cache-Control"] = "no-store"
-        return await service.get_run_output_preview(
+        return service.get_run_output_preview(
             run_id=run_id,
             max_rows=max_rows,
             max_columns=max_columns,
@@ -870,7 +878,7 @@ async def preview_run_output_endpoint(
         ) from exc
     except RunOutputMissingError as exc:
         status_code = status.HTTP_404_NOT_FOUND
-        run_record = await service.get_run(run_id)  # type: ignore[arg-type]
+        run_record = service.get_run(run_id)  # type: ignore[arg-type]
         if run_record and run_record.status is RunStatus.FAILED:
             detail = {
                 "error": {

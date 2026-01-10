@@ -9,12 +9,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from ade_api.db import get_db_session
+from ade_api.db import get_db
 from ade_api.settings import Settings, get_settings
 
-SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDep = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 

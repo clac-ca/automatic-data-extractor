@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import mimetypes
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,10 +13,9 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import openpyxl
-from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
@@ -111,6 +110,15 @@ class RunPathsSnapshot:
     processed_file: str | None = None
 
 
+def _run_with_timeout(func, *, timeout: float, **kwargs):
+    """Run a callable with a timeout to avoid hanging on large workbook operations."""
+    if timeout <= 0:
+        return func(**kwargs)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, **kwargs)
+        return future.result(timeout=timeout)
+
+
 
 # --------------------------------------------------------------------------- #
 # Main service
@@ -130,7 +138,7 @@ class RunsService:
     def __init__(
         self,
         *,
-        session: AsyncSession,
+        session: Session,
         settings: Settings,
         storage: ConfigStorage | None = None,
     ) -> None:
@@ -160,7 +168,7 @@ class RunsService:
     # Run lifecycle: creation and queueing
     # --------------------------------------------------------------------- #
 
-    async def prepare_run(
+    def prepare_run(
         self,
         *,
         configuration_id: UUID,
@@ -178,24 +186,24 @@ class RunsService:
             ),
         )
 
-        configuration = await self._resolve_configuration(configuration_id)
+        configuration = self._resolve_configuration(configuration_id)
 
         input_document_id = options.input_document_id
         if not input_document_id:
             raise RunInputMissingError("Input document is required to create a run")
-        await self._require_document(
+        self._require_document(
             workspace_id=configuration.workspace_id,
             document_id=input_document_id,
         )
 
-        existing = await self._runs.list_active_for_documents(
+        existing = self._runs.list_active_for_documents(
             configuration_id=configuration.id,
             document_ids=[input_document_id],
         )
         if existing:
             run = existing[0]
             configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-            await self._session.commit()
+            self._session.flush()
             logger.info(
                 "run.prepare.noop",
                 extra=log_context(
@@ -208,13 +216,13 @@ class RunsService:
             )
             return run
 
-        await self._enforce_queue_capacity()
+        self._enforce_queue_capacity()
 
         selected_sheet_names = self._select_input_sheet_names(options)
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
-        deps_digest = await self._resolve_deps_digest(configuration)
+        deps_digest = self._resolve_deps_digest(configuration)
         engine_spec = self._settings.engine_spec
-        await self._insert_runs_for_documents(
+        self._insert_runs_for_documents(
             configuration=configuration,
             document_ids=[input_document_id],
             engine_spec=engine_spec,
@@ -231,9 +239,9 @@ class RunsService:
 
         # Touch configuration usage timestamp.
         configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-        await self._session.commit()
+        self._session.flush()
 
-        run = await self._require_active_run(
+        run = self._require_active_run(
             configuration_id=configuration.id,
             document_id=input_document_id,
         )
@@ -251,7 +259,7 @@ class RunsService:
         )
         return run
 
-    async def prepare_run_for_workspace(
+    def prepare_run_for_workspace(
         self,
         *,
         workspace_id: UUID,
@@ -261,7 +269,7 @@ class RunsService:
     ) -> Run:
         """Create a run for the workspace, resolving the active configuration if needed."""
 
-        configuration = await self._resolve_workspace_configuration(
+        configuration = self._resolve_workspace_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -269,12 +277,12 @@ class RunsService:
             input_document_id=input_document_id,
             options=options,
         )
-        return await self.prepare_run(
+        return self.prepare_run(
             configuration_id=configuration.id,
             options=run_options,
         )
 
-    async def prepare_runs_batch(
+    def prepare_runs_batch(
         self,
         *,
         configuration_id: UUID,
@@ -300,8 +308,8 @@ class RunsService:
         if not document_ids:
             return []
 
-        configuration = await self._resolve_configuration(configuration_id)
-        await self._require_documents(
+        configuration = self._resolve_configuration(configuration_id)
+        self._require_documents(
             workspace_id=configuration.workspace_id,
             document_ids=document_ids,
         )
@@ -314,7 +322,7 @@ class RunsService:
         if skip_existing_check:
             new_document_ids = list(document_ids)
         else:
-            existing = await self._runs.list_active_for_documents(
+            existing = self._runs.list_active_for_documents(
                 configuration_id=configuration.id,
                 document_ids=list(document_ids),
             )
@@ -322,7 +330,7 @@ class RunsService:
             new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
 
         if new_document_ids:
-            await self._enforce_queue_capacity(
+            self._enforce_queue_capacity(
                 requested=len(new_document_ids),
                 queued_count=queued_count,
             )
@@ -361,9 +369,9 @@ class RunsService:
                     metadata=options.metadata,
                 )
 
-            deps_digest = await self._resolve_deps_digest(configuration)
+            deps_digest = self._resolve_deps_digest(configuration)
             engine_spec = self._settings.engine_spec
-            await self._insert_runs_for_documents(
+            self._insert_runs_for_documents(
                 configuration=configuration,
                 document_ids=new_document_ids,
                 engine_spec=engine_spec,
@@ -378,9 +386,9 @@ class RunsService:
             )
 
         configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-        await self._session.commit()
+        self._session.flush()
 
-        runs = await self._runs.list_active_for_documents(
+        runs = self._runs.list_active_for_documents(
             configuration_id=configuration.id,
             document_ids=list(document_ids),
         )
@@ -396,7 +404,7 @@ class RunsService:
             )
         return runs
 
-    async def prepare_runs_batch_for_workspace(
+    def prepare_runs_batch_for_workspace(
         self,
         *,
         workspace_id: UUID,
@@ -406,17 +414,17 @@ class RunsService:
     ) -> list[Run]:
         """Create batch runs for the workspace, resolving the active configuration if needed."""
 
-        configuration = await self._resolve_workspace_configuration(
+        configuration = self._resolve_workspace_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
-        return await self.prepare_runs_batch(
+        return self.prepare_runs_batch(
             configuration_id=configuration.id,
             document_ids=document_ids,
             options=options,
         )
 
-    async def load_run_options(self, run: Run) -> RunCreateOptions:
+    def load_run_options(self, run: Run) -> RunCreateOptions:
         """Rehydrate run options from the run row."""
 
         payload: dict[str, Any] = dict(run.run_options or {})
@@ -438,7 +446,7 @@ class RunsService:
                 input_sheet_names=list(run.input_sheet_names or []),
             )
 
-    async def enqueue_pending_runs_for_configuration(
+    def enqueue_pending_runs_for_configuration(
         self,
         *,
         configuration_id: UUID,
@@ -447,10 +455,10 @@ class RunsService:
         """Queue runs for uploaded documents without runs using the active configuration."""
 
         try:
-            configuration = await self._resolve_configuration(configuration_id)
+            configuration = self._resolve_configuration(configuration_id)
         except ConfigurationNotFoundError:
             return 0
-        if await self._processing_paused(configuration.workspace_id):
+        if self._processing_paused(configuration.workspace_id):
             logger.info(
                 "run.pending.enqueue.skip.processing_paused",
                 extra=log_context(
@@ -480,12 +488,12 @@ class RunsService:
             queued_count = None
             remaining = None
             if queue_limit:
-                queued_count = await self._runs.count_queued()
+                queued_count = self._runs.count_queued()
                 remaining = max(queue_limit - queued_count, 0)
                 if remaining <= 0:
                     break
             limit = batch_size if remaining is None else min(batch_size, remaining)
-            documents = await self._pending_documents(
+            documents = self._pending_documents(
                 workspace_id=configuration.workspace_id,
                 configuration_id=configuration.id,
                 limit=limit,
@@ -515,7 +523,7 @@ class RunsService:
                 if run_options and run_options.active_sheet_only:
                     active_sheet_only_by_document_id[document.id] = True
             try:
-                runs = await self.prepare_runs_batch(
+                runs = self.prepare_runs_batch(
                     configuration_id=configuration.id,
                     document_ids=document_ids,
                     options=RunBatchCreateOptions(),
@@ -548,17 +556,17 @@ class RunsService:
             )
         return total
 
-    async def is_processing_paused(self, *, workspace_id: UUID) -> bool:
-        return await self._processing_paused(workspace_id)
+    def is_processing_paused(self, *, workspace_id: UUID) -> bool:
+        return self._processing_paused(workspace_id)
 
-    async def _remaining_queue_capacity(self) -> int | None:
+    def _remaining_queue_capacity(self) -> int | None:
         limit = self._settings.queue_size
         if not limit:
             return None
-        queued = await self._runs.count_queued()
+        queued = self._runs.count_queued()
         return max(limit - queued, 0)
 
-    async def _pending_documents(
+    def _pending_documents(
         self,
         *,
         workspace_id: UUID,
@@ -587,16 +595,16 @@ class RunsService:
             .order_by(Document.created_at.asc())
             .limit(limit)
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def _require_active_run(
+    def _require_active_run(
         self,
         *,
         configuration_id: UUID,
         document_id: UUID,
     ) -> Run:
-        runs = await self._runs.list_active_for_documents(
+        runs = self._runs.list_active_for_documents(
             configuration_id=configuration_id,
             document_ids=[document_id],
         )
@@ -604,17 +612,17 @@ class RunsService:
             raise RuntimeError(f"No active run found for document {document_id}")
         return runs[0]
 
-    async def _resolve_deps_digest(self, configuration: Configuration) -> str:
+    def _resolve_deps_digest(self, configuration: Configuration) -> str:
         try:
-            config_path = await self._storage.ensure_config_path(
+            config_path = self._storage.ensure_config_path(
                 configuration.workspace_id,
                 configuration.id,
             )
         except Exception as exc:  # pragma: no cover - surface as run error
             raise RunInputMissingError("Configuration files are missing") from exc
-        return await run_in_threadpool(compute_dependency_digest, config_path)
+        return compute_dependency_digest(config_path)
 
-    async def _insert_runs_for_documents(
+    def _insert_runs_for_documents(
         self,
         *,
         configuration: Configuration,
@@ -636,7 +644,7 @@ class RunsService:
         )
         if document_status is not None:
             base_stmt = base_stmt.where(Document.status == document_status)
-        result = await self._session.execute(base_stmt)
+        result = self._session.execute(base_stmt)
         eligible_ids = [doc_id for (doc_id,) in result.all()]
         if not eligible_ids:
             return
@@ -647,7 +655,7 @@ class RunsService:
                 Run.input_document_id.in_(eligible_ids),
                 Run.status.in_(list(existing_statuses)),
             )
-            existing_result = await self._session.execute(existing_stmt)
+            existing_result = self._session.execute(existing_stmt)
             existing_ids = {doc_id for (doc_id,) in existing_result.all()}
             eligible_ids = [doc_id for doc_id in eligible_ids if doc_id not in existing_ids]
             if not eligible_ids:
@@ -684,11 +692,10 @@ class RunsService:
         rows = build_rows(eligible_ids)
         for attempt in range(2):
             try:
-                await self._session.execute(insert(Run), rows)
-                await self._session.commit()
+                with self._session.begin_nested():
+                    self._session.execute(insert(Run), rows)
                 return
             except IntegrityError:
-                await self._session.rollback()
                 if attempt:
                     raise
                 if existing_statuses:
@@ -697,14 +704,14 @@ class RunsService:
                         Run.input_document_id.in_(eligible_ids),
                         Run.status.in_(list(existing_statuses)),
                     )
-                    existing_result = await self._session.execute(existing_stmt)
+                    existing_result = self._session.execute(existing_stmt)
                     existing_ids = {doc_id for (doc_id,) in existing_result.all()}
                     remaining = [doc_id for doc_id in eligible_ids if doc_id not in existing_ids]
                     if not remaining:
                         return
                     rows = build_rows(remaining)
 
-    async def _enforce_queue_capacity(
+    def _enforce_queue_capacity(
         self,
         *,
         requested: int = 1,
@@ -714,7 +721,7 @@ class RunsService:
         if not limit or requested <= 0:
             return
 
-        queued = queued_count if queued_count is not None else await self._runs.count_queued()
+        queued = queued_count if queued_count is not None else self._runs.count_queued()
         if queued + requested > limit:
             raise RunQueueFullError(f"Run queue is full (limit {limit})")
 
@@ -722,14 +729,14 @@ class RunsService:
     # Public read APIs (runs, summaries, outputs)
     # --------------------------------------------------------------------- #
 
-    async def get_run(self, run_id: UUID) -> Run | None:
+    def get_run(self, run_id: UUID) -> Run | None:
         """Return the run instance for ``run_id`` if it exists."""
 
         logger.debug(
             "run.get.start",
             extra=log_context(run_id=run_id),
         )
-        run = await self._runs.get(run_id)
+        run = self._runs.get(run_id)
         if run is None:
             logger.debug(
                 "run.get.miss",
@@ -747,19 +754,19 @@ class RunsService:
             )
         return run
 
-    async def get_run_metrics(self, *, run_id: UUID) -> RunMetrics | None:
+    def get_run_metrics(self, *, run_id: UUID) -> RunMetrics | None:
         """Return persisted run metrics for ``run_id`` when available."""
 
-        run = await self._require_run(run_id)
-        return await self._runs.get_metrics(run.id)
+        run = self._require_run(run_id)
+        return self._runs.get_metrics(run.id)
 
-    async def list_run_fields(self, *, run_id: UUID) -> list[RunField]:
+    def list_run_fields(self, *, run_id: UUID) -> list[RunField]:
         """Return field summaries for ``run_id``."""
 
-        run = await self._require_run(run_id)
-        return await self._runs.list_fields(run.id)
+        run = self._require_run(run_id)
+        return self._runs.list_fields(run.id)
 
-    async def list_run_columns(
+    def list_run_columns(
         self,
         *,
         run_id: UUID,
@@ -767,10 +774,10 @@ class RunsService:
     ) -> list[RunTableColumn]:
         """Return detected columns for ``run_id`` with optional filters."""
 
-        run = await self._require_run(run_id)
-        return await self._runs.list_columns(run_id=run.id, filters=filters)
+        run = self._require_run(run_id)
+        return self._runs.list_columns(run_id=run.id, filters=filters)
 
-    async def list_runs(
+    def list_runs(
         self,
         *,
         workspace_id: UUID,
@@ -797,7 +804,7 @@ class RunsService:
             ),
         )
 
-        page_result = await self._runs.list_by_workspace(
+        page_result = self._runs.list_by_workspace(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             filters=filters,
@@ -807,7 +814,7 @@ class RunsService:
             page=page,
             per_page=per_page,
         )
-        resources = [await self.to_resource(run) for run in page_result.items]
+        resources = [self.to_resource(run) for run in page_result.items]
         response = RunPage(
             items=resources,
             page=page_result.page,
@@ -830,7 +837,7 @@ class RunsService:
         )
         return response
 
-    async def list_runs_for_configuration(
+    def list_runs_for_configuration(
         self,
         *,
         configuration_id: UUID,
@@ -843,8 +850,8 @@ class RunsService:
     ) -> RunPage:
         """Return paginated runs for ``configuration_id`` scoped to its workspace."""
 
-        configuration = await self._resolve_configuration(configuration_id)
-        return await self.list_runs(
+        configuration = self._resolve_configuration(configuration_id)
+        return self.list_runs(
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
             filters=filters,
@@ -855,7 +862,7 @@ class RunsService:
             per_page=per_page,
         )
 
-    async def to_resource(self, run: Run) -> RunResource:
+    def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
 
         run_dir = self._run_dir_for_run(
@@ -882,12 +889,12 @@ class RunsService:
         failure_stage = None
         failure_message = run.error_message
 
-        input_meta = await self._build_input_metadata(
+        input_meta = self._build_input_metadata(
             run=run,
             files_counts={},
             sheets_counts={},
         )
-        output_meta = await self._build_output_metadata(
+        output_meta = self._build_output_metadata(
             run=run,
             run_dir=run_dir,
             paths=paths,
@@ -923,7 +930,7 @@ class RunsService:
         processed_file = paths.processed_file
         return processed_file
 
-    async def _build_input_metadata(
+    def _build_input_metadata(
         self,
         *,
         run: Run,
@@ -939,7 +946,7 @@ class RunsService:
         if document_id:
             download_url = f"/api/v1/runs/{run.id}/input/download"
             try:
-                document = await self._require_document(
+                document = self._require_document(
                     workspace_id=run.workspace_id,
                     document_id=run.input_document_id,  # type: ignore[arg-type]
                 )
@@ -968,7 +975,7 @@ class RunsService:
             input_sheet_count=sheets_counts.get("total"),
         )
 
-    async def _build_output_metadata(
+    def _build_output_metadata(
         self,
         *,
         run: Run,
@@ -1037,35 +1044,34 @@ class RunsService:
             output_metadata=output_metadata,
         )
 
-    async def get_run_input_metadata(
+    def get_run_input_metadata(
         self,
         *,
         run_id: UUID,
     ) -> RunInput:
-        run = await self._require_run(run_id)
-        resource = await self.to_resource(run)
+        run = self._require_run(run_id)
+        resource = self.to_resource(run)
         if resource.input.document_id is None:
             raise RunInputMissingError("Run input is unavailable")
         if resource.input.filename is None:
             raise RunDocumentMissingError("Run input file is unavailable")
         return resource.input
 
-    async def stream_run_input(
+    def stream_run_input(
         self,
         *,
         run_id: UUID,
-    ) -> tuple[Run, Document, AsyncIterator[bytes]]:
-        run = await self._require_run(run_id)
+    ) -> tuple[Run, Document, Iterator[bytes]]:
+        run = self._require_run(run_id)
         if not run.input_document_id:
             raise RunInputMissingError("Run input is unavailable")
-        document = await self._require_document(
+        document = self._require_document(
             workspace_id=run.workspace_id,
             document_id=run.input_document_id,
         )
         storage = self._storage_for(run.workspace_id)
         path = storage.path_for(document.stored_uri)
-        exists = await asyncio.to_thread(path.exists)
-        if not exists:
+        if not path.exists():
             logger.warning(
                 "run.input.stream.missing_file",
                 extra=log_context(
@@ -1080,9 +1086,9 @@ class RunsService:
 
         stream = storage.stream(document.stored_uri)
 
-        async def _guarded() -> AsyncIterator[bytes]:
+        def _guarded() -> Iterator[bytes]:
             try:
-                async for chunk in stream:
+                for chunk in stream:
                     yield chunk
             except FileNotFoundError as exc:
                 logger.warning(
@@ -1099,28 +1105,28 @@ class RunsService:
 
         return run, document, _guarded()
 
-    async def get_run_output_metadata(
+    def get_run_output_metadata(
         self,
         *,
         run_id: UUID,
     ) -> RunOutput:
-        run = await self._require_run(run_id)
-        resource = await self.to_resource(run)
+        run = self._require_run(run_id)
+        resource = self.to_resource(run)
         return resource.output
 
-    async def resolve_output_for_download(
+    def resolve_output_for_download(
         self,
         *,
         run_id: UUID,
     ) -> tuple[Run, Path]:
-        run = await self._require_run(run_id)
+        run = self._require_run(run_id)
         if run.status in {
             RunStatus.QUEUED,
             RunStatus.RUNNING,
         }:
             raise RunOutputNotReadyError("Run output is not available until the run completes.")
         try:
-            path = await self.resolve_output_file(run_id=run_id)
+            path = self.resolve_output_file(run_id=run_id)
         except RunOutputMissingError as err:
             if run.status is RunStatus.FAILED:
                 raise RunOutputMissingError(
@@ -1129,7 +1135,7 @@ class RunsService:
             raise
         return run, path
 
-    async def get_run_output_preview(
+    def get_run_output_preview(
         self,
         *,
         run_id: UUID,
@@ -1155,38 +1161,34 @@ class RunsService:
             ),
         )
 
-        run, path = await self.resolve_output_for_download(run_id=run_id)
+        run, path = self.resolve_output_for_download(run_id=run_id)
         suffix = path.suffix.lower()
         timeout = self._settings.preview_timeout_seconds
 
         try:
             if suffix == ".xlsx":
-                preview = await asyncio.wait_for(
-                    run_in_threadpool(
-                        build_workbook_preview_from_xlsx,
-                        path,
-                        max_rows=max_rows,
-                        max_columns=max_columns,
-                        trim_empty_columns=trim_empty_columns,
-                        trim_empty_rows=trim_empty_rows,
-                        sheet_name=sheet_name,
-                        sheet_index=effective_sheet_index,
-                    ),
+                preview = _run_with_timeout(
+                    build_workbook_preview_from_xlsx,
                     timeout=timeout,
+                    path=path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    trim_empty_columns=trim_empty_columns,
+                    trim_empty_rows=trim_empty_rows,
+                    sheet_name=sheet_name,
+                    sheet_index=effective_sheet_index,
                 )
             elif suffix == ".csv":
-                preview = await asyncio.wait_for(
-                    run_in_threadpool(
-                        build_workbook_preview_from_csv,
-                        path,
-                        max_rows=max_rows,
-                        max_columns=max_columns,
-                        trim_empty_columns=trim_empty_columns,
-                        trim_empty_rows=trim_empty_rows,
-                        sheet_name=sheet_name,
-                        sheet_index=effective_sheet_index,
-                    ),
+                preview = _run_with_timeout(
+                    build_workbook_preview_from_csv,
                     timeout=timeout,
+                    path=path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    trim_empty_columns=trim_empty_columns,
+                    trim_empty_rows=trim_empty_rows,
+                    sheet_name=sheet_name,
+                    sheet_index=effective_sheet_index,
                 )
             else:
                 raise RunOutputPreviewUnsupportedError(
@@ -1197,7 +1199,7 @@ class RunsService:
             raise RunOutputPreviewSheetNotFoundError(
                 f"Sheet {requested!r} was not found in run {run_id!r} output."
             ) from exc
-        except TimeoutError as exc:
+        except FuturesTimeout as exc:
             raise RunOutputPreviewParseError(
                 f"Preview timed out after {timeout:g}s for run {run_id!r} output."
             ) from exc
@@ -1220,7 +1222,7 @@ class RunsService:
         )
         return preview
 
-    async def list_run_output_sheets(
+    def list_run_output_sheets(
         self,
         *,
         run_id: UUID,
@@ -1232,17 +1234,14 @@ class RunsService:
             extra=log_context(run_id=run_id),
         )
 
-        run, path = await self.resolve_output_for_download(run_id=run_id)
+        run, path = self.resolve_output_for_download(run_id=run_id)
         suffix = path.suffix.lower()
         timeout = self._settings.preview_timeout_seconds
 
         if suffix == ".xlsx":
             try:
-                sheets = await asyncio.wait_for(
-                    run_in_threadpool(self._inspect_workbook, path),
-                    timeout=timeout,
-                )
-            except TimeoutError as exc:
+                sheets = _run_with_timeout(self._inspect_workbook, timeout=timeout, path=path)
+            except FuturesTimeout as exc:
                 raise RunOutputSheetParseError(
                     f"Worksheet inspection timed out after {timeout:g}s for run {run_id!r} output."
                 ) from exc
@@ -1281,15 +1280,15 @@ class RunsService:
             f"Sheets are not supported for output file type {suffix!r}."
         )
 
-    async def get_logs_file_path(self, *, run_id: UUID) -> Path:
+    def get_logs_file_path(self, *, run_id: UUID) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
 
         logger.debug(
             "run.logs.file_path.start",
             extra=log_context(run_id=run_id),
         )
-        run = await self._require_run(run_id)
-        logs_path = await self.get_event_log_path(run_id=run_id)
+        run = self._require_run(run_id)
+        logs_path = self.get_event_log_path(run_id=run_id)
         if not logs_path.is_file():
             logger.warning(
                 "run.logs.file_path.missing",
@@ -1312,14 +1311,14 @@ class RunsService:
         )
         return logs_path
 
-    async def get_event_log_path(self, *, run_id: UUID) -> Path:
+    def get_event_log_path(self, *, run_id: UUID) -> Path:
         """Return the NDJSON log path for a run (may not exist yet)."""
 
-        run = await self._require_run(run_id)
+        run = self._require_run(run_id)
         logs_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs"
         return logs_dir / "events.ndjson"
 
-    async def resolve_output_file(
+    def resolve_output_file(
         self,
         *,
         run_id: UUID,
@@ -1330,7 +1329,7 @@ class RunsService:
             "run.outputs.resolve.start",
             extra=log_context(run_id=run_id),
         )
-        run = await self._require_run(run_id)
+        run = self._require_run(run_id)
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
 
         paths_snapshot = self._finalize_paths(
@@ -1522,8 +1521,8 @@ class RunsService:
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
         return None
 
-    async def _require_run(self, run_id: UUID) -> Run:
-        run = await self._runs.get(run_id)
+    def _require_run(self, run_id: UUID) -> Run:
+        run = self._runs.get(run_id)
         if run is None:
             logger.warning(
                 "run.require_run.not_found",
@@ -1532,8 +1531,8 @@ class RunsService:
             raise RunNotFoundError(run_id)
         return run
 
-    async def _require_document(self, *, workspace_id: UUID, document_id: UUID) -> Document:
-        document = await self._documents.get_document(
+    def _require_document(self, *, workspace_id: UUID, document_id: UUID) -> Document:
+        document = self._documents.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -1548,7 +1547,7 @@ class RunsService:
             raise RunDocumentMissingError(f"Document {document_id} not found")
         return document
 
-    async def _require_documents(
+    def _require_documents(
         self,
         *,
         workspace_id: UUID,
@@ -1562,7 +1561,7 @@ class RunsService:
             Document.deleted_at.is_(None),
             Document.id.in_(document_ids),
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         documents = list(result.scalars())
         found = {doc.id for doc in documents}
         missing = [document_id for document_id in document_ids if document_id not in found]
@@ -1582,8 +1581,8 @@ class RunsService:
         base = workspace_documents_root(self._settings, workspace_id)
         return DocumentStorage(base)
 
-    async def _resolve_configuration(self, configuration_id: UUID) -> Configuration:
-        configuration = await self._configs.get_by_id(configuration_id)
+    def _resolve_configuration(self, configuration_id: UUID) -> Configuration:
+        configuration = self._configs.get_by_id(configuration_id)
         if configuration is None:
             logger.warning(
                 "run.config.resolve.not_found",
@@ -1601,20 +1600,20 @@ class RunsService:
             )
         return configuration
 
-    async def _processing_paused(self, workspace_id: UUID) -> bool:
-        workspace = await self._workspaces.get_workspace(workspace_id)
+    def _processing_paused(self, workspace_id: UUID) -> bool:
+        workspace = self._workspaces.get_workspace(workspace_id)
         if workspace is None:
             return False
         return read_processing_paused(workspace.settings)
 
-    async def _resolve_workspace_configuration(
+    def _resolve_workspace_configuration(
         self,
         *,
         workspace_id: UUID,
         configuration_id: UUID | None,
     ) -> Configuration:
         if configuration_id is None:
-            configuration = await self._configs.get_active(workspace_id)
+            configuration = self._configs.get_active(workspace_id)
             if configuration is None:
                 logger.warning(
                     "run.config.resolve.active_missing",
@@ -1622,7 +1621,7 @@ class RunsService:
                 )
                 raise ConfigurationNotFoundError("active_configuration_not_found")
         else:
-            configuration = await self._configs.get(
+            configuration = self._configs.get(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
             )

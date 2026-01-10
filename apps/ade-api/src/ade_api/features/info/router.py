@@ -18,7 +18,7 @@ router = APIRouter(tags=["info"])
     status_code=status.HTTP_200_OK,
     summary="Runtime metadata",
 )
-async def read_info(
+def read_info(
     request: Request,
     settings: SettingsDep,
 ) -> InfoResponse:

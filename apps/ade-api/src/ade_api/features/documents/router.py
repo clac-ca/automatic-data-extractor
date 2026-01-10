@@ -8,7 +8,6 @@ import time
 from typing import Annotated, Any
 from uuid import UUID
 
-import anyio
 from fastapi import (
     APIRouter,
     Depends,
@@ -29,7 +28,6 @@ from pydantic import ValidationError
 from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import (
-    SessionDep,
     SettingsDep,
     get_documents_service,
     get_idempotency_service,
@@ -50,7 +48,7 @@ from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
-from ade_api.db import session_scope
+from ade_api.db import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.idempotency import (
     IdempotencyService,
@@ -216,7 +214,7 @@ def _parse_run_options(run_options: str | None) -> DocumentUploadRunOptions | No
         ) from exc
 
 
-async def _try_enqueue_run(
+def _try_enqueue_run(
     *,
     runs_service: RunsService,
     workspace_id: UUID,
@@ -224,7 +222,7 @@ async def _try_enqueue_run(
     run_options: DocumentUploadRunOptions | None = None,
 ) -> None:
     try:
-        if await runs_service.is_processing_paused(workspace_id=workspace_id):
+        if runs_service.is_processing_paused(workspace_id=workspace_id):
             return
         options = None
         if run_options:
@@ -232,7 +230,7 @@ async def _try_enqueue_run(
                 input_sheet_names=run_options.input_sheet_names,
                 active_sheet_only=run_options.active_sheet_only,
             )
-        await runs_service.prepare_run_for_workspace(
+        runs_service.prepare_run_for_workspace(
             workspace_id=workspace_id,
             input_document_id=document_id,
             configuration_id=None,
@@ -252,17 +250,19 @@ async def _try_enqueue_run(
         )
 
 
-async def _hash_upload_file(upload: UploadFile) -> tuple[str, int]:
+def _hash_upload_file(upload: UploadFile) -> tuple[str, int]:
     hasher = hashlib.sha256()
     total = 0
-    await upload.seek(0)
+    if upload.file is None:  # pragma: no cover - UploadFile always supplies file
+        raise RuntimeError("Upload stream is not available")
+    upload.file.seek(0)
     while True:
-        chunk = await upload.read(_UPLOAD_HASH_CHUNK_SIZE)
+        chunk = upload.file.read(_UPLOAD_HASH_CHUNK_SIZE)
         if not chunk:
             break
         total += len(chunk)
         hasher.update(chunk)
-    await upload.seek(0)
+    upload.file.seek(0)
     return hasher.hexdigest(), total
 
 
@@ -288,7 +288,7 @@ async def _hash_upload_file(upload: UploadFile) -> tuple[str, int]:
         },
     },
 )
-async def upload_document(
+def upload_document(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
     runs_service: RunsServiceDep,
@@ -305,7 +305,7 @@ async def upload_document(
     payload = _parse_metadata(metadata)
     upload_run_options = _parse_run_options(run_options)
     metadata_payload = service.build_upload_metadata(payload, upload_run_options)
-    file_sha256, file_size = await _hash_upload_file(file)
+    file_sha256, file_size = _hash_upload_file(file)
     scope_key = build_scope_key(
         principal_id=str(_actor.id),
         workspace_id=str(workspace_id),
@@ -323,7 +323,7 @@ async def upload_document(
             "file_size": file_size,
         },
     )
-    replay = await idempotency.resolve_replay(
+    replay = idempotency.resolve_replay(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -331,7 +331,7 @@ async def upload_document(
     if replay:
         return replay.to_response()
     try:
-        document = await service.create_document(
+        document = service.create_document(
             workspace_id=workspace_id,
             upload=file,
             metadata=metadata_payload,
@@ -343,14 +343,14 @@ async def upload_document(
     except InvalidDocumentExpirationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    await _try_enqueue_run(
+    _try_enqueue_run(
         runs_service=runs_service,
         workspace_id=workspace_id,
         document_id=document.id,
         run_options=upload_run_options,
     )
 
-    await idempotency.store_response(
+    idempotency.store_response(
         key=idempotency_key,
         scope_key=scope_key,
         request_hash=request_hash,
@@ -379,7 +379,7 @@ async def upload_document(
         },
     },
 )
-async def list_documents(
+def list_documents(
     workspace_id: WorkspacePath,
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     service: DocumentsServiceDep,
@@ -392,7 +392,7 @@ async def list_documents(
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    page_result = await service.list_documents(
+    page_result = service.list_documents(
         workspace_id=workspace_id,
         page=list_query.page,
         per_page=list_query.per_page,
@@ -413,7 +413,7 @@ async def list_documents(
     response_model_exclude_none=True,
     dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit"}))],
 )
-async def list_document_changes(
+def list_document_changes(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
@@ -427,7 +427,7 @@ async def list_document_changes(
             detail="cursor is required",
         )
     try:
-        page = await service.list_document_changes(
+        page = service.list_document_changes(
             workspace_id=workspace_id,
             cursor_token=cursor,
             limit=limit,
@@ -454,37 +454,38 @@ async def stream_document_changes(
     workspace_id: WorkspacePath,
     request: Request,
     settings: SettingsDep,
-    db_session: SessionDep,
     _actor: DocumentReader,
     *,
     cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
 ) -> EventSourceResponse:
     start_cursor = _resolve_change_cursor(request, cursor)
-    await db_session.close()
+    session_factory = get_sessionmaker(request)
 
     async def event_stream():
         cursor_value = start_cursor
         last_send = time.monotonic()
 
-        with anyio.CancelScope(shield=True):
-            async with session_scope() as session:
+        def _resolve_cursor() -> int:
+            with session_factory() as session:
                 events_service = DocumentEventsService(session=session, settings=settings)
-                try:
-                    resolution = await events_service.resolve_cursor(
-                        workspace_id=workspace_id,
-                        cursor=cursor_value,
-                    )
-                except DocumentEventCursorTooOld as exc:
-                    yield sse_json(
-                        "error",
-                        {
-                            "code": "resync_required",
-                            "oldestCursor": str(exc.oldest_cursor),
-                            "latestCursor": str(exc.latest_cursor),
-                        },
-                    )
-                    return
-                cursor_value = resolution.cursor
+                resolution = events_service.resolve_cursor(
+                    workspace_id=workspace_id,
+                    cursor=cursor_value,
+                )
+                return resolution.cursor
+
+        try:
+            cursor_value = await asyncio.to_thread(_resolve_cursor)
+        except DocumentEventCursorTooOld as exc:
+            yield sse_json(
+                "error",
+                {
+                    "code": "resync_required",
+                    "oldestCursor": str(exc.oldest_cursor),
+                    "latestCursor": str(exc.latest_cursor),
+                },
+            )
+            return
 
         yield sse_json("ready", {"cursor": str(cursor_value)})
 
@@ -492,14 +493,16 @@ async def stream_document_changes(
             if await request.is_disconnected():
                 return
 
-            with anyio.CancelScope(shield=True):
-                async with session_scope() as session:
+            def _fetch_changes(current_cursor: int):
+                with session_factory() as session:
                     events_service = DocumentEventsService(session=session, settings=settings)
-                    events = await events_service.fetch_changes_after(
+                    return events_service.fetch_changes_after(
                         workspace_id=workspace_id,
-                        cursor=cursor_value,
+                        cursor=current_cursor,
                         limit=TAILER_BATCH_LIMIT,
                     )
+
+            events = await asyncio.to_thread(_fetch_changes, cursor_value)
 
             if events:
                 for change in events:
@@ -552,7 +555,7 @@ async def stream_document_changes(
         },
     },
 )
-async def update_document(
+def update_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentUpdateRequest,
@@ -563,7 +566,7 @@ async def update_document(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        current = await service.get_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -571,7 +574,7 @@ async def update_document(
             request.headers.get("if-match"),
             expected_token=build_etag_token(current.id, current.version),
         )
-        updated = await service.update_document(
+        updated = service.update_document(
             workspace_id=workspace_id,
             document_id=document_id,
             payload=payload,
@@ -607,7 +610,7 @@ async def update_document(
         },
     },
 )
-async def patch_document_tags_batch(
+def patch_document_tags_batch(
     workspace_id: WorkspacePath,
     payload: DocumentBatchTagsRequest,
     service: DocumentsServiceDep,
@@ -615,7 +618,7 @@ async def patch_document_tags_batch(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchTagsResponse:
     try:
-        documents = await service.patch_document_tags_batch(
+        documents = service.patch_document_tags_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             add=payload.add,
@@ -649,7 +652,7 @@ async def patch_document_tags_batch(
         },
     },
 )
-async def archive_documents_batch_endpoint(
+def archive_documents_batch_endpoint(
     workspace_id: WorkspacePath,
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
@@ -657,7 +660,7 @@ async def archive_documents_batch_endpoint(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
-        documents = await service.archive_documents_batch(
+        documents = service.archive_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             client_request_id=client_request_id,
@@ -687,7 +690,7 @@ async def archive_documents_batch_endpoint(
         },
     },
 )
-async def restore_documents_batch_endpoint(
+def restore_documents_batch_endpoint(
     workspace_id: WorkspacePath,
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
@@ -695,7 +698,7 @@ async def restore_documents_batch_endpoint(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
-        documents = await service.restore_documents_batch(
+        documents = service.restore_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             client_request_id=client_request_id,
@@ -725,7 +728,7 @@ async def restore_documents_batch_endpoint(
         },
     },
 )
-async def archive_document_endpoint(
+def archive_document_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     request: Request,
@@ -734,7 +737,7 @@ async def archive_document_endpoint(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        current = await service.get_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -742,7 +745,7 @@ async def archive_document_endpoint(
             request.headers.get("if-match"),
             expected_token=build_etag_token(current.id, current.version),
         )
-        return await service.archive_document(
+        return service.archive_document(
             workspace_id=workspace_id,
             document_id=document_id,
             client_request_id=client_request_id,
@@ -770,7 +773,7 @@ async def archive_document_endpoint(
         },
     },
 )
-async def restore_document_endpoint(
+def restore_document_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     request: Request,
@@ -779,7 +782,7 @@ async def restore_document_endpoint(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        current = await service.get_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -787,7 +790,7 @@ async def restore_document_endpoint(
             request.headers.get("if-match"),
             expected_token=build_etag_token(current.id, current.version),
         )
-        return await service.restore_document(
+        return service.restore_document(
             workspace_id=workspace_id,
             document_id=document_id,
             client_request_id=client_request_id,
@@ -818,7 +821,7 @@ async def restore_document_endpoint(
         },
     },
 )
-async def replace_document_tags(
+def replace_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsReplace,
@@ -828,7 +831,7 @@ async def replace_document_tags(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        current = await service.get_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -836,7 +839,7 @@ async def replace_document_tags(
             request.headers.get("if-match"),
             expected_token=build_etag_token(current.id, current.version),
         )
-        return await service.replace_document_tags(
+        return service.replace_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             tags=payload.tags,
@@ -870,7 +873,7 @@ async def replace_document_tags(
         },
     },
 )
-async def patch_document_tags(
+def patch_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsPatch,
@@ -880,7 +883,7 @@ async def patch_document_tags(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
-        current = await service.get_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -888,7 +891,7 @@ async def patch_document_tags(
             request.headers.get("if-match"),
             expected_token=build_etag_token(current.id, current.version),
         )
-        return await service.patch_document_tags(
+        return service.patch_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             add=payload.add,
@@ -919,7 +922,7 @@ async def patch_document_tags(
         },
     },
 )
-async def read_document(
+def read_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     response: Response,
@@ -927,7 +930,7 @@ async def read_document(
     _actor: DocumentReader,
 ) -> DocumentOut:
     try:
-        document = await service.get_document(
+        document = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -957,14 +960,14 @@ async def read_document(
         },
     },
 )
-async def read_document_list_row(
+def read_document_list_row(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
 ) -> DocumentListRow:
     try:
-        return await service.get_document_list_row(
+        return service.get_document_list_row(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -987,27 +990,30 @@ async def read_document_list_row(
         },
     },
 )
-async def download_document(
+def download_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    service: DocumentsServiceDep,
-    db_session: SessionDep,
+    request: Request,
+    settings: SettingsDep,
     _actor: DocumentReader,
 ) -> StreamingResponse:
+    session_factory = get_sessionmaker(request)
     try:
-        record, stream = await service.stream_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
+        with session_factory() as session:
+            service = DocumentsService(session=session, settings=settings)
+            record, stream = service.stream_document(
+                workspace_id=workspace_id,
+                document_id=document_id,
+            )
+            media_type = record.content_type or "application/octet-stream"
+            disposition = build_content_disposition(record.name)
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentFileMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    await db_session.close()
-    media_type = record.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = build_content_disposition(record.name)
+    response.headers["Content-Disposition"] = disposition
     return response
 
 
@@ -1028,7 +1034,7 @@ async def download_document(
         },
     },
 )
-async def preview_document(
+def preview_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
@@ -1096,7 +1102,7 @@ async def preview_document(
     if sheet_name is None and sheet_index is None:
         sheet_index = 0
     try:
-        return await service.get_document_preview(
+        return service.get_document_preview(
             workspace_id=workspace_id,
             document_id=document_id,
             max_rows=max_rows,
@@ -1130,14 +1136,14 @@ async def preview_document(
         },
     },
 )
-async def list_document_sheets_endpoint(
+def list_document_sheets_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
 ) -> list[DocumentSheet]:
     try:
-        return await service.list_document_sheets(
+        return service.list_document_sheets(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -1164,7 +1170,7 @@ async def list_document_sheets_endpoint(
         },
     },
 )
-async def delete_document(
+def delete_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     request: Request,
@@ -1173,7 +1179,7 @@ async def delete_document(
     client_request_id: ClientRequestIdHeader = None,
 ) -> None:
     try:
-        current = await service.get_document(
+        current = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -1181,7 +1187,7 @@ async def delete_document(
             request.headers.get("if-match"),
             expected_token=build_etag_token(current.id, current.version),
         )
-        await service.delete_document(
+        service.delete_document(
             workspace_id=workspace_id,
             document_id=document_id,
             actor=actor,
@@ -1209,7 +1215,7 @@ async def delete_document(
         },
     },
 )
-async def delete_documents_batch(
+def delete_documents_batch(
     workspace_id: WorkspacePath,
     payload: DocumentBatchDeleteRequest,
     service: DocumentsServiceDep,
@@ -1217,7 +1223,7 @@ async def delete_documents_batch(
     client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchDeleteResponse:
     try:
-        deleted_ids = await service.delete_documents_batch(
+        deleted_ids = service.delete_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             actor=actor,
@@ -1248,7 +1254,7 @@ async def delete_documents_batch(
         },
     },
 )
-async def list_document_tags(
+def list_document_tags(
     workspace_id: WorkspacePath,
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     service: DocumentsServiceDep,
@@ -1260,7 +1266,7 @@ async def list_document_tags(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Tag listings do not support filters.",
             )
-        return await service.list_tag_catalog(
+        return service.list_tag_catalog(
             workspace_id=workspace_id,
             page=list_query.page,
             per_page=list_query.per_page,

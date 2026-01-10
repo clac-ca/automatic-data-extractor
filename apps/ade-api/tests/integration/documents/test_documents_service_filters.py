@@ -42,7 +42,7 @@ async def test_list_documents_applies_filters_and_sorting(session, settings) -> 
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    result = await service.list_documents(
+    result = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -62,7 +62,7 @@ async def test_list_documents_applies_filters_and_sorting(session, settings) -> 
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    name_sorted = await service.list_documents(
+    name_sorted = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -93,7 +93,7 @@ async def test_activity_at_filters_within_range(session, settings) -> None:
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    result = await service.list_documents(
+    result = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -119,7 +119,7 @@ async def test_sorting_last_run_places_nulls_last(session, settings) -> None:
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    result = await service.list_documents(
+    result = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -148,7 +148,7 @@ async def test_list_documents_includes_last_run_message(session, settings) -> No
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    result = await service.list_documents(
+    result = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=25,

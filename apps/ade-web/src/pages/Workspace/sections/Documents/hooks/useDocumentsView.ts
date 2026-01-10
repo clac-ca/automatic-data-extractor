@@ -11,6 +11,8 @@ import {
 import { ApiError } from "@api/errors";
 import type { FilterItem, FilterJoinOperator } from "@api/listing";
 import { useDebouncedCallback } from "@hooks/use-debounced-callback";
+import { createScopedStorage } from "@lib/storage";
+import { uiStorageKeys } from "@lib/uiStorageKeys";
 
 import {
   buildDocumentsComparator,
@@ -173,22 +175,21 @@ export function useDocumentsView({
   const comparator = useMemo(() => buildDocumentsComparator(sortTokens), [sortTokens]);
   const sortSupported = useMemo(() => supportsSortTokens(sortTokens), [sortTokens]);
 
-  const storageKey = useMemo(
-    () => (workspaceId ? `ade:documents:cursor:${workspaceId}` : null),
+  const cursorStorage = useMemo(
+    () => (workspaceId ? createScopedStorage(uiStorageKeys.documentsCursor(workspaceId)) : null),
     [workspaceId],
   );
 
   useEffect(() => {
-    if (typeof window === "undefined" || !storageKey) return;
-    const stored = window.localStorage.getItem(storageKey);
+    if (!cursorStorage) return;
+    const stored = cursorStorage.get<string>();
     setState((prev) => ({ ...prev, cursor: stored ?? prev.cursor }));
-  }, [storageKey]);
+  }, [cursorStorage]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !storageKey) return;
-    if (!state.cursor) return;
-    window.localStorage.setItem(storageKey, state.cursor);
-  }, [state.cursor, storageKey]);
+    if (!cursorStorage || !state.cursor) return;
+    cursorStorage.set(state.cursor);
+  }, [cursorStorage, state.cursor]);
 
   const resetView = useCallback(() => {
     setState((prev) => ({

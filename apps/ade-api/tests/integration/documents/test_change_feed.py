@@ -207,8 +207,8 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
         occurred_at=now,
     )
     session.add_all([old_change, fresh_change])
-    await session.flush()
-    await session.commit()
+    session.flush()
+    session.commit()
 
     token, _ = await login(
         async_client,

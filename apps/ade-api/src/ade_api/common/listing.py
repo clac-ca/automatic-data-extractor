@@ -8,7 +8,7 @@ from typing import Any, Generic, TypeVar
 from fastapi import HTTPException, Query, Request, status
 from pydantic import Field
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -130,8 +130,8 @@ def strict_list_query_guard(*, allowed_extra: set[str] | None = None):
     return dependency
 
 
-async def paginate_query(
-    session: AsyncSession,
+def paginate_query(
+    session: Session,
     stmt: Select,
     *,
     page: int,
@@ -147,15 +147,13 @@ async def paginate_query(
         and session.bind is not None
         and getattr(session.bind.dialect, "name", None) == "postgresql"
     ):
-        await session.execute(
-            text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}")
-        )
+        session.execute(text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}"))
 
     count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
-    total = (await session.execute(count_stmt)).scalar_one()
+    total = session.execute(count_stmt).scalar_one()
     page_count = math.ceil(total / per_page) if total > 0 else 0
 
-    result = await session.execute(ordered_stmt.limit(per_page).offset(offset))
+    result = session.execute(ordered_stmt.limit(per_page).offset(offset))
     rows = result.scalars().all()
 
     return ListPage[T](

@@ -4,6 +4,8 @@ import clsx from "clsx";
 
 import { DownloadIcon } from "@components/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { createScopedStorage } from "@lib/storage";
+import { uiStorageKeys } from "@lib/uiStorageKeys";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";
@@ -24,26 +26,21 @@ type ConsoleFilters = {
 
 type ConsoleViewMode = "parsed" | "ndjson";
 
-const CONSOLE_LEVEL_STORAGE_KEY = "ade.ui.workbench.console.levelFilter.v1";
+const consoleLevelStorage = createScopedStorage(uiStorageKeys.workbenchConsoleLevelFilter);
 
 export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: ConsoleTabProps) {
   const [filters, setFilters] = useState<ConsoleFilters>(() => {
     const defaultFilters: ConsoleFilters = { origin: "all", level: "info" };
-    if (typeof window === "undefined") return defaultFilters;
-    try {
-      const stored = window.localStorage.getItem(CONSOLE_LEVEL_STORAGE_KEY);
-      if (
-        stored === "all" ||
-        stored === "debug" ||
-        stored === "info" ||
-        stored === "warning" ||
-        stored === "error" ||
-        stored === "success"
-      ) {
-        return { ...defaultFilters, level: stored };
-      }
-    } catch {
-      // ignore localStorage failures
+    const stored = consoleLevelStorage.get<string>();
+    if (
+      stored === "all" ||
+      stored === "debug" ||
+      stored === "info" ||
+      stored === "warning" ||
+      stored === "error" ||
+      stored === "success"
+    ) {
+      return { ...defaultFilters, level: stored };
     }
     return defaultFilters;
   });
@@ -93,12 +90,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   }, [follow, filteredIndices.length, snapshot, rowVirtualizer]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(CONSOLE_LEVEL_STORAGE_KEY, filters.level);
-    } catch {
-      // ignore localStorage failures
-    }
+    consoleLevelStorage.set(filters.level);
   }, [filters.level]);
 
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {

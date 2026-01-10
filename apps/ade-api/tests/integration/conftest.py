@@ -10,18 +10,14 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import (
-    AsyncConnection,
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-)
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
-from ade_api.db import DatabaseConfig, db
-from ade_api.db.migrations import run_migrations_async
+from ade_api.db import DatabaseSettings, build_engine, get_db
+from ade_api.db.migrations import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.models import Role, User, Workspace, WorkspaceMembership
@@ -98,92 +94,98 @@ def _fast_hash_env() -> Iterator[None]:
 def _reset_auth_caches() -> None:
     reset_auth_state()
 
-
-@pytest_asyncio.fixture(autouse=True)
-async def _override_sessionmaker(
-    db_connection: AsyncConnection,
-    monkeypatch: pytest.MonkeyPatch,
-) -> AsyncIterator[None]:
-    """Bind background sessions to the test transaction connection."""
-
-    session_factory = async_sessionmaker(
-        bind=db_connection,
-        expire_on_commit=False,
-        autoflush=False,
-        join_transaction_mode="create_savepoint",
+def _build_db_settings(settings: Settings) -> DatabaseSettings:
+    return DatabaseSettings(
+        url=settings.database_url,
+        echo=settings.database_echo,
+        auth_mode=settings.database_auth_mode,
+        managed_identity_client_id=settings.database_mi_client_id,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=settings.database_pool_timeout,
+        pool_recycle=settings.database_pool_recycle,
+        sqlite_journal_mode=settings.database_sqlite_journal_mode,
+        sqlite_synchronous=settings.database_sqlite_synchronous,
+        sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
+        sqlite_begin_mode=settings.database_sqlite_begin_mode,
     )
 
-    monkeypatch.setattr(db, "_sessionmaker", session_factory)
 
-    yield
+@pytest.fixture(scope="session", autouse=True)
+def migrated_db(base_settings: Settings) -> Iterator[Engine]:
+    db_settings = _build_db_settings(base_settings)
+    run_migrations(db_settings)
+    engine = build_engine(db_settings)
 
-
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def migrated_db(base_settings: Settings) -> AsyncEngine:
-    _ = base_settings
-    db_config = DatabaseConfig.from_env()
-    await run_migrations_async(db_config)
-    db.init(db_config)
-    engine = db.engine
-
-    session_factory = async_sessionmaker(
-        bind=engine,
-        expire_on_commit=False,
-        autoflush=False,
-    )
-    async with session_factory() as session:
+    with Session(engine) as session:
         service = RbacService(session=session)
-        await service.sync_registry()
-        await session.commit()
+        service.sync_registry()
+        session.commit()
 
     yield engine
-    await db.dispose()
+    engine.dispose()
 
 
-@pytest_asyncio.fixture()
-async def db_connection(migrated_db: AsyncEngine) -> AsyncIterator[AsyncConnection]:
-    async with migrated_db.connect() as connection:
-        transaction = await connection.begin()
+@pytest.fixture()
+def db_connection(migrated_db: Engine) -> Iterator[Connection]:
+    with migrated_db.connect() as connection:
+        transaction = connection.begin()
         if connection.dialect.name == "sqlite":
-            await connection.exec_driver_sql("BEGIN")
+            connection.exec_driver_sql("BEGIN")
         try:
             yield connection
         finally:
             if transaction.is_active:
-                await transaction.rollback()
+                transaction.rollback()
             else:
                 raise RuntimeError("Test DB transaction was committed; isolation broken.")
 
 
-@pytest_asyncio.fixture()
-async def db_session(db_connection: AsyncConnection) -> AsyncIterator[AsyncSession]:
-    session = AsyncSession(
+@pytest.fixture()
+def db_sessionmaker(db_connection: Connection):
+    return sessionmaker(
         bind=db_connection,
         expire_on_commit=False,
         autoflush=False,
         join_transaction_mode="create_savepoint",
     )
 
+
+@pytest.fixture()
+def db_session(db_sessionmaker) -> Iterator[Session]:
+    session = db_sessionmaker()
     try:
         yield session
     finally:
-        await session.close()
+        session.close()
 
 
 @pytest.fixture()
-def session(db_session: AsyncSession) -> AsyncSession:
+def session(db_session: Session) -> Session:
     return db_session
 
 
 @pytest.fixture()
 def app(
     settings: Settings,
-    db_connection: AsyncConnection,
+    db_sessionmaker,
 ) -> FastAPI:
     app = create_app(settings=settings)
 
     app.dependency_overrides[get_settings] = lambda: cast(Settings, app.state.settings)
-    _ = db_connection
+
+    def _get_db_override():
+        session = db_sessionmaker()
+        try:
+            yield session
+            session.commit()
+        except BaseException:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _get_db_override
 
     return app
 
@@ -208,8 +210,8 @@ def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
     return _apply
 
 
-@pytest_asyncio.fixture()
-async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
+@pytest.fixture()
+def seed_identity(db_session: Session) -> SeededIdentity:
     """Create baseline users and workspace records for auth/RBAC tests."""
 
     rbac_service = RbacService(session=db_session)
@@ -277,17 +279,17 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
             orphan,
         ]
     )
-    await db_session.flush()
+    db_session.flush()
 
-    admin_role = await rbac_service.get_role_by_slug(slug="global-admin")
+    admin_role = rbac_service.get_role_by_slug(slug="global-admin")
     if admin_role is not None:
-        await rbac_service.assign_role_if_missing(
+        rbac_service.assign_role_if_missing(
             user_id=cast(UUID, admin.id),
             role_id=admin_role.id,
             workspace_id=None,
         )
 
-    member_role = await rbac_service.get_role_by_slug(slug="global-user")
+    member_role = rbac_service.get_role_by_slug(slug="global-user")
     if member_role is not None:
         for candidate in (
             workspace_owner,
@@ -295,7 +297,7 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
             member_with_manage,
             orphan,
         ):
-            await rbac_service.assign_role_if_missing(
+            rbac_service.assign_role_if_missing(
                 user_id=cast(UUID, candidate.id),
                 role_id=member_role.id,
                 workspace_id=None,
@@ -330,40 +332,40 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
             member_manage_secondary,
         ]
     )
-    await db_session.flush()
+    db_session.flush()
 
     workspace_roles: dict[str, Role] = {}
     for slug in ("workspace-owner", "workspace-member"):
-        role = await rbac_service.get_role_by_slug(slug=slug)
+        role = rbac_service.get_role_by_slug(slug=slug)
         if role is not None:
             workspace_roles[slug] = role
 
-    async def _assign_workspace_role(
+    def _assign_workspace_role(
         membership: WorkspaceMembership, user: User, slug: str
     ) -> None:
         role = workspace_roles.get(slug)
         if role is None:
             return
-        await rbac_service.assign_role_if_missing(
+        rbac_service.assign_role_if_missing(
             user_id=cast(UUID, user.id),
             role_id=role.id,
             workspace_id=cast(UUID, membership.workspace_id),
         )
 
-    await _assign_workspace_role(workspace_owner_membership, workspace_owner, "workspace-owner")
-    await _assign_workspace_role(member_membership, member, "workspace-member")
-    await _assign_workspace_role(member_manage_default, member_with_manage, "workspace-member")
-    await _assign_workspace_role(member_manage_secondary, member_with_manage, "workspace-member")
+    _assign_workspace_role(workspace_owner_membership, workspace_owner, "workspace-owner")
+    _assign_workspace_role(member_membership, member, "workspace-member")
+    _assign_workspace_role(member_manage_default, member_with_manage, "workspace-member")
+    _assign_workspace_role(member_manage_secondary, member_with_manage, "workspace-member")
 
     owner_role = workspace_roles.get("workspace-owner")
     if owner_role is not None:
-        await rbac_service.assign_role_if_missing(
+        rbac_service.assign_role_if_missing(
             user_id=cast(UUID, admin.id),
             role_id=owner_role.id,
             workspace_id=cast(UUID, workspace.id),
         )
 
-    await db_session.commit()
+    db_session.commit()
 
     return SeededIdentity(
         workspace_id=cast(UUID, workspace.id),

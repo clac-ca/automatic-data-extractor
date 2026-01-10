@@ -5,9 +5,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import MetaData
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
+from .database import Base, NAMING_CONVENTION, metadata
 from .types import GUID, UTCDateTime
 
 __all__ = [
@@ -18,22 +18,6 @@ __all__ = [
     "UUIDPrimaryKeyMixin",
     "TimestampMixin",
 ]
-
-NAMING_CONVENTION: dict[str, str] = {
-    "ix": "%(table_name)s_%(column_0_name)s_idx",
-    "uq": "%(table_name)s_%(column_0_name)s_key",
-    "ck": "%(table_name)s_%(constraint_name)s_check",
-    "fk": "%(table_name)s_%(column_0_name)s_fkey",
-    "pk": "%(table_name)s_pkey",
-}
-
-metadata = MetaData(naming_convention=NAMING_CONVENTION)
-
-
-class Base(DeclarativeBase):
-    """Declarative base using the global naming convention."""
-
-    metadata = metadata
 
 
 def utc_now() -> datetime:

@@ -30,7 +30,7 @@ async def test_workspace_run_listing_filters_by_status(
         status=ConfigurationStatus.DRAFT,
     )
     session.add_all([configuration, other_configuration])
-    await session.flush()
+    session.flush()
 
     document = make_document(workspace_id=workspace_id, filename="input.csv")
     document_other = make_document(
@@ -38,7 +38,7 @@ async def test_workspace_run_listing_filters_by_status(
         filename="other.csv",
     )
     session.add_all([document, document_other])
-    await session.flush()
+    session.flush()
 
     run_ok = make_run(
         workspace_id=workspace_id,
@@ -59,7 +59,7 @@ async def test_workspace_run_listing_filters_by_status(
         status=RunStatus.SUCCEEDED,
     )
     session.add_all([run_ok, run_failed, run_other_workspace])
-    await session.commit()
+    session.commit()
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
 

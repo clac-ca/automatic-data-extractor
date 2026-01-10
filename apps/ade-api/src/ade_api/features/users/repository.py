@@ -6,7 +6,7 @@ from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
 from ade_api.models import User
@@ -22,38 +22,38 @@ _UNSET = object()
 class UsersRepository:
     """High-level persistence helpers for the unified user model."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: Session) -> None:
         self._session = session
 
-    async def get_by_id(self, user_id: str | UUID) -> User | None:
+    def get_by_id(self, user_id: str | UUID) -> User | None:
         stmt = (
             select(User)
             .options(selectinload(User.oauth_accounts))
             .where(User.id == user_id)
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_id_basic(self, user_id: str | UUID) -> User | None:
+    def get_by_id_basic(self, user_id: str | UUID) -> User | None:
         """Lightweight lookup without eager-loading relationships."""
 
-        return await self._session.get(User, user_id)
+        return self._session.get(User, user_id)
 
-    async def get_by_email(self, email: str) -> User | None:
+    def get_by_email(self, email: str) -> User | None:
         stmt = (
             select(User)
             .options(selectinload(User.oauth_accounts))
             .where(User.email_normalized == _canonical_email(email))
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_users(self) -> list[User]:
+    def list_users(self) -> list[User]:
         stmt = select(User).order_by(User.email_normalized)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def create(
+    def create(
         self,
         *,
         email: str,
@@ -75,17 +75,17 @@ class UsersRepository:
             failed_login_count=0,
         )
         self._session.add(user)
-        await self._session.flush()
-        await self._session.refresh(user)
+        self._session.flush()
+        self._session.refresh(user)
         return user
 
-    async def set_password(self, user: User, password_hash: str) -> User:
+    def set_password(self, user: User, password_hash: str) -> User:
         user.hashed_password = password_hash
-        await self._session.flush()
-        await self._session.refresh(user)
+        self._session.flush()
+        self._session.refresh(user)
         return user
 
-    async def update_user(
+    def update_user(
         self,
         user: User,
         *,
@@ -96,8 +96,8 @@ class UsersRepository:
             user.display_name = cast(str | None, display_name)
         if is_active is not _UNSET:
             user.is_active = cast(bool, is_active)
-        await self._session.flush()
-        await self._session.refresh(user)
+        self._session.flush()
+        self._session.refresh(user)
         return user
 
 

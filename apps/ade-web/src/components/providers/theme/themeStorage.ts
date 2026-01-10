@@ -1,22 +1,33 @@
+import { createScopedStorage } from "@lib/storage";
+import { uiStorageKeys } from "@lib/uiStorageKeys";
+
 export type ModePreference = "system" | "light" | "dark";
 
-export const MODE_STORAGE_KEY = "ade.mode";
-export const THEME_STORAGE_KEY = "ade.theme";
+export const MODE_STORAGE_KEY = uiStorageKeys.themeMode;
+export const THEME_STORAGE_KEY = uiStorageKeys.themeName;
 
-function readRawPreference(key: string): string | null {
-  if (typeof window === "undefined") {
+const modeStorage = createScopedStorage(MODE_STORAGE_KEY);
+const themeStorage = createScopedStorage(THEME_STORAGE_KEY);
+
+function readRawPreference(storage: ReturnType<typeof createScopedStorage>): string | null {
+  return storage.get<string>();
+}
+
+export function parseStoredPreference(value: string | null): string | null {
+  if (value === null) {
     return null;
   }
   try {
-    return window.localStorage.getItem(key);
+    const parsed = JSON.parse(value);
+    return typeof parsed === "string" ? parsed : null;
   } catch (error) {
-    console.warn("Failed to read theme preference", error);
+    console.warn("Failed to parse theme preference", error);
     return null;
   }
 }
 
 export function readStoredModePreference(): ModePreference | null {
-  const raw = readRawPreference(MODE_STORAGE_KEY);
+  const raw = readRawPreference(modeStorage);
   if (raw === "light" || raw === "dark" || raw === "system") {
     return raw;
   }
@@ -24,7 +35,7 @@ export function readStoredModePreference(): ModePreference | null {
 }
 
 export function readStoredThemePreference(): string | null {
-  const raw = readRawPreference(THEME_STORAGE_KEY);
+  const raw = readRawPreference(themeStorage);
   if (typeof raw === "string" && raw.length > 0) {
     return raw;
   }
@@ -32,23 +43,9 @@ export function readStoredThemePreference(): string | null {
 }
 
 export function writeModePreference(next: ModePreference): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(MODE_STORAGE_KEY, next);
-  } catch (error) {
-    console.warn("Failed to persist theme mode", error);
-  }
+  modeStorage.set(next);
 }
 
 export function writeThemePreference(next: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, next);
-  } catch (error) {
-    console.warn("Failed to persist theme name", error);
-  }
+  themeStorage.set(next);
 }

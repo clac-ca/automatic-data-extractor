@@ -682,7 +682,7 @@ The app streams **run** events to the workbench console and relies on NDJSON arc
 ### 6.1 Run stream
 
 * `GET /api/v1/runs/{runId}/events/stream`
-* Supports `after_sequence` for resume.
+* Supports `after_sequence` for resume (byte offset; same semantics as `Last-Event-ID`).
 * Each SSE frame carries an `EventRecord` payload (`event:` is the record name).
 
 Environment provisioning logs are not streamed separately in v1.

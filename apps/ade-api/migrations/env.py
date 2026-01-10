@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
 
-from ade_api.db.base import metadata
-from ade_api.db.database import DatabaseConfig, attach_managed_identity, build_sync_url
+from ade_api.db import Base, DatabaseSettings, build_engine
 
 # Alembic Config object
 config = context.config
@@ -26,10 +25,10 @@ def _import_models() -> None:
 
 
 _import_models()
-target_metadata = metadata
+target_metadata = Base.metadata
 
 
-def _get_url() -> str:
+def _get_url_override() -> str | None:
     # 1) alembic.ini sqlalchemy.url
     url = config.get_main_option("sqlalchemy.url")
     if url:
@@ -40,9 +39,23 @@ def _get_url() -> str:
     if override:
         return override
 
-    # 3) ADE_DATABASE_URL from env (sync URL expected)
-    cfg = DatabaseConfig.from_env()
-    return build_sync_url(cfg)
+    # 3) fall back to ADE_DATABASE_URL via DatabaseSettings.from_env()
+    return None
+
+
+def _build_settings(url_override: str | None) -> DatabaseSettings:
+    settings = DatabaseSettings.from_env()
+    if url_override:
+        settings = replace(settings, url=url_override)
+    return settings
+
+
+def _normalized_url(settings: DatabaseSettings) -> str:
+    engine = build_engine(settings)
+    try:
+        return engine.url.render_as_string(hide_password=False)
+    finally:
+        engine.dispose()
 
 
 def _is_sqlite(url: str) -> bool:
@@ -52,17 +65,9 @@ def _is_sqlite(url: str) -> bool:
         return url.startswith("sqlite")
 
 
-def _use_managed_identity(url: str) -> bool:
-    cfg = DatabaseConfig.from_env()
-    try:
-        backend = make_url(url).get_backend_name()
-    except Exception:
-        backend = "sqlite" if url.startswith("sqlite") else ""
-    return cfg.auth_mode == "managed_identity" and backend == "mssql"
-
-
 def run_migrations_offline() -> None:
-    url = _get_url()
+    settings = _build_settings(_get_url_override())
+    url = _normalized_url(settings)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -75,7 +80,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    url = _get_url()
+    url_override = _get_url_override()
 
     # If a connection is passed in (rare but useful), use it
     existing_connection = config.attributes.get("connection")
@@ -83,28 +88,19 @@ def run_migrations_online() -> None:
         context.configure(
             connection=existing_connection,
             target_metadata=target_metadata,
-            render_as_batch=_is_sqlite(url),
+            render_as_batch=_is_sqlite(
+                existing_connection.engine.url.render_as_string(hide_password=False)
+            ),
         )
         with context.begin_transaction():
             context.run_migrations()
         return
 
-    section = config.get_section(config.config_ini_section) or {}
-    section["sqlalchemy.url"] = url
-
-    connectable = engine_from_config(
-        section,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        future=True,
-    )
-
-    if _use_managed_identity(url):
-        cfg = DatabaseConfig.from_env()
-        attach_managed_identity(connectable, client_id=cfg.managed_identity_client_id)
-
+    settings = _build_settings(url_override)
+    engine = build_engine(settings)
     try:
-        with connectable.connect() as connection:
+        url = engine.url.render_as_string(hide_password=False)
+        with engine.connect() as connection:
             context.configure(
                 connection=connection,
                 target_metadata=target_metadata,
@@ -113,7 +109,7 @@ def run_migrations_online() -> None:
             with context.begin_transaction():
                 context.run_migrations()
     finally:
-        connectable.dispose()
+        engine.dispose()
 
 
 if context.is_offline_mode():

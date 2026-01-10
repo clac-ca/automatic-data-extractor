@@ -48,9 +48,9 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
           }
           search={search}
           scrollContainer={scrollContainer}
-          actions={actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : undefined}
+          actions={actions ? <div className="flex min-w-0 flex-nowrap items-center gap-2">{actions}</div> : undefined}
           trailing={
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-nowrap items-center gap-2">
               <AppearanceMenu tone="header" />
               <ProfileDropdown
                 displayName={displayName}

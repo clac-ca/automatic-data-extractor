@@ -15,8 +15,6 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from uuid import UUID
 
-from fastapi.concurrency import run_in_threadpool
-
 from ade_api.infra.storage import workspace_config_root
 from ade_api.settings import Settings
 
@@ -79,7 +77,7 @@ class ConfigStorage:
     def config_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
         return self.workspace_root(workspace_id) / str(configuration_id)
 
-    async def materialize_from_template(
+    def materialize_from_template(
         self,
         *,
         workspace_id: UUID,
@@ -89,25 +87,25 @@ class ConfigStorage:
         destination = workspace_root / str(configuration_id)
         staging = workspace_root / f".init-{configuration_id}-{secrets.token_hex(4)}"
 
-        await run_in_threadpool(workspace_root.mkdir, parents=True, exist_ok=True)
+        workspace_root.mkdir(parents=True, exist_ok=True)
 
         def _clear_stage() -> None:
             if staging.exists():
                 shutil.rmtree(staging, ignore_errors=True)
 
-        await run_in_threadpool(_clear_stage)
+        _clear_stage()
 
         try:
-            await run_in_threadpool(self._run_engine_config_init, staging)
-            issues, _ = await self.validate_path(staging)
+            self._run_engine_config_init(staging)
+            issues, _ = self.validate_path(staging)
             if issues:
                 raise ConfigSourceInvalidError(issues)
-            await self._publish_stage(staging, destination)
+            self._publish_stage(staging, destination)
         except Exception:
-            await self._remove_path(staging)
+            self._remove_path(staging)
             raise
 
-    async def materialize_from_clone(
+    def materialize_from_clone(
         self,
         *,
         workspace_id: UUID,
@@ -115,23 +113,23 @@ class ConfigStorage:
         new_configuration_id: UUID,
     ) -> None:
         source_path = self.config_path(workspace_id, source_configuration_id)
-        exists = await run_in_threadpool(source_path.is_dir)
+        exists = source_path.is_dir()
         if not exists:
             raise ConfigSourceNotFoundError(f"Configuration '{source_configuration_id}' not found")
-        await self._materialize_from_source(
+        self._materialize_from_source(
             source=source_path,
             workspace_id=workspace_id,
             configuration_id=new_configuration_id,
         )
 
-    async def ensure_config_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
+    def ensure_config_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
         path = self.config_path(workspace_id, configuration_id)
-        exists = await run_in_threadpool(path.is_dir)
+        exists = path.is_dir()
         if not exists:
             raise ConfigStorageNotFoundError(f"Configuration files missing for {configuration_id}")
         return path
 
-    async def import_archive(
+    def import_archive(
         self,
         *,
         workspace_id: UUID,
@@ -140,14 +138,14 @@ class ConfigStorage:
     ) -> str | None:
         """Materialize a configuration from a zip archive."""
 
-        return await self._materialize_from_archive(
+        return self._materialize_from_archive(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             archive=archive,
             replace=False,
         )
 
-    async def replace_from_archive(
+    def replace_from_archive(
         self,
         *,
         workspace_id: UUID,
@@ -156,14 +154,14 @@ class ConfigStorage:
     ) -> str | None:
         """Replace an existing configuration (draft-only) from a zip archive."""
 
-        return await self._materialize_from_archive(
+        return self._materialize_from_archive(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             archive=archive,
             replace=True,
         )
 
-    async def delete_config(
+    def delete_config(
         self,
         *,
         workspace_id: UUID,
@@ -179,9 +177,9 @@ class ConfigStorage:
                 if not missing_ok:
                     raise
 
-        await run_in_threadpool(_remove)
+        _remove()
 
-    async def validate_path(
+    def validate_path(
         self,
         path: Path,
     ) -> tuple[list[ConfigValidationIssue], str | None]:
@@ -216,9 +214,9 @@ class ConfigStorage:
             digest = None if issues else _calculate_digest(path)
             return issues, digest
 
-        return await run_in_threadpool(_validate)
+        return _validate()
 
-    async def _materialize_from_archive(
+    def _materialize_from_archive(
         self,
         *,
         workspace_id: UUID,
@@ -230,7 +228,7 @@ class ConfigStorage:
         destination = workspace_root / str(configuration_id)
         staging = workspace_root / f".import-{configuration_id}-{secrets.token_hex(4)}"
 
-        await run_in_threadpool(workspace_root.mkdir, parents=True, exist_ok=True)
+        workspace_root.mkdir(parents=True, exist_ok=True)
 
         def _prepare_stage() -> None:
             if len(archive) > _IMPORT_MAX_ARCHIVE_BYTES:
@@ -241,8 +239,8 @@ class ConfigStorage:
             _extract_archive(archive, staging)
 
         try:
-            await run_in_threadpool(_prepare_stage)
-            issues, digest = await self.validate_path(staging)
+            _prepare_stage()
+            issues, digest = self.validate_path(staging)
             if issues:
                 raise ConfigSourceInvalidError(issues)
 
@@ -255,13 +253,13 @@ class ConfigStorage:
                     shutil.rmtree(destination, ignore_errors=True)
                 staging.replace(destination)
 
-            await run_in_threadpool(_publish)
+            _publish()
             return digest
         except Exception:
-            await self._remove_path(staging)
+            self._remove_path(staging)
             raise
 
-    async def _materialize_from_source(
+    def _materialize_from_source(
         self,
         *,
         source: Path,
@@ -272,49 +270,46 @@ class ConfigStorage:
         destination = workspace_root / str(configuration_id)
         staging = workspace_root / f".staging-{configuration_id}-{secrets.token_hex(4)}"
 
-        async def _copy_to_stage() -> None:
-            def _copy() -> None:
-                workspace_root.mkdir(parents=True, exist_ok=True)
-                if staging.exists():
-                    shutil.rmtree(staging)
-                copytree_no_stat(
-                    source,
-                    staging,
-                    ignore=shutil.ignore_patterns(*COPY_IGNORE_PATTERNS),
-                )
+        def _copy() -> None:
+            workspace_root.mkdir(parents=True, exist_ok=True)
+            if staging.exists():
+                shutil.rmtree(staging)
+            copytree_no_stat(
+                source,
+                staging,
+                ignore=shutil.ignore_patterns(*COPY_IGNORE_PATTERNS),
+            )
 
-            await run_in_threadpool(_copy)
-
-        await _copy_to_stage()
+        _copy()
         try:
-            issues, _ = await self.validate_path(staging)
+            issues, _ = self.validate_path(staging)
         except Exception:
-            await self._remove_path(staging)
+            self._remove_path(staging)
             raise
 
         if issues:
-            await self._remove_path(staging)
+            self._remove_path(staging)
             raise ConfigSourceInvalidError(issues)
 
         try:
-            await self._publish_stage(staging, destination)
+            self._publish_stage(staging, destination)
         except Exception:
-            await self._remove_path(staging)
+            self._remove_path(staging)
             raise
 
-    async def _publish_stage(self, staging: Path, destination: Path) -> None:
+    def _publish_stage(self, staging: Path, destination: Path) -> None:
         def _publish() -> None:
             if destination.exists():
                 raise ConfigPublishConflictError(f"Destination '{destination}' already exists")
             staging.replace(destination)
 
-        await run_in_threadpool(_publish)
+        _publish()
 
-    async def _remove_path(self, path: Path) -> None:
+    def _remove_path(self, path: Path) -> None:
         def _remove() -> None:
             shutil.rmtree(path, ignore_errors=True)
 
-        await run_in_threadpool(_remove)
+        _remove()
 
     def _run_engine_config_init(self, target_dir: Path) -> None:
         command = [

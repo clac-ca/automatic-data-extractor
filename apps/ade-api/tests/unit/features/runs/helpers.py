@@ -18,7 +18,7 @@ from ade_api.models import (
 from ade_api.settings import Settings
 
 
-async def build_runs_service(
+def build_runs_service(
     session,
     tmp_path: Path,
     *,
@@ -47,7 +47,7 @@ async def build_runs_service(
 
     workspace = Workspace(name="Test Workspace", slug=f"ws-{generate_uuid7().hex[:8]}")
     session.add(workspace)
-    await session.flush()
+    session.flush()
 
     configuration = Configuration(
         workspace_id=workspace.id,
@@ -56,7 +56,7 @@ async def build_runs_service(
         content_digest="digest",
     )
     session.add(configuration)
-    await session.flush()
+    session.flush()
 
     config_root = workspace_config_root(settings, workspace.id, configuration.id)
     config_root.mkdir(parents=True, exist_ok=True)
@@ -86,7 +86,7 @@ async def build_runs_service(
         expires_at=utc_now(),
     )
     session.add(document)
-    await session.commit()
+    session.commit()
 
     service = RunsService(
         session=session,

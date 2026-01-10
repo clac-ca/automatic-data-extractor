@@ -1,7 +1,7 @@
 import { createScopedStorage } from "@lib/storage";
+import { uiStorageKeys } from "@lib/uiStorageKeys";
 
-const PREFERRED_WORKSPACE_STORAGE_KEY = "backend.app.active_workspace";
-const storage = createScopedStorage(PREFERRED_WORKSPACE_STORAGE_KEY);
+const storage = createScopedStorage(uiStorageKeys.workspaceLastActive);
 
 export function readPreferredWorkspaceId(): string | null {
   return storage.get<string>();

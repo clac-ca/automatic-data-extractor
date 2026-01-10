@@ -56,7 +56,7 @@ async def test_delete_document_marks_deleted(
     detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 404
 
-    row = await session.get(Document, UUID(document_id))
+    row = session.get(Document, UUID(document_id))
     assert row is not None
     assert row.deleted_at is not None
     stored_uri = row.stored_uri

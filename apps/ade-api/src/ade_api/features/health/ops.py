@@ -5,10 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 from sqlalchemy import text
 
-from ade_api.api.deps import SettingsDep
+from ade_api.api.deps import SessionDep, SettingsDep
 from ade_api.common.problem_details import ApiError
 from ade_api.common.time import utc_now
-from ade_api.db import session_scope
 
 from .schemas import HealthCheckResponse, HealthComponentStatus
 from .service import HealthService
@@ -23,11 +22,11 @@ router = APIRouter()
     summary="Service liveness probe",
     response_model_exclude_none=True,
 )
-async def read_liveness(settings: SettingsDep) -> HealthCheckResponse:
+def read_liveness(settings: SettingsDep) -> HealthCheckResponse:
     """Return liveness status without touching the database."""
 
     service = HealthService(settings=settings, safe_mode_service=None)
-    return await service.status()
+    return service.status()
 
 
 @router.get(
@@ -37,12 +36,11 @@ async def read_liveness(settings: SettingsDep) -> HealthCheckResponse:
     summary="Service readiness probe",
     response_model_exclude_none=True,
 )
-async def read_readiness(settings: SettingsDep) -> HealthCheckResponse:
+def read_readiness(settings: SettingsDep, db: SessionDep) -> HealthCheckResponse:
     """Return readiness status after checking critical dependencies."""
 
     try:
-        async with session_scope() as session:
-            await session.execute(text("SELECT 1"))
+        db.execute(text("SELECT 1"))
     except Exception as exc:  # pragma: no cover - exercised in integration tests
         raise ApiError(
             error_type="service_unavailable",

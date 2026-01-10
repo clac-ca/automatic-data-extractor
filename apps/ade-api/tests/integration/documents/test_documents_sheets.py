@@ -45,7 +45,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
         expires_at=utc_now(),
     )
     session.add(document)
-    await session.commit()
+    session.commit()
 
     listing = await async_client.get(
         f"{workspace_base}/documents/{document.id}/sheets",

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated
 from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi_users import BaseUserManager, FastAPIUsers, schemas
 from fastapi_users.authentication import (
     AuthenticationBackend,
@@ -19,12 +21,13 @@ from fastapi_users.authentication import (
 from fastapi_users.authentication.strategy import DatabaseStrategy
 from fastapi_users.manager import UUIDIDMixin
 from fastapi_users.password import PasswordHelper
-from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
-from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyAccessTokenDatabase
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi_users.authentication.strategy.db import AccessTokenDatabase
+from fastapi_users.db import BaseUserDatabase
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.responses import Response
 
-from ade_api.db import get_db_session
+from ade_api.db import get_sessionmaker
 from ade_api.models import AccessToken, OAuthAccount, User
 from ade_api.settings import Settings, get_settings
 
@@ -90,16 +93,187 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
         return user
 
 
+class SyncUserDatabase(BaseUserDatabase[User, UUID]):
+    """Async adapter around sync SQLAlchemy sessions for fastapi-users."""
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        user_table: type[User],
+        oauth_account_table: type[OAuthAccount] | None = None,
+    ) -> None:
+        self._session_factory = session_factory
+        self.user_table = user_table
+        self.oauth_account_table = oauth_account_table
+
+    def _fetch_one(self, statement) -> User | None:
+        with self._session_factory() as session:
+            result = session.execute(statement)
+            return result.unique().scalar_one_or_none()
+
+    async def get(self, id: UUID) -> User | None:
+        statement = select(self.user_table).where(self.user_table.id == id)
+        return await run_in_threadpool(self._fetch_one, statement)
+
+    async def get_by_email(self, email: str) -> User | None:
+        statement = select(self.user_table).where(
+            func.lower(self.user_table.email) == func.lower(email)
+        )
+        return await run_in_threadpool(self._fetch_one, statement)
+
+    async def get_by_oauth_account(self, oauth: str, account_id: str) -> User | None:
+        if self.oauth_account_table is None:
+            raise NotImplementedError
+
+        statement = (
+            select(self.user_table)
+            .join(self.oauth_account_table)
+            .where(self.oauth_account_table.oauth_name == oauth)  # type: ignore
+            .where(self.oauth_account_table.account_id == account_id)  # type: ignore
+        )
+        return await run_in_threadpool(self._fetch_one, statement)
+
+    async def create(self, create_dict: dict[str, object]) -> User:
+        def _create() -> User:
+            with self._session_factory() as session:
+                user = self.user_table(**create_dict)
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+                return user
+
+        return await run_in_threadpool(_create)
+
+    async def update(self, user: User, update_dict: dict[str, object]) -> User:
+        def _update() -> User:
+            with self._session_factory() as session:
+                db_user = session.merge(user)
+                for key, value in update_dict.items():
+                    setattr(db_user, key, value)
+                session.add(db_user)
+                session.commit()
+                session.refresh(db_user)
+                return db_user
+
+        return await run_in_threadpool(_update)
+
+    async def delete(self, user: User) -> None:
+        def _delete() -> None:
+            with self._session_factory() as session:
+                db_user = session.merge(user)
+                session.delete(db_user)
+                session.commit()
+
+        await run_in_threadpool(_delete)
+
+    async def add_oauth_account(self, user: User, create_dict: dict[str, object]) -> User:
+        if self.oauth_account_table is None:
+            raise NotImplementedError
+
+        def _add() -> User:
+            with self._session_factory() as session:
+                db_user = session.merge(user)
+                session.refresh(db_user)
+                oauth_account = self.oauth_account_table(**create_dict)
+                db_user.oauth_accounts.append(oauth_account)  # type: ignore
+                session.add(db_user)
+                session.commit()
+                session.refresh(db_user)
+                return db_user
+
+        return await run_in_threadpool(_add)
+
+    async def update_oauth_account(
+        self,
+        user: User,
+        oauth_account: OAuthAccount,
+        update_dict: dict[str, object],
+    ) -> User:
+        if self.oauth_account_table is None:
+            raise NotImplementedError
+
+        def _update() -> User:
+            with self._session_factory() as session:
+                db_user = session.merge(user)
+                db_account = session.merge(oauth_account)
+                for key, value in update_dict.items():
+                    setattr(db_account, key, value)
+                session.add(db_account)
+                session.commit()
+                session.refresh(db_user)
+                return db_user
+
+        return await run_in_threadpool(_update)
+
+
+class SyncAccessTokenDatabase(AccessTokenDatabase[AccessToken]):
+    """Async adapter around sync SQLAlchemy sessions for access tokens."""
+
+    def __init__(self, session_factory: sessionmaker[Session], access_token_table: type[AccessToken]):
+        self._session_factory = session_factory
+        self.access_token_table = access_token_table
+
+    async def get_by_token(
+        self, token: str, max_age: datetime | None = None  # type: ignore[name-defined]
+    ) -> AccessToken | None:
+        def _fetch() -> AccessToken | None:
+            stmt = select(self.access_token_table).where(
+                self.access_token_table.token == token  # type: ignore
+            )
+            if max_age is not None:
+                stmt = stmt.where(self.access_token_table.created_at >= max_age)  # type: ignore
+            with self._session_factory() as session:
+                result = session.execute(stmt)
+                return result.scalar_one_or_none()
+
+        return await run_in_threadpool(_fetch)
+
+    async def create(self, create_dict: dict[str, object]) -> AccessToken:
+        def _create() -> AccessToken:
+            with self._session_factory() as session:
+                access_token = self.access_token_table(**create_dict)
+                session.add(access_token)
+                session.commit()
+                session.refresh(access_token)
+                return access_token
+
+        return await run_in_threadpool(_create)
+
+    async def update(
+        self, access_token: AccessToken, update_dict: dict[str, object]
+    ) -> AccessToken:
+        def _update() -> AccessToken:
+            with self._session_factory() as session:
+                db_token = session.merge(access_token)
+                for key, value in update_dict.items():
+                    setattr(db_token, key, value)
+                session.add(db_token)
+                session.commit()
+                session.refresh(db_token)
+                return db_token
+
+        return await run_in_threadpool(_update)
+
+    async def delete(self, access_token: AccessToken) -> None:
+        def _delete() -> None:
+            with self._session_factory() as session:
+                db_token = session.merge(access_token)
+                session.delete(db_token)
+                session.commit()
+
+        await run_in_threadpool(_delete)
+
+
 async def get_user_db(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> AsyncIterator[SQLAlchemyUserDatabase[User, UUID]]:
-    yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
+    session_factory: Annotated[sessionmaker[Session], Depends(get_sessionmaker)],
+) -> AsyncIterator[SyncUserDatabase]:
+    yield SyncUserDatabase(session_factory, User, OAuthAccount)
 
 
 async def get_access_token_db(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> AsyncIterator[SQLAlchemyAccessTokenDatabase[AccessToken]]:
-    yield SQLAlchemyAccessTokenDatabase(session, AccessToken)
+    session_factory: Annotated[sessionmaker[Session], Depends(get_sessionmaker)],
+) -> AsyncIterator[SyncAccessTokenDatabase]:
+    yield SyncAccessTokenDatabase(session_factory, AccessToken)
 
 
 async def get_user_manager(

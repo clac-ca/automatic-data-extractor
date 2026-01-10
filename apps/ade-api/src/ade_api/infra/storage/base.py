@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import BinaryIO
 
@@ -36,7 +36,7 @@ class StorageAdapter(ABC):
     """Protocol implemented by storage adapters."""
 
     @abstractmethod
-    async def write(
+    def write(
         self,
         uri: str,
         stream: BinaryIO,
@@ -46,9 +46,9 @@ class StorageAdapter(ABC):
         """Persist ``stream`` to ``uri`` returning a ``StoredObject`` descriptor."""
 
     @abstractmethod
-    async def stream(self, uri: str, *, chunk_size: int = 1024 * 1024) -> AsyncIterator[bytes]:
+    def stream(self, uri: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
         """Yield the bytes stored at ``uri`` in ``chunk_size`` chunks."""
 
     @abstractmethod
-    async def delete(self, uri: str) -> None:
+    def delete(self, uri: str) -> None:
         """Remove ``uri`` from storage if it exists."""

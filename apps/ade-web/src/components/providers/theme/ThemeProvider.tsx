@@ -4,6 +4,7 @@ import { applyThemeToDocument, normalizeThemeId, resolveMode, DEFAULT_THEME_ID, 
 import {
   MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  parseStoredPreference,
   readStoredModePreference,
   readStoredThemePreference,
   writeModePreference,
@@ -87,7 +88,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
     }
     const handleStorage = (event: StorageEvent) => {
       if (event.key === MODE_STORAGE_KEY) {
-        const next = event.newValue;
+        const next = parseStoredPreference(event.newValue);
         if (next === "light" || next === "dark" || next === "system") {
           setModePreferenceState(next);
         } else if (next === null) {
@@ -96,7 +97,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
         return;
       }
       if (event.key === THEME_STORAGE_KEY) {
-        const next = event.newValue;
+        const next = parseStoredPreference(event.newValue);
         if (typeof next === "string") {
           setThemeState(normalizeThemeId(next));
           setPreviewThemeState(null);

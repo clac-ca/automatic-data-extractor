@@ -104,7 +104,7 @@ export function GlobalTopBar({
           className={clsx(
             "grid h-[var(--app-shell-header-h)] w-full items-center gap-3 sm:gap-4",
             showSearch
-              ? "grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[1fr_minmax(0,var(--app-shell-search-max-w))_1fr] lg:gap-8"
+              ? "grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_minmax(0,var(--app-shell-search-max-w))_auto] lg:gap-8"
               : "grid-cols-[minmax(0,1fr)_auto]",
           )}
         >

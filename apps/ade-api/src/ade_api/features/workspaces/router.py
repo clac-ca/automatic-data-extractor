@@ -59,7 +59,7 @@ WorkspacePath = Annotated[
         },
     },
 )
-async def create_workspace(
+def create_workspace(
     admin_user: Annotated[
         User,
         Security(require_global("workspaces.create")),
@@ -68,7 +68,7 @@ async def create_workspace(
     *,
     payload: WorkspaceCreate = WORKSPACE_CREATE_BODY,
 ) -> WorkspaceOut:
-    workspace = await service.create_workspace(
+    workspace = service.create_workspace(
         user=admin_user,
         name=payload.name,
         slug=payload.slug,
@@ -93,13 +93,13 @@ async def create_workspace(
         },
     },
 )
-async def list_workspaces(
+def list_workspaces(
     current_user: Annotated[User, Security(require_authenticated)],
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     _guard: Annotated[None, Depends(strict_list_query_guard())],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspacePage:
-    return await service.list_workspaces(
+    return service.list_workspaces(
         user=current_user,
         sort=list_query.sort,
         filters=list_query.filters,
@@ -128,7 +128,7 @@ async def list_workspaces(
         },
     },
 )
-async def read_workspace(
+def read_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     _actor: Annotated[
         User,
@@ -166,7 +166,7 @@ async def read_workspace(
         },
     },
 )
-async def update_workspace(
+def update_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     actor: Annotated[
         User,
@@ -179,7 +179,7 @@ async def update_workspace(
     *,
     payload: WorkspaceUpdate = WORKSPACE_UPDATE_BODY,
 ) -> WorkspaceOut:
-    workspace = await service.update_workspace(
+    workspace = service.update_workspace(
         user=actor,
         workspace_id=workspace.id,
         name=payload.name,
@@ -207,7 +207,7 @@ async def update_workspace(
         },
     },
 )
-async def delete_workspace(
+def delete_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     _actor: Annotated[
         User,
@@ -218,7 +218,7 @@ async def delete_workspace(
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    await service.delete_workspace(workspace_id=workspace.id)
+    service.delete_workspace(workspace_id=workspace.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -236,7 +236,7 @@ async def delete_workspace(
         },
     },
 )
-async def set_default_workspace(
+def set_default_workspace(
     workspace: Annotated[WorkspaceOut, Depends(get_workspace_profile)],
     actor: Annotated[
         User,
@@ -247,7 +247,7 @@ async def set_default_workspace(
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    await service.set_default_workspace(
+    service.set_default_workspace(
         workspace_id=workspace.id,
         user=actor,
     )

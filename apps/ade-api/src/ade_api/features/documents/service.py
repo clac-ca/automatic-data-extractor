@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
 import unicodedata
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,10 +14,9 @@ from uuid import UUID
 
 import openpyxl
 from fastapi import UploadFile
-from fastapi.concurrency import run_in_threadpool
 from pydantic import ValidationError
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.ids import generate_uuid7
@@ -86,12 +85,20 @@ UPLOAD_RUN_OPTIONS_KEY = "__ade_run_options"
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 
+def _run_with_timeout(func, *, timeout: float, **kwargs):
+    """Run a callable with a timeout to avoid hanging on large workbook operations."""
+    if timeout <= 0:
+        return func(**kwargs)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, **kwargs)
+        return future.result(timeout=timeout)
+
 
 
 class DocumentsService:
     """Manage document metadata and backing file storage."""
 
-    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+    def __init__(self, *, session: Session, settings: Settings) -> None:
         self._session = session
         self._settings = settings
 
@@ -126,7 +133,7 @@ class DocumentsService:
         except ValidationError:
             return None
 
-    async def create_document(
+    def create_document(
         self,
         *,
         workspace_id: UUID,
@@ -159,8 +166,8 @@ class DocumentsService:
         if upload.file is None:  # pragma: no cover - UploadFile always supplies file
             raise RuntimeError("Upload stream is not available")
 
-        await upload.seek(0)
-        stored = await storage.write(
+        upload.file.seek(0)
+        stored = storage.write(
             stored_uri,
             upload.file,
             max_bytes=self._settings.storage_upload_max_bytes,
@@ -182,15 +189,15 @@ class DocumentsService:
             last_run_at=None,
         )
         self._session.add(document)
-        await self._session.flush()
+        self._session.flush()
 
         stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         hydrated = result.scalar_one()
 
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
-        await self._events.record_changed(
+        self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
             document_version=payload.version,
@@ -210,7 +217,7 @@ class DocumentsService:
 
         return payload
 
-    async def list_documents(
+    def list_documents(
         self,
         *,
         workspace_id: UUID,
@@ -242,8 +249,8 @@ class DocumentsService:
         )
 
         # Capture the cursor before listing to avoid skipping changes committed during the query.
-        changes_cursor = await self._events.current_cursor(workspace_id=workspace_id)
-        page_result = await paginate_query(
+        changes_cursor = self._events.current_cursor(workspace_id=workspace_id)
+        page_result = paginate_query(
             self._session,
             stmt,
             page=page,
@@ -252,7 +259,7 @@ class DocumentsService:
             changes_cursor=str(changes_cursor),
         )
         items = [DocumentOut.model_validate(item) for item in page_result.items]
-        await self._attach_latest_runs(workspace_id, items)
+        self._attach_latest_runs(workspace_id, items)
         for item in items:
             self._apply_derived_fields(item)
 
@@ -278,7 +285,7 @@ class DocumentsService:
             changes_cursor=page_result.changes_cursor,
         )
 
-    async def list_document_changes(
+    def list_document_changes(
         self,
         *,
         workspace_id: UUID,
@@ -291,7 +298,7 @@ class DocumentsService:
         except (TypeError, ValueError) as exc:
             raise ValueError("cursor must be an integer string") from exc
 
-        page = await self._events.list_changes(
+        page = self._events.list_changes(
             workspace_id=workspace_id,
             cursor=cursor,
             limit=limit,
@@ -311,16 +318,16 @@ class DocumentsService:
         ]
         return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
 
-    async def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
+    def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
         logger.debug(
             "document.get.start",
             extra=log_context(workspace_id=workspace_id, document_id=document_id),
         )
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        await self._attach_latest_runs(workspace_id, [payload])
+        self._attach_latest_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
 
         logger.info(
@@ -334,7 +341,7 @@ class DocumentsService:
         )
         return payload
 
-    async def get_document_list_row(
+    def get_document_list_row(
         self,
         *,
         workspace_id: UUID,
@@ -346,9 +353,9 @@ class DocumentsService:
             "document.list_row.start",
             extra=log_context(workspace_id=workspace_id, document_id=document_id),
         )
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        await self._attach_latest_runs(workspace_id, [payload])
+        self._attach_latest_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
         row = self._build_list_row(payload)
 
@@ -363,7 +370,7 @@ class DocumentsService:
         )
         return row
 
-    async def update_document(
+    def update_document(
         self,
         *,
         workspace_id: UUID,
@@ -371,7 +378,7 @@ class DocumentsService:
         payload: DocumentUpdateRequest,
         client_request_id: str | None = None,
     ) -> DocumentOut:
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         changed = False
 
         if "assignee_user_id" in payload.model_fields_set:
@@ -388,13 +395,13 @@ class DocumentsService:
             document.version += 1
 
         if changed:
-            await self._session.flush()
-            await self._session.refresh(document, attribute_names=["assignee_user"])
+            self._session.flush()
+            self._session.refresh(document, attribute_names=["assignee_user"])
 
         updated = DocumentOut.model_validate(document)
         self._apply_derived_fields(updated)
         if changed:
-            await self._events.record_changed(
+            self._events.record_changed(
                 workspace_id=workspace_id,
                 document_id=document_id,
                 document_version=updated.version,
@@ -402,7 +409,7 @@ class DocumentsService:
             )
         return updated
 
-    async def archive_document(
+    def archive_document(
         self,
         *,
         workspace_id: UUID,
@@ -411,17 +418,17 @@ class DocumentsService:
     ) -> DocumentOut:
         """Archive a document to remove it from active workflows."""
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         changed = document.status != DocumentStatus.ARCHIVED
         if changed:
             document.status = DocumentStatus.ARCHIVED
             document.version += 1
-            await self._session.flush()
+            self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
         if changed:
-            await self._events.record_changed(
+            self._events.record_changed(
                 workspace_id=workspace_id,
                 document_id=document_id,
                 document_version=payload.version,
@@ -429,7 +436,7 @@ class DocumentsService:
             )
         return payload
 
-    async def archive_documents_batch(
+    def archive_documents_batch(
         self,
         *,
         workspace_id: UUID,
@@ -442,7 +449,7 @@ class DocumentsService:
         if not ordered_ids:
             return []
 
-        documents = await self._require_documents(
+        documents = self._require_documents(
             workspace_id=workspace_id,
             document_ids=ordered_ids,
         )
@@ -458,7 +465,7 @@ class DocumentsService:
             changed_ids.add(document.id)
 
         if changed_ids:
-            await self._session.flush()
+            self._session.flush()
 
         payloads: list[DocumentOut] = []
         for doc_id in ordered_ids:
@@ -466,7 +473,7 @@ class DocumentsService:
             self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
-                await self._events.record_changed(
+                self._events.record_changed(
                     workspace_id=workspace_id,
                     document_id=doc_id,
                     document_version=payload.version,
@@ -475,7 +482,7 @@ class DocumentsService:
 
         return payloads
 
-    async def restore_document(
+    def restore_document(
         self,
         *,
         workspace_id: UUID,
@@ -484,23 +491,23 @@ class DocumentsService:
     ) -> DocumentOut:
         """Restore a document from the archive."""
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         if document.status != DocumentStatus.ARCHIVED:
             payload = DocumentOut.model_validate(document)
             self._apply_derived_fields(payload)
             return payload
 
-        status_map = await self._latest_run_statuses(
+        status_map = self._latest_run_statuses(
             workspace_id=workspace_id,
             document_ids=[document.id],
         )
         document.status = self._status_from_last_run(status_map.get(document.id))
         document.version += 1
-        await self._session.flush()
+        self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        await self._events.record_changed(
+        self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
             document_version=payload.version,
@@ -508,7 +515,7 @@ class DocumentsService:
         )
         return payload
 
-    async def restore_documents_batch(
+    def restore_documents_batch(
         self,
         *,
         workspace_id: UUID,
@@ -521,12 +528,12 @@ class DocumentsService:
         if not ordered_ids:
             return []
 
-        documents = await self._require_documents(
+        documents = self._require_documents(
             workspace_id=workspace_id,
             document_ids=ordered_ids,
         )
         document_by_id = {doc.id: doc for doc in documents}
-        status_map = await self._latest_run_statuses(
+        status_map = self._latest_run_statuses(
             workspace_id=workspace_id,
             document_ids=list(document_by_id.keys()),
         )
@@ -540,7 +547,7 @@ class DocumentsService:
             changed_ids.add(document.id)
 
         if changed_ids:
-            await self._session.flush()
+            self._session.flush()
 
         payloads: list[DocumentOut] = []
         for doc_id in ordered_ids:
@@ -548,7 +555,7 @@ class DocumentsService:
             self._apply_derived_fields(payload)
             payloads.append(payload)
             if doc_id in changed_ids:
-                await self._events.record_changed(
+                self._events.record_changed(
                     workspace_id=workspace_id,
                     document_id=doc_id,
                     document_version=payload.version,
@@ -557,7 +564,7 @@ class DocumentsService:
 
         return payloads
 
-    async def list_document_sheets(
+    def list_document_sheets(
         self,
         *,
         workspace_id: UUID,
@@ -570,12 +577,11 @@ class DocumentsService:
             extra=log_context(workspace_id=workspace_id, document_id=document_id),
         )
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         storage = self._storage_for(workspace_id)
         path = storage.path_for(document.stored_uri)
 
-        exists = await run_in_threadpool(path.exists)
-        if not exists:
+        if not path.exists():
             raise DocumentFileMissingError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -584,9 +590,10 @@ class DocumentsService:
         suffix = Path(document.original_filename).suffix.lower()
         if suffix == ".xlsx":
             try:
-                sheets = await asyncio.wait_for(
-                    run_in_threadpool(self._inspect_workbook, path),
+                sheets = _run_with_timeout(
+                    self._inspect_workbook,
                     timeout=self._settings.preview_timeout_seconds,
+                    path=path,
                 )
                 logger.info(
                     "document.sheets.list.success",
@@ -598,7 +605,7 @@ class DocumentsService:
                     ),
                 )
                 return sheets
-            except TimeoutError as exc:
+            except FuturesTimeout as exc:
                 raise DocumentWorksheetParseError(
                     document_id=document_id,
                     stored_uri=document.stored_uri,
@@ -624,7 +631,7 @@ class DocumentsService:
         )
         return sheets
 
-    async def get_document_preview(
+    def get_document_preview(
         self,
         *,
         workspace_id: UUID,
@@ -652,12 +659,11 @@ class DocumentsService:
             ),
         )
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         storage = self._storage_for(workspace_id)
         path = storage.path_for(document.stored_uri)
 
-        exists = await run_in_threadpool(path.exists)
-        if not exists:
+        if not path.exists():
             raise DocumentFileMissingError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -666,32 +672,28 @@ class DocumentsService:
         suffix = Path(document.original_filename).suffix.lower()
         try:
             if suffix == ".xlsx":
-                preview = await asyncio.wait_for(
-                    run_in_threadpool(
-                        build_workbook_preview_from_xlsx,
-                        path,
-                        max_rows=max_rows,
-                        max_columns=max_columns,
-                        trim_empty_columns=trim_empty_columns,
-                        trim_empty_rows=trim_empty_rows,
-                        sheet_name=sheet_name,
-                        sheet_index=effective_sheet_index,
-                    ),
+                preview = _run_with_timeout(
+                    build_workbook_preview_from_xlsx,
                     timeout=self._settings.preview_timeout_seconds,
+                    path=path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    trim_empty_columns=trim_empty_columns,
+                    trim_empty_rows=trim_empty_rows,
+                    sheet_name=sheet_name,
+                    sheet_index=effective_sheet_index,
                 )
             elif suffix == ".csv":
-                preview = await asyncio.wait_for(
-                    run_in_threadpool(
-                        build_workbook_preview_from_csv,
-                        path,
-                        max_rows=max_rows,
-                        max_columns=max_columns,
-                        trim_empty_columns=trim_empty_columns,
-                        trim_empty_rows=trim_empty_rows,
-                        sheet_name=sheet_name,
-                        sheet_index=effective_sheet_index,
-                    ),
+                preview = _run_with_timeout(
+                    build_workbook_preview_from_csv,
                     timeout=self._settings.preview_timeout_seconds,
+                    path=path,
+                    max_rows=max_rows,
+                    max_columns=max_columns,
+                    trim_empty_columns=trim_empty_columns,
+                    trim_empty_rows=trim_empty_rows,
+                    sheet_name=sheet_name,
+                    sheet_index=effective_sheet_index,
                 )
             else:
                 raise DocumentPreviewUnsupportedError(
@@ -704,7 +706,7 @@ class DocumentsService:
                 document_id=document_id,
                 sheet=requested,
             ) from exc
-        except TimeoutError as exc:
+        except FuturesTimeout as exc:
             raise DocumentPreviewParseError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -730,24 +732,23 @@ class DocumentsService:
         )
         return preview
 
-    async def stream_document(
+    def stream_document(
         self,
         *,
         workspace_id: UUID,
         document_id: UUID,
-    ) -> tuple[DocumentOut, AsyncIterator[bytes]]:
-        """Return a document record and async iterator for its bytes."""
+    ) -> tuple[DocumentOut, Iterator[bytes]]:
+        """Return a document record and iterator for its bytes."""
 
         logger.debug(
             "document.stream.start",
             extra=log_context(workspace_id=workspace_id, document_id=document_id),
         )
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         storage = self._storage_for(workspace_id)
         path = storage.path_for(document.stored_uri)
-        exists = await run_in_threadpool(path.exists)
-        if not exists:
+        if not path.exists():
             logger.warning(
                 "document.stream.missing_file",
                 extra=log_context(
@@ -763,9 +764,9 @@ class DocumentsService:
 
         stream = storage.stream(document.stored_uri)
 
-        async def _guarded() -> AsyncIterator[bytes]:
+        def _guarded() -> Iterator[bytes]:
             try:
-                async for chunk in stream:
+                for chunk in stream:
                     yield chunk
             except FileNotFoundError as exc:
                 logger.warning(
@@ -782,7 +783,7 @@ class DocumentsService:
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
-        await self._attach_latest_runs(workspace_id, [payload])
+        self._attach_latest_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
 
         logger.info(
@@ -796,7 +797,7 @@ class DocumentsService:
         )
         return payload, _guarded()
 
-    async def delete_document(
+    def delete_document(
         self,
         *,
         workspace_id: UUID,
@@ -816,17 +817,17 @@ class DocumentsService:
             ),
         )
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         now = datetime.now(tz=UTC)
         document.deleted_at = now
         document.version += 1
         if actor is not None:
             document.deleted_by_user_id = actor_id
-        await self._session.flush()
+        self._session.flush()
 
         storage = self._storage_for(workspace_id)
-        await storage.delete(document.stored_uri)
-        await self._events.record_deleted(
+        storage.delete(document.stored_uri)
+        self._events.record_deleted(
             workspace_id=workspace_id,
             document_id=document_id,
             document_version=document.version,
@@ -843,7 +844,7 @@ class DocumentsService:
             ),
         )
 
-    async def delete_documents_batch(
+    def delete_documents_batch(
         self,
         *,
         workspace_id: UUID,
@@ -858,7 +859,7 @@ class DocumentsService:
             return []
 
         actor_id: UUID | None = actor.id if actor is not None else None
-        documents = await self._require_documents(
+        documents = self._require_documents(
             workspace_id=workspace_id,
             document_ids=ordered_ids,
         )
@@ -871,15 +872,15 @@ class DocumentsService:
             if actor is not None:
                 document.deleted_by_user_id = actor_id
 
-        await self._session.flush()
+        self._session.flush()
 
         storage = self._storage_for(workspace_id)
         for document in documents:
-            await storage.delete(document.stored_uri)
+            storage.delete(document.stored_uri)
 
         for document_id in ordered_ids:
             document = document_by_id[document_id]
-            await self._events.record_deleted(
+            self._events.record_deleted(
                 workspace_id=workspace_id,
                 document_id=document_id,
                 document_version=document.version,
@@ -888,7 +889,7 @@ class DocumentsService:
 
         return ordered_ids
 
-    async def replace_document_tags(
+    def replace_document_tags(
         self,
         *,
         workspace_id: UUID,
@@ -903,14 +904,14 @@ class DocumentsService:
         except TagValidationError as exc:
             raise InvalidDocumentTagsError(str(exc)) from exc
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         document.tags = [DocumentTag(document_id=document.id, tag=tag) for tag in normalized]
         document.version += 1
-        await self._session.flush()
+        self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        await self._events.record_changed(
+        self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
             document_version=payload.version,
@@ -918,7 +919,7 @@ class DocumentsService:
         )
         return payload
 
-    async def patch_document_tags(
+    def patch_document_tags(
         self,
         *,
         workspace_id: UUID,
@@ -938,7 +939,7 @@ class DocumentsService:
         except TagValidationError as exc:
             raise InvalidDocumentTagsError(str(exc)) from exc
 
-        document = await self._get_document(workspace_id, document_id)
+        document = self._get_document(workspace_id, document_id)
         existing = {tag.tag for tag in document.tags}
         next_tags = (existing | set(normalized_add)) - set(normalized_remove)
         if len(next_tags) > MAX_TAGS_PER_DOCUMENT:
@@ -952,11 +953,11 @@ class DocumentsService:
             document.tags.append(DocumentTag(document_id=document.id, tag=tag))
 
         document.version += 1
-        await self._session.flush()
+        self._session.flush()
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        await self._events.record_changed(
+        self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
             document_version=payload.version,
@@ -964,7 +965,7 @@ class DocumentsService:
         )
         return payload
 
-    async def patch_document_tags_batch(
+    def patch_document_tags_batch(
         self,
         *,
         workspace_id: UUID,
@@ -985,7 +986,7 @@ class DocumentsService:
             raise InvalidDocumentTagsError(str(exc)) from exc
 
         ordered_ids = list(dict.fromkeys(document_ids))
-        documents = await self._require_documents(
+        documents = self._require_documents(
             workspace_id=workspace_id,
             document_ids=ordered_ids,
         )
@@ -1006,14 +1007,14 @@ class DocumentsService:
 
             document.version += 1
 
-        await self._session.flush()
+        self._session.flush()
 
         payloads: list[DocumentOut] = []
         for doc_id in ordered_ids:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
             self._apply_derived_fields(payload)
             payloads.append(payload)
-            await self._events.record_changed(
+            self._events.record_changed(
                 workspace_id=workspace_id,
                 document_id=UUID(str(doc_id)),
                 document_version=payload.version,
@@ -1022,7 +1023,7 @@ class DocumentsService:
 
         return payloads
 
-    async def list_tag_catalog(
+    def list_tag_catalog(
         self,
         *,
         workspace_id: UUID,
@@ -1071,9 +1072,9 @@ class DocumentsService:
         ordered_stmt = stmt.order_by(*order_by)
 
         count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
+        total = (self._session.execute(count_stmt)).scalar_one()
         page_count = math.ceil(total / per_page) if total > 0 else 0
-        result = await self._session.execute(ordered_stmt.limit(per_page).offset(offset))
+        result = self._session.execute(ordered_stmt.limit(per_page).offset(offset))
         rows = result.mappings().all()
 
         items = [
@@ -1090,8 +1091,8 @@ class DocumentsService:
             changes_cursor="0",
         )
 
-    async def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
-        document = await self._repository.get_document(
+    def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
+        document = self._repository.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
         )
@@ -1106,7 +1107,7 @@ class DocumentsService:
             raise DocumentNotFoundError(document_id)
         return document
 
-    async def _require_documents(
+    def _require_documents(
         self,
         *,
         workspace_id: UUID,
@@ -1120,7 +1121,7 @@ class DocumentsService:
             .where(Document.deleted_at.is_(None))
             .where(Document.id.in_(document_ids))
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         documents = list(result.scalars())
         found = {doc.id for doc in documents}
         missing = [document_id for document_id in document_ids if document_id not in found]
@@ -1137,7 +1138,7 @@ class DocumentsService:
 
         return documents
 
-    async def _attach_latest_runs(
+    def _attach_latest_runs(
         self,
         workspace_id: UUID,
         documents: Sequence[DocumentOut],
@@ -1147,11 +1148,11 @@ class DocumentsService:
         if not documents:
             return
 
-        latest_runs = await self._latest_stream_runs(
+        latest_runs = self._latest_stream_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
-        latest_successful_runs = await self._latest_successful_runs(
+        latest_successful_runs = self._latest_successful_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
@@ -1260,7 +1261,7 @@ class DocumentsService:
             return DocumentStatus.PROCESSING
         return DocumentStatus.UPLOADED
 
-    async def _latest_run_statuses(
+    def _latest_run_statuses(
         self,
         *,
         workspace_id: UUID,
@@ -1293,7 +1294,7 @@ class DocumentsService:
             select(ranked_runs.c.document_id, ranked_runs.c.status)
             .where(ranked_runs.c.rank == 1)
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
 
         latest: dict[UUID, RunStatus] = {}
         for row in result.mappings():
@@ -1307,7 +1308,7 @@ class DocumentsService:
 
         return latest
 
-    async def _latest_stream_runs(
+    def _latest_stream_runs(
         self,
         *,
         workspace_id: UUID,
@@ -1343,7 +1344,7 @@ class DocumentsService:
         )
 
         stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
 
         latest: dict[UUID, DocumentRunSummary] = {}
         for row in result.mappings():
@@ -1360,7 +1361,7 @@ class DocumentsService:
 
         return latest
 
-    async def _latest_successful_runs(
+    def _latest_successful_runs(
         self,
         *,
         workspace_id: UUID,
@@ -1397,7 +1398,7 @@ class DocumentsService:
         )
 
         stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
 
         latest: dict[UUID, DocumentRunSummary] = {}
         for row in result.mappings():

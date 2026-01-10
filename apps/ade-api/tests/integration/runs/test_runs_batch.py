@@ -22,7 +22,7 @@ async def test_create_runs_batch_creates_runs(
         name="Batch Config",
     )
     session.add(configuration)
-    await session.flush()
+    session.flush()
 
     config_dir = workspace_config_root(settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,7 @@ async def test_create_runs_batch_creates_runs(
         make_document(workspace_id=workspace_id, filename="input-b.csv", byte_size=14),
     ]
     session.add_all(documents)
-    await session.commit()
+    session.commit()
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
@@ -50,7 +50,7 @@ async def test_create_runs_batch_creates_runs(
     assert len(runs) == 2
 
     run_ids = [UUID(item["id"]) for item in runs]
-    result = await session.execute(select(Run).where(Run.id.in_(run_ids)))
+    result = session.execute(select(Run).where(Run.id.in_(run_ids)))
     stored = list(result.scalars())
     assert len(stored) == 2
     assert {run.input_document_id for run in stored} == {doc.id for doc in documents}
@@ -70,7 +70,7 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
         name="Batch Config",
     )
     session.add(configuration)
-    await session.flush()
+    session.flush()
 
     config_dir = workspace_config_root(updated_settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -80,7 +80,7 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
         make_document(workspace_id=workspace_id, filename="input-b.csv", byte_size=14),
     ]
     session.add_all(documents)
-    await session.commit()
+    session.commit()
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
@@ -96,5 +96,5 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
     payload = response.json()
     assert payload["type"] == "rate_limited"
     assert any(item.get("code") == "run_queue_full" for item in payload.get("errors", []))
-    result = await session.execute(select(Run).where(Run.configuration_id == configuration.id))
+    result = session.execute(select(Run).where(Run.configuration_id == configuration.id))
     assert result.scalars().all() == []

@@ -66,6 +66,7 @@ import {
 } from "@hooks/configurations";
 import type { FileReadJson } from "@schema/configurations";
 import { createScopedStorage } from "@lib/storage";
+import { uiStorageKeys } from "@lib/uiStorageKeys";
 import { isDarkMode, useTheme } from "@components/providers/theme";
 import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@api";
@@ -99,16 +100,6 @@ const OUTPUT_HANDLE_THICKNESS = 10; // matches thicker PanelResizeHandle hit tar
 const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
   "Panel closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
-const buildTabStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.configuration.${configId}.tabs`;
-const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.configuration.${configId}.console`;
-const buildExplorerExpandedStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.configuration.${configId}.explorer.expanded`;
-const buildLayoutStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.configuration.${configId}.layout`;
-
-
 const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
   explorer: "",
   search: "Search coming soon",
@@ -322,15 +313,15 @@ export function Workbench({
   const [runDialogOpen, setRunDialogOpen] = useState(false);
 
   const tabPersistence = useMemo(
-    () => (seed ? null : createScopedStorage(buildTabStorageKey(workspaceId, configId))),
+    () => (seed ? null : createScopedStorage(uiStorageKeys.workbenchTabs(workspaceId, configId))),
     [workspaceId, configId, seed],
   );
   const consolePersistence = useMemo(
-    () => (seed ? null : createScopedStorage(buildConsoleStorageKey(workspaceId, configId))),
+    () => (seed ? null : createScopedStorage(uiStorageKeys.workbenchConsole(workspaceId, configId))),
     [workspaceId, configId, seed],
   );
   const layoutPersistence = useMemo(
-    () => createScopedStorage(buildLayoutStorageKey(workspaceId, configId)),
+    () => createScopedStorage(uiStorageKeys.workbenchLayout(workspaceId, configId)),
     [workspaceId, configId],
   );
   const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
@@ -1965,7 +1956,7 @@ export function Workbench({
                     deletingFolderPath={deletingFolderPath}
                     onDeleteFile={handleDeleteFile}
                     onDeleteFolder={handleDeleteFolder}
-                    expandedStorageKey={buildExplorerExpandedStorageKey(workspaceId, configId)}
+                    expandedStorageKey={uiStorageKeys.workbenchExplorerExpanded(workspaceId, configId)}
                     onHide={handleHideExplorer}
                   />
                 ) : (

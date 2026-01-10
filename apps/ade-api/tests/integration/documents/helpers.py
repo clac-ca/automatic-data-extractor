@@ -38,7 +38,7 @@ async def build_documents_fixture(session):
         is_active=True,
     )
     session.add_all([workspace, uploader, colleague])
-    await session.flush()
+    session.flush()
 
     now = datetime.now(tz=UTC)
     expires = now + timedelta(days=30)
@@ -77,7 +77,7 @@ async def build_documents_fixture(session):
     )
 
     session.add_all([processed, uploaded])
-    await session.flush()
+    session.flush()
 
     return workspace, uploader, colleague, processed, uploaded
 
@@ -91,7 +91,7 @@ async def ensure_configuration(session, workspace_id):
         status=ConfigurationStatus.ACTIVE,
     )
     session.add(configuration)
-    await session.flush()
+    session.flush()
 
     return configuration.id
 
@@ -106,7 +106,7 @@ async def build_tag_filter_fixture(session):
         is_active=True,
     )
     session.add_all([workspace, uploader])
-    await session.flush()
+    session.flush()
 
     now = datetime.now(tz=UTC)
     expires = now + timedelta(days=30)
@@ -184,7 +184,7 @@ async def build_tag_filter_fixture(session):
     )
 
     session.add_all([doc_all, doc_finance, doc_priority, doc_empty])
-    await session.flush()
+    session.flush()
 
     return workspace, uploader, doc_all, doc_finance, doc_priority, doc_empty
 
@@ -207,5 +207,5 @@ async def seed_failed_run(session, *, workspace_id, document_id, uploader_id):
         error_message="Request failed with status 404",
     )
     session.add(run)
-    await session.flush()
+    session.flush()
     return run

@@ -48,7 +48,7 @@ UserPath = Annotated[
     response_model_exclude_none=True,
     summary="List workspace members with their roles",
 )
-async def list_workspace_members(
+def list_workspace_members(
     workspace_id: WorkspacePath,
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     _guard: Annotated[None, Depends(strict_list_query_guard())],
@@ -61,7 +61,7 @@ async def list_workspace_members(
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspaceMemberPage:
-    return await service.list_workspace_members(
+    return service.list_workspace_members(
         workspace_id=workspace_id,
         sort=list_query.sort,
         filters=list_query.filters,
@@ -79,7 +79,7 @@ async def list_workspace_members(
     status_code=status.HTTP_201_CREATED,
     summary="Add a workspace member with roles",
 )
-async def add_workspace_member(
+def add_workspace_member(
     workspace_id: WorkspacePath,
     _actor: Annotated[
         User,
@@ -92,7 +92,7 @@ async def add_workspace_member(
     *,
     payload: WorkspaceMemberCreate = WORKSPACE_MEMBER_CREATE_BODY,
 ) -> WorkspaceMemberOut:
-    return await service.add_workspace_member(
+    return service.add_workspace_member(
         workspace_id=workspace_id,
         payload=payload,
     )
@@ -104,7 +104,7 @@ async def add_workspace_member(
     response_model=WorkspaceMemberOut,
     summary="Replace workspace member roles",
 )
-async def update_workspace_member(
+def update_workspace_member(
     workspace_id: WorkspacePath,
     user_id: UserPath,
     _actor: Annotated[
@@ -118,7 +118,7 @@ async def update_workspace_member(
     *,
     payload: WorkspaceMemberUpdate = WORKSPACE_MEMBER_UPDATE_BODY,
 ) -> WorkspaceMemberOut:
-    return await service.update_workspace_member_roles(
+    return service.update_workspace_member_roles(
         workspace_id=workspace_id,
         user_id=user_id,
         payload=payload,
@@ -131,7 +131,7 @@ async def update_workspace_member(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove a workspace member",
 )
-async def remove_workspace_member(
+def remove_workspace_member(
     workspace_id: WorkspacePath,
     user_id: UserPath,
     _actor: Annotated[
@@ -143,7 +143,7 @@ async def remove_workspace_member(
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    await service.remove_workspace_member(
+    service.remove_workspace_member(
         workspace_id=workspace_id,
         user_id=user_id,
     )

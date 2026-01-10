@@ -20,12 +20,13 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.api.deps import SessionDep, get_configurations_service, get_runs_service
+from ade_api.api.deps import SettingsDep, get_configurations_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
 from ade_api.common.sorting import resolve_sort
 from ade_api.core.http import require_csrf, require_workspace
+from ade_api.db import get_sessionmaker
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
@@ -52,6 +53,7 @@ from ..service import (
     PreconditionFailedError,
     PreconditionRequiredError,
 )
+from ..storage import ConfigStorage
 from ..sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter()
@@ -74,7 +76,7 @@ MAKE_ACTIVE_BODY = Body(
     response_model_exclude_none=True,
     summary="List configurations for a workspace",
 )
-async def list_configurations(
+def list_configurations(
     workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
@@ -93,7 +95,7 @@ async def list_configurations(
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    return await service.list_configurations(
+    return service.list_configurations(
         workspace_id=workspace_id,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
@@ -110,7 +112,7 @@ async def list_configurations(
     response_model_exclude_none=True,
     summary="Retrieve configuration metadata",
 )
-async def read_configuration(
+def read_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     response: Response,
@@ -124,7 +126,7 @@ async def read_configuration(
     ],
 ) -> ConfigurationRecord:
     try:
-        record = await service.get_configuration(
+        record = service.get_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -145,7 +147,7 @@ async def read_configuration(
     summary="Create a configuration from a template or clone",
     response_model_exclude_none=True,
 )
-async def create_configuration(
+def create_configuration(
     workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
@@ -159,7 +161,7 @@ async def create_configuration(
     payload: ConfigurationCreate = CONFIG_CREATE_BODY,
 ) -> ConfigurationRecord:
     try:
-        record = await service.create_configuration(
+        record = service.create_configuration(
             workspace_id=workspace_id,
             display_name=payload.display_name,
             source=payload.source,
@@ -192,7 +194,7 @@ async def create_configuration(
     summary="Create a configuration from an uploaded archive",
     response_model_exclude_none=True,
 )
-async def import_configuration(
+def import_configuration(
     workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
@@ -207,8 +209,8 @@ async def import_configuration(
     file: UploadFile = UPLOAD_ARCHIVE_FIELD,
 ) -> ConfigurationRecord:
     try:
-        archive = await file.read()
-        record = await service.import_configuration_from_archive(
+        archive = file.file.read()
+        record = service.import_configuration_from_archive(
             workspace_id=workspace_id,
             display_name=display_name.strip(),
             archive=archive,
@@ -242,7 +244,7 @@ async def import_configuration(
     summary="Validate the configuration on disk",
     response_model_exclude_none=True,
 )
-async def validate_configuration(
+def validate_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -255,7 +257,7 @@ async def validate_configuration(
     ],
 ) -> ConfigurationValidateResponse:
     try:
-        result = await service.validate_configuration(
+        result = service.validate_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -283,7 +285,7 @@ async def validate_configuration(
     summary="Make a draft configuration active",
     response_model_exclude_none=True,
 )
-async def publish_configuration_endpoint(
+def publish_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -299,7 +301,7 @@ async def publish_configuration_endpoint(
 ) -> ConfigurationRecord:
     del payload
     try:
-        record = await service.make_active_configuration(
+        record = service.make_active_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -319,7 +321,7 @@ async def publish_configuration_endpoint(
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    await runs_service.enqueue_pending_runs_for_configuration(
+    runs_service.enqueue_pending_runs_for_configuration(
         configuration_id=record.id,
     )
 
@@ -333,7 +335,7 @@ async def publish_configuration_endpoint(
     summary="Archive the active configuration",
     response_model_exclude_none=True,
 )
-async def archive_configuration_endpoint(
+def archive_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -346,7 +348,7 @@ async def archive_configuration_endpoint(
     ],
 ) -> ConfigurationRecord:
     try:
-        record = await service.archive_configuration(
+        record = service.archive_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -363,11 +365,11 @@ async def archive_configuration_endpoint(
         status.HTTP_200_OK: {"content": {"application/zip": {}}},
     },
 )
-async def export_config(
+def export_config(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    db_session: SessionDep,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    request: Request,
+    settings: SettingsDep,
     _actor: Annotated[
         User,
         Security(
@@ -380,17 +382,20 @@ async def export_config(
     if format != "zip":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="unsupported_format")
     try:
-        blob = await service.export_zip(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
+        session_factory = get_sessionmaker(request)
+        with session_factory() as session:
+            storage = ConfigStorage(settings=settings)
+            service = ConfigurationsService(session=session, storage=storage)
+            blob = service.export_zip(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+            )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     stream = io.BytesIO(blob)
     headers = {
         "Content-Disposition": build_content_disposition(f"{configuration_id}.zip"),
     }
-    await db_session.close()
     return StreamingResponse(stream, media_type="application/zip", headers=headers)
 
 
@@ -401,7 +406,7 @@ async def export_config(
     summary="Replace a draft configuration from an uploaded archive",
     response_model_exclude_none=True,
 )
-async def replace_configuration_from_archive(
+def replace_configuration_from_archive(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     request: Request,
@@ -415,9 +420,9 @@ async def replace_configuration_from_archive(
     ],
     file: UploadFile = UPLOAD_ARCHIVE_FIELD,
 ) -> ConfigurationRecord:
-    archive = await file.read()
+    archive = file.file.read()
     try:
-        record = await service.replace_configuration_from_archive(
+        record = service.replace_configuration_from_archive(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             archive=archive,

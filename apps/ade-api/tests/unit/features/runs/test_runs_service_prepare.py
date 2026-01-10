@@ -12,15 +12,14 @@ from ade_api.models import Document, DocumentSource, DocumentStatus, Run, RunSta
 from tests.unit.features.runs.helpers import build_runs_service
 
 
-@pytest.mark.asyncio()
-async def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
-    service, configuration, document, _settings = await build_runs_service(
+def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
+    service, configuration, document, _settings = build_runs_service(
         session,
         tmp_path,
     )
 
     options = RunCreateOptions(input_document_id=str(document.id))
-    run = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.QUEUED
     assert run.engine_spec == str(_settings.engine_spec)
@@ -31,19 +30,18 @@ async def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
     assert run.run_options.get("input_document_id") == str(document.id)
 
 
-@pytest.mark.asyncio()
-async def test_prepare_run_rejects_when_queue_is_full(
+def test_prepare_run_rejects_when_queue_is_full(
     session,
     tmp_path: Path,
 ) -> None:
-    service, configuration, document, _settings = await build_runs_service(
+    service, configuration, document, _settings = build_runs_service(
         session,
         tmp_path,
         queue_size=1,
     )
 
     options = RunCreateOptions(input_document_id=str(document.id))
-    await service.prepare_run(configuration_id=configuration.id, options=options)
+    service.prepare_run(configuration_id=configuration.id, options=options)
 
     second_document = Document(
         id=generate_uuid7(),
@@ -59,37 +57,36 @@ async def test_prepare_run_rejects_when_queue_is_full(
         expires_at=utc_now(),
     )
     session.add(second_document)
-    await session.commit()
+    session.commit()
 
     with pytest.raises(RunQueueFullError):
-        await service.prepare_run(
+        service.prepare_run(
             configuration_id=configuration.id,
             options=RunCreateOptions(input_document_id=str(second_document.id)),
         )
 
 
-@pytest.mark.asyncio()
-async def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
+def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
     session,
     tmp_path: Path,
 ) -> None:
-    service, configuration, document, _settings = await build_runs_service(
+    service, configuration, document, _settings = build_runs_service(
         session,
         tmp_path,
     )
 
-    queued = await service.enqueue_pending_runs_for_configuration(
+    queued = service.enqueue_pending_runs_for_configuration(
         configuration_id=configuration.id,
     )
     assert queued == 1
 
-    result = await session.execute(select(Run).where(Run.input_document_id == document.id))
+    result = session.execute(select(Run).where(Run.input_document_id == document.id))
     runs = result.scalars().all()
     assert len(runs) == 1
     assert runs[0].configuration_id == configuration.id
     assert runs[0].status is RunStatus.QUEUED
 
-    second = await service.enqueue_pending_runs_for_configuration(
+    second = service.enqueue_pending_runs_for_configuration(
         configuration_id=configuration.id,
     )
     assert second == 0

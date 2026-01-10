@@ -1,10 +1,11 @@
-from sqlalchemy.engine import make_url
+from sqlalchemy import text
+from sqlalchemy.pool import StaticPool
 
-from ade_api.db.database import DatabaseConfig, build_async_url, build_sync_url
+from ade_api.db import DatabaseSettings, build_engine
 
 
-def test_build_sync_url_removes_sql_credentials_for_managed_identity() -> None:
-    cfg = DatabaseConfig(
+def test_build_engine_strips_sql_credentials_for_managed_identity() -> None:
+    settings = DatabaseSettings(
         url=(
             "mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade"
             "?Trusted_Connection=yes"
@@ -12,18 +13,31 @@ def test_build_sync_url_removes_sql_credentials_for_managed_identity() -> None:
         auth_mode="managed_identity",
     )
 
-    url = make_url(build_sync_url(cfg))
+    engine = build_engine(settings)
+    try:
+        url = engine.url
+        assert url.username is None
+        assert url.password is None
+        assert "Trusted_Connection" not in (url.query or {})
+    finally:
+        engine.dispose()
 
-    assert url.username is None
-    assert url.password is None
-    assert "Trusted_Connection" not in url.query
+
+def test_build_engine_normalizes_mssql_driver() -> None:
+    settings = DatabaseSettings(url="mssql://user:secret@contoso.database.windows.net:1433/ade")
+    engine = build_engine(settings)
+    try:
+        assert engine.url.drivername.startswith("mssql+pyodbc")
+    finally:
+        engine.dispose()
 
 
-def test_build_async_url_converts_sqlite_and_mssql_drivers() -> None:
-    sqlite_cfg = DatabaseConfig(url="sqlite:///./data/db/ade.sqlite")
-    assert build_async_url(sqlite_cfg).startswith("sqlite+aiosqlite:///")
-
-    mssql_cfg = DatabaseConfig(
-        url="mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade",
-    )
-    assert build_async_url(mssql_cfg).startswith("mssql+aioodbc://")
+def test_build_engine_sqlite_in_memory_smoke() -> None:
+    settings = DatabaseSettings(url="sqlite:///:memory:")
+    engine = build_engine(settings)
+    try:
+        assert isinstance(engine.pool, StaticPool)
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT 1")).scalar_one() == 1
+    finally:
+        engine.dispose()

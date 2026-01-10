@@ -26,7 +26,7 @@ async def test_tag_filters_any_all_not_empty(session, settings) -> None:
         id_field=ID_FIELD,
     )
 
-    any_match = await service.list_documents(
+    any_match = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -44,7 +44,7 @@ async def test_tag_filters_any_all_not_empty(session, settings) -> None:
     any_ids = {item.id for item in any_match.items}
     assert any_ids == {doc_all.id, doc_finance.id, doc_priority.id}
 
-    all_match = await service.list_documents(
+    all_match = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -66,7 +66,7 @@ async def test_tag_filters_any_all_not_empty(session, settings) -> None:
     )
     assert {item.id for item in all_match.items} == {doc_all.id}
 
-    not_match = await service.list_documents(
+    not_match = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,
@@ -87,7 +87,7 @@ async def test_tag_filters_any_all_not_empty(session, settings) -> None:
     assert doc_finance.id in not_ids
     assert doc_empty.id in not_ids
 
-    empty_match = await service.list_documents(
+    empty_match = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,

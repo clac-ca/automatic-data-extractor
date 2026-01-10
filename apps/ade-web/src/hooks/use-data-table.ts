@@ -27,6 +27,7 @@ import {
   parseSortingState,
   serializeSortingState,
 } from "@/lib/parsers";
+import { createScopedStorage } from "@/lib/storage";
 import type { ExtendedColumnSort, QueryKeys } from "@/types/data-table";
 
 const PAGE_KEY = "page";
@@ -129,21 +130,16 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>(initialState?.columnVisibility ?? {});
+  const columnSizingStorage = React.useMemo(
+    () => (columnSizingKey ? createScopedStorage(columnSizingKey) : null),
+    [columnSizingKey],
+  );
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>(() => {
-    if (!columnSizingKey || typeof window === "undefined") {
+    if (!columnSizingStorage) {
       return initialState?.columnSizing ?? {};
     }
-    try {
-      const raw = window.localStorage.getItem(columnSizingKey);
-      if (!raw) return initialState?.columnSizing ?? {};
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        return parsed as ColumnSizingState;
-      }
-    } catch {
-      return initialState?.columnSizing ?? {};
-    }
-    return initialState?.columnSizing ?? {};
+    const stored = columnSizingStorage.get<ColumnSizingState>();
+    return stored ?? initialState?.columnSizing ?? {};
   });
 
   const page = React.useMemo(
@@ -393,11 +389,11 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
   );
 
   React.useEffect(() => {
-    if (!columnSizingKey || typeof window === "undefined") {
+    if (!columnSizingStorage) {
       return;
     }
-    window.localStorage.setItem(columnSizingKey, JSON.stringify(columnSizing));
-  }, [columnSizing, columnSizingKey]);
+    columnSizingStorage.set(columnSizing);
+  }, [columnSizing, columnSizingStorage]);
 
   const table = useReactTable({
     ...tableProps,

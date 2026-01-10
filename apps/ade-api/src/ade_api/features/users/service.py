@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.listing import paginate_query
@@ -33,19 +33,19 @@ LOCKOUT_HORIZON = timedelta(days=365 * 10)
 class UsersService:
     """Expose read-oriented helpers for user accounts."""
 
-    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+    def __init__(self, *, session: Session, settings: Settings) -> None:
         self._session = session
         self._repo = UsersRepository(session)
         self._api_keys = ApiKeyService(session=session, settings=settings)
 
-    async def get_profile(self, *, user: User) -> UserProfile:
+    def get_profile(self, *, user: User) -> UserProfile:
         """Return the profile for the authenticated user."""
         logger.debug(
             "user.profile.get.start",
             extra=log_context(user_id=str(user.id)),
         )
 
-        profile = await self._build_profile(user)
+        profile = self._build_profile(user)
 
         logger.debug(
             "user.profile.get.success",
@@ -53,7 +53,7 @@ class UsersService:
         )
         return profile
 
-    async def get_user(self, *, user_id: str | UUID) -> UserOut:
+    def get_user(self, *, user_id: str | UUID) -> UserOut:
         """Return a single user profile by identifier."""
 
         logger.debug(
@@ -61,21 +61,21 @@ class UsersService:
             extra=log_context(user_id=str(user_id)),
         )
 
-        user = await self._repo.get_by_id(user_id)
+        user = self._repo.get_by_id(user_id)
         if user is None:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
                 detail="User not found.",
             )
 
-        result = await self._serialize_user(user)
+        result = self._serialize_user(user)
         logger.info(
             "users.get.success",
             extra=log_context(user_id=str(user.id)),
         )
         return result
 
-    async def list_users(
+    def list_users(
         self,
         *,
         page: int,
@@ -104,7 +104,7 @@ class UsersService:
             join_operator=join_operator,
             q=q,
         )
-        page_result = await paginate_query(
+        page_result = paginate_query(
             self._session,
             stmt,
             page=page,
@@ -115,7 +115,7 @@ class UsersService:
 
         items: list[UserOut] = []
         for user in page_result.items:
-            items.append(await self._serialize_user(user))
+            items.append(self._serialize_user(user))
 
         result = UserPage(
             items=items,
@@ -137,7 +137,7 @@ class UsersService:
         )
         return result
 
-    async def update_user(
+    def update_user(
         self,
         *,
         user_id: str | UUID,
@@ -151,7 +151,7 @@ class UsersService:
             extra=log_context(user_id=str(user_id)),
         )
 
-        user = await self._repo.get_by_id_basic(user_id)
+        user = self._repo.get_by_id_basic(user_id)
         if user is None:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
@@ -181,19 +181,19 @@ class UsersService:
                     status.HTTP_400_BAD_REQUEST,
                     detail="Users cannot deactivate their own account.",
                 )
-            await self._apply_deactivation(user=user, actor=actor)
+            self._apply_deactivation(user=user, actor=actor)
         elif is_active_update is True and not user.is_active:
-            await self._apply_reactivation(user=user)
+            self._apply_reactivation(user=user)
         elif "is_active" in updates:
             repo_kwargs["is_active"] = updates["is_active"]
 
         if repo_kwargs:
-            await self._repo.update_user(
+            self._repo.update_user(
                 user,
                 **repo_kwargs,
             )
 
-        result = await self._serialize_user(user)
+        result = self._serialize_user(user)
         logger.info(
             "users.update.success",
             extra=log_context(
@@ -204,7 +204,7 @@ class UsersService:
         )
         return result
 
-    async def deactivate_user(
+    def deactivate_user(
         self,
         *,
         user_id: str | UUID,
@@ -212,7 +212,7 @@ class UsersService:
     ) -> UserOut:
         """Deactivate a user account and revoke API keys."""
 
-        user = await self._repo.get_by_id_basic(user_id)
+        user = self._repo.get_by_id_basic(user_id)
         if user is None:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
@@ -225,18 +225,18 @@ class UsersService:
                 detail="Users cannot deactivate their own account.",
             )
 
-        await self._apply_deactivation(user=user, actor=actor)
-        return await self._serialize_user(user)
+        self._apply_deactivation(user=user, actor=actor)
+        return self._serialize_user(user)
 
-    async def _build_profile(self, user: User) -> UserProfile:
+    def _build_profile(self, user: User) -> UserProfile:
         logger.debug(
             "user.profile.build",
             extra=log_context(user_id=str(user.id)),
         )
 
         rbac = RbacService(session=self._session)
-        permissions = await rbac.get_global_permissions_for_user(user=user)
-        roles = await rbac.get_global_role_slugs_for_user(user=user)
+        permissions = rbac.get_global_permissions_for_user(user=user)
+        roles = rbac.get_global_role_slugs_for_user(user=user)
         return UserProfile(
             id=str(user.id),
             email=user.email,
@@ -247,21 +247,21 @@ class UsersService:
             permissions=sorted(permissions),
         )
 
-    async def _serialize_user(self, user: User) -> UserOut:
-        profile = await self._build_profile(user)
+    def _serialize_user(self, user: User) -> UserOut:
+        profile = self._build_profile(user)
         return UserOut(
             **profile.model_dump(),
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
 
-    async def _apply_deactivation(self, *, user: User, actor: User | None) -> None:
+    def _apply_deactivation(self, *, user: User, actor: User | None) -> None:
         now = utc_now()
         user.is_active = False
         user.locked_until = now + LOCKOUT_HORIZON
         user.failed_login_count = 0
-        await self._session.flush()
-        await self._api_keys.revoke_all_for_user(user_id=user.id)
+        self._session.flush()
+        self._api_keys.revoke_all_for_user(user_id=user.id)
         logger.info(
             "users.deactivate",
             extra=log_context(
@@ -271,13 +271,13 @@ class UsersService:
             ),
         )
 
-    async def _apply_reactivation(self, *, user: User) -> None:
+    def _apply_reactivation(self, *, user: User) -> None:
         user.is_active = True
         user.locked_until = None
         user.failed_login_count = 0
-        await self._session.flush()
+        self._session.flush()
 
-    async def create_admin(
+    def create_admin(
         self,
         *,
         email: str,
@@ -300,7 +300,7 @@ class UsersService:
             ),
         )
 
-        existing = await self._repo.get_by_email(canonical_email)
+        existing = self._repo.get_by_email(canonical_email)
         if existing is not None:
             logger.warning(
                 "user.admin.create.conflict_existing",
@@ -318,7 +318,7 @@ class UsersService:
         cleaned_display_name = display_name.strip() if display_name else None
 
         try:
-            user = await self._repo.create(
+            user = self._repo.create(
                 email=canonical_email,
                 hashed_password=password_hash,
                 display_name=cleaned_display_name,

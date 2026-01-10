@@ -89,6 +89,18 @@ ADE reads database settings from environment variables (prefix `ADE_`):
 * `ADE_DATABASE_MI_CLIENT_ID`
   Optional GUID of a **user‑assigned** managed identity, if you use one. Leave unset for system‑assigned managed identity.
 
+* `ADE_DATABASE_POOL_SIZE`
+  Base connection pool size for SQL Server/Azure SQL (default `5`). Ignored for SQLite.
+
+* `ADE_DATABASE_MAX_OVERFLOW`
+  Extra connections allowed above the base pool size (default `10`). Ignored for SQLite.
+
+* `ADE_DATABASE_POOL_TIMEOUT`
+  Seconds to wait for a pooled connection before failing (default `30`). Ignored for SQLite.
+
+* `ADE_DATABASE_POOL_RECYCLE`
+  Seconds before recycling pooled connections (default `1800`). Ignored for SQLite.
+
 ADE expects:
 
 * Migrations to be applied before starting the API/worker (`ade start` and `ade dev` run them automatically; otherwise use `ade migrate`).

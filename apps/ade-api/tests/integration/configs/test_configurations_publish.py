@@ -41,7 +41,7 @@ async def test_publish_configuration_sets_active_and_digest(
         Configuration.workspace_id == workspace_id,
         Configuration.id == record["id"],
     )
-    result = await session.execute(stmt)
+    result = session.execute(stmt)
     config = result.scalar_one()
     assert config.status == "active"
     assert config.content_digest == payload["content_digest"]
@@ -73,7 +73,7 @@ async def test_publish_archives_previous_active(
     )
 
     stmt = select(Configuration).where(Configuration.workspace_id == workspace_id)
-    result = await session.execute(stmt)
+    result = session.execute(stmt)
     configs = {str(row.id): row for row in result.scalars()}
     assert configs[str(first["id"])].status is ConfigurationStatus.ARCHIVED
     assert configs[str(second["id"])].status is ConfigurationStatus.ACTIVE

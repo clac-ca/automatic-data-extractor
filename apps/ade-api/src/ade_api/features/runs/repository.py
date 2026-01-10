@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import Select, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.listing import ListPage, paginate_query
@@ -20,15 +20,15 @@ __all__ = ["RunsRepository"]
 class RunsRepository:
     """Encapsulate read/write operations for runs."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: Session) -> None:
         self._session = session
 
-    async def get(self, run_id: UUID) -> Run | None:
+    def get(self, run_id: UUID) -> Run | None:
         """Return the ``Run`` identified by ``run_id`` if it exists."""
 
-        return await self._session.get(Run, run_id)
+        return self._session.get(Run, run_id)
 
-    async def list_by_workspace(
+    def list_by_workspace(
         self,
         *,
         workspace_id: UUID,
@@ -52,7 +52,7 @@ class RunsRepository:
             q=q,
         )
 
-        return await paginate_query(
+        return paginate_query(
             self._session,
             stmt,
             page=page,
@@ -61,7 +61,7 @@ class RunsRepository:
             changes_cursor="0",
         )
 
-    async def count_queued(self) -> int:
+    def count_queued(self) -> int:
         stmt = (
             select(func.count())
             .select_from(Run)
@@ -70,10 +70,10 @@ class RunsRepository:
                 Run.attempt_count < Run.max_attempts,
             )
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return int(result.scalar_one())
 
-    async def list_active_for_documents(
+    def list_active_for_documents(
         self,
         *,
         configuration_id: UUID,
@@ -86,22 +86,22 @@ class RunsRepository:
             Run.input_document_id.in_(document_ids),
             Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]),
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_metrics(self, run_id: UUID) -> RunMetrics | None:
-        return await self._session.get(RunMetrics, run_id)
+    def get_metrics(self, run_id: UUID) -> RunMetrics | None:
+        return self._session.get(RunMetrics, run_id)
 
-    async def list_fields(self, run_id: UUID) -> list[RunField]:
+    def list_fields(self, run_id: UUID) -> list[RunField]:
         stmt = (
             select(RunField)
             .where(RunField.run_id == run_id)
             .order_by(RunField.field.asc())
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_columns(
+    def list_columns(
         self,
         *,
         run_id: UUID,
@@ -115,5 +115,5 @@ class RunsRepository:
             RunTableColumn.table_index.asc(),
             RunTableColumn.column_index.asc(),
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return list(result.scalars().all())

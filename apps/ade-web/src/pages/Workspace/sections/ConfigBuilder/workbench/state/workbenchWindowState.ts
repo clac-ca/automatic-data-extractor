@@ -1,3 +1,5 @@
+import { uiStorageKeys } from "@lib/uiStorageKeys";
+
 export function getWorkbenchReturnPathStorageKey(workspaceId: string) {
-  return `ade.ui.workspace.${workspaceId}.workbench.returnPath`;
+  return uiStorageKeys.workbenchReturnPath(workspaceId);
 }

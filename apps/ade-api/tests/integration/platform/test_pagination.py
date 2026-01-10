@@ -2,25 +2,22 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from sqlalchemy import select
 
 from ade_api.common.listing import paginate_query
 from ade_api.models import Workspace
 
-pytestmark = pytest.mark.asyncio
 
-
-async def test_paginate_returns_canonical_envelope(session) -> None:
+def test_paginate_returns_canonical_envelope(session) -> None:
     suffix = uuid.uuid4().hex[:8]
     records = [
         Workspace(name=f"Workspace {index}", slug=f"pagination-{suffix}-{index}") for index in range(3)
     ]
     session.add_all(records)
-    await session.commit()
+    session.commit()
 
     query = select(Workspace).where(Workspace.slug.like(f"pagination-{suffix}-%"))
-    page = await paginate_query(
+    page = paginate_query(
         session,
         query,
         page=1,

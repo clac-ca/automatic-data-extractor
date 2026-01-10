@@ -12,7 +12,7 @@ from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, Response
 
 from ade_api.common.problem_details import ApiError, ProblemDetailsErrorItem
@@ -115,25 +115,25 @@ def _sanitize_headers(headers: Mapping[str, str] | None) -> dict[str, str] | Non
 class IdempotencyService:
     """Persist and replay idempotent request/response pairs."""
 
-    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+    def __init__(self, *, session: Session, settings: Settings) -> None:
         self._session = session
         self._ttl = settings.idempotency_key_ttl
 
-    async def resolve_replay(
+    def resolve_replay(
         self,
         *,
         key: str,
         scope_key: str,
         request_hash: str,
     ) -> IdempotencyReplay | None:
-        record = await self._get_record(key=key, scope_key=scope_key)
+        record = self._get_record(key=key, scope_key=scope_key)
         if record is None:
             return None
 
         now = utc_now()
         if record.expires_at <= now:
-            await self._session.delete(record)
-            await self._session.flush()
+            self._session.delete(record)
+            self._session.flush()
             return None
 
         if record.request_hash != request_hash:
@@ -156,7 +156,7 @@ class IdempotencyService:
             body=record.response_body,
         )
 
-    async def store_response(
+    def store_response(
         self,
         *,
         key: str,
@@ -176,21 +176,21 @@ class IdempotencyService:
             expires_at=utc_now() + self._ttl,
         )
 
-        async with self._session.begin_nested():
+        with self._session.begin_nested():
             self._session.add(record)
             try:
-                await self._session.flush()
+                self._session.flush()
             except IntegrityError:
                 return
 
-    async def _get_record(self, *, key: str, scope_key: str) -> IdempotencyRecord | None:
+    def _get_record(self, *, key: str, scope_key: str) -> IdempotencyRecord | None:
         stmt = (
             select(IdempotencyRecord)
             .where(IdempotencyRecord.idempotency_key == key)
             .where(IdempotencyRecord.scope_key == scope_key)
             .limit(1)
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
 

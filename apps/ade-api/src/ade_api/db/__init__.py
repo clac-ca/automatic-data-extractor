@@ -2,16 +2,15 @@
 
 from .base import NAMING_CONVENTION, Base, TimestampMixin, UUIDPrimaryKeyMixin, metadata, utc_now
 from .database import (
-    Database,
     DatabaseAuthMode,
-    DatabaseConfig,
-    SQLiteBeginMode,
-    attach_managed_identity,
-    build_async_url,
-    build_sync_url,
-    db,
-    session_scope,
-    get_db_session,
+    DatabaseSettings,
+    build_engine,
+    get_db,
+    get_engine,
+    get_sessionmaker,
+    get_sessionmaker_from_app,
+    init_db,
+    shutdown_db,
 )
 from .types import GUID, UTCDateTime
 
@@ -24,14 +23,13 @@ __all__ = [
     "TimestampMixin",
     "GUID",
     "UTCDateTime",
-    "Database",
-    "DatabaseConfig",
     "DatabaseAuthMode",
-    "SQLiteBeginMode",
-    "db",
-    "session_scope",
-    "get_db_session",
-    "build_sync_url",
-    "build_async_url",
-    "attach_managed_identity",
+    "DatabaseSettings",
+    "build_engine",
+    "init_db",
+    "shutdown_db",
+    "get_db",
+    "get_engine",
+    "get_sessionmaker",
+    "get_sessionmaker_from_app",
 ]

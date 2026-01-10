@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ade_api.common.logging import log_context
 from ade_api.models import SystemSetting
@@ -25,15 +25,15 @@ SAFE_MODE_DEFAULT_DETAIL = (
 class SystemSettingsService:
     """Simple CRUD helpers for system settings."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: Session) -> None:
         self._session = session
 
-    async def get(self, key: str) -> dict[str, Any] | None:
+    def get(self, key: str) -> dict[str, Any] | None:
         logger.debug(
             "system_settings.get.start",
             extra=log_context(setting_key=key),
         )
-        record = await self._fetch_by_key(key)
+        record = self._fetch_by_key(key)
         value = dict(record.value) if record else None
         logger.debug(
             "system_settings.get.result",
@@ -44,12 +44,12 @@ class SystemSettingsService:
         )
         return value
 
-    async def upsert(self, key: str, value: dict[str, Any]) -> SystemSetting:
+    def upsert(self, key: str, value: dict[str, Any]) -> SystemSetting:
         logger.debug(
             "system_settings.upsert.start",
             extra=log_context(setting_key=key),
         )
-        setting = await self._fetch_by_key(key)
+        setting = self._fetch_by_key(key)
         created = setting is None
 
         if setting is None:
@@ -58,7 +58,7 @@ class SystemSettingsService:
         else:
             setting.value = dict(value)
 
-        await self._session.flush()
+        self._session.flush()
 
         logger.info(
             "system_settings.upsert.success",
@@ -69,15 +69,15 @@ class SystemSettingsService:
         )
         return setting
 
-    async def delete(self, key: str) -> None:
+    def delete(self, key: str) -> None:
         logger.debug(
             "system_settings.delete.start",
             extra=log_context(setting_key=key),
         )
-        setting = await self._fetch_by_key(key)
+        setting = self._fetch_by_key(key)
         if setting is not None:
-            await self._session.delete(setting)
-            await self._session.flush()
+            self._session.delete(setting)
+            self._session.flush()
             logger.info(
                 "system_settings.delete.success",
                 extra=log_context(setting_key=key),
@@ -88,25 +88,25 @@ class SystemSettingsService:
                 extra=log_context(setting_key=key),
             )
 
-    async def _fetch_by_key(self, key: str) -> SystemSetting | None:
+    def _fetch_by_key(self, key: str) -> SystemSetting | None:
         stmt = select(SystemSetting).where(SystemSetting.key == key).limit(1)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
 
 class SafeModeService:
     """Persist and fetch ADE safe mode state."""
 
-    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
+    def __init__(self, *, session: Session, settings: Settings) -> None:
         self._session = session
         self._settings = settings
         self._system_settings = SystemSettingsService(session=session)
 
-    async def get_status(self) -> SafeModeStatus:
+    def get_status(self) -> SafeModeStatus:
         """Return the current safe mode state, applying persisted overrides if present."""
 
         logger.debug("safe_mode.get_status.start", extra=log_context())
-        persisted = await self._system_settings.get(SAFE_MODE_SETTING_KEY)
+        persisted = self._system_settings.get(SAFE_MODE_SETTING_KEY)
 
         enabled = self._settings.safe_mode
         detail = SAFE_MODE_DEFAULT_DETAIL
@@ -125,7 +125,7 @@ class SafeModeService:
         )
         return status
 
-    async def update_status(
+    def update_status(
         self,
         *,
         enabled: bool,
@@ -141,7 +141,7 @@ class SafeModeService:
         )
 
         normalized_detail = (detail or "").strip() or SAFE_MODE_DEFAULT_DETAIL
-        record = await self._system_settings._fetch_by_key(SAFE_MODE_SETTING_KEY)
+        record = self._system_settings._fetch_by_key(SAFE_MODE_SETTING_KEY)
         payload = {"enabled": enabled, "detail": normalized_detail}
         created = record is None
 
@@ -151,8 +151,7 @@ class SafeModeService:
         else:
             record.value = payload
 
-        await self._session.flush()
-        await self._session.commit()
+        self._session.flush()
 
         status = SafeModeStatus(enabled=enabled, detail=normalized_detail)
 

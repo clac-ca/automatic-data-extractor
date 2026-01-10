@@ -155,7 +155,7 @@ async def test_upload_document_does_not_cache_worksheets(
 
     assert upload.status_code == 201, upload.text
     document_id = UUID(upload.json()["id"])
-    record = await session.get(Document, document_id)
+    record = session.get(Document, document_id)
     assert record is not None
     assert "worksheets" not in (record.attributes or {})
 

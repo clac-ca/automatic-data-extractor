@@ -40,7 +40,7 @@ USER_ID_PARAM = Annotated[
     summary="List all users (administrator only)",
     response_model_exclude_none=True,
 )
-async def list_users(
+def list_users(
     _: Annotated[User, Security(require_global("users.read_all"))],
     list_query: Annotated[ListQueryParams, Depends(list_query_params)],
     _guard: Annotated[None, Depends(strict_list_query_guard())],
@@ -52,7 +52,7 @@ async def list_users(
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
-    return await service.list_users(
+    return service.list_users(
         page=list_query.page,
         per_page=list_query.per_page,
         order_by=order_by,
@@ -80,12 +80,12 @@ async def list_users(
         },
     },
 )
-async def get_user(
+def get_user(
     _: Annotated[User, Security(require_global("users.read_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserOut:
-    return await service.get_user(user_id=user_id)
+    return service.get_user(user_id=user_id)
 
 
 @router.patch(
@@ -110,13 +110,13 @@ async def get_user(
         },
     },
 )
-async def update_user(
+def update_user(
     actor: Annotated[User, Security(require_global("users.manage_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
     payload: UserUpdate = USER_UPDATE_BODY,
 ) -> UserOut:
-    return await service.update_user(user_id=user_id, payload=payload, actor=actor)
+    return service.update_user(user_id=user_id, payload=payload, actor=actor)
 
 
 @router.post(
@@ -138,12 +138,12 @@ async def update_user(
         },
     },
 )
-async def deactivate_user(
+def deactivate_user(
     actor: Annotated[User, Security(require_global("users.manage_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserOut:
-    return await service.deactivate_user(user_id=user_id, actor=actor)
+    return service.deactivate_user(user_id=user_id, actor=actor)
 
 
 __all__ = ["router"]

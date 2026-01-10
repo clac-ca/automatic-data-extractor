@@ -39,7 +39,7 @@ async def test_download_missing_file_returns_404(
     payload = upload.json()
     document_id = payload["id"]
 
-    row = await session.get(Document, UUID(document_id))
+    row = session.get(Document, UUID(document_id))
     assert row is not None
     stored_uri = row.stored_uri
 

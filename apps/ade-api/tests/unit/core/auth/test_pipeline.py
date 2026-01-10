@@ -5,13 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
-import pytest
-
 from ade_api.core.auth.pipeline import authenticate_websocket
 from ade_api.core.auth.principal import AuthVia, AuthenticatedPrincipal, PrincipalType
 from ade_api.settings import Settings
-
-pytestmark = pytest.mark.asyncio
 
 
 class StubAuthenticator:
@@ -19,7 +15,7 @@ class StubAuthenticator:
         self.result = result
         self.calls: list[str] = []
 
-    async def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
+    def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
         self.calls.append(token)
         return self.result
 
@@ -41,7 +37,7 @@ class FakeSession:
     def __init__(self, users: dict[UUID, object]) -> None:
         self._users = users
 
-    async def get(self, _model: object, user_id: UUID) -> object | None:
+    def get(self, _model: object, user_id: UUID) -> object | None:
         return self._users.get(user_id)
 
 
@@ -57,7 +53,7 @@ def _user(user_id: UUID) -> object:
     return SimpleNamespace(id=user_id, is_active=True)
 
 
-async def test_authenticate_websocket_prefers_api_key() -> None:
+def test_authenticate_websocket_prefers_api_key() -> None:
     api_user_id = uuid4()
     bearer_user_id = uuid4()
     cookie_user_id = uuid4()
@@ -82,7 +78,7 @@ async def test_authenticate_websocket_prefers_api_key() -> None:
         }
     )
 
-    principal = await authenticate_websocket(
+    principal = authenticate_websocket(
         websocket,
         session,
         settings,
@@ -97,7 +93,7 @@ async def test_authenticate_websocket_prefers_api_key() -> None:
     assert cookie_service.calls == []
 
 
-async def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
+def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
     bearer_user_id = uuid4()
     cookie_user_id = uuid4()
 
@@ -117,7 +113,7 @@ async def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
         }
     )
 
-    principal = await authenticate_websocket(
+    principal = authenticate_websocket(
         websocket,
         session,
         settings,
@@ -131,7 +127,7 @@ async def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
     assert cookie_service.calls == []
 
 
-async def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
+def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
     cookie_user_id = uuid4()
     query_user_id = uuid4()
 
@@ -151,7 +147,7 @@ async def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
         }
     )
 
-    principal = await authenticate_websocket(
+    principal = authenticate_websocket(
         websocket,
         session,
         settings,
@@ -165,7 +161,7 @@ async def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
     assert bearer_service.calls == []
 
 
-async def test_authenticate_websocket_falls_back_to_query_param() -> None:
+def test_authenticate_websocket_falls_back_to_query_param() -> None:
     query_user_id = uuid4()
 
     api_service = StubAuthenticator(None)
@@ -176,7 +172,7 @@ async def test_authenticate_websocket_falls_back_to_query_param() -> None:
     settings = Settings(jwt_secret="test-jwt-secret-for-tests-please-change")
     session = FakeSession({query_user_id: _user(query_user_id)})
 
-    principal = await authenticate_websocket(
+    principal = authenticate_websocket(
         websocket,
         session,
         settings,

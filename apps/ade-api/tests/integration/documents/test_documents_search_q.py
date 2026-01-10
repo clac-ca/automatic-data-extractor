@@ -24,7 +24,7 @@ async def test_list_documents_q_matches_tokens_across_fields(session, settings) 
         id_field=ID_FIELD,
     )
 
-    result = await service.list_documents(
+    result = service.list_documents(
         workspace_id=workspace.id,
         page=1,
         per_page=50,

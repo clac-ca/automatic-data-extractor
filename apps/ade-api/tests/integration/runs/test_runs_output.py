@@ -22,11 +22,11 @@ async def test_run_output_endpoint_serves_file(
         name="Output Config",
     )
     session.add(configuration)
-    await session.flush()
+    session.flush()
 
     document = make_document(workspace_id=workspace_id, filename="input.csv")
     session.add_all([document])
-    await session.flush()
+    session.flush()
 
     run = make_run(
         workspace_id=workspace_id,
@@ -36,7 +36,7 @@ async def test_run_output_endpoint_serves_file(
     )
     run.completed_at = utc_now()
     session.add(run)
-    await session.commit()
+    session.commit()
 
     run_dir = workspace_run_root(settings, workspace_id, run.id)
     output_dir = run_dir / "output"

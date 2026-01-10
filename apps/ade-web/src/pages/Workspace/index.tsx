@@ -12,6 +12,7 @@ import type { WorkspaceProfile } from "@schema/workspaces";
 import { WorkspaceProvider } from "@pages/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider, useWorkbenchWindow } from "@pages/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@lib/storage";
+import { uiStorageKeys } from "@lib/uiStorageKeys";
 import { GlobalTopBar } from "@components/shell/GlobalTopBar";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";
 import { ProfileDropdown } from "@components/shell/ProfileDropdown";
@@ -185,35 +186,11 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     [workspaceNavItems],
   );
 
-  const navPinnedStorage = useMemo(() => createScopedStorage("ade.ui.navPinned"), []);
-  const legacyNavPinnedStorage = useMemo(
-    () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navPinned`),
-    [workspace.id],
-  );
-  const legacyNavCollapsedStorage = useMemo(
-    () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navCollapsed`),
-    [workspace.id],
-  );
-  const resolveNavPinned = useCallback(() => {
+  const navPinnedStorage = useMemo(() => createScopedStorage(uiStorageKeys.sidebarPinned), []);
+  const [isNavPinned, setIsNavPinned] = useState(() => {
     const pinned = navPinnedStorage.get<boolean>();
-    if (typeof pinned === "boolean") {
-      return pinned;
-    }
-    const legacyPinned = legacyNavPinnedStorage.get<boolean>();
-    if (typeof legacyPinned === "boolean") {
-      return legacyPinned;
-    }
-    const legacyCollapsed = legacyNavCollapsedStorage.get<boolean>();
-    if (typeof legacyCollapsed === "boolean") {
-      return !legacyCollapsed;
-    }
-    return false;
-  }, [legacyNavCollapsedStorage, legacyNavPinnedStorage, navPinnedStorage]);
-  const [isNavPinned, setIsNavPinned] = useState(resolveNavPinned);
-
-  useEffect(() => {
-    setIsNavPinned(resolveNavPinned());
-  }, [resolveNavPinned]);
+    return typeof pinned === "boolean" ? pinned : false;
+  });
 
   useEffect(() => {
     navPinnedStorage.set(isNavPinned);
@@ -311,7 +288,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const email = session.user.email ?? "";
 
   const topBarTrailing = (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-nowrap items-center gap-2">
       <AppearanceMenu tone="header" />
       <ProfileDropdown
         displayName={displayName}

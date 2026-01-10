@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
 import { useSearchParams } from "@app/navigation/urlState";
 import type { PresenceParticipant } from "@schema/presence";
 import type { DocumentStatus, FileType, WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
@@ -659,7 +660,7 @@ export function DocumentsTable({
     columns,
     pageCount,
     enableColumnResizing: true,
-    columnSizingKey: `documents-table:${workspaceId}`,
+    columnSizingKey: uiStorageKeys.documentsTableColumnSizing(workspaceId),
     defaultColumn: {
       size: 140,
       minSize: 90,

@@ -21,8 +21,8 @@ router = APIRouter()
     summary="Service health status",
     response_model_exclude_none=True,
 )
-async def read_health(
+def read_health(
     service: Annotated[HealthService, Depends(get_health_service)],
 ) -> HealthCheckResponse:
     """Return the current health information for ADE."""
-    return await service.status()
+    return service.status()

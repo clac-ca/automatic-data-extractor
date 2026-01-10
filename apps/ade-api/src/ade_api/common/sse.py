@@ -14,14 +14,10 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-from watchfiles import awatch
-
 from ade_api.common.encoding import json_dumps
-from ade_api.common.events import strip_sequence
 
-WATCH_DEBOUNCE_MS = 50
-WATCH_STEP_MS = 50
-WATCH_TIMEOUT_MS = 500
+DEFAULT_READ_CHUNK_SIZE = 64 * 1024
+DEFAULT_POLL_INTERVAL = 0.25
 
 
 def _build_event(
@@ -78,90 +74,91 @@ def sse_json(
 async def stream_ndjson_events(
     *,
     path: Path,
-    start_sequence: int = 0,
+    start_offset: int = 0,
     stop_events: set[str] | None = None,
     ping_interval: float = 15.0,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+    read_chunk_size: int = DEFAULT_READ_CHUNK_SIZE,
 ) -> AsyncIterator[dict[str, str]]:
-    """Tail an NDJSON event log file and yield SSE messages."""
+    """Tail an NDJSON event log file and yield SSE messages using byte offsets."""
 
     stop_events = stop_events or set()
-    last_sequence = start_sequence
-    cursor = 0
+    cursor = max(0, start_offset)
     last_ping = time.monotonic()
+    buffer = b""
+    wait_step = min(poll_interval, ping_interval)
 
-    def _handle_event(event: dict[str, Any]) -> tuple[dict[str, str] | None, bool]:
-        nonlocal cursor, last_sequence
-        cursor += 1
-        seq = event.get("sequence")
-        if not isinstance(seq, int):
-            seq = cursor
-            event["sequence"] = seq
-        if seq <= last_sequence:
-            return None, False
-        last_sequence = seq
-        payload = strip_sequence(event)
-        message = sse_json(
-            str(event.get("event") or "message"),
-            payload,
-            event_id=last_sequence,
-        )
-        return message, event.get("event") in stop_events
-
-    if not path.exists():
-        # The worker pre-creates the log file; this only runs if a client connects early.
-        yield sse_text("ping", "waiting")
-        last_ping = time.monotonic()
-        wait_step = min(0.25, ping_interval)
-        while not path.exists():
-            await asyncio.sleep(wait_step)
-            now = time.monotonic()
-            if now - last_ping >= ping_interval:
-                yield sse_text("ping", "waiting")
-                last_ping = now
-        last_ping = time.monotonic()
-
-    with path.open("r", encoding="utf-8") as handle:
-        for raw in handle:
-            event = _parse_event_line(raw)
-            if event is None:
-                continue
-            message, should_stop = _handle_event(event)
-            if message is None:
-                continue
-            yield message
-            if should_stop:
-                return
-
-        watcher = awatch(
-            path,
-            debounce=WATCH_DEBOUNCE_MS,
-            step=WATCH_STEP_MS,
-            rust_timeout=WATCH_TIMEOUT_MS,
-            yield_on_timeout=True,
-        )
+    try:
         while True:
-            line = handle.readline()
-            if line:
-                event = _parse_event_line(line)
-                if event is None:
-                    continue
-                message, should_stop = _handle_event(event)
-                if message is None:
-                    continue
-                yield message
-                if should_stop:
-                    return
-                continue
+            if not path.exists():
+                # The worker pre-creates the log file; this only runs if a client connects early.
+                yield sse_text("ping", "waiting")
+                last_ping = time.monotonic()
+                while not path.exists():
+                    await asyncio.sleep(wait_step)
+                    now = time.monotonic()
+                    if now - last_ping >= ping_interval:
+                        yield sse_text("ping", "waiting")
+                        last_ping = now
+                last_ping = time.monotonic()
 
             try:
-                await watcher.__anext__()
-            except StopAsyncIteration:
-                return
+                stat = path.stat()
+            except FileNotFoundError:
+                continue
 
-            now = time.monotonic()
-            if now - last_ping >= ping_interval:
-                yield sse_text("ping", "keep-alive")
-                last_ping = now
+            if cursor > stat.st_size:
+                cursor = stat.st_size
+                buffer = b""
+
+            file_id = (stat.st_dev, stat.st_ino)
+            with path.open("rb") as handle:
+                handle.seek(cursor)
+                while True:
+                    chunk = handle.read(read_chunk_size)
+                    if chunk:
+                        buffer += chunk
+                        lines = buffer.splitlines(keepends=True)
+                        buffer = b""
+                        for line in lines:
+                            if not line.endswith(b"\n"):
+                                buffer = line
+                                break
+                            cursor += len(line)
+                            raw = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                            event = _parse_event_line(raw)
+                            if event is None:
+                                continue
+                            event_name = str(event.get("event") or "message")
+                            yield _build_event(raw, event=event_name, event_id=cursor)
+                            if event.get("event") in stop_events:
+                                return
+                        continue
+
+                    try:
+                        stat = path.stat()
+                    except FileNotFoundError:
+                        buffer = b""
+                        break
+
+                    if (stat.st_dev, stat.st_ino) != file_id:
+                        cursor = 0
+                        buffer = b""
+                        break
+
+                    if stat.st_size < cursor:
+                        cursor = stat.st_size
+                        buffer = b""
+                        handle.seek(cursor)
+
+                    now = time.monotonic()
+                    if now - last_ping >= ping_interval:
+                        yield sse_text("ping", "keep-alive")
+                        last_ping = now
+
+                    await asyncio.sleep(poll_interval)
+    except asyncio.CancelledError:
+        return
 
 
 def _parse_event_line(raw: str) -> dict[str, Any] | None:
