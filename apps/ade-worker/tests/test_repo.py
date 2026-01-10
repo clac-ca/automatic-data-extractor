@@ -76,6 +76,40 @@ def _insert_document(engine, *, document_id: str, workspace_id: str, now: dateti
         )
 
 
+def _insert_environment(
+    engine,
+    *,
+    env_id: str,
+    workspace_id: str,
+    configuration_id: str,
+    engine_spec: str,
+    deps_digest: str,
+    status: str,
+    now: datetime,
+    error_message: str | None = None,
+) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            insert(environments).values(
+                id=env_id,
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                engine_spec=engine_spec,
+                deps_digest=deps_digest,
+                status=status,
+                error_message=error_message,
+                claimed_by=None,
+                claim_expires_at=None,
+                created_at=now - timedelta(minutes=5),
+                updated_at=now - timedelta(minutes=5),
+                last_used_at=None,
+                python_version=None,
+                python_interpreter=None,
+                engine_version=None,
+            )
+        )
+
+
 def test_ensure_environment_rows_unique_by_deps_digest() -> None:
     engine = _engine()
     repo = Repo(engine)
@@ -119,6 +153,46 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
         rows = conn.execute(select(environments.c.deps_digest)).mappings().all()
     digests = sorted(row["deps_digest"] for row in rows)
     assert digests == ["sha256:aaa", "sha256:bbb"]
+
+
+def test_ensure_environment_rows_requeues_failed_env() -> None:
+    engine = _engine()
+    repo = Repo(engine)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+
+    _insert_run(
+        engine,
+        run_id="run-10",
+        workspace_id="ws-10",
+        configuration_id="cfg-10",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:xyz",
+        now=now,
+    )
+    _insert_environment(
+        engine,
+        env_id="env-10",
+        workspace_id="ws-10",
+        configuration_id="cfg-10",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:xyz",
+        status="failed",
+        error_message="oops",
+        now=now,
+    )
+
+    inserted = repo.ensure_environment_rows_for_queued_runs(now=now, limit=None)
+    assert inserted == 0
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            select(environments.c.status, environments.c.error_message)
+            .where(environments.c.id == "env-10")
+        ).first()
+
+    assert row is not None
+    assert row.status == "queued"
+    assert row.error_message is None
 
 
 def test_update_document_status_updates_version_and_last_run_at() -> None:

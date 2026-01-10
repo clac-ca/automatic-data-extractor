@@ -88,8 +88,9 @@ class Repo:
                     "engine_version": None,
                 }
                 try:
-                    conn.execute(insert(environments).values(**env_row))
-                    inserted += 1
+                    with conn.begin_nested():
+                        conn.execute(insert(environments).values(**env_row))
+                        inserted += 1
                 except IntegrityError:
                     # Environment already exists (unique key). Requeue failed environments.
                     conn.execute(

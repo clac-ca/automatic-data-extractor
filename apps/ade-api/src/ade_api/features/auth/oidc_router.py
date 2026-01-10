@@ -116,7 +116,7 @@ def _redirect_success(settings: Settings, *, return_to: str) -> RedirectResponse
 
 
 @router.get("/oidc/{provider}/authorize")
-async def authorize_oidc(
+def authorize_oidc(
     provider: str,
     return_to: Annotated[str | None, Query()] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,
