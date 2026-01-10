@@ -65,6 +65,8 @@ export function useUploadManager({
   const inFlightRef = useRef(new Set<string>());
   const abortHandlesRef = useRef(new Map<string, () => void>());
   const abortReasonsRef = useRef(new Map<string, "pause" | "cancel">());
+  const progressBufferRef = useRef(new Map<string, { loaded: number; total: number | null }>());
+  const progressTimerRef = useRef<number | null>(null);
 
   const enqueue = useCallback((files: readonly UploadManagerQueueItem[]) => {
     if (!files.length) return [];
@@ -163,6 +165,45 @@ export function useUploadManager({
     setItems((current) => current.map((item) => (item.id === itemId ? { ...item, response } : item)));
   }, []);
 
+  const flushProgress = useCallback(() => {
+    if (!progressBufferRef.current.size) {
+      progressTimerRef.current = null;
+      return;
+    }
+    const updates = new Map(progressBufferRef.current);
+    progressBufferRef.current.clear();
+    progressTimerRef.current = null;
+    setItems((current) =>
+      current.map((entry) => {
+        const progress = updates.get(entry.id);
+        if (!progress) return entry;
+        return {
+          ...entry,
+          progress: normalizeProgress(entry.file, progress),
+        };
+      }),
+    );
+  }, []);
+
+  const queueProgressUpdate = useCallback(
+    (itemId: string, progress: { loaded: number; total: number | null }) => {
+      progressBufferRef.current.set(itemId, progress);
+      if (progressTimerRef.current !== null) {
+        return;
+      }
+      progressTimerRef.current = window.setTimeout(flushProgress, 100);
+    },
+    [flushProgress],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current !== null) {
+        window.clearTimeout(progressTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!workspaceId) {
       return;
@@ -197,17 +238,7 @@ export function useUploadManager({
       const uploadPromise = runSimpleUpload(item, {
         workspaceId,
         controller,
-        onProgress: (progress) =>
-          setItems((current) =>
-            current.map((entry) =>
-              entry.id === item.id
-                ? {
-                    ...entry,
-                    progress: normalizeProgress(entry.file, progress),
-                  }
-                : entry,
-            ),
-          ),
+        onProgress: (progress) => queueProgressUpdate(item.id, progress),
       });
 
       uploadPromise

@@ -112,6 +112,11 @@ class DocumentOut(BaseSchema):
         alias="latestResult",
         description="Summary of the latest result metadata, when available.",
     )
+    list_row: DocumentListRow | None = Field(
+        default=None,
+        alias="listRow",
+        description="Optional list row projection for table updates.",
+    )
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -342,6 +347,10 @@ class DocumentChangeEntry(BaseSchema):
     document_version: int = Field(alias="documentVersion")
     request_id: str | None = Field(default=None, alias="requestId")
     client_request_id: str | None = Field(default=None, alias="clientRequestId")
+    row: DocumentListRow | None = Field(
+        default=None,
+        description="Optional list row snapshot for changed documents.",
+    )
 
 
 class DocumentChangesPage(BaseSchema):

@@ -65,9 +65,17 @@ def run_start(
         env["ADE_FRONTEND_DIST_DIR"] = dist_env
         typer.echo(f"🧭 Frontend dist:        {dist_env}")
 
-    api_port = int(api_port if api_port is not None else os.getenv("ADE_API_PORT", "8000") or "8000")
-    api_host = api_host or os.getenv("ADE_API_HOST", "0.0.0.0")
-    api_workers = int(api_workers if api_workers is not None else os.getenv("ADE_API_WORKERS", "3") or "3")
+    from ade_api.settings import Settings
+
+    api_settings = Settings(_env_file=common.REPO_ROOT / ".env")
+    if api_port is None:
+        api_port = api_settings.api_port if api_settings.api_port is not None else 8000
+    api_port = int(api_port)
+    if api_host is None:
+        api_host = api_settings.api_host or "0.0.0.0"
+    if api_workers is None:
+        api_workers = api_settings.api_workers if api_settings.api_workers is not None else 3
+    api_workers = int(api_workers)
 
     typer.echo("🗄️  Running migrations…")
     run_migrate()
@@ -132,6 +140,7 @@ def register(app: typer.Typer) -> None:
             "--api-workers",
             help="Number of API worker processes (uvicorn).",
             envvar="ADE_API_WORKERS",
+            min=1,
         ),
         web: bool = typer.Option(
             True,

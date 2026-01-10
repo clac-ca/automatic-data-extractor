@@ -244,6 +244,38 @@ def _extract_output_path(payload: dict[str, Any] | None) -> str | None:
     return str(path) if isinstance(path, str) and path.strip() else None
 
 
+def _relative_to_dir(base: Path, path: Path) -> str | None:
+    try:
+        return str(path.resolve().relative_to(base.resolve()))
+    except ValueError:
+        return None
+
+
+def _normalize_output_path(raw: str | None, *, run_dir: Path) -> str | None:
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = (run_dir / candidate).resolve()
+    return _relative_to_dir(run_dir, candidate)
+
+
+def _infer_output_path(output_dir: Path, *, run_dir: Path) -> str | None:
+    if not output_dir.exists():
+        return None
+    normalized = output_dir / "normalized.xlsx"
+    relative = _relative_to_dir(run_dir, normalized)
+    if relative and normalized.is_file():
+        return relative
+    for path in output_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = _relative_to_dir(run_dir, path)
+        if relative:
+            return relative
+    return None
+
+
 @dataclass(slots=True)
 class RunJob:
     settings: WorkerSettings
@@ -475,6 +507,7 @@ class RunJob:
         output_dir = self.paths.run_output_dir(workspace_id, run_id)
         _ensure_dir(input_dir)
         _ensure_dir(output_dir)
+        run_dir = self.paths.run_dir(workspace_id, run_id)
 
         original_name = Path(str(doc.get("original_filename") or "input")).name
         staged_input = input_dir / original_name
@@ -541,7 +574,12 @@ class RunJob:
             return
 
         if res.exit_code == 0:
-            output_path = _extract_output_path(engine_payload)
+            output_path = _normalize_output_path(
+                _extract_output_path(engine_payload),
+                run_dir=run_dir,
+            )
+            if not output_path:
+                output_path = _infer_output_path(output_dir, run_dir=run_dir)
             results_payload = engine_payload if isinstance(engine_payload, dict) else None
             metrics = parse_run_metrics(results_payload) if results_payload else None
             fields = parse_run_fields(results_payload) if results_payload else []

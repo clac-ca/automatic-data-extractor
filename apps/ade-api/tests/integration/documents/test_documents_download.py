@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from httpx import AsyncClient
 
@@ -39,7 +40,7 @@ async def test_download_missing_file_returns_404(
     payload = upload.json()
     document_id = payload["id"]
 
-    row = session.get(Document, UUID(document_id))
+    row = await anyio.to_thread.run_sync(session.get, Document, UUID(document_id))
     assert row is not None
     stored_uri = row.stored_uri
 

@@ -13,14 +13,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .db import create_db_engine, maybe_create_schema
+from .db import assert_tables_exist, create_db_engine
 from .jobs.environment import EnvironmentJob
 from .jobs.run import RunJob
 from .gc import gc_environments, gc_run_artifacts
 from .paths import PathManager
 from .queue import EnvironmentQueue, RunQueue
 from .repo import Repo
-from .schema import REQUIRED_TABLES, metadata
+from .schema import REQUIRED_TABLES
 from .settings import WorkerSettings
 from .subprocess_runner import SubprocessRunner
 
@@ -211,9 +211,13 @@ def main() -> int:
         sqlite_busy_timeout_ms=settings.sqlite_busy_timeout_ms,
         sqlite_journal_mode=settings.sqlite_journal_mode,
         sqlite_synchronous=settings.sqlite_synchronous,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=settings.database_pool_timeout,
+        pool_recycle=settings.database_pool_recycle,
     )
 
-    maybe_create_schema(engine, auto_create=settings.auto_create_schema, required_tables=REQUIRED_TABLES, metadata=metadata)
+    assert_tables_exist(engine, REQUIRED_TABLES)
 
     worker_id = settings.worker_id or _default_worker_id()
 

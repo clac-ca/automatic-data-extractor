@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import anyio
 import json
 from typing import Any
 
@@ -166,10 +167,10 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
     admin = seed_identity.admin
     member = seed_identity.member
     token, _ = await login(async_client, email=admin.email, password=admin.password)
-    user = session.get(User, member.id)
+    user = await anyio.to_thread.run_sync(session.get, User, member.id)
     assert user is not None
     user.is_active = False
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     base_url = f"/api/v1/workspaces/{seed_identity.workspace_id}/members"
 

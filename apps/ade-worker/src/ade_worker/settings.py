@@ -64,7 +64,10 @@ class WorkerSettings:
     sqlite_busy_timeout_ms: int
     sqlite_journal_mode: str
     sqlite_synchronous: str
-    auto_create_schema: bool
+    database_pool_size: int
+    database_max_overflow: int
+    database_pool_timeout: int
+    database_pool_recycle: int
 
     # Worker identity & loop
     worker_id: str | None
@@ -109,7 +112,10 @@ class WorkerSettings:
             sqlite_busy_timeout_ms=_env_int("ADE_DATABASE_SQLITE_BUSY_TIMEOUT_MS", 30000),
             sqlite_journal_mode=(_env("ADE_DATABASE_SQLITE_JOURNAL_MODE", "WAL") or "WAL").upper(),
             sqlite_synchronous=(_env("ADE_DATABASE_SQLITE_SYNCHRONOUS", "NORMAL") or "NORMAL").upper(),
-            auto_create_schema=_env_bool("ADE_WORKER_AUTO_CREATE_SCHEMA", default=False),
+            database_pool_size=_env_int("ADE_DATABASE_POOL_SIZE", 5),
+            database_max_overflow=_env_int("ADE_DATABASE_MAX_OVERFLOW", 10),
+            database_pool_timeout=_env_int("ADE_DATABASE_POOL_TIMEOUT", 30),
+            database_pool_recycle=_env_int("ADE_DATABASE_POOL_RECYCLE", 1800),
 
             worker_id=_env("ADE_WORKER_ID"),
             concurrency=_env_int("ADE_WORKER_CONCURRENCY", _default_concurrency()),

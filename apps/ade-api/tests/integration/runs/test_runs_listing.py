@@ -1,3 +1,4 @@
+import anyio
 import json
 import pytest
 
@@ -30,7 +31,7 @@ async def test_workspace_run_listing_filters_by_status(
         status=ConfigurationStatus.DRAFT,
     )
     session.add_all([configuration, other_configuration])
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     document = make_document(workspace_id=workspace_id, filename="input.csv")
     document_other = make_document(
@@ -38,7 +39,7 @@ async def test_workspace_run_listing_filters_by_status(
         filename="other.csv",
     )
     session.add_all([document, document_other])
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     run_ok = make_run(
         workspace_id=workspace_id,
@@ -59,7 +60,7 @@ async def test_workspace_run_listing_filters_by_status(
         status=RunStatus.SUCCEEDED,
     )
     session.add_all([run_ok, run_failed, run_other_workspace])
-    session.commit()
+    await anyio.to_thread.run_sync(session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
 

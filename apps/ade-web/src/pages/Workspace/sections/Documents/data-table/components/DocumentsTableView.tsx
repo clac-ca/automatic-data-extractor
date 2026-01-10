@@ -5,7 +5,6 @@ import { resolveApiUrl } from "@api/client";
 import {
   archiveWorkspaceDocument,
   deleteWorkspaceDocument,
-  fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
   restoreWorkspaceDocument,
   type DocumentUploadResponse,
@@ -292,12 +291,12 @@ export function DocumentsTableView({
   useEffect(() => {
     if (!uploadItems?.length) return;
     uploadItems.forEach((item) => {
-      const documentId =
-        item.documentId ?? item.row?.id ?? item.response?.id ?? null;
-      if (item.row && !handledUploadsRef.current.has(item.id)) {
+      const row = item.response?.listRow ?? null;
+      const documentId = row?.id ?? null;
+      if (row && !handledUploadsRef.current.has(item.id)) {
         handledUploadsRef.current.add(item.id);
         registerClientRequestId(item.id);
-        upsertRow(item.row);
+        upsertRow(row);
       }
 
       if (documentId && item.status !== "succeeded" && item.status !== "failed" && item.status !== "cancelled") {
@@ -307,11 +306,6 @@ export function DocumentsTableView({
       if (documentId && item.status === "succeeded" && !completedUploadsRef.current.has(item.id)) {
         completedUploadsRef.current.add(item.id);
         setUploadProgress(documentId, null);
-        void fetchWorkspaceDocumentRowById(workspaceId, documentId)
-          .then((fresh) => {
-            upsertRow(fresh);
-          })
-          .catch(() => null);
       }
 
       if (

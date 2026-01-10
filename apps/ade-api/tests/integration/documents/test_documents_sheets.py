@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import anyio
 import pytest
 from httpx import AsyncClient
 
@@ -45,7 +46,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
         expires_at=utc_now(),
     )
     session.add(document)
-    session.commit()
+    await anyio.to_thread.run_sync(session.commit)
 
     listing = await async_client.get(
         f"{workspace_base}/documents/{document.id}/sheets",

@@ -123,7 +123,7 @@ export async function fetchWorkspaceDocuments(
 
 export async function fetchWorkspaceDocumentChanges(
   workspaceId: string,
-  options: { cursor: string; limit?: number },
+  options: { cursor: string; limit?: number; includeRows?: boolean },
   signal?: AbortSignal,
 ): Promise<DocumentChangesPage> {
   const query = new URLSearchParams({
@@ -131,6 +131,9 @@ export async function fetchWorkspaceDocumentChanges(
   });
   if (typeof options.limit === "number") {
     query.set("limit", String(options.limit));
+  }
+  if (options.includeRows) {
+    query.set("includeRows", "true");
   }
 
   const response = await apiFetch(

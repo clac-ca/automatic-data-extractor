@@ -1,3 +1,4 @@
+import anyio
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,7 +23,7 @@ async def test_create_runs_batch_creates_runs(
         name="Batch Config",
     )
     session.add(configuration)
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     config_dir = workspace_config_root(settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +33,7 @@ async def test_create_runs_batch_creates_runs(
         make_document(workspace_id=workspace_id, filename="input-b.csv", byte_size=14),
     ]
     session.add_all(documents)
-    session.commit()
+    await anyio.to_thread.run_sync(session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
@@ -50,8 +51,12 @@ async def test_create_runs_batch_creates_runs(
     assert len(runs) == 2
 
     run_ids = [UUID(item["id"]) for item in runs]
-    result = session.execute(select(Run).where(Run.id.in_(run_ids)))
-    stored = list(result.scalars())
+
+    def _load_runs():
+        result = session.execute(select(Run).where(Run.id.in_(run_ids)))
+        return list(result.scalars())
+
+    stored = await anyio.to_thread.run_sync(_load_runs)
     assert len(stored) == 2
     assert {run.input_document_id for run in stored} == {doc.id for doc in documents}
     assert all(run.input_sheet_names is None for run in stored)
@@ -70,7 +75,7 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
         name="Batch Config",
     )
     session.add(configuration)
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     config_dir = workspace_config_root(updated_settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -80,7 +85,7 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
         make_document(workspace_id=workspace_id, filename="input-b.csv", byte_size=14),
     ]
     session.add_all(documents)
-    session.commit()
+    await anyio.to_thread.run_sync(session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
@@ -96,5 +101,10 @@ async def test_create_runs_batch_queue_full_all_or_nothing(
     payload = response.json()
     assert payload["type"] == "rate_limited"
     assert any(item.get("code") == "run_queue_full" for item in payload.get("errors", []))
-    result = session.execute(select(Run).where(Run.configuration_id == configuration.id))
-    assert result.scalars().all() == []
+
+    def _load_runs_for_config():
+        result = session.execute(select(Run).where(Run.configuration_id == configuration.id))
+        return result.scalars().all()
+
+    stored = await anyio.to_thread.run_sync(_load_runs_for_config)
+    assert stored == []

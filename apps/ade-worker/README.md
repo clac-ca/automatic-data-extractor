@@ -32,7 +32,6 @@ python -m ade_worker
 - `ADE_ENGINE_PACKAGE_PATH` (default `apps/ade-engine`)
 - `ADE_WORKER_CONCURRENCY` (default: conservative auto)
 - `ADE_WORKER_LEASE_SECONDS` (default `900`)
-- `ADE_WORKER_AUTO_CREATE_SCHEMA` (default `0`)
 - `ADE_WORKER_ENABLE_GC` (default `1` for single-host)
 - `ADE_WORKER_GC_INTERVAL_SECONDS` (default `3600`)
 - `ADE_WORKER_ENV_TTL_DAYS` (default `30`)
@@ -41,6 +40,7 @@ python -m ade_worker
 ## Schema
 
 See `ade_worker/schema.py` for table definitions.
+The worker never creates tables; run migrations via ade-api before starting ade-worker.
 
 ## Garbage collection
 

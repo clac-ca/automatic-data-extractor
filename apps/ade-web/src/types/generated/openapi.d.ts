@@ -1925,6 +1925,8 @@ export type components = {
             requestId?: string | null;
             /** Clientrequestid */
             clientRequestId?: string | null;
+            /** @description Optional list row snapshot for changed documents. */
+            row?: components["schemas"]["DocumentListRow"] | null;
         };
         /**
          * DocumentChangesPage
@@ -6228,6 +6230,7 @@ export interface operations {
                 /** @description Cursor token. */
                 cursor?: string | null;
                 limit?: number;
+                includeRows?: boolean;
             };
             header?: never;
             path: {
@@ -6266,6 +6269,7 @@ export interface operations {
             query?: {
                 /** @description Cursor token. */
                 cursor?: string | null;
+                includeRows?: boolean;
             };
             header?: never;
             path: {
@@ -7740,7 +7744,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": string;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

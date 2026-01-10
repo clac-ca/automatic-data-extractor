@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import uuid4
 
+import anyio
 import pytest
 
 from ade_api.common.ids import generate_uuid7
@@ -207,8 +208,8 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
         occurred_at=now,
     )
     session.add_all([old_change, fresh_change])
-    session.flush()
-    session.commit()
+    await anyio.to_thread.run_sync(session.flush)
+    await anyio.to_thread.run_sync(session.commit)
 
     token, _ = await login(
         async_client,

@@ -18,6 +18,7 @@ export function useDocumentsChangesStream({
   workspaceId,
   cursor,
   enabled = true,
+  includeRows = false,
   onEvent,
   onResyncRequired,
   onReady,
@@ -25,6 +26,7 @@ export function useDocumentsChangesStream({
   workspaceId?: string | null;
   cursor?: string | null;
   enabled?: boolean;
+  includeRows?: boolean;
   onEvent: (change: DocumentChangeEntry) => void;
   onResyncRequired: (latestCursor: string | null, oldestCursor: string | null) => void;
   onReady?: (cursor: string | null) => void;
@@ -48,9 +50,12 @@ export function useDocumentsChangesStream({
     let active = true;
     setConnectionState("connecting");
 
-    const source = new EventSource(documentsChangesStreamUrl(workspaceId, cursor), {
-      withCredentials: true,
-    });
+    const source = new EventSource(
+      documentsChangesStreamUrl(workspaceId, cursor, { includeRows }),
+      {
+        withCredentials: true,
+      },
+    );
     sourceRef.current = source;
 
     const handleOpen = () => {
@@ -115,7 +120,7 @@ export function useDocumentsChangesStream({
       sourceRef.current = null;
       setConnectionState("idle");
     };
-  }, [cursor, enabled, workspaceId]);
+  }, [cursor, enabled, includeRows, workspaceId]);
 
   return { connectionState };
 }

@@ -75,7 +75,7 @@ def get_password_helper() -> PasswordHelper:
 class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
     def __init__(
         self,
-        user_db: SQLAlchemyUserDatabase[User, UUID],
+        user_db: BaseUserDatabase[User, UUID],
         settings: Settings,
         password_helper: PasswordHelper,
     ) -> None:
@@ -277,7 +277,7 @@ async def get_access_token_db(
 
 
 async def get_user_manager(
-    user_db: Annotated[SQLAlchemyUserDatabase[User, UUID], Depends(get_user_db)],
+    user_db: Annotated[BaseUserDatabase[User, UUID], Depends(get_user_db)],
     settings: Annotated[Settings, Depends(get_settings)],
     password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
 ) -> AsyncIterator[UserManager]:
@@ -316,9 +316,7 @@ def get_cookie_transport(settings: Settings) -> CookieTransport:
 
 
 def get_database_strategy(
-    access_token_db: Annotated[
-        SQLAlchemyAccessTokenDatabase[AccessToken], Depends(get_access_token_db)
-    ],
+    access_token_db: Annotated[AccessTokenDatabase[AccessToken], Depends(get_access_token_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DatabaseStrategy:
     return DatabaseStrategy(

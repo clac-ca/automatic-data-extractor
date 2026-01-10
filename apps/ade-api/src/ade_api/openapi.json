@@ -5379,6 +5379,16 @@
               "default": 200,
               "title": "Limit"
             }
+          },
+          {
+            "name": "includeRows",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerows"
+            }
           }
         ],
         "responses": {
@@ -5466,6 +5476,16 @@
               "title": "Cursor"
             },
             "description": "Cursor token."
+          },
+          {
+            "name": "includeRows",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerows"
+            }
           }
         ],
         "responses": {
@@ -8882,6 +8902,18 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -12446,6 +12478,17 @@
               }
             ],
             "title": "Clientrequestid"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentListRow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional list row snapshot for changed documents."
           }
         },
         "additionalProperties": false,

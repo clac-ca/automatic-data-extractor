@@ -273,6 +273,9 @@ class Settings(BaseSettings):
 
     # Server
     server_public_url: str = DEFAULT_PUBLIC_URL
+    api_host: str | None = None
+    api_port: int | None = Field(default=None, ge=1, le=65535)
+    api_workers: int | None = Field(default=None, ge=1)
     frontend_url: str | None = None
     frontend_dist_dir: Path | None = Field(default=None)
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
@@ -293,6 +296,7 @@ class Settings(BaseSettings):
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
+    documents_upload_concurrency_limit: int | None = Field(8, ge=1)
 
     # Engine
     engine_spec: str = Field(

@@ -1,3 +1,4 @@
+import anyio
 import pytest
 
 from ade_api.common.time import utc_now
@@ -22,11 +23,11 @@ async def test_run_output_endpoint_serves_file(
         name="Output Config",
     )
     session.add(configuration)
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     document = make_document(workspace_id=workspace_id, filename="input.csv")
     session.add_all([document])
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     run = make_run(
         workspace_id=workspace_id,
@@ -36,7 +37,7 @@ async def test_run_output_endpoint_serves_file(
     )
     run.completed_at = utc_now()
     session.add(run)
-    session.commit()
+    await anyio.to_thread.run_sync(session.commit)
 
     run_dir = workspace_run_root(settings, workspace_id, run.id)
     output_dir = run_dir / "output"

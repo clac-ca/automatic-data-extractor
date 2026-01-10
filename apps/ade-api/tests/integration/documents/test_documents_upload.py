@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import anyio
 import io
 from uuid import UUID, uuid4
 
@@ -46,6 +47,7 @@ async def test_upload_list_download_document(
     assert payload["byteSize"] == len(b"hello world")
     assert payload["metadata"] == {"source": "tests"}
     assert payload["tags"] == []
+    assert payload["listRow"]["id"] == document_id
 
     listing = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert listing.status_code == 200
@@ -155,7 +157,7 @@ async def test_upload_document_does_not_cache_worksheets(
 
     assert upload.status_code == 201, upload.text
     document_id = UUID(upload.json()["id"])
-    record = session.get(Document, document_id)
+    record = await anyio.to_thread.run_sync(session.get, Document, document_id)
     assert record is not None
     assert "worksheets" not in (record.attributes or {})
 

@@ -7,6 +7,7 @@ import math
 import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,8 @@ from ade_api.common.workbook_preview import (
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.models import (
     Document,
+    DocumentEvent,
+    DocumentEventType,
     DocumentSource,
     DocumentStatus,
     DocumentTag,
@@ -70,7 +73,7 @@ from .schemas import (
     TagCatalogItem,
     TagCatalogPage,
 )
-from .storage import DocumentStorage
+from .storage import DocumentStorage, StoredDocument
 from .tags import (
     MAX_TAGS_PER_DOCUMENT,
     TagValidationError,
@@ -93,6 +96,13 @@ def _run_with_timeout(func, *, timeout: float, **kwargs):
         future = executor.submit(func, **kwargs)
         return future.result(timeout=timeout)
 
+
+
+@dataclass(slots=True)
+class StagedUpload:
+    document_id: UUID
+    stored_uri: str
+    stored: StoredDocument
 
 
 class DocumentsService:
@@ -141,6 +151,7 @@ class DocumentsService:
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
         actor: User | None = None,
+        staged: StagedUpload | None = None,
     ) -> DocumentOut:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
@@ -159,37 +170,35 @@ class DocumentsService:
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
         expiration = self._resolve_expiration(expires_at, now)
-        document_id = generate_uuid7()
-        storage = self._storage_for(workspace_id)
-        stored_uri = storage.make_stored_uri(str(document_id))
 
-        if upload.file is None:  # pragma: no cover - UploadFile always supplies file
-            raise RuntimeError("Upload stream is not available")
+        owns_stage = staged is None
+        staged_upload = staged or self.stage_upload(workspace_id=workspace_id, upload=upload)
+        document_id = staged_upload.document_id
+        stored_uri = staged_upload.stored_uri
+        stored = staged_upload.stored
 
-        upload.file.seek(0)
-        stored = storage.write(
-            stored_uri,
-            upload.file,
-            max_bytes=self._settings.storage_upload_max_bytes,
-        )
-
-        document = Document(
-            id=document_id,
-            workspace_id=workspace_id,
-            original_filename=self._normalise_filename(upload.filename),
-            content_type=self._normalise_content_type(upload.content_type),
-            byte_size=stored.byte_size,
-            sha256=stored.sha256,
-            stored_uri=stored_uri,
-            attributes=metadata_payload,
-            uploaded_by_user_id=actor_id,
-            status=DocumentStatus.UPLOADED,
-            source=DocumentSource.MANUAL_UPLOAD,
-            expires_at=expiration,
-            last_run_at=None,
-        )
-        self._session.add(document)
-        self._session.flush()
+        try:
+            document = Document(
+                id=document_id,
+                workspace_id=workspace_id,
+                original_filename=self._normalise_filename(upload.filename),
+                content_type=self._normalise_content_type(upload.content_type),
+                byte_size=stored.byte_size,
+                sha256=stored.sha256,
+                stored_uri=stored_uri,
+                attributes=metadata_payload,
+                uploaded_by_user_id=actor_id,
+                status=DocumentStatus.UPLOADED,
+                source=DocumentSource.MANUAL_UPLOAD,
+                expires_at=expiration,
+                last_run_at=None,
+            )
+            self._session.add(document)
+            self._session.flush()
+        except Exception:
+            if owns_stage:
+                self.discard_staged_upload(workspace_id=workspace_id, staged=staged_upload)
+            raise
 
         stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
         result = self._session.execute(stmt)
@@ -197,6 +206,7 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
+        payload.list_row = self._build_list_row(payload)
         self._events.record_changed(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -216,6 +226,29 @@ class DocumentsService:
         )
 
         return payload
+
+    def stage_upload(
+        self,
+        *,
+        workspace_id: UUID,
+        upload: UploadFile,
+        document_id: UUID | None = None,
+    ) -> StagedUpload:
+        document_id = document_id or generate_uuid7()
+        storage = self._storage_for(workspace_id)
+        stored_uri = storage.make_stored_uri(str(document_id))
+        if upload.file is None:  # pragma: no cover - UploadFile always supplies file
+            raise RuntimeError("Upload stream is not available")
+        stored = storage.write(
+            stored_uri,
+            upload.file,
+            max_bytes=self._settings.storage_upload_max_bytes,
+        )
+        return StagedUpload(document_id=document_id, stored_uri=stored_uri, stored=stored)
+
+    def discard_staged_upload(self, *, workspace_id: UUID, staged: StagedUpload) -> None:
+        storage = self._storage_for(workspace_id)
+        storage.delete(staged.stored_uri)
 
     def list_documents(
         self,
@@ -292,6 +325,7 @@ class DocumentsService:
         cursor_token: str,
         limit: int,
         max_cursor: int | None = None,
+        include_rows: bool = False,
     ) -> DocumentChangesPage:
         try:
             cursor = int(cursor_token)
@@ -304,19 +338,59 @@ class DocumentsService:
             limit=limit,
             max_cursor=max_cursor,
         )
-        entries = [
-            DocumentChangeEntry(
-                cursor=str(change.cursor),
-                type=change.event_type.value,
-                document_id=str(change.document_id),
-                occurred_at=change.occurred_at,
-                document_version=change.document_version,
-                request_id=change.request_id,
-                client_request_id=change.client_request_id,
-            )
-            for change in page.items
-        ]
+        entries = self.build_change_entries(
+            workspace_id=workspace_id,
+            events=page.items,
+            include_rows=include_rows,
+        )
         return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
+
+    def build_change_entries(
+        self,
+        *,
+        workspace_id: UUID,
+        events: Sequence[DocumentEvent],
+        include_rows: bool,
+    ) -> list[DocumentChangeEntry]:
+        rows_by_id: dict[UUID, DocumentListRow] = {}
+        if include_rows:
+            changed_ids = {
+                change.document_id
+                for change in events
+                if change.event_type == DocumentEventType.CHANGED
+            }
+            if changed_ids:
+                stmt = (
+                    self._repository.base_query(workspace_id)
+                    .where(Document.id.in_(changed_ids))
+                    .where(Document.deleted_at.is_(None))
+                )
+                result = self._session.execute(stmt)
+                documents = list(result.scalars())
+                payloads = [DocumentOut.model_validate(item) for item in documents]
+                self._attach_latest_runs(workspace_id, payloads)
+                for payload in payloads:
+                    self._apply_derived_fields(payload)
+                    rows_by_id[payload.id] = self._build_list_row(payload)
+
+        entries: list[DocumentChangeEntry] = []
+        for change in events:
+            row = None
+            if include_rows and change.event_type == DocumentEventType.CHANGED:
+                row = rows_by_id.get(change.document_id)
+            entries.append(
+                DocumentChangeEntry(
+                    cursor=str(change.cursor),
+                    type=change.event_type.value,
+                    document_id=str(change.document_id),
+                    occurred_at=change.occurred_at,
+                    document_version=change.document_version,
+                    request_id=change.request_id,
+                    client_request_id=change.client_request_id,
+                    row=row,
+                )
+            )
+        return entries
 
     def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
         """Return document metadata for ``document_id``."""

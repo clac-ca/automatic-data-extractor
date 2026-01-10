@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
@@ -135,6 +136,12 @@ def create_application_lifespan(
         ensure_runtime_dirs(settings)
         app.state.settings = settings
         app.state.safe_mode = bool(settings.safe_mode)
+        if settings.documents_upload_concurrency_limit:
+            app.state.documents_upload_semaphore = threading.BoundedSemaphore(
+                settings.documents_upload_concurrency_limit
+            )
+        else:
+            app.state.documents_upload_semaphore = None
         db_settings = _build_db_settings()
         safe_url = make_url(db_settings.url).render_as_string(hide_password=True)
         logger.info("db.init.start", extra={"database_url": safe_url})

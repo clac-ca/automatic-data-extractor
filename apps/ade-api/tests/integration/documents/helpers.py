@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import anyio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -21,6 +22,10 @@ from ade_api.models import (
 )
 
 
+async def _flush(session) -> None:
+    await anyio.to_thread.run_sync(session.flush)
+
+
 async def build_documents_fixture(session):
     workspace = Workspace(name="Workspace", slug=f"ws-{uuid4().hex[:6]}")
     uploader = User(
@@ -38,7 +43,7 @@ async def build_documents_fixture(session):
         is_active=True,
     )
     session.add_all([workspace, uploader, colleague])
-    session.flush()
+    await _flush(session)
 
     now = datetime.now(tz=UTC)
     expires = now + timedelta(days=30)
@@ -77,7 +82,7 @@ async def build_documents_fixture(session):
     )
 
     session.add_all([processed, uploaded])
-    session.flush()
+    await _flush(session)
 
     return workspace, uploader, colleague, processed, uploaded
 
@@ -91,7 +96,7 @@ async def ensure_configuration(session, workspace_id):
         status=ConfigurationStatus.ACTIVE,
     )
     session.add(configuration)
-    session.flush()
+    await _flush(session)
 
     return configuration.id
 
@@ -106,7 +111,7 @@ async def build_tag_filter_fixture(session):
         is_active=True,
     )
     session.add_all([workspace, uploader])
-    session.flush()
+    await _flush(session)
 
     now = datetime.now(tz=UTC)
     expires = now + timedelta(days=30)
@@ -184,7 +189,7 @@ async def build_tag_filter_fixture(session):
     )
 
     session.add_all([doc_all, doc_finance, doc_priority, doc_empty])
-    session.flush()
+    await _flush(session)
 
     return workspace, uploader, doc_all, doc_finance, doc_priority, doc_empty
 
@@ -207,5 +212,5 @@ async def seed_failed_run(session, *, workspace_id, document_id, uploader_id):
         error_message="Request failed with status 404",
     )
     session.add(run)
-    session.flush()
+    await _flush(session)
     return run

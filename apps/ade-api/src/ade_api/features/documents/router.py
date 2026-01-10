@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import time
@@ -80,7 +79,6 @@ from .schemas import (
     DocumentBatchDeleteResponse,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
-    DocumentChangeEntry,
     DocumentChangesPage,
     DocumentListPage,
     DocumentListRow,
@@ -108,10 +106,12 @@ tags_router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
-_UPLOAD_HASH_CHUNK_SIZE = 1024 * 1024
 TAILER_POLL_INTERVAL_SECONDS = 0.25
+TAILER_POLL_MAX_INTERVAL_SECONDS = 2.0
 TAILER_BATCH_LIMIT = 200
 KEEPALIVE_SECONDS = 15.0
+TAILER_POLL_CONCURRENCY = 8
+_TAILER_POLL_SEMAPHORE = asyncio.Semaphore(TAILER_POLL_CONCURRENCY)
 
 
 WorkspacePath = Annotated[
@@ -250,22 +250,6 @@ def _try_enqueue_run(
         )
 
 
-def _hash_upload_file(upload: UploadFile) -> tuple[str, int]:
-    hasher = hashlib.sha256()
-    total = 0
-    if upload.file is None:  # pragma: no cover - UploadFile always supplies file
-        raise RuntimeError("Upload stream is not available")
-    upload.file.seek(0)
-    while True:
-        chunk = upload.file.read(_UPLOAD_HASH_CHUNK_SIZE)
-        if not chunk:
-            break
-        total += len(chunk)
-        hasher.update(chunk)
-    upload.file.seek(0)
-    return hasher.hexdigest(), total
-
-
 @router.post(
     "",
     dependencies=[Security(require_csrf)],
@@ -302,46 +286,67 @@ def upload_document(
     expires_at: Annotated[str | None, Form()] = None,
     run_options: Annotated[str | None, Form()] = None,
 ) -> DocumentOut:
+    upload_slot_acquired = False
+    upload_semaphore = getattr(request.app.state, "documents_upload_semaphore", None)
+    if upload_semaphore is not None:
+        upload_slot_acquired = upload_semaphore.acquire(blocking=False)
+        if not upload_slot_acquired:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many concurrent uploads. Please retry shortly.",
+            )
     payload = _parse_metadata(metadata)
     upload_run_options = _parse_run_options(run_options)
     metadata_payload = service.build_upload_metadata(payload, upload_run_options)
-    file_sha256, file_size = _hash_upload_file(file)
+    staged = None
     scope_key = build_scope_key(
         principal_id=str(_actor.id),
         workspace_id=str(workspace_id),
     )
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload={
-            "metadata": metadata_payload,
-            "expires_at": expires_at,
-            "run_options": upload_run_options.model_dump() if upload_run_options else None,
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "file_sha256": file_sha256,
-            "file_size": file_size,
-        },
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
     try:
+        staged = service.stage_upload(workspace_id=workspace_id, upload=file)
+        request_hash = build_request_hash(
+            method=request.method,
+            path=request.url.path,
+            payload={
+                "metadata": metadata_payload,
+                "expires_at": expires_at,
+                "run_options": upload_run_options.model_dump() if upload_run_options else None,
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "file_sha256": staged.stored.sha256,
+                "file_size": staged.stored.byte_size,
+            },
+        )
+        replay = idempotency.resolve_replay(
+            key=idempotency_key,
+            scope_key=scope_key,
+            request_hash=request_hash,
+        )
+        if replay:
+            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+            return replay.to_response()
         document = service.create_document(
             workspace_id=workspace_id,
             upload=file,
             metadata=metadata_payload,
             expires_at=expires_at,
             actor=_actor,
+            staged=staged,
         )
     except DocumentTooLargeError as exc:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
     except InvalidDocumentExpirationError as exc:
+        if staged is not None:
+            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception:
+        if staged is not None:
+            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+        raise
+    finally:
+        if upload_slot_acquired:
+            upload_semaphore.release()
 
     _try_enqueue_run(
         runs_service=runs_service,
@@ -411,7 +416,7 @@ def list_documents(
     status_code=status.HTTP_200_OK,
     summary="List document changes",
     response_model_exclude_none=True,
-    dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit"}))],
+    dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit", "includeRows"}))],
 )
 def list_document_changes(
     workspace_id: WorkspacePath,
@@ -420,6 +425,7 @@ def list_document_changes(
     *,
     cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
 ) -> DocumentChangesPage:
     if cursor is None:
         raise HTTPException(
@@ -431,6 +437,7 @@ def list_document_changes(
             workspace_id=workspace_id,
             cursor_token=cursor,
             limit=limit,
+            include_rows=include_rows,
         )
         return DocumentChangesPage(items=page.items, next_cursor=page.next_cursor)
     except DocumentEventCursorTooOld as exc:
@@ -457,6 +464,7 @@ async def stream_document_changes(
     _actor: DocumentReader,
     *,
     cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
+    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
 ) -> EventSourceResponse:
     start_cursor = _resolve_change_cursor(request, cursor)
     session_factory = get_sessionmaker(request)
@@ -464,6 +472,7 @@ async def stream_document_changes(
     async def event_stream():
         cursor_value = start_cursor
         last_send = time.monotonic()
+        poll_interval = TAILER_POLL_INTERVAL_SECONDS
 
         def _resolve_cursor() -> int:
             with session_factory() as session:
@@ -496,26 +505,26 @@ async def stream_document_changes(
             def _fetch_changes(current_cursor: int):
                 with session_factory() as session:
                     events_service = DocumentEventsService(session=session, settings=settings)
-                    return events_service.fetch_changes_after(
+                    events = events_service.fetch_changes_after(
                         workspace_id=workspace_id,
                         cursor=current_cursor,
                         limit=TAILER_BATCH_LIMIT,
                     )
+                    service = DocumentsService(session=session, settings=settings)
+                    return service.build_change_entries(
+                        workspace_id=workspace_id,
+                        events=events,
+                        include_rows=include_rows,
+                    )
 
-            events = await asyncio.to_thread(_fetch_changes, cursor_value)
+            async with _TAILER_POLL_SEMAPHORE:
+                events = await asyncio.to_thread(_fetch_changes, cursor_value)
 
             if events:
+                poll_interval = TAILER_POLL_INTERVAL_SECONDS
                 for change in events:
-                    payload = DocumentChangeEntry(
-                        cursor=str(change.cursor),
-                        type=change.event_type.value,
-                        document_id=str(change.document_id),
-                        occurred_at=change.occurred_at,
-                        document_version=change.document_version,
-                        request_id=change.request_id,
-                        client_request_id=change.client_request_id,
-                    ).model_dump(by_alias=True, exclude_none=True)
-                    yield sse_json(change.event_type.value, payload, event_id=change.cursor)
+                    payload = change.model_dump(by_alias=True, exclude_none=True)
+                    yield sse_json(change.type, payload, event_id=change.cursor)
                     cursor_value = int(change.cursor)
                     last_send = time.monotonic()
                 continue
@@ -525,7 +534,8 @@ async def stream_document_changes(
                 last_send = now
                 yield sse_json("keepalive", {})
 
-            await asyncio.sleep(TAILER_POLL_INTERVAL_SECONDS)
+            poll_interval = min(TAILER_POLL_MAX_INTERVAL_SECONDS, poll_interval * 1.5)
+            await asyncio.sleep(poll_interval)
 
     return EventSourceResponse(
         event_stream(),

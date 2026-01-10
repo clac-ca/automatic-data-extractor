@@ -8,6 +8,7 @@ from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -90,6 +91,21 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+_DEPS_DIGEST_CACHE_SIZE = 256
+
+
+@lru_cache(maxsize=_DEPS_DIGEST_CACHE_SIZE)
+def _cached_deps_digest(config_path: str, content_digest: str) -> str:
+    return compute_dependency_digest(Path(config_path))
+
+
+def _deps_digest_cache_key(configuration: Configuration) -> str:
+    if configuration.content_digest:
+        return configuration.content_digest
+    if configuration.updated_at:
+        return configuration.updated_at.isoformat()
+    return "unknown"
 
 
 
@@ -620,7 +636,8 @@ class RunsService:
             )
         except Exception as exc:  # pragma: no cover - surface as run error
             raise RunInputMissingError("Configuration files are missing") from exc
-        return compute_dependency_digest(config_path)
+        cache_key = _deps_digest_cache_key(configuration)
+        return _cached_deps_digest(str(config_path), cache_key)
 
     def _insert_runs_for_documents(
         self,
@@ -814,7 +831,7 @@ class RunsService:
             page=page,
             per_page=per_page,
         )
-        resources = [self.to_resource(run) for run in page_result.items]
+        resources = [self.to_resource(run, resolve_paths=False) for run in page_result.items]
         response = RunPage(
             items=resources,
             page=page_result.page,
@@ -862,21 +879,24 @@ class RunsService:
             per_page=per_page,
         )
 
-    def to_resource(self, run: Run) -> RunResource:
+    def to_resource(self, run: Run, *, resolve_paths: bool = True) -> RunResource:
         """Convert ``run`` into its API representation."""
 
-        run_dir = self._run_dir_for_run(
-            workspace_id=run.workspace_id,
-            run_id=run.id,
+        run_dir = (
+            self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+            if resolve_paths
+            else None
         )
-        paths = self._finalize_paths(
-            run_dir=run_dir,
-            default_paths=RunPathsSnapshot(output_path=run.output_path),
+        paths = (
+            self._finalize_paths(
+                run_dir=run_dir,
+                default_paths=RunPathsSnapshot(output_path=run.output_path),
+            )
+            if resolve_paths and run_dir is not None
+            else RunPathsSnapshot(output_path=run.output_path)
         )
 
-        processed_file = self._resolve_processed_file(
-            paths=paths,
-        )
+        processed_file = self._resolve_processed_file(paths=paths) if resolve_paths else None
 
         # Timing and failure info
         started_at = self._ensure_utc(run.started_at)
@@ -899,6 +919,7 @@ class RunsService:
             run_dir=run_dir,
             paths=paths,
             processed_file=processed_file,
+            resolve_paths=resolve_paths,
         )
         links = self._links(run.id)
 
@@ -979,13 +1000,14 @@ class RunsService:
         self,
         *,
         run: Run,
-        run_dir: Path,
+        run_dir: Path | None,
         paths: RunPathsSnapshot,
         processed_file: str | None,
+        resolve_paths: bool = True,
     ) -> RunOutput:
         output_path = paths.output_path
         output_file: Path | None = None
-        if output_path:
+        if resolve_paths and run_dir is not None and output_path:
             candidate = (run_dir / output_path).resolve()
             try:
                 candidate.relative_to(run_dir)
@@ -994,10 +1016,9 @@ class RunsService:
             if candidate and candidate.is_file():
                 output_file = candidate
 
-        ready = bool(output_file) and run.status in {
-            RunStatus.SUCCEEDED,
-            RunStatus.FAILED,
-        }
+        ready = run.status in {RunStatus.SUCCEEDED, RunStatus.FAILED} and (
+            bool(output_file) if resolve_paths else bool(output_path)
+        )
 
         filename: str | None = None
         size_bytes: int | None = None
@@ -1010,6 +1031,8 @@ class RunsService:
             except OSError:
                 size_bytes = None
             content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        elif output_path:
+            filename = Path(output_path).name
 
         return RunOutput(
             ready=ready,
@@ -1017,7 +1040,7 @@ class RunsService:
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
-            has_output=bool(output_file),
+            has_output=bool(output_file) if resolve_paths else bool(output_path),
             output_path=output_path,
             processed_file=str(processed_file) if processed_file else None,
         )

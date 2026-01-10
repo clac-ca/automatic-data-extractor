@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from sqlalchemy import select
 
@@ -24,7 +25,7 @@ async def test_idempotency_replays_and_conflicts(
         name="Idempotency Config",
     )
     session.add(configuration)
-    session.flush()
+    await anyio.to_thread.run_sync(session.flush)
 
     config_dir = workspace_config_root(settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -32,7 +33,7 @@ async def test_idempotency_replays_and_conflicts(
     document_one = make_document(workspace_id=workspace_id, filename="idempotency-one.csv")
     document_two = make_document(workspace_id=workspace_id, filename="idempotency-two.csv")
     session.add_all([document_one, document_two])
-    session.commit()
+    await anyio.to_thread.run_sync(session.commit)
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     idempotency_key = f"idem-{uuid4().hex}"
@@ -58,13 +59,16 @@ async def test_idempotency_replays_and_conflicts(
     assert response_two.status_code == 201, response_two.text
     assert response_two.json()["id"] == run_id
 
-    result = session.execute(
-        select(Run).where(
-            Run.configuration_id == configuration.id,
-            Run.input_document_id == document_one.id,
+    def _load_runs():
+        result = session.execute(
+            select(Run).where(
+                Run.configuration_id == configuration.id,
+                Run.input_document_id == document_one.id,
+            )
         )
-    )
-    runs = list(result.scalars())
+        return list(result.scalars())
+
+    runs = await anyio.to_thread.run_sync(_load_runs)
     assert len(runs) == 1
     assert runs[0].id == UUID(run_id)
 

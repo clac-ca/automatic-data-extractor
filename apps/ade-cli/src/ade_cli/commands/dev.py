@@ -44,6 +44,7 @@ def run_dev(
     web_only: bool = False,
     api_port: int | None = None,
     api_host: str | None = None,
+    api_workers: int | None = None,
     web_port: int | None = None,
     web_host: str | None = None,
 ) -> None:
@@ -73,8 +74,6 @@ def run_dev(
         typer.echo("⚠️ No services selected; nothing to run.", err=True)
         raise typer.Exit(code=1)
 
-    api_port = int(api_port if api_port is not None else os.getenv("ADE_API_PORT", "8000") or "8000")
-    api_host = api_host or os.getenv("ADE_API_HOST", "127.0.0.1")
     web_port = int(web_port if web_port is not None else os.getenv("ADE_WEB_PORT", "5173") or "5173")
     web_host = web_host or os.getenv("ADE_WEB_HOST", "127.0.0.1")
 
@@ -104,16 +103,33 @@ def run_dev(
         typer.echo("⚠️  web package.json not found; skipping web.", err=True)
         web = False
 
-    if api and web and api_port == web_port:
-        typer.echo("❌ API and web ports must be different when running both servers.", err=True)
-        raise typer.Exit(code=1)
-
+    api_reload = True
     if api:
         common.require_python_module(
             "ade_api",
             "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
         )
         common.uvicorn_path()
+        from ade_api.settings import Settings
+
+        api_settings = Settings(_env_file=common.REPO_ROOT / ".env")
+        if api_port is None:
+            api_port = api_settings.api_port if api_settings.api_port is not None else 8000
+        api_port = int(api_port)
+        if api_host is None:
+            api_host = api_settings.api_host or "127.0.0.1"
+        if api_workers is None:
+            api_workers = api_settings.api_workers if api_settings.api_workers is not None else 1
+        api_workers = int(api_workers)
+
+    if api and web and api_port == web_port:
+        typer.echo("❌ API and web ports must be different when running both servers.", err=True)
+        raise typer.Exit(code=1)
+
+    if api:
+        if api_workers > 1:
+            api_reload = False
+            typer.echo("Note: API workers > 1; disabling reload in dev.")
         typer.echo(f"🔧 API dev server:        http://{api_host}:{api_port}")
 
     if web:
@@ -139,21 +155,23 @@ def run_dev(
     tasks: list[tuple[str, list[str], Path | None, dict[str, str]]] = []
     if api:
         uvicorn_bin = common.uvicorn_path()
+        api_cmd = [
+            uvicorn_bin,
+            "ade_api.main:create_app",
+            "--factory",
+            "--host",
+            api_host,
+            "--port",
+            str(api_port),
+        ]
+        if api_reload:
+            api_cmd.extend(["--reload", "--reload-dir", "apps/ade-api"])
+        if api_workers > 1:
+            api_cmd.extend(["--workers", str(api_workers)])
         tasks.append(
             (
                 "api",
-                [
-                    uvicorn_bin,
-                    "ade_api.main:create_app",
-                    "--factory",
-                    "--host",
-                    api_host,
-                    "--port",
-                    str(api_port),
-                    "--reload",
-                    "--reload-dir",
-                    "apps/ade-api",
-                ],
+                api_cmd,
                 common.REPO_ROOT,
                 env,
             )
@@ -249,6 +267,13 @@ def register(app: typer.Typer) -> None:
             help="Host/interface for the API dev server.",
             envvar="ADE_API_HOST",
         ),
+        api_workers: int = typer.Option(
+            None,
+            "--api-workers",
+            help="Number of API worker processes (uvicorn).",
+            envvar="ADE_API_WORKERS",
+            min=1,
+        ),
         web_port: int = typer.Option(
             None,
             "--web-port",
@@ -270,6 +295,7 @@ def register(app: typer.Typer) -> None:
             web_only=web_only,
             api_port=api_port,
             api_host=api_host,
+            api_workers=api_workers,
             web_port=web_port,
             web_host=web_host,
         )
