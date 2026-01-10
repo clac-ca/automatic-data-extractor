@@ -49,7 +49,7 @@ from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
-from ade_api.db import db
+from ade_api.db import session_scope
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.idempotency import (
     IdempotencyService,
@@ -465,7 +465,7 @@ async def stream_document_changes(
         cursor_value = start_cursor
         last_send = time.monotonic()
 
-        async with db.sessionmaker() as session:
+        async with session_scope() as session:
             events_service = DocumentEventsService(session=session, settings=settings)
             try:
                 resolution = await events_service.resolve_cursor(
@@ -490,7 +490,7 @@ async def stream_document_changes(
             if await request.is_disconnected():
                 return
 
-            async with db.sessionmaker() as session:
+            async with session_scope() as session:
                 events_service = DocumentEventsService(session=session, settings=settings)
                 events = await events_service.fetch_changes_after(
                     workspace_id=workspace_id,

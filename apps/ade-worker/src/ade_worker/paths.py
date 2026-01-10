@@ -10,6 +10,7 @@ Align with the API storage layout:
 from __future__ import annotations
 
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,6 +27,16 @@ def _safe_join(base: Path, *parts: str) -> Path:
     except ValueError as exc:
         raise UnsafePathError(f"Unsafe path join: {candidate} is outside {base_resolved}") from exc
     return candidate
+
+
+def _normalize_uuid(value: str | uuid.UUID) -> str:
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    text = str(value)
+    try:
+        return str(uuid.UUID(text))
+    except (ValueError, AttributeError, TypeError):
+        return text
 
 
 def _strip_file_uri(uri: str) -> str:
@@ -73,23 +84,26 @@ class PathManager:
         return _safe_join(self.data_dir, "workspaces")
 
     def documents_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.workspaces_root(), workspace_id, "documents")
+        return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "documents")
 
     def configs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.workspaces_root(), workspace_id, "config_packages")
+        return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "config_packages")
 
     def runs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.workspaces_root(), workspace_id, "runs")
+        return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "runs")
 
     def venvs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.data_dir, "venvs", workspace_id)
+        return _safe_join(self.data_dir, "venvs", _normalize_uuid(workspace_id))
 
     def pip_cache_dir(self) -> Path:
         return _safe_join(self.data_dir, "cache", "pip")
 
     # --- config packages ---
     def config_package_dir(self, workspace_id: str, configuration_id: str) -> Path:
-        return _safe_join(self.configs_root(workspace_id), configuration_id)
+        return _safe_join(
+            self.configs_root(workspace_id),
+            _normalize_uuid(configuration_id),
+        )
 
     # --- environments / venvs ---
     def environment_root(
@@ -100,7 +114,12 @@ class PathManager:
         environment_id: str,
     ) -> Path:
         segment = _deps_digest_segment(deps_digest)
-        return _safe_join(self.venvs_root(workspace_id), configuration_id, segment, environment_id)
+        return _safe_join(
+            self.venvs_root(workspace_id),
+            _normalize_uuid(configuration_id),
+            segment,
+            _normalize_uuid(environment_id),
+        )
 
     def environment_venv_dir(
         self,
@@ -129,7 +148,7 @@ class PathManager:
 
     # --- runs ---
     def run_dir(self, workspace_id: str, run_id: str) -> Path:
-        return _safe_join(self.runs_root(workspace_id), run_id)
+        return _safe_join(self.runs_root(workspace_id), _normalize_uuid(run_id))
 
     def run_input_dir(self, workspace_id: str, run_id: str) -> Path:
         return _safe_join(self.run_dir(workspace_id, run_id), "input")

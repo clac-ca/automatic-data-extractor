@@ -8,7 +8,7 @@ from sqlalchemy import text
 from ade_api.api.deps import SettingsDep
 from ade_api.common.problem_details import ApiError
 from ade_api.common.time import utc_now
-from ade_api.db import db
+from ade_api.db import session_scope
 
 from .schemas import HealthCheckResponse, HealthComponentStatus
 from .service import HealthService
@@ -41,7 +41,7 @@ async def read_readiness(settings: SettingsDep) -> HealthCheckResponse:
     """Return readiness status after checking critical dependencies."""
 
     try:
-        async with db.sessionmaker() as session:
+        async with session_scope() as session:
             await session.execute(text("SELECT 1"))
     except Exception as exc:  # pragma: no cover - exercised in integration tests
         raise ApiError(

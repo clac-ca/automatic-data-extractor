@@ -84,7 +84,7 @@ export function AppearanceMenu({
         aria-label="Appearance settings"
         title="Appearance"
         className={clsx(
-          "inline-flex h-9 items-center gap-2 rounded-xl border px-2.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "inline-flex h-[var(--app-shell-control-h)] items-center gap-2 rounded-xl border px-2.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isHeaderTone
             ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
             : "border-border/80 bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",

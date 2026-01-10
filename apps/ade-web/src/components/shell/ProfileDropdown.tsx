@@ -176,7 +176,8 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
         ref={triggerRef}
         type="button"
         className={clsx(
-          "inline-flex items-center gap-3 rounded-xl border px-2.5 py-1.5 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "inline-flex items-center rounded-xl border text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          isHeaderTone ? "h-[var(--app-shell-control-h)] gap-2 px-2.5" : "gap-3 px-2.5 py-1.5",
           isHeaderTone
             ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
             : "border-border bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",
@@ -194,13 +195,24 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
           }
         }}
       >
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
+        <span
+          className={clsx(
+            "inline-flex items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground shadow-sm",
+            isHeaderTone ? "h-8 w-8" : "h-9 w-9",
+          )}
+        >
           {initials}
         </span>
-        <span className="hidden min-w-0 flex-col xl:flex">
-          <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
-          <span className="truncate text-xs text-muted-foreground">{email}</span>
-        </span>
+        {isHeaderTone ? (
+          <span className="hidden min-w-0 xl:block">
+            <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+          </span>
+        ) : (
+          <span className="hidden min-w-0 flex-col xl:flex">
+            <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+            <span className="truncate text-xs text-muted-foreground">{email}</span>
+          </span>
+        )}
         <ChevronDownIcon
           className={clsx(
             "h-4 w-4 transition-transform duration-150",

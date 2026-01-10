@@ -200,10 +200,17 @@ function WorkspaceNavPanel({
       <div
         className={clsx(
           "border-b border-sidebar-border",
-          expanded ? "px-3 py-3" : "px-2 py-3",
+          "flex h-[var(--app-shell-header-h)] items-center",
+          expanded ? "px-3" : "justify-center px-2",
         )}
       >
-        <WorkspaceSwitcher variant={variant} onOpenChange={onSwitcherOpenChange} />
+        <WorkspaceSwitcher
+          variant={variant}
+          density={expanded ? "compact" : "default"}
+          showLabel={false}
+          onOpenChange={onSwitcherOpenChange}
+          className={expanded ? "w-full" : undefined}
+        />
       </div>
       {/* Nav */}
       <nav

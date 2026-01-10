@@ -219,8 +219,10 @@ export function GlobalSearchField({
   };
 
   const isHeaderVariant = variant === "header";
+  const showScopeLabel = Boolean(scopeLabel) && !isHeaderVariant;
   const variantClasses = isHeaderVariant
     ? clsx(
+        "h-[var(--app-shell-control-h)]",
         "rounded-2xl border border-border/50 bg-background/60 text-foreground backdrop-blur-sm",
         "shadow-none ring-1 ring-inset ring-border/30 transition",
         "focus-within:border-ring focus-within:bg-background/80 focus-within:ring-ring/40",
@@ -238,7 +240,9 @@ export function GlobalSearchField({
 
   const formTextClass = "text-muted-foreground";
   const inputTextClass = "text-foreground placeholder:text-muted-foreground";
-  const formPaddingClass = isHeaderVariant ? "px-3.5 py-1.5 sm:px-4 sm:py-2" : "px-4 py-2 sm:px-5 sm:py-2.5";
+  const formPaddingClass = isHeaderVariant
+    ? "h-full px-3.5 sm:px-4"
+    : "px-4 py-2 sm:px-5 sm:py-2.5";
   const shortcutClass = isHeaderVariant
     ? "border-border/40 bg-background/80 text-foreground"
     : "border-border/70 bg-card/80 text-muted-foreground";
@@ -249,7 +253,7 @@ export function GlobalSearchField({
   const leadingIconClass = isHeaderVariant
     ? "bg-background/60 text-muted-foreground ring-border/40"
     : "bg-card text-muted-foreground ring-border/40";
-  const leadingIconSizeClass = isHeaderVariant ? "h-8 w-8 sm:h-9 sm:w-9" : "h-9 w-9 sm:h-10 sm:w-10";
+  const leadingIconSizeClass = isHeaderVariant ? "h-8 w-8" : "h-9 w-9 sm:h-10 sm:w-10";
 
   return (
     <div
@@ -311,8 +315,8 @@ export function GlobalSearchField({
             </span>
           )}
 
-          <div className="flex min-w-0 flex-1 flex-col">
-            {scopeLabel ? (
+          <div className={clsx("flex min-w-0 flex-1", showScopeLabel ? "flex-col" : "items-center")}>
+            {showScopeLabel ? (
               <span
                 className={clsx(
                   "text-[0.6rem] font-semibold uppercase tracking-wide sm:text-[0.65rem]",
@@ -334,7 +338,11 @@ export function GlobalSearchField({
               aria-haspopup="listbox"
               onKeyDown={handleSearchKeyDown}
               placeholder={placeholder}
-              className={clsx("w-full border-0 bg-transparent text-base font-medium focus:outline-none", inputTextClass)}
+              className={clsx(
+                "w-full border-0 bg-transparent font-medium focus:outline-none",
+                isHeaderVariant ? "text-sm" : "text-base",
+                inputTextClass,
+              )}
               aria-expanded={showDropdown}
               aria-controls={showDropdown ? suggestionsListId : undefined}
               aria-activedescendant={

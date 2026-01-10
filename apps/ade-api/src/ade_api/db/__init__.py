@@ -10,6 +10,7 @@ from .database import (
     build_async_url,
     build_sync_url,
     db,
+    session_scope,
     get_db_session,
 )
 from .types import GUID, UTCDateTime
@@ -28,6 +29,7 @@ __all__ = [
     "DatabaseAuthMode",
     "SQLiteBeginMode",
     "db",
+    "session_scope",
     "get_db_session",
     "build_sync_url",
     "build_async_url",

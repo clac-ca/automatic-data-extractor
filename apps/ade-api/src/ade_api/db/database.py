@@ -5,7 +5,7 @@ Standard behavior:
 - One session per request (FastAPI dependency)
 - Commit on success, rollback on exception
 - SQLite: WAL + busy_timeout + pool_size=1 (serialize access per process)
-- Azure SQL: pooled connections + pre-ping + recycle + fast_executemany
+- Azure SQL: pooled connections + pre-ping + recycle (fast_executemany for pyodbc only)
 
 Managed Identity:
 - Uses azure-identity DefaultAzureCredential to fetch an access token
@@ -14,9 +14,11 @@ Managed Identity:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import struct
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -45,6 +47,7 @@ __all__ = [
     "DatabaseConfig",
     "Database",
     "db",
+    "session_scope",
     "get_db_session",
     "build_sync_url",
     "build_async_url",
@@ -211,6 +214,36 @@ def _sanitize_mssql_for_managed_identity(url: URL) -> URL:
     return url.set(query=query)
 
 
+def _build_engine_kwargs(url: URL, cfg: DatabaseConfig) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "echo": cfg.echo,
+        "pool_pre_ping": True,
+    }
+
+    backend = _supported_backend(url)
+    if backend == "sqlite":
+        kwargs["pool_size"] = 1
+        kwargs["max_overflow"] = 0
+        kwargs["pool_timeout"] = max(1, cfg.pool_timeout)
+        kwargs["connect_args"] = {
+            "check_same_thread": False,
+            "timeout": cfg.sqlite_busy_timeout_ms / 1000.0,
+        }
+        if _is_sqlite_memory(url):
+            kwargs["poolclass"] = StaticPool
+    else:
+        kwargs.update(
+            pool_size=cfg.pool_size,
+            max_overflow=cfg.max_overflow,
+            pool_timeout=cfg.pool_timeout,
+            pool_recycle=cfg.pool_recycle,
+        )
+        if url.drivername.startswith("mssql+pyodbc"):
+            kwargs["fast_executemany"] = True
+
+    return kwargs
+
+
 def build_sync_url(cfg: DatabaseConfig) -> str:
     """Return the *sync* SQLAlchemy URL string (for Alembic)."""
     url = make_url(cfg.url)
@@ -340,42 +373,11 @@ class Database:
         url_obj = make_url(async_url)
         backend = _supported_backend(url_obj)
 
-        engine_kwargs: dict[str, Any] = {
-            "echo": cfg.echo,
-            "pool_pre_ping": True,
-        }
-
         if backend == "sqlite":
             # Create dir for file-backed DB
             _ensure_sqlite_parent_dir(url_obj)
 
-            # Serialize access per process to minimize lock errors.
-            # SQLite is not a high-concurrency database; this is the most reliable pattern.
-            engine_kwargs["pool_size"] = 1
-            engine_kwargs["max_overflow"] = 0
-            engine_kwargs["pool_timeout"] = max(1, cfg.pool_timeout)
-
-            connect_args = {
-                "check_same_thread": False,
-                "timeout": cfg.sqlite_busy_timeout_ms / 1000.0,
-            }
-            engine_kwargs["connect_args"] = connect_args
-
-            if _is_sqlite_memory(url_obj):
-                # Needed so all sessions share the same :memory: database.
-                engine_kwargs["poolclass"] = StaticPool
-
-        else:
-            # SQL Server / Azure SQL
-            engine_kwargs.update(
-                pool_size=cfg.pool_size,
-                max_overflow=cfg.max_overflow,
-                pool_timeout=cfg.pool_timeout,
-                pool_recycle=cfg.pool_recycle,
-                # Good default for bulk inserts on SQL Server via pyodbc
-                fast_executemany=True,
-            )
-
+        engine_kwargs = _build_engine_kwargs(url_obj, cfg)
         engine = create_async_engine(async_url, **engine_kwargs)
 
         # Managed identity (works for async too; we attach to the underlying sync engine)
@@ -429,12 +431,27 @@ class Database:
 db = Database()
 
 
+async def close_session(session: AsyncSession) -> None:
+    await asyncio.shield(session.close())
+
+
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    session = db.sessionmaker()
+    try:
+        yield session
+    finally:
+        await close_session(session)
+
+
 async def get_db_session() -> AsyncIterator[AsyncSession]:
     """FastAPI dependency: one AsyncSession per request."""
-    async with db.sessionmaker() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+    session = db.sessionmaker()
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await close_session(session)

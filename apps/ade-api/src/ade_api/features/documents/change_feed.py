@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.logging import current_request_id
 from ade_api.common.time import utc_now
-from ade_api.db import db
+from ade_api.db import session_scope
 from ade_api.models import DocumentEvent, DocumentEventType
 from ade_api.settings import Settings
 
@@ -224,7 +224,7 @@ async def run_document_events_pruner(
 
     while not stop_event.is_set():
         try:
-            async with db.sessionmaker() as session:
+            async with session_scope() as session:
                 service = DocumentEventsService(session=session, settings=settings)
                 await service.prune()
                 await session.commit()

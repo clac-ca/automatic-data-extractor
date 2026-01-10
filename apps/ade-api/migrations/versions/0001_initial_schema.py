@@ -4,6 +4,7 @@ Notes:
 - GUID primary keys are app-generated (no server default).
 - SQLite: uses constraints-based enums.
 - SQL Server: uses NVARCHAR + CHECK constraints for enums (via native_enum=False).
+- Consolidated baseline includes environments + document events (no builds/upload sessions).
 """
 
 from __future__ import annotations
@@ -88,14 +89,6 @@ RUN_STATUS = sa.Enum(
     length=20,
 )
 
-BUILD_STATUS = sa.Enum(
-    "queued", "building", "ready", "failed", "cancelled",
-    name="build_status",
-    native_enum=False,
-    create_constraint=True,
-    length=20,
-)
-
 CONFIG_STATUS = sa.Enum(
     "draft", "active", "archived",
     name="configuration_status",
@@ -104,8 +97,16 @@ CONFIG_STATUS = sa.Enum(
     length=20,
 )
 
+ENVIRONMENT_STATUS = sa.Enum(
+    "queued", "building", "ready", "failed",
+    name="environment_status",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
 DOCUMENT_STATUS = sa.Enum(
-    "uploaded", "processing", "processed", "failed", "archived",
+    "uploading", "uploaded", "processing", "processed", "failed", "archived",
     name="document_status",
     native_enum=False,
     create_constraint=True,
@@ -120,28 +121,12 @@ DOCUMENT_SOURCE = sa.Enum(
     length=50,
 )
 
-DOCUMENT_CHANGE_TYPE = sa.Enum(
-    "upsert", "deleted",
-    name="document_change_type",
+DOCUMENT_EVENT_TYPE = sa.Enum(
+    "document.changed", "document.deleted",
+    name="document_event_type",
     native_enum=False,
     create_constraint=True,
-    length=20,
-)
-
-DOCUMENT_UPLOAD_CONFLICT_BEHAVIOR = sa.Enum(
-    "rename", "replace", "fail",
-    name="document_upload_conflict_behavior",
-    native_enum=False,
-    create_constraint=True,
-    length=20,
-)
-
-DOCUMENT_UPLOAD_SESSION_STATUS = sa.Enum(
-    "active", "complete", "committed", "cancelled",
-    name="document_upload_session_status",
-    native_enum=False,
-    create_constraint=True,
-    length=20,
+    length=40,
 )
 
 PERMISSION_SCOPE = sa.Enum(
@@ -172,12 +157,11 @@ def upgrade() -> None:
 
     _create_system_settings()
     _create_configurations()
-    _create_builds()
+    _create_environments()
 
     _create_documents()
     _create_document_tags()
-    _create_document_changes()
-    _create_document_upload_sessions()
+    _create_document_events()
 
     _create_runs()
     _create_run_metrics()
@@ -354,14 +338,11 @@ def _create_configurations() -> None:
         sa.Column("display_name", sa.String(length=255), nullable=False),
         sa.Column("status", CONFIG_STATUS, nullable=False, server_default="draft"),
         sa.Column("content_digest", sa.String(length=80), nullable=True),
-        sa.Column("active_build_id", GUID(), nullable=True),
-        sa.Column("active_build_fingerprint", sa.String(length=128), nullable=True),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         *_timestamps(),
     )
     op.create_index("ix_configurations_workspace_status", "configurations", ["workspace_id", "status"], unique=False)
-    op.create_index("ix_configurations_active_build_id", "configurations", ["active_build_id"], unique=False)
 
     # One active configuration per workspace using partial/filtered unique index
     active_where = sa.text("status = 'active'")
@@ -385,44 +366,38 @@ def _create_configurations() -> None:
         op.create_index("ix_configurations_active_per_workspace", "configurations", ["workspace_id"], unique=False)
 
 
-def _create_builds() -> None:
-    dialect = _dialect_name()
-
+def _create_environments() -> None:
     op.create_table(
-        "builds",
+        "environments",
         _uuid_pk(),
         sa.Column("workspace_id", GUID(), sa.ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False),
         sa.Column("configuration_id", GUID(), sa.ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False),
-        sa.Column("fingerprint", sa.String(length=128), nullable=False),
-        sa.Column("engine_spec", sa.String(length=255), nullable=True),
-        sa.Column("engine_version", sa.String(length=50), nullable=True),
-        sa.Column("python_version", sa.String(length=50), nullable=True),
-        sa.Column("python_interpreter", sa.String(length=255), nullable=True),
-        sa.Column("config_digest", sa.String(length=80), nullable=True),
-        sa.Column("status", BUILD_STATUS, nullable=False, server_default="queued"),
-        sa.Column("exit_code", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("summary", sa.Text(), nullable=True),
+        sa.Column("engine_spec", sa.String(length=255), nullable=False),
+        sa.Column("deps_digest", sa.String(length=128), nullable=False),
+        sa.Column("status", ENVIRONMENT_STATUS, nullable=False, server_default="queued"),
         sa.Column("error_message", sa.Text(), nullable=True),
-        sa.UniqueConstraint("configuration_id", "fingerprint", name="ux_builds_config_fingerprint"),
+        sa.Column("claimed_by", sa.String(length=255), nullable=True),
+        sa.Column("claim_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("python_version", sa.String(length=50), nullable=True),
+        sa.Column("python_interpreter", sa.String(length=512), nullable=True),
+        sa.Column("engine_version", sa.String(length=50), nullable=True),
+        sa.UniqueConstraint(
+            "workspace_id",
+            "configuration_id",
+            "engine_spec",
+            "deps_digest",
+            name="ux_environments_key",
+        ),
     )
-    op.create_index("ix_builds_workspace", "builds", ["workspace_id"], unique=False)
-    op.create_index("ix_builds_configuration", "builds", ["configuration_id"], unique=False)
-    op.create_index("ix_builds_status", "builds", ["status"], unique=False)
-    op.create_index("ix_builds_fingerprint", "builds", ["fingerprint"], unique=False)
-
-    # Optional FK configurations.active_build_id -> builds.id skipped on sqlite+mssql
-    if dialect not in {"sqlite", "mssql"}:
-        op.create_foreign_key(
-            "fk_configurations_active_build_id",
-            source_table="configurations",
-            referent_table="builds",
-            local_cols=["active_build_id"],
-            remote_cols=["id"],
-            ondelete="NO ACTION",
-        )
+    op.create_index("ix_environments_workspace", "environments", ["workspace_id"], unique=False)
+    op.create_index("ix_environments_configuration", "environments", ["configuration_id"], unique=False)
+    op.create_index("ix_environments_claim", "environments", ["status", "created_at"], unique=False)
+    op.create_index("ix_environments_claim_expires", "environments", ["status", "claim_expires_at"], unique=False)
+    op.create_index("ix_environments_status_last_used", "environments", ["status", "last_used_at"], unique=False)
+    op.create_index("ix_environments_status_updated", "environments", ["status", "updated_at"], unique=False)
 
 
 def _create_documents() -> None:
@@ -435,6 +410,7 @@ def _create_documents() -> None:
         sa.Column("original_filename", sa.String(length=255), nullable=False),
         sa.Column("content_type", sa.String(length=255), nullable=True),
         sa.Column("byte_size", sa.Integer(), nullable=False),
+        sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("sha256", sa.String(length=64), nullable=False),
         sa.Column("stored_uri", sa.String(length=512), nullable=False),
         sa.Column("attributes", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
@@ -495,9 +471,9 @@ def _create_document_tags() -> None:
     op.create_index("document_tags_tag_document_id_idx", "document_tags", ["tag", "document_id"], unique=False)
 
 
-def _create_document_changes() -> None:
+def _create_document_events() -> None:
     op.create_table(
-        "document_changes",
+        "document_events",
         sa.Column(
             "cursor",
             sa.BigInteger().with_variant(sa.Integer(), "sqlite"),
@@ -506,38 +482,17 @@ def _create_document_changes() -> None:
             nullable=False,
         ),
         sa.Column("workspace_id", GUID(), sa.ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False),
-        sa.Column("document_id", GUID(), sa.ForeignKey("documents.id", ondelete="NO ACTION"), nullable=True),
-        sa.Column("type", DOCUMENT_CHANGE_TYPE, nullable=False),
-        sa.Column("payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("document_id", GUID(), sa.ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False),
+        sa.Column("event_type", DOCUMENT_EVENT_TYPE, nullable=False),
+        sa.Column("document_version", sa.Integer(), nullable=False),
+        sa.Column("request_id", sa.String(length=128), nullable=True),
+        sa.Column("client_request_id", sa.String(length=128), nullable=True),
+        sa.Column("payload", sa.JSON(), nullable=True),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index("ix_document_changes_workspace_cursor", "document_changes", ["workspace_id", "cursor"], unique=False)
-    op.create_index("ix_document_changes_workspace_document", "document_changes", ["workspace_id", "document_id"], unique=False)
-    op.create_index("ix_document_changes_workspace_occurred", "document_changes", ["workspace_id", "occurred_at"], unique=False)
-
-
-def _create_document_upload_sessions() -> None:
-    op.create_table(
-        "document_upload_sessions",
-        _uuid_pk(),
-        sa.Column("workspace_id", GUID(), sa.ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False),
-        sa.Column("created_by_user_id", GUID(), sa.ForeignKey("users.id", ondelete="NO ACTION"), nullable=True),
-        sa.Column("filename", sa.String(length=255), nullable=False),
-        sa.Column("content_type", sa.String(length=255), nullable=True),
-        sa.Column("byte_size", sa.Integer(), nullable=False),
-        sa.Column("metadata", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("conflict_behavior", DOCUMENT_UPLOAD_CONFLICT_BEHAVIOR, nullable=False, server_default="rename"),
-        sa.Column("folder_id", sa.String(length=255), nullable=True),
-        sa.Column("temp_stored_uri", sa.String(length=512), nullable=False),
-        sa.Column("received_bytes", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("received_ranges", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("status", DOCUMENT_UPLOAD_SESSION_STATUS, nullable=False, server_default="active"),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        *_timestamps(),
-    )
-    op.create_index("ix_document_upload_sessions_workspace", "document_upload_sessions", ["workspace_id"], unique=False)
-    op.create_index("ix_document_upload_sessions_expires", "document_upload_sessions", ["expires_at"], unique=False)
-    op.create_index("ix_document_upload_sessions_status", "document_upload_sessions", ["status"], unique=False)
+    op.create_index("ix_document_events_workspace_cursor", "document_events", ["workspace_id", "cursor"], unique=False)
+    op.create_index("ix_document_events_workspace_document", "document_events", ["workspace_id", "document_id"], unique=False)
+    op.create_index("ix_document_events_workspace_occurred", "document_events", ["workspace_id", "occurred_at"], unique=False)
 
 
 def _create_runs() -> None:
@@ -548,20 +503,32 @@ def _create_runs() -> None:
         _uuid_pk(),
         sa.Column("configuration_id", GUID(), sa.ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False),
         sa.Column("workspace_id", GUID(), sa.ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False),
-        sa.Column("build_id", GUID(), sa.ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True),
         sa.Column("input_document_id", GUID(), sa.ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False),
         sa.Column("input_sheet_names", sa.JSON(), nullable=True),
         sa.Column("output_path", sa.String(length=512), nullable=True),
+        sa.Column(
+            "engine_spec",
+            sa.String(length=255),
+            nullable=False,
+            server_default=sa.text("'apps/ade-engine'"),
+        ),
+        sa.Column(
+            "deps_digest",
+            sa.String(length=128),
+            nullable=False,
+            server_default=sa.text(
+                "'sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d'"
+            ),
+        ),
         sa.Column("status", RUN_STATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column("submitted_by_user_id", GUID(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
 
-        # Durable queue fields (from your old 0002)
+        # Durable queue fields
         sa.Column("available_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("run_options", sa.JSON(), nullable=True),
         sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
@@ -578,10 +545,11 @@ def _create_runs() -> None:
     op.create_index("ix_runs_input_document", "runs", ["input_document_id"], unique=False)
     op.create_index("ix_runs_workspace_input_finished", "runs", ["workspace_id", "input_document_id", "completed_at", "started_at"], unique=False)
     op.create_index("ix_runs_workspace_created", "runs", ["workspace_id", "created_at"], unique=False)
-    op.create_index("ix_runs_build", "runs", ["build_id"], unique=False)
 
     # Claim/queue index
     op.create_index("ix_runs_claim", "runs", ["status", "available_at", "created_at"], unique=False)
+    op.create_index("ix_runs_claim_expires", "runs", ["status", "claim_expires_at"], unique=False)
+    op.create_index("ix_runs_status_completed", "runs", ["status", "completed_at"], unique=False)
 
     # Unique "active job" per document/config/workspace for queued/running
     active_where = sa.text("status IN ('queued','running')")

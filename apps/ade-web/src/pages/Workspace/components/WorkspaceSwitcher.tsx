@@ -23,9 +23,11 @@ import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
 
 type WorkspaceSwitcherVariant = "rail" | "drawer";
+type WorkspaceSwitcherDensity = "default" | "compact";
 
 interface WorkspaceSwitcherProps {
   readonly variant?: WorkspaceSwitcherVariant;
+  readonly density?: WorkspaceSwitcherDensity;
   readonly showLabel?: boolean;
   readonly onNavigate?: () => void;
   readonly onOpenChange?: (open: boolean) => void;
@@ -34,6 +36,7 @@ interface WorkspaceSwitcherProps {
 
 export function WorkspaceSwitcher({
   variant = "drawer",
+  density = "default",
   showLabel,
   onNavigate,
   onOpenChange,
@@ -43,7 +46,8 @@ export function WorkspaceSwitcher({
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const isRail = variant === "rail";
-  const displayLabel = showLabel ?? !isRail;
+  const isCompact = density === "compact";
+  const displayLabel = !isCompact && (showLabel ?? !isRail);
   const label = `Switch workspace: ${workspace.name}`;
 
   const setPopoverOpen = (nextOpen: boolean) => {
@@ -69,7 +73,14 @@ export function WorkspaceSwitcher({
   const popoverOffset = isRail ? 12 : 8;
 
   return (
-    <div className={clsx("flex flex-col gap-2", isRail && "items-center", className)}>
+    <div
+      className={clsx(
+        "flex",
+        isCompact ? "w-full" : "flex-col gap-2",
+        isRail && !isCompact && "items-center",
+        className,
+      )}
+    >
       {displayLabel ? (
         <span className="px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-sidebar-foreground">
           Workspace
@@ -88,13 +99,24 @@ export function WorkspaceSwitcher({
               "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
               isRail
                 ? "h-11 w-11 justify-center bg-sidebar-accent/70 hover:bg-sidebar-accent"
-                : "w-full gap-3 border border-sidebar-border/60 bg-sidebar/60 px-2.5 py-2 hover:border-sidebar-border hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground",
+                : isCompact
+                  ? "h-[var(--app-shell-control-h)] w-full gap-3 border border-sidebar-border/60 bg-sidebar/60 px-2.5 py-0 hover:border-sidebar-border hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground"
+                  : "w-full gap-3 border border-sidebar-border/60 bg-sidebar/60 px-2.5 py-2 hover:border-sidebar-border hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground",
             )}
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-semibold uppercase text-primary-foreground shadow-sm">
+            <span
+              className={clsx(
+                "flex items-center justify-center bg-primary text-xs font-semibold uppercase text-primary-foreground shadow-sm",
+                isCompact ? "h-8 w-8 rounded-lg" : "h-10 w-10 rounded-xl",
+              )}
+            >
               {getWorkspaceInitials(workspace.name)}
             </span>
-            {isRail ? null : (
+            {isRail ? null : isCompact ? (
+              <span className="flex min-w-0 flex-1 items-center">
+                <span className="truncate text-sm font-semibold">{workspace.name}</span>
+              </span>
+            ) : (
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-semibold">{workspace.name}</span>
                 <span className="truncate text-xs text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground/80 group-data-[state=open]:text-sidebar-accent-foreground/80">

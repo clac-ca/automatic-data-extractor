@@ -70,6 +70,11 @@
   --app-z-select: 100;
   --app-z-toast: 200;
 
+  /* App shell layout tokens */
+  --app-shell-header-h: 3.5rem;
+  --app-shell-control-h: 2.25rem;
+  --app-shell-search-max-w: 42rem;
+
   /* charts */
   --chart-1: oklch(0.5462 0.25 264.376);
   --chart-2: oklch(0.6 0.118 184.704);

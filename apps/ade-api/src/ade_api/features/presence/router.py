@@ -17,8 +17,7 @@ from ade_api.core.http.dependencies import (
     get_cookie_authenticator,
     get_rbac_service,
 )
-from ade_api.db import db as database
-from ade_api.db import get_db_session
+from ade_api.db import get_db_session, session_scope
 from ade_api.models import User
 from ade_api.settings import Settings, get_settings
 
@@ -181,7 +180,7 @@ async def presence_ws(
     async def join_channel(scope: str, context: dict[str, Any]) -> None:
         nonlocal channel_key, client_id
 
-        async with database.sessionmaker() as session:
+        async with session_scope() as session:
             allowed = await _authorize_scope(
                 principal=principal,
                 db=session,

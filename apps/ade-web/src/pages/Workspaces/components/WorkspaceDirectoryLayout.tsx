@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useNavigate } from "@app/navigation/history";
 
 import { useSession } from "@components/providers/auth/SessionContext";
@@ -19,6 +19,10 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
   const session = useSession();
   const navigate = useNavigate();
   const [isVersionsModalOpen, setIsVersionsModalOpen] = useState(false);
+  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
+  const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
+    setScrollContainer(node);
+  }, []);
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
 
@@ -43,6 +47,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
             </button>
           }
           search={search}
+          scrollContainer={scrollContainer}
           actions={actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : undefined}
           trailing={
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -63,7 +68,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
             </div>
           }
         />
-        <main id="main-content" tabIndex={-1} className="flex flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 overflow-y-auto" ref={handleScrollContainerRef}>
           <div className="mx-auto w-full max-w-6xl px-4 py-8">
             <div className={`grid gap-6 ${sidePanel ? "lg:grid-cols-[minmax(0,1fr)_280px]" : ""}`}>
               <div>{children}</div>
