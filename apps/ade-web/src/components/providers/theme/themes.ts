@@ -11,17 +11,6 @@ const THEME_CONFIG = {
 
 export type ThemeId = keyof typeof THEME_CONFIG
 
-export const LEGACY_THEME_ID_ALIASES: Partial<Record<string, ThemeId>> = {
-  default: "indigo",
-  ocean: "cyan",
-  forest: "emerald",
-  sunset: "amber",
-  rose: "coral",
-  grape: "violet",
-  sand: "teal",
-  carbon: "blue",
-} as const
-
 export type BuiltInTheme = {
   id: ThemeId
   label: string

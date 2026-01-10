@@ -1,7 +1,6 @@
 import {
   BUILT_IN_THEMES,
   THEME_IDS,
-  LEGACY_THEME_ID_ALIASES,
   isThemeId,
   type BuiltInTheme,
   type ThemeId,
@@ -47,10 +46,6 @@ export function normalizeThemeId(value: string | null | undefined): ThemeId {
   }
   if (isThemeId(value)) {
     return value;
-  }
-  const aliased = LEGACY_THEME_ID_ALIASES[value];
-  if (aliased) {
-    return aliased;
   }
   return DEFAULT_THEME_ID;
 }
