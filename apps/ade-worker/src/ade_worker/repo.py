@@ -200,19 +200,24 @@ class Repo:
                 """
             )
         elif dialect == "mssql":
-            stmt = text(
+            update_stmt = text(
                 """
-                DECLARE @version_output TABLE (version INT);
                 UPDATE documents
                 SET status = :status,
                     updated_at = :now,
                     last_run_at = :now,
                     version = version + 1
-                OUTPUT inserted.version INTO @version_output
                 WHERE id = :document_id;
-                SELECT TOP 1 version FROM @version_output;
                 """
             )
+            result = session.execute(update_stmt, params)
+            if getattr(result, "rowcount", 0) != 1:
+                return None
+            row = session.execute(
+                text("SELECT version FROM documents WHERE id = :document_id"),
+                {"document_id": document_id},
+            ).mappings().first()
+            return int(row.get("version") or 0) if row else None
         else:
             raise ValueError(f"Unsupported dialect: {dialect}")
 
