@@ -1921,10 +1921,6 @@ export type components = {
             occurredAt: string;
             /** Documentversion */
             documentVersion: number;
-            /** Requestid */
-            requestId?: string | null;
-            /** Clientrequestid */
-            clientRequestId?: string | null;
             /** @description Optional list row snapshot for changed documents. */
             row?: components["schemas"]["DocumentListRow"] | null;
         };
@@ -6371,7 +6367,6 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
                 /** @description ETag value required for optimistic concurrency checks. */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -6435,7 +6430,6 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
                 /** @description ETag value required for optimistic concurrency checks. */
                 "If-Match": components["parameters"]["IfMatch"];
@@ -6505,7 +6499,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -6569,7 +6562,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -6635,7 +6627,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -6701,7 +6692,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -6765,7 +6755,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -6829,7 +6818,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -6895,7 +6883,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {
@@ -7190,7 +7177,6 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "X-Client-Request-Id"?: string | null;
                 "X-CSRF-Token"?: string | null;
             };
             path: {

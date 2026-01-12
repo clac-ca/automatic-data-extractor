@@ -34,10 +34,8 @@ vi.mock("@pages/Workspaces/components/WorkspaceDirectoryLayout", () => ({
   ),
 }));
 
-vi.mock("@components/shell/GlobalSearchField", () => ({
-  GlobalSearchField: (props: { className?: string }) => (
-    <div data-testid="global-search" className={props.className} />
-  ),
+vi.mock("@components/shell/GlobalNavSearch", () => ({
+  GlobalNavSearch: () => <div data-testid="global-search" />,
 }));
 
 vi.mock("@hooks/useShortcutHint", () => ({

@@ -305,3 +305,55 @@ def test_run_ack_failure_requeues() -> None:
     assert row.available_at == retry_at
     assert row.error_message == "boom"
     assert row.completed_at is None
+
+
+def test_run_release_for_env_requeues() -> None:
+    engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+    retry_at = now + timedelta(seconds=5)
+
+    _insert_run(
+        engine,
+        run_id="run-env-missing",
+        workspace_id="ws-6",
+        configuration_id="cfg-6",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:fff",
+        status="running",
+        now=now,
+        attempt_count=1,
+        max_attempts=3,
+        claim_expires_at=now + timedelta(minutes=5),
+        claimed_by="worker-5",
+    )
+
+    queue = RunQueue(engine, SessionLocal, backoff=lambda _attempts: 0)
+    ok = queue.release_for_env(
+        run_id="run-env-missing",
+        worker_id="worker-5",
+        retry_at=retry_at,
+        error_message="Environment missing on disk",
+    )
+    assert ok is True
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            select(
+                runs.c.status,
+                runs.c.claimed_by,
+                runs.c.claim_expires_at,
+                runs.c.available_at,
+                runs.c.error_message,
+                runs.c.completed_at,
+                runs.c.attempt_count,
+            ).where(runs.c.id == "run-env-missing")
+        ).first()
+    assert row is not None
+    assert row.status == "queued"
+    assert row.claimed_by is None
+    assert row.claim_expires_at is None
+    assert row.available_at == retry_at
+    assert row.error_message == "Environment missing on disk"
+    assert row.completed_at is None
+    assert row.attempt_count == 0

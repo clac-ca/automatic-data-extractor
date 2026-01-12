@@ -11,7 +11,9 @@ Rules:
 
 from __future__ import annotations
 
+import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -59,8 +61,13 @@ def _mssql_apply_defaults(url: URL) -> URL:
     return url.set(query=query)
 
 
+def _register_sqlite_datetime_adapter() -> None:
+    sqlite3.register_adapter(datetime, lambda value: value.isoformat(" "))
+
+
 def _create_sqlite_engine(url: URL, settings: Settings) -> Engine:
     _ensure_sqlite_parent_dir(url)
+    _register_sqlite_datetime_adapter()
     is_memory = _is_sqlite_memory(url)
 
     connect_args: dict = {"check_same_thread": False}

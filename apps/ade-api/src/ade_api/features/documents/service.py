@@ -207,11 +207,6 @@ class DocumentsService:
         payload = DocumentOut.model_validate(hydrated)
         self._apply_derived_fields(payload)
         payload.list_row = self._build_list_row(payload)
-        self._events.record_changed(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=payload.version,
-        )
 
         logger.info(
             "document.create.success",
@@ -385,8 +380,6 @@ class DocumentsService:
                     document_id=str(change.document_id),
                     occurred_at=change.occurred_at,
                     document_version=change.document_version,
-                    request_id=change.request_id,
-                    client_request_id=change.client_request_id,
                     row=row,
                 )
             )
@@ -450,7 +443,6 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         payload: DocumentUpdateRequest,
-        client_request_id: str | None = None,
     ) -> DocumentOut:
         document = self._get_document(workspace_id, document_id)
         changed = False
@@ -474,13 +466,6 @@ class DocumentsService:
 
         updated = DocumentOut.model_validate(document)
         self._apply_derived_fields(updated)
-        if changed:
-            self._events.record_changed(
-                workspace_id=workspace_id,
-                document_id=document_id,
-                document_version=updated.version,
-                client_request_id=client_request_id,
-            )
         return updated
 
     def archive_document(
@@ -488,7 +473,6 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
-        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Archive a document to remove it from active workflows."""
 
@@ -501,13 +485,6 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        if changed:
-            self._events.record_changed(
-                workspace_id=workspace_id,
-                document_id=document_id,
-                document_version=payload.version,
-                client_request_id=client_request_id,
-            )
         return payload
 
     def archive_documents_batch(
@@ -515,7 +492,6 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
-        client_request_id: str | None = None,
     ) -> list[DocumentOut]:
         """Archive multiple documents."""
 
@@ -546,13 +522,6 @@ class DocumentsService:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
             self._apply_derived_fields(payload)
             payloads.append(payload)
-            if doc_id in changed_ids:
-                self._events.record_changed(
-                    workspace_id=workspace_id,
-                    document_id=doc_id,
-                    document_version=payload.version,
-                    client_request_id=client_request_id,
-                )
 
         return payloads
 
@@ -561,7 +530,6 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
-        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Restore a document from the archive."""
 
@@ -581,12 +549,6 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        self._events.record_changed(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=payload.version,
-            client_request_id=client_request_id,
-        )
         return payload
 
     def restore_documents_batch(
@@ -594,7 +556,6 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
-        client_request_id: str | None = None,
     ) -> list[DocumentOut]:
         """Restore multiple documents from the archive."""
 
@@ -628,13 +589,6 @@ class DocumentsService:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
             self._apply_derived_fields(payload)
             payloads.append(payload)
-            if doc_id in changed_ids:
-                self._events.record_changed(
-                    workspace_id=workspace_id,
-                    document_id=doc_id,
-                    document_version=payload.version,
-                    client_request_id=client_request_id,
-                )
 
         return payloads
 
@@ -877,7 +831,6 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         actor: User | None = None,
-        client_request_id: str | None = None,
     ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
@@ -901,12 +854,6 @@ class DocumentsService:
 
         storage = self._storage_for(workspace_id)
         storage.delete(document.stored_uri)
-        self._events.record_deleted(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=document.version,
-            client_request_id=client_request_id,
-        )
 
         logger.info(
             "document.delete.success",
@@ -924,7 +871,6 @@ class DocumentsService:
         workspace_id: UUID,
         document_ids: Sequence[UUID],
         actor: User | None = None,
-        client_request_id: str | None = None,
     ) -> list[UUID]:
         """Soft delete multiple documents and remove stored files."""
 
@@ -954,12 +900,6 @@ class DocumentsService:
 
         for document_id in ordered_ids:
             document = document_by_id[document_id]
-            self._events.record_deleted(
-                workspace_id=workspace_id,
-                document_id=document_id,
-                document_version=document.version,
-                client_request_id=client_request_id,
-            )
 
         return ordered_ids
 
@@ -969,7 +909,6 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         tags: list[str],
-        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Replace tags on a document in a single transaction."""
 
@@ -985,12 +924,6 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        self._events.record_changed(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=payload.version,
-            client_request_id=client_request_id,
-        )
         return payload
 
     def patch_document_tags(
@@ -1000,7 +933,6 @@ class DocumentsService:
         document_id: UUID,
         add: list[str] | None = None,
         remove: list[str] | None = None,
-        client_request_id: str | None = None,
     ) -> DocumentOut:
         """Add or remove tags on a document."""
 
@@ -1031,12 +963,6 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         self._apply_derived_fields(payload)
-        self._events.record_changed(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            document_version=payload.version,
-            client_request_id=client_request_id,
-        )
         return payload
 
     def patch_document_tags_batch(
@@ -1046,7 +972,6 @@ class DocumentsService:
         document_ids: Sequence[UUID],
         add: list[str] | None = None,
         remove: list[str] | None = None,
-        client_request_id: str | None = None,
     ) -> list[DocumentOut]:
         """Add or remove tags on multiple documents."""
 
@@ -1088,12 +1013,6 @@ class DocumentsService:
             payload = DocumentOut.model_validate(document_by_id[doc_id])
             self._apply_derived_fields(payload)
             payloads.append(payload)
-            self._events.record_changed(
-                workspace_id=workspace_id,
-                document_id=UUID(str(doc_id)),
-                document_version=payload.version,
-                client_request_id=client_request_id,
-            )
 
         return payloads
 

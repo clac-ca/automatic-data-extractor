@@ -14,6 +14,7 @@ import { WorkbenchWindowProvider, useWorkbenchWindow } from "@pages/Workspace/co
 import { createScopedStorage } from "@lib/storage";
 import { uiStorageKeys } from "@lib/uiStorageKeys";
 import { GlobalTopBar } from "@components/shell/GlobalTopBar";
+import { GlobalNavSearch } from "@components/shell/GlobalNavSearch";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";
 import { ProfileDropdown } from "@components/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
@@ -29,9 +30,6 @@ import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
 import { Alert } from "@/components/ui/alert";
 import { PageState } from "@components/layouts/page-state";
 import { CloseIcon, MenuIcon } from "@components/icons";
-import { useDebouncedCallback } from "@hooks/use-debounced-callback";
-import { useShortcutHint } from "@hooks/useShortcutHint";
-import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 
 import DocumentsScreen from "@pages/Workspace/sections/Documents";
 import RunsScreen from "@pages/Workspace/sections/Runs";
@@ -162,7 +160,6 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const safeMode = useSafeModeStatus();
   const safeModeEnabled = safeMode.data?.enabled ?? false;
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
-  const shortcutHint = useShortcutHint();
   const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
   const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
     setScrollContainer(node);
@@ -171,23 +168,9 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     () => getWorkspacePrimaryNavigation(workspace),
     [workspace],
   );
-  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
-  const [documentSearchInput, setDocumentSearchInput] = useState("");
-  const [runSearchInput, setRunSearchInput] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isVersionsModalOpen, setIsVersionsModalOpen] = useState(false);
-  const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
   const immersiveWorkbenchActive = Boolean(workbenchSession && windowState === "maximized");
-  const workspaceSearchSuggestions = useMemo(
-    () =>
-      workspaceNavItems.map((item) => ({
-        id: item.id,
-        label: item.label,
-        description: `Jump to ${item.label}`,
-        icon: <item.icon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-      })),
-    [workspaceNavItems],
-  );
 
   const navPinnedStorage = useMemo(() => createScopedStorage(uiStorageKeys.sidebarPinned), []);
   const [isNavPinned, setIsNavPinned] = useState(() => {
@@ -198,10 +181,6 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   useEffect(() => {
     navPinnedStorage.set(isNavPinned);
   }, [isNavPinned, navPinnedStorage]);
-
-  useEffect(() => {
-    setWorkspaceSearchQuery("");
-  }, [workspace.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -237,28 +216,6 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     }
   }, [immersiveWorkbenchActive]);
 
-
-  const handleWorkspaceSearchSubmit = useCallback(() => {
-    if (!workspaceSearchNormalized) {
-      return;
-    }
-    const match =
-      workspaceNavItems.find((item) => item.label.toLowerCase().includes(workspaceSearchNormalized)) ??
-      workspaceNavItems.find((item) => item.id.toLowerCase().includes(workspaceSearchNormalized));
-    if (match) {
-      navigate(match.href);
-    }
-  }, [workspaceSearchNormalized, workspaceNavItems, navigate]);
-  const handleWorkspaceSuggestionSelect = useCallback(
-    (suggestion: GlobalSearchSuggestion) => {
-      const match = workspaceNavItems.find((item) => item.id === suggestion.id);
-      if (match) {
-        navigate(match.href);
-        setWorkspaceSearchQuery("");
-      }
-    },
-    [workspaceNavItems, navigate],
-  );
 
   const openMobileNav = useCallback(() => setIsMobileNavOpen(true), []);
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
@@ -308,137 +265,19 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       />
     </div>
   );
-  const workspaceSearch = {
-    value: workspaceSearchQuery,
-    onChange: setWorkspaceSearchQuery,
-    onSubmit: handleWorkspaceSearchSubmit,
-    placeholder: `Search ${workspace.name} or jump to a section`,
-    shortcutHint,
-    scopeLabel: workspace.name,
-    suggestions: workspaceSearchSuggestions,
-    onSelectSuggestion: handleWorkspaceSuggestionSelect,
-  };
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
-  const isDocumentsSection = section?.kind === "content" && section.key === "documents";
-  const isRunsSection = section?.kind === "content" && section.key === "runs";
-  const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
-  const runSearchValue = isRunsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
-
-  useEffect(() => {
-    if (documentSearchValue !== documentSearchInput) {
-      setDocumentSearchInput(documentSearchValue);
-    }
-  }, [documentSearchInput, documentSearchValue]);
-
-  useEffect(() => {
-    if (runSearchValue !== runSearchInput) {
-      setRunSearchInput(runSearchValue);
-    }
-  }, [runSearchInput, runSearchValue]);
-
-  const handleDocumentSearchChange = useCallback(
-    (nextValue: string) => {
-      if (!isDocumentsSection) {
-        return;
-      }
-      const params = new URLSearchParams(location.search);
-      if (nextValue) {
-        params.set("q", nextValue);
-      } else {
-        params.delete("q");
-      }
-      const searchParams = params.toString();
-      navigate(
-        `${location.pathname}${searchParams ? `?${searchParams}` : ""}${location.hash}`,
-        { replace: true },
-      );
-    },
-    [isDocumentsSection, location.hash, location.pathname, location.search, navigate],
+  const topBarSearch = (
+    <GlobalNavSearch
+      scope={{
+        kind: "workspace",
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        navItems: workspaceNavItems,
+      }}
+    />
   );
-  const debouncedDocumentSearchChange = useDebouncedCallback(handleDocumentSearchChange, 250);
-  const handleDocumentSearchInputChange = useCallback(
-    (nextValue: string) => {
-      setDocumentSearchInput(nextValue);
-      debouncedDocumentSearchChange(nextValue);
-    },
-    [debouncedDocumentSearchChange],
-  );
-  const handleDocumentSearchSubmit = useCallback(
-    (value: string) => {
-      setDocumentSearchInput(value);
-      handleDocumentSearchChange(value);
-    },
-    [handleDocumentSearchChange],
-  );
-  const handleDocumentSearchClear = useCallback(() => {
-    setDocumentSearchInput("");
-    handleDocumentSearchChange("");
-  }, [handleDocumentSearchChange]);
-  const documentsSearch = isDocumentsSection
-    ? {
-        value: documentSearchInput,
-        onChange: handleDocumentSearchInputChange,
-        onSubmit: handleDocumentSearchSubmit,
-        onClear: handleDocumentSearchClear,
-        placeholder: "Search documents",
-        shortcutHint,
-        scopeLabel: "Documents",
-        enableShortcut: true,
-      }
-    : undefined;
-  const handleRunSearchChange = useCallback(
-    (nextValue: string) => {
-      if (!isRunsSection) {
-        return;
-      }
-      const params = new URLSearchParams(location.search);
-      if (nextValue) {
-        params.set("q", nextValue);
-      } else {
-        params.delete("q");
-      }
-      const searchParams = params.toString();
-      navigate(
-        `${location.pathname}${searchParams ? `?${searchParams}` : ""}${location.hash}`,
-        { replace: true },
-      );
-    },
-    [isRunsSection, location.hash, location.pathname, location.search, navigate],
-  );
-  const debouncedRunSearchChange = useDebouncedCallback(handleRunSearchChange, 250);
-  const handleRunSearchInputChange = useCallback(
-    (nextValue: string) => {
-      setRunSearchInput(nextValue);
-      debouncedRunSearchChange(nextValue);
-    },
-    [debouncedRunSearchChange],
-  );
-  const handleRunSearchSubmit = useCallback(
-    (value: string) => {
-      setRunSearchInput(value);
-      handleRunSearchChange(value);
-    },
-    [handleRunSearchChange],
-  );
-  const handleRunSearchClear = useCallback(() => {
-    setRunSearchInput("");
-    handleRunSearchChange("");
-  }, [handleRunSearchChange]);
-  const runsSearch = isRunsSection
-    ? {
-        value: runSearchInput,
-        onChange: handleRunSearchInputChange,
-        onSubmit: handleRunSearchSubmit,
-        onClear: handleRunSearchClear,
-        placeholder: "Search runs",
-        shortcutHint,
-        scopeLabel: "Runs",
-        enableShortcut: true,
-      }
-    : undefined;
-  const topBarSearch = documentsSearch ?? runsSearch ?? workspaceSearch;
 
   useEffect(() => {
     if (section?.kind === "redirect") {

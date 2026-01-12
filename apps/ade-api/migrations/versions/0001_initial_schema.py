@@ -485,9 +485,6 @@ def _create_document_events() -> None:
         sa.Column("document_id", GUID(), sa.ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False),
         sa.Column("event_type", DOCUMENT_EVENT_TYPE, nullable=False),
         sa.Column("document_version", sa.Integer(), nullable=False),
-        sa.Column("request_id", sa.String(length=128), nullable=True),
-        sa.Column("client_request_id", sa.String(length=128), nullable=True),
-        sa.Column("payload", sa.JSON(), nullable=True),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_document_events_workspace_cursor", "document_events", ["workspace_id", "cursor"], unique=False)

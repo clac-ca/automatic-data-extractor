@@ -12,12 +12,14 @@ import {
 } from "@api/documents";
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { buildWeakEtag } from "@api/etag";
-import { createIdempotencyKey } from "@api/idempotency";
 import { Link } from "@app/navigation/Link";
+import { useSearchParams } from "@app/navigation/urlState";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@/components/ui/button";
+import { SearchField } from "@components/inputs/SearchField";
 import type { PresenceParticipant } from "@schema/presence";
 import type { UploadManagerItem } from "@hooks/documents/uploadManager";
+import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 import {
   Dialog,
   DialogContent,
@@ -81,6 +83,7 @@ export function DocumentsTableView({
     >(),
   );
   const archiveFlashTimersRef = useRef<Map<string, number>>(new Map());
+  const lastScrolledDocumentRef = useRef<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [isAtTop, setIsAtTop] = useState(true);
   const [visibleRange, setVisibleRange] = useState<{ startIndex: number; endIndex: number; total: number } | null>(null);
@@ -88,6 +91,59 @@ export function DocumentsTableView({
   const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchInput, setSearchInput] = useState(q ?? "");
+  const documentParam = useMemo(() => searchParams.get("document"), [searchParams]);
+  const applySearchParam = useCallback(
+    (nextValue: string) => {
+      const params = new URLSearchParams(searchParams);
+      const trimmed = nextValue.trim();
+      if (trimmed) {
+        params.set("q", trimmed);
+      } else {
+        params.delete("q");
+      }
+      const nextSearch = params.toString();
+      if (nextSearch === searchParams.toString()) {
+        return;
+      }
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const debouncedApplySearchParam = useDebouncedCallback(applySearchParam, 250);
+  const handleSearchInputChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      debouncedApplySearchParam(value);
+    },
+    [debouncedApplySearchParam],
+  );
+  const handleSearchClear = useCallback(() => {
+    setSearchInput("");
+    applySearchParam("");
+  }, [applySearchParam]);
+  const syncDocumentParam = useCallback(
+    (documentId: string | null) => {
+      const params = new URLSearchParams(searchParams);
+      const current = params.get("document");
+      if (current === documentId) return;
+      if (documentId) {
+        params.set("document", documentId);
+      } else {
+        params.delete("document");
+      }
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    const nextValue = q ?? "";
+    if (nextValue !== searchInput) {
+      setSearchInput(nextValue);
+    }
+  }, [q, searchInput]);
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
   const effectiveSort = useMemo(
     () => normalizedSort ?? DEFAULT_DOCUMENT_SORT,
@@ -119,8 +175,6 @@ export function DocumentsTableView({
     upsertRow,
     removeRow,
     setUploadProgress,
-    registerClientRequestId,
-    clearClientRequestId,
     queuedChanges,
     applyQueuedChanges,
   } = documentsView;
@@ -195,10 +249,37 @@ export function DocumentsTableView({
   }, [documents.length, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading]);
 
   useEffect(() => {
-    if (!expandedRowId) return;
-    if (documentsById[expandedRowId]) return;
-    setExpandedRowId(null);
-  }, [documentsById, expandedRowId]);
+    if (!documentParam) {
+      if (expandedRowId) {
+        setExpandedRowId(null);
+      }
+      lastScrolledDocumentRef.current = null;
+      return;
+    }
+
+    if (documentsById[documentParam]) {
+      if (expandedRowId !== documentParam) {
+        setExpandedRowId(documentParam);
+      }
+      return;
+    }
+
+    if (!isLoading) {
+      syncDocumentParam(null);
+    }
+  }, [documentParam, documentsById, expandedRowId, isLoading, syncDocumentParam]);
+
+  useEffect(() => {
+    if (!documentParam || expandedRowId !== documentParam) return;
+    if (lastScrolledDocumentRef.current === documentParam) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const selector = `[data-row-id="${escapeAttributeSelector(documentParam)}"]`;
+    const row = container.querySelector<HTMLElement>(selector);
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    lastScrolledDocumentRef.current = documentParam;
+  }, [documentParam, expandedRowId, documents.length]);
 
   useEffect(() => {
     if (expandedRowId) {
@@ -224,9 +305,16 @@ export function DocumentsTableView({
     [presence.clientId, presence.participants],
   );
 
-  const handleTogglePreview = useCallback((documentId: string) => {
-    setExpandedRowId((current) => (current === documentId ? null : documentId));
-  }, []);
+  const handleTogglePreview = useCallback(
+    (documentId: string) => {
+      setExpandedRowId((current) => {
+        const next = current === documentId ? null : documentId;
+        syncDocumentParam(next);
+        return next;
+      });
+    },
+    [syncDocumentParam],
+  );
 
   useEffect(() => {
     if (presence.connectionState !== "open") return;
@@ -286,8 +374,6 @@ export function DocumentsTableView({
     [tagsQuery.data?.items],
   );
 
-  const createClientRequestId = useCallback(() => createIdempotencyKey("req"), []);
-
   useEffect(() => {
     if (!uploadItems?.length) return;
     uploadItems.forEach((item) => {
@@ -295,7 +381,6 @@ export function DocumentsTableView({
       const documentId = row?.id ?? null;
       if (row && !handledUploadsRef.current.has(item.id)) {
         handledUploadsRef.current.add(item.id);
-        registerClientRequestId(item.id);
         upsertRow(row);
       }
 
@@ -314,12 +399,11 @@ export function DocumentsTableView({
         !completedUploadsRef.current.has(item.id)
       ) {
         completedUploadsRef.current.add(item.id);
-        clearClientRequestId(item.id);
         setUploadProgress(documentId, null);
         removeRow(documentId);
       }
     });
-  }, [clearClientRequestId, registerClientRequestId, removeRow, setUploadProgress, upsertRow, uploadItems, workspaceId]);
+  }, [removeRow, setUploadProgress, upsertRow, uploadItems, workspaceId]);
 
   const applyDocumentUpdate = useCallback(
     (documentId: string, updated: DocumentRecord) => {
@@ -428,20 +512,14 @@ export function DocumentsTableView({
       }
       const ifMatch =
         options.ifMatch ?? current.etag ?? buildWeakEtag(documentId, String(current.version));
-      const requestId = createClientRequestId();
-      registerClientRequestId(requestId);
       markRowPending(documentId, "restore");
       try {
-        const updated = await restoreWorkspaceDocument(workspaceId, documentId, {
-          clientRequestId: requestId,
-          ifMatch,
-        });
+        const updated = await restoreWorkspaceDocument(workspaceId, documentId, { ifMatch });
         applyDocumentUpdate(documentId, updated);
         if (!options.silent) {
           notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
         }
       } catch (error) {
-        clearClientRequestId(requestId);
         notifyToast({
           title: error instanceof Error ? error.message : "Unable to restore document.",
           intent: "danger",
@@ -452,13 +530,10 @@ export function DocumentsTableView({
     },
     [
       applyDocumentUpdate,
-      clearClientRequestId,
       clearRowPending,
-      createClientRequestId,
       documentsById,
       markRowPending,
       notifyToast,
-      registerClientRequestId,
       workspaceId,
     ],
   );
@@ -485,8 +560,6 @@ export function DocumentsTableView({
         : null;
       const snapshot = current.assignee ?? null;
 
-      const requestId = createClientRequestId();
-      registerClientRequestId(requestId);
       markRowPending(documentId, "assign");
       updateRow(documentId, { assignee: optimisticAssignee });
       try {
@@ -494,11 +567,10 @@ export function DocumentsTableView({
           workspaceId,
           documentId,
           { assigneeId },
-          { ifMatch, clientRequestId: requestId },
+          { ifMatch },
         );
         applyDocumentUpdate(documentId, updated);
       } catch (error) {
-        clearClientRequestId(requestId);
         updateRow(documentId, { assignee: snapshot });
         notifyToast({
           title: "Unable to update assignee",
@@ -511,14 +583,11 @@ export function DocumentsTableView({
     },
     [
       applyDocumentUpdate,
-      clearClientRequestId,
       clearRowPending,
-      createClientRequestId,
       documentsById,
       markRowPending,
       notifyToast,
       people,
-      registerClientRequestId,
       updateRow,
       workspaceId,
     ],
@@ -532,9 +601,7 @@ export function DocumentsTableView({
       const hasTag = tags.includes(tag);
       const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
 
-      const requestId = createClientRequestId();
       const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
-      registerClientRequestId(requestId);
       markRowPending(documentId, "tags");
       updateRow(documentId, { tags: nextTags });
       try {
@@ -543,11 +610,10 @@ export function DocumentsTableView({
           documentId,
           hasTag ? { remove: [tag] } : { add: [tag] },
           undefined,
-          { clientRequestId: requestId, ifMatch },
+          { ifMatch },
         );
         applyDocumentUpdate(documentId, updated);
       } catch (error) {
-        clearClientRequestId(requestId);
         updateRow(documentId, { tags });
         notifyToast({
           title: "Unable to update tags",
@@ -560,13 +626,10 @@ export function DocumentsTableView({
     },
     [
       applyDocumentUpdate,
-      clearClientRequestId,
       clearRowPending,
-      createClientRequestId,
       documentsById,
       markRowPending,
       notifyToast,
-      registerClientRequestId,
       updateRow,
       workspaceId,
     ],
@@ -616,15 +679,10 @@ export function DocumentsTableView({
         ],
       });
 
-      const requestId = createClientRequestId();
       const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
-      registerClientRequestId(requestId);
       markRowPending(documentId, "archive");
       try {
-        const updated = await archiveWorkspaceDocument(workspaceId, documentId, {
-          clientRequestId: requestId,
-          ifMatch,
-        });
+        const updated = await archiveWorkspaceDocument(workspaceId, documentId, { ifMatch });
         const entry = archiveUndoRef.current.get(documentId);
         if (entry?.undoRequested) {
           const undoMatch =
@@ -634,7 +692,6 @@ export function DocumentsTableView({
         }
         applyDocumentUpdate(documentId, updated);
       } catch (error) {
-        clearClientRequestId(requestId);
         const entry = archiveUndoRef.current.get(documentId);
         if (entry) {
           updateRow(documentId, entry.snapshot);
@@ -651,14 +708,11 @@ export function DocumentsTableView({
     },
     [
       applyDocumentUpdate,
-      clearClientRequestId,
       clearRowPending,
       clearArchivedFlash,
-      createClientRequestId,
       documentsById,
       markRowPending,
       notifyToast,
-      registerClientRequestId,
       restoreDocument,
       triggerArchivedFlash,
       updateRow,
@@ -684,19 +738,13 @@ export function DocumentsTableView({
   const onDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
     const ifMatch = deleteTarget.etag ?? buildWeakEtag(deleteTarget.id, String(deleteTarget.version));
-    const requestId = createClientRequestId();
-    registerClientRequestId(requestId);
     markRowPending(deleteTarget.id, "delete");
     try {
-      await deleteWorkspaceDocument(workspaceId, deleteTarget.id, {
-        ifMatch,
-        clientRequestId: requestId,
-      });
+      await deleteWorkspaceDocument(workspaceId, deleteTarget.id, { ifMatch });
       removeRow(deleteTarget.id);
       notifyToast({ title: "Document deleted.", intent: "success", duration: 4000 });
       setDeleteTarget(null);
     } catch (error) {
-      clearClientRequestId(requestId);
       notifyToast({
         title: error instanceof Error ? error.message : "Unable to delete document.",
         intent: "danger",
@@ -705,13 +753,10 @@ export function DocumentsTableView({
       clearRowPending(deleteTarget.id, "delete");
     }
   }, [
-    clearClientRequestId,
     clearRowPending,
-    createClientRequestId,
     deleteTarget,
     markRowPending,
     notifyToast,
-    registerClientRequestId,
     removeRow,
     workspaceId,
   ]);
@@ -748,6 +793,16 @@ export function DocumentsTableView({
     <DocumentsPresenceIndicator
       participants={toolbarParticipants}
       connectionState={presence.connectionState}
+    />
+  );
+  const toolbarSearch = (
+    <SearchField
+      value={searchInput}
+      onValueChange={handleSearchInputChange}
+      onClear={handleSearchClear}
+      placeholder="Search documents"
+      ariaLabel="Search documents"
+      className="w-full sm:w-[16rem]"
     />
   );
   const toolbarContent = toolbarActions ? (
@@ -814,6 +869,7 @@ export function DocumentsTableView({
         onTogglePreview={handleTogglePreview}
         isRowActionPending={isRowMutationPending}
         archivedFlashIds={archivedFlashIds}
+        toolbarSearch={toolbarSearch}
         toolbarActions={toolbarContent}
         scrollContainerRef={scrollContainerRef}
         onVisibleRangeChange={handleVisibleRangeChange}
@@ -880,6 +936,13 @@ function sortParticipants(participants: PresenceParticipant[]) {
     const bLabel = getParticipantLabel(b).toLowerCase();
     return aLabel.localeCompare(bLabel);
   });
+}
+
+function escapeAttributeSelector(value: string) {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value);
+  }
+  return value.replace(/[\"\\]/g, "\\$&");
 }
 
 function dedupeParticipants(participants: PresenceParticipant[], clientId: string | null) {

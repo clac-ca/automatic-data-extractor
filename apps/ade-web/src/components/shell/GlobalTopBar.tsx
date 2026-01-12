@@ -1,20 +1,12 @@
 import { type ReactNode, useEffect, useState } from "react";
 import clsx from "clsx";
 
-import { GlobalSearchField, type GlobalSearchFieldProps } from "./GlobalSearchField";
-
-export type {
-  GlobalSearchFilter,
-  GlobalSearchFieldProps as GlobalTopBarSearchProps,
-  GlobalSearchSuggestion,
-} from "./GlobalSearchField";
-
 interface GlobalTopBarProps {
   readonly brand?: ReactNode;
   readonly leading?: ReactNode;
   readonly actions?: ReactNode;
   readonly trailing?: ReactNode;
-  readonly search?: GlobalSearchFieldProps;
+  readonly search?: ReactNode;
   readonly secondaryContent?: ReactNode;
   readonly scrollContainer?: HTMLElement | null;
 }
@@ -62,18 +54,6 @@ export function GlobalTopBar({
 
   const showSearch = Boolean(search);
 
-  const searchProps = search
-    ? {
-        ...search,
-        // Default to a top-bar-friendly look unless caller overrides.
-        variant: search.variant ?? "header",
-        className: clsx(
-          "w-full min-w-0 justify-self-center",
-          search.className,
-        ),
-      }
-    : undefined;
-
   return (
     <header
       className={clsx(
@@ -113,7 +93,7 @@ export function GlobalTopBar({
             {leading}
           </div>
 
-          {searchProps ? <GlobalSearchField {...searchProps} /> : null}
+          {showSearch ? <div className="w-full min-w-0 justify-self-center">{search}</div> : null}
 
           <div
             className={clsx(

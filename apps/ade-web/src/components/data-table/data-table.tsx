@@ -193,6 +193,7 @@ export function DataTable<TData>({
                     <React.Fragment key={row.id}>
                       <TableRow
                         data-state={row.getIsSelected() && "selected"}
+                        data-row-id={row.id}
                         data-expanded={expanded || undefined}
                         aria-expanded={expanded || undefined}
                         className={cn(onRowClick && "cursor-pointer")}

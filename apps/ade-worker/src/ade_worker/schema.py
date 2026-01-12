@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     Index,
     UniqueConstraint,
+    text,
 )
 
 metadata = MetaData()
@@ -101,6 +102,7 @@ documents = Table(
     Column("version", Integer, nullable=False),
     Column("updated_at", DateTime, nullable=False),
     Column("last_run_at", DateTime, nullable=True),
+    Column("deleted_at", DateTime, nullable=True),
 )
 
 document_events = Table(
@@ -111,9 +113,6 @@ document_events = Table(
     Column("document_id", String(36), nullable=False),
     Column("event_type", String(40), nullable=False),
     Column("document_version", Integer, nullable=False),
-    Column("request_id", String(128), nullable=True),
-    Column("client_request_id", String(128), nullable=True),
-    Column("payload", Text, nullable=True),
     Column("occurred_at", DateTime, nullable=False),
     Index("ix_document_events_workspace_cursor", "workspace_id", "cursor"),
     Index("ix_document_events_workspace_document", "workspace_id", "document_id"),
@@ -197,6 +196,132 @@ REQUIRED_TABLES = [
     "run_table_columns",
 ]
 
+def install_document_event_triggers(engine) -> None:
+    with engine.begin() as connection:
+        dialect = connection.dialect.name
+        if dialect == "sqlite":
+            connection.exec_driver_sql(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_documents_events_insert
+                AFTER INSERT ON documents
+                BEGIN
+                    INSERT INTO document_events (
+                        workspace_id,
+                        document_id,
+                        event_type,
+                        document_version,
+                        occurred_at
+                    )
+                    VALUES (
+                        NEW.workspace_id,
+                        NEW.id,
+                        'document.changed',
+                        NEW.version,
+                        NEW.updated_at
+                    );
+                END;
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_documents_events_update
+                AFTER UPDATE ON documents
+                WHEN NEW.version != OLD.version
+                BEGIN
+                    INSERT INTO document_events (
+                        workspace_id,
+                        document_id,
+                        event_type,
+                        document_version,
+                        occurred_at
+                    )
+                    VALUES (
+                        NEW.workspace_id,
+                        NEW.id,
+                        CASE
+                            WHEN NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL
+                                THEN 'document.deleted'
+                            ELSE 'document.changed'
+                        END,
+                        NEW.version,
+                        NEW.updated_at
+                    );
+                END;
+                """
+            )
+            return
+
+        if dialect == "mssql":
+            connection.execute(
+                text(
+                    """
+                    IF OBJECT_ID('dbo.trg_documents_events_insert', 'TR') IS NULL
+                    EXEC('
+                    CREATE TRIGGER dbo.trg_documents_events_insert
+                    ON dbo.documents
+                    AFTER INSERT
+                    AS
+                    BEGIN
+                        SET NOCOUNT ON;
+                        INSERT INTO document_events (
+                            workspace_id,
+                            document_id,
+                            event_type,
+                            document_version,
+                            occurred_at
+                        )
+                        SELECT
+                            i.workspace_id,
+                            i.id,
+                            ''document.changed'',
+                            i.version,
+                            i.updated_at
+                        FROM inserted AS i;
+                    END;
+                    ');
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    IF OBJECT_ID('dbo.trg_documents_events_update', 'TR') IS NULL
+                    EXEC('
+                    CREATE TRIGGER dbo.trg_documents_events_update
+                    ON dbo.documents
+                    AFTER UPDATE
+                    AS
+                    BEGIN
+                        SET NOCOUNT ON;
+                        INSERT INTO document_events (
+                            workspace_id,
+                            document_id,
+                            event_type,
+                            document_version,
+                            occurred_at
+                        )
+                        SELECT
+                            i.workspace_id,
+                            i.id,
+                            CASE
+                                WHEN i.deleted_at IS NOT NULL AND d.deleted_at IS NULL
+                                    THEN ''document.deleted''
+                                ELSE ''document.changed''
+                            END,
+                            i.version,
+                            i.updated_at
+                        FROM inserted AS i
+                        INNER JOIN deleted AS d ON d.id = i.id
+                        WHERE i.version <> d.version;
+                    END;
+                    ');
+                    """
+                )
+            )
+            return
+
+        raise ValueError(f"Unsupported dialect for document_events triggers: {dialect}")
+
 __all__ = [
     "metadata",
     "environments",
@@ -207,4 +332,5 @@ __all__ = [
     "run_fields",
     "run_table_columns",
     "REQUIRED_TABLES",
+    "install_document_event_triggers",
 ]

@@ -394,29 +394,6 @@ class EnvironmentQueue:
             result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
-    def release_for_env(
-        self,
-        *,
-        session: Session | None = None,
-        run_id: str,
-        worker_id: str,
-        retry_at: datetime,
-        error_message: str,
-    ) -> bool:
-        stmt = text(RUN_RELEASE_ENV)
-        params = {
-            "run_id": run_id,
-            "worker_id": worker_id,
-            "retry_at": retry_at,
-            "error_message": error_message,
-        }
-        if session is not None:
-            result = session.execute(stmt, params)
-            return bool(getattr(result, "rowcount", 0) == 1)
-        with self._SessionLocal.begin() as session:
-            result = session.execute(stmt, params)
-            return bool(getattr(result, "rowcount", 0) == 1)
-
     def expire_stuck(self, *, now: datetime) -> int:
         processed = 0
         with self._SessionLocal.begin() as session:
@@ -550,6 +527,29 @@ class RunQueue:
             result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)
 
+        with self._SessionLocal.begin() as session:
+            result = session.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
+
+    def release_for_env(
+        self,
+        *,
+        session: Session | None = None,
+        run_id: str,
+        worker_id: str,
+        retry_at: datetime,
+        error_message: str,
+    ) -> bool:
+        stmt = text(RUN_RELEASE_ENV)
+        params = {
+            "run_id": run_id,
+            "worker_id": worker_id,
+            "retry_at": retry_at,
+            "error_message": error_message,
+        }
+        if session is not None:
+            result = session.execute(stmt, params)
+            return bool(getattr(result, "rowcount", 0) == 1)
         with self._SessionLocal.begin() as session:
             result = session.execute(stmt, params)
             return bool(getattr(result, "rowcount", 0) == 1)

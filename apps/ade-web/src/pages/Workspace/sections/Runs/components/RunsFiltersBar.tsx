@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
+
 import { Button } from "@/components/ui/button";
+import { SearchField } from "@components/inputs/SearchField";
+import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 
 import type { RunConfigOption, RunsFilters } from "../types";
 import { DATE_RANGE_OPTIONS } from "../constants";
@@ -18,10 +22,38 @@ export function RunsFiltersBar({
   onChange: (next: Partial<RunsFilters>) => void;
   onReset: () => void;
 }) {
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const debouncedSearchChange = useDebouncedCallback((value: string) => {
+    onChange({ search: value });
+  }, 250);
+
+  useEffect(() => {
+    if (filters.search !== searchInput) {
+      setSearchInput(filters.search);
+    }
+  }, [filters.search, searchInput]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    debouncedSearchChange(value);
+  };
+
+  const handleSearchClear = () => {
+    setSearchInput("");
+    onChange({ search: "" });
+  };
+
   return (
     <div className="shrink-0 border-b border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr]">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_1fr_1fr_1fr]">
+          <SearchField
+            value={searchInput}
+            onValueChange={handleSearchChange}
+            onClear={handleSearchClear}
+            placeholder="Search runs"
+            ariaLabel="Search runs"
+          />
           <select
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             value={filters.dateRange}
