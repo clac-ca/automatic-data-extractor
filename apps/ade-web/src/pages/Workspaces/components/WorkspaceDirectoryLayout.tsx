@@ -3,7 +3,7 @@ import { useNavigate } from "@app/navigation/history";
 
 import { useSession } from "@components/providers/auth/SessionContext";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";
-import { GlobalTopBar, type GlobalTopBarSearchProps } from "@components/shell/GlobalTopBar";
+import { GlobalTopBar } from "@components/shell/GlobalTopBar";
 import { ProfileDropdown } from "@components/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@components/shell/AboutVersionsModal";
 import { DirectoryIcon } from "@components/icons";
@@ -12,7 +12,7 @@ interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
   readonly sidePanel?: ReactNode;
   readonly actions?: ReactNode;
-  readonly search?: GlobalTopBarSearchProps;
+  readonly search?: ReactNode;
 }
 
 export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search }: WorkspaceDirectoryLayoutProps) {

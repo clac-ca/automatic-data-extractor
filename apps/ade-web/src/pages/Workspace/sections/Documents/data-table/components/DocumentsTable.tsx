@@ -43,6 +43,7 @@ interface DocumentsTableProps {
   onTogglePreview: (documentId: string) => void;
   isRowActionPending?: (documentId: string) => boolean;
   archivedFlashIds?: Set<string>;
+  toolbarSearch?: ReactNode;
   toolbarActions?: ReactNode;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   scrollFooter?: ReactNode;
@@ -76,6 +77,7 @@ export function DocumentsTable({
   onTogglePreview,
   isRowActionPending,
   archivedFlashIds,
+  toolbarSearch,
   toolbarActions,
   scrollContainerRef,
   scrollFooter,
@@ -724,6 +726,9 @@ export function DocumentsTable({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <DataTableAdvancedToolbar table={table}>
+        {toolbarSearch ? (
+          <div className="min-w-[12rem] flex-1 sm:flex-none">{toolbarSearch}</div>
+        ) : null}
         <DataTableSortList table={table} align="start" />
         <DataTableFilterList
           table={table}

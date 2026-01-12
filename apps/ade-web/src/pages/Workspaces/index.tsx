@@ -10,9 +10,8 @@ import type { WorkspaceProfile } from "@schema/workspaces";
 import { Button } from "@/components/ui/button";
 import { PageState } from "@components/layouts/page-state";
 import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
-import { useShortcutHint } from "@hooks/useShortcutHint";
-import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
-import { GlobalSearchField } from "@components/shell/GlobalSearchField";
+import { GlobalNavSearch } from "@components/shell/GlobalNavSearch";
+import { SearchField } from "@components/inputs/SearchField";
 import { Alert } from "@/components/ui/alert";
 
 export default function WorkspacesScreen() {
@@ -34,7 +33,6 @@ function WorkspacesIndexContent() {
     normalizedPermissions.includes("workspaces.create") ||
     normalizedPermissions.includes("workspaces.manage_all");
   const [searchQuery, setSearchQuery] = useState("");
-  const shortcutHint = useShortcutHint();
   const workspacesPage = workspacesQuery.data;
   const workspaces: WorkspaceProfile[] = useMemo(
     () => workspacesPage?.items ?? [],
@@ -62,32 +60,18 @@ function WorkspacesIndexContent() {
     </Button>
   ) : undefined;
 
-  const handleWorkspaceSearchSubmit = useCallback(() => {
-    if (!normalizedSearch) {
+  const handleWorkspaceSearchSubmit = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
       return;
     }
     const firstMatch = visibleWorkspaces[0];
     if (firstMatch) {
       goToWorkspace(firstMatch.id);
     }
-  }, [visibleWorkspaces, normalizedSearch, goToWorkspace]);
+  }, [visibleWorkspaces, goToWorkspace]);
 
   const handleResetSearch = useCallback(() => setSearchQuery(""), []);
-
-  const suggestionSeed = (normalizedSearch ? visibleWorkspaces : workspaces).slice(0, 5);
-  const searchSuggestions = suggestionSeed.map((workspace) => ({
-    id: workspace.id,
-    label: workspace.name,
-    description: workspace.slug ? `Slug • ${workspace.slug}` : "Workspace",
-  }));
-
-  const handleWorkspaceSuggestionSelect = useCallback(
-    (suggestion: GlobalSearchSuggestion) => {
-      setSearchQuery("");
-      goToWorkspace(suggestion.id);
-    },
-    [goToWorkspace],
-  );
 
   const handleSetDefaultWorkspace = useCallback(
     async (workspace: WorkspaceProfile) => {
@@ -106,24 +90,7 @@ function WorkspacesIndexContent() {
     [setDefaultWorkspaceMutation],
   );
 
-  const directorySearch = {
-    value: searchQuery,
-    onChange: setSearchQuery,
-    onSubmit: handleWorkspaceSearchSubmit,
-    placeholder: "Search workspaces or jump to one instantly",
-    shortcutHint,
-    scopeLabel: "Workspace directory",
-    suggestions: searchSuggestions,
-    onSelectSuggestion: handleWorkspaceSuggestionSelect,
-    onClear: handleResetSearch,
-  };
-  const inlineDirectorySearch = {
-    ...directorySearch,
-    shortcutHint: undefined,
-    onClear: handleResetSearch,
-    enableShortcut: false,
-    variant: "minimal" as const,
-  };
+  const topBarSearch = <GlobalNavSearch scope={{ kind: "directory" }} />;
 
   if (workspacesQuery.isLoading) {
     return (
@@ -191,7 +158,14 @@ function WorkspacesIndexContent() {
             {setDefaultError}
           </Alert>
         ) : null}
-        <GlobalSearchField {...inlineDirectorySearch} className="w-full" />
+        <SearchField
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+          onSubmit={handleWorkspaceSearchSubmit}
+          onClear={handleResetSearch}
+          placeholder="Search workspaces by name or slug"
+          className="w-full"
+        />
         <section className="grid gap-5 lg:grid-cols-2">
           {visibleWorkspaces.map((workspace) => {
             const isUpdatingDefault =
@@ -243,7 +217,7 @@ function WorkspacesIndexContent() {
   return (
     <WorkspaceDirectoryLayout
       actions={actions}
-      search={directorySearch}
+      search={topBarSearch}
       sidePanel={<DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />}
     >
       {mainContent}

@@ -14,10 +14,13 @@ import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { buildWeakEtag } from "@api/etag";
 import { createIdempotencyKey } from "@api/idempotency";
 import { Link } from "@app/navigation/Link";
+import { useSearchParams } from "@app/navigation/urlState";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@/components/ui/button";
+import { SearchField } from "@components/inputs/SearchField";
 import type { PresenceParticipant } from "@schema/presence";
 import type { UploadManagerItem } from "@hooks/documents/uploadManager";
+import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 import {
   Dialog,
   DialogContent,
@@ -88,6 +91,44 @@ export function DocumentsTableView({
   const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
 
   const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchInput, setSearchInput] = useState(q ?? "");
+  const applySearchParam = useCallback(
+    (nextValue: string) => {
+      const params = new URLSearchParams(searchParams);
+      const trimmed = nextValue.trim();
+      if (trimmed) {
+        params.set("q", trimmed);
+      } else {
+        params.delete("q");
+      }
+      const nextSearch = params.toString();
+      if (nextSearch === searchParams.toString()) {
+        return;
+      }
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const debouncedApplySearchParam = useDebouncedCallback(applySearchParam, 250);
+  const handleSearchInputChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      debouncedApplySearchParam(value);
+    },
+    [debouncedApplySearchParam],
+  );
+  const handleSearchClear = useCallback(() => {
+    setSearchInput("");
+    applySearchParam("");
+  }, [applySearchParam]);
+
+  useEffect(() => {
+    const nextValue = q ?? "";
+    if (nextValue !== searchInput) {
+      setSearchInput(nextValue);
+    }
+  }, [q, searchInput]);
   const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
   const effectiveSort = useMemo(
     () => normalizedSort ?? DEFAULT_DOCUMENT_SORT,
@@ -750,6 +791,16 @@ export function DocumentsTableView({
       connectionState={presence.connectionState}
     />
   );
+  const toolbarSearch = (
+    <SearchField
+      value={searchInput}
+      onValueChange={handleSearchInputChange}
+      onClear={handleSearchClear}
+      placeholder="Search documents"
+      ariaLabel="Search documents"
+      className="w-full sm:w-[16rem]"
+    />
+  );
   const toolbarContent = toolbarActions ? (
     <div className="flex flex-wrap items-center gap-3">
       {toolbarPresence}
@@ -814,6 +865,7 @@ export function DocumentsTableView({
         onTogglePreview={handleTogglePreview}
         isRowActionPending={isRowMutationPending}
         archivedFlashIds={archivedFlashIds}
+        toolbarSearch={toolbarSearch}
         toolbarActions={toolbarContent}
         scrollContainerRef={scrollContainerRef}
         onVisibleRangeChange={handleVisibleRangeChange}
