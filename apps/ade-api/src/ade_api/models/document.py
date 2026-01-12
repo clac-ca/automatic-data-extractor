@@ -236,9 +236,6 @@ class DocumentEvent(Base):
         nullable=False,
     )
     document_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    client_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    payload: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
 
     __table_args__ = (

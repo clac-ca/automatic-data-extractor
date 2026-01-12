@@ -345,8 +345,6 @@ class DocumentChangeEntry(BaseSchema):
     document_id: UUIDStr = Field(alias="documentId")
     occurred_at: datetime = Field(alias="occurredAt")
     document_version: int = Field(alias="documentVersion")
-    request_id: str | None = Field(default=None, alias="requestId")
-    client_request_id: str | None = Field(default=None, alias="clientRequestId")
     row: DocumentListRow | None = Field(
         default=None,
         description="Optional list row snapshot for changed documents.",

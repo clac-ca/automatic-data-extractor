@@ -330,10 +330,6 @@ export function evaluateDocumentFilters(
   let requiresRefresh = false;
   const results: boolean[] = [];
 
-  if (q) {
-    return { matches: false, requiresRefresh: true };
-  }
-
   for (const filter of filters) {
     const { id, operator, value } = filter;
     const values = Array.isArray(value) ? value : value != null ? [value] : [];

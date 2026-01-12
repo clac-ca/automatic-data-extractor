@@ -193,7 +193,7 @@ export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
   payload: { assigneeId?: string | null; metadata?: Record<string, unknown> | null },
-  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body: {
     assigneeId?: string | null;
@@ -210,9 +210,6 @@ export async function patchWorkspaceDocument(
   if (options.ifMatch) {
     headers["If-Match"] = options.ifMatch;
   }
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
-  }
 
   const { data } = await client.PATCH("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
@@ -227,14 +224,11 @@ export async function patchWorkspaceDocument(
 export async function deleteWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+  options: { ifMatch?: string | null } = {},
 ): Promise<void> {
   const headers: Record<string, string> = {};
   if (options.ifMatch) {
     headers["If-Match"] = options.ifMatch;
-  }
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
   }
 
   await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
@@ -246,12 +240,10 @@ export async function deleteWorkspaceDocument(
 export async function deleteWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
-  options: { clientRequestId?: string | null } = {},
 ): Promise<string[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/delete", {
     params: { path: { workspaceId } },
     body: { documentIds },
-    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) throw new Error("Expected delete response.");
@@ -261,14 +253,11 @@ export async function deleteWorkspaceDocumentsBatch(
 export async function archiveWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const headers: Record<string, string> = {};
   if (options.ifMatch) {
     headers["If-Match"] = options.ifMatch;
-  }
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
   }
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
     params: { path: { workspaceId, documentId } },
@@ -282,14 +271,11 @@ export async function archiveWorkspaceDocument(
 export async function restoreWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const headers: Record<string, string> = {};
   if (options.ifMatch) {
     headers["If-Match"] = options.ifMatch;
-  }
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
   }
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
     params: { path: { workspaceId, documentId } },
@@ -303,12 +289,10 @@ export async function restoreWorkspaceDocument(
 export async function archiveWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
-  options: { clientRequestId?: string | null } = {},
 ): Promise<DocumentRecord[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
     params: { path: { workspaceId } },
     body: { documentIds },
-    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) throw new Error("Expected updated document records.");
@@ -318,12 +302,10 @@ export async function archiveWorkspaceDocumentsBatch(
 export async function restoreWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
-  options: { clientRequestId?: string | null } = {},
 ): Promise<DocumentRecord[]> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
     params: { path: { workspaceId } },
     body: { documentIds },
-    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) throw new Error("Expected updated document records.");

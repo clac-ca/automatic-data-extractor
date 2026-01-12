@@ -11,9 +11,8 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from ade_api.common.logging import current_request_id
 from ade_api.common.time import utc_now
-from ade_api.models import DocumentEvent, DocumentEventType
+from ade_api.models import DocumentEvent
 from ade_api.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -46,7 +45,7 @@ class DocumentEventCursorTooOld(DocumentEventCursorError):
 
 
 class DocumentEventsService:
-    """Persist and query the documents change feed."""
+    """Query the documents change feed."""
 
     def __init__(self, *, session: Session, settings: Settings) -> None:
         self._session = session
@@ -142,54 +141,6 @@ class DocumentEventsService:
         )
         result = self._session.execute(stmt)
         return list(result.scalars())
-
-    def record_changed(
-        self,
-        *,
-        workspace_id: UUID,
-        document_id: UUID,
-        document_version: int,
-        client_request_id: str | None = None,
-        request_id: str | None = None,
-        occurred_at: datetime | None = None,
-    ) -> DocumentEvent:
-        entry = DocumentEvent(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            event_type=DocumentEventType.CHANGED,
-            document_version=document_version,
-            request_id=request_id or current_request_id(),
-            client_request_id=client_request_id,
-            payload=None,
-            occurred_at=occurred_at or utc_now(),
-        )
-        self._session.add(entry)
-        self._session.flush()
-        return entry
-
-    def record_deleted(
-        self,
-        *,
-        workspace_id: UUID,
-        document_id: UUID,
-        document_version: int,
-        client_request_id: str | None = None,
-        request_id: str | None = None,
-        occurred_at: datetime | None = None,
-    ) -> DocumentEvent:
-        entry = DocumentEvent(
-            workspace_id=workspace_id,
-            document_id=document_id,
-            event_type=DocumentEventType.DELETED,
-            document_version=document_version,
-            request_id=request_id or current_request_id(),
-            client_request_id=client_request_id,
-            payload=None,
-            occurred_at=occurred_at or utc_now(),
-        )
-        self._session.add(entry)
-        self._session.flush()
-        return entry
 
     def prune(
         self,

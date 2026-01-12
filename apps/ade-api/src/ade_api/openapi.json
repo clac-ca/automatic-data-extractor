@@ -5567,22 +5567,6 @@
             "description": "Document identifier"
           },
           {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
-          },
-          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -5821,22 +5805,6 @@
             "description": "Document identifier"
           },
           {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
-          },
-          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -5940,22 +5908,6 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
-          },
-          {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6068,22 +6020,6 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
-          },
-          {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6203,22 +6139,6 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
-          },
-          {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6352,22 +6272,6 @@
             "description": "Document identifier"
           },
           {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
-          },
-          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -6487,22 +6391,6 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
-          },
-          {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
           },
           {
             "name": "X-CSRF-Token",
@@ -6626,22 +6514,6 @@
             "description": "Document identifier"
           },
           {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
-          },
-          {
             "name": "X-CSRF-Token",
             "in": "header",
             "required": false,
@@ -6762,22 +6634,6 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
-          },
-          {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
           },
           {
             "name": "X-CSRF-Token",
@@ -7363,22 +7219,6 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
-          },
-          {
-            "name": "X-Client-Request-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Client-Request-Id"
-            }
           },
           {
             "name": "X-CSRF-Token",
@@ -12456,28 +12296,6 @@
           "documentVersion": {
             "type": "integer",
             "title": "Documentversion"
-          },
-          "requestId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requestid"
-          },
-          "clientRequestId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Clientrequestid"
           },
           "row": {
             "anyOf": [

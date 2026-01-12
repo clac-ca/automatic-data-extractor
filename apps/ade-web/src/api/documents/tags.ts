@@ -11,14 +11,11 @@ export async function replaceDocumentTags(
   documentId: string,
   tags: readonly string[],
   signal?: AbortSignal,
-  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const headers: Record<string, string> = {};
   if (options.ifMatch) {
     headers["If-Match"] = options.ifMatch;
-  }
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
   }
   const { data } = await client.PUT(
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags",
@@ -42,7 +39,7 @@ export async function patchDocumentTags(
   documentId: string,
   payload: { add?: readonly string[] | null; remove?: readonly string[] | null },
   signal?: AbortSignal,
-  options: { ifMatch?: string | null; clientRequestId?: string | null } = {},
+  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body = {
     add: payload.add ? [...payload.add] : payload.add,
@@ -51,9 +48,6 @@ export async function patchDocumentTags(
   const headers: Record<string, string> = {};
   if (options.ifMatch) {
     headers["If-Match"] = options.ifMatch;
-  }
-  if (options.clientRequestId) {
-    headers["X-Client-Request-Id"] = options.clientRequestId;
   }
   const { data } = await client.PATCH(
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags",
@@ -77,7 +71,6 @@ export async function patchDocumentTagsBatch(
   documentIds: string[],
   payload: { add?: readonly string[] | null; remove?: readonly string[] | null },
   signal?: AbortSignal,
-  options: { clientRequestId?: string | null } = {},
 ): Promise<DocumentRecord[]> {
   const body = {
     documentIds,
@@ -88,7 +81,6 @@ export async function patchDocumentTagsBatch(
     params: { path: { workspaceId } },
     body,
     signal,
-    headers: options.clientRequestId ? { "X-Client-Request-Id": options.clientRequestId } : undefined,
   });
 
   if (!data) {

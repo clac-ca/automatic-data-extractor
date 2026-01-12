@@ -12,7 +12,6 @@ from fastapi import (
     Depends,
     File,
     Form,
-    Header,
     HTTPException,
     Path,
     Query,
@@ -120,7 +119,6 @@ WorkspacePath = Annotated[
         alias="workspaceId",
     ),
 ]
-ClientRequestIdHeader = Annotated[str | None, Header(alias="X-Client-Request-Id")]
 DocumentPath = Annotated[
     UUID,
     Path(
@@ -409,7 +407,7 @@ def list_documents(
     response_model=DocumentChangesPage,
     status_code=status.HTTP_200_OK,
     summary="List document changes",
-    response_model_exclude_none=True,
+    response_model_exclude_none=False,
     dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit", "includeRows"}))],
 )
 def list_document_changes(
@@ -517,7 +515,7 @@ async def stream_document_changes(
             if events:
                 poll_interval = TAILER_POLL_INTERVAL_SECONDS
                 for change in events:
-                    payload = change.model_dump(by_alias=True, exclude_none=True)
+                    payload = change.model_dump(by_alias=True, exclude_none=False)
                     yield sse_json(change.type, payload, event_id=change.cursor)
                     cursor_value = int(change.cursor)
                     last_send = time.monotonic()
@@ -567,7 +565,6 @@ def update_document(
     response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
         current = service.get_document(
@@ -582,7 +579,6 @@ def update_document(
             workspace_id=workspace_id,
             document_id=document_id,
             payload=payload,
-            client_request_id=client_request_id,
         )
         etag = format_weak_etag(build_etag_token(updated.id, updated.version))
         if etag:
@@ -619,7 +615,6 @@ def patch_document_tags_batch(
     payload: DocumentBatchTagsRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchTagsResponse:
     try:
         documents = service.patch_document_tags_batch(
@@ -627,7 +622,6 @@ def patch_document_tags_batch(
             document_ids=payload.document_ids,
             add=payload.add,
             remove=payload.remove,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -661,13 +655,11 @@ def archive_documents_batch_endpoint(
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
         documents = service.archive_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -699,13 +691,11 @@ def restore_documents_batch_endpoint(
     payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchArchiveResponse:
     try:
         documents = service.restore_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -738,7 +728,6 @@ def archive_document_endpoint(
     request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
         current = service.get_document(
@@ -752,7 +741,6 @@ def archive_document_endpoint(
         return service.archive_document(
             workspace_id=workspace_id,
             document_id=document_id,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -783,7 +771,6 @@ def restore_document_endpoint(
     request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
         current = service.get_document(
@@ -797,7 +784,6 @@ def restore_document_endpoint(
         return service.restore_document(
             workspace_id=workspace_id,
             document_id=document_id,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -832,7 +818,6 @@ def replace_document_tags(
     request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
         current = service.get_document(
@@ -847,7 +832,6 @@ def replace_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
             tags=payload.tags,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -884,7 +868,6 @@ def patch_document_tags(
     request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentOut:
     try:
         current = service.get_document(
@@ -900,7 +883,6 @@ def patch_document_tags(
             document_id=document_id,
             add=payload.add,
             remove=payload.remove,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -951,7 +933,7 @@ def read_document(
     response_model=DocumentListRow,
     status_code=status.HTTP_200_OK,
     summary="Retrieve document list row",
-    response_model_exclude_none=True,
+    response_model_exclude_none=False,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to access documents.",
@@ -1180,7 +1162,6 @@ def delete_document(
     request: Request,
     service: DocumentsServiceDep,
     actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> None:
     try:
         current = service.get_document(
@@ -1195,7 +1176,6 @@ def delete_document(
             workspace_id=workspace_id,
             document_id=document_id,
             actor=actor,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1224,14 +1204,12 @@ def delete_documents_batch(
     payload: DocumentBatchDeleteRequest,
     service: DocumentsServiceDep,
     actor: DocumentManager,
-    client_request_id: ClientRequestIdHeader = None,
 ) -> DocumentBatchDeleteResponse:
     try:
         deleted_ids = service.delete_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             actor=actor,
-            client_request_id=client_request_id,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -10,6 +10,7 @@ from ade_worker.schema import (
     document_events,
     documents,
     environments,
+    install_document_event_triggers,
     metadata,
     run_fields,
     run_metrics,
@@ -21,6 +22,7 @@ from ade_worker.schema import (
 def _engine():
     engine = create_engine("sqlite:///:memory:")
     metadata.create_all(engine)
+    install_document_event_triggers(engine)
     return engine
 
 
@@ -224,6 +226,7 @@ def test_update_document_status_updates_version_and_last_run_at() -> None:
         event = conn.execute(
             select(document_events.c.event_type, document_events.c.document_version)
             .where(document_events.c.document_id == "doc-1")
+            .order_by(document_events.c.cursor.desc())
         ).first()
 
     assert row is not None

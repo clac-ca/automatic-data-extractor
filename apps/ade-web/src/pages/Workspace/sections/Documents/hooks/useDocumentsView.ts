@@ -141,7 +141,6 @@ export function useDocumentsView({
 }) {
   const [state, setState] = useState<DocumentsState>(DEFAULT_STATE);
   const inFlightPagesRef = useRef(new Set<string>());
-  const pendingRequestIdsRef = useRef(new Set<string>());
   const isAtTopRef = useRef(isAtTop);
   const visibleStartIndexRef = useRef<number | null>(visibleStartIndex ?? null);
   const viewKey = useMemo(
@@ -286,16 +285,9 @@ export function useDocumentsView({
         let queuedAdded = false;
 
         for (const entry of entries) {
-          const requestId = entry.clientRequestId ?? null;
-          const isLocal = requestId ? pendingRequestIdsRef.current.has(requestId) : false;
-          if (requestId && isLocal) {
-            pendingRequestIdsRef.current.delete(requestId);
-          }
-
           let shouldQueue = false;
           if (
             allowQueue &&
-            !isLocal &&
             !isAtTopRef.current &&
             entry.type === "document.changed" &&
             entry.row
@@ -656,14 +648,6 @@ export function useDocumentsView({
     updateRow(documentId, { uploadProgress: percent });
   }, [updateRow]);
 
-  const registerClientRequestId = useCallback((requestId: string) => {
-    pendingRequestIdsRef.current.add(requestId);
-  }, []);
-
-  const clearClientRequestId = useCallback((requestId: string) => {
-    pendingRequestIdsRef.current.delete(requestId);
-  }, []);
-
   const rows = useMemo(
     () => state.viewIds.map((id) => state.documentsById[id]).filter(Boolean),
     [state.documentsById, state.viewIds],
@@ -684,8 +668,6 @@ export function useDocumentsView({
     upsertRow,
     removeRow,
     setUploadProgress,
-    registerClientRequestId,
-    clearClientRequestId,
     queuedChanges: state.queuedChanges,
     applyQueuedChanges,
     connectionState,

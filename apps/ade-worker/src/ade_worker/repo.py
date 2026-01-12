@@ -10,7 +10,7 @@ from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from .schema import document_events, documents, environments, run_fields, run_metrics, run_table_columns, runs
+from .schema import documents, environments, run_fields, run_metrics, run_table_columns, runs
 
 
 class Repo:
@@ -196,7 +196,7 @@ class Repo:
                     last_run_at = :now,
                     version = version + 1
                 WHERE id = :document_id
-                RETURNING workspace_id, version;
+                RETURNING version;
                 """
             )
         elif dialect == "mssql":
@@ -207,7 +207,7 @@ class Repo:
                     updated_at = :now,
                     last_run_at = :now,
                     version = version + 1
-                OUTPUT inserted.workspace_id, inserted.version
+                OUTPUT inserted.version
                 WHERE id = :document_id;
                 """
             )
@@ -218,18 +218,6 @@ class Repo:
         if not row:
             return None
         version = int(row.get("version") or 0)
-        session.execute(
-            insert(document_events).values(
-                workspace_id=row["workspace_id"],
-                document_id=document_id,
-                event_type="document.changed",
-                document_version=version,
-                request_id=None,
-                client_request_id=None,
-                payload=None,
-                occurred_at=now,
-            )
-        )
         return version
 
     def record_run_result(

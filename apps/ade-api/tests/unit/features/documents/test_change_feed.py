@@ -5,7 +5,14 @@ from uuid import uuid4
 
 from ade_api.common.time import utc_now
 from ade_api.features.documents.change_feed import DocumentEventsService
-from ade_api.models import Document, DocumentSource, DocumentStatus, Workspace
+from ade_api.models import (
+    Document,
+    DocumentEvent,
+    DocumentEventType,
+    DocumentSource,
+    DocumentStatus,
+    Workspace,
+)
 
 
 def _seed_workspace(session, workspace_id):
@@ -49,18 +56,25 @@ def test_change_feed_appends_in_order(session, settings) -> None:
     _seed_document(session, workspace_id, first_id, now)
     _seed_document(session, workspace_id, second_id, now)
 
-    service.record_changed(
-        workspace_id=workspace_id,
-        document_id=first_id,
-        document_version=1,
-        occurred_at=now,
+    session.add(
+        DocumentEvent(
+            workspace_id=workspace_id,
+            document_id=first_id,
+            event_type=DocumentEventType.CHANGED,
+            document_version=1,
+            occurred_at=now,
+        )
     )
-    service.record_changed(
-        workspace_id=workspace_id,
-        document_id=second_id,
-        document_version=1,
-        occurred_at=now,
+    session.add(
+        DocumentEvent(
+            workspace_id=workspace_id,
+            document_id=second_id,
+            event_type=DocumentEventType.CHANGED,
+            document_version=1,
+            occurred_at=now,
+        )
     )
+    session.flush()
 
     events = service.fetch_changes_after(workspace_id=workspace_id, cursor=0, limit=10)
     assert len(events) == 2
@@ -90,24 +104,32 @@ def test_fetch_changes_after_respects_cursor_and_limit(session, settings) -> Non
     _seed_document(session, workspace_id, second_id, now)
     _seed_document(session, workspace_id, third_id, now)
 
-    service.record_changed(
-        workspace_id=workspace_id,
-        document_id=first_id,
-        document_version=1,
-        occurred_at=now,
+    session.add_all(
+        [
+            DocumentEvent(
+                workspace_id=workspace_id,
+                document_id=first_id,
+                event_type=DocumentEventType.CHANGED,
+                document_version=1,
+                occurred_at=now,
+            ),
+            DocumentEvent(
+                workspace_id=workspace_id,
+                document_id=second_id,
+                event_type=DocumentEventType.CHANGED,
+                document_version=2,
+                occurred_at=now,
+            ),
+            DocumentEvent(
+                workspace_id=workspace_id,
+                document_id=third_id,
+                event_type=DocumentEventType.CHANGED,
+                document_version=3,
+                occurred_at=now,
+            ),
+        ]
     )
-    service.record_changed(
-        workspace_id=workspace_id,
-        document_id=second_id,
-        document_version=2,
-        occurred_at=now,
-    )
-    service.record_changed(
-        workspace_id=workspace_id,
-        document_id=third_id,
-        document_version=3,
-        occurred_at=now,
-    )
+    session.flush()
 
     events = service.fetch_changes_after(workspace_id=workspace_id, cursor=0, limit=10)
     assert len(events) == 3
