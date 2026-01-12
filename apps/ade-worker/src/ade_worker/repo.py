@@ -202,13 +202,15 @@ class Repo:
         elif dialect == "mssql":
             stmt = text(
                 """
+                DECLARE @version_output TABLE (version INT);
                 UPDATE documents
                 SET status = :status,
                     updated_at = :now,
                     last_run_at = :now,
                     version = version + 1
-                OUTPUT inserted.version
+                OUTPUT inserted.version INTO @version_output
                 WHERE id = :document_id;
+                SELECT TOP 1 version FROM @version_output;
                 """
             )
         else:
