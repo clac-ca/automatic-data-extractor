@@ -55,7 +55,6 @@ from ade_api.features.idempotency import (
     build_scope_key,
     require_idempotency_key,
 )
-from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
@@ -238,11 +237,6 @@ def _try_enqueue_run(
         )
     except ConfigurationNotFoundError:
         return
-    except RunQueueFullError as exc:
-        logger.warning(
-            "document.auto_run.queue_full",
-            extra=log_context(workspace_id=workspace_id, document_id=document_id, detail=str(exc)),
-        )
     except Exception:
         logger.exception(
             "document.auto_run.failed",

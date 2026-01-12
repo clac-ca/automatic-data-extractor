@@ -1,12 +1,12 @@
 const THEME_CONFIG = {
-  default: { label: "Default", description: "Indigo accent on clean neutrals." },
-  ocean: { label: "Ocean", description: "Cyan/teal accent — crisp and modern." },
-  forest: { label: "Forest", description: "Emerald accent — calm and grounded." },
-  sunset: { label: "Sunset", description: "Orange accent — warm and energetic." },
-  rose: { label: "Rose", description: "Rose accent — bold and expressive." },
-  grape: { label: "Grape", description: "Violet accent — premium and creative." },
-  sand: { label: "Sand", description: "Teal accent on warm neutrals." },
-  carbon: { label: "Carbon", description: "Blue accent — minimal and enterprise." },
+  indigo: { label: "Indigo", description: "Indigo accent on clean neutrals." },
+  cyan: { label: "Cyan", description: "Cyan accent — crisp and modern." },
+  emerald: { label: "Emerald", description: "Emerald accent — calm and grounded." },
+  amber: { label: "Amber", description: "Amber accent — warm and energetic." },
+  coral: { label: "Coral", description: "Coral accent — bold and expressive." },
+  violet: { label: "Violet", description: "Violet accent — premium and creative." },
+  teal: { label: "Teal", description: "Teal accent — bright and balanced." },
+  blue: { label: "Blue", description: "Blue accent — minimal and enterprise." },
 } as const
 
 export type ThemeId = keyof typeof THEME_CONFIG

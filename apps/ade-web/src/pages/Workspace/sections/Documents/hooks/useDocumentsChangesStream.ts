@@ -33,25 +33,39 @@ export function useDocumentsChangesStream({
 }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const sourceRef = useRef<EventSource | null>(null);
+  const cursorRef = useRef<string | null>(null);
+  const connectionKeyRef = useRef<string | null>(null);
   const handlersRef = useRef({ onEvent, onResyncRequired, onReady });
 
   useEffect(() => {
     handlersRef.current = { onEvent, onResyncRequired, onReady };
   }, [onEvent, onReady, onResyncRequired]);
 
+  const shouldConnect = Boolean(enabled && workspaceId && cursor);
+
   useEffect(() => {
-    if (!enabled || !workspaceId || !cursor) {
+    const connectionKey = workspaceId ? `${workspaceId}:${includeRows}` : null;
+    if (!shouldConnect || !workspaceId) {
       sourceRef.current?.close();
       sourceRef.current = null;
+      connectionKeyRef.current = null;
       setConnectionState("idle");
       return;
     }
+
+    if (sourceRef.current && connectionKeyRef.current === connectionKey) {
+      return;
+    }
+
+    sourceRef.current?.close();
+    sourceRef.current = null;
+    connectionKeyRef.current = connectionKey;
 
     let active = true;
     setConnectionState("connecting");
 
     const source = new EventSource(
-      documentsChangesStreamUrl(workspaceId, cursor, { includeRows }),
+      documentsChangesStreamUrl(workspaceId, cursorRef.current ?? cursor, { includeRows }),
       {
         withCredentials: true,
       },
@@ -70,6 +84,18 @@ export function useDocumentsChangesStream({
         if (!parsed.cursor && event.lastEventId) {
           parsed.cursor = event.lastEventId;
         }
+        if (parsed.cursor) {
+          const nextCursor = String(parsed.cursor);
+          const currentCursor = cursorRef.current;
+          if (currentCursor) {
+            const currentValue = Number(currentCursor);
+            const nextValue = Number(nextCursor);
+            if (!Number.isNaN(currentValue) && !Number.isNaN(nextValue) && nextValue <= currentValue) {
+              return;
+            }
+          }
+          cursorRef.current = nextCursor;
+        }
         handlersRef.current.onEvent(parsed);
       } catch {
         return;
@@ -82,6 +108,9 @@ export function useDocumentsChangesStream({
         const payload = JSON.parse(event.data) as ReadyPayload;
         const nextCursor =
           typeof payload.cursor === "number" ? String(payload.cursor) : payload.cursor ?? null;
+        if (nextCursor) {
+          cursorRef.current = nextCursor;
+        }
         handlersRef.current.onReady?.(nextCursor);
       } catch {
         return;
@@ -120,7 +149,12 @@ export function useDocumentsChangesStream({
       sourceRef.current = null;
       setConnectionState("idle");
     };
-  }, [cursor, enabled, includeRows, workspaceId]);
+  }, [includeRows, shouldConnect, workspaceId]);
+
+  useEffect(() => {
+    if (!cursor) return;
+    cursorRef.current = cursor;
+  }, [cursor]);
 
   return { connectionState };
 }

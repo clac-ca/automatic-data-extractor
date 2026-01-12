@@ -23,7 +23,6 @@ def build_runs_service(
     tmp_path: Path,
     *,
     safe_mode: bool = False,
-    queue_size: int | None = None,
 ) -> tuple[RunsService, Configuration, Document, Settings]:
     data_root = tmp_path / "data"
     engine_dir = tmp_path / "engine"
@@ -34,6 +33,7 @@ def build_runs_service(
     )
 
     settings = Settings(
+        _env_file=None,
         workspaces_dir=data_root / "workspaces",
         documents_dir=data_root / "workspaces",
         configs_dir=data_root / "workspaces",
@@ -41,7 +41,6 @@ def build_runs_service(
         venvs_dir=data_root / "venvs",
         pip_cache_dir=data_root / "cache" / "pip",
         safe_mode=safe_mode,
-        queue_size=queue_size,
         engine_spec=str(engine_dir),
     )
 

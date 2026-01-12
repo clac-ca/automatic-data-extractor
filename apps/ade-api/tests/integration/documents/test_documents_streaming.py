@@ -16,15 +16,15 @@ from ade_api.settings import Settings
 
 def test_stream_document_handles_missing_file_mid_stream(
     seed_identity,
-    session,
+    db_session,
     settings: Settings,
 ) -> None:
     """Document streaming should surface a domain error when the file disappears."""
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
     workspace_id = seed_identity.workspace_id
 
-    member = session.get(User, seed_identity.member.id)
+    member = db_session.get(User, seed_identity.member.id)
     assert member is not None
 
     upload = UploadFile(
@@ -44,7 +44,7 @@ def test_stream_document_handles_missing_file_mid_stream(
         document_id=record.id,
     )
 
-    stored_row = session.get(Document, record.id)
+    stored_row = db_session.get(Document, record.id)
     assert stored_row is not None
     stored_path = workspace_documents_root(settings, workspace_id) / stored_row.stored_uri
     stored_path.unlink()

@@ -170,7 +170,7 @@ async def test_document_changes_include_delete_event(async_client, seed_identity
     )
 
 
-async def test_document_changes_cursor_too_old(async_client, seed_identity, session, settings) -> None:
+async def test_document_changes_cursor_too_old(async_client, seed_identity, db_session, settings) -> None:
     settings.documents_change_feed_retention_period = timedelta(seconds=1)
 
     workspace_id = seed_identity.workspace_id
@@ -190,7 +190,7 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
         expires_at=utc_now() + timedelta(days=1),
         last_run_at=None,
     )
-    session.add(doc)
+    db_session.add(doc)
 
     now = utc_now()
     old_change = DocumentEvent(
@@ -207,9 +207,9 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, sess
         document_version=2,
         occurred_at=now,
     )
-    session.add_all([old_change, fresh_change])
-    await anyio.to_thread.run_sync(session.flush)
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add_all([old_change, fresh_change])
+    await anyio.to_thread.run_sync(db_session.flush)
+    await anyio.to_thread.run_sync(db_session.commit)
 
     token, _ = await login(
         async_client,

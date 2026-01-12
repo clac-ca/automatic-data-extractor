@@ -44,7 +44,7 @@ async def test_cookie_login_sets_session_and_bootstrap(
 async def test_cookie_login_creates_access_token(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     """Cookie login should persist an access token row."""
 
@@ -56,7 +56,7 @@ async def test_cookie_login_creates_access_token(
     assert response.status_code == 204, response.text
 
     def _load_tokens():
-        return session.execute(select(AccessToken)).scalars().all()
+        return db_session.execute(select(AccessToken)).scalars().all()
 
     tokens = await anyio.to_thread.run_sync(_load_tokens)
     assert len(tokens) == 1
@@ -67,7 +67,7 @@ async def test_cookie_logout_clears_access_token(
     async_client: AsyncClient,
     seed_identity,
     settings: Settings,
-    session,
+    db_session,
 ) -> None:
     """Logout should delete access tokens and clear session cookies."""
 
@@ -91,7 +91,7 @@ async def test_cookie_logout_clears_access_token(
     assert not async_client.cookies.get(settings.session_cookie_name)
 
     def _load_tokens():
-        return session.execute(select(AccessToken)).scalars().all()
+        return db_session.execute(select(AccessToken)).scalars().all()
 
     tokens = await anyio.to_thread.run_sync(_load_tokens)
     assert tokens == []
@@ -228,15 +228,15 @@ async def test_list_auth_providers_force_sso(
 async def test_login_rejects_inactive_user(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     """Inactive accounts should not receive new sessions."""
 
     member = seed_identity.member
-    user = await anyio.to_thread.run_sync(session.get, User, member.id)
+    user = await anyio.to_thread.run_sync(db_session.get, User, member.id)
     assert user is not None
     user.is_active = False
-    await anyio.to_thread.run_sync(session.flush)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     response = await async_client.post(
         "/api/v1/auth/cookie/login",
@@ -250,7 +250,7 @@ async def test_login_rejects_inactive_user(
 async def test_access_token_rejected_after_deactivation(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     """Existing bearer tokens should be blocked once the user is inactive."""
 
@@ -261,10 +261,10 @@ async def test_access_token_rejected_after_deactivation(
         password=member.password,
     )
 
-    user = await anyio.to_thread.run_sync(session.get, User, member.id)
+    user = await anyio.to_thread.run_sync(db_session.get, User, member.id)
     assert user is not None
     user.is_active = False
-    await anyio.to_thread.run_sync(session.flush)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     response = await async_client.get(
         "/api/v1/me/bootstrap",

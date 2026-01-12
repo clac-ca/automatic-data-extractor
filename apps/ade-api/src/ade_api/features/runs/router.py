@@ -61,7 +61,6 @@ from .exceptions import (
     RunOutputPreviewUnsupportedError,
     RunOutputSheetParseError,
     RunOutputSheetUnsupportedError,
-    RunQueueFullError,
 )
 from .filters import RunColumnFilters
 from .schemas import (
@@ -183,16 +182,6 @@ def create_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except RunQueueFullError as exc:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": {
-                    "code": "run_queue_full",
-                    "message": str(exc),
-                }
-            },
-        ) from exc
 
     resource = service.to_resource(run)
     idempotency.store_response(
@@ -247,16 +236,6 @@ def create_runs_batch_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunQueueFullError as exc:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": {
-                    "code": "run_queue_full",
-                    "message": str(exc),
-                }
-            },
-        ) from exc
 
     resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)
@@ -318,16 +297,6 @@ def create_workspace_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except RunQueueFullError as exc:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": {
-                    "code": "run_queue_full",
-                    "message": str(exc),
-                }
-            },
-        ) from exc
 
     resource = service.to_resource(run)
     idempotency.store_response(
@@ -386,16 +355,6 @@ def create_workspace_runs_batch_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunQueueFullError as exc:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": {
-                    "code": "run_queue_full",
-                    "message": str(exc),
-                }
-            },
-        ) from exc
 
     resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)

@@ -6,26 +6,27 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, select, text, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
 
 from .schema import document_events, documents, environments, run_fields, run_metrics, run_table_columns, runs
 
 
 class Repo:
-    def __init__(self, engine) -> None:
-        self.engine = engine
+    def __init__(self, SessionLocal: sessionmaker[Session]) -> None:
+        self._SessionLocal = SessionLocal
 
     def load_environment(self, env_id: str) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
-            row = conn.execute(
+        with self._SessionLocal() as session:
+            row = session.execute(
                 select(environments).where(environments.c.id == env_id)
             ).mappings().first()
         return dict(row) if row else None
 
     def load_ready_environment_for_run(self, run: dict[str, Any]) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
-            row = conn.execute(
+        with self._SessionLocal() as session:
+            row = session.execute(
                 select(environments).where(
                     environments.c.workspace_id == run["workspace_id"],
                     environments.c.configuration_id == run["configuration_id"],
@@ -37,16 +38,30 @@ class Repo:
         return dict(row) if row else None
 
     def load_run(self, run_id: str) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
-            row = conn.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
+        with self._SessionLocal() as session:
+            row = session.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
         return dict(row) if row else None
 
     def load_document(self, document_id: str) -> dict[str, Any] | None:
-        with self.engine.begin() as conn:
-            row = conn.execute(
+        with self._SessionLocal() as session:
+            row = session.execute(
                 select(documents).where(documents.c.id == document_id)
             ).mappings().first()
         return dict(row) if row else None
+
+    def has_queued_runs(self, *, now: datetime) -> bool:
+        stmt = (
+            select(runs.c.id)
+            .where(
+                runs.c.status == "queued",
+                runs.c.available_at <= now,
+                runs.c.attempt_count < runs.c.max_attempts,
+            )
+            .limit(1)
+        )
+        with self._SessionLocal() as session:
+            row = session.execute(stmt).first()
+        return row is not None
 
     def ensure_environment_rows_for_queued_runs(self, *, now: datetime, limit: int | None = None) -> int:
         stmt = (
@@ -67,8 +82,8 @@ class Repo:
             stmt = stmt.limit(limit)
 
         inserted = 0
-        with self.engine.begin() as conn:
-            rows = conn.execute(stmt).mappings().all()
+        with self._SessionLocal.begin() as session:
+            rows = session.execute(stmt).mappings().all()
             for row in rows:
                 env_row = {
                     "id": str(uuid4()),
@@ -88,11 +103,12 @@ class Repo:
                     "engine_version": None,
                 }
                 try:
-                    conn.execute(insert(environments).values(**env_row))
-                    inserted += 1
+                    with session.begin_nested():
+                        session.execute(insert(environments).values(**env_row))
+                        inserted += 1
                 except IntegrityError:
                     # Environment already exists (unique key). Requeue failed environments.
-                    conn.execute(
+                    session.execute(
                         update(environments)
                         .where(
                             environments.c.workspace_id == row["workspace_id"],
@@ -115,12 +131,12 @@ class Repo:
     def mark_environment_queued(
         self,
         *,
-        conn,
+        session: Session,
         env_id: str,
         now: datetime,
         error_message: str,
     ) -> None:
-        conn.execute(
+        session.execute(
             update(environments)
             .where(environments.c.id == env_id)
             .values(
@@ -135,14 +151,14 @@ class Repo:
     def record_environment_metadata(
         self,
         *,
-        conn,
+        session: Session,
         env_id: str,
         now: datetime,
         python_interpreter: str | None,
         python_version: str | None,
         engine_version: str | None,
     ) -> None:
-        conn.execute(
+        session.execute(
             update(environments)
             .where(environments.c.id == env_id)
             .values(
@@ -153,8 +169,8 @@ class Repo:
             )
         )
 
-    def touch_environment_last_used(self, *, conn, env_id: str, now: datetime) -> None:
-        conn.execute(
+    def touch_environment_last_used(self, *, session: Session, env_id: str, now: datetime) -> None:
+        session.execute(
             update(environments)
             .where(environments.c.id == env_id)
             .values(last_used_at=now, updated_at=now)
@@ -163,25 +179,46 @@ class Repo:
     def update_document_status(
         self,
         *,
-        conn,
+        session: Session,
         document_id: str,
         status: str,
         now: datetime,
     ) -> int | None:
-        row = conn.execute(
-            select(documents.c.workspace_id, documents.c.version).where(
-                documents.c.id == document_id
+        dialect = session.get_bind().dialect.name
+        params = {"status": status, "now": now, "document_id": document_id}
+
+        if dialect == "sqlite":
+            stmt = text(
+                """
+                UPDATE documents
+                SET status = :status,
+                    updated_at = :now,
+                    last_run_at = :now,
+                    version = version + 1
+                WHERE id = :document_id
+                RETURNING workspace_id, version;
+                """
             )
-        ).mappings().first()
+        elif dialect == "mssql":
+            stmt = text(
+                """
+                UPDATE documents
+                SET status = :status,
+                    updated_at = :now,
+                    last_run_at = :now,
+                    version = version + 1
+                OUTPUT inserted.workspace_id, inserted.version
+                WHERE id = :document_id;
+                """
+            )
+        else:
+            raise ValueError(f"Unsupported dialect: {dialect}")
+
+        row = session.execute(stmt, params).mappings().first()
         if not row:
             return None
-        version = int(row.get("version") or 0) + 1
-        conn.execute(
-            update(documents)
-            .where(documents.c.id == document_id)
-            .values(status=status, updated_at=now, last_run_at=now, version=version)
-        )
-        conn.execute(
+        version = int(row.get("version") or 0)
+        session.execute(
             insert(document_events).values(
                 workspace_id=row["workspace_id"],
                 document_id=document_id,
@@ -198,14 +235,14 @@ class Repo:
     def record_run_result(
         self,
         *,
-        conn,
+        session: Session,
         run_id: str,
         completed_at: datetime | None,
         exit_code: int | None,
         output_path: str | None,
         error_message: str | None,
     ) -> None:
-        conn.execute(
+        session.execute(
             update(runs)
             .where(runs.c.id == run_id)
             .values(
@@ -219,42 +256,42 @@ class Repo:
     def replace_run_metrics(
         self,
         *,
-        conn,
+        session: Session,
         run_id: str,
         metrics: dict[str, Any] | None,
     ) -> None:
-        conn.execute(delete(run_metrics).where(run_metrics.c.run_id == run_id))
+        session.execute(delete(run_metrics).where(run_metrics.c.run_id == run_id))
         if not metrics:
             return
         payload = dict(metrics)
         payload["run_id"] = run_id
-        conn.execute(insert(run_metrics).values(**payload))
+        session.execute(insert(run_metrics).values(**payload))
 
     def replace_run_fields(
         self,
         *,
-        conn,
+        session: Session,
         run_id: str,
         rows: Sequence[dict[str, Any]],
     ) -> None:
-        conn.execute(delete(run_fields).where(run_fields.c.run_id == run_id))
+        session.execute(delete(run_fields).where(run_fields.c.run_id == run_id))
         if not rows:
             return
         payload = [dict(row, run_id=run_id) for row in rows]
-        conn.execute(insert(run_fields), payload)
+        session.execute(insert(run_fields), payload)
 
     def replace_run_table_columns(
         self,
         *,
-        conn,
+        session: Session,
         run_id: str,
         rows: Sequence[dict[str, Any]],
     ) -> None:
-        conn.execute(delete(run_table_columns).where(run_table_columns.c.run_id == run_id))
+        session.execute(delete(run_table_columns).where(run_table_columns.c.run_id == run_id))
         if not rows:
             return
         payload = [dict(row, run_id=run_id) for row in rows]
-        conn.execute(insert(run_table_columns), payload)
+        session.execute(insert(run_table_columns), payload)
 
 
 __all__ = ["Repo"]

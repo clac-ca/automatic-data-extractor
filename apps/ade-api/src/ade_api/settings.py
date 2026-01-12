@@ -3,21 +3,40 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
 
 # ---- Defaults ---------------------------------------------------------------
 
 MODULE_DIR = Path(__file__).resolve().parent
+
+
+def _detect_repo_root(start: Path) -> Path:
+    for p in [start, *start.parents]:
+        if (p / "apps").is_dir():
+            return p
+        if (p / ".git").is_dir():
+            return p
+    return Path.cwd()
+
+
+REPO_ROOT = _detect_repo_root(MODULE_DIR)
+
+
+def _env_file() -> str:
+    override = os.getenv("ADE_ENV_FILE")
+    if override and override.strip():
+        return str(Path(override).expanduser().resolve())
+    return str((REPO_ROOT / ".env").resolve())
 
 
 def _candidate_api_roots() -> list[Path]:
@@ -55,7 +74,7 @@ def _detect_api_root() -> Path:
 
 
 DEFAULT_API_ROOT = _detect_api_root()
-DEFAULT_STORAGE_ROOT = Path("./data")  # resolve later
+DEFAULT_STORAGE_ROOT = REPO_ROOT / "data"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
 DEFAULT_WORKSPACES_DIR = DEFAULT_STORAGE_ROOT / "workspaces"
@@ -78,8 +97,6 @@ MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
 MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
-
-_LENIENT_LIST_FIELDS = {"server_cors_origins", "oidc_scopes"}
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -155,109 +172,27 @@ def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
         candidate = value
     else:
         candidate = Path(str(value).strip())
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
     return candidate.expanduser().resolve()
 
 
 # ---- Settings ---------------------------------------------------------------
 
 
-class _LenientEnvSettingsSource(EnvSettingsSource):
-    """Environment source that preserves raw strings for list-like fields."""
-
-    lenient_fields: ClassVar[set[str]] = _LENIENT_LIST_FIELDS
-
-    def prepare_field_value(
-        self,
-        field_name: str,
-        field,
-        value: Any,
-        value_is_complex: bool,
-    ) -> Any:
-        if field_name in self.lenient_fields and isinstance(value, str):
-            return value
-        return super().prepare_field_value(field_name, field, value, value_is_complex)
-
-
-class _LenientDotEnvSettingsSource(DotEnvSettingsSource):
-    """Dotenv source that preserves raw strings for list-like fields."""
-
-    lenient_fields: ClassVar[set[str]] = _LENIENT_LIST_FIELDS
-
-    def prepare_field_value(
-        self,
-        field_name: str,
-        field,
-        value: Any,
-        value_is_complex: bool,
-    ) -> Any:
-        if field_name in self.lenient_fields and isinstance(value, str):
-            return value
-        return super().prepare_field_value(field_name, field, value, value_is_complex)
-
-
 class Settings(BaseSettings):
     """FastAPI settings loaded from ADE_* environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_env_file(),
+        env_file_encoding="utf-8",
         env_prefix="ADE_",
         case_sensitive=False,
         extra="ignore",
         env_ignore_empty=True,
     )
 
-    _explicit_init_fields: set[str] = PrivateAttr(default_factory=set)
     _jwt_secret_generated: bool = PrivateAttr(default=False)
-
-    def __init__(self, **data: Any):
-        explicit = set(data.keys())
-        super().__init__(**data)
-        object.__setattr__(self, "_explicit_init_fields", explicit)
-        if "workspaces_dir" in explicit:
-            self._apply_workspaces_override(explicit)
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
-    ):
-        env_source = _LenientEnvSettingsSource(
-            settings_cls,
-            case_sensitive=getattr(env_settings, "case_sensitive", None),
-            env_prefix=getattr(env_settings, "env_prefix", None),
-            env_nested_delimiter=getattr(env_settings, "env_nested_delimiter", None),
-            env_nested_max_split=getattr(env_settings, "env_nested_max_split", None),
-            env_ignore_empty=getattr(env_settings, "env_ignore_empty", None),
-            env_parse_none_str=getattr(env_settings, "env_parse_none_str", None),
-            env_parse_enums=getattr(env_settings, "env_parse_enums", None),
-        )
-        dotenv_source = _LenientDotEnvSettingsSource(
-            settings_cls,
-            env_file=getattr(dotenv_settings, "env_file", None),
-            env_file_encoding=getattr(dotenv_settings, "env_file_encoding", None),
-            case_sensitive=getattr(dotenv_settings, "case_sensitive", None),
-            env_prefix=getattr(dotenv_settings, "env_prefix", None),
-            env_nested_delimiter=getattr(dotenv_settings, "env_nested_delimiter", None),
-            env_nested_max_split=getattr(dotenv_settings, "env_nested_max_split", None),
-            env_ignore_empty=getattr(dotenv_settings, "env_ignore_empty", None),
-            env_parse_none_str=getattr(dotenv_settings, "env_parse_none_str", None),
-            env_parse_enums=getattr(dotenv_settings, "env_parse_enums", None),
-        )
-        return (init_settings, env_source, dotenv_source, file_secret_settings)
-
-    def _apply_workspaces_override(self, explicit_fields: set[str]) -> None:
-        """Align dependent storage roots when workspaces_dir is provided explicitly."""
-
-        if "documents_dir" not in explicit_fields:
-            self.documents_dir = self.workspaces_dir
-        if "configs_dir" not in explicit_fields:
-            self.configs_dir = self.workspaces_dir
-        if "runs_dir" not in explicit_fields:
-            self.runs_dir = self.workspaces_dir
 
     # Core
     app_name: str = "Automatic Data Extractor API"
@@ -268,7 +203,7 @@ class Settings(BaseSettings):
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     openapi_url: str = "/openapi.json"
-    log_level: str = Field(default="INFO", validation_alias="ADE_LOG_LEVEL")
+    log_level: str = "INFO"
     safe_mode: bool = False
 
     # Server
@@ -278,7 +213,9 @@ class Settings(BaseSettings):
     api_workers: int | None = Field(default=None, ge=1)
     frontend_url: str | None = None
     frontend_dist_dir: Path | None = Field(default=None)
-    server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
+    server_cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: list(DEFAULT_CORS_ORIGINS)
+    )
     idempotency_key_ttl: timedelta = Field(default=timedelta(hours=24))
 
     # Paths
@@ -354,8 +291,7 @@ class Settings(BaseSettings):
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
 
-    # Runs (queue limits)
-    queue_size: int | None = Field(default=200, ge=1)
+    # Runs
     preview_timeout_seconds: float = Field(10, gt=0)
 
     # OIDC
@@ -364,7 +300,9 @@ class Settings(BaseSettings):
     oidc_client_secret: SecretStr | None = None
     oidc_issuer: str | None = None
     oidc_redirect_url: str | None = None  # may be relative ('/auth/callback')
-    oidc_scopes: list[str] = Field(default_factory=lambda: ["openid", "email", "profile"])
+    oidc_scopes: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["openid", "email", "profile"]
+    )
     auth_force_sso: bool = False
     auth_sso_auto_provision: bool = True
 
@@ -422,6 +360,7 @@ class Settings(BaseSettings):
         if mode not in {"sql_password", "managed_identity"}:
             raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
         return mode
+
 
     @field_validator("database_mi_client_id", mode="before")
     @classmethod
@@ -612,7 +551,7 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def _build_settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=_env_file())
 
 
 def get_settings() -> Settings:

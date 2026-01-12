@@ -29,6 +29,7 @@ import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@hooks/system";
 import { Alert } from "@/components/ui/alert";
 import { PageState } from "@components/layouts/page-state";
 import { CloseIcon, MenuIcon } from "@components/icons";
+import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 import { useShortcutHint } from "@hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@components/shell/GlobalTopBar";
 
@@ -171,6 +172,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     [workspace],
   );
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
+  const [documentSearchInput, setDocumentSearchInput] = useState("");
+  const [runSearchInput, setRunSearchInput] = useState("");
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isVersionsModalOpen, setIsVersionsModalOpen] = useState(false);
   const workspaceSearchNormalized = workspaceSearchQuery.trim().toLowerCase();
@@ -322,6 +325,19 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const isRunsSection = section?.kind === "content" && section.key === "runs";
   const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
   const runSearchValue = isRunsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
+
+  useEffect(() => {
+    if (documentSearchValue !== documentSearchInput) {
+      setDocumentSearchInput(documentSearchValue);
+    }
+  }, [documentSearchInput, documentSearchValue]);
+
+  useEffect(() => {
+    if (runSearchValue !== runSearchInput) {
+      setRunSearchInput(runSearchValue);
+    }
+  }, [runSearchInput, runSearchValue]);
+
   const handleDocumentSearchChange = useCallback(
     (nextValue: string) => {
       if (!isDocumentsSection) {
@@ -341,19 +357,29 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     },
     [isDocumentsSection, location.hash, location.pathname, location.search, navigate],
   );
+  const debouncedDocumentSearchChange = useDebouncedCallback(handleDocumentSearchChange, 250);
+  const handleDocumentSearchInputChange = useCallback(
+    (nextValue: string) => {
+      setDocumentSearchInput(nextValue);
+      debouncedDocumentSearchChange(nextValue);
+    },
+    [debouncedDocumentSearchChange],
+  );
   const handleDocumentSearchSubmit = useCallback(
     (value: string) => {
+      setDocumentSearchInput(value);
       handleDocumentSearchChange(value);
     },
     [handleDocumentSearchChange],
   );
   const handleDocumentSearchClear = useCallback(() => {
+    setDocumentSearchInput("");
     handleDocumentSearchChange("");
   }, [handleDocumentSearchChange]);
   const documentsSearch = isDocumentsSection
     ? {
-        value: documentSearchValue,
-        onChange: handleDocumentSearchChange,
+        value: documentSearchInput,
+        onChange: handleDocumentSearchInputChange,
         onSubmit: handleDocumentSearchSubmit,
         onClear: handleDocumentSearchClear,
         placeholder: "Search documents",
@@ -381,19 +407,29 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     },
     [isRunsSection, location.hash, location.pathname, location.search, navigate],
   );
+  const debouncedRunSearchChange = useDebouncedCallback(handleRunSearchChange, 250);
+  const handleRunSearchInputChange = useCallback(
+    (nextValue: string) => {
+      setRunSearchInput(nextValue);
+      debouncedRunSearchChange(nextValue);
+    },
+    [debouncedRunSearchChange],
+  );
   const handleRunSearchSubmit = useCallback(
     (value: string) => {
+      setRunSearchInput(value);
       handleRunSearchChange(value);
     },
     [handleRunSearchChange],
   );
   const handleRunSearchClear = useCallback(() => {
+    setRunSearchInput("");
     handleRunSearchChange("");
   }, [handleRunSearchChange]);
   const runsSearch = isRunsSection
     ? {
-        value: runSearchValue,
-        onChange: handleRunSearchChange,
+        value: runSearchInput,
+        onChange: handleRunSearchInputChange,
         onSubmit: handleRunSearchSubmit,
         onClear: handleRunSearchClear,
         placeholder: "Search runs",
@@ -447,77 +483,77 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
             />
           </div>
         ) : null}
-        {!immersiveWorkbenchActive ? (
-          <div className="row-start-1 col-start-1 lg:col-start-2">
+        <div className="relative row-span-2 col-start-1 flex min-h-0 min-w-0 flex-col lg:col-start-2">
+          {!immersiveWorkbenchActive ? (
             <GlobalTopBar
               brand={topBarBrand}
               trailing={topBarTrailing}
               search={topBarSearch}
               scrollContainer={scrollContainer}
             />
-          </div>
-        ) : null}
-        <div className="relative row-start-2 col-start-1 min-h-0 min-w-0 overflow-hidden flex flex-col lg:col-start-2">
-          {!immersiveWorkbenchActive && isMobileNavOpen ? (
-            <div className="fixed inset-0 z-[var(--app-z-overlay)] lg:hidden" role="dialog" aria-modal="true">
-              <button
-                type="button"
-                className="absolute inset-0 bg-overlay backdrop-blur-sm"
-                onClick={closeMobileNav}
-                aria-label="Close navigation"
-              />
-              <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl">
-                <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-3">
-                  <WorkspaceSwitcher
-                    variant="drawer"
-                    showLabel={false}
-                    onNavigate={closeMobileNav}
-                    className="min-w-0 flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={closeMobileNav}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground transition hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                    aria-label="Close navigation"
-                  >
-                    <CloseIcon className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto px-3 py-4">
-                  <WorkspaceNavList items={workspaceNavItems} onNavigate={closeMobileNav} showHeading={false} />
-                </div>
-              </div>
-            </div>
           ) : null}
-          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden" key={`section-${section.key}`}>
-            <main
-              id="main-content"
-              tabIndex={-1}
-              className={clsx(
-                "relative flex-1 min-h-0 min-w-0",
-                fullHeightLayout ? "flex flex-col overflow-hidden" : "overflow-y-auto",
-              )}
-              ref={handleScrollContainerRef}
-            >
-              <div
-                className={clsx(
-                  fullHeightLayout
-                    ? "flex w-full flex-1 min-h-0 flex-col px-0 py-0"
-                    : "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
-                )}
-              >
-                {safeModeEnabled ? (
-                  <div className={clsx("mb-4", fullHeightLayout ? "px-6 pt-4" : "")}>
-                    <Alert tone="warning" heading="Safe mode active">
-                      {safeModeDetail}
-                    </Alert>
+          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            {!immersiveWorkbenchActive && isMobileNavOpen ? (
+              <div className="fixed inset-0 z-[var(--app-z-overlay)] lg:hidden" role="dialog" aria-modal="true">
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-overlay backdrop-blur-sm"
+                  onClick={closeMobileNav}
+                  aria-label="Close navigation"
+                />
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl">
+                  <div className="flex items-center gap-3 border-b border-sidebar-border px-4 py-3">
+                    <WorkspaceSwitcher
+                      variant="drawer"
+                      showLabel={false}
+                      onNavigate={closeMobileNav}
+                      className="min-w-0 flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={closeMobileNav}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground transition hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                      aria-label="Close navigation"
+                    >
+                      <CloseIcon className="h-4 w-4" />
+                    </button>
                   </div>
-                ) : null}
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  {section.element}
+                  <div className="flex-1 overflow-y-auto px-3 py-4">
+                    <WorkspaceNavList items={workspaceNavItems} onNavigate={closeMobileNav} showHeading={false} />
+                  </div>
                 </div>
               </div>
-            </main>
+            ) : null}
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden" key={`section-${section.key}`}>
+              <main
+                id="main-content"
+                tabIndex={-1}
+                className={clsx(
+                  "relative flex-1 min-h-0 min-w-0",
+                  fullHeightLayout ? "flex flex-col overflow-hidden" : "overflow-y-auto",
+                )}
+                ref={handleScrollContainerRef}
+              >
+                <div
+                  className={clsx(
+                    fullHeightLayout
+                      ? "flex w-full flex-1 min-h-0 flex-col px-0 py-0"
+                      : "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
+                  )}
+                >
+                  {safeModeEnabled ? (
+                    <div className={clsx("mb-4", fullHeightLayout ? "px-6 pt-4" : "")}>
+                      <Alert tone="warning" heading="Safe mode active">
+                        {safeModeDetail}
+                      </Alert>
+                    </div>
+                  ) : null}
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    {section.element}
+                  </div>
+                </div>
+              </main>
+            </div>
           </div>
         </div>
       </div>

@@ -7,15 +7,16 @@
 
 /*
   shadcn/ui theme tokens
-  - Theme: document.documentElement.dataset.theme = "ocean" | "forest" | ...
+  - Theme: document.documentElement.dataset.theme =
+      "indigo" | "cyan" | "emerald" | "amber" | "coral" | "violet" | "teal" | "blue"
   - Dark:  document.documentElement.classList.toggle("dark")
 */
 
 /* -----------------------------
-   Base theme = "default"
+   Base theme = "indigo"
 ------------------------------ */
 :root,
-:root[data-theme="default"] {
+:root[data-theme="indigo"] {
   color-scheme: light;
 
   /* Base tokens */
@@ -60,7 +61,6 @@
   --overlay-strong: oklch(0 0 0 / 0.6);
 
   /* Layering */
-  --app-z-base: 0;
   --app-z-header: 30;
   --app-z-nav: 40;
   --app-z-overlay: 50;
@@ -74,6 +74,16 @@
   --app-shell-header-h: 3.5rem;
   --app-shell-control-h: 2.25rem;
   --app-shell-search-max-w: 42rem;
+
+  /* Monaco editor tokens (derived from theme palette) */
+  --code-editor-bg: var(--background);
+  --code-editor-fg: var(--foreground);
+  --code-editor-cursor: var(--primary);
+  --code-editor-line-highlight: var(--muted);
+  --code-editor-line-number: var(--muted-foreground);
+  --code-editor-selection: var(--accent);
+  --code-editor-selection-inactive: var(--muted);
+  --code-editor-gutter: var(--card);
 
   /* charts */
   --chart-1: oklch(0.5462 0.25 264.376);
@@ -116,7 +126,7 @@
 }
 
 :root.dark,
-:root[data-theme="default"].dark {
+:root[data-theme="indigo"].dark {
   color-scheme: dark;
 
   --background: oklch(0.145 0 0);
@@ -196,8 +206,8 @@
    Primaries are tuned to ~5.0:1 contrast with white text (AA margin)
 ------------------------------ */
 
-/* OCEAN */
-:root[data-theme="ocean"] {
+/* CYAN */
+:root[data-theme="cyan"] {
   --primary: oklch(0.5339 0.0923 210);
   --ring: oklch(0.5339 0.0923 210);
   --chart-1: oklch(0.5339 0.0923 210);
@@ -209,7 +219,7 @@
   --sidebar-accent: oklch(0.9 0.012 210);
   --sidebar-ring: oklch(0.5339 0.0923 210);
 }
-:root[data-theme="ocean"].dark {
+:root[data-theme="cyan"].dark {
   --primary: oklch(0.5339 0.0923 210);
   --ring: oklch(0.5339 0.0923 210);
   --chart-1: oklch(0.5339 0.0923 210);
@@ -222,8 +232,8 @@
   --sidebar-ring: oklch(0.5339 0.0923 210);
 }
 
-/* FOREST */
-:root[data-theme="forest"] {
+/* EMERALD */
+:root[data-theme="emerald"] {
   --primary: oklch(0.5279 0.1305 155);
   --ring: oklch(0.5279 0.1305 155);
   --chart-1: oklch(0.5279 0.1305 155);
@@ -235,7 +245,7 @@
   --sidebar-accent: oklch(0.9 0.012 155);
   --sidebar-ring: oklch(0.5279 0.1305 155);
 }
-:root[data-theme="forest"].dark {
+:root[data-theme="emerald"].dark {
   --primary: oklch(0.5279 0.1305 155);
   --ring: oklch(0.5279 0.1305 155);
   --chart-1: oklch(0.5279 0.1305 155);
@@ -248,8 +258,8 @@
   --sidebar-ring: oklch(0.5279 0.1305 155);
 }
 
-/* SUNSET */
-:root[data-theme="sunset"] {
+/* AMBER */
+:root[data-theme="amber"] {
   --primary: oklch(0.5585 0.1597 45);
   --ring: oklch(0.5585 0.1597 45);
   --chart-1: oklch(0.5585 0.1597 45);
@@ -261,7 +271,7 @@
   --sidebar-accent: oklch(0.9 0.012 45);
   --sidebar-ring: oklch(0.5585 0.1597 45);
 }
-:root[data-theme="sunset"].dark {
+:root[data-theme="amber"].dark {
   --primary: oklch(0.5585 0.1597 45);
   --ring: oklch(0.5585 0.1597 45);
   --chart-1: oklch(0.5585 0.1597 45);
@@ -274,8 +284,8 @@
   --sidebar-ring: oklch(0.5585 0.1597 45);
 }
 
-/* ROSE */
-:root[data-theme="rose"] {
+/* CORAL */
+:root[data-theme="coral"] {
   --primary: oklch(0.5715 0.2295 20);
   --ring: oklch(0.5715 0.2295 20);
   --chart-1: oklch(0.5715 0.2295 20);
@@ -287,7 +297,7 @@
   --sidebar-accent: oklch(0.9 0.012 20);
   --sidebar-ring: oklch(0.5715 0.2295 20);
 }
-:root[data-theme="rose"].dark {
+:root[data-theme="coral"].dark {
   --primary: oklch(0.5715 0.2295 20);
   --ring: oklch(0.5715 0.2295 20);
   --chart-1: oklch(0.5715 0.2295 20);
@@ -300,8 +310,8 @@
   --sidebar-ring: oklch(0.5715 0.2295 20);
 }
 
-/* GRAPE */
-:root[data-theme="grape"] {
+/* VIOLET */
+:root[data-theme="violet"] {
   --primary: oklch(0.5741 0.25 303);
   --ring: oklch(0.5741 0.25 303);
   --chart-1: oklch(0.5741 0.25 303);
@@ -313,7 +323,7 @@
   --sidebar-accent: oklch(0.9 0.012 303);
   --sidebar-ring: oklch(0.5741 0.25 303);
 }
-:root[data-theme="grape"].dark {
+:root[data-theme="violet"].dark {
   --primary: oklch(0.5741 0.25 303);
   --ring: oklch(0.5741 0.25 303);
   --chart-1: oklch(0.5741 0.25 303);
@@ -326,8 +336,8 @@
   --sidebar-ring: oklch(0.5741 0.25 303);
 }
 
-/* SAND */
-:root[data-theme="sand"] {
+/* TEAL */
+:root[data-theme="teal"] {
   --primary: oklch(0.5311 0.0936 185);
   --ring: oklch(0.5311 0.0936 185);
   --chart-1: oklch(0.5311 0.0936 185);
@@ -339,7 +349,7 @@
   --sidebar-accent: oklch(0.9 0.012 185);
   --sidebar-ring: oklch(0.5311 0.0936 185);
 }
-:root[data-theme="sand"].dark {
+:root[data-theme="teal"].dark {
   --primary: oklch(0.5311 0.0936 185);
   --ring: oklch(0.5311 0.0936 185);
   --chart-1: oklch(0.5311 0.0936 185);
@@ -352,8 +362,8 @@
   --sidebar-ring: oklch(0.5311 0.0936 185);
 }
 
-/* CARBON */
-:root[data-theme="carbon"] {
+/* BLUE */
+:root[data-theme="blue"] {
   --primary: oklch(0.5430 0.1537 250);
   --ring: oklch(0.5430 0.1537 250);
   --chart-1: oklch(0.5430 0.1537 250);
@@ -365,7 +375,7 @@
   --sidebar-accent: oklch(0.9 0.012 250);
   --sidebar-ring: oklch(0.5430 0.1537 250);
 }
-:root[data-theme="carbon"].dark {
+:root[data-theme="blue"].dark {
   --primary: oklch(0.5430 0.1537 250);
   --ring: oklch(0.5430 0.1537 250);
   --chart-1: oklch(0.5430 0.1537 250);

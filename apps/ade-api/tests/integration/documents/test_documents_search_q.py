@@ -13,10 +13,12 @@ from tests.integration.documents.helpers import build_documents_fixture
 pytestmark = pytest.mark.asyncio
 
 
-async def test_list_documents_q_matches_tokens_across_fields(session, settings) -> None:
-    workspace, _uploader, _colleague, processed, _uploaded = await build_documents_fixture(session)
+async def test_list_documents_q_matches_tokens_across_fields(db_session, settings) -> None:
+    workspace, _uploader, _colleague, processed, _uploaded = await build_documents_fixture(
+        db_session
+    )
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
     order_by = resolve_sort(
         [],
         allowed=SORT_FIELDS,

@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 async def test_delete_document_marks_deleted(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
     settings: Settings,
 ) -> None:
     """Soft deletion should flag the record and remove the stored file."""
@@ -57,7 +57,7 @@ async def test_delete_document_marks_deleted(
     detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 404
 
-    row = await anyio.to_thread.run_sync(session.get, Document, UUID(document_id))
+    row = await anyio.to_thread.run_sync(db_session.get, Document, UUID(document_id))
     assert row is not None
     assert row.deleted_at is not None
     stored_uri = row.stored_uri

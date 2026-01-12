@@ -125,7 +125,7 @@ async def test_list_documents_rejects_unknown_query_params(
 async def test_upload_document_does_not_cache_worksheets(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     """Uploads should not persist worksheet metadata on document records."""
 
@@ -157,7 +157,7 @@ async def test_upload_document_does_not_cache_worksheets(
 
     assert upload.status_code == 201, upload.text
     document_id = UUID(upload.json()["id"])
-    record = await anyio.to_thread.run_sync(session.get, Document, document_id)
+    record = await anyio.to_thread.run_sync(db_session.get, Document, document_id)
     assert record is not None
     assert "worksheets" not in (record.attributes or {})
 

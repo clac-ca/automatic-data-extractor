@@ -69,7 +69,7 @@ def test_authenticate_websocket_prefers_api_key() -> None:
         },
         cookies={"ade_session": "cookie-token"},
     )
-    settings = Settings(jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
     session = FakeSession(
         {
             api_user_id: _user(api_user_id),
@@ -105,7 +105,7 @@ def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
         headers={"authorization": "Bearer bearer-token"},
         cookies={"ade_session": "cookie-token"},
     )
-    settings = Settings(jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
     session = FakeSession(
         {
             bearer_user_id: _user(bearer_user_id),
@@ -139,7 +139,7 @@ def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
         cookies={"ade_session": "cookie-token"},
         query_params={"access_token": "query-token"},
     )
-    settings = Settings(jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
     session = FakeSession(
         {
             cookie_user_id: _user(cookie_user_id),
@@ -169,7 +169,7 @@ def test_authenticate_websocket_falls_back_to_query_param() -> None:
     cookie_service = StubAuthenticator(None)
 
     websocket = FakeWebSocket(query_params={"access_token": "query-token"})
-    settings = Settings(jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
     session = FakeSession({query_user_id: _user(query_user_id)})
 
     principal = authenticate_websocket(

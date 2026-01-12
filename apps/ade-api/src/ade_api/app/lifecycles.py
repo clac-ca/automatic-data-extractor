@@ -14,13 +14,7 @@ from fastapi.routing import Lifespan
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
-from ade_api.db import (
-    DatabaseSettings,
-    get_engine,
-    get_sessionmaker_from_app,
-    init_db,
-    shutdown_db,
-)
+from ade_api.db import get_engine, get_sessionmaker_from_app, init_db, shutdown_db
 from ade_api.features.documents.change_feed import run_document_events_pruner
 from ade_api.features.rbac import RbacService
 from ade_api.settings import Settings, get_settings
@@ -115,22 +109,6 @@ def create_application_lifespan(
 ) -> Lifespan[FastAPI]:
     """Return the FastAPI lifespan handler used by the app factory."""
 
-    def _build_db_settings() -> DatabaseSettings:
-        return DatabaseSettings(
-            url=settings.database_url,
-            echo=settings.database_echo,
-            auth_mode=settings.database_auth_mode,
-            managed_identity_client_id=settings.database_mi_client_id,
-            pool_size=settings.database_pool_size,
-            max_overflow=settings.database_max_overflow,
-            pool_timeout=settings.database_pool_timeout,
-            pool_recycle=settings.database_pool_recycle,
-            sqlite_journal_mode=settings.database_sqlite_journal_mode,
-            sqlite_synchronous=settings.database_sqlite_synchronous,
-            sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
-            sqlite_begin_mode=settings.database_sqlite_begin_mode,
-        )
-
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ensure_runtime_dirs(settings)
@@ -142,10 +120,11 @@ def create_application_lifespan(
             )
         else:
             app.state.documents_upload_semaphore = None
-        db_settings = _build_db_settings()
-        safe_url = make_url(db_settings.url).render_as_string(hide_password=True)
+        if not settings.database_url:
+            raise RuntimeError("ADE_DATABASE_URL is required to initialize the database.")
+        safe_url = make_url(settings.database_url).render_as_string(hide_password=True)
         logger.info("db.init.start", extra={"database_url": safe_url})
-        init_db(app, db_settings)
+        init_db(app, settings)
         logger.info("db.init.complete", extra={"database_url": safe_url})
 
         engine = get_engine(app)

@@ -162,15 +162,15 @@ async def test_workspace_member_listing_admin(
 async def test_workspace_member_listing_excludes_inactive_by_default(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
 ) -> None:
     admin = seed_identity.admin
     member = seed_identity.member
     token, _ = await login(async_client, email=admin.email, password=admin.password)
-    user = await anyio.to_thread.run_sync(session.get, User, member.id)
+    user = await anyio.to_thread.run_sync(db_session.get, User, member.id)
     assert user is not None
     user.is_active = False
-    await anyio.to_thread.run_sync(session.flush)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     base_url = f"/api/v1/workspaces/{seed_identity.workspace_id}/members"
 

@@ -14,7 +14,7 @@ pytestmark = pytest.mark.asyncio
 async def test_run_output_endpoint_serves_file(
     async_client,
     seed_identity,
-    session,
+    db_session,
     settings: Settings,
 ) -> None:
     workspace_id = seed_identity.workspace_id
@@ -22,12 +22,12 @@ async def test_run_output_endpoint_serves_file(
         workspace_id=workspace_id,
         name="Output Config",
     )
-    session.add(configuration)
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
 
     document = make_document(workspace_id=workspace_id, filename="input.csv")
-    session.add_all([document])
-    await anyio.to_thread.run_sync(session.flush)
+    db_session.add_all([document])
+    await anyio.to_thread.run_sync(db_session.flush)
 
     run = make_run(
         workspace_id=workspace_id,
@@ -36,8 +36,8 @@ async def test_run_output_endpoint_serves_file(
         status=RunStatus.SUCCEEDED,
     )
     run.completed_at = utc_now()
-    session.add(run)
-    await anyio.to_thread.run_sync(session.commit)
+    db_session.add(run)
+    await anyio.to_thread.run_sync(db_session.commit)
 
     run_dir = workspace_run_root(settings, workspace_id, run.id)
     output_dir = run_dir / "output"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from sqlalchemy import create_engine, insert, select
+from sqlalchemy.orm import sessionmaker
 
 from ade_worker.repo import Repo
 from ade_worker.schema import (
@@ -76,9 +77,44 @@ def _insert_document(engine, *, document_id: str, workspace_id: str, now: dateti
         )
 
 
+def _insert_environment(
+    engine,
+    *,
+    env_id: str,
+    workspace_id: str,
+    configuration_id: str,
+    engine_spec: str,
+    deps_digest: str,
+    status: str,
+    now: datetime,
+    error_message: str | None = None,
+) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            insert(environments).values(
+                id=env_id,
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                engine_spec=engine_spec,
+                deps_digest=deps_digest,
+                status=status,
+                error_message=error_message,
+                claimed_by=None,
+                claim_expires_at=None,
+                created_at=now - timedelta(minutes=5),
+                updated_at=now - timedelta(minutes=5),
+                last_used_at=None,
+                python_version=None,
+                python_interpreter=None,
+                engine_version=None,
+            )
+        )
+
+
 def test_ensure_environment_rows_unique_by_deps_digest() -> None:
     engine = _engine()
-    repo = Repo(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_run(
@@ -121,20 +157,64 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
     assert digests == ["sha256:aaa", "sha256:bbb"]
 
 
+def test_ensure_environment_rows_requeues_failed_env() -> None:
+    engine = _engine()
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    repo = Repo(SessionLocal)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+
+    _insert_run(
+        engine,
+        run_id="run-10",
+        workspace_id="ws-10",
+        configuration_id="cfg-10",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:xyz",
+        now=now,
+    )
+    _insert_environment(
+        engine,
+        env_id="env-10",
+        workspace_id="ws-10",
+        configuration_id="cfg-10",
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:xyz",
+        status="failed",
+        error_message="oops",
+        now=now,
+    )
+
+    inserted = repo.ensure_environment_rows_for_queued_runs(now=now, limit=None)
+    assert inserted == 0
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            select(environments.c.status, environments.c.error_message)
+            .where(environments.c.id == "env-10")
+        ).first()
+
+    assert row is not None
+    assert row.status == "queued"
+    assert row.error_message is None
+
+
 def test_update_document_status_updates_version_and_last_run_at() -> None:
     engine = _engine()
-    repo = Repo(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_document(engine, document_id="doc-1", workspace_id="ws-1", now=now)
 
-    with engine.begin() as conn:
-        repo.update_document_status(
-            conn=conn,
+    with SessionLocal.begin() as session:
+        version = repo.update_document_status(
+            session=session,
             document_id="doc-1",
             status="processing",
             now=now,
         )
+
+    assert version == 2
 
     with engine.begin() as conn:
         row = conn.execute(
@@ -158,7 +238,8 @@ def test_update_document_status_updates_version_and_last_run_at() -> None:
 
 def test_replace_run_metrics_overwrites() -> None:
     engine = _engine()
-    repo = Repo(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_run(
@@ -171,9 +252,9 @@ def test_replace_run_metrics_overwrites() -> None:
         now=now,
     )
 
-    with engine.begin() as conn:
+    with SessionLocal.begin() as session:
         repo.replace_run_metrics(
-            conn=conn,
+            session=session,
             run_id="run-4",
             metrics={
                 "evaluation_outcome": "partial",
@@ -189,9 +270,9 @@ def test_replace_run_metrics_overwrites() -> None:
     assert row["evaluation_outcome"] == "partial"
     assert row["evaluation_findings_total"] == 2
 
-    with engine.begin() as conn:
+    with SessionLocal.begin() as session:
         repo.replace_run_metrics(
-            conn=conn,
+            session=session,
             run_id="run-4",
             metrics={
                 "evaluation_outcome": "succeeded",
@@ -208,7 +289,8 @@ def test_replace_run_metrics_overwrites() -> None:
 
 def test_replace_run_fields_is_idempotent() -> None:
     engine = _engine()
-    repo = Repo(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_run(
@@ -240,16 +322,16 @@ def test_replace_run_fields_is_idempotent() -> None:
         },
     ]
 
-    with engine.begin() as conn:
-        repo.replace_run_fields(conn=conn, run_id="run-5", rows=rows)
+    with SessionLocal.begin() as session:
+        repo.replace_run_fields(session=session, run_id="run-5", rows=rows)
 
     with engine.begin() as conn:
         first = conn.execute(select(run_fields)).mappings().all()
     assert len(first) == 2
 
-    with engine.begin() as conn:
+    with SessionLocal.begin() as session:
         repo.replace_run_fields(
-            conn=conn,
+            session=session,
             run_id="run-5",
             rows=[
                 {
@@ -271,7 +353,8 @@ def test_replace_run_fields_is_idempotent() -> None:
 
 def test_replace_run_table_columns_is_idempotent() -> None:
     engine = _engine()
-    repo = Repo(engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     _insert_run(
@@ -303,16 +386,16 @@ def test_replace_run_table_columns_is_idempotent() -> None:
         }
     ]
 
-    with engine.begin() as conn:
-        repo.replace_run_table_columns(conn=conn, run_id="run-6", rows=columns)
+    with SessionLocal.begin() as session:
+        repo.replace_run_table_columns(session=session, run_id="run-6", rows=columns)
 
     with engine.begin() as conn:
         first = conn.execute(select(run_table_columns)).mappings().all()
     assert len(first) == 1
     assert first[0]["mapped_field"] == "email"
 
-    with engine.begin() as conn:
-        repo.replace_run_table_columns(conn=conn, run_id="run-6", rows=[])
+    with SessionLocal.begin() as session:
+        repo.replace_run_table_columns(session=session, run_id="run-6", rows=[])
 
     with engine.begin() as conn:
         second = conn.execute(select(run_table_columns)).mappings().all()

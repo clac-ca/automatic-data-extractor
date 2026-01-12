@@ -2104,6 +2104,8 @@ export type components = {
             latestSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
             /** @description Summary of the latest result metadata, when available. */
             latestResult?: components["schemas"]["DocumentResultSummary"] | null;
+            /** @description Optional list row projection for table updates. */
+            listRow?: components["schemas"]["DocumentListRow"] | null;
         };
         /**
          * DocumentResultSummary

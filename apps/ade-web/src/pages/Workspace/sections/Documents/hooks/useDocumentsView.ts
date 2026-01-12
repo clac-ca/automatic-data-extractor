@@ -366,6 +366,9 @@ export function useDocumentsView({
       if (entry.type === "document.deleted") {
         return entry;
       }
+      if (entry.row) {
+        return entry;
+      }
       try {
         const row = await fetchWorkspaceDocumentRowById(workspaceId, entry.documentId);
         return { ...entry, row };
@@ -584,6 +587,7 @@ export function useDocumentsView({
     workspaceId,
     cursor: state.cursor,
     enabled: enabled && Boolean(state.cursor),
+    includeRows: true,
     onEvent: (change) => {
       void applyIncomingChanges([change], { allowQueue: true });
     },

@@ -13,12 +13,12 @@ from tests.integration.documents.helpers import build_tag_filter_fixture
 pytestmark = pytest.mark.asyncio
 
 
-async def test_tag_filters_any_all_not_empty(session, settings) -> None:
+async def test_tag_filters_any_all_not_empty(db_session, settings) -> None:
     workspace, _, doc_all, doc_finance, doc_priority, doc_empty = await build_tag_filter_fixture(
-        session
+        db_session
     )
 
-    service = DocumentsService(session=session, settings=settings)
+    service = DocumentsService(session=db_session, settings=settings)
     order_by = resolve_sort(
         [],
         allowed=SORT_FIELDS,

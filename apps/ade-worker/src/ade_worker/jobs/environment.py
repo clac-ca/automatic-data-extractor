@@ -11,12 +11,12 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from sqlalchemy.orm import Session, sessionmaker
 
 from ..paths import PathManager
 from ..queue import EnvironmentClaim, EnvironmentQueue
 from ..repo import Repo
-from ..settings import WorkerSettings
+from ..settings import Settings
 from ..subprocess_runner import EventLog, SubprocessRunner
 
 logger = logging.getLogger("ade_worker")
@@ -39,8 +39,8 @@ def _run_capture_text(cmd: list[str]) -> str:
 
 @dataclass(slots=True)
 class EnvironmentJob:
-    settings: WorkerSettings
-    engine: Any  # sqlalchemy.Engine
+    settings: Settings
+    SessionLocal: sessionmaker[Session]
     queue: EnvironmentQueue
     repo: Repo
     paths: PathManager
@@ -61,7 +61,7 @@ class EnvironmentJob:
             env_id=env.id,
             worker_id=self.worker_id,
             now=utcnow(),
-            lease_seconds=int(self.settings.lease_seconds),
+            lease_seconds=int(self.settings.worker_lease_seconds),
         )
 
     def process(self, claim: EnvironmentClaim) -> None:
@@ -108,7 +108,7 @@ class EnvironmentJob:
 
         event_log.emit(event="environment.start", message="Starting environment build", context=ctx)
 
-        deadline = time.monotonic() + float(self.settings.environment_timeout_seconds)
+        deadline = time.monotonic() + float(self.settings.worker_env_build_timeout_seconds)
         pip_env = self._pip_env()
         last_exit_code: int | None = None
 
@@ -126,7 +126,7 @@ class EnvironmentJob:
                 cwd=None,
                 env=pip_env,
                 heartbeat=lambda: self._heartbeat_env(claim),
-                heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
             )
             last_exit_code = res.exit_code
@@ -152,7 +152,7 @@ class EnvironmentJob:
                 cwd=None,
                 env=pip_env,
                 heartbeat=lambda: self._heartbeat_env(claim),
-                heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
             )
             last_exit_code = res.exit_code
@@ -172,7 +172,7 @@ class EnvironmentJob:
                 cwd=None,
                 env=pip_env,
                 heartbeat=lambda: self._heartbeat_env(claim),
-                heartbeat_interval=max(1.0, self.settings.lease_seconds / 3),
+                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
             )
             last_exit_code = res.exit_code
@@ -196,9 +196,9 @@ class EnvironmentJob:
             )
 
             finished_at = utcnow()
-            with self.engine.begin() as conn:
+            with self.SessionLocal.begin() as session:
                 ok = self.queue.ack_success(
-                    conn=conn,
+                    session=session,
                     env_id=claim.id,
                     worker_id=self.worker_id,
                     now=finished_at,
@@ -212,7 +212,7 @@ class EnvironmentJob:
                     )
                     return
                 self.repo.record_environment_metadata(
-                    conn=conn,
+                    session=session,
                     env_id=claim.id,
                     now=finished_at,
                     python_interpreter=str(python_bin),
@@ -229,9 +229,9 @@ class EnvironmentJob:
             finished_at = utcnow()
             exit_code = last_exit_code or 1
 
-            with self.engine.begin() as conn:
+            with self.SessionLocal.begin() as session:
                 ok = self.queue.ack_failure(
-                    conn=conn,
+                    session=session,
                     env_id=claim.id,
                     worker_id=self.worker_id,
                     now=finished_at,
@@ -247,7 +247,7 @@ class EnvironmentJob:
                     return
 
                 self.repo.record_environment_metadata(
-                    conn=conn,
+                    session=session,
                     env_id=claim.id,
                     now=finished_at,
                     python_interpreter=None,

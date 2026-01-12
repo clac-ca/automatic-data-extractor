@@ -2,8 +2,6 @@
 
 from .base import NAMING_CONVENTION, Base, TimestampMixin, UUIDPrimaryKeyMixin, metadata, utc_now
 from .database import (
-    DatabaseAuthMode,
-    DatabaseSettings,
     build_engine,
     get_db,
     get_engine,
@@ -23,8 +21,6 @@ __all__ = [
     "TimestampMixin",
     "GUID",
     "UTCDateTime",
-    "DatabaseAuthMode",
-    "DatabaseSettings",
     "build_engine",
     "init_db",
     "shutdown_db",

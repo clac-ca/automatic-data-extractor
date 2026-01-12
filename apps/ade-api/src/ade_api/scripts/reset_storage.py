@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import MetaData, inspect
 from sqlalchemy.engine import URL, make_url
 
-from ade_api.db import DatabaseSettings, build_engine
+from ade_api.db import build_engine
 
 from ..settings import Settings
 
@@ -136,25 +136,8 @@ def _describe_database_target(database_url: URL, sqlite_path: Path | None) -> No
         print(f"  - {backend} database: {rendered}")
 
 
-def _build_db_settings(settings: Settings) -> DatabaseSettings:
-    return DatabaseSettings(
-        url=settings.database_url,
-        echo=settings.database_echo,
-        auth_mode=settings.database_auth_mode,
-        managed_identity_client_id=settings.database_mi_client_id,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_timeout=settings.database_pool_timeout,
-        pool_recycle=settings.database_pool_recycle,
-        sqlite_journal_mode=settings.database_sqlite_journal_mode,
-        sqlite_synchronous=settings.database_sqlite_synchronous,
-        sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
-        sqlite_begin_mode=settings.database_sqlite_begin_mode,
-    )
-
-
-def _drop_all_tables(db_settings: DatabaseSettings) -> int:
-    engine = build_engine(db_settings)
+def _drop_all_tables(settings: Settings) -> int:
+    engine = build_engine(settings)
     try:
         with engine.begin() as connection:
             inspector = inspect(connection)
@@ -192,8 +175,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = Settings()
-    db_settings = _build_db_settings(settings)
-    database_url = make_url(db_settings.url)
+    if not settings.database_url:
+        raise RuntimeError("ADE_DATABASE_URL is required.")
+    database_url = make_url(settings.database_url)
     sqlite_path = _resolve_sqlite_database_path(database_url)
     targets = _gather_storage_targets(settings, database_url)
 
@@ -227,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("Dropping database tables...")
         try:
-            dropped_tables = _drop_all_tables(db_settings)
+            dropped_tables = _drop_all_tables(settings)
         except Exception as exc:  # noqa: BLE001
             drop_error = exc
 

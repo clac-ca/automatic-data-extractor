@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 async def test_download_missing_file_returns_404(
     async_client: AsyncClient,
     seed_identity,
-    session,
+    db_session,
     settings: Settings,
 ) -> None:
     """Downloading a document with a missing backing file should 404."""
@@ -40,7 +40,7 @@ async def test_download_missing_file_returns_404(
     payload = upload.json()
     document_id = payload["id"]
 
-    row = await anyio.to_thread.run_sync(session.get, Document, UUID(document_id))
+    row = await anyio.to_thread.run_sync(db_session.get, Document, UUID(document_id))
     assert row is not None
     stored_uri = row.stored_uri
 

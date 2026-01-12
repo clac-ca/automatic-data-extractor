@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .db import assert_tables_exist, create_db_engine
+from .db import assert_tables_exist, build_engine, build_sessionmaker
 from .jobs.environment import EnvironmentJob
 from .jobs.run import RunJob
 from .gc import gc_environments, gc_run_artifacts
@@ -21,7 +21,7 @@ from .paths import PathManager
 from .queue import EnvironmentQueue, RunQueue
 from .repo import Repo
 from .schema import REQUIRED_TABLES
-from .settings import WorkerSettings
+from .settings import Settings, get_settings
 from .subprocess_runner import SubprocessRunner
 
 logger = logging.getLogger("ade_worker")
@@ -60,8 +60,8 @@ def _next_gc_deadline(now_mono: float, interval_seconds: float) -> float:
 
 @dataclass(slots=True)
 class WorkerLoop:
-    settings: WorkerSettings
-    engine: Any  # sqlalchemy.Engine
+    settings: Settings
+    SessionLocal: Any  # sqlalchemy.orm.sessionmaker
     worker_id: str
     env_queue: EnvironmentQueue
     run_queue: RunQueue
@@ -74,22 +74,26 @@ class WorkerLoop:
         logger.info(
             "ade-worker starting worker_id=%s concurrency=%s",
             self.worker_id,
-            self.settings.concurrency,
+            self.settings.worker_concurrency,
         )
 
-        poll = float(self.settings.poll_interval)
-        max_poll = float(self.settings.poll_interval_max)
+        poll = float(self.settings.worker_poll_interval)
+        max_poll = float(self.settings.worker_poll_interval_max)
 
-        cleanup_every = float(self.settings.cleanup_interval)
+        cleanup_every = float(self.settings.worker_cleanup_interval)
         next_cleanup = time.monotonic() + cleanup_every
 
-        gc_enabled = bool(self.settings.enable_gc) and float(self.settings.gc_interval_seconds) > 0
-        gc_interval = float(self.settings.gc_interval_seconds)
+        gc_enabled = bool(self.settings.worker_enable_gc) and float(
+            self.settings.worker_gc_interval_seconds
+        ) > 0
+        gc_interval = float(self.settings.worker_gc_interval_seconds)
         next_gc = _next_gc_deadline(time.monotonic(), gc_interval) if gc_enabled else None
 
-        ensure_batch = max(10, int(self.settings.concurrency) * 5)
+        ensure_batch = max(10, int(self.settings.worker_concurrency) * 5)
+        ensure_interval = max(1.0, float(self.settings.worker_poll_interval_max))
+        next_ensure = time.monotonic()
 
-        with ThreadPoolExecutor(max_workers=int(self.settings.concurrency)) as executor:
+        with ThreadPoolExecutor(max_workers=int(self.settings.worker_concurrency)) as executor:
             in_flight: set[Future[None]] = set()
 
             while True:
@@ -126,10 +130,10 @@ class WorkerLoop:
                 if next_gc is not None and mono >= next_gc:
                     try:
                         env_result = gc_environments(
-                            engine=self.engine,
+                            SessionLocal=self.SessionLocal,
                             paths=self.paths,
                             now=now,
-                            env_ttl_days=self.settings.env_ttl_days,
+                            env_ttl_days=self.settings.worker_env_ttl_days,
                         )
                         if env_result.scanned:
                             logger.info(
@@ -142,13 +146,13 @@ class WorkerLoop:
                     except Exception:
                         logger.exception("environment GC failed")
 
-                    if self.settings.run_artifact_ttl_days is not None:
+                    if self.settings.worker_run_artifact_ttl_days is not None:
                         try:
                             run_result = gc_run_artifacts(
-                                engine=self.engine,
+                                SessionLocal=self.SessionLocal,
                                 paths=self.paths,
                                 now=now,
-                                run_ttl_days=self.settings.run_artifact_ttl_days,
+                                run_ttl_days=self.settings.worker_run_artifact_ttl_days,
                             )
                             if run_result.scanned:
                                 logger.info(
@@ -164,18 +168,24 @@ class WorkerLoop:
                     next_gc = _next_gc_deadline(mono, gc_interval)
 
                 # Ensure environments exist for queued runs (best effort).
-                try:
-                    self.repo.ensure_environment_rows_for_queued_runs(now=now, limit=ensure_batch)
-                except Exception:
-                    logger.exception("failed to ensure environment rows for queued runs")
+                if mono >= next_ensure:
+                    try:
+                        if self.repo.has_queued_runs(now=now):
+                            self.repo.ensure_environment_rows_for_queued_runs(
+                                now=now,
+                                limit=ensure_batch,
+                            )
+                    except Exception:
+                        logger.exception("failed to ensure environment rows for queued runs")
+                    next_ensure = mono + ensure_interval
 
                 # Claim work while capacity remains.
                 claimed_any = False
-                while len(in_flight) < int(self.settings.concurrency):
+                while len(in_flight) < int(self.settings.worker_concurrency):
                     env_claim = self.env_queue.claim_next(
                         worker_id=self.worker_id,
                         now=now,
-                        lease_seconds=int(self.settings.lease_seconds),
+                        lease_seconds=int(self.settings.worker_lease_seconds),
                     )
                     if env_claim is not None:
                         claimed_any = True
@@ -185,7 +195,7 @@ class WorkerLoop:
                     run_claim = self.run_queue.claim_next(
                         worker_id=self.worker_id,
                         now=now,
-                        lease_seconds=int(self.settings.lease_seconds),
+                        lease_seconds=int(self.settings.worker_lease_seconds),
                     )
                     if run_claim is None:
                         break
@@ -193,46 +203,39 @@ class WorkerLoop:
                     in_flight.add(executor.submit(self.run_job.process, run_claim))
 
                 if claimed_any:
-                    poll = float(self.settings.poll_interval)
+                    poll = float(self.settings.worker_poll_interval)
                     continue
 
                 # Idle backoff.
                 time.sleep(poll)
-                poll = min(max_poll, poll * 1.25 + 0.01)
+                poll = min(max_poll, poll * 1.25 + 0.01 + (random.random() * 0.05))
 
 
 def main() -> int:
-    settings = WorkerSettings.load()
-    _setup_logging(settings.log_level)
+    settings = get_settings()
+    _setup_logging(settings.worker_log_level)
 
-    _ensure_runtime_dirs(settings.data_dir, settings.venvs_dir)
+    _ensure_runtime_dirs(settings.worker_data_dir, settings.venvs_dir)
 
-    engine = create_db_engine(
-        settings.database_url,
-        sqlite_busy_timeout_ms=settings.sqlite_busy_timeout_ms,
-        sqlite_journal_mode=settings.sqlite_journal_mode,
-        sqlite_synchronous=settings.sqlite_synchronous,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_timeout=settings.database_pool_timeout,
-        pool_recycle=settings.database_pool_recycle,
-    )
+    engine = build_engine(settings)
 
     assert_tables_exist(engine, REQUIRED_TABLES)
 
     worker_id = settings.worker_id or _default_worker_id()
 
-    paths = PathManager(settings.data_dir, settings.venvs_dir)
-    repo = Repo(engine)
+    paths = PathManager(settings.worker_data_dir, settings.venvs_dir)
+    SessionLocal = build_sessionmaker(engine)
 
-    env_queue = EnvironmentQueue(engine)
-    run_queue = RunQueue(engine, backoff=settings.backoff_seconds)
+    repo = Repo(SessionLocal)
+
+    env_queue = EnvironmentQueue(engine, SessionLocal)
+    run_queue = RunQueue(engine, SessionLocal, backoff=settings.backoff_seconds)
 
     runner = SubprocessRunner()
 
     env_job = EnvironmentJob(
         settings=settings,
-        engine=engine,
+        SessionLocal=SessionLocal,
         queue=env_queue,
         repo=repo,
         paths=paths,
@@ -241,7 +244,7 @@ def main() -> int:
     )
     run_job = RunJob(
         settings=settings,
-        engine=engine,
+        SessionLocal=SessionLocal,
         queue=run_queue,
         repo=repo,
         paths=paths,
@@ -251,7 +254,7 @@ def main() -> int:
 
     WorkerLoop(
         settings=settings,
-        engine=engine,
+        SessionLocal=SessionLocal,
         worker_id=worker_id,
         env_queue=env_queue,
         run_queue=run_queue,

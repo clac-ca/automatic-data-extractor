@@ -6,9 +6,10 @@ from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 import anyio
-from fastapi import APIRouter, Depends, Path, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Path, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
+from ade_api.api.deps import SettingsDep
 from ade_api.core.auth import AuthenticationError, authenticate_websocket
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia
 from ade_api.core.http.dependencies import (
@@ -19,13 +20,12 @@ from ade_api.core.http.dependencies import (
 )
 from ade_api.db import get_sessionmaker_from_app
 from ade_api.models import User
-from ade_api.settings import Settings, get_settings
+from ade_api.settings import Settings
 
 from .registry import ChannelKey, PresenceParticipant, get_presence_registry
 
 router = APIRouter(prefix="/workspaces/{workspaceId}/presence", tags=["presence"])
 
-SettingsDep = Annotated[Settings, Depends(get_settings)]
 WorkspacePath = Annotated[
     UUID,
     Path(

@@ -8,14 +8,11 @@ import { DataTableColumnHeader } from "@/components/data-table/data-table-column
 import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
 import { useDataTable } from "@/hooks/use-data-table";
-import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
-import { useSearchParams } from "@app/navigation/urlState";
 import type { PresenceParticipant } from "@schema/presence";
 import type { DocumentStatus, FileType, WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
 import { DocumentPresenceBadges } from "@pages/Workspace/sections/Documents/components/DocumentPresenceBadges";
@@ -84,16 +81,10 @@ export function DocumentsTable({
   scrollFooter,
   onVisibleRangeChange,
 }: DocumentsTableProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [searchValue, setSearchValue] = useState(() => searchParams.get("q") ?? "");
   const [contextMenu, setContextMenu] = useState<{
     rowId: string;
     position: { x: number; y: number };
   } | null>(null);
-
-  useEffect(() => {
-    setSearchValue(searchParams.get("q") ?? "");
-  }, [searchParams]);
 
   const statusOptions = useMemo(
     () =>
@@ -688,33 +679,6 @@ export function DocumentsTable({
     clearOnDefault: true,
   });
 
-  const replaceHistory = history !== "push";
-  const setSearchParamsSafe = useCallback(
-    (value: string) => {
-      const applyUpdate = () =>
-        setSearchParams((prev) => {
-          const params = new URLSearchParams(prev);
-          const trimmed = value.trim();
-          if (!trimmed) {
-            params.delete("q");
-          } else {
-            params.set("q", trimmed);
-          }
-          params.delete("page");
-          return params;
-        }, { replace: replaceHistory });
-
-      if (startTransition) {
-        startTransition(() => applyUpdate());
-      } else {
-        applyUpdate();
-      }
-    },
-    [replaceHistory, setSearchParams, startTransition],
-  );
-
-  const debouncedSetSearch = useDebouncedCallback(setSearchParamsSafe, debounceMs);
-
   useEffect(() => {
     const container = scrollContainerRef?.current;
     if (!container) return;
@@ -760,16 +724,6 @@ export function DocumentsTable({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <DataTableAdvancedToolbar table={table}>
-        <Input
-          value={searchValue}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setSearchValue(nextValue);
-            debouncedSetSearch(nextValue);
-          }}
-          placeholder="Search documents..."
-          className="h-8 w-full max-w-[240px]"
-        />
         <DataTableSortList table={table} align="start" />
         <DataTableFilterList
           table={table}

@@ -64,7 +64,6 @@ from .exceptions import (
     RunOutputPreviewUnsupportedError,
     RunOutputSheetParseError,
     RunOutputSheetUnsupportedError,
-    RunQueueFullError,
 )
 from .filters import RunColumnFilters
 from .repository import RunsRepository
@@ -146,7 +145,7 @@ class RunsService:
 
     Responsibilities:
     - create and persist Run rows
-    - enforce queue limits and batch creation rules
+    - enforce batch creation rules
     - read artifacts/logs written by ade-worker
     - serialize run resources for API responses
     """
@@ -211,28 +210,6 @@ class RunsService:
             workspace_id=configuration.workspace_id,
             document_id=input_document_id,
         )
-
-        existing = self._runs.list_active_for_documents(
-            configuration_id=configuration.id,
-            document_ids=[input_document_id],
-        )
-        if existing:
-            run = existing[0]
-            configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
-            self._session.flush()
-            logger.info(
-                "run.prepare.noop",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    input_document_id=input_document_id,
-                    status=run.status.value,
-                ),
-            )
-            return run
-
-        self._enforce_queue_capacity()
 
         selected_sheet_names = self._select_input_sheet_names(options)
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
@@ -307,7 +284,6 @@ class RunsService:
         input_sheet_names_by_document_id: dict[UUID, list[str]] | None = None,
         active_sheet_only_by_document_id: dict[UUID, bool] | None = None,
         skip_existing_check: bool = False,
-        queued_count: int | None = None,
     ) -> list[Run]:
         """Create queued runs for each document id, enforcing all-or-nothing semantics."""
 
@@ -346,11 +322,6 @@ class RunsService:
             new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
 
         if new_document_ids:
-            self._enforce_queue_capacity(
-                requested=len(new_document_ids),
-                queued_count=queued_count,
-            )
-
             for document_id in new_document_ids:
                 input_sheet_names = None
                 if (
@@ -494,21 +465,13 @@ class RunsService:
             )
             return 0
 
-        queue_limit = self._settings.queue_size
-        batch_size = batch_size or queue_limit or 100
+        batch_size = batch_size or 100
         if batch_size <= 0:
             return 0
 
         total = 0
         while True:
-            queued_count = None
-            remaining = None
-            if queue_limit:
-                queued_count = self._runs.count_queued()
-                remaining = max(queue_limit - queued_count, 0)
-                if remaining <= 0:
-                    break
-            limit = batch_size if remaining is None else min(batch_size, remaining)
+            limit = batch_size
             documents = self._pending_documents(
                 workspace_id=configuration.workspace_id,
                 configuration_id=configuration.id,
@@ -517,16 +480,12 @@ class RunsService:
             if not documents:
                 break
             logger.debug(
-                "run.pending.enqueue.batch batch_size=%s queued_count=%s remaining=%s",
+                "run.pending.enqueue.batch batch_size=%s",
                 limit,
-                queued_count,
-                remaining,
                 extra=log_context(
                     workspace_id=configuration.workspace_id,
                     configuration_id=configuration.id,
                     batch_size=limit,
-                    queued_count=queued_count,
-                    remaining=remaining,
                 ),
             )
             document_ids = [doc.id for doc in documents]
@@ -538,25 +497,14 @@ class RunsService:
                     sheet_names_by_document_id[document.id] = list(run_options.input_sheet_names)
                 if run_options and run_options.active_sheet_only:
                     active_sheet_only_by_document_id[document.id] = True
-            try:
-                runs = self.prepare_runs_batch(
-                    configuration_id=configuration.id,
-                    document_ids=document_ids,
-                    options=RunBatchCreateOptions(),
-                    input_sheet_names_by_document_id=sheet_names_by_document_id or None,
-                    active_sheet_only_by_document_id=active_sheet_only_by_document_id or None,
-                    skip_existing_check=True,
-                    queued_count=queued_count,
-                )
-            except RunQueueFullError:
-                logger.warning(
-                    "run.pending.enqueue.queue_full",
-                    extra=log_context(
-                        workspace_id=configuration.workspace_id,
-                        configuration_id=configuration.id,
-                    ),
-                )
-                break
+            runs = self.prepare_runs_batch(
+                configuration_id=configuration.id,
+                document_ids=document_ids,
+                options=RunBatchCreateOptions(),
+                input_sheet_names_by_document_id=sheet_names_by_document_id or None,
+                active_sheet_only_by_document_id=active_sheet_only_by_document_id or None,
+                skip_existing_check=True,
+            )
             total += len(runs)
             if len(document_ids) < limit:
                 break
@@ -574,13 +522,6 @@ class RunsService:
 
     def is_processing_paused(self, *, workspace_id: UUID) -> bool:
         return self._processing_paused(workspace_id)
-
-    def _remaining_queue_capacity(self) -> int | None:
-        limit = self._settings.queue_size
-        if not limit:
-            return None
-        queued = self._runs.count_queued()
-        return max(limit - queued, 0)
 
     def _pending_documents(
         self,
@@ -727,20 +668,6 @@ class RunsService:
                     if not remaining:
                         return
                     rows = build_rows(remaining)
-
-    def _enforce_queue_capacity(
-        self,
-        *,
-        requested: int = 1,
-        queued_count: int | None = None,
-    ) -> None:
-        limit = self._settings.queue_size
-        if not limit or requested <= 0:
-            return
-
-        queued = queued_count if queued_count is not None else self._runs.count_queued()
-        if queued + requested > limit:
-            raise RunQueueFullError(f"Run queue is full (limit {limit})")
 
     # --------------------------------------------------------------------- #
     # Public read APIs (runs, summaries, outputs)
