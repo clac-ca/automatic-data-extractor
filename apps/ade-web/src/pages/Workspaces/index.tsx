@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useNavigate } from "@app/navigation/history";
+import { useSearchParams } from "@app/navigation/urlState";
 
 import { useSession } from "@components/providers/auth/SessionContext";
 import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@hooks/workspaces";
+import { useDebouncedCallback } from "@hooks/use-debounced-callback";
 import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
 import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
@@ -20,6 +22,7 @@ export default function WorkspacesScreen() {
 
 function WorkspacesIndexContent() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
   const setDefaultWorkspaceMutation = useSetDefaultWorkspaceMutation();
@@ -32,7 +35,31 @@ function WorkspacesIndexContent() {
   const canCreateWorkspace =
     normalizedPermissions.includes("workspaces.create") ||
     normalizedPermissions.includes("workspaces.manage_all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const urlSearchQuery = useMemo(() => searchParams.get("q") ?? "", [searchParams]);
+  const [searchQuery, setSearchQuery] = useState(urlSearchQuery);
+  const updateSearchParams = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(searchParams);
+      const trimmed = value.trim();
+      if (trimmed) {
+        params.set("q", trimmed);
+      } else {
+        params.delete("q");
+      }
+      const nextSearch = params.toString();
+      if (nextSearch === searchParams.toString()) return;
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const debouncedUpdateSearchParams = useDebouncedCallback(updateSearchParams, 200);
+  const handleSearchQueryChange = useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      debouncedUpdateSearchParams(value);
+    },
+    [debouncedUpdateSearchParams],
+  );
   const workspacesPage = workspacesQuery.data;
   const workspaces: WorkspaceProfile[] = useMemo(
     () => workspacesPage?.items ?? [],
@@ -54,6 +81,12 @@ function WorkspacesIndexContent() {
     [navigate],
   );
 
+  useEffect(() => {
+    if (urlSearchQuery !== searchQuery) {
+      setSearchQuery(urlSearchQuery);
+    }
+  }, [searchQuery, urlSearchQuery]);
+
   const actions = canCreateWorkspace ? (
     <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
       Create workspace
@@ -71,7 +104,10 @@ function WorkspacesIndexContent() {
     }
   }, [visibleWorkspaces, goToWorkspace]);
 
-  const handleResetSearch = useCallback(() => setSearchQuery(""), []);
+  const handleResetSearch = useCallback(() => {
+    setSearchQuery("");
+    updateSearchParams("");
+  }, [updateSearchParams]);
 
   const handleSetDefaultWorkspace = useCallback(
     async (workspace: WorkspaceProfile) => {
@@ -160,7 +196,7 @@ function WorkspacesIndexContent() {
         ) : null}
         <SearchField
           value={searchQuery}
-          onValueChange={setSearchQuery}
+          onValueChange={handleSearchQueryChange}
           onSubmit={handleWorkspaceSearchSubmit}
           onClear={handleResetSearch}
           placeholder="Search workspaces by name or slug"

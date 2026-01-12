@@ -1,6 +1,7 @@
 import {
   type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type SVGProps,
   useEffect,
@@ -10,21 +11,18 @@ import {
   useState,
 } from "react";
 import clsx from "clsx";
-import { useQuery } from "@tanstack/react-query";
 
 import { useNavigate } from "@app/navigation/history";
 import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
-import { fetchWorkspaces } from "@api/workspaces/api";
-import { fetchWorkspaceDocuments, type DocumentListRow } from "@api/documents";
-import { fetchWorkspaceRuns, type RunResource } from "@api/runs/api";
-import { useDebouncedCallback } from "@hooks/use-debounced-callback";
+import {
+  GLOBAL_SEARCH_TRIGGER_LENGTH,
+  type GlobalSearchScope,
+  useGlobalSearchData,
+} from "@hooks/use-global-search";
 import { useShortcutHint } from "@hooks/useShortcutHint";
 import { CloseIcon, DirectoryIcon, DocumentIcon, RunsIcon, SearchIcon, SpinnerIcon } from "@components/icons";
 
-const SEARCH_TRIGGER_LENGTH = 2;
-const RESULT_LIMIT = 5;
-const DEFAULT_DOCUMENT_SORT = "-createdAt";
-const DEFAULT_RUN_SORT = "-createdAt";
+const DEBOUNCE_DELAY_MS = 200;
 
 type GlobalNavItem = {
   readonly id: string;
@@ -80,25 +78,160 @@ export function GlobalNavSearch({
   const generatedId = useId();
   const inputId = `${generatedId}-input`;
   const listId = `${generatedId}-list`;
+  const statusId = `${generatedId}-status`;
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [focusWithin, setFocusWithin] = useState(false);
-  const focusWithinRef = useRef(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const updateDebouncedQuery = useDebouncedCallback((next: string) => {
-    setDebouncedQuery(next.trim());
-  }, 200);
-
   const normalizedQuery = query.trim();
-  const {
-    sections,
-    isLoading,
-    emptyMessage,
-  } = useGlobalSearchResults(scope, debouncedQuery, focusWithin);
+  const shouldSearch = normalizedQuery.length >= GLOBAL_SEARCH_TRIGGER_LENGTH;
+
+  useEffect(() => {
+    if (!normalizedQuery) {
+      setDebouncedQuery("");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedQuery(normalizedQuery);
+    }, DEBOUNCE_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [normalizedQuery]);
+
+  const searchScope: GlobalSearchScope =
+    scope.kind === "workspace"
+      ? { kind: "workspace", workspaceId: scope.workspaceId }
+      : { kind: "directory" };
+
+  const { documents, runs, workspaces, isFetching, isError } = useGlobalSearchData({
+    scope: searchScope,
+    query: debouncedQuery,
+    enabled: isOpen,
+  });
+
+  const navItems = useMemo(() => {
+    if (scope.kind !== "workspace") return [];
+    if (!normalizedQuery) return scope.navItems;
+    const loweredQuery = normalizedQuery.toLowerCase();
+    return scope.navItems.filter((item) => {
+      const label = item.label.toLowerCase();
+      return label.includes(loweredQuery) || item.id.toLowerCase().includes(loweredQuery);
+    });
+  }, [normalizedQuery, scope.kind, scope.navItems]);
+
+  const isQueryStale = normalizedQuery !== debouncedQuery;
+  const canShowRemoteResults = shouldSearch && !isQueryStale;
+
+  const sections = useMemo(() => {
+    const next: GlobalSearchSection[] = [];
+
+    if (navItems.length > 0) {
+      next.push({
+        id: "navigate",
+        label: "Jump to",
+        items: navItems.map((item) => ({
+          id: `nav-${item.id}`,
+          label: item.label,
+          description: "Workspace section",
+          icon: item.icon ? <item.icon className="h-4 w-4 text-muted-foreground" aria-hidden /> : undefined,
+          href: item.href,
+          meta: "Section",
+        })),
+      });
+    }
+
+    if (canShowRemoteResults && scope.kind === "workspace") {
+      const documentItems = documents.map((document) => {
+        const label = document.name || "Untitled document";
+        return {
+          id: `document-${document.id}`,
+          label,
+          description: document.status ? `Status: ${document.status}` : "Document",
+          icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
+          href: buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, {
+            q: normalizedQuery,
+            document: document.id,
+          }),
+        };
+      });
+      const viewAllDocuments = {
+        id: "documents-all",
+        label: "Search documents",
+        description: `View all document results for "${normalizedQuery}"`,
+        icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
+        href: buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, { q: normalizedQuery }),
+        meta: "All",
+      };
+      next.push({
+        id: "documents",
+        label: "Documents",
+        items: documentItems.length > 0 ? [...documentItems, viewAllDocuments] : [viewAllDocuments],
+      });
+
+      const runItems = runs.map((run) => {
+        const label = run.input?.filename ?? run.input?.document_id ?? `Run ${run.id}`;
+        return {
+          id: `run-${run.id}`,
+          label,
+          description: run.status ? `Status: ${run.status}` : "Run",
+          icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
+          href: buildSearchHref(`/workspaces/${scope.workspaceId}/runs`, {
+            q: normalizedQuery,
+            run: run.id,
+          }),
+        };
+      });
+      const viewAllRuns = {
+        id: "runs-all",
+        label: "Search runs",
+        description: `View all run results for "${normalizedQuery}"`,
+        icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
+        href: buildSearchHref(`/workspaces/${scope.workspaceId}/runs`, { q: normalizedQuery }),
+        meta: "All",
+      };
+      next.push({
+        id: "runs",
+        label: "Runs",
+        items: runItems.length > 0 ? [...runItems, viewAllRuns] : [viewAllRuns],
+      });
+    }
+
+    if (canShowRemoteResults && scope.kind === "directory") {
+      const workspaceItems = workspaces.map((workspace) => ({
+        id: `workspace-${workspace.id}`,
+        label: workspace.name,
+        description: workspace.slug ? `Slug: ${workspace.slug}` : "Workspace",
+        icon: <DirectoryIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
+        href: getDefaultWorkspacePath(workspace.id),
+        meta: "Workspace",
+      }));
+
+      if (workspaceItems.length > 0) {
+        next.push({
+          id: "workspaces",
+          label: "Workspaces",
+          items: workspaceItems,
+        });
+      }
+    }
+
+    return next;
+  }, [
+    canShowRemoteResults,
+    documents,
+    navItems,
+    normalizedQuery,
+    runs,
+    scope.kind,
+    scope.workspaceId,
+    workspaces,
+  ]);
+
   const flatItems = useMemo(
     () => sections.flatMap((section) => section.items),
     [sections],
@@ -127,6 +260,10 @@ export function GlobalNavSearch({
   }, [normalizedQuery]);
 
   useEffect(() => {
+    if (!isOpen) setActiveIndex(0);
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!enableShortcut) return;
     if (typeof window === "undefined") return;
 
@@ -145,9 +282,35 @@ export function GlobalNavSearch({
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [enableShortcut]);
 
-  const showDropdown =
-    focusWithin &&
-    (flatItems.length > 0 || isLoading || Boolean(emptyMessage));
+  const isSearchPending = isOpen && shouldSearch && (isQueryStale || isFetching);
+  const hasResults = flatItems.length > 0;
+  const fallbackHref =
+    shouldSearch && normalizedQuery
+      ? scope.kind === "workspace"
+        ? buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, { q: normalizedQuery })
+        : buildSearchHref("/workspaces", { q: normalizedQuery })
+      : null;
+
+  let statusMessage: string | null = null;
+  if (isError) {
+    statusMessage = hasResults
+      ? "Some results may be unavailable right now."
+      : "Search is unavailable right now.";
+  } else if (isSearchPending && !hasResults) {
+    statusMessage = "Searching...";
+  } else if (!hasResults && !isSearchPending) {
+    if (!normalizedQuery) {
+      statusMessage = scope.kind === "workspace"
+        ? "Search documents, runs, and workspace navigation."
+        : "Search workspaces by name or slug.";
+    } else if (!shouldSearch) {
+      statusMessage = `Type at least ${GLOBAL_SEARCH_TRIGGER_LENGTH} characters to search.`;
+    } else {
+      statusMessage = `No matches for "${normalizedQuery}".`;
+    }
+  }
+
+  const showDropdown = isOpen && (hasResults || isSearchPending || Boolean(statusMessage));
 
   const searchPlaceholder =
     placeholder ??
@@ -155,64 +318,99 @@ export function GlobalNavSearch({
 
   const handleQueryChange = (next: string) => {
     setQuery(next);
-    updateDebouncedQuery(next);
+    if (!isOpen) {
+      setIsOpen(true);
+    }
   };
 
   const handleClear = () => {
     if (!query) return;
     setQuery("");
     setDebouncedQuery("");
-    updateDebouncedQuery("");
     inputRef.current?.focus({ preventScroll: true });
   };
 
   const close = () => {
-    if (!focusWithinRef.current) return;
-    focusWithinRef.current = false;
-    setFocusWithin(false);
+    setIsOpen(false);
   };
 
-  const handleSelectItem = (item: GlobalSearchItem | undefined) => {
+  const handleSelectItem = (
+    item: GlobalSearchItem | undefined,
+    options: { preserveQuery?: boolean; skipNavigate?: boolean } = {},
+  ) => {
     if (!item) return;
     item.onSelect?.();
-    if (item.href) {
+    if (item.href && !options.skipNavigate) {
       navigate(item.href);
     }
-    setQuery("");
-    setDebouncedQuery("");
-    updateDebouncedQuery("");
-    close();
-    const active = document.activeElement as HTMLElement | null;
-    if (active && rootRef.current?.contains(active)) {
-      active.blur();
+    if (!options.preserveQuery) {
+      setQuery("");
+      setDebouncedQuery("");
+      close();
+      const active = document.activeElement as HTMLElement | null;
+      if (active && rootRef.current?.contains(active)) {
+        active.blur();
+      }
+    }
+  };
+
+  const handleItemClick = (event: ReactMouseEvent<HTMLElement>, item: GlobalSearchItem) => {
+    const hasModifier =
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button === 1;
+    handleSelectItem(item, { preserveQuery: hasModifier, skipNavigate: true });
+    if (event.defaultPrevented || hasModifier) return;
+    if (item.href) {
+      event.preventDefault();
+      navigate(item.href);
     }
   };
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-      event.currentTarget.blur();
-      return;
-    }
-
-    if (!showDropdown || flatItems.length === 0) return;
-
     if (event.key === "ArrowDown") {
+      if (!showDropdown || flatItems.length === 0) return;
       event.preventDefault();
       setActiveIndex((current) => (current + 1) % flatItems.length);
       return;
     }
 
     if (event.key === "ArrowUp") {
+      if (!showDropdown || flatItems.length === 0) return;
       event.preventDefault();
       setActiveIndex((current) => (current - 1 + flatItems.length) % flatItems.length);
       return;
     }
 
-    if (event.key === "Enter") {
+    if (event.key === "Home") {
+      if (!showDropdown || flatItems.length === 0) return;
       event.preventDefault();
-      handleSelectItem(flatItems[activeIndex]);
+      setActiveIndex(0);
+      return;
+    }
+
+    if (event.key === "End") {
+      if (!showDropdown || flatItems.length === 0) return;
+      event.preventDefault();
+      setActiveIndex(flatItems.length - 1);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (showDropdown && flatItems.length > 0) {
+        event.preventDefault();
+        handleSelectItem(flatItems[activeIndex]);
+        return;
+      }
+      if (fallbackHref) {
+        event.preventDefault();
+        navigate(fallbackHref);
+        setQuery("");
+        setDebouncedQuery("");
+        close();
+      }
     }
   };
 
@@ -220,12 +418,7 @@ export function GlobalNavSearch({
     <div
       ref={rootRef}
       className={clsx("relative w-full min-w-0", className)}
-      onFocusCapture={() => {
-        if (!focusWithinRef.current) {
-          focusWithinRef.current = true;
-          setFocusWithin(true);
-        }
-      }}
+      onFocusCapture={() => setIsOpen(true)}
       onBlurCapture={() => {
         requestAnimationFrame(() => {
           const root = rootRef.current;
@@ -237,9 +430,14 @@ export function GlobalNavSearch({
       onKeyDownCapture={(event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
-        close();
-        const active = document.activeElement as HTMLElement | null;
-        if (active && rootRef.current?.contains(active)) active.blur();
+        if (isOpen) {
+          close();
+          inputRef.current?.focus({ preventScroll: true });
+          return;
+        }
+        if (query) {
+          handleClear();
+        }
       }}
     >
       <div
@@ -249,7 +447,7 @@ export function GlobalNavSearch({
         )}
       >
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-background/80 text-muted-foreground ring-1 ring-inset ring-border/40">
-          <SearchIcon className="h-4 w-4" />
+          <SearchIcon className="h-4 w-4" aria-hidden />
         </span>
         <input
           ref={inputRef}
@@ -263,11 +461,13 @@ export function GlobalNavSearch({
           aria-autocomplete="list"
           aria-haspopup="listbox"
           aria-expanded={showDropdown}
-          aria-controls={showDropdown ? listId : undefined}
+          aria-controls={showDropdown && flatItems.length > 0 ? listId : undefined}
           aria-activedescendant={
             showDropdown && flatItems.length > 0 ? `${listId}-option-${activeIndex}` : undefined
           }
+          aria-describedby={showDropdown && statusMessage ? statusId : undefined}
           placeholder={searchPlaceholder}
+          autoComplete="off"
           className="w-full min-w-0 border-0 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
 
@@ -283,7 +483,7 @@ export function GlobalNavSearch({
             </button>
           ) : null}
 
-          {isLoading ? (
+          {isSearchPending ? (
             <span className="inline-flex h-7 w-7 items-center justify-center" aria-live="polite" aria-label="Searching">
               <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" />
             </span>
@@ -300,12 +500,15 @@ export function GlobalNavSearch({
       {showDropdown ? (
         <div
           className="absolute left-0 right-0 top-full z-[var(--app-z-header)] mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl ring-1 ring-inset ring-border/30"
-          role="listbox"
-          aria-label="Global search results"
-          id={listId}
         >
           {sections.length > 0 ? (
-            <div className="divide-y divide-border/60">
+            <div
+              className="divide-y divide-border/60"
+              role="listbox"
+              aria-label="Global search results"
+              id={listId}
+              aria-busy={isSearchPending}
+            >
               {sections.map((section, sectionIndex) => {
                 const sectionIndexOffset = sectionOffsets[sectionIndex] ?? 0;
                 return (
@@ -317,41 +520,88 @@ export function GlobalNavSearch({
                       {section.items.map((item, itemIndex) => {
                         const absoluteIndex = sectionIndexOffset + itemIndex;
                         const isActive = absoluteIndex === activeIndex;
+                        const rowClassName = clsx(
+                          "flex w-full cursor-pointer items-start gap-3 px-4 py-2.5 text-left transition",
+                          isActive ? "bg-muted" : "hover:bg-muted",
+                        );
                         return (
-                          <button
-                            key={item.id}
-                            id={`${listId}-option-${absoluteIndex}`}
-                            type="button"
-                            role="option"
-                            aria-selected={isActive}
-                            onMouseEnter={() => setActiveIndex(absoluteIndex)}
-                            onClick={() => handleSelectItem(item)}
-                            className={clsx(
-                              "flex w-full items-start gap-3 px-4 py-2.5 text-left transition",
-                              isActive ? "bg-muted" : "hover:bg-muted",
-                            )}
-                          >
-                            {item.icon ? (
-                              <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
-                            ) : (
-                              <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden />
-                            )}
-                            <span className="flex min-w-0 flex-1 flex-col">
-                              <span className="flex items-center gap-2">
-                                <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
-                                {item.meta ? (
-                                  <span className="rounded border border-border bg-card px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    {item.meta}
+                          item.href ? (
+                            <a
+                              key={item.id}
+                              href={item.href}
+                              id={`${listId}-option-${absoluteIndex}`}
+                              role="option"
+                              aria-selected={isActive}
+                              tabIndex={-1}
+                              onMouseEnter={() => setActiveIndex(absoluteIndex)}
+                              onClick={(event) => handleItemClick(event, item)}
+                              className={rowClassName}
+                            >
+                              {item.icon ? (
+                                <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
+                              ) : (
+                                <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden />
+                              )}
+                              <span className="flex min-w-0 flex-1 flex-col">
+                                <span className="flex items-center gap-2">
+                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
+                                  {item.meta ? (
+                                    <span className="rounded border border-border bg-card px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                      {item.meta}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                {item.description ? (
+                                  <span
+                                    className={clsx(
+                                      "text-xs",
+                                      isActive ? "text-foreground" : "text-muted-foreground",
+                                    )}
+                                  >
+                                    {item.description}
                                   </span>
                                 ) : null}
                               </span>
-                              {item.description ? (
-                                <span className={clsx("text-xs", isActive ? "text-foreground" : "text-muted-foreground")}>
-                                  {item.description}
+                            </a>
+                          ) : (
+                            <button
+                              key={item.id}
+                              id={`${listId}-option-${absoluteIndex}`}
+                              type="button"
+                              role="option"
+                              aria-selected={isActive}
+                              tabIndex={-1}
+                              onMouseEnter={() => setActiveIndex(absoluteIndex)}
+                              onClick={() => handleSelectItem(item)}
+                              className={rowClassName}
+                            >
+                              {item.icon ? (
+                                <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
+                              ) : (
+                                <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden />
+                              )}
+                              <span className="flex min-w-0 flex-1 flex-col">
+                                <span className="flex items-center gap-2">
+                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
+                                  {item.meta ? (
+                                    <span className="rounded border border-border bg-card px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                      {item.meta}
+                                    </span>
+                                  ) : null}
                                 </span>
-                              ) : null}
-                            </span>
-                          </button>
+                                {item.description ? (
+                                  <span
+                                    className={clsx(
+                                      "text-xs",
+                                      isActive ? "text-foreground" : "text-muted-foreground",
+                                    )}
+                                  >
+                                    {item.description}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                          )
                         );
                       })}
                     </div>
@@ -361,9 +611,14 @@ export function GlobalNavSearch({
             </div>
           ) : null}
 
-          {sections.length === 0 && emptyMessage ? (
-            <div className="px-4 py-4 text-sm text-muted-foreground" role="status">
-              {emptyMessage}
+          {statusMessage ? (
+            <div
+              id={statusId}
+              className="px-4 py-4 text-sm text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              {statusMessage}
             </div>
           ) : null}
         </div>
@@ -372,173 +627,19 @@ export function GlobalNavSearch({
   );
 }
 
-function useGlobalSearchResults(scope: GlobalNavSearchScope, query: string, enabled: boolean) {
-  const normalizedQuery = query.trim();
-  const hasQuery = normalizedQuery.length > 0;
-  const shouldSearch = normalizedQuery.length >= SEARCH_TRIGGER_LENGTH;
-  const loweredQuery = normalizedQuery.toLowerCase();
-  const workspaceId = scope.kind === "workspace" ? scope.workspaceId : "";
+function buildSearchHref(path: string, params: Record<string, string | null | undefined>) {
+  const searchParams = new URLSearchParams();
 
-  const navItems = useMemo(() => {
-    if (scope.kind !== "workspace") return [];
-    if (!hasQuery) return scope.navItems;
-    return scope.navItems.filter((item) => {
-      const label = item.label.toLowerCase();
-      return label.includes(loweredQuery) || item.id.toLowerCase().includes(loweredQuery);
-    });
-  }, [hasQuery, loweredQuery, scope]);
-
-  const documentsQuery = useQuery({
-    queryKey: ["global-search", "documents", workspaceId, normalizedQuery],
-    queryFn: ({ signal }) =>
-      fetchWorkspaceDocuments(
-        workspaceId,
-        {
-          sort: DEFAULT_DOCUMENT_SORT,
-          page: 1,
-          perPage: RESULT_LIMIT,
-          q: normalizedQuery,
-        },
-        signal,
-      ),
-    enabled: enabled && scope.kind === "workspace" && shouldSearch,
-    staleTime: 20_000,
-  });
-
-  const runsQuery = useQuery({
-    queryKey: ["global-search", "runs", workspaceId, normalizedQuery],
-    queryFn: ({ signal }) =>
-      fetchWorkspaceRuns(
-        workspaceId,
-        {
-          page: 1,
-          perPage: RESULT_LIMIT,
-          sort: DEFAULT_RUN_SORT,
-          q: normalizedQuery,
-        },
-        signal,
-      ),
-    enabled: enabled && scope.kind === "workspace" && shouldSearch,
-    staleTime: 20_000,
-  });
-
-  const workspacesQuery = useQuery({
-    queryKey: ["global-search", "workspaces", normalizedQuery],
-    queryFn: ({ signal }) => fetchWorkspaces({ page: 1, pageSize: RESULT_LIMIT, q: normalizedQuery, signal }),
-    enabled: enabled && scope.kind === "directory" && shouldSearch,
-    staleTime: 30_000,
-  });
-
-  const sections: GlobalSearchSection[] = [];
-
-  if (navItems.length > 0) {
-    sections.push({
-      id: "navigate",
-      label: "Jump to",
-      items: navItems.map((item) => ({
-        id: `nav-${item.id}`,
-        label: item.label,
-        description: "Workspace section",
-        icon: item.icon ? <item.icon className="h-4 w-4 text-muted-foreground" aria-hidden /> : undefined,
-        href: item.href,
-        meta: "Section",
-      })),
-    });
-  }
-
-  if (scope.kind === "workspace" && shouldSearch) {
-    const documents = (documentsQuery.data?.items ?? []) as DocumentListRow[];
-    const documentItems = documents.map((document) => ({
-      id: `document-${document.id}`,
-      label: document.name || "Untitled document",
-      description: document.status ? `Status: ${document.status}` : "Document",
-      icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-      href: buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, document.name || normalizedQuery),
-    }));
-    const viewAllDocuments = {
-      id: "documents-all",
-      label: "View all document results",
-      description: `Search documents for "${normalizedQuery}"`,
-      icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-      href: buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, normalizedQuery),
-      meta: "All",
-    };
-    const documentsSectionItems =
-      documentItems.length > 0 ? [...documentItems, viewAllDocuments] : [viewAllDocuments];
-    sections.push({
-      id: "documents",
-      label: "Documents",
-      items: documentsSectionItems,
-    });
-
-    const runs = (runsQuery.data?.items ?? []) as RunResource[];
-    const runItems = runs.map((run) => ({
-      id: `run-${run.id}`,
-      label: run.input?.filename ?? run.input?.document_id ?? `Run ${run.id}`,
-      description: run.status ? `Status: ${run.status}` : "Run",
-      icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-      href: buildSearchHref(`/workspaces/${scope.workspaceId}/runs`, run.input?.filename ?? normalizedQuery),
-    }));
-    const viewAllRuns = {
-      id: "runs-all",
-      label: "View all run results",
-      description: `Search runs for "${normalizedQuery}"`,
-      icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-      href: buildSearchHref(`/workspaces/${scope.workspaceId}/runs`, normalizedQuery),
-      meta: "All",
-    };
-    const runsSectionItems = runItems.length > 0 ? [...runItems, viewAllRuns] : [viewAllRuns];
-    sections.push({
-      id: "runs",
-      label: "Runs",
-      items: runsSectionItems,
-    });
-  }
-
-  if (scope.kind === "directory" && shouldSearch) {
-    const workspaces = workspacesQuery.data?.items ?? [];
-    const workspaceItems = workspaces.map((workspace) => ({
-      id: `workspace-${workspace.id}`,
-      label: workspace.name,
-      description: workspace.slug ? `Slug: ${workspace.slug}` : "Workspace",
-      icon: <DirectoryIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-      href: getDefaultWorkspacePath(workspace.id),
-      meta: "Workspace",
-    }));
-
-    if (workspaceItems.length > 0) {
-      sections.push({
-        id: "workspaces",
-        label: "Workspaces",
-        items: workspaceItems,
-      });
+  Object.entries(params).forEach(([key, value]) => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) searchParams.set(key, trimmed);
+      return;
     }
-  }
+    if (value) searchParams.set(key, String(value));
+  });
 
-  const isLoading = documentsQuery.isFetching || runsQuery.isFetching || workspacesQuery.isFetching;
-  const hasResults = sections.some((section) => section.items.length > 0);
-  let emptyMessage: string | null = null;
-
-  if (!hasResults && !isLoading) {
-    if (!hasQuery) {
-      emptyMessage = scope.kind === "workspace"
-        ? "Start typing to search documents, runs, and workspace navigation."
-        : "Search workspaces by name or slug.";
-    } else if (!shouldSearch) {
-      emptyMessage = "Type at least 2 characters to search.";
-    } else {
-      emptyMessage = `No matches for "${normalizedQuery}".`;
-    }
-  }
-
-  return { sections, isLoading, emptyMessage };
-}
-
-function buildSearchHref(path: string, query: string) {
-  const params = new URLSearchParams();
-  const trimmed = query.trim();
-  if (trimmed) params.set("q", trimmed);
-  const search = params.toString();
+  const search = searchParams.toString();
   return search ? `${path}?${search}` : path;
 }
 
