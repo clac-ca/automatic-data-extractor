@@ -316,6 +316,23 @@ def _drop_mssql_triggers() -> None:
     )
 
 
+def _ensure_mssql_alembic_version_length() -> None:
+    op.execute(
+        """
+        IF EXISTS (
+            SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = 'alembic_version'
+              AND COLUMN_NAME = 'version_num'
+              AND CHARACTER_MAXIMUM_LENGTH BETWEEN 1 AND 63
+        )
+        BEGIN
+            ALTER TABLE alembic_version ALTER COLUMN version_num VARCHAR(128) NOT NULL;
+        END;
+        """
+    )
+
+
 def upgrade() -> None:
     dialect = _dialect_name()
     if dialect == "sqlite":
@@ -334,6 +351,7 @@ def upgrade() -> None:
         return
 
     if dialect == "mssql":
+        _ensure_mssql_alembic_version_length()
         _drop_mssql_triggers()
         for name in ("request_id", "client_request_id", "payload"):
             if _column_exists("document_events", name):
