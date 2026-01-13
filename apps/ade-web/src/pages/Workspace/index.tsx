@@ -40,7 +40,13 @@ import WorkspaceSettingsScreen from "@pages/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }
-  | { readonly kind: "content"; readonly key: string; readonly element: ReactElement; readonly fullHeight?: boolean };
+  | {
+      readonly kind: "content";
+      readonly key: string;
+      readonly element: ReactElement;
+      readonly fullHeight?: boolean;
+      readonly fullWidth?: boolean;
+    };
 
 export default function WorkspaceScreen() {
   return <WorkspaceContent />;
@@ -290,6 +296,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   }
 
   const fullHeightLayout = section.fullHeight ?? false;
+  const fullWidthLayout = section.fullWidth ?? fullHeightLayout;
+  const contentHasPadding = !fullHeightLayout && !fullWidthLayout;
 
   const workspaceNavWidth = immersiveWorkbenchActive
     ? "0px"
@@ -377,11 +385,13 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                   className={clsx(
                     fullHeightLayout
                       ? "flex w-full flex-1 min-h-0 flex-col px-0 py-0"
-                      : "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
+                      : fullWidthLayout
+                        ? "flex w-full flex-col px-0 py-0"
+                        : "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
                   )}
                 >
                   {safeModeEnabled ? (
-                    <div className={clsx("mb-4", fullHeightLayout ? "px-6 pt-4" : "")}>
+                    <div className={clsx("mb-4", contentHasPadding ? "" : "px-6 pt-4")}>
                       <Alert tone="warning" heading="Safe mode active">
                         {safeModeDetail}
                       </Alert>
@@ -464,10 +474,10 @@ export function resolveWorkspaceSection(
           to: `/workspaces/${workspaceId}/documents${query ? `?${query}` : ""}${hash}`,
         };
       }
-      return { kind: "content", key: "documents", element: <DocumentsScreen />, fullHeight: true };
+      return { kind: "content", key: "documents", element: <DocumentsScreen />, fullWidth: true };
     }
     case "runs":
-      return { kind: "content", key: "runs", element: <RunsScreen />, fullHeight: true };
+      return { kind: "content", key: "runs", element: <RunsScreen />, fullWidth: true };
     case "config-builder": {
       if (!second) {
         return { kind: "content", key: "config-builder", element: <ConfigBuilderScreen /> };

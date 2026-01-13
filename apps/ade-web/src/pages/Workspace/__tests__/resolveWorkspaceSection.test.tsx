@@ -36,7 +36,7 @@ describe("resolveWorkspaceSection", () => {
 
   it("returns the documents section for the documents slug", () => {
     const result = resolveWorkspaceSection(workspaceId, ["documents"], "", "");
-    expect(result).toMatchObject({ kind: "content", key: "documents", fullHeight: true });
+    expect(result).toMatchObject({ kind: "content", key: "documents", fullWidth: true });
   });
 
   it("returns the config builder index and details", () => {
@@ -62,7 +62,7 @@ describe("resolveWorkspaceSection", () => {
 
   it("returns the runs section for the runs slug", () => {
     const result = resolveWorkspaceSection(workspaceId, ["runs"], "", "");
-    expect(result).toMatchObject({ kind: "content", key: "runs" });
+    expect(result).toMatchObject({ kind: "content", key: "runs", fullWidth: true });
   });
 
   it("returns the settings section with trailing segments in the key", () => {
