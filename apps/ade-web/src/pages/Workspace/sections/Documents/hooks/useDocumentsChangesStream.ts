@@ -61,11 +61,17 @@ export function useDocumentsChangesStream({
     sourceRef.current = null;
     connectionKeyRef.current = connectionKey;
 
+    const initialCursor = cursorRef.current ?? cursor;
+    if (!initialCursor) {
+      setConnectionState("idle");
+      return;
+    }
+
     let active = true;
     setConnectionState("connecting");
 
     const source = new EventSource(
-      documentsChangesStreamUrl(workspaceId, cursorRef.current ?? cursor, { includeRows }),
+      documentsChangesStreamUrl(workspaceId, initialCursor, { includeRows }),
       {
         withCredentials: true,
       },

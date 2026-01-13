@@ -66,3 +66,9 @@ export function stableId() {
   }
   return `id_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
+
+export function formatTimestamp(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}

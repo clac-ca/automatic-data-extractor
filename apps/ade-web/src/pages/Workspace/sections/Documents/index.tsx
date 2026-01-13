@@ -8,9 +8,9 @@ import { useConfigurationsQuery } from "@hooks/configurations";
 import { useUploadManager, type UploadManagerQueueItem } from "@hooks/documents/uploadManager";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 
-import { UploadManager } from "./components/UploadManager";
-import { UploadPreflightDialog } from "./components/UploadPreflightDialog";
-import { DocumentsTableView } from "./data-table/components/DocumentsTableView";
+import { UploadManager } from "./components/upload/UploadManager";
+import { UploadPreflightDialog } from "./components/upload/UploadPreflightDialog";
+import { DocumentsTableView } from "./components/table/DocumentsTableView";
 
 const XLSX_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -50,30 +50,33 @@ export default function DocumentsScreen() {
 
   const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
 
-  const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(event.target.files ?? []);
-    const accepted = selected.filter(isXlsxFile);
-    const rejected = selected.filter((file) => !isXlsxFile(file));
+  const handleFileInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const selected = Array.from(event.target.files ?? []);
+      const accepted = selected.filter(isXlsxFile);
+      const rejected = selected.filter((file) => !isXlsxFile(file));
 
-    if (rejected.length > 0) {
-      const skippedLabel =
-        rejected.length === 1
-          ? `Skipped ${rejected[0].name}.`
-          : `Skipped ${rejected.length} files.`;
+      if (rejected.length > 0) {
+        const skippedLabel =
+          rejected.length === 1
+            ? `Skipped ${rejected[0].name}.`
+            : `Skipped ${rejected.length} files.`;
 
-      notifyToast({
-        title: "Only .xlsx files are supported.",
-        description: skippedLabel,
-        intent: "warning",
-        duration: 6000,
-      });
-    }
+        notifyToast({
+          title: "Only .xlsx files are supported.",
+          description: skippedLabel,
+          intent: "warning",
+          duration: 6000,
+        });
+      }
 
-    if (accepted.length > 0) {
-      setUploadPreflightFiles(accepted);
-    }
-    event.target.value = "";
-  }, [notifyToast]);
+      if (accepted.length > 0) {
+        setUploadPreflightFiles(accepted);
+      }
+      event.target.value = "";
+    },
+    [notifyToast],
+  );
 
   const handleUploadConfirm = useCallback(
     (items: UploadManagerQueueItem[]) => {
@@ -141,6 +144,7 @@ export default function DocumentsScreen() {
             processingPaused={processingPaused}
             toolbarActions={toolbarActions}
             uploadItems={uploadManager.items}
+            onUploadClick={handleUploadClick}
           />
         </section>
       </div>

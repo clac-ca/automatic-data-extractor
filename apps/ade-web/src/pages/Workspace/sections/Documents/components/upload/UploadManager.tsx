@@ -6,7 +6,7 @@ import type { UploadManagerItem, UploadManagerSummary } from "@hooks/documents/u
 import { CloseIcon, RefreshIcon, UploadIcon } from "@components/icons";
 import { Button } from "@/components/ui/button";
 
-import { formatBytes } from "../utils";
+import { formatBytes } from "../../utils";
 import { UploadProgress } from "./UploadProgress";
 
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
@@ -84,7 +84,9 @@ export function UploadManager({
             <div>
               <p className="text-sm font-semibold text-foreground">Upload manager</p>
               <p className="text-[11px] text-muted-foreground">
-                {summary.uploadingCount > 0 ? `${summary.uploadingCount} uploading` : "All uploads paused or complete"}
+                {summary.uploadingCount > 0
+                  ? `${summary.uploadingCount} uploading`
+                  : "All uploads paused or complete"}
               </p>
             </div>
             {completedCount > 0 ? (

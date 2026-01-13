@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { DataTable } from "@/components/data-table/data-table";
+import { resolveApiUrl } from "@api/client";
+import { fetchRunColumns, fetchRunOutputPreview, fetchRunOutputSheets, type RunOutputSheet } from "@api/runs/api";
+import { ApiError } from "@api/errors";
 import { Button } from "@/components/ui/button";
 import { DownloadIcon } from "@/components/icons";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { resolveApiUrl } from "@api/client";
-import { fetchRunColumns, fetchRunOutputPreview, fetchRunOutputSheets } from "@api/runs/api";
-import { ApiError } from "@api/errors";
-import { columnLabel } from "@pages/Workspace/sections/Documents/utils";
 
-import type { DocumentListRow } from "../types";
-import type { WorkbookSheetPreview } from "@pages/Workspace/sections/Documents/types";
-import type { RunOutputSheet } from "@api/runs/api";
+import type { DocumentListRow } from "../../types";
+import type { WorkbookSheetPreview } from "../../types";
+import { columnLabel } from "../../utils";
 
 type PreviewRow = Record<string, string>;
 
@@ -24,9 +23,7 @@ interface DocumentPreviewGridProps {
   document: DocumentListRow;
 }
 
-export function DocumentPreviewGrid({
-  document: doc,
-}: DocumentPreviewGridProps) {
+export function DocumentPreviewGrid({ document: doc }: DocumentPreviewGridProps) {
   const runId = doc.latestSuccessfulRun?.id ?? null;
   const normalizedDownloadUrl = runId
     ? resolveApiUrl(`/api/v1/runs/${runId}/output/download`)
@@ -81,12 +78,7 @@ export function DocumentPreviewGrid({
 
   const columnsQuery = useQuery({
     queryKey: ["run-output-columns", runId, activeSheetIndex],
-    queryFn: ({ signal }) =>
-      fetchRunColumns(
-        runId ?? "",
-        { sheet_index: activeSheetIndex },
-        signal,
-      ),
+    queryFn: ({ signal }) => fetchRunColumns(runId ?? "", { sheet_index: activeSheetIndex }, signal),
     staleTime: 30_000,
     enabled: Boolean(runId),
   });
@@ -107,6 +99,7 @@ export function DocumentPreviewGrid({
     );
     return totals;
   }, [columnsQuery.data]);
+
   const columnCount = useMemo(() => {
     if (!sheet) return 0;
     const maxRowLength = sheet.rows.reduce(
@@ -115,6 +108,7 @@ export function DocumentPreviewGrid({
     );
     return Math.max(sheet.headers.length, maxRowLength);
   }, [sheet]);
+
   const columnIds = useMemo(
     () => Array.from({ length: columnCount }, (_, index) => `col_${index}`),
     [columnCount],
@@ -156,21 +150,11 @@ export function DocumentPreviewGrid({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    defaultColumn: {
-      size: 140,
-      minSize: 100,
-      maxSize: 240,
-    },
-    enableColumnResizing: false,
   });
 
   const sheetMeta = sheet ? formatSheetMeta(sheet, mappingSummary) : null;
   const sheetTabs = sheets.length ? (
-    <SheetTabs
-      sheets={sheets}
-      activeIndex={activeSheetIndex}
-      onSelect={setSelectedSheetIndex}
-    />
+    <SheetTabs sheets={sheets} activeIndex={activeSheetIndex} onSelect={setSelectedSheetIndex} />
   ) : null;
   const downloadActions = (
     <>
@@ -198,24 +182,23 @@ export function DocumentPreviewGrid({
 
   if (!runId) {
     return (
-    <PreviewShell actions={downloadActions} meta={sheetMeta}>
-      <div className="text-xs text-muted-foreground">No successful run output available yet.</div>
-    </PreviewShell>
+      <PreviewShell actions={downloadActions} meta={sheetMeta}>
+        <div className="text-xs text-muted-foreground">No successful run output available yet.</div>
+      </PreviewShell>
     );
   }
 
   if (previewQuery.isLoading) {
     return (
-    <PreviewShell actions={downloadActions} meta={sheetMeta}>
-      <div className="text-xs text-muted-foreground">Loading preview...</div>
-    </PreviewShell>
+      <PreviewShell actions={downloadActions} meta={sheetMeta}>
+        <div className="text-xs text-muted-foreground">Loading preview...</div>
+      </PreviewShell>
     );
   }
 
   if (previewQuery.isError) {
     const error = previewQuery.error;
-    const message =
-      error instanceof ApiError ? error.message : "Unable to load preview.";
+    const message = error instanceof ApiError ? error.message : "Unable to load preview.";
     return (
       <PreviewShell actions={downloadActions} meta={sheetMeta}>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -244,11 +227,42 @@ export function DocumentPreviewGrid({
   return (
     <PreviewShell actions={downloadActions} meta={sheetMeta}>
       <div className="flex flex-col gap-2">
-        <DataTable
-          table={table}
-          showPagination={false}
-          className="min-w-0 max-w-full gap-1.5 overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:max-h-[min(360px,45vh)] [&_[data-slot=table-container]]:overflow-x-auto [&_[data-slot=table-container]]:overflow-y-auto [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:text-xs [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-10 [&_[data-slot=table-head]]:h-8 [&_[data-slot=table-head]]:bg-muted/30 [&_[data-slot=table-head]]:text-[11px] [&_[data-slot=table-head]]:font-semibold [&_[data-slot=table-head]]:text-muted-foreground [&_[data-slot=table-head]]:truncate [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_var(--border)] [&_[data-slot=table-cell]]:px-2 [&_[data-slot=table-cell]]:py-1.5 [&_[data-slot=table-cell]]:text-xs [&_[data-slot=table-cell]]:truncate"
-        />
+        <div className="max-h-[min(360px,45vh)] overflow-auto">
+          <Table className="min-w-full text-xs">
+            <TableHeader className="sticky top-0 bg-muted/30 backdrop-blur-sm">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} className="h-8 text-[11px] font-semibold text-muted-foreground">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="px-2 py-1.5">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
+                    No rows.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
         {sheetTabs}
       </div>
     </PreviewShell>

@@ -1,4 +1,5 @@
 import type { components } from "@schema";
+import type { FilterItem, FilterJoinOperator } from "@api/listing";
 
 export type { DocumentPageResult, ListDocumentsQuery } from "@api/documents";
 
@@ -17,11 +18,17 @@ export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type MappingHealth = DocumentResultSummary;
 
 export type WorkspacePerson = {
-  /** Stable key for selection and storage. Example: `user:<uuid>` or `label:<email>` */
-  key: string;
+  id: string;
   label: string;
-  kind: "user" | "label";
-  userId?: string;
+  email?: string | null;
 };
 
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
+
+export type DocumentsListParams = {
+  page: number;
+  perPage: number;
+  sort: string | null;
+  filters: FilterItem[] | null;
+  joinOperator: FilterJoinOperator | null;
+};

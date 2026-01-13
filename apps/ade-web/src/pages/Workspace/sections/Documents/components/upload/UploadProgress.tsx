@@ -13,7 +13,9 @@ export function UploadProgress({ upload }: { upload: UploadItem }) {
     <div className="flex flex-col gap-1 text-[10px] text-muted-foreground">
       <div className="flex items-center justify-between">
         <span>{label}</span>
-        {upload.status === "uploading" ? <span className="tabular-nums">{percent}%</span> : null}
+        {upload.status === "uploading" ? (
+          <span className="tabular-nums">{percent}%</span>
+        ) : null}
       </div>
       <div className="h-1.5 w-full rounded-full bg-muted">
         <div

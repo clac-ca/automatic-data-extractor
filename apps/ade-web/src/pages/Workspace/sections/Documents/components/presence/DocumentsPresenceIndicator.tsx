@@ -45,10 +45,7 @@ export function DocumentsPresenceIndicator({
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <Badge variant="outline" className="gap-2 border-muted-foreground/20 text-muted-foreground">
-        <span
-          aria-hidden
-          className={cn("h-2 w-2 rounded-full", STATE_DOT_CLASSES[connectionState])}
-        />
+        <span aria-hidden className={cn("h-2 w-2 rounded-full", STATE_DOT_CLASSES[connectionState])} />
         {label}
       </Badge>
       <span className="text-xs text-muted-foreground">{countLabel}</span>
