@@ -1,4 +1,12 @@
+import type { ExtendedColumnSort } from "@/types/data-table";
+
+import type { DocumentListRow } from "./types";
+
 export const DEFAULT_PAGE_SIZE = 20;
+
+export const DEFAULT_SORTING: ExtendedColumnSort<DocumentListRow>[] = [
+  { id: "createdAt", desc: true },
+];
 
 export const DOCUMENTS_SORT_IDS = new Set([
   "id",

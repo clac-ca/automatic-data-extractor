@@ -14,7 +14,7 @@ import {
   ActionBarSeparator,
 } from "@/components/ui/action-bar";
 
-import { DEFAULT_PAGE_SIZE } from "../../constants";
+import { DEFAULT_PAGE_SIZE, DEFAULT_SORTING } from "../../constants";
 import type { DocumentRow } from "../../types";
 
 interface DocumentsTableProps {
@@ -40,7 +40,7 @@ export function DocumentsTable({
       minSize: 90,
     },
     initialState: {
-      sorting: [{ id: "createdAt", desc: true }],
+      sorting: DEFAULT_SORTING,
       pagination: { pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE },
       columnVisibility: {
         select: true,

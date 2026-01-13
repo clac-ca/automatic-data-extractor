@@ -5,7 +5,12 @@ import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
 import { getValidFilters } from "@/lib/data-table";
 import type { FilterItem, FilterJoinOperator } from "@api/listing";
 
-import { DEFAULT_PAGE_SIZE, DOCUMENTS_FILTER_IDS, DOCUMENTS_SORT_IDS } from "../constants";
+import {
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_SORTING,
+  DOCUMENTS_FILTER_IDS,
+  DOCUMENTS_SORT_IDS,
+} from "../constants";
 import type { DocumentListRow, DocumentsListParams } from "../types";
 
 function toApiFilters(filters: ReturnType<typeof getValidFilters<DocumentListRow>>): FilterItem[] {
@@ -20,7 +25,9 @@ export function useDocumentsListParams(): DocumentsListParams {
   );
   const [sorting] = useQueryState(
     "sort",
-    getSortingStateParser<DocumentListRow>(DOCUMENTS_SORT_IDS),
+    getSortingStateParser<DocumentListRow>(DOCUMENTS_SORT_IDS).withDefault(
+      DEFAULT_SORTING,
+    ),
   );
   const sort = useMemo(
     () => (sorting?.length ? JSON.stringify(sorting) : null),
@@ -38,7 +45,7 @@ export function useDocumentsListParams(): DocumentsListParams {
   }, [filtersValue]);
   const [joinOperator] = useQueryState(
     "joinOperator",
-    parseAsStringEnum(["and", "or"]),
+    parseAsStringEnum(["and", "or"]).withDefault("and"),
   );
 
   return {
