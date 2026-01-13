@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import clsx from "clsx";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { Workbench } from "@pages/Workspace/sections/ConfigBuilder/workbench/Workbench";
 import type { WorkbenchDataSeed } from "@pages/Workspace/sections/ConfigBuilder/workbench/types";

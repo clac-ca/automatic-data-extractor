@@ -1,7 +1,7 @@
 import * as React from "react";
 import clsx from "clsx";
 
-import { NavLink } from "@app/navigation/Link";
+import { NavLink } from "react-router-dom";
 import {
   getWorkspacePrimaryNavigation,
   type WorkspaceNavigationItem,

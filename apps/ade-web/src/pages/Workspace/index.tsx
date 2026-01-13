@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type Rea
 
 import clsx from "clsx";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useSession } from "@components/providers/auth/SessionContext";

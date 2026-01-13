@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocationLike } from "@app/navigation/history";
-
 import {
-  DEFAULT_APP_HOME,
+  DEFAULT_RETURN_TO,
   buildLoginRedirect,
   buildSetupRedirect,
   buildRedirectUrl,
   chooseDestination,
   isPublicPath,
   joinPath,
+  type LocationLike,
   normalizeNextFromLocation,
   resolveRedirectParam,
   sanitizeNextPath,
@@ -28,7 +27,7 @@ describe("authNavigation utils", () => {
     expect(isPublicPath("/")).toBe(true);
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/setup")).toBe(true);
-    expect(isPublicPath("/auth/callback")).toBe(true);
+    expect(isPublicPath("/logout")).toBe(true);
     expect(isPublicPath("/workspaces")).toBe(false);
   });
 
@@ -38,10 +37,7 @@ describe("authNavigation utils", () => {
   });
 
   it("normalizes next path from location", () => {
-    expect(normalizeNextFromLocation(mockLocation({ pathname: "/" }))).toBe(DEFAULT_APP_HOME);
-    expect(normalizeNextFromLocation(mockLocation({ pathname: "/auth/callback" }))).toBe(
-      DEFAULT_APP_HOME,
-    );
+    expect(normalizeNextFromLocation(mockLocation({ pathname: "/" }))).toBe(DEFAULT_RETURN_TO);
     expect(normalizeNextFromLocation(mockLocation({ pathname: "/workspaces/123" }))).toBe(
       "/workspaces/123",
     );
@@ -52,47 +48,47 @@ describe("authNavigation utils", () => {
     expect(sanitizeNextPath("")).toBeNull();
     expect(sanitizeNextPath("relative")).toBeNull();
     expect(sanitizeNextPath("//evil.com")).toBeNull();
-    expect(sanitizeNextPath("/login")).toBeNull();
+    expect(sanitizeNextPath("/login")).toBe("/login");
     expect(sanitizeNextPath("/workspaces/123")).toBe("/workspaces/123");
-    expect(sanitizeNextPath("/")).toBe(DEFAULT_APP_HOME);
+    expect(sanitizeNextPath("/")).toBe("/");
   });
 
   it("chooses destination with precedence", () => {
     expect(chooseDestination("/workspaces/abc", "/workspaces/def")).toBe("/workspaces/abc");
     expect(chooseDestination(null, "/workspaces/def")).toBe("/workspaces/def");
-    expect(chooseDestination(null, "/login")).toBe(DEFAULT_APP_HOME);
-    expect(chooseDestination(null, null)).toBe(DEFAULT_APP_HOME);
+    expect(chooseDestination(null, "/login")).toBe("/login");
+    expect(chooseDestination(null, null)).toBe(DEFAULT_RETURN_TO);
   });
 
   it("builds login redirect URLs", () => {
-    expect(buildLoginRedirect("/workspaces")).toBe("/login");
-    expect(buildLoginRedirect("/workspaces/123")).toBe("/login?redirectTo=%2Fworkspaces%2F123");
+    expect(buildLoginRedirect("/workspaces")).toBe("/login?returnTo=%2Fworkspaces");
+    expect(buildLoginRedirect("/workspaces/123")).toBe("/login?returnTo=%2Fworkspaces%2F123");
     expect(buildLoginRedirect("/workspaces/123?tab=settings")).toBe(
-      "/login?redirectTo=%2Fworkspaces%2F123%3Ftab%3Dsettings",
+      "/login?returnTo=%2Fworkspaces%2F123%3Ftab%3Dsettings",
     );
     expect(buildLoginRedirect("//evil")).toBe("/login");
   });
 
   it("builds setup redirect URLs", () => {
-    expect(buildSetupRedirect("/workspaces")).toBe("/setup");
-    expect(buildSetupRedirect("/workspaces/xyz")).toBe("/setup?redirectTo=%2Fworkspaces%2Fxyz");
+    expect(buildSetupRedirect("/workspaces")).toBe("/setup?returnTo=%2Fworkspaces");
+    expect(buildSetupRedirect("/workspaces/xyz")).toBe("/setup?returnTo=%2Fworkspaces%2Fxyz");
     expect(buildSetupRedirect("/workspaces/xyz?tab=settings")).toBe(
-      "/setup?redirectTo=%2Fworkspaces%2Fxyz%3Ftab%3Dsettings",
+      "/setup?returnTo=%2Fworkspaces%2Fxyz%3Ftab%3Dsettings",
     );
     expect(buildSetupRedirect("//evil")).toBe("/setup");
   });
 
   it("builds redirect URLs for arbitrary paths", () => {
     expect(buildRedirectUrl("/login", "/workspaces/team")).toBe(
-      "/login?redirectTo=%2Fworkspaces%2Fteam",
+      "/login?returnTo=%2Fworkspaces%2Fteam",
     );
-    expect(buildRedirectUrl("/login", DEFAULT_APP_HOME)).toBe("/login");
+    expect(buildRedirectUrl("/login", DEFAULT_RETURN_TO)).toBe("/login");
   });
 
   it("resolves redirect parameters", () => {
     expect(resolveRedirectParam("/workspaces/alpha")).toBe("/workspaces/alpha");
-    expect(resolveRedirectParam("//bad")).toBe(DEFAULT_APP_HOME);
-    expect(resolveRedirectParam("")).toBe(DEFAULT_APP_HOME);
-    expect(resolveRedirectParam(null)).toBe(DEFAULT_APP_HOME);
+    expect(resolveRedirectParam("//bad")).toBe(DEFAULT_RETURN_TO);
+    expect(resolveRedirectParam("")).toBe(DEFAULT_RETURN_TO);
+    expect(resolveRedirectParam(null)).toBe(DEFAULT_RETURN_TO);
   });
 });

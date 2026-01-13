@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@test/test-utils";
+import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
-import { ScreenSwitch } from "../App";
+import { appRoutes } from "../routes";
 import { normalizePathname } from "@app/navigation/paths";
 
 vi.mock("@pages/Home", () => ({ default: () => <div data-testid="home-screen">home</div> }));
 vi.mock("@pages/Login", () => ({ default: () => <div data-testid="login-screen">login</div> }));
-vi.mock("@pages/AuthCallback", () => ({ default: () => <div data-testid="auth-callback-screen">auth</div> }));
 vi.mock("@pages/Setup", () => ({ default: () => <div data-testid="setup-screen">setup</div> }));
 vi.mock("@pages/Workspaces", () => ({ default: () => <div data-testid="workspaces-screen">workspaces</div> }));
 vi.mock("@pages/Workspaces/New", () => ({ default: () => <div data-testid="workspace-new-screen">new</div> }));
@@ -19,8 +19,8 @@ vi.mock("@components/providers/auth/RequireSession", () => ({
 }));
 
 function renderAt(path: string) {
-  window.history.replaceState(null, "", path);
-  render(<ScreenSwitch />);
+  const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
+  render(<RouterProvider router={router} />);
 }
 
 describe("normalizePathname", () => {
@@ -32,15 +32,10 @@ describe("normalizePathname", () => {
   });
 });
 
-describe("ScreenSwitch", () => {
-  beforeEach(() => {
-    window.history.replaceState(null, "", "/");
-  });
-
+describe("App routes", () => {
   const cases: Array<{ path: string; testId: string }> = [
     { path: "/", testId: "home-screen" },
     { path: "/login", testId: "login-screen" },
-    { path: "/auth/callback", testId: "auth-callback-screen" },
     { path: "/setup", testId: "setup-screen" },
     { path: "/workspaces", testId: "workspaces-screen" },
     { path: "/workspaces/new", testId: "workspace-new-screen" },

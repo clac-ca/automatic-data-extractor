@@ -107,7 +107,7 @@ Window state is **session‑local only** and not persisted. On reload we always 
 
 ### 1.3 Unsaved changes and navigation blocking
 
-The workbench uses a navigation blocker (e.g. `useNavigationBlocker`) to avoid accidental loss of edits.
+The workbench uses an unsaved‑changes guard (`useUnsavedChangesGuard` / `useBlocker`) to avoid accidental loss of edits.
 
 * A **tab** is dirty if:
 

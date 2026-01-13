@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
 
-import { NavLink } from "@app/navigation/Link";
+import { Link } from "react-router-dom";
 import type { WorkspaceSettingsNavGroup, WorkspaceSettingsRouteId } from "../settingsNav";
 
 interface SettingsShellProps {
@@ -76,11 +76,15 @@ export function SettingsShell({
 
                     return (
                       <li key={item.id} className="w-full">
-                        <NavLink to={item.href} className={baseClasses}>
+                        <Link
+                          to={item.href}
+                          className={baseClasses}
+                          aria-current={isActive ? "page" : undefined}
+                        >
                           <div className="flex min-w-0 flex-col">
                             <span className="font-semibold">{item.label}</span>
                           </div>
-                        </NavLink>
+                        </Link>
                       </li>
                     );
                   })}

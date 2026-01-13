@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 
-import { useLocation, useNavigationBlocker } from "@app/navigation/history";
+import { useBlocker, type BlockerFunction } from "react-router-dom";
 
 const DEFAULT_PROMPT = "You have unsaved changes in the config editor. Are you sure you want to leave?";
 
@@ -19,28 +19,38 @@ export function useUnsavedChangesGuard({
   message = DEFAULT_PROMPT,
   shouldBypassNavigation,
 }: UseUnsavedChangesGuardOptions) {
-  const location = useLocation();
-
-  const blocker = useCallback<Parameters<typeof useNavigationBlocker>[0]>(
-    (intent) => {
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) => {
       if (!isDirty) {
-        return true;
+        return false;
       }
 
       if (shouldBypassNavigation?.()) {
-        return true;
+        return false;
       }
 
-      if (intent.location.pathname === location.pathname) {
-        return true;
+      if (currentLocation.pathname === nextLocation.pathname) {
+        return false;
       }
 
-      return confirm(message);
+      return true;
     },
-    [confirm, isDirty, location.pathname, message, shouldBypassNavigation],
+    [isDirty, shouldBypassNavigation],
   );
 
-  useNavigationBlocker(blocker, isDirty);
+  const blocker = useBlocker(shouldBlock);
+
+  useEffect(() => {
+    if (blocker.state !== "blocked") {
+      return;
+    }
+
+    if (confirm(message)) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
+    }
+  }, [blocker, confirm, message]);
 
   useEffect(() => {
     if (!isDirty) {

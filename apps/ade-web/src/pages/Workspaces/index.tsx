@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { useNavigate } from "@app/navigation/history";
+import { useNavigate } from "react-router-dom";
 import { useSearchParams } from "@app/navigation/urlState";
 
 import { useSession } from "@components/providers/auth/SessionContext";

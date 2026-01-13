@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { useNavigate } from "@app/navigation/history";
+import { useNavigate } from "react-router-dom";
 
 import { useSession } from "@components/providers/auth/SessionContext";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";

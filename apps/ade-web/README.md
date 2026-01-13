@@ -136,14 +136,14 @@ For a complete domain index and naming contract (IDs, routes, folder layout), st
 
 ## 3. Routing, navigation, and URL state
 
-ADE Web is a single-page React app with a small custom navigation layer built on `window.history`.
+ADE Web is a single-page React app using **React Router v7 (data router)**.
 
 ### Top-level routes
 
-Handled by `App` + `ScreenSwitch`:
+Defined in `src/app/routes.tsx` (root shell + protected branch):
 
 - `/` – entry strategy (decide login vs setup vs app).
-- `/login`, `/auth/callback`, `/logout`, `/setup` – auth and first-run setup.
+- `/login`, `/logout`, `/setup` – auth and first-run setup.
 - `/workspaces`, `/workspaces/new` – workspace directory & creation.
 - `/workspaces/:workspaceId/...` – workspace shell.
 - Anything else – global “Not found” screen.
@@ -161,10 +161,10 @@ See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigatio
 
 ### Navigation primitives
 
-- `NavProvider` – owns `location`, listens to `popstate`, coordinates blockers.
+- `RouterProvider` + `createBrowserRouter` – app entry and route wiring.
 - `useLocation()` – read current `{ pathname, search, hash }`.
 - `useNavigate()` – programmatic SPA navigation (`push`/`replace`).
-- `useNavigationBlocker()` – opt-in blockers (e.g. workbench unsaved changes).
+- `useBlocker()` – opt‑in blockers (e.g. workbench unsaved changes).
 - `Link` / `NavLink` – SPA links that preserve normal browser behaviours (right-click, modifier-click, etc.).
 
 ### URL-encoded state
@@ -342,7 +342,7 @@ The numbered docs under `apps/ade-web/docs` are the **source of truth** for ADE 
    On-disk layout, layers, and dependency rules.
 
 3. [`03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)  
-   Routes, `NavProvider`, SPA links, and URL query conventions.
+   Routes, React Router usage, SPA links, and URL query conventions.
 
 4. [`04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md)  
    HTTP client, API modules, React Query, and backend `/api/v1/...` expectations (including NDJSON streams).

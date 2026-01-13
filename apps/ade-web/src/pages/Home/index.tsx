@@ -7,7 +7,7 @@ import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { Button } from "@/components/ui/button";
 import { PageState } from "@components/layouts/page-state";
-import { useLocation, useNavigate } from "@app/navigation/history";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function HomeScreen() {
   return <RootIndexContent />;

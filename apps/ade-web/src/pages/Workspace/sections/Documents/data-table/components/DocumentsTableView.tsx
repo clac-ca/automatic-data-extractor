@@ -12,7 +12,7 @@ import {
 } from "@api/documents";
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { buildWeakEtag } from "@api/etag";
-import { Link } from "@app/navigation/Link";
+import { Link } from "react-router-dom";
 import { useSearchParams } from "@app/navigation/urlState";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@/components/ui/button";

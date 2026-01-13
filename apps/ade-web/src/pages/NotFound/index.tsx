@@ -1,4 +1,4 @@
-import { Link } from "@app/navigation/Link";
+import { Link } from "react-router-dom";
 
 export default function NotFoundScreen() {
   return (
@@ -10,7 +10,7 @@ export default function NotFoundScreen() {
         <h1 className="text-3xl font-semibold text-foreground">Page not found</h1>
         <p className="text-sm text-muted-foreground">
           The resource you&apos;re looking for doesn&apos;t exist yet. Add a page under <code>src/pages/&lt;PageName&gt;/</code> and
-          register it inside <code>src/app/App.tsx</code> if this surface should exist in the routerless SPA.
+          register it inside <code>src/app/routes.tsx</code> if this surface should exist in the app.
         </p>
         <div className="flex justify-center gap-3 text-sm">
           <Link

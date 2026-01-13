@@ -14,7 +14,7 @@ import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
-import { useNavigate } from "@app/navigation/history";
+import { useNavigate } from "react-router-dom";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNod
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 
-import { useNavigate } from "@app/navigation/history";
+import { useNavigate } from "react-router-dom";
 import { ChevronDownIcon, SpinnerIcon } from "@components/icons";
 
 interface ProfileDropdownAction {

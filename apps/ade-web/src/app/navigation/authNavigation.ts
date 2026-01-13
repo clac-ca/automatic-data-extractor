@@ -1,7 +1,13 @@
-import type { LocationLike } from "@app/navigation/history";
 import { normalizePathname } from "@app/navigation/paths";
 
+export type LocationLike = {
+  readonly pathname: string;
+  readonly search: string;
+  readonly hash: string;
+};
+
 export const DEFAULT_APP_HOME = "/workspaces";
+export const DEFAULT_RETURN_TO = "/";
 
 const PUBLIC_PATHS = new Set<string>(["/", "/login", "/setup", "/logout"]);
 
@@ -15,11 +21,6 @@ export function isPublicPath(path: string): boolean {
   if (PUBLIC_PATHS.has(normalized)) {
     return true;
   }
-
-  if (normalized === "/auth" || normalized.startsWith("/auth/")) {
-    return true;
-  }
-
   return false;
 }
 
@@ -30,7 +31,7 @@ export function joinPath(location: LocationLike): string {
 export function normalizeNextFromLocation(location: LocationLike): string {
   const raw = joinPath(location) || "/";
   const sanitized = sanitizeNextPath(raw);
-  return sanitized ?? DEFAULT_APP_HOME;
+  return sanitized ?? DEFAULT_RETURN_TO;
 }
 
 export function sanitizeNextPath(value: string | null | undefined): string | null {
@@ -47,11 +48,7 @@ export function sanitizeNextPath(value: string | null | undefined): string | nul
     return null;
   }
 
-  if (trimmed === "/") {
-    return DEFAULT_APP_HOME;
-  }
-
-  if (isPublicPath(trimmed)) {
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
     return null;
   }
 
@@ -59,7 +56,7 @@ export function sanitizeNextPath(value: string | null | undefined): string | nul
 }
 
 export function resolveRedirectParam(value: string | null | undefined): string {
-  return sanitizeNextPath(value) ?? DEFAULT_APP_HOME;
+  return sanitizeNextPath(value) ?? DEFAULT_RETURN_TO;
 }
 
 export function buildLoginRedirect(next: string): string {
@@ -73,8 +70,8 @@ export function buildSetupRedirect(next: string): string {
 export function buildRedirectUrl(basePath: string, next: string): string {
   const safeNext = resolveRedirectParam(next);
   const params = new URLSearchParams();
-  if (safeNext !== DEFAULT_APP_HOME) {
-    params.set("redirectTo", safeNext);
+  if (safeNext !== DEFAULT_RETURN_TO) {
+    params.set("returnTo", safeNext);
   }
   const query = params.toString();
   return query ? `${basePath}?${query}` : basePath;
@@ -94,5 +91,5 @@ export function chooseDestination(
     return queryDestination;
   }
 
-  return DEFAULT_APP_HOME;
+  return DEFAULT_RETURN_TO;
 }

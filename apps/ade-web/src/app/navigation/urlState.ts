@@ -1,6 +1,6 @@
 import { createContext, createElement, useCallback, useContext, useMemo, type ReactNode } from "react";
 
-import { useLocation, useNavigate } from "./history";
+import { useLocation, useNavigate } from "react-router-dom";
 
 type SearchParamPrimitive = string | number | boolean;
 type SearchParamsRecordValue =

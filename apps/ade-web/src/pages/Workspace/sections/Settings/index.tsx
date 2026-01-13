@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PageState } from "@components/layouts/page-state";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { SettingsShell } from "./components/SettingsShell";

@@ -111,21 +111,22 @@ src/
   main.tsx
   app/
     App.tsx
+    routes.tsx
+    router.tsx
     providers/
       AppProviders.tsx
     navigation/
-      history.tsx
-      Link.tsx
       urlState.ts
+      authNavigation.ts
       paths.ts
 ```
 
 What belongs here:
 
-* `<App>` – root component used in `main.tsx`.
-* `NavProvider` – custom navigation context built on `window.history` (see `app/navigation`).
+* `AppShell`/`ProtectedLayout` – app‑level layout + auth gating (in `app/App.tsx`).
+* `routes.tsx` – route table (top‑level mapping of paths to pages).
+* `router.tsx` – `createBrowserRouter` wiring used by `main.tsx`.
 * `AppProviders` – React Query client and other global providers (in `app/providers/`).
-* `ScreenSwitch` – top‑level route switch (lives in `app/App.tsx`).
 
 What does **not** belong here:
 
@@ -148,8 +149,6 @@ src/pages/
   Home/
     index.tsx
   Login/
-    index.tsx
-  AuthCallback/
     index.tsx
   Logout/
     index.tsx
@@ -465,7 +464,7 @@ This section summarises naming conventions used in this document. See **01‑dom
 
 * **State / infra hooks** use descriptive names:
 
-  * `useSafeModeStatus`, `useWorkbenchUrlState`, `useNavigationBlocker`, `useSearchParams`.
+  * `useSafeModeStatus`, `useWorkbenchUrlState`, `useUnsavedChangesGuard`, `useSearchParams`.
 
 ### 11.4 API modules
 
@@ -508,7 +507,8 @@ To make the structure concrete, here’s how the **Documents** section of the wo
 ```text
 src/
   app/
-    App.tsx                       # ScreenSwitch lives here
+    App.tsx                       # App shell + ProtectedLayout
+    routes.tsx                    # Route table
     navigation/
       urlState.ts                 # useSearchParams helpers
   api/
@@ -535,7 +535,7 @@ Flow:
 
 1. **Routing**
 
-   * `ScreenSwitch` (inside `app/App.tsx`) examines the current location.
+   * Route definitions in `app/routes.tsx` map URLs to pages.
    * `/workspaces/:workspaceId/documents` is mapped to `DocumentsScreen`.
 
 2. **Screen logic**

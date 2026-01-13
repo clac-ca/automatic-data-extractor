@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { useSettingsSection } from "../sectionContext";

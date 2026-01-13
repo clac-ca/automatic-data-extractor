@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useNavigate, useNavigationBlocker, type NavigationIntent } from "@app/navigation/history";
+import { useBlocker } from "react-router-dom";
 
 interface UnsavedChangesPromptProps {
   readonly when: boolean;
@@ -18,15 +18,10 @@ export function UnsavedChangesPrompt({
   confirmLabel = "Leave without saving",
   cancelLabel = "Stay on page",
 }: UnsavedChangesPromptProps) {
-  const navigate = useNavigate();
-  const [pendingIntent, setPendingIntent] = useState<NavigationIntent | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const allowNextNavigationRef = useRef(false);
+  const blocker = useBlocker(when);
 
   useEffect(() => {
     if (!when) {
-      setDialogOpen(false);
-      setPendingIntent(null);
       return;
     }
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -37,44 +32,29 @@ export function UnsavedChangesPrompt({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [when]);
 
-  useNavigationBlocker(
-    (intent) => {
-      if (!when) {
-        return true;
-      }
-      if (allowNextNavigationRef.current) {
-        allowNextNavigationRef.current = false;
-        return true;
-      }
-      setPendingIntent(intent);
-      setDialogOpen(true);
-      return false;
-    },
-    when,
-  );
+  useEffect(() => {
+    if (!when && blocker.state === "blocked") {
+      blocker.reset();
+    }
+  }, [blocker, when]);
 
   const confirmNavigation = () => {
-    if (!pendingIntent) {
+    if (blocker.state !== "blocked") {
       return;
     }
-    allowNextNavigationRef.current = true;
-    const replace = pendingIntent.kind === "replace" || pendingIntent.kind === "pop";
-    navigate(pendingIntent.to, { replace });
-    setDialogOpen(false);
-    setPendingIntent(null);
-    setTimeout(() => {
-      allowNextNavigationRef.current = false;
-    }, 0);
+    blocker.proceed();
   };
 
   const cancelNavigation = () => {
-    setDialogOpen(false);
-    setPendingIntent(null);
+    if (blocker.state !== "blocked") {
+      return;
+    }
+    blocker.reset();
   };
 
   return (
     <ConfirmDialog
-      open={dialogOpen && when}
+      open={when && blocker.state === "blocked"}
       title={title}
       description={description}
       confirmLabel={confirmLabel}

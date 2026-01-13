@@ -12,7 +12,7 @@ import {
 } from "react";
 import clsx from "clsx";
 
-import { useNavigate } from "@app/navigation/history";
+import { useNavigate } from "react-router-dom";
 import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
 import {
   GLOBAL_SEARCH_TRIGGER_LENGTH,

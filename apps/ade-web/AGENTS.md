@@ -1,4 +1,4 @@
-## Frontend Structure (Routerless, Layer-Based)
+## Frontend Structure (React Router v7, Layer-Based)
 
 ```
 apps/ade-web/
@@ -7,11 +7,13 @@ apps/ade-web/
 ├─ vite.config.ts
 ├─ index.html
 └─ src/
-   ├─ main.tsx                     # Vite entry point → renders <App />
-   ├─ app/                         # Composition root (App.tsx, providers, navigation)
-   │  ├─ App.tsx                   # App shell + <ScreenSwitch />
+   ├─ main.tsx                     # Vite entry point → renders <RouterProvider />
+   ├─ app/                         # Composition root (App shell, routes, providers)
+   │  ├─ App.tsx                   # App shell + ProtectedLayout
+   │  ├─ routes.tsx                # Route definitions
+   │  ├─ router.tsx                # createBrowserRouter wiring
    │  ├─ providers/                # AppProviders + bootstrapping
-   │  └─ navigation/               # History-based navigation helpers
+   │  └─ navigation/               # URL helpers (authNavigation, urlState, paths)
    ├─ api/                         # HTTP client + domain API calls
    ├─ pages/                       # Route-level pages (Home, Login, Workspace, …)
 	   ├─ components/                  # Shared UI primitives + layouts + providers
@@ -31,11 +33,11 @@ apps/ade-web/
 
 ### Navigation & URL helpers
 
-* The app no longer uses React Router. A lightweight history provider powers navigation.
-* Use the helpers from `@app/navigation`:
-  * `NavProvider`, `useNavigate`, `useLocation`, `useSearchParams`
-  * `Link`/`NavLink` render `<a>` tags with history-aware click handling.
-* Page selection happens inside `app/App.tsx` – add new pages by extending the switch logic there.
+* The app uses **React Router v7 (data router)**.
+* Route definitions live in `src/app/routes.tsx`; the router is created in `src/app/router.tsx`.
+* Use `react-router-dom` hooks/components:
+  * `useNavigate`, `useLocation`, `useSearchParams`, `Link`, `NavLink`.
+* URL helpers (auth redirects, URL param overrides) live in `@app/navigation/*`.
 
 ### Commands
 
@@ -103,11 +105,10 @@ If you’re not sure where something goes: default to co-locating it under the *
 
 ### 3. Navigation
 
-- We use a **router-less model** based on the History API:
-  - A `NavProvider` exposes `useLocation` and `useNavigate`.
-- A pure `ScreenSwitch` turns `location.pathname` (and sometimes query params) into “which page/section to render”.
+- We use **React Router v7** with a central route config.
+- Route wiring lives in `src/app/routes.tsx` and `src/app/router.tsx`.
 - When you add or change pages:
-  - Update the central switch logic explicitly.
+  - Update the route table explicitly.
   - Keep path → page mapping **simple and obvious** (no hidden routing magic).
 - Deep links must work:
   - Direct navigation + browser refresh should always land on the correct screen/section.
@@ -162,7 +163,7 @@ When you add new functionality:
 
 1. **New page or major experience**  
    - Create a folder under `src/pages/YourPage` with `index.tsx`.
-   - Wire it into the central page switch.
+   - Wire it into `src/app/routes.tsx`.
 2. **New sub-area inside a page**  
    - Create `sections/SubArea/index.tsx` under the relevant page.
 3. **Reusable pieces**  
