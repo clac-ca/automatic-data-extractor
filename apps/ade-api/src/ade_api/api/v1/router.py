@@ -16,6 +16,7 @@ from ade_api.features.presence.router import router as presence_router
 from ade_api.features.rbac.router import router as rbac_router
 from ade_api.features.rbac.router import user_roles_router as rbac_user_roles_router
 from ade_api.features.runs.router import router as runs_router
+from ade_api.features.sso.router import router as sso_router
 from ade_api.features.system_settings.router import router as system_router
 from ade_api.features.users.router import router as users_router
 from ade_api.features.workspaces.members import router as workspace_members_router
@@ -42,6 +43,7 @@ def create_api_router(settings: Settings) -> APIRouter:
     api_router.include_router(presence_router)
     api_router.include_router(configurations_router)
     api_router.include_router(runs_router)
+    api_router.include_router(sso_router)
     api_router.include_router(system_router)
     return api_router
 

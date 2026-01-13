@@ -528,7 +528,11 @@ export default function ConfigBuilderScreen() {
               </FormField>
               {renderTemplateField(createConfig.isPending)}
               {creationError ? <p className="text-sm font-medium text-destructive">{creationError}</p> : null}
-              <Button type="submit" className="w-full" disabled={!canSubmit} isLoading={createConfig.isPending}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!canSubmit || createConfig.isPending}
+              >
                 Create from template
               </Button>
             </form>
@@ -561,7 +565,11 @@ export default function ConfigBuilderScreen() {
                   ) : null}
                 </FormField>
                 {importError ? <p className="text-sm font-medium text-destructive">{importError}</p> : null}
-                <Button type="submit" className="w-full" disabled={!canImport} isLoading={importConfig.isPending}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!canImport || importConfig.isPending}
+                >
                   Import archive
                 </Button>
               </form>
@@ -749,7 +757,11 @@ export default function ConfigBuilderScreen() {
           </FormField>
           {renderTemplateField(createConfig.isPending)}
           {creationError ? <p className="text-sm font-medium text-destructive">{creationError}</p> : null}
-          <Button type="submit" className="w-full" disabled={!canSubmit} isLoading={createConfig.isPending}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!canSubmit || createConfig.isPending}
+          >
             Create from template
           </Button>
         </form>
@@ -782,7 +794,11 @@ export default function ConfigBuilderScreen() {
               ) : null}
             </FormField>
             {importError ? <p className="text-sm font-medium text-destructive">{importError}</p> : null}
-            <Button type="submit" className="w-full" disabled={!canImport} isLoading={importConfig.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!canImport || importConfig.isPending}
+            >
               Import archive
             </Button>
           </form>

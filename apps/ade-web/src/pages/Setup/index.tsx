@@ -46,9 +46,9 @@ export default function SetupScreen() {
   const queryClient = useQueryClient();
 
   const setupQuery = useSetupStatusQuery(true);
-  const redirectTo = useMemo(() => {
+  const returnTo = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return resolveRedirectParam(params.get("redirectTo"));
+    return resolveRedirectParam(params.get("returnTo"));
   }, [location.search]);
 
   useEffect(() => {
@@ -56,9 +56,9 @@ export default function SetupScreen() {
       return;
     }
     if (!setupQuery.data?.setup_required) {
-      navigate(buildLoginRedirect(redirectTo), { replace: true });
+      navigate(buildLoginRedirect(returnTo), { replace: true });
     }
-  }, [navigate, redirectTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending]);
+  }, [navigate, returnTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,7 +89,9 @@ export default function SetupScreen() {
     setFormError(null);
 
     const formData = new FormData(event.currentTarget);
-    const raw = Object.fromEntries(formData.entries()) as Partial<SetupFormValues> & { redirectTo?: string };
+    const raw = Object.fromEntries(formData.entries()) as Partial<SetupFormValues> & {
+      returnTo?: string;
+    };
     const parsed = setupSchema.safeParse(raw);
 
     if (!parsed.success) {
@@ -99,7 +101,7 @@ export default function SetupScreen() {
     }
 
     setIsSubmitting(true);
-    const destination = resolveRedirectParam(raw.redirectTo);
+    const destination = resolveRedirectParam(raw.returnTo);
 
     try {
       const session = await completeSetup({
@@ -137,7 +139,7 @@ export default function SetupScreen() {
         </header>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <input type="hidden" name="redirectTo" value={redirectTo} />
+          <input type="hidden" name="returnTo" value={returnTo} />
           <div className="grid gap-6 md:grid-cols-2">
             <FormField label="Display name" required>
               <Input
@@ -187,7 +189,7 @@ export default function SetupScreen() {
           {formError ? <Alert tone="danger">{formError}</Alert> : null}
 
           <div className="flex justify-end">
-            <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Creating administrator…" : "Create administrator"}
             </Button>
           </div>

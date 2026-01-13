@@ -22,13 +22,14 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         ("/api/v1/health", "GET"),
         ("/api/v1/info", "GET"),
         ("/api/v1/auth/providers", "GET"),
+        ("/api/v1/auth/sso/providers", "GET"),
         ("/api/v1/auth/setup", "GET"),
         ("/api/v1/auth/setup", "POST"),
         ("/api/v1/auth/cookie/login", "POST"),
         ("/api/v1/auth/jwt/login", "POST"),
         ("/api/v1/auth/register", "POST"),
-        ("/api/v1/auth/oidc/{provider}/authorize", "GET"),
-        ("/api/v1/auth/oidc/{provider}/callback", "GET"),
+        ("/api/v1/auth/sso/{providerId}/authorize", "GET"),
+        ("/api/v1/auth/sso/{providerId}/callback", "GET"),
     }
     http_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}
 

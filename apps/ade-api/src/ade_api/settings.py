@@ -290,21 +290,13 @@ class Settings(BaseSettings):
     auth_disabled: bool = False
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
+    auth_force_sso: bool = False
+    auth_sso_auto_provision: bool = False
+    auth_sso_providers_json: str | None = None
+    sso_encryption_key: SecretStr | None = None
 
     # Runs
     preview_timeout_seconds: float = Field(10, gt=0)
-
-    # OIDC
-    oidc_enabled: bool = False
-    oidc_client_id: str | None = None
-    oidc_client_secret: SecretStr | None = None
-    oidc_issuer: str | None = None
-    oidc_redirect_url: str | None = None  # may be relative ('/auth/callback')
-    oidc_scopes: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["openid", "email", "profile"]
-    )
-    auth_force_sso: bool = False
-    auth_sso_auto_provision: bool = True
 
     # ---- Validators ----
 
@@ -346,10 +338,13 @@ class Settings(BaseSettings):
     def _v_cors(cls, v: Any) -> list[str]:
         return _list_from_env(v, default=DEFAULT_CORS_ORIGINS)
 
-    @field_validator("oidc_scopes", mode="before")
+    @field_validator("auth_sso_providers_json", mode="before")
     @classmethod
-    def _v_scopes(cls, v: Any) -> list[str]:
-        return _list_from_env(v, default=["openid", "email", "profile"])
+    def _v_auth_sso_providers_json(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        cleaned = str(v).strip()
+        return cleaned or None
 
     @field_validator("database_auth_mode", mode="before")
     @classmethod
@@ -360,7 +355,6 @@ class Settings(BaseSettings):
         if mode not in {"sql_password", "managed_identity"}:
             raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
         return mode
-
 
     @field_validator("database_mi_client_id", mode="before")
     @classmethod
@@ -410,30 +404,6 @@ class Settings(BaseSettings):
     @classmethod
     def _v_durations(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)
-
-    @field_validator("oidc_issuer", mode="before")
-    @classmethod
-    def _v_oidc_issuer(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        s = str(v).strip()
-        p = urlparse(s)
-        if p.scheme != "https" or not p.netloc:
-            raise ValueError("ADE_OIDC_ISSUER must be an https URL")
-        return p.geturl().rstrip("/")
-
-    @field_validator("oidc_redirect_url", mode="before")
-    @classmethod
-    def _v_oidc_redirect(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        s = str(v).strip()
-        if s.startswith("/"):
-            return s
-        p = urlparse(s)
-        if p.scheme != "https" or not p.netloc:
-            raise ValueError("ADE_OIDC_REDIRECT_URL must be https or a path starting with '/'")
-        return p.geturl().rstrip("/")
 
     @field_validator("frontend_dist_dir", mode="before")
     @classmethod
@@ -511,30 +481,6 @@ class Settings(BaseSettings):
         if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
             self.jwt_secret = SecretStr(secrets.token_urlsafe(64))
             self._jwt_secret_generated = True
-
-        oidc_config = {
-            "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
-            "ADE_OIDC_CLIENT_SECRET": self.oidc_client_secret,
-            "ADE_OIDC_ISSUER": self.oidc_issuer,
-            "ADE_OIDC_REDIRECT_URL": self.oidc_redirect_url,
-        }
-        provided_oidc_values = [name for name, val in oidc_config.items() if val]
-
-        if not self.oidc_enabled and len(provided_oidc_values) == len(oidc_config):
-            self.oidc_enabled = True
-
-        if self.oidc_enabled:
-            missing = [name for name, val in oidc_config.items() if not val]
-            if missing:
-                raise ValueError("OIDC enabled but missing: " + ", ".join(missing))
-            if "openid" not in self.oidc_scopes:
-                self.oidc_scopes = ["openid", *self.oidc_scopes]
-            if self.oidc_redirect_url and self.oidc_redirect_url.startswith("/"):
-                self.oidc_redirect_url = f"{self.server_public_url}{self.oidc_redirect_url}"
-        else:
-            # If disabled, discourage partial config that hints at a misconfigured env
-            if provided_oidc_values:
-                raise ValueError("Set ADE_OIDC_ENABLED=true when supplying other OIDC settings")
 
         return self
 

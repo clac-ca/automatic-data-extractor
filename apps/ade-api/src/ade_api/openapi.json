@@ -449,27 +449,59 @@
         }
       }
     },
-    "/api/v1/auth/oidc/{provider}/authorize": {
+    "/api/v1/auth/sso/providers": {
       "get": {
         "tags": [
           "auth",
           "auth",
           "auth"
         ],
-        "summary": "Authorize Oidc",
-        "operationId": "authorize_oidc_api_v1_auth_oidc__provider__authorize_get",
+        "summary": "Return active SSO providers",
+        "operationId": "list_sso_providers_api_v1_auth_sso_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicSsoProviderListResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/sso/{providerId}/authorize": {
+      "get": {
+        "tags": [
+          "auth",
+          "auth",
+          "auth"
+        ],
+        "summary": "Authorize Sso",
+        "operationId": "authorize_sso_api_v1_auth_sso__providerId__authorize_get",
         "parameters": [
           {
-            "name": "provider",
+            "name": "providerId",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Provider"
+              "title": "Providerid"
             }
           },
           {
-            "name": "return_to",
+            "name": "returnTo",
             "in": "query",
             "required": false,
             "schema": {
@@ -481,7 +513,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Return To"
+              "title": "Returnto"
             }
           }
         ],
@@ -521,39 +553,23 @@
         "security": []
       }
     },
-    "/api/v1/auth/oidc/{provider}/callback": {
+    "/api/v1/auth/sso/{providerId}/callback": {
       "get": {
         "tags": [
           "auth",
           "auth",
           "auth"
         ],
-        "summary": "Callback Oidc",
-        "operationId": "callback_oidc_api_v1_auth_oidc__provider__callback_get",
+        "summary": "Callback Sso",
+        "operationId": "callback_sso_api_v1_auth_sso__providerId__callback_get",
         "parameters": [
           {
-            "name": "provider",
+            "name": "providerId",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Provider"
-            }
-          },
-          {
-            "name": "response_mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Response Mode"
+              "title": "Providerid"
             }
           }
         ],
@@ -11126,6 +11142,486 @@
         ]
       }
     },
+    "/api/v1/admin/sso/providers": {
+      "get": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "List SSO providers (admin)",
+        "operationId": "list_providers_api_v1_admin_sso_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoProviderListResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Create an SSO provider (admin)",
+        "operationId": "create_provider_api_v1_admin_sso_providers_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoProviderCreate",
+                "description": "SSO provider to create."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoProviderAdminOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/sso/providers/{id}": {
+      "get": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Get an SSO provider (admin)",
+        "operationId": "get_provider_api_v1_admin_sso_providers__id__get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Provider identifier.",
+              "title": "Id"
+            },
+            "description": "Provider identifier."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoProviderAdminOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Update an SSO provider (admin)",
+        "operationId": "update_provider_api_v1_admin_sso_providers__id__patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Provider identifier.",
+              "title": "Id"
+            },
+            "description": "Provider identifier."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoProviderUpdate",
+                "description": "SSO provider fields to update."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoProviderAdminOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Disable an SSO provider (admin)",
+        "operationId": "delete_provider_api_v1_admin_sso_providers__id__delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Provider identifier.",
+              "title": "Id"
+            },
+            "description": "Provider identifier."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/sso/settings": {
+      "get": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Read SSO global settings (admin)",
+        "operationId": "read_sso_settings_api_v1_admin_sso_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoSettings"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Update SSO global settings (admin)",
+        "operationId": "update_sso_settings_api_v1_admin_sso_settings_put",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoSettings",
+                "description": "SSO global settings."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoSettings"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/system/safemode": {
       "get": {
         "tags": [
@@ -13837,6 +14333,59 @@
         "title": "PermissionPage",
         "description": "Paginated permission registry response."
       },
+      "PublicSsoProvider": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "const": "oidc",
+            "title": "Type"
+          },
+          "startUrl": {
+            "type": "string",
+            "title": "Starturl"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "type",
+          "startUrl"
+        ],
+        "title": "PublicSsoProvider",
+        "description": "Provider summary returned to the login screen."
+      },
+      "PublicSsoProviderListResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/PublicSsoProvider"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "forceSso": {
+            "type": "boolean",
+            "title": "Forcesso",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "providers"
+        ],
+        "title": "PublicSsoProviderListResponse"
+      },
       "RoleAssignmentOut": {
         "properties": {
           "id": {
@@ -15467,6 +16016,264 @@
         ],
         "title": "ScopeType",
         "description": "Scopes supported by RBAC-aware resources."
+      },
+      "SsoProviderAdminOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/SsoProviderType"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "clientId": {
+            "type": "string",
+            "title": "Clientid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SsoProviderStatus"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "managedBy": {
+            "$ref": "#/components/schemas/SsoProviderManagedBy"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "label",
+          "issuer",
+          "clientId",
+          "status",
+          "domains",
+          "managedBy",
+          "locked",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "SsoProviderAdminOut",
+        "description": "Provider details returned to administrators."
+      },
+      "SsoProviderCreate": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/SsoProviderType",
+            "default": "oidc"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Label"
+          },
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "clientId": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Clientid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SsoProviderStatus",
+            "default": "disabled"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-_]{2,63}$",
+            "title": "Id"
+          },
+          "clientSecret": {
+            "type": "string",
+            "format": "password",
+            "title": "Clientsecret",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "issuer",
+          "clientId",
+          "id",
+          "clientSecret"
+        ],
+        "title": "SsoProviderCreate",
+        "description": "Payload to create a provider."
+      },
+      "SsoProviderListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SsoProviderAdminOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SsoProviderListResponse"
+      },
+      "SsoProviderManagedBy": {
+        "type": "string",
+        "enum": [
+          "db",
+          "env"
+        ],
+        "title": "SsoProviderManagedBy",
+        "description": "Source-of-truth marker for provider configuration."
+      },
+      "SsoProviderStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "disabled",
+          "deleted"
+        ],
+        "title": "SsoProviderStatus",
+        "description": "Lifecycle status for SSO providers."
+      },
+      "SsoProviderType": {
+        "type": "string",
+        "enum": [
+          "oidc"
+        ],
+        "title": "SsoProviderType",
+        "description": "Supported SSO provider types."
+      },
+      "SsoProviderUpdate": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "clientId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientid"
+          },
+          "clientSecret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientsecret"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SsoProviderStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domains": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domains"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SsoProviderUpdate",
+        "description": "Payload to update a provider."
+      },
+      "SsoSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SsoSettings"
       },
       "TagCatalogItem": {
         "properties": {

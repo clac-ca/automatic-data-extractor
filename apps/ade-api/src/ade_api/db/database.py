@@ -24,6 +24,8 @@ from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
 
+from ade_api.common.problem_details import ApiError
+from ade_api.core.auth.errors import AuthenticationError, PermissionDeniedError
 from ade_api.settings import Settings, get_settings
 from .azure_sql_auth import attach_azure_sql_managed_identity
 
@@ -227,7 +229,13 @@ def get_db(request: Request) -> Generator[Session, None, None]:
         session.commit()
     except BaseException as exc:
         session.rollback()
-        if not isinstance(exc, (HTTPException, RequestValidationError)):
+        expected = isinstance(
+            exc,
+            (HTTPException, RequestValidationError, AuthenticationError, PermissionDeniedError),
+        )
+        if not expected and isinstance(exc, ApiError) and exc.status_code < 500:
+            expected = True
+        if not expected:
             logger.warning(
                 "db.session.rollback",
                 extra={

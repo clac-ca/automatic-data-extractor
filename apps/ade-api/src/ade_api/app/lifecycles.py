@@ -17,6 +17,7 @@ from sqlalchemy.engine import make_url
 from ade_api.db import get_engine, get_sessionmaker_from_app, init_db, shutdown_db
 from ade_api.features.documents.change_feed import run_document_events_pruner
 from ade_api.features.rbac import RbacService
+from ade_api.features.sso.env_sync import sync_sso_providers_from_env
 from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,11 @@ def create_application_lifespan(
                 except Exception:
                     logger.warning("rbac.registry.sync.failed", exc_info=True)
 
+        def _sync_sso_env_providers() -> None:
+            with session_factory() as session:
+                with session.begin():
+                    sync_sso_providers_from_env(session=session, settings=settings)
+
         try:
             # Fail fast if the schema hasn't been migrated.
             try:
@@ -158,6 +164,7 @@ def create_application_lifespan(
                 ) from exc
 
             await asyncio.to_thread(_sync_rbac_registry)
+            await asyncio.to_thread(_sync_sso_env_providers)
 
             pruner_stop = asyncio.Event()
             pruner_task = asyncio.create_task(

@@ -232,7 +232,7 @@ function WorkspaceCreateContent() {
             <Button type="button" variant="secondary" onClick={() => navigate("/workspaces")} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Creating workspace…" : "Create workspace"}
             </Button>
           </div>

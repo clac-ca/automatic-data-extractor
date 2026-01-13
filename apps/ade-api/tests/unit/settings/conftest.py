@@ -52,14 +52,9 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_WORKER_CPU_SECONDS",
         "ADE_WORKER_MEM_MB",
         "ADE_WORKER_FSIZE_MB",
-        "ADE_OIDC_ENABLED",
-        "ADE_OIDC_CLIENT_ID",
-        "ADE_OIDC_CLIENT_SECRET",
-        "ADE_OIDC_ISSUER",
-        "ADE_OIDC_REDIRECT_URL",
-        "ADE_OIDC_SCOPES",
         "ADE_AUTH_FORCE_SSO",
         "ADE_AUTH_SSO_AUTO_PROVISION",
+        "ADE_SSO_ENCRYPTION_KEY",
     ):
         monkeypatch.delenv(var, raising=False)
     yield

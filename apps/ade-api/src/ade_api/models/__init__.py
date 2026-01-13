@@ -20,6 +20,15 @@ from .run import Run, RunStatus
 from .run_field import RunField
 from .run_metrics import RunMetrics
 from .run_table_column import RunTableColumn
+from .sso import (
+    SsoAuthState,
+    SsoIdentity,
+    SsoProvider,
+    SsoProviderDomain,
+    SsoProviderManagedBy,
+    SsoProviderStatus,
+    SsoProviderType,
+)
 from .system_setting import SystemSetting
 from .user import AccessToken, OAuthAccount, User
 from .workspace import Workspace, WorkspaceMembership
@@ -50,6 +59,13 @@ __all__ = [
     "RunStatus",
     "RunTableColumn",
     "ScopeType",
+    "SsoAuthState",
+    "SsoIdentity",
+    "SsoProvider",
+    "SsoProviderDomain",
+    "SsoProviderManagedBy",
+    "SsoProviderStatus",
+    "SsoProviderType",
     "SystemSetting",
     "User",
     "OAuthAccount",

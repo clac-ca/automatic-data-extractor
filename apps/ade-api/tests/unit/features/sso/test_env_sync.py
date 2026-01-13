@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+from ade_api.features.sso.env_sync import sync_sso_providers_from_env
+from ade_api.features.sso.service import SsoService
+from ade_api.models import SsoProvider, SsoProviderManagedBy, SsoProviderStatus
+from ade_api.settings import Settings
+
+
+def _settings_with_env(raw: str | None) -> Settings:
+    return Settings(
+        _env_file=None,
+        jwt_secret="test-jwt-secret-for-tests-please-change",
+        sso_encryption_key="test-sso-encryption-key",
+        auth_sso_providers_json=raw,
+    )
+
+
+def test_env_sync_creates_env_managed_provider(session) -> None:
+    raw = """
+    [
+      {
+        "id": "okta-primary",
+        "type": "oidc",
+        "label": "Okta",
+        "issuer": "https://issuer.example.com",
+        "clientId": "client-1",
+        "clientSecret": "secret-1",
+        "domains": ["example.com"],
+        "status": "active"
+      }
+    ]
+    """
+    settings = _settings_with_env(raw)
+
+    sync_sso_providers_from_env(session=session, settings=settings)
+
+    provider = session.get(SsoProvider, "okta-primary")
+    assert provider is not None
+    assert provider.managed_by == SsoProviderManagedBy.ENV
+    assert provider.locked is True
+    assert provider.label == "Okta"
+    assert provider.status == SsoProviderStatus.ACTIVE
+    assert sorted(domain.domain for domain in provider.domains) == ["example.com"]
+
+
+def test_env_sync_updates_existing_provider(session, settings) -> None:
+    service = SsoService(session=session, settings=settings)
+    service.create_provider(
+        provider_id="okta-primary",
+        label="Old",
+        issuer="https://issuer.old.com",
+        client_id="old-client",
+        client_secret="old-secret",
+        status_value=SsoProviderStatus.DISABLED,
+        domains=["old.com"],
+    )
+    session.commit()
+
+    raw = """
+    [
+      {
+        "id": "okta-primary",
+        "type": "oidc",
+        "label": "New Label",
+        "issuer": "https://issuer.example.com",
+        "clientId": "new-client",
+        "clientSecret": "new-secret",
+        "domains": ["example.com"],
+        "status": "active"
+      }
+    ]
+    """
+    env_settings = _settings_with_env(raw)
+
+    sync_sso_providers_from_env(session=session, settings=env_settings)
+
+    provider = session.get(SsoProvider, "okta-primary")
+    assert provider is not None
+    assert provider.managed_by == SsoProviderManagedBy.ENV
+    assert provider.locked is True
+    assert provider.label == "New Label"
+    assert provider.status == SsoProviderStatus.ACTIVE
+    assert sorted(domain.domain for domain in provider.domains) == ["example.com"]
+
+
+def test_env_sync_releases_removed_env_provider(session, settings) -> None:
+    service = SsoService(session=session, settings=settings)
+    provider = service.create_provider(
+        provider_id="okta-primary",
+        label="Okta",
+        issuer="https://issuer.example.com",
+        client_id="demo-client",
+        client_secret="demo-secret",
+        status_value=SsoProviderStatus.DISABLED,
+        domains=["example.com"],
+    )
+    provider.managed_by = SsoProviderManagedBy.ENV
+    provider.locked = True
+    session.commit()
+
+    env_settings = _settings_with_env("[]")
+
+    sync_sso_providers_from_env(session=session, settings=env_settings)
+
+    refreshed = session.get(SsoProvider, "okta-primary")
+    assert refreshed is not None
+    assert refreshed.managed_by == SsoProviderManagedBy.DB
+    assert refreshed.locked is False

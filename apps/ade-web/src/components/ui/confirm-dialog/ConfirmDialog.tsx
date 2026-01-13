@@ -84,7 +84,7 @@ export function ConfirmDialog({
         }
       : {
           badge: "bg-muted text-foreground",
-          confirmVariant: "primary" as const,
+          confirmVariant: "default" as const,
         };
 
   return createPortal(
@@ -127,7 +127,6 @@ export function ConfirmDialog({
               type="button"
               variant={toneStyles.confirmVariant}
               onClick={onConfirm}
-              isLoading={isConfirming}
               disabled={confirmDisabled || isConfirming}
             >
               {confirmLabel}

@@ -33,7 +33,7 @@ function buildSsoHref(startUrl: string | null | undefined, returnTo: string | nu
     return base;
   }
   const joiner = base.includes("?") ? "&" : "?";
-  return `${base}${joiner}return_to=${encodeURIComponent(returnTo)}`;
+  return `${base}${joiner}returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export default function LoginScreen() {
@@ -48,24 +48,30 @@ export default function LoginScreen() {
 
   const providersQuery = useAuthProvidersQuery();
   const providers: AuthProvider[] = providersQuery.data?.providers ?? [];
-  const ssoProviders = providers.filter((provider) => provider.type !== "password");
-  const forceSso = providersQuery.data?.force_sso ?? false;
+  const oidcProviders = providers.filter((provider) => provider.type === "oidc");
+  const forceSso = providersQuery.data?.forceSso ?? false;
+  const providersLoadFailed = providersQuery.isError && !providersQuery.isFetching;
+  const providersUnavailable = oidcProviders.length === 0;
+  const blockingSsoMessage =
+    forceSso && (providersLoadFailed || providersUnavailable)
+      ? "Single sign-on is required, but no providers are available. Contact your administrator."
+      : null;
   const providersError =
-    providersQuery.isError && !providersQuery.isFetching
+    providersLoadFailed && !forceSso
       ? "We couldn't load the list of providers. Refresh the page or continue with email."
       : null;
 
-  const redirectTo = useMemo(() => {
+  const returnTo = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return resolveRedirectParam(params.get("redirectTo"));
+    return resolveRedirectParam(params.get("returnTo"));
   }, [location.search]);
 
   useEffect(() => {
     if (!session) {
       return;
     }
-    navigate(chooseDestination(session.return_to, redirectTo), { replace: true });
-  }, [navigate, redirectTo, session]);
+    navigate(chooseDestination(session.return_to, returnTo), { replace: true });
+  }, [navigate, returnTo, session]);
 
   useEffect(() => {
     if (!shouldCheckSetup) {
@@ -75,9 +81,57 @@ export default function LoginScreen() {
       return;
     }
     if (setupQuery.data?.setup_required) {
-      navigate(buildSetupRedirect(redirectTo), { replace: true });
+      navigate(buildSetupRedirect(returnTo), { replace: true });
     }
-  }, [navigate, redirectTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending, shouldCheckSetup]);
+  }, [navigate, returnTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending, shouldCheckSetup]);
+
+  const ssoErrorMessage = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const code = params.get("ssoError");
+    if (!code) {
+      return null;
+    }
+    const providerId = params.get("providerId");
+    const providerLabel = oidcProviders.find((provider) => provider.id === providerId)?.label;
+
+    const prefix = providerLabel ? `${providerLabel} sign-in failed.` : "Single sign-on failed.";
+    switch (code) {
+      case "PROVIDER_NOT_FOUND":
+        return `${prefix} The provider is no longer available.`;
+      case "PROVIDER_DISABLED":
+        return `${prefix} The provider is disabled.`;
+      case "PROVIDER_MISCONFIGURED":
+        return `${prefix} The provider is misconfigured. Contact your administrator.`;
+      case "STATE_INVALID":
+      case "STATE_EXPIRED":
+      case "STATE_REUSED":
+        return `${prefix} Your sign-in session expired. Please try again.`;
+      case "TOKEN_EXCHANGE_FAILED":
+        return `${prefix} We couldn't complete the sign-in. Try again.`;
+      case "ID_TOKEN_INVALID":
+        return `${prefix} We couldn't validate your sign-in. Contact your administrator.`;
+      case "EMAIL_MISSING":
+        return `${prefix} Your identity provider did not return an email address.`;
+      case "EMAIL_NOT_VERIFIED":
+        return `${prefix} Your email address must be verified before signing in.`;
+      case "AUTO_PROVISION_DISABLED":
+        return `${prefix} Your account must be provisioned before signing in.`;
+      case "DOMAIN_NOT_ALLOWED":
+        return `${prefix} Your domain is not approved for auto-provisioning.`;
+      case "USER_NOT_ALLOWED":
+        return `${prefix} Your account is not allowed to sign in.`;
+      case "IDENTITY_CONFLICT":
+        return `${prefix} Your account is linked to another user. Contact your administrator.`;
+      case "UPSTREAM_ERROR":
+        return `${prefix} The identity provider returned an error.`;
+      case "RATE_LIMITED":
+        return `${prefix} Too many attempts. Please wait and try again.`;
+      case "INTERNAL_ERROR":
+        return `${prefix} We couldn't complete the sign-in. Please try again.`;
+      default:
+        return `${prefix} Please try again.`;
+    }
+  }, [location.search, oidcProviders]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -135,7 +189,7 @@ export default function LoginScreen() {
     }
 
     const { email, password } = parsed.data;
-    const redirectValue = typeof raw.redirectTo === "string" ? raw.redirectTo : null;
+    const redirectValue = typeof raw.returnTo === "string" ? raw.returnTo : null;
     const destination = resolveRedirectParam(redirectValue);
 
     setIsSubmitting(true);
@@ -171,6 +225,8 @@ export default function LoginScreen() {
           </p>
         </header>
 
+        {ssoErrorMessage ? <Alert tone="danger" className="mt-6">{ssoErrorMessage}</Alert> : null}
+        {blockingSsoMessage ? <Alert tone="danger" className="mt-6">{blockingSsoMessage}</Alert> : null}
         {providersError ? <Alert tone="warning" className="mt-6">{providersError}</Alert> : null}
 
         {isProvidersLoading ? (
@@ -178,12 +234,12 @@ export default function LoginScreen() {
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
           </div>
-        ) : ssoProviders.length > 0 ? (
+        ) : !blockingSsoMessage && oidcProviders.length > 0 ? (
           <div className="mt-6 space-y-3">
-            {ssoProviders.map((provider) => (
+            {oidcProviders.map((provider) => (
               <a
                 key={provider.id}
-                href={buildSsoHref(provider.start_url, redirectTo)}
+                href={buildSsoHref(provider.startUrl, returnTo)}
                 className="flex w-full items-center justify-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Continue with {provider.label}
@@ -194,7 +250,7 @@ export default function LoginScreen() {
 
         {!forceSso ? (
           <form method="post" className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <input type="hidden" name="redirectTo" value={redirectTo} />
+            <input type="hidden" name="returnTo" value={returnTo} />
             <FormField label="Email address" required>
               <Input
                 id="email"
@@ -219,7 +275,7 @@ export default function LoginScreen() {
 
             {shouldShowActionError ? <Alert tone="danger">{formError}</Alert> : null}
 
-            <Button type="submit" className="w-full justify-center" isLoading={isSubmitting} disabled={isSubmitting}>
+            <Button type="submit" className="w-full justify-center" disabled={isSubmitting}>
               {isSubmitting ? "Signing in…" : "Continue"}
             </Button>
           </form>

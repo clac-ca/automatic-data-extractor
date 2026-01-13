@@ -121,7 +121,7 @@ describe("RequireSession", () => {
     renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces/alpha");
 
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
-    expect(window.location.search).toBe("?redirectTo=%2Fworkspaces%2Falpha");
+    expect(window.location.search).toBe("?returnTo=%2Fworkspaces%2Falpha");
   });
 
   it("allows retrying when setup status fails to load", async () => {

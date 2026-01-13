@@ -67,11 +67,6 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         auth_disabled=False,
         safe_mode=False,
         jwt_secret="test-jwt-secret-for-tests-please-change",
-        oidc_enabled=False,
-        oidc_client_id=None,
-        oidc_client_secret=None,
-        oidc_issuer=None,
-        oidc_redirect_url=None,
         auth_force_sso=False,
     )
     ensure_runtime_dirs(settings)

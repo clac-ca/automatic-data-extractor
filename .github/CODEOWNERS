@@ -1,0 +1,5 @@
+# UI vendor primitives and kits should be reviewed by frontend owners.
+# TODO: replace @ade-frontend with the correct team or individual owner.
+/apps/ade-web/src/components/ui/ @ade-frontend
+/apps/ade-web/src/components/data-table/ @ade-frontend
+/apps/ade-web/src/hooks/use-data-table.* @ade-frontend

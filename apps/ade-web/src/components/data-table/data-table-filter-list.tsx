@@ -9,9 +9,9 @@ import {
   ListFilter,
   Trash2,
 } from "lucide-react";
+import { parseAsStringEnum, useQueryState } from "nuqs";
 import * as React from "react";
 
-import { useSearchParams } from "@app/navigation/urlState";
 import { DataTableRangeFilter } from "@/components/data-table/data-table-range-filter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { getDefaultFilterOperator, getFilterOperators } from "@/lib/data-table";
 import { formatDate } from "@/lib/format";
 import { generateId } from "@/lib/id";
-import { parseFiltersState, serializeFiltersState } from "@/lib/parsers";
+import { getFiltersStateParser } from "@/lib/parsers";
 import { cn } from "@/lib/utils";
 import type {
   ExtendedColumnFilter,
@@ -73,28 +73,20 @@ const THROTTLE_MS = 50;
 const FILTER_SHORTCUT_KEY = "f";
 const REMOVE_FILTER_SHORTCUTS = ["backspace", "delete"];
 
-type FiltersUpdater<TData> =
-  | ExtendedColumnFilter<TData>[]
-  | ((prev: ExtendedColumnFilter<TData>[]) => ExtendedColumnFilter<TData>[]);
-
 interface DataTableFilterListProps<TData>
   extends React.ComponentProps<typeof PopoverContent> {
   table: Table<TData>;
   debounceMs?: number;
   throttleMs?: number;
   shallow?: boolean;
-  history?: "push" | "replace";
-  startTransition?: React.TransitionStartFunction;
   disabled?: boolean;
 }
 
 export function DataTableFilterList<TData>({
   table,
   debounceMs = DEBOUNCE_MS,
-  throttleMs: _throttleMs = THROTTLE_MS,
-  shallow: _shallow = true,
-  history = "replace",
-  startTransition,
+  throttleMs = THROTTLE_MS,
+  shallow = true,
   disabled,
   ...props
 }: DataTableFilterListProps<TData>) {
@@ -103,24 +95,6 @@ export function DataTableFilterList<TData>({
   const descriptionId = React.useId();
   const [open, setOpen] = React.useState(false);
   const addButtonRef = React.useRef<HTMLButtonElement>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const replace = history !== "push";
-
-  const setParams = React.useCallback(
-    (updater: (params: URLSearchParams) => URLSearchParams) => {
-      const applyUpdate = () =>
-        setSearchParams((prev) => updater(new URLSearchParams(prev)), {
-          replace,
-        });
-
-      if (startTransition) {
-        startTransition(() => applyUpdate());
-      } else {
-        applyUpdate();
-      }
-    },
-    [replace, setSearchParams, startTransition],
-  );
 
   const columns = React.useMemo(() => {
     return table
@@ -128,59 +102,25 @@ export function DataTableFilterList<TData>({
       .filter((column) => column.columnDef.enableColumnFilter);
   }, [table]);
 
-  const filtersKey = table.options.meta?.queryKeys?.filters ?? "filters";
-  const joinOperatorKey =
-    table.options.meta?.queryKeys?.joinOperator ?? "joinOperator";
-  const columnIds = React.useMemo(
-    () => columns.map((field) => field.id),
-    [columns],
+  const [filters, setFilters] = useQueryState(
+    table.options.meta?.queryKeys?.filters ?? "filters",
+    getFiltersStateParser<TData>(columns.map((field) => field.id))
+      .withDefault([])
+      .withOptions({
+        clearOnDefault: true,
+        shallow,
+        throttleMs,
+      }),
   );
-
-  const filters = React.useMemo(() => {
-    return parseFiltersState<TData>(searchParams.get(filtersKey), columnIds);
-  }, [searchParams, filtersKey, columnIds]);
-
-  const joinOperator = React.useMemo<JoinOperator>(() => {
-    return searchParams.get(joinOperatorKey) === "or" ? "or" : "and";
-  }, [searchParams, joinOperatorKey]);
-
-  const setFilters = React.useCallback(
-    (updater: FiltersUpdater<TData>) => {
-      setParams((params) => {
-        const current = parseFiltersState<TData>(
-          params.get(filtersKey),
-          columnIds,
-        );
-        const nextFilters =
-          typeof updater === "function" ? updater(current) : updater;
-
-        if (nextFilters.length === 0) {
-          params.delete(filtersKey);
-        } else {
-          params.set(filtersKey, serializeFiltersState(nextFilters));
-        }
-
-        return params;
-      });
-    },
-    [setParams, filtersKey, columnIds],
-  );
-
-  const setJoinOperator = React.useCallback(
-    (nextOperator: JoinOperator) => {
-      setParams((params) => {
-        if (nextOperator === "and") {
-          params.delete(joinOperatorKey);
-        } else {
-          params.set(joinOperatorKey, nextOperator);
-        }
-        return params;
-      });
-    },
-    [setParams, joinOperatorKey],
-  );
-
   const debouncedSetFilters = useDebouncedCallback(setFilters, debounceMs);
+
+  const [joinOperator, setJoinOperator] = useQueryState(
+    table.options.meta?.queryKeys?.joinOperator ?? "",
+    parseAsStringEnum(["and", "or"]).withDefault("and").withOptions({
+      clearOnDefault: true,
+      shallow,
+    }),
+  );
 
   const onFilterAdd = React.useCallback(() => {
     const column = columns[0];
@@ -224,7 +164,7 @@ export function DataTableFilterList<TData>({
       const updatedFilters = filters.filter(
         (filter) => filter.filterId !== filterId,
       );
-      setFilters(updatedFilters);
+      void setFilters(updatedFilters);
       requestAnimationFrame(() => {
         addButtonRef.current?.focus();
       });
@@ -233,12 +173,9 @@ export function DataTableFilterList<TData>({
   );
 
   const onFiltersReset = React.useCallback(() => {
-    setParams((params) => {
-      params.delete(filtersKey);
-      params.delete(joinOperatorKey);
-      return params;
-    });
-  }, [setParams, filtersKey, joinOperatorKey]);
+    void setFilters(null);
+    void setJoinOperator("and");
+  }, [setFilters, setJoinOperator]);
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

@@ -88,9 +88,7 @@ function WorkspacesIndexContent() {
   }, [searchQuery, urlSearchQuery]);
 
   const actions = canCreateWorkspace ? (
-    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
-      Create workspace
-    </Button>
+    <Button onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
   ) : undefined;
 
   const handleWorkspaceSearchSubmit = useCallback((value: string) => {
@@ -302,7 +300,7 @@ function EmptyStateCreate({ onCreate }: { onCreate: () => void }) {
       <p className="mt-2 text-sm text-muted-foreground">
         Create your first workspace to start uploading configuration sets and documents.
       </p>
-      <Button variant="primary" onClick={onCreate} className="mt-6">
+      <Button onClick={onCreate} className="mt-6">
         Create workspace
       </Button>
     </div>

@@ -129,15 +129,15 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/oidc/{provider}/authorize": {
+    "/api/v1/auth/sso/providers": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Authorize Oidc */
-        get: operations["authorize_oidc_api_v1_auth_oidc__provider__authorize_get"];
+        /** Return active SSO providers */
+        get: operations["list_sso_providers_api_v1_auth_sso_providers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -146,15 +146,32 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/oidc/{provider}/callback": {
+    "/api/v1/auth/sso/{providerId}/authorize": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Callback Oidc */
-        get: operations["callback_oidc_api_v1_auth_oidc__provider__callback_get"];
+        /** Authorize Sso */
+        get: operations["authorize_sso_api_v1_auth_sso__providerId__authorize_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sso/{providerId}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Callback Sso */
+        get: operations["callback_sso_api_v1_auth_sso__providerId__callback_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1380,6 +1397,61 @@ export type paths = {
         /** Preview run output worksheet */
         get: operations["preview_run_output_endpoint_api_v1_runs__runId__output_preview_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sso/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List SSO providers (admin) */
+        get: operations["list_providers_api_v1_admin_sso_providers_get"];
+        put?: never;
+        /** Create an SSO provider (admin) */
+        post: operations["create_provider_api_v1_admin_sso_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sso/providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an SSO provider (admin) */
+        get: operations["get_provider_api_v1_admin_sso_providers__id__get"];
+        put?: never;
+        post?: never;
+        /** Disable an SSO provider (admin) */
+        delete: operations["delete_provider_api_v1_admin_sso_providers__id__delete"];
+        options?: never;
+        head?: never;
+        /** Update an SSO provider (admin) */
+        patch: operations["update_provider_api_v1_admin_sso_providers__id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/sso/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read SSO global settings (admin) */
+        get: operations["read_sso_settings_api_v1_admin_sso_settings_get"];
+        /** Update SSO global settings (admin) */
+        put: operations["update_sso_settings_api_v1_admin_sso_settings_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2642,6 +2714,33 @@ export type components = {
             changesCursor: string;
         };
         /**
+         * PublicSsoProvider
+         * @description Provider summary returned to the login screen.
+         */
+        PublicSsoProvider: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "oidc";
+            /** Starturl */
+            startUrl: string;
+        };
+        /** PublicSsoProviderListResponse */
+        PublicSsoProviderListResponse: {
+            /** Providers */
+            providers: components["schemas"]["PublicSsoProvider"][];
+            /**
+             * Forcesso
+             * @default false
+             */
+            forceSso: boolean;
+        };
+        /**
          * RoleAssignmentOut
          * @description API representation of a role assignment to a user in a scope.
          */
@@ -3267,6 +3366,110 @@ export type components = {
          * @enum {string}
          */
         ScopeType: "global" | "workspace";
+        /**
+         * SsoProviderAdminOut
+         * @description Provider details returned to administrators.
+         */
+        SsoProviderAdminOut: {
+            /** Id */
+            id: string;
+            type: components["schemas"]["SsoProviderType"];
+            /** Label */
+            label: string;
+            /** Issuer */
+            issuer: string;
+            /** Clientid */
+            clientId: string;
+            status: components["schemas"]["SsoProviderStatus"];
+            /** Domains */
+            domains: string[];
+            managedBy: components["schemas"]["SsoProviderManagedBy"];
+            /** Locked */
+            locked: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * SsoProviderCreate
+         * @description Payload to create a provider.
+         */
+        SsoProviderCreate: {
+            /** @default oidc */
+            type: components["schemas"]["SsoProviderType"];
+            /** Label */
+            label: string;
+            /** Issuer */
+            issuer: string;
+            /** Clientid */
+            clientId: string;
+            /** @default disabled */
+            status: components["schemas"]["SsoProviderStatus"];
+            /** Domains */
+            domains?: string[];
+            /** Id */
+            id: string;
+            /**
+             * Clientsecret
+             * Format: password
+             */
+            clientSecret: string;
+        };
+        /** SsoProviderListResponse */
+        SsoProviderListResponse: {
+            /** Items */
+            items: components["schemas"]["SsoProviderAdminOut"][];
+        };
+        /**
+         * SsoProviderManagedBy
+         * @description Source-of-truth marker for provider configuration.
+         * @enum {string}
+         */
+        SsoProviderManagedBy: "db" | "env";
+        /**
+         * SsoProviderStatus
+         * @description Lifecycle status for SSO providers.
+         * @enum {string}
+         */
+        SsoProviderStatus: "active" | "disabled" | "deleted";
+        /**
+         * SsoProviderType
+         * @description Supported SSO provider types.
+         * @enum {string}
+         */
+        SsoProviderType: "oidc";
+        /**
+         * SsoProviderUpdate
+         * @description Payload to update a provider.
+         */
+        SsoProviderUpdate: {
+            /** Label */
+            label?: string | null;
+            /** Issuer */
+            issuer?: string | null;
+            /** Clientid */
+            clientId?: string | null;
+            /** Clientsecret */
+            clientSecret?: string | null;
+            status?: components["schemas"]["SsoProviderStatus"] | null;
+            /** Domains */
+            domains?: string[] | null;
+        };
+        /** SsoSettings */
+        SsoSettings: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
         /**
          * TagCatalogItem
          * @description Tag entry with document counts.
@@ -3982,14 +4185,36 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    authorize_oidc_api_v1_auth_oidc__provider__authorize_get: {
+    list_sso_providers_api_v1_auth_sso_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSsoProviderListResponse"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    authorize_sso_api_v1_auth_sso__providerId__authorize_get: {
         parameters: {
             query?: {
-                return_to?: string | null;
+                returnTo?: string | null;
             };
             header?: never;
             path: {
-                provider: string;
+                providerId: string;
             };
             cookie?: never;
         };
@@ -4018,14 +4243,12 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    callback_oidc_api_v1_auth_oidc__provider__callback_get: {
+    callback_sso_api_v1_auth_sso__providerId__callback_get: {
         parameters: {
-            query?: {
-                response_mode?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
-                provider: string;
+                providerId: string;
             };
             cookie?: never;
         };
@@ -8754,6 +8977,237 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_providers_api_v1_admin_sso_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoProviderListResponse"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_provider_api_v1_admin_sso_providers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoProviderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoProviderAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    get_provider_api_v1_admin_sso_providers__id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider identifier. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoProviderAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    delete_provider_api_v1_admin_sso_providers__id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Provider identifier. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_provider_api_v1_admin_sso_providers__id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Provider identifier. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoProviderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoProviderAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    read_sso_settings_api_v1_admin_sso_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoSettings"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_sso_settings_api_v1_admin_sso_settings_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
             default: components["responses"]["ProblemDetails"];
         };

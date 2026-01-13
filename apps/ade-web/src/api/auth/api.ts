@@ -9,8 +9,21 @@ export const sessionKeys = {
   setupStatus: () => [...sessionKeys.root, "setup-status"] as const,
 };
 
-export type AuthProvider = components["schemas"]["AuthProvider"];
-export type AuthProviderResponse = components["schemas"]["AuthProviderListResponse"];
+type AuthProviderRaw = components["schemas"]["AuthProvider"];
+type AuthProviderResponseRaw = components["schemas"]["AuthProviderListResponse"];
+
+export type AuthProvider = Readonly<{
+  id: string;
+  label: string;
+  type: "password" | "oidc";
+  startUrl?: string | null;
+  iconUrl?: string | null;
+}>;
+
+export type AuthProviderResponse = Readonly<{
+  providers: AuthProvider[];
+  forceSso: boolean;
+}>;
 type MeContext = components["schemas"]["MeContext"];
 type MeWorkspaceSummary = components["schemas"]["MeWorkspaceSummary"];
 type MeProfile = components["schemas"]["MeProfile"];
@@ -39,18 +52,20 @@ export type SessionEnvelope = Readonly<{
   return_to: string | null;
 }>;
 
-export async function fetchAuthProviders(options: RequestOptions = {}): Promise<AuthProviderResponse> {
+export async function fetchAuthProviders(
+  options: RequestOptions = {},
+): Promise<AuthProviderResponse> {
   try {
     const { data } = await client.GET("/api/v1/auth/providers", {
       signal: options.signal,
     });
     if (!data) {
-      return { providers: [], force_sso: false };
+      return { providers: [], forceSso: false };
     }
     return normalizeAuthProviderResponse(data);
   } catch (error: unknown) {
     if (error instanceof ApiError && error.status === 404) {
-      return { providers: [], force_sso: false };
+      return { providers: [], forceSso: false };
     }
     throw error;
   }
@@ -69,10 +84,6 @@ export async function createSession(
   options: RequestOptions = {},
 ): Promise<SessionEnvelope> {
   await submitPasswordLogin(payload, options.signal);
-  return bootstrapSession(options.signal, null);
-}
-
-export async function completeAuthCallback(options: RequestOptions = {}): Promise<SessionEnvelope> {
   return bootstrapSession(options.signal, null);
 }
 
@@ -179,17 +190,19 @@ function normalizeSessionEnvelope(
   };
 }
 
-function normalizeAuthProviderResponse(data: AuthProviderResponse): AuthProviderResponse {
+function normalizeAuthProviderResponse(data: AuthProviderResponseRaw): AuthProviderResponse {
   return {
     providers: (data.providers ?? []).map(normalizeAuthProvider),
-    force_sso: Boolean(data.force_sso),
+    forceSso: Boolean(data.force_sso),
   };
 }
 
-function normalizeAuthProvider(provider: AuthProvider): AuthProvider {
+function normalizeAuthProvider(provider: AuthProviderRaw): AuthProvider {
   return {
-    ...provider,
-    start_url: provider.start_url ?? "",
-    icon_url: provider.icon_url ?? null,
+    id: provider.id,
+    label: provider.label,
+    type: provider.type,
+    startUrl: provider.start_url ?? "",
+    iconUrl: provider.icon_url ?? null,
   };
 }

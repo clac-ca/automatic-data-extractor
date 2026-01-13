@@ -1,8 +1,5 @@
-"use client";
-
 import {
   type ColumnFiltersState,
-  type ColumnSizingState,
   getCoreRowModel,
   getFacetedMinMaxValues,
   getFacetedRowModel,
@@ -19,15 +16,19 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
+import {
+  parseAsArrayOf,
+  parseAsInteger,
+  parseAsString,
+  type SingleParser,
+  type UseQueryStateOptions,
+  useQueryState,
+  useQueryStates,
+} from "nuqs";
 import * as React from "react";
 
-import { useSearchParams } from "@app/navigation/urlState";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
-import {
-  parseSortingState,
-  serializeSortingState,
-} from "@/lib/parsers";
-import { createScopedStorage } from "@/lib/storage";
+import { getSortingStateParser } from "@/lib/parsers";
 import type { ExtendedColumnSort, QueryKeys } from "@/types/data-table";
 
 const PAGE_KEY = "page";
@@ -38,36 +39,6 @@ const JOIN_OPERATOR_KEY = "joinOperator";
 const ARRAY_SEPARATOR = ",";
 const DEBOUNCE_MS = 300;
 const THROTTLE_MS = 50;
-
-function parseNumberParam(value: string | null, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? fallback : parsed;
-}
-
-function isSortingEqual<TData>(
-  left: ExtendedColumnSort<TData>[],
-  right: ExtendedColumnSort<TData>[],
-) {
-  return (
-    left.length === right.length &&
-    left.every(
-      (item, index) =>
-        item.id === right[index]?.id && item.desc === right[index]?.desc,
-    )
-  );
-}
-
-function isExplicitEmptySort(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("[")) return false;
-  try {
-    const parsed = JSON.parse(trimmed);
-    return Array.isArray(parsed) && parsed.length === 0;
-  } catch {
-    return false;
-  }
-}
 
 interface UseDataTableProps<TData>
   extends Omit<
@@ -89,8 +60,6 @@ interface UseDataTableProps<TData>
   throttleMs?: number;
   clearOnDefault?: boolean;
   enableAdvancedFilter?: boolean;
-  enableColumnResizing?: boolean;
-  columnSizingKey?: string;
   scroll?: boolean;
   shallow?: boolean;
   startTransition?: React.TransitionStartFunction;
@@ -107,9 +76,7 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     throttleMs = THROTTLE_MS,
     clearOnDefault = false,
     enableAdvancedFilter = false,
-    enableColumnResizing = false,
-    columnSizingKey,
-    scroll: _scroll = false,
+    scroll = false,
     shallow = true,
     startTransition,
     ...tableProps
@@ -120,35 +87,44 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
   const filtersKey = queryKeys?.filters ?? FILTERS_KEY;
   const joinOperatorKey = queryKeys?.joinOperator ?? JOIN_OPERATOR_KEY;
 
-  const replace = history !== "push";
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const defaultPageSize = initialState?.pagination?.pageSize ?? 10;
+  const queryStateOptions = React.useMemo<
+    Omit<UseQueryStateOptions<string>, "parse">
+  >(
+    () => ({
+      history,
+      scroll,
+      shallow,
+      throttleMs,
+      debounceMs,
+      clearOnDefault,
+      startTransition,
+    }),
+    [
+      history,
+      scroll,
+      shallow,
+      throttleMs,
+      debounceMs,
+      clearOnDefault,
+      startTransition,
+    ],
+  );
 
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>(
     initialState?.rowSelection ?? {},
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>(initialState?.columnVisibility ?? {});
-  const columnSizingStorage = React.useMemo(
-    () => (columnSizingKey ? createScopedStorage(columnSizingKey) : null),
-    [columnSizingKey],
-  );
-  const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>(() => {
-    if (!columnSizingStorage) {
-      return initialState?.columnSizing ?? {};
-    }
-    const stored = columnSizingStorage.get<ColumnSizingState>();
-    return stored ?? initialState?.columnSizing ?? {};
-  });
 
-  const page = React.useMemo(
-    () => parseNumberParam(searchParams.get(pageKey), 1),
-    [searchParams, pageKey],
+  const [page, setPage] = useQueryState(
+    pageKey,
+    parseAsInteger.withOptions(queryStateOptions).withDefault(1),
   );
-  const perPage = React.useMemo(
-    () => parseNumberParam(searchParams.get(perPageKey), defaultPageSize),
-    [searchParams, perPageKey, defaultPageSize],
+  const [perPage, setPerPage] = useQueryState(
+    perPageKey,
+    parseAsInteger
+      .withOptions(queryStateOptions)
+      .withDefault(initialState?.pagination?.pageSize ?? 10),
   );
 
   const pagination: PaginationState = React.useMemo(() => {
@@ -158,62 +134,15 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     };
   }, [page, perPage]);
 
-  const setParams = React.useCallback(
-    (
-      updater: (params: URLSearchParams) => URLSearchParams,
-      opts: { replace?: boolean } = {},
-    ) => {
-      const applyUpdate = () =>
-        setSearchParams((prev) => updater(new URLSearchParams(prev)), {
-          replace: opts.replace ?? replace,
-        });
-
-      if (startTransition) {
-        startTransition(() => applyUpdate());
-      } else {
-        applyUpdate();
-      }
-    },
-    [replace, setSearchParams, startTransition],
-  );
-
-  const setPage = React.useCallback(
-    (nextPage: number) => {
-      setParams((params) => {
-        if (clearOnDefault && nextPage === 1) {
-          params.delete(pageKey);
-        } else {
-          params.set(pageKey, String(nextPage));
-        }
-        return params;
-      });
-    },
-    [clearOnDefault, pageKey, setParams],
-  );
-
-  const setPerPage = React.useCallback(
-    (nextPerPage: number) => {
-      setParams((params) => {
-        if (clearOnDefault && nextPerPage === defaultPageSize) {
-          params.delete(perPageKey);
-        } else {
-          params.set(perPageKey, String(nextPerPage));
-        }
-        return params;
-      });
-    },
-    [clearOnDefault, defaultPageSize, perPageKey, setParams],
-  );
-
   const onPaginationChange = React.useCallback(
     (updaterOrValue: Updater<PaginationState>) => {
       if (typeof updaterOrValue === "function") {
         const newPagination = updaterOrValue(pagination);
-        setPage(newPagination.pageIndex + 1);
-        setPerPage(newPagination.pageSize);
+        void setPage(newPagination.pageIndex + 1);
+        void setPerPage(newPagination.pageSize);
       } else {
-        setPage(updaterOrValue.pageIndex + 1);
-        setPerPage(updaterOrValue.pageSize);
+        void setPage(updaterOrValue.pageIndex + 1);
+        void setPerPage(updaterOrValue.pageSize);
       }
     },
     [pagination, setPage, setPerPage],
@@ -225,31 +154,11 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     );
   }, [columns]);
 
-  const sorting = React.useMemo(() => {
-    const rawSort = searchParams.get(sortKey);
-    if (!rawSort) {
-      return initialState?.sorting ?? [];
-    }
-    const parsed = parseSortingState<TData>(rawSort, columnIds);
-    if (parsed.length > 0 || isExplicitEmptySort(rawSort)) {
-      return parsed;
-    }
-    return initialState?.sorting ?? [];
-  }, [searchParams, sortKey, columnIds, initialState?.sorting]);
-
-  const setSorting = React.useCallback(
-    (nextSorting: ExtendedColumnSort<TData>[]) => {
-      const defaultSorting = initialState?.sorting ?? [];
-      setParams((params) => {
-        if (clearOnDefault && isSortingEqual(nextSorting, defaultSorting)) {
-          params.delete(sortKey);
-        } else {
-          params.set(sortKey, serializeSortingState(nextSorting));
-        }
-        return params;
-      });
-    },
-    [clearOnDefault, initialState?.sorting, setParams, sortKey],
+  const [sorting, setSorting] = useQueryState(
+    sortKey,
+    getSortingStateParser<TData>(columnIds)
+      .withOptions(queryStateOptions)
+      .withDefault(initialState?.sorting ?? []),
   );
 
   const onSortingChange = React.useCallback(
@@ -270,62 +179,30 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     return columns.filter((column) => column.enableColumnFilter);
   }, [columns, enableAdvancedFilter]);
 
-  const filterValues = React.useMemo(() => {
-    if (enableAdvancedFilter) return {} as Record<string, string | string[] | null>;
+  const filterParsers = React.useMemo(() => {
+    if (enableAdvancedFilter) return {};
 
     return filterableColumns.reduce<
-      Record<string, string | string[] | null>
+      Record<string, SingleParser<string> | SingleParser<string[]>>
     >((acc, column) => {
-      const key = column.id ?? "";
-      if (!key) return acc;
-      const rawValue = searchParams.get(key);
-      if (!rawValue) {
-        acc[key] = null;
-        return acc;
-      }
-
       if (column.meta?.options) {
-        acc[key] = rawValue.split(ARRAY_SEPARATOR).filter(Boolean);
+        acc[column.id ?? ""] = parseAsArrayOf(
+          parseAsString,
+          ARRAY_SEPARATOR,
+        ).withOptions(queryStateOptions);
       } else {
-        acc[key] = rawValue;
+        acc[column.id ?? ""] = parseAsString.withOptions(queryStateOptions);
       }
       return acc;
     }, {});
-  }, [enableAdvancedFilter, filterableColumns, searchParams]);
+  }, [filterableColumns, queryStateOptions, enableAdvancedFilter]);
 
-  const setFilterValues = React.useCallback(
-    (values: Record<string, string | string[] | null>) => {
-      setParams((params) => {
-        for (const [key, value] of Object.entries(values)) {
-          if (
-            value === null ||
-            (Array.isArray(value) && value.length === 0) ||
-            (typeof value === "string" && value.trim() === "")
-          ) {
-            params.delete(key);
-          } else {
-            const serialized = Array.isArray(value)
-              ? value.join(ARRAY_SEPARATOR)
-              : value;
-            params.set(key, serialized);
-          }
-        }
-
-        if (clearOnDefault) {
-          params.delete(pageKey);
-        } else {
-          params.set(pageKey, "1");
-        }
-
-        return params;
-      });
-    },
-    [clearOnDefault, pageKey, setParams],
-  );
+  const [filterValues, setFilterValues] = useQueryStates(filterParsers);
 
   const debouncedSetFilterValues = useDebouncedCallback(
     (values: typeof filterValues) => {
-      setFilterValues(values);
+      void setPage(1);
+      void setFilterValues(values);
     },
     debounceMs,
   );
@@ -388,13 +265,6 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     [debouncedSetFilterValues, filterableColumns, enableAdvancedFilter],
   );
 
-  React.useEffect(() => {
-    if (!columnSizingStorage) {
-      return;
-    }
-    columnSizingStorage.set(columnSizing);
-  }, [columnSizing, columnSizingStorage]);
-
   const table = useReactTable({
     ...tableProps,
     columns,
@@ -406,22 +276,17 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
       columnVisibility,
       rowSelection,
       columnFilters,
-      columnSizing,
     },
     defaultColumn: {
       ...tableProps.defaultColumn,
       enableColumnFilter: false,
     },
-    enableColumnResizing,
-    columnResizeMode: enableColumnResizing ? "onChange" : undefined,
-    columnResizeDirection: "ltr",
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onPaginationChange,
     onSortingChange,
     onColumnFiltersChange,
     onColumnVisibilityChange: setColumnVisibility,
-    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -444,5 +309,8 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     },
   });
 
-  return { table, shallow, debounceMs, throttleMs, history, startTransition };
+  return React.useMemo(
+    () => ({ table, shallow, debounceMs, throttleMs }),
+    [table, shallow, debounceMs, throttleMs],
+  );
 }

@@ -1,7 +1,7 @@
 import { encodeFilters, type FilterItem, type FilterJoinOperator } from "@api/listing";
 import { UNASSIGNED_KEY } from "@pages/Workspace/sections/Documents/filters";
 import { getValidFilters } from "@/lib/data-table";
-import { parseFiltersState } from "@/lib/parsers";
+import { getFiltersStateParser } from "@/lib/parsers";
 
 import type { DocumentsListParams, DocumentListRow } from "./types";
 
@@ -220,7 +220,7 @@ export function normalizeDocumentsSort(value: string | null) {
 export function normalizeDocumentsFilters(value: string | null): FilterItem[] {
   if (!value) return [];
 
-  const parsed = parseFiltersState(value);
+  const parsed = getFiltersStateParser<DocumentListRow>().parse(value) ?? [];
   if (parsed.length === 0) return [];
 
   const normalized = getValidFilters(parsed)

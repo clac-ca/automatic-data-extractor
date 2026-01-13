@@ -249,9 +249,10 @@ Session:
 
 Auth providers:
 
-* `GET /api/v1/auth/providers`                – configured auth providers.
-* `GET /api/v1/auth/oidc/{provider}/authorize` – start SSO login (302 redirect).
-* `GET /api/v1/auth/oidc/{provider}/callback`  – finish SSO login.
+* `GET /api/v1/auth/providers` – configured auth providers (password + active SSO).
+* `GET /api/v1/auth/sso/providers` – public SSO provider list for the login screen.
+* `GET /api/v1/auth/sso/{providerId}/authorize` – start SSO login (302 redirect).
+* `GET /api/v1/auth/sso/{providerId}/callback` – finish SSO login.
 
 **Example functions**
 
