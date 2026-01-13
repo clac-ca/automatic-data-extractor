@@ -23,8 +23,12 @@ from fastapi.responses import StreamingResponse
 from ade_api.api.deps import SettingsDep, get_configurations_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
-from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
-from ade_api.common.sorting import resolve_sort
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
+)
 from ade_api.core.http import require_csrf, require_workspace
 from ade_api.db import get_sessionmaker
 from ade_api.features.runs.service import RunsService
@@ -54,7 +58,7 @@ from ..service import (
     PreconditionRequiredError,
 )
 from ..storage import ConfigStorage
-from ..sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from ..sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter()
 
@@ -79,8 +83,8 @@ MAKE_ACTIVE_BODY = Body(
 def list_configurations(
     workspace_id: WorkspaceIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     _actor: Annotated[
         User,
         Security(
@@ -89,9 +93,10 @@ def list_configurations(
         ),
     ],
 ) -> ConfigurationPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -100,9 +105,10 @@ def list_configurations(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
 

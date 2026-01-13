@@ -147,7 +147,10 @@ function WorkspacesIndexContent() {
   const { table } = useDataTable({
     data: workspaces,
     columns,
-    pageCount: workspacesPage?.pageCount ?? 0,
+    pageCount:
+      typeof workspacesPage?.meta.totalCount === "number"
+        ? Math.max(1, Math.ceil(workspacesPage.meta.totalCount / perPage))
+        : 1,
     initialState: {
       sorting: [{ id: "name", desc: false }],
       pagination: { pageSize: DEFAULT_WORKSPACE_PAGE_SIZE },

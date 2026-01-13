@@ -34,9 +34,13 @@ from ade_api.api.deps import (
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
-from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
+)
 from ade_api.common.logging import log_context
-from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
@@ -89,7 +93,7 @@ from .schemas import (
     TagCatalogPage,
 )
 from .service import DocumentsService
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
     prefix="/workspaces/{workspaceId}/documents",
@@ -363,7 +367,7 @@ def upload_document(
     status_code=status.HTTP_200_OK,
     summary="List documents",
     response_model_exclude_none=True,
-    dependencies=[Depends(strict_list_query_guard())],
+    dependencies=[Depends(strict_cursor_query_guard())],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list documents.",
@@ -378,27 +382,28 @@ def upload_document(
 )
 def list_documents(
     workspace_id: WorkspacePath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     service: DocumentsServiceDep,
-    response: Response,
     actor: DocumentReader,
 ) -> DocumentListPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
     page_result = service.list_documents(
         workspace_id=workspace_id,
-        page=list_query.page,
-        per_page=list_query.per_page,
-        order_by=order_by,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        resolved_sort=resolved_sort,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
+        include_total=list_query.include_total,
+        include_facets=list_query.include_facets,
     )
-    response.headers["X-Ade-Changes-Cursor"] = page_result.changes_cursor
     return page_result
 
 
@@ -408,7 +413,7 @@ def list_documents(
     status_code=status.HTTP_200_OK,
     summary="List document changes",
     response_model_exclude_none=False,
-    dependencies=[Depends(strict_list_query_guard(allowed_extra={"cursor", "limit", "includeRows"}))],
+    dependencies=[Depends(strict_cursor_query_guard(allowed_extra={"includeRows"}))],
 )
 def list_document_changes(
     workspace_id: WorkspacePath,
@@ -1223,7 +1228,7 @@ def delete_documents_batch(
     status_code=status.HTTP_200_OK,
     summary="List document tags",
     response_model_exclude_none=True,
-    dependencies=[Depends(strict_list_query_guard())],
+    dependencies=[Depends(strict_cursor_query_guard())],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list tags.",
@@ -1238,7 +1243,7 @@ def delete_documents_batch(
 )
 def list_document_tags(
     workspace_id: WorkspacePath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     service: DocumentsServiceDep,
     _actor: DocumentReader,
 ) -> TagCatalogPage:
@@ -1250,8 +1255,9 @@ def list_document_tags(
             )
         return service.list_tag_catalog(
             workspace_id=workspace_id,
-            page=list_query.page,
-            per_page=list_query.per_page,
+            limit=list_query.limit,
+            cursor=list_query.cursor,
+            include_total=list_query.include_total,
             q=list_query.q,
             sort=list_query.sort,
         )

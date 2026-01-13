@@ -138,7 +138,12 @@ export function RunsTableView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <RunsMetrics counts={counts} rangeLabel={rangeLabel} />
-      <RunsTable data={runs} columns={columnsDef} pageCount={pageCount} toolbarActions={toolbarActions} />
+      <RunsTable
+        data={runs}
+        columns={columnsDef}
+        pageCount={pageCount}
+        toolbarActions={toolbarActions}
+      />
       {activeRun ? (
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           <RunPreviewPanel

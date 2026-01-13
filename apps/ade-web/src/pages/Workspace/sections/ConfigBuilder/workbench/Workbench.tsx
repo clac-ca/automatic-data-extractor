@@ -2810,7 +2810,7 @@ async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
     params: {
       path: { workspaceId },
-      query: { sort: '[{"id":"createdAt","desc":true}]', perPage: 50 },
+      query: { sort: '[{"id":"createdAt","desc":true}]', limit: 50 },
     },
     signal,
   });

@@ -31,12 +31,14 @@ export class DocumentChangesResyncError extends Error {
 }
 
 export type ListDocumentsQuery = {
-  page: number;
-  perPage: number;
+  limit: number;
+  cursor?: string | null;
   sort?: string | null;
   filters?: FilterItem[] | string | null;
   joinOperator?: FilterJoinOperator;
   q?: string | null;
+  includeTotal?: boolean;
+  includeFacets?: boolean;
 };
 
 const DEFAULT_DOCUMENTS_PAGE_SIZE = 50;
@@ -94,21 +96,25 @@ export async function fetchWorkspaceDocuments(
   workspaceId: string,
   options: {
     sort: string | null;
-    page: number;
-    perPage: number;
+    limit: number;
+    cursor?: string | null;
     filters?: FilterItem[] | string | null;
     joinOperator?: FilterJoinOperator;
     q?: string | null;
+    includeTotal?: boolean;
+    includeFacets?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<DocumentPageResult> {
   const query = buildListQuery({
     sort: options.sort ?? null,
-    page: options.page > 0 ? options.page : 1,
-    perPage: options.perPage > 0 ? options.perPage : DEFAULT_DOCUMENTS_PAGE_SIZE,
+    limit: options.limit > 0 ? options.limit : DEFAULT_DOCUMENTS_PAGE_SIZE,
+    cursor: options.cursor ?? null,
     q: options.q ?? null,
     filters: options.filters,
     joinOperator: options.joinOperator,
+    includeTotal: options.includeTotal,
+    includeFacets: options.includeFacets,
   });
 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {

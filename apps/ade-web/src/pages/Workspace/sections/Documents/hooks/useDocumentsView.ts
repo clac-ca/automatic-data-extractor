@@ -5,6 +5,7 @@ import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult 
 import type { FilterItem, FilterJoinOperator } from "@api/listing";
 import { createScopedStorage } from "@lib/storage";
 import { uiStorageKeys } from "@lib/uiStorageKeys";
+import { useCursorPager } from "@hooks/use-cursor-pager";
 
 import type { DocumentRow } from "../types";
 
@@ -40,25 +41,38 @@ export function useDocumentsView({
     () => (filters?.length ? JSON.stringify(filters) : ""),
     [filters],
   );
+  const cursorKey = useMemo(
+    () => [workspaceId, perPage, sort ?? "", filtersKey, joinOperator ?? ""].join("|"),
+    [workspaceId, perPage, sort, filtersKey, joinOperator],
+  );
   const queryKey = useMemo(
     () => ["documents", workspaceId, page, perPage, sort ?? "", filtersKey, joinOperator ?? ""],
     [workspaceId, page, perPage, sort, filtersKey, joinOperator],
   );
 
-  const documentsQuery = useQuery<DocumentPageResult>({
-    queryKey,
-    queryFn: ({ signal }) =>
+  const cursorPager = useCursorPager<DocumentListRow>({
+    page,
+    limit: perPage,
+    includeTotal: true,
+    resetKey: cursorKey,
+    fetchPage: ({ cursor, limit, includeTotal, signal }) =>
       fetchWorkspaceDocuments(
         workspaceId,
         {
-          page,
-          perPage,
+          limit,
+          cursor,
           sort,
           filters,
           joinOperator: joinOperator ?? undefined,
+          includeTotal,
         },
         signal,
       ),
+  });
+
+  const documentsQuery = useQuery<DocumentPageResult>({
+    queryKey,
+    queryFn: ({ signal }) => cursorPager.fetchCurrentPage(signal),
     enabled: enabled && Boolean(workspaceId),
     staleTime: 10_000,
     placeholderData: (previous) => previous,
@@ -100,10 +114,10 @@ export function useDocumentsView({
   }, [cursorStorage]);
 
   useEffect(() => {
-    const nextCursor = documentsQuery.data?.changesCursor ?? null;
+    const nextCursor = documentsQuery.data?.meta.changesCursor ?? null;
     if (!nextCursor) return;
     setCursor(nextCursor);
-  }, [documentsQuery.data?.changesCursor]);
+  }, [documentsQuery.data?.meta.changesCursor]);
 
   useEffect(() => {
     if (!cursorStorage || !cursor) return;
@@ -172,8 +186,14 @@ export function useDocumentsView({
   return {
     rows,
     documentsById,
-    pageCount: documentsQuery.data?.pageCount ?? 1,
-    total: typeof documentsQuery.data?.total === "number" ? documentsQuery.data.total : null,
+    pageCount:
+      typeof documentsQuery.data?.meta.totalCount === "number"
+        ? Math.max(1, Math.ceil(documentsQuery.data.meta.totalCount / perPage))
+        : 1,
+    total:
+      typeof documentsQuery.data?.meta.totalCount === "number"
+        ? documentsQuery.data.meta.totalCount
+        : null,
     isLoading: documentsQuery.isLoading,
     isFetching: documentsQuery.isFetching,
     error: documentsQuery.error instanceof Error ? documentsQuery.error.message : null,

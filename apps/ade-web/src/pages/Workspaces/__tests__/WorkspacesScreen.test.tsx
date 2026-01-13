@@ -18,6 +18,7 @@ vi.mock("@components/providers/auth/SessionContext", () => ({
 vi.mock("@hooks/workspaces", () => ({
   useWorkspacesQuery: (...args: unknown[]) => mockUseWorkspacesQuery(...args),
   useSetDefaultWorkspaceMutation: () => mockUseSetDefaultWorkspaceMutation(),
+  DEFAULT_WORKSPACE_PAGE_SIZE: 200,
 }));
 
 vi.mock("@app/navigation/workspacePaths", () => ({
@@ -77,11 +78,15 @@ describe("WorkspacesScreen", () => {
     mockUseWorkspacesQuery.mockReturnValue({
       data: {
         items: workspaces,
-        page: 1,
-        perPage: 2,
-        pageCount: 1,
-        total: 2,
-        changesCursor: "0",
+        meta: {
+          limit: 2,
+          hasMore: false,
+          nextCursor: null,
+          totalIncluded: true,
+          totalCount: 2,
+          changesCursor: "0",
+        },
+        facets: null,
       },
       isLoading: false,
       isError: false,

@@ -812,20 +812,7 @@
         "operationId": "list_my_api_keys_api_v1_users_me_apikeys_get",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -834,9 +821,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -914,6 +919,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -1305,20 +1334,7 @@
             "description": "User identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -1327,9 +1343,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -1407,6 +1441,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -1838,20 +1896,7 @@
         "operationId": "list_users_api_v1_users_get",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -1860,9 +1905,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -1940,6 +2003,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -2312,20 +2399,7 @@
         "operationId": "list_permissions_api_v1_permissions_get",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -2334,9 +2408,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -2414,6 +2506,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -2473,20 +2589,7 @@
         "operationId": "list_roles_api_v1_roles_get",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -2495,9 +2598,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -2575,6 +2696,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -2953,20 +3098,7 @@
         "operationId": "list_assignments_api_v1_roleassignments_get",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -2975,9 +3107,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -3055,6 +3205,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -3807,20 +3981,7 @@
         "operationId": "list_workspaces_api_v1_workspaces_get",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -3829,9 +3990,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -3909,6 +4088,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -4401,20 +4604,7 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -4423,9 +4613,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -4503,6 +4711,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -4862,20 +5094,7 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -4884,9 +5103,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -4964,6 +5201,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -5185,20 +5446,7 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -5207,9 +5455,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -5287,6 +5553,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -7356,20 +7646,7 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -7378,9 +7655,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -7458,6 +7753,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -9403,20 +9722,7 @@
             "description": "Configuration identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -9425,9 +9731,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -9505,6 +9829,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -9798,20 +10146,7 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "1-based page number",
-              "default": 1,
-              "title": "Page"
-            },
-            "description": "1-based page number"
-          },
-          {
-            "name": "perPage",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
@@ -9820,9 +10155,27 @@
               "minimum": 1,
               "description": "Items per page (max 200)",
               "default": 50,
-              "title": "Perpage"
+              "title": "Limit"
             },
             "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
           },
           {
             "name": "sort",
@@ -9900,6 +10253,30 @@
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -11850,39 +12227,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "ApiKeyPage",
-        "description": "Paginated collection of API keys."
+        "description": "Cursor-based collection of API keys."
       },
       "ApiKeySummary": {
         "properties": {
@@ -12443,39 +12811,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "ConfigurationPage",
-        "description": "Paginated configuration listing."
+        "description": "Cursor-based configuration listing."
       },
       "ConfigurationRecord": {
         "properties": {
@@ -12601,6 +12960,65 @@
         ],
         "title": "ConfigurationValidateResponse",
         "description": "Result of running validation."
+      },
+      "CursorMeta": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "title": "Hasmore"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "totalIncluded": {
+            "type": "boolean",
+            "title": "Totalincluded"
+          },
+          "totalCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalcount"
+          },
+          "changesCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changescursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "limit",
+          "hasMore",
+          "nextCursor",
+          "totalIncluded",
+          "totalCount"
+        ],
+        "title": "CursorMeta"
       },
       "DirectoryWriteResponse": {
         "properties": {
@@ -12860,40 +13278,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor",
-            "description": "Watermark cursor for the documents change feed at response time."
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "DocumentListPage",
-        "description": "Paginated envelope of document list rows."
+        "description": "Cursor-based envelope of document list rows."
       },
       "DocumentListRow": {
         "properties": {
@@ -14299,39 +14707,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "PermissionPage",
-        "description": "Paginated permission registry response."
+        "description": "Cursor-based permission registry response."
       },
       "PublicSsoProvider": {
         "properties": {
@@ -14451,39 +14850,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "RoleAssignmentPage",
-        "description": "Paginated role assignment collection."
+        "description": "Cursor-based role assignment collection."
       },
       "RoleCreate": {
         "properties": {
@@ -14614,39 +15004,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "RolePage",
-        "description": "Paginated role collection."
+        "description": "Cursor-based role collection."
       },
       "RoleUpdate": {
         "properties": {
@@ -15684,39 +16065,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "RunPage",
-        "description": "Paginated collection of ``RunResource`` items."
+        "description": "Cursor-based collection of ``RunResource`` items."
       },
       "RunResource": {
         "properties": {
@@ -16305,39 +16677,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "TagCatalogPage",
-        "description": "Paginated tag catalog."
+        "description": "Cursor-based tag catalog."
       },
       "UserCreate": {
         "properties": {
@@ -16496,39 +16859,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "UserPage",
-        "description": "Paginated collection of users."
+        "description": "Cursor-based collection of users."
       },
       "UserRead": {
         "properties": {
@@ -16958,39 +17312,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "WorkspaceMemberPage",
-        "description": "Paginated collection of workspace members."
+        "description": "Cursor-based collection of workspace members."
       },
       "WorkspaceMemberUpdate": {
         "properties": {
@@ -17075,39 +17420,30 @@
             "type": "array",
             "title": "Items"
           },
-          "page": {
-            "type": "integer",
-            "title": "Page"
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
           },
-          "perPage": {
-            "type": "integer",
-            "title": "Perpage"
-          },
-          "pageCount": {
-            "type": "integer",
-            "title": "Pagecount"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "changesCursor": {
-            "type": "string",
-            "title": "Changescursor"
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "items",
-          "page",
-          "perPage",
-          "pageCount",
-          "total",
-          "changesCursor"
+          "meta"
         ],
         "title": "WorkspacePage",
-        "description": "Paginated workspace listing."
+        "description": "Cursor-based workspace listing."
       },
       "WorkspaceUpdate": {
         "properties": {

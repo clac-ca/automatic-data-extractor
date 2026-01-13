@@ -6,7 +6,12 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
 from ade_api.api.deps import get_workspaces_service
-from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort_sequence,
+    strict_cursor_query_guard,
+)
 from ade_api.core.http import require_authenticated, require_csrf, require_global, require_workspace
 from ade_api.models import User
 
@@ -18,6 +23,7 @@ from .schemas import (
     WorkspaceUpdate,
 )
 from .service import WorkspacesService
+from .sorting import DEFAULT_SORT, WORKSPACE_CURSOR_FIELDS
 
 router = APIRouter(tags=["workspaces"], dependencies=[Security(require_authenticated)])
 workspaces_service_dependency = Depends(get_workspaces_service)
@@ -95,18 +101,24 @@ def create_workspace(
 )
 def list_workspaces(
     current_user: Annotated[User, Security(require_authenticated)],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspacePage:
+    resolved_sort = resolve_cursor_sort_sequence(
+        list_query.sort,
+        cursor_fields=WORKSPACE_CURSOR_FIELDS,
+        default=DEFAULT_SORT,
+    )
     return service.list_workspaces(
         user=current_user,
-        sort=list_query.sort,
+        resolved_sort=resolved_sort,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
 

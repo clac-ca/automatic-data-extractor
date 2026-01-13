@@ -1542,21 +1542,16 @@ export type components = {
         };
         /**
          * ApiKeyPage
-         * @description Paginated collection of API keys.
+         * @description Cursor-based collection of API keys.
          */
         ApiKeyPage: {
             /** Items */
             items: components["schemas"]["ApiKeySummary"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * ApiKeySummary
@@ -1814,21 +1809,16 @@ export type components = {
         };
         /**
          * ConfigurationPage
-         * @description Paginated configuration listing.
+         * @description Cursor-based configuration listing.
          */
         ConfigurationPage: {
             /** Items */
             items: components["schemas"]["ConfigurationRecord"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * ConfigurationRecord
@@ -1893,6 +1883,21 @@ export type components = {
             content_digest?: string | null;
             /** Issues */
             issues: components["schemas"]["ConfigValidationIssue"][];
+        };
+        /** CursorMeta */
+        CursorMeta: {
+            /** Limit */
+            limit: number;
+            /** Hasmore */
+            hasMore: boolean;
+            /** Nextcursor */
+            nextCursor: string | null;
+            /** Totalincluded */
+            totalIncluded: boolean;
+            /** Totalcount */
+            totalCount: number | null;
+            /** Changescursor */
+            changesCursor?: string | null;
         };
         /** DirectoryWriteResponse */
         DirectoryWriteResponse: {
@@ -2014,24 +2019,16 @@ export type components = {
         DocumentFileType: "xlsx" | "xls" | "csv" | "pdf" | "unknown";
         /**
          * DocumentListPage
-         * @description Paginated envelope of document list rows.
+         * @description Cursor-based envelope of document list rows.
          */
         DocumentListPage: {
             /** Items */
             items: components["schemas"]["DocumentListRow"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /**
-             * Changescursor
-             * @description Watermark cursor for the documents change feed at response time.
-             */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * DocumentListRow
@@ -2697,21 +2694,16 @@ export type components = {
         };
         /**
          * PermissionPage
-         * @description Paginated permission registry response.
+         * @description Cursor-based permission registry response.
          */
         PermissionPage: {
             /** Items */
             items: components["schemas"]["PermissionOut"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * PublicSsoProvider
@@ -2773,21 +2765,16 @@ export type components = {
         };
         /**
          * RoleAssignmentPage
-         * @description Paginated role assignment collection.
+         * @description Cursor-based role assignment collection.
          */
         RoleAssignmentPage: {
             /** Items */
             items: components["schemas"]["RoleAssignmentOut"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * RoleCreate
@@ -2835,21 +2822,16 @@ export type components = {
         };
         /**
          * RolePage
-         * @description Paginated role collection.
+         * @description Cursor-based role collection.
          */
         RolePage: {
             /** Items */
             items: components["schemas"]["RoleOut"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * RoleUpdate
@@ -3214,21 +3196,16 @@ export type components = {
         };
         /**
          * RunPage
-         * @description Paginated collection of ``RunResource`` items.
+         * @description Cursor-based collection of ``RunResource`` items.
          */
         RunPage: {
             /** Items */
             items: components["schemas"]["RunResource"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * RunResource
@@ -3482,21 +3459,16 @@ export type components = {
         };
         /**
          * TagCatalogPage
-         * @description Paginated tag catalog.
+         * @description Cursor-based tag catalog.
          */
         TagCatalogPage: {
             /** Items */
             items: components["schemas"]["TagCatalogItem"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UserCreate */
         UserCreate: {
@@ -3563,21 +3535,16 @@ export type components = {
         };
         /**
          * UserPage
-         * @description Paginated collection of users.
+         * @description Cursor-based collection of users.
          */
         UserPage: {
             /** Items */
             items: components["schemas"]["UserOut"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UserRead */
         UserRead: {
@@ -3788,21 +3755,16 @@ export type components = {
         };
         /**
          * WorkspaceMemberPage
-         * @description Paginated collection of workspace members.
+         * @description Cursor-based collection of workspace members.
          */
         WorkspaceMemberPage: {
             /** Items */
             items: components["schemas"]["WorkspaceMemberOut"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * WorkspaceMemberUpdate
@@ -3842,21 +3804,16 @@ export type components = {
         };
         /**
          * WorkspacePage
-         * @description Paginated workspace listing.
+         * @description Cursor-based workspace listing.
          */
         WorkspacePage: {
             /** Items */
             items: components["schemas"]["WorkspaceOut"][];
-            /** Page */
-            page: number;
-            /** Perpage */
-            perPage: number;
-            /** Pagecount */
-            pageCount: number;
-            /** Total */
-            total: number;
-            /** Changescursor */
-            changesCursor: string;
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * WorkspaceUpdate
@@ -4404,10 +4361,10 @@ export interface operations {
     list_my_api_keys_api_v1_users_me_apikeys_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -4416,6 +4373,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -4633,10 +4594,10 @@ export interface operations {
     list_user_api_keys_api_v1_users__userId__apikeys_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -4645,6 +4606,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {
@@ -4888,10 +4853,10 @@ export interface operations {
     list_users_api_v1_users_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -4900,6 +4865,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -5116,10 +5085,10 @@ export interface operations {
     list_permissions_api_v1_permissions_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -5128,6 +5097,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -5161,10 +5134,10 @@ export interface operations {
     list_roles_api_v1_roles_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -5173,6 +5146,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -5355,10 +5332,10 @@ export interface operations {
     list_assignments_api_v1_roleassignments_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -5367,6 +5344,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -5712,10 +5693,10 @@ export interface operations {
     list_workspaces_api_v1_workspaces_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -5724,6 +5705,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -6081,10 +6066,10 @@ export interface operations {
     list_workspace_members_api_v1_workspaces__workspaceId__members_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -6093,6 +6078,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {
@@ -6250,10 +6239,10 @@ export interface operations {
     list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -6262,6 +6251,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {
@@ -6312,10 +6305,10 @@ export interface operations {
     list_documents_api_v1_workspaces__workspaceId__documents_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -6324,6 +6317,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {
@@ -7464,10 +7461,10 @@ export interface operations {
     list_configurations_api_v1_workspaces__workspaceId__configurations_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -7476,6 +7473,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {
@@ -8207,10 +8208,10 @@ export interface operations {
     list_configuration_runs_endpoint_api_v1_configurations__configurationId__runs_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -8219,6 +8220,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {
@@ -8339,10 +8344,10 @@ export interface operations {
     list_workspace_runs_endpoint_api_v1_workspaces__workspaceId__runs_get: {
         parameters: {
             query?: {
-                /** @description 1-based page number */
-                page?: number;
                 /** @description Items per page (max 200) */
-                perPage?: number;
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
                 /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
@@ -8351,6 +8356,10 @@ export interface operations {
                 joinOperator?: components["schemas"]["FilterJoinOperator"];
                 /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
                 q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path: {

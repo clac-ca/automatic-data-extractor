@@ -17,12 +17,13 @@ export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"]
 export type RunOutputSheet = components["schemas"]["RunOutputSheet"];
 
 export type RunsQuery = {
-  page?: number;
-  perPage?: number;
+  limit?: number;
+  cursor?: string | null;
   q?: string | null;
   sort?: string | null;
   filters?: FilterItem[];
   joinOperator?: FilterJoinOperator;
+  includeTotal?: boolean;
 };
 
 export type RunCreateOptions = components["schemas"]["RunCreateOptionsBase"];
@@ -48,12 +49,13 @@ export async function fetchWorkspaceRuns(
   signal?: AbortSignal,
 ): Promise<RunPage> {
   const requestQuery = buildListQuery({
-    page: query.page,
-    perPage: query.perPage,
+    limit: query.limit,
+    cursor: query.cursor ?? null,
     sort: query.sort ?? null,
     q: query.q ?? null,
     joinOperator: query.joinOperator,
     filters: query.filters,
+    includeTotal: query.includeTotal,
   });
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/runs", {
     params: { path: { workspaceId }, query: requestQuery },
@@ -72,8 +74,7 @@ export async function fetchWorkspaceRunsForDocument(
     params: {
       path: { workspaceId },
       query: buildListQuery({
-        page: 1,
-        perPage: 25,
+        limit: 25,
         filters: [
           {
             id: "inputDocumentId",

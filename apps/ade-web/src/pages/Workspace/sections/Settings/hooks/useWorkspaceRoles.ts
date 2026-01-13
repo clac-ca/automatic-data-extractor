@@ -22,24 +22,22 @@ const ROLE_PAGE_SIZE = MAX_PAGE_SIZE;
 const PERMISSION_PAGE_SIZE = MAX_PAGE_SIZE;
 
 const roleListParams = {
-  page: 1,
-  pageSize: ROLE_PAGE_SIZE,
+  limit: ROLE_PAGE_SIZE,
 } as const;
 
 const permissionListParams = {
   scope: "workspace" as const,
-  page: 1,
-  pageSize: PERMISSION_PAGE_SIZE,
+  limit: PERMISSION_PAGE_SIZE,
 } as const;
 
 export function useWorkspaceRolesQuery(workspaceId: string) {
   return useQuery<RoleListPage>({
     queryKey: workspacesKeys.roles(workspaceId, roleListParams),
     queryFn: ({ signal }) =>
-      collectAllPages((page) =>
+      collectAllPages((cursor) =>
         listWorkspaceRoles({
-          page,
-          pageSize: ROLE_PAGE_SIZE,
+          limit: ROLE_PAGE_SIZE,
+          cursor,
           signal,
         }),
       ),
@@ -54,11 +52,11 @@ export function usePermissionsQuery(scope: "workspace" | "global" = "workspace")
   return useQuery<PermissionListPage>({
     queryKey: workspacesKeys.permissions(params),
     queryFn: ({ signal }) =>
-      collectAllPages((page) =>
+      collectAllPages((cursor) =>
         listPermissions({
           scope,
-          page,
-          pageSize: params.pageSize,
+          limit: params.limit,
+          cursor,
           signal,
         }),
       ),
@@ -127,7 +125,13 @@ export function useDeleteWorkspaceRoleMutation(workspaceId: string) {
         return {
           ...current,
           items,
-          total: typeof current.total === "number" ? Math.max(current.total - 1, 0) : current.total,
+          meta: {
+            ...current.meta,
+            totalCount:
+              typeof current.meta.totalCount === "number"
+                ? Math.max(current.meta.totalCount - 1, 0)
+                : current.meta.totalCount,
+          },
         };
       });
     },
@@ -141,17 +145,24 @@ function appendRole(page: RoleListPage | undefined, role: RoleDefinition): RoleL
   if (!page) {
     return {
       items: [role],
-      page: 1,
-      perPage: ROLE_PAGE_SIZE,
-      pageCount: 1,
-      total: 1,
-      changesCursor: "0",
+      meta: {
+        limit: ROLE_PAGE_SIZE,
+        hasMore: false,
+        nextCursor: null,
+        totalIncluded: true,
+        totalCount: 1,
+        changesCursor: "0",
+      },
+      facets: null,
     };
   }
   return {
     ...page,
     items: [role, ...page.items],
-    total: page.total + 1,
-    pageCount: 1,
+    meta: {
+      ...page.meta,
+      totalCount:
+        typeof page.meta.totalCount === "number" ? page.meta.totalCount + 1 : page.meta.totalCount,
+    },
   };
 }

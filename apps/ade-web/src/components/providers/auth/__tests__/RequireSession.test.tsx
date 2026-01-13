@@ -1,7 +1,9 @@
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-import { render, screen, waitFor } from "@test/test-utils";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { AllProviders } from "@test/test-utils";
 import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import type { SessionEnvelope } from "@api/auth/api";
@@ -19,7 +21,12 @@ vi.mock("@hooks/auth/useSetupStatusQuery", () => ({
 
 function renderWithHistory(ui: React.ReactElement, path = "/") {
   window.history.replaceState(null, "", path);
-  return render(ui);
+  const router = createBrowserRouter([
+    { path: "/login", element: <AllProviders>Login</AllProviders> },
+    { path: "/setup", element: <AllProviders>Setup</AllProviders> },
+    { path: "*", element: <AllProviders>{ui}</AllProviders> },
+  ]);
+  return rtlRender(<RouterProvider router={router} />);
 }
 
 describe("RequireSession", () => {
@@ -81,7 +88,7 @@ describe("RequireSession", () => {
     renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
     await waitFor(() => expect(window.location.pathname).toBe("/login"));
-    expect(window.location.search).toBe("");
+    expect(window.location.search).toBe("?returnTo=%2Fworkspaces");
   });
 
   it("redirects to the setup screen when initial setup is required", async () => {

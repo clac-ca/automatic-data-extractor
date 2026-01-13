@@ -67,10 +67,12 @@ async def test_workspace_run_listing_filters_by_status(
     all_runs = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
+        params={"includeTotal": "true"},
     )
     assert all_runs.status_code == 200
     payload = all_runs.json()
-    assert payload["total"] == 2
+    assert payload["meta"]["totalIncluded"] is True
+    assert payload["meta"]["totalCount"] == 2
 
     status_filters = json.dumps(
         [{"id": "status", "operator": "eq", "value": RunStatus.SUCCEEDED.value}]
@@ -78,9 +80,10 @@ async def test_workspace_run_listing_filters_by_status(
     filtered = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        params={"filters": status_filters},
+        params={"filters": status_filters, "includeTotal": "true"},
     )
     assert filtered.status_code == 200
     filtered_payload = filtered.json()
-    assert filtered_payload["total"] == 1
+    assert filtered_payload["meta"]["totalIncluded"] is True
+    assert filtered_payload["meta"]["totalCount"] == 1
     assert filtered_payload["items"][0]["id"] == str(run_ok.id)

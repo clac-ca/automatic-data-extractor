@@ -218,9 +218,12 @@ You should be able to navigate from a backend route to its module and function w
 
 All list endpoints share the same query keys and response envelope.
 
-**Query params**: `page`, `perPage`, `sort`, `filters`, `joinOperator`, `q`
+**Query params**: `limit`, `cursor`, `sort`, `filters`, `joinOperator`, `q`, `includeTotal`, `includeFacets`
 
-**Envelope**: `items`, `page`, `perPage`, `pageCount`, `total`, `changesCursor`
+**Envelope**: `items`, `meta`, `facets`
+
+`meta` contains `limit`, `hasMore`, `nextCursor`, `totalIncluded`, `totalCount`, and optional
+`changesCursor` when a change feed is available.
 
 `filters` is a URL-encoded JSON array of `{ id, operator, value }` items using
 the Tablecn-compatible DSL. Unknown query params return `422`.

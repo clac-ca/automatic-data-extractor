@@ -13,9 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
+from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor, paginate_sequence_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import paginate_query, paginate_sequence
-from ade_api.common.sorting import sort_sequence
 from ade_api.core.rbac.policy import GLOBAL_IMPLICATIONS, WORKSPACE_IMPLICATIONS
 from ade_api.core.rbac.registry import (
     PERMISSION_REGISTRY,
@@ -33,11 +32,6 @@ from .filters import (
     apply_permission_filters,
     evaluate_role_filters,
     parse_role_filters,
-)
-from .sorting import (
-    ROLE_DEFAULT_SORT,
-    ROLE_SORT_FIELDS,
-    role_id_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -329,9 +323,10 @@ class RbacService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by,
-        page: int,
-        per_page: int,
+        resolved_sort: ResolvedCursorSort[Permission],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
     ):
         stmt = select(Permission)
         stmt = apply_permission_filters(
@@ -340,12 +335,13 @@ class RbacService:
             join_operator=join_operator,
             q=q,
         )
-        return paginate_query(
+        return paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 
@@ -357,9 +353,10 @@ class RbacService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        sort: list[str],
-        page: int,
-        per_page: int,
+        resolved_sort: ResolvedCursorSort[Role],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
     ):
         stmt: Select[Role] = (
             select(Role)
@@ -380,17 +377,12 @@ class RbacService:
                 q=q,
             )
         ]
-        ordered = sort_sequence(
+        return paginate_sequence_cursor(
             filtered,
-            sort,
-            allowed=ROLE_SORT_FIELDS,
-            default=ROLE_DEFAULT_SORT,
-            id_key=role_id_key,
-        )
-        return paginate_sequence(
-            ordered,
-            page=page,
-            per_page=per_page,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 
@@ -561,9 +553,10 @@ class RbacService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by,
-        page: int,
-        per_page: int,
+        resolved_sort: ResolvedCursorSort[UserRoleAssignment],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
         default_active_only: bool = True,
     ):
         stmt: Select[UserRoleAssignment] = (
@@ -583,12 +576,13 @@ class RbacService:
             default_active_only=default_active_only,
         )
 
-        return paginate_query(
+        return paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 

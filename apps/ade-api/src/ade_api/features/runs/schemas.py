@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import RunStatus
 
@@ -285,7 +285,7 @@ class RunResource(BaseSchema):
     events_download_url: str | None = None
 
 
-class RunPage(ListPage[RunResource]):
-    """Paginated collection of ``RunResource`` items."""
+class RunPage(CursorPage[RunResource]):
+    """Cursor-based collection of ``RunResource`` items."""
 
     items: list[RunResource]

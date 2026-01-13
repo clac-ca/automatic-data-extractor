@@ -18,10 +18,10 @@ from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ade_api.common.cursor_listing import ResolvedCursorSort
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
-from ade_api.common.types import OrderBy
 from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
     build_workbook_preview_from_csv,
@@ -729,9 +729,10 @@ class RunsService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by: OrderBy,
-        page: int,
-        per_page: int,
+        resolved_sort: ResolvedCursorSort[Run],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
     ) -> RunPage:
         """Return paginated runs for ``workspace_id`` with optional filters."""
 
@@ -741,9 +742,9 @@ class RunsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 filters=[item.model_dump() for item in filters],
-                order_by=str(order_by),
-                page=page,
-                per_page=per_page,
+                order_by=str(resolved_sort.order_by),
+                limit=limit,
+                cursor=cursor,
                 q=q,
             ),
         )
@@ -754,18 +755,16 @@ class RunsService:
             filters=filters,
             join_operator=join_operator,
             q=q,
-            order_by=order_by,
-            page=page,
-            per_page=per_page,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
         )
         resources = [self.to_resource(run, resolve_paths=False) for run in page_result.items]
         response = RunPage(
             items=resources,
-            page=page_result.page,
-            per_page=page_result.per_page,
-            page_count=page_result.page_count,
-            total=page_result.total,
-            changes_cursor=page_result.changes_cursor,
+            meta=page_result.meta,
+            facets=page_result.facets,
         )
 
         logger.info(
@@ -773,10 +772,9 @@ class RunsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                page=response.page,
-                per_page=response.per_page,
+                limit=response.meta.limit,
                 count=len(response.items),
-                total=response.total,
+                total=response.meta.total_count,
             ),
         )
         return response
@@ -788,9 +786,10 @@ class RunsService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by: OrderBy,
-        page: int,
-        per_page: int,
+        resolved_sort: ResolvedCursorSort[Run],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
     ) -> RunPage:
         """Return paginated runs for ``configuration_id`` scoped to its workspace."""
 
@@ -801,9 +800,10 @@ class RunsService:
             filters=filters,
             join_operator=join_operator,
             q=q,
-            order_by=order_by,
-            page=page,
-            per_page=per_page,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
         )
 
     def to_resource(self, run: Run, *, resolve_paths: bool = True) -> RunResource:

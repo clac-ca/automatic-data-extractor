@@ -4,11 +4,12 @@ import { buildListQuery, type FilterItem } from "@api/listing";
 import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@schema";
 
 export interface ListPageOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly includeRevoked?: boolean;
   readonly sort?: string;
   readonly q?: string;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -96,10 +97,11 @@ function buildApiKeyListQuery(options: ListPageOptions) {
     filters.push({ id: "revokedAt", operator: "isEmpty" });
   }
   return buildListQuery({
-    page: options.page,
-    perPage: options.pageSize,
+    limit: options.limit,
+    cursor: options.cursor ?? null,
     sort: options.sort ?? null,
     q: options.q ?? null,
     filters,
+    includeTotal: options.includeTotal,
   });
 }

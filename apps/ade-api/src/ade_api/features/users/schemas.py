@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 
 
@@ -62,8 +62,8 @@ class UserUpdate(BaseSchema):
         return self
 
 
-class UserPage(ListPage[UserOut]):
-    """Paginated collection of users."""
+class UserPage(CursorPage[UserOut]):
+    """Cursor-based collection of users."""
 
 
 __all__ = ["UserOut", "UserPage", "UserProfile", "UserUpdate"]

@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns } from "@api/runs/api";
-import type { RunsQuery } from "@api/runs/api";
 import { runsKeys } from "@hooks/runs/keys";
+import { useCursorPager } from "@hooks/use-cursor-pager";
 
 import { buildCounts, buildRunRecord } from "../utils";
 import type { RunRecord } from "../types";
@@ -27,20 +27,49 @@ export function useRunsView({
   activeRunId: string | null;
   enabled?: boolean;
 }) {
-  const query = useMemo<RunsQuery>(
+  const cursorKey = useMemo(
+    () => [workspaceId, perPage, sort ?? "", JSON.stringify(filters ?? []), joinOperator ?? ""].join("|"),
+    [workspaceId, perPage, sort, filters, joinOperator],
+  );
+
+  const cursorPager = useCursorPager({
+    page,
+    limit: perPage,
+    includeTotal: true,
+    resetKey: cursorKey,
+    fetchPage: ({ cursor, limit, includeTotal, signal }) =>
+      fetchWorkspaceRuns(
+        workspaceId,
+        {
+          limit,
+          cursor,
+          sort: sort ?? null,
+          filters: filters ?? undefined,
+          joinOperator: joinOperator ?? undefined,
+          includeTotal,
+        },
+        signal,
+      ),
+  });
+
+  const filtersKey = useMemo(
+    () => (filters?.length ? JSON.stringify(filters) : ""),
+    [filters],
+  );
+  const listKey = useMemo(
     () => ({
       page,
       perPage,
-      sort: sort ?? null,
-      filters: filters ?? undefined,
-      joinOperator: joinOperator ?? undefined,
+      sort: sort ?? "",
+      filtersKey,
+      joinOperator: joinOperator ?? "",
     }),
-    [page, perPage, sort, filters, joinOperator],
+    [page, perPage, sort, filtersKey, joinOperator],
   );
 
   const runsQuery = useQuery({
-    queryKey: runsKeys.list(workspaceId, query),
-    queryFn: ({ signal }) => fetchWorkspaceRuns(workspaceId, query, signal),
+    queryKey: runsKeys.list(workspaceId, listKey),
+    queryFn: ({ signal }) => cursorPager.fetchCurrentPage(signal),
     enabled: enabled && Boolean(workspaceId),
     staleTime: 10_000,
     placeholderData: (previous) => previous,
@@ -90,8 +119,14 @@ export function useRunsView({
     runs,
     counts,
     activeRun,
-    pageCount: runsQuery.data?.pageCount ?? 1,
-    totalCount: runsQuery.data?.total ?? runsQuery.data?.items?.length ?? 0,
+    pageCount:
+      typeof runsQuery.data?.meta.totalCount === "number"
+        ? Math.max(1, Math.ceil(runsQuery.data.meta.totalCount / perPage))
+        : 1,
+    totalCount:
+      typeof runsQuery.data?.meta.totalCount === "number"
+        ? runsQuery.data.meta.totalCount
+        : runsQuery.data?.items?.length ?? 0,
     isLoading: runsQuery.isLoading,
     isFetching: runsQuery.isFetching,
     isError: runsQuery.isError,

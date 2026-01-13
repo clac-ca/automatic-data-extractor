@@ -123,7 +123,7 @@ export function DocumentsTableView({
 
   const membersQuery = useQuery({
     queryKey: ["documents-members", workspaceId],
-    queryFn: ({ signal }) => listWorkspaceMembers(workspaceId, { page: 1, pageSize: 200, signal }),
+    queryFn: ({ signal }) => listWorkspaceMembers(workspaceId, { limit: 200, signal }),
     enabled: Boolean(workspaceId),
     staleTime: 60_000,
   });
@@ -152,7 +152,7 @@ export function DocumentsTableView({
   const tagsQuery = useQuery({
     queryKey: ["documents-tags", workspaceId],
     queryFn: ({ signal }) =>
-      fetchTagCatalog(workspaceId, { page: 1, perPage: 200, sort: '[{"id":"count","desc":true}]' }, signal),
+      fetchTagCatalog(workspaceId, { limit: 200, sort: '[{"id":"count","desc":true}]' }, signal),
     enabled: Boolean(workspaceId),
     staleTime: 60_000,
   });

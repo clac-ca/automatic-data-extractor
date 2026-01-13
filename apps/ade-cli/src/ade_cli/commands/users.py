@@ -481,9 +481,10 @@ def _list_roles(
     json_output: bool,
 ) -> None:
     from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
-    from ade_api.common.sorting import resolve_sort
+    from ade_api.common.cursor_listing import resolve_cursor_sort
     from ade_api.features.rbac.sorting import (
         ASSIGNMENT_DEFAULT_SORT,
+        ASSIGNMENT_CURSOR_FIELDS,
         ASSIGNMENT_ID_FIELD,
         ASSIGNMENT_SORT_FIELDS,
     )
@@ -510,9 +511,10 @@ def _list_roles(
                 value=None if workspace_filter is None else str(workspace_filter),
             ),
         ]
-        order_by = resolve_sort(
+        resolved_sort = resolve_cursor_sort(
             [],
             allowed=ASSIGNMENT_SORT_FIELDS,
+            cursor_fields=ASSIGNMENT_CURSOR_FIELDS,
             default=ASSIGNMENT_DEFAULT_SORT,
             id_field=ASSIGNMENT_ID_FIELD,
         )
@@ -520,9 +522,10 @@ def _list_roles(
             filters=filters,
             join_operator=FilterJoinOperator.AND,
             q=None,
-            order_by=order_by,
-            page=1,
-            per_page=limit,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=None,
+            include_total=False,
             default_active_only=False,
         )
         assignments = list(page.items)

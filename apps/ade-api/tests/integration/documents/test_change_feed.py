@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import anyio
 import pytest
+from sqlalchemy import update
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
@@ -36,10 +37,10 @@ async def test_document_changes_include_create_event(async_client, seed_identity
     listing = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"page": 1, "perPage": 1},
+        params={"limit": 1},
     )
     assert listing.status_code == 200, listing.text
-    baseline_cursor = listing.json()["changesCursor"]
+    baseline_cursor = listing.json()["meta"]["changesCursor"]
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -92,10 +93,10 @@ async def test_document_changes_cursor_replay(async_client, seed_identity) -> No
     listing = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"page": 1, "perPage": 1},
+        params={"limit": 1},
     )
     assert listing.status_code == 200, listing.text
-    baseline_cursor = listing.json()["changesCursor"]
+    baseline_cursor = listing.json()["meta"]["changesCursor"]
 
     patch = await async_client.patch(
         f"{workspace_base}/documents/{document_id}/tags",
@@ -143,10 +144,10 @@ async def test_document_changes_include_delete_event(async_client, seed_identity
     listing = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"page": 1, "perPage": 1},
+        params={"limit": 1},
     )
     assert listing.status_code == 200, listing.text
-    baseline_cursor = listing.json()["changesCursor"]
+    baseline_cursor = listing.json()["meta"]["changesCursor"]
 
     delete = await async_client.delete(
         f"{workspace_base}/documents/{document_id}",
@@ -209,6 +210,14 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, db_s
     )
     db_session.add_all([old_change, fresh_change])
     await anyio.to_thread.run_sync(db_session.flush)
+    stale_timestamp = now - timedelta(seconds=10)
+    await anyio.to_thread.run_sync(
+        lambda: db_session.execute(
+            update(DocumentEvent)
+            .where(DocumentEvent.workspace_id == workspace_id)
+            .values(occurred_at=stale_timestamp)
+        )
+    )
     await anyio.to_thread.run_sync(db_session.commit)
 
     token, _ = await login(

@@ -11,10 +11,9 @@ import sqlalchemy as sa
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
+from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import ListPage, paginate_query
 from ade_api.common.time import utc_now
-from ade_api.common.types import OrderBy
 from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 from ade_api.core.security.api_keys import (
@@ -162,10 +161,11 @@ class ApiKeyService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by: OrderBy,
-        page: int,
-        per_page: int,
-    ) -> ListPage[ApiKey]:
+        resolved_sort: ResolvedCursorSort[ApiKey],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
+    ):
         """List keys for a specific user (self-service and admin use)."""
 
         stmt = (
@@ -179,12 +179,13 @@ class ApiKeyService:
             q=q,
         )
 
-        return paginate_query(
+        return paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 
@@ -194,11 +195,12 @@ class ApiKeyService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by: OrderBy,
+        resolved_sort: ResolvedCursorSort[ApiKey],
         user_id: UUID | None,
-        page: int,
-        per_page: int,
-    ) -> ListPage[ApiKey]:
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
+    ):
         """List keys across the tenant (admin use)."""
 
         stmt = self._base_query()
@@ -211,12 +213,13 @@ class ApiKeyService:
             q=q,
         )
 
-        return paginate_query(
+        return paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 

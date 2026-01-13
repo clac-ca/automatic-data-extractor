@@ -52,11 +52,12 @@ async def test_upload_list_download_document(
     listing = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert listing.status_code == 200
     payload = listing.json()
-    assert payload["page"] == 1
-    assert payload["perPage"] == 50
-    assert payload["pageCount"] >= 1
-    assert payload["total"] >= 1
-    assert "changesCursor" in payload
+    assert payload["meta"]["limit"] == 50
+    assert payload["meta"]["hasMore"] is False
+    assert payload["meta"].get("nextCursor") is None
+    assert payload["meta"]["totalIncluded"] is False
+    assert payload["meta"].get("totalCount") is None
+    assert "changesCursor" in payload["meta"]
     assert any(item["id"] == document_id for item in payload["items"])
     assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 

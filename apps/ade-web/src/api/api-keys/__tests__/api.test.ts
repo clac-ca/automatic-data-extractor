@@ -22,11 +22,15 @@ vi.mock("@api/client", () => {
 
 const emptyPage = {
   items: [],
-  page: 1,
-  perPage: 25,
-  pageCount: 1,
-  total: 0,
-  changesCursor: "0",
+  meta: {
+    limit: 25,
+    hasMore: false,
+    nextCursor: null,
+    totalIncluded: false,
+    totalCount: null,
+    changesCursor: "0",
+  },
+  facets: null,
 };
 
 describe("api key client", () => {
@@ -37,11 +41,11 @@ describe("api key client", () => {
   it("lists my API keys with pagination flags", async () => {
     (client.GET as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: emptyPage });
 
-    await listMyApiKeys({ page: 2, pageSize: 10, includeRevoked: true });
+    await listMyApiKeys({ limit: 10, cursor: "cursor-1", includeRevoked: true });
 
     expect(client.GET).toHaveBeenCalledWith("/api/v1/users/me/apikeys", {
       params: {
-        query: { page: 2, perPage: 10 },
+        query: { limit: 10, cursor: "cursor-1" },
       },
       signal: undefined,
     });

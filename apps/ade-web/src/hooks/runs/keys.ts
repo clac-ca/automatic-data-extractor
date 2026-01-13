@@ -1,9 +1,10 @@
-import type { RunColumnsQuery, RunsQuery } from "@api/runs/api";
+import type { RunColumnsQuery } from "@api/runs/api";
 
 export const runsKeys = {
   root: () => ["runs"] as const,
   workspace: (workspaceId: string) => [...runsKeys.root(), workspaceId] as const,
-  list: (workspaceId: string, query: RunsQuery) => [...runsKeys.workspace(workspaceId), "list", query] as const,
+  list: (workspaceId: string, params: Record<string, unknown>) =>
+    [...runsKeys.workspace(workspaceId), "list", params] as const,
   run: (runId: string) => [...runsKeys.root(), "run", runId] as const,
   metrics: (runId: string) => [...runsKeys.run(runId), "metrics"] as const,
   fields: (runId: string) => [...runsKeys.run(runId), "fields"] as const,

@@ -96,12 +96,14 @@ params return `422`.
 
 Query params:
 
-- `page` (1-based, default `1`)
-- `perPage` (default `50`, max `200`)
-- `sort` (CSV list of fields, prefix `-` for DESC)
+- `limit` (default `50`, max `200`)
+- `cursor` (opaque cursor token)
+- `sort` (JSON array of `{ id, desc }`)
 - `filters` (URL-encoded JSON array of `{ id, operator, value }`)
 - `joinOperator` (`and` or `or`, default `and`)
 - `q` (free-text search)
+- `includeTotal` (default `false`)
+- `includeFacets` (default `false`)
 
 See `docs/reference/list-search.md` for `q` tokenization rules and per-resource
 searchable fields.
@@ -111,16 +113,20 @@ Response envelope:
 ```json
 {
   "items": [],
-  "page": 1,
-  "perPage": 50,
-  "pageCount": 0,
-  "total": 0,
-  "changesCursor": "0"
+  "meta": {
+    "limit": 50,
+    "hasMore": false,
+    "nextCursor": null,
+    "totalIncluded": false,
+    "totalCount": null,
+    "changesCursor": "0"
+  },
+  "facets": null
 }
 ```
 
 `changesCursor` is a snapshot watermark. For resources without change feeds it
-is `"0"`.
+is omitted or `null`.
 
 Filter operators follow the Tablecn DSL (for example `eq`, `in`, `between`,
 `iLike`, `isEmpty`). Values must match the operator shape (arrays for `in`,

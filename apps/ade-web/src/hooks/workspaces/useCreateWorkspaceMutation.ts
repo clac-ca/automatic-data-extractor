@@ -24,9 +24,16 @@ export function useCreateWorkspaceMutation() {
             : [...page.items, workspace];
 
         const sortedItems = [...mergedItems].sort((a, b) => a.name.localeCompare(b.name));
-        const total = typeof page.total === "number" && existingIndex === -1 ? page.total + 1 : page.total;
+        const nextTotal =
+          typeof page.meta.totalCount === "number" && existingIndex === -1
+            ? page.meta.totalCount + 1
+            : page.meta.totalCount;
 
-        queryClient.setQueryData(key, { ...page, items: sortedItems, total });
+        queryClient.setQueryData(key, {
+          ...page,
+          items: sortedItems,
+          meta: { ...page.meta, totalCount: nextTotal },
+        });
       });
 
       queryClient.invalidateQueries({ queryKey: workspacesKeys.all() });

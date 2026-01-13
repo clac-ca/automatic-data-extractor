@@ -10,7 +10,7 @@ from typing import Any, Literal
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import (
     DocumentSource,
@@ -266,8 +266,8 @@ class TagCatalogItem(BaseSchema):
     document_count: int = Field(ge=0)
 
 
-class TagCatalogPage(ListPage[TagCatalogItem]):
-    """Paginated tag catalog."""
+class TagCatalogPage(CursorPage[TagCatalogItem]):
+    """Cursor-based tag catalog."""
 
 
 class DocumentRunSummary(BaseSchema):
@@ -328,13 +328,8 @@ class DocumentListRow(BaseSchema):
     latest_result: DocumentResultSummary | None = Field(default=None, alias="latestResult")
 
 
-class DocumentListPage(ListPage[DocumentListRow]):
-    """Paginated envelope of document list rows."""
-
-    changes_cursor: str = Field(
-        description="Watermark cursor for the documents change feed at response time.",
-        alias="changesCursor",
-    )
+class DocumentListPage(CursorPage[DocumentListRow]):
+    """Cursor-based envelope of document list rows."""
 
 
 class DocumentChangeEntry(BaseSchema):

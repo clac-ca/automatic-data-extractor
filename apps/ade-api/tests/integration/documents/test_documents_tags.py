@@ -119,7 +119,7 @@ async def test_tag_catalog_counts_and_excludes_deleted(
     catalog = await async_client.get(
         f"{workspace_base}/documents/tags",
         headers=headers,
-        params={"sort": "-count"},
+        params={"sort": '[{"id":"count","desc":true}]'},
     )
     assert catalog.status_code == 200, catalog.text
     items = catalog.json()["items"]

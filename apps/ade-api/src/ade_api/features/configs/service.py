@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import paginate_query
+from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
@@ -93,44 +93,43 @@ class ConfigurationsService:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by: OrderBy,
-        page: int,
-        per_page: int,
+        resolved_sort: ResolvedCursorSort[Configuration],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
     ) -> ConfigurationPage:
         logger.debug(
             "config.list.start",
             extra=log_context(
                 workspace_id=workspace_id,
-                page=page,
-                per_page=per_page,
+                limit=limit,
+                cursor=cursor,
                 q=q,
             ),
         )
         stmt = self._repo.base_query().where(Configuration.workspace_id == workspace_id)
         stmt = apply_config_filters(stmt, filters, join_operator=join_operator, q=q)
-        page_result = paginate_query(
+        page_result = paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
         items = [ConfigurationRecord.model_validate(item) for item in page_result.items]
         response = ConfigurationPage(
             items=items,
-            page=page_result.page,
-            per_page=page_result.per_page,
-            page_count=page_result.page_count,
-            total=page_result.total,
-            changes_cursor=page_result.changes_cursor,
+            meta=page_result.meta,
+            facets=page_result.facets,
         )
         logger.debug(
             "config.list.success",
             extra=log_context(
                 workspace_id=workspace_id,
                 count=len(response.items),
-                total=response.total,
+                total=response.meta.total_count,
             ),
         )
         return response

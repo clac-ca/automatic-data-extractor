@@ -37,8 +37,7 @@ export function useGlobalSearchData({ scope, query, enabled }: UseGlobalSearchDa
         workspaceId,
         {
           sort: GLOBAL_SEARCH_DOCUMENT_SORT,
-          page: 1,
-          perPage: GLOBAL_SEARCH_RESULT_LIMIT,
+          limit: GLOBAL_SEARCH_RESULT_LIMIT,
           q: normalizedQuery,
         },
         signal,
@@ -53,8 +52,7 @@ export function useGlobalSearchData({ scope, query, enabled }: UseGlobalSearchDa
       fetchWorkspaceRuns(
         workspaceId,
         {
-          page: 1,
-          perPage: GLOBAL_SEARCH_RESULT_LIMIT,
+          limit: GLOBAL_SEARCH_RESULT_LIMIT,
           sort: GLOBAL_SEARCH_RUN_SORT,
           q: normalizedQuery,
         },
@@ -66,7 +64,8 @@ export function useGlobalSearchData({ scope, query, enabled }: UseGlobalSearchDa
 
   const workspacesQuery = useQuery({
     queryKey: ["global-search", "workspaces", normalizedQuery],
-    queryFn: ({ signal }) => fetchWorkspaces({ page: 1, pageSize: GLOBAL_SEARCH_RESULT_LIMIT, q: normalizedQuery, signal }),
+    queryFn: ({ signal }) =>
+      fetchWorkspaces({ limit: GLOBAL_SEARCH_RESULT_LIMIT, q: normalizedQuery, signal }),
     enabled: enabled && scope.kind === "directory" && shouldSearch,
     staleTime: 30_000,
   });

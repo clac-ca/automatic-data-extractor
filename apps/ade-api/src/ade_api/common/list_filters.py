@@ -269,18 +269,6 @@ def _normalize_filter_raw(raw: dict[str, Any]) -> dict[str, Any] | None:
     if normalized_operator_value in {FilterOperator.IS_EMPTY.value, FilterOperator.IS_NOT_EMPTY.value}:
         raw_value = None
 
-    if normalized_operator_value == FilterOperator.BETWEEN.value:
-        if (
-            not isinstance(raw_value, list)
-            or len(raw_value) != 2
-            or any(entry is None or (isinstance(entry, str) and not entry) for entry in raw_value)
-        ):
-            return None
-
-    if normalized_operator_value in {FilterOperator.IN.value, FilterOperator.NOT_IN.value}:
-        if not isinstance(raw_value, list) or len(raw_value) == 0:
-            return None
-
     if _should_skip_filter(normalized_operator_value, raw_value):
         return None
 

@@ -9,19 +9,19 @@ const CONFIGURATIONS_PAGE_SIZE = 100;
 interface UseConfigurationsQueryOptions {
   readonly workspaceId: string;
   readonly enabled?: boolean;
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
 }
 
 export function useConfigurationsQuery({
   workspaceId,
   enabled = true,
-  page = 1,
-  pageSize = CONFIGURATIONS_PAGE_SIZE,
+  limit = CONFIGURATIONS_PAGE_SIZE,
+  cursor = null,
 }: UseConfigurationsQueryOptions) {
   return useQuery<ConfigurationPage>({
-    queryKey: configurationKeys.list(workspaceId, { page, pageSize }),
-    queryFn: ({ signal }) => listConfigurations(workspaceId, { page, pageSize, signal }),
+    queryKey: configurationKeys.list(workspaceId, { limit, cursor }),
+    queryFn: ({ signal }) => listConfigurations(workspaceId, { limit, cursor, signal }),
     enabled: enabled && workspaceId.length > 0,
     staleTime: 15_000,
     placeholderData: (previous: ConfigurationPage | undefined) => previous,

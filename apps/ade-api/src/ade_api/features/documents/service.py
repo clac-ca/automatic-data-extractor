@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import math
 import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -16,16 +16,22 @@ from uuid import UUID
 import openpyxl
 from fastapi import UploadFile
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
 
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import paginate_query
+from ade_api.common.cursor_listing import (
+    ResolvedCursorSort,
+    cursor_field,
+    paginate_query_cursor,
+    parse_int,
+    parse_str,
+    resolve_cursor_sort,
+)
 from ade_api.common.logging import log_context
-from ade_api.common.sorting import resolve_sort
-from ade_api.common.types import OrderBy
 from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
     build_workbook_preview_from_csv,
@@ -249,12 +255,14 @@ class DocumentsService:
         self,
         *,
         workspace_id: UUID,
-        page: int,
-        per_page: int,
-        order_by: OrderBy,
+        limit: int,
+        cursor: str | None,
+        resolved_sort: ResolvedCursorSort[Document],
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
+        include_total: bool,
+        include_facets: bool,
     ) -> DocumentListPage:
         """Return paginated documents with the shared envelope."""
 
@@ -262,9 +270,9 @@ class DocumentsService:
             "document.list.start",
             extra=log_context(
                 workspace_id=workspace_id,
-                page=page,
-                per_page=per_page,
-                order_by=str(order_by),
+                limit=limit,
+                cursor=cursor,
+                order_by=str(resolved_sort.order_by),
             ),
         )
 
@@ -278,12 +286,14 @@ class DocumentsService:
 
         # Capture the cursor before listing to avoid skipping changes committed during the query.
         changes_cursor = self._events.current_cursor(workspace_id=workspace_id)
-        page_result = paginate_query(
+        facets = self._build_document_facets(stmt) if include_facets else None
+        page_result = paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor=str(changes_cursor),
         )
         items = [DocumentOut.model_validate(item) for item in page_result.items]
@@ -295,23 +305,15 @@ class DocumentsService:
             "document.list.success",
             extra=log_context(
                 workspace_id=workspace_id,
-                page=page_result.page,
-                per_page=page_result.per_page,
+                limit=page_result.meta.limit,
                 count=len(items),
-                total=page_result.total,
+                has_more=page_result.meta.has_more,
             ),
         )
 
         rows = [self._build_list_row(item) for item in items]
 
-        return DocumentListPage(
-            items=rows,
-            page=page_result.page,
-            per_page=page_result.per_page,
-            page_count=page_result.page_count,
-            total=page_result.total,
-            changes_cursor=page_result.changes_cursor,
-        )
+        return DocumentListPage(items=rows, meta=page_result.meta, facets=facets)
 
     def list_document_changes(
         self,
@@ -1020,8 +1022,9 @@ class DocumentsService:
         self,
         *,
         workspace_id: UUID,
-        page: int,
-        per_page: int,
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
         sort: list[str],
         q: str | None = None,
     ) -> TagCatalogPage:
@@ -1054,35 +1057,34 @@ class DocumentsService:
             "name": (DocumentTag.tag.asc(), DocumentTag.tag.desc()),
             "count": (count_expr.asc(), count_expr.desc()),
         }
-        order_by = resolve_sort(
+
+        cursor_fields = {
+            "id": cursor_field(lambda item: item.tag, parse_str),
+            "name": cursor_field(lambda item: item.tag, parse_str),
+            "count": cursor_field(lambda item: item.document_count, parse_int),
+        }
+        resolved_sort = resolve_cursor_sort(
             sort,
             allowed=sort_fields,
+            cursor_fields=cursor_fields,
             default=["name"],
             id_field=(DocumentTag.tag.asc(), DocumentTag.tag.desc()),
         )
-
-        offset = (page - 1) * per_page
-        ordered_stmt = stmt.order_by(*order_by)
-
-        count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
-        total = (self._session.execute(count_stmt)).scalar_one()
-        page_count = math.ceil(total / per_page) if total > 0 else 0
-        result = self._session.execute(ordered_stmt.limit(per_page).offset(offset))
-        rows = result.mappings().all()
-
-        items = [
-            TagCatalogItem(tag=row["tag"], document_count=int(row["document_count"] or 0))
-            for row in rows
-        ]
-
-        return TagCatalogPage(
-            items=items,
-            page=page,
-            per_page=per_page,
-            page_count=page_count,
-            total=total,
+        page_result = paginate_query_cursor(
+            self._session,
+            stmt,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
+            row_mapper=lambda row: TagCatalogItem(
+                tag=row["tag"],
+                document_count=int(row["document_count"] or 0),
+            ),
         )
+
+        return TagCatalogPage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
 
     def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
         document = self._repository.get_document(
@@ -1181,6 +1183,47 @@ class DocumentsService:
             latest_successful_run=document.latest_successful_run,
             latest_result=document.latest_result,
         )
+
+    def _build_document_facets(self, stmt: Select) -> dict[str, Any]:
+        filtered_ids = stmt.order_by(None).with_only_columns(Document.id).distinct().subquery()
+
+        def coerce_value(value: Any) -> Any:
+            if isinstance(value, Enum):
+                return value.value
+            if isinstance(value, UUID):
+                return str(value)
+            return value
+
+        def build_buckets(expr) -> list[dict[str, Any]]:
+            rows = self._session.execute(
+                select(
+                    expr.label("value"),
+                    func.count().label("count"),
+                )
+                .select_from(Document)
+                .join(filtered_ids, filtered_ids.c.id == Document.id)
+                .group_by(expr)
+            ).all()
+            buckets = [
+                {"value": coerce_value(value), "count": int(count or 0)}
+                for value, count in rows
+            ]
+            buckets.sort(key=lambda bucket: str(bucket["value"]))
+            return buckets
+
+        lower_name = func.lower(Document.original_filename)
+        file_type_expr = case(
+            (lower_name.like("%.xlsx"), DocumentFileType.XLSX.value),
+            (lower_name.like("%.xls"), DocumentFileType.XLS.value),
+            (lower_name.like("%.csv"), DocumentFileType.CSV.value),
+            (lower_name.like("%.pdf"), DocumentFileType.PDF.value),
+            else_=DocumentFileType.UNKNOWN.value,
+        )
+
+        return {
+            "status": {"buckets": build_buckets(Document.status)},
+            "fileType": {"buckets": build_buckets(file_type_expr)},
+        }
 
     @staticmethod
     def _derive_file_type(name: str) -> DocumentFileType:

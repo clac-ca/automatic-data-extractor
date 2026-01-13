@@ -4,7 +4,7 @@ import type { components } from "@schema";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
-type TagCatalogQuery = Pick<ListQueryParams, "page" | "perPage" | "sort" | "q">;
+type TagCatalogQuery = Pick<ListQueryParams, "limit" | "cursor" | "sort" | "q" | "includeTotal">;
 
 export async function replaceDocumentTags(
   workspaceId: string,
@@ -96,10 +96,11 @@ export async function fetchTagCatalog(
   signal?: AbortSignal,
 ): Promise<TagCatalogPage> {
   const requestQuery = buildListQuery({
-    page: query.page,
-    perPage: query.perPage,
+    limit: query.limit,
+    cursor: query.cursor ?? null,
     sort: query.sort ?? null,
     q: query.q ?? null,
+    includeTotal: query.includeTotal,
   });
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/tags", {
     params: {

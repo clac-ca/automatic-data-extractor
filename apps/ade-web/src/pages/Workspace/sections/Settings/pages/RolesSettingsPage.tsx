@@ -63,7 +63,7 @@ export function RolesSettingsPage() {
     return (rolesQuery.data?.items ?? []).slice().sort((a, b) => collator.compare(a.name, b.name));
   }, [rolesQuery.data]);
 
-  const roleCount = rolesQuery.data?.total ?? roles.length;
+  const roleCount = rolesQuery.data?.meta.totalCount ?? roles.length;
   const selectedParam = params[0];
   const isCreateOpen = selectedParam === "new";
   const selectedRoleId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;

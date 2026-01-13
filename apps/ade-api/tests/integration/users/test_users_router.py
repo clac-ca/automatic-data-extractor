@@ -39,20 +39,23 @@ async def test_list_users_admin_success(
     token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     emails: set[str] = set()
-    page = 1
+    cursor: str | None = None
     while True:
+        params = {"limit": 100}
+        if cursor:
+            params["cursor"] = cursor
         response = await async_client.get(
             "/api/v1/users",
             headers={"Authorization": f"Bearer {token}"},
-            params={"page": page, "perPage": 100},
+            params=params,
         )
         assert response.status_code == 200
         data = response.json()
         emails.update(item["email"] for item in data["items"])
-        if data["pageCount"] == 0 or page >= data["pageCount"]:
+        if not data["meta"]["hasMore"]:
             break
-        page += 1
-        assert page < 10, "unexpectedly large number of pages"
+        cursor = data["meta"]["nextCursor"]
+        assert cursor is not None
     expected = {
         seed_identity.admin.email,
         seed_identity.workspace_owner.email,

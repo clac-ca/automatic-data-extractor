@@ -7,9 +7,8 @@ from uuid import UUID
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import ListPage, paginate_query
-from ade_api.common.types import OrderBy
 from ade_api.models import Run, RunField, RunMetrics, RunStatus, RunTableColumn
 
 from .filters import RunColumnFilters, apply_run_column_filters, apply_run_filters
@@ -36,10 +35,11 @@ class RunsRepository:
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        order_by: OrderBy,
-        page: int,
-        per_page: int,
-    ) -> ListPage[Run]:
+        resolved_sort: ResolvedCursorSort[Run],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
+    ):
         """Return paginated runs for ``workspace_id`` filtered by config, status, or document."""
 
         stmt: Select = select(Run).where(Run.workspace_id == workspace_id)
@@ -52,12 +52,13 @@ class RunsRepository:
             q=q,
         )
 
-        return paginate_query(
+        return paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 

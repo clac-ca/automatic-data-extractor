@@ -10,13 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, 
 from ade_api.api.deps import get_api_keys_service, get_idempotency_service
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.etag import build_etag_token, format_weak_etag
-from ade_api.common.listing import (
-    ListPage,
-    ListQueryParams,
-    list_query_params,
-    strict_list_query_guard,
+from ade_api.common.cursor_listing import (
+    CursorPage,
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
 )
-from ade_api.common.sorting import resolve_sort
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf, require_global
 from ade_api.features.idempotency import (
@@ -29,7 +29,7 @@ from ade_api.models import ApiKey
 
 from .schemas import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyPage, ApiKeySummary
 from .service import ApiKeyAccessDeniedError, ApiKeyNotFoundError, ApiKeyService
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["api-keys"])
 
@@ -75,15 +75,12 @@ def _make_create_response(result) -> ApiKeyCreateResponse:
     )
 
 
-def _map_page(page: ListPage[ApiKey]) -> ApiKeyPage:
+def _map_page(page: CursorPage[ApiKey]) -> ApiKeyPage:
     summaries = [_serialize_summary(record) for record in page.items]
     return ApiKeyPage(
         items=summaries,
-        page=page.page,
-        per_page=page.per_page,
-        page_count=page.page_count,
-        total=page.total,
-        changes_cursor=page.changes_cursor,
+        meta=page.meta,
+        facets=page.facets,
     )
 
 
@@ -107,12 +104,13 @@ def _api_key_etag_token(record: ApiKey) -> str:
 def list_my_api_keys(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> ApiKeyPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -121,9 +119,10 @@ def list_my_api_keys(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
     return _map_page(result_page)
@@ -277,12 +276,13 @@ def list_user_api_keys(
     user_id: UserPath,
     _: Annotated[None, Security(require_global("api_keys.read_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> ApiKeyPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -291,9 +291,10 @@ def list_user_api_keys(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
     return _map_page(result_page)
 

@@ -23,12 +23,12 @@ from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import SessionDep, SettingsDep, get_idempotency_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
-from ade_api.common.listing import (
-    ListQueryParams,
-    list_query_params,
-    strict_list_query_guard,
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
 )
-from ade_api.common.sorting import resolve_sort
 from ade_api.common.sse import stream_ndjson_events
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
@@ -79,7 +79,7 @@ from .schemas import (
     RunWorkspaceCreateRequest,
 )
 from .service import RunsService
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
     tags=["runs"],
@@ -375,14 +375,15 @@ def create_workspace_runs_batch_endpoint(
 )
 def list_configuration_runs_endpoint(
     configuration_id: ConfigurationPath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
     try:
-        order_by = resolve_sort(
+        resolved_sort = resolve_cursor_sort(
             list_query.sort,
             allowed=SORT_FIELDS,
+            cursor_fields=CURSOR_FIELDS,
             default=DEFAULT_SORT,
             id_field=ID_FIELD,
         )
@@ -391,9 +392,10 @@ def list_configuration_runs_endpoint(
             filters=list_query.filters,
             join_operator=list_query.join_operator,
             q=list_query.q,
-            order_by=order_by,
-            page=list_query.page,
-            per_page=list_query.per_page,
+            resolved_sort=resolved_sort,
+            limit=list_query.limit,
+            cursor=list_query.cursor,
+            include_total=list_query.include_total,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -406,13 +408,14 @@ def list_configuration_runs_endpoint(
 )
 def list_workspace_runs_endpoint(
     workspace_id: WorkspacePath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -421,9 +424,10 @@ def list_workspace_runs_endpoint(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
 
