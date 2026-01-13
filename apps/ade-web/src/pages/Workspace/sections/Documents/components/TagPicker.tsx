@@ -52,7 +52,7 @@ export function TagPicker({
         {
           page: 1,
           perPage: 20,
-          sort: "-count",
+          sort: '[{"id":"count","desc":true}]',
           q: canSearch ? effectiveQuery : undefined,
         },
         signal,

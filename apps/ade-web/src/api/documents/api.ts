@@ -1,8 +1,7 @@
 import { client } from "@api/client";
 import { apiFetch } from "@api/client";
 import { ApiError } from "@api/errors";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
-import { encodeFilters } from "@api/listing";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@api/listing";
 import type { components } from "@schema";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
@@ -35,7 +34,7 @@ export type ListDocumentsQuery = {
   page: number;
   perPage: number;
   sort?: string | null;
-  filters?: FilterItem[];
+  filters?: FilterItem[] | string | null;
   joinOperator?: FilterJoinOperator;
   q?: string | null;
 };
@@ -97,20 +96,20 @@ export async function fetchWorkspaceDocuments(
     sort: string | null;
     page: number;
     perPage: number;
-    filters?: FilterItem[];
+    filters?: FilterItem[] | string | null;
     joinOperator?: FilterJoinOperator;
     q?: string | null;
   },
   signal?: AbortSignal,
 ): Promise<DocumentPageResult> {
-  const query = {
-    sort: options.sort ?? undefined,
+  const query = buildListQuery({
+    sort: options.sort ?? null,
     page: options.page > 0 ? options.page : 1,
     perPage: options.perPage > 0 ? options.perPage : DEFAULT_DOCUMENTS_PAGE_SIZE,
-    q: options.q ?? undefined,
-    filters: encodeFilters(options.filters),
+    q: options.q ?? null,
+    filters: options.filters,
     joinOperator: options.joinOperator,
-  };
+  });
 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
     params: { path: { workspaceId }, query },

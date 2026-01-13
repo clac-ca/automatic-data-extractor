@@ -2808,7 +2808,10 @@ function RunExtractionDialog({
 
 async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRow[]> {
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
-    params: { path: { workspaceId }, query: { sort: "-createdAt", perPage: 50 } },
+    params: {
+      path: { workspaceId },
+      query: { sort: '[{"id":"createdAt","desc":true}]', perPage: 50 },
+    },
     signal,
   });
   return data?.items ?? [];

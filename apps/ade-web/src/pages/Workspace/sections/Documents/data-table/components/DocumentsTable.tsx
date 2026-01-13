@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode, type RefObject } from "react";
-import type { ColumnDef, Row } from "@tanstack/react-table";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Ellipsis } from "lucide-react";
 
 import { DataTable } from "@/components/data-table/data-table";
@@ -8,8 +8,16 @@ import { DataTableColumnHeader } from "@/components/data-table/data-table-column
 import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
 import { useDataTable } from "@/hooks/use-data-table";
+import {
+  ActionBar,
+  ActionBarGroup,
+  ActionBarItem,
+  ActionBarSelection,
+  ActionBarSeparator,
+} from "@/components/ui/action-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
@@ -17,11 +25,9 @@ import type { PresenceParticipant } from "@schema/presence";
 import type { DocumentStatus, FileType, WorkspacePerson } from "@pages/Workspace/sections/Documents/types";
 import { DocumentPresenceBadges } from "@pages/Workspace/sections/Documents/components/DocumentPresenceBadges";
 import { MappingBadge } from "@pages/Workspace/sections/Documents/components/MappingBadge";
-import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "@pages/Workspace/sections/Documents/components/PeoplePicker";
+import { PeoplePicker, normalizeSingleAssignee } from "@pages/Workspace/sections/Documents/components/PeoplePicker";
 import { TagPicker } from "@pages/Workspace/sections/Documents/components/TagPicker";
-import { UNASSIGNED_KEY } from "@pages/Workspace/sections/Documents/filters";
 import { fileTypeLabel, formatBytes, shortId } from "@pages/Workspace/sections/Documents/utils";
-import { DocumentPreviewGrid } from "./DocumentPreviewGrid";
 import type { DocumentRow } from "../types";
 import { DEFAULT_PAGE_SIZE, formatTimestamp } from "../utils";
 
@@ -39,15 +45,9 @@ interface DocumentsTableProps {
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
-  expandedRowId: string | null;
-  onTogglePreview: (documentId: string) => void;
   isRowActionPending?: (documentId: string) => boolean;
   archivedFlashIds?: Set<string>;
-  toolbarSearch?: ReactNode;
   toolbarActions?: ReactNode;
-  scrollContainerRef?: RefObject<HTMLDivElement | null>;
-  scrollFooter?: ReactNode;
-  onVisibleRangeChange?: (range: { startIndex: number; endIndex: number; total: number }) => void;
 }
 
 const STATUS_BADGE_STYLES: Record<DocumentStatus, string> = {
@@ -73,15 +73,9 @@ export function DocumentsTable({
   onDeleteRequest,
   onDownloadOutput,
   onDownloadOriginal,
-  expandedRowId,
-  onTogglePreview,
   isRowActionPending,
   archivedFlashIds,
-  toolbarSearch,
   toolbarActions,
-  scrollContainerRef,
-  scrollFooter,
-  onVisibleRangeChange,
 }: DocumentsTableProps) {
   const [contextMenu, setContextMenu] = useState<{
     rowId: string;
@@ -118,10 +112,7 @@ export function DocumentsTable({
     [people],
   );
 
-  const assigneeOptions = useMemo(
-    () => [{ label: "Unassigned", value: UNASSIGNED_KEY }, ...memberOptions],
-    [memberOptions],
-  );
+  const assigneeOptions = useMemo(() => memberOptions, [memberOptions]);
 
   const tagFilterOptions = useMemo(
     () => tagOptions.map((tag) => ({ label: tag, value: tag })),
@@ -144,13 +135,6 @@ export function DocumentsTable({
     [],
   );
 
-  const togglePreview = useCallback(
-    (rowId: string) => {
-      onTogglePreview(rowId);
-    },
-    [onTogglePreview],
-  );
-
   const contextRow = useMemo(
     () => (contextMenu ? data.find((row) => row.id === contextMenu.rowId) ?? null : null),
     [contextMenu, data],
@@ -171,34 +155,13 @@ export function DocumentsTable({
     setContextMenu({ rowId, position: { x: event.clientX, y: event.clientY } });
   }, []);
 
-  const onRowContextMenu = useCallback(
-    (row: Row<DocumentRow>, event: MouseEvent<HTMLTableRowElement>) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.closest("input, textarea, select, [contenteditable='true']")
-      ) {
-        return;
-      }
-      openContextMenu(row.original.id, event);
-    },
-    [openContextMenu],
-  );
-
   const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
     if (!contextRow) return [];
     const isArchived = contextRow.status === "archived";
-    const isPreviewable = Boolean(contextRow.latestSuccessfulRun?.id);
-    const isExpanded = contextRow.id === expandedRowId;
     const isBusy = isRowActionPending?.(contextRow.id) ?? false;
     const canDownloadOutput = Boolean(contextRow.latestSuccessfulRun?.id);
 
     return [
-      {
-        id: "preview",
-        label: isExpanded ? "Hide preview" : "Show preview",
-        onSelect: () => togglePreview(contextRow.id),
-        disabled: !isPreviewable,
-      },
       {
         id: "download-normalized",
         label: "Download normalized",
@@ -228,18 +191,44 @@ export function DocumentsTable({
     ];
   }, [
     contextRow,
-    expandedRowId,
     isRowActionPending,
     onArchive,
     onDeleteRequest,
     onDownloadOriginal,
     onDownloadOutput,
     onRestore,
-    togglePreview,
   ]);
 
   const columns = useMemo<ColumnDef<DocumentRow>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() && "indeterminate")
+              }
+              onCheckedChange={(value) => table.toggleAllPageRowsSelected(Boolean(value))}
+              aria-label="Select all rows"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
+              aria-label="Select row"
+            />
+          </div>
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        enableColumnFilter: false,
+        size: 48,
+      },
       {
         id: "id",
         accessorKey: "id",
@@ -307,7 +296,7 @@ export function DocumentsTable({
           variant: "text",
         },
         size: 260,
-        enableColumnFilter: false,
+        enableColumnFilter: true,
         enableHiding: false,
       },
       {
@@ -400,10 +389,10 @@ export function DocumentsTable({
         cell: ({ row }) => (
           <PeoplePicker
             people={people}
-            value={[row.original.assignee?.id ? `user:${row.original.assignee.id}` : unassignedKey()]}
+            value={row.original.assignee?.id ? [`user:${row.original.assignee.id}`] : []}
             onChange={(keys) => onAssign(row.original.id, normalizeSingleAssignee(keys))}
-            placeholder="Assignee..."
-            includeUnassigned
+            placeholder="Unassigned"
+            allowClear
             disabled={isRowActionPending?.(row.original.id) ?? false}
             buttonClassName="min-w-[140px] bg-background px-2 py-1 text-[11px] shadow-none"
           />
@@ -648,7 +637,7 @@ export function DocumentsTable({
     ],
   );
 
-  const { table, debounceMs, throttleMs, shallow, history, startTransition } = useDataTable({
+  const { table, debounceMs, throttleMs, shallow } = useDataTable({
     data,
     columns,
     pageCount,
@@ -662,6 +651,7 @@ export function DocumentsTable({
       sorting: [{ id: "createdAt", desc: true }],
       pagination: { pageSize: DEFAULT_PAGE_SIZE },
       columnVisibility: {
+        select: true,
         id: false,
         workspaceId: false,
         fileType: false,
@@ -674,61 +664,40 @@ export function DocumentsTable({
         updatedAt: false,
         latestSuccessfulRun: false,
       },
-      columnPinning: { right: ["actions"] },
+      columnPinning: { left: ["select"], right: ["actions"] },
     },
     getRowId: (row) => row.id,
     enableAdvancedFilter: true,
     clearOnDefault: true,
   });
 
-  useEffect(() => {
-    const container = scrollContainerRef?.current;
-    if (!container) return;
-
-    const updateWidth = () => {
-      container.style.setProperty(
-        "--documents-preview-width",
-        `${container.clientWidth}px`,
-      );
-    };
-
-    updateWidth();
-
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => updateWidth());
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [scrollContainerRef]);
-
-  const isRowExpanded = useCallback(
-    (row: Row<DocumentRow>) => row.id === expandedRowId,
-    [expandedRowId],
-  );
-
-  const onRowClick = useCallback(
-    (row: Row<DocumentRow>, event: MouseEvent<HTMLTableRowElement>) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.closest(
-          "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true'], [data-ignore-row-click]",
-        )
-      ) {
-        return;
-      }
-      togglePreview(row.id);
-    },
-    [togglePreview],
+  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const actionBar = (
+    <ActionBar
+      open={selectedCount > 0}
+      onOpenChange={(open) => {
+        if (!open) {
+          table.toggleAllRowsSelected(false);
+        }
+      }}
+    >
+      <ActionBarSelection>{selectedCount} selected</ActionBarSelection>
+      <ActionBarSeparator />
+      <ActionBarGroup>
+        <ActionBarItem
+          variant="outline"
+          size="sm"
+          onSelect={() => table.toggleAllRowsSelected(false)}
+        >
+          Clear selection
+        </ActionBarItem>
+      </ActionBarGroup>
+    </ActionBar>
   );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <DataTableAdvancedToolbar table={table}>
-        {toolbarSearch ? (
-          <div className="min-w-[12rem] flex-1 sm:flex-none">{toolbarSearch}</div>
-        ) : null}
         <DataTableSortList table={table} align="start" />
         <DataTableFilterList
           table={table}
@@ -736,8 +705,6 @@ export function DocumentsTable({
           debounceMs={debounceMs}
           throttleMs={throttleMs}
           shallow={shallow}
-          history={history}
-          startTransition={startTransition}
         />
         {toolbarActions ? (
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -745,50 +712,7 @@ export function DocumentsTable({
           </div>
         ) : null}
       </DataTableAdvancedToolbar>
-      <div
-        ref={scrollContainerRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col items-start gap-3 overflow-auto rounded-md border border-border bg-background"
-      >
-        <DataTable
-          table={table}
-          showPagination={false}
-          className="inline-flex min-w-full w-max overflow-visible [&>div]:border-0 [&>div]:overflow-visible [&>div]:rounded-none [&_[data-slot=table]]:min-w-full [&_[data-slot=table]]:w-max [&_[data-slot=table]]:table-fixed [&_[data-slot=table-container]]:max-w-full [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-head]]:!sticky [&_[data-slot=table-head]]:top-0 [&_[data-slot=table-head]]:!z-20 [&_[data-slot=table-head]]:bg-background/95 [&_[data-slot=table-head]]:backdrop-blur-sm [&_[data-slot=table-head]]:shadow-[inset_0_-1px_0_0_var(--border)]"
-          onRowClick={onRowClick}
-          onRowContextMenu={onRowContextMenu}
-          stretchColumnId="name"
-          isRowExpanded={isRowExpanded}
-          expandedRowCellClassName="bg-muted/20 p-0 align-top whitespace-normal overflow-visible"
-          virtualize={{
-            enabled: !expandedRowId,
-            estimateSize: 52,
-            overscan: 8,
-            getScrollElement: () => scrollContainerRef?.current ?? null,
-            onRangeChange: onVisibleRangeChange,
-          }}
-          renderExpandedRow={(row) => {
-            return (
-              <div className="min-w-0 max-w-full">
-                <div
-                  className="sticky left-0 min-w-0 max-w-full"
-                  style={{
-                    width: "var(--documents-preview-width, 100%)",
-                    maxWidth: "var(--documents-preview-width, 100%)",
-                  }}
-                >
-                  {!row.original.latestSuccessfulRun?.id ? (
-                    <div className="p-2 text-muted-foreground text-sm">
-                      Preview is available after a successful run completes.
-                    </div>
-                  ) : (
-                    <DocumentPreviewGrid document={row.original} />
-                  )}
-                </div>
-              </div>
-            );
-          }}
-        />
-        {scrollFooter}
-      </div>
+      <DataTable table={table} actionBar={actionBar} />
       <ContextMenu
         open={Boolean(contextMenu && contextRow)}
         position={contextMenu && contextRow ? contextMenu.position : null}
@@ -817,7 +741,7 @@ function formatRunStatus(value: string) {
   return normalized[0]?.toUpperCase() + normalized.slice(1);
 }
 
-function renderRunSummary(run: DocumentListRow["latestRun"] | null | undefined) {
+function renderRunSummary(run: DocumentRow["latestRun"] | null | undefined) {
   if (!run) {
     return <span className="text-muted-foreground">-</span>;
   }
@@ -834,7 +758,7 @@ function renderRunSummary(run: DocumentListRow["latestRun"] | null | undefined) 
   );
 }
 
-function renderUserSummary(user: DocumentListRow["uploader"]) {
+function renderUserSummary(user: DocumentRow["uploader"]) {
   if (!user) {
     return <span className="text-muted-foreground">-</span>;
   }

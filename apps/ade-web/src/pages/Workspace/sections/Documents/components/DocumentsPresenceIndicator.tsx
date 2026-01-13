@@ -1,7 +1,9 @@
 import type { PresenceConnectionState, PresenceParticipant } from "@schema/presence";
 
-import { AvatarStack, type AvatarStackItem } from "@/components/ui/avatar-stack";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarGroup } from "@/components/ui/avatar-group";
 import { Badge } from "@/components/ui/badge";
+import { getInitials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const STATE_LABELS: Record<PresenceConnectionState, string> = {
@@ -27,11 +29,15 @@ export function DocumentsPresenceIndicator({
   connectionState: PresenceConnectionState;
   className?: string;
 }) {
-  const avatarItems = participants.map((participant) => ({
-    id: participant.user_id,
-    name: participant.display_name ?? undefined,
-    email: participant.email ?? undefined,
-  })) satisfies AvatarStackItem[];
+  const avatarItems = participants.map((participant) => {
+    const name = participant.display_name ?? undefined;
+    const email = participant.email ?? undefined;
+    return {
+      id: participant.user_id,
+      label: name || email || "Participant",
+      initials: getInitials(name, email),
+    };
+  });
 
   const label = STATE_LABELS[connectionState] ?? "Offline";
   const countLabel = participants.length === 0 ? "Just you" : `${participants.length} viewing`;
@@ -46,7 +52,17 @@ export function DocumentsPresenceIndicator({
         {label}
       </Badge>
       <span className="text-xs text-muted-foreground">{countLabel}</span>
-      {participants.length > 0 ? <AvatarStack items={avatarItems} size="xs" max={4} /> : null}
+      {participants.length > 0 ? (
+        <AvatarGroup size={24} max={4}>
+          {avatarItems.map((item) => (
+            <Avatar key={item.id} aria-hidden="true" title={item.label}>
+              <AvatarFallback className="text-[10px] font-semibold text-foreground">
+                {item.initials}
+              </AvatarFallback>
+            </Avatar>
+          ))}
+        </AvatarGroup>
+      ) : null}
     </div>
   );
 }

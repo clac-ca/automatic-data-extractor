@@ -1,41 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns, RUNS_PAGE_SIZE } from "@api/runs/api";
-import type { FilterItem } from "@api/listing";
+import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns } from "@api/runs/api";
+import type { RunsQuery } from "@api/runs/api";
 import { runsKeys } from "@hooks/runs/keys";
-import { buildCounts, buildCreatedAtRange, buildRunRecord } from "../utils";
-import type { RunConfigOption, RunsFilters } from "../types";
-import { DEFAULT_RUNS_FILTERS } from "../constants";
+import { buildCounts, buildRunRecord } from "../utils";
 
-export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: string; initialFilters?: RunsFilters }) {
-  const [filters, setFilters] = useState<RunsFilters>(initialFilters ?? DEFAULT_RUNS_FILTERS);
+export function useRunsModel({ workspaceId, query }: { workspaceId: string; query: RunsQuery }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-
-  const query = useMemo(() => {
-    const items: FilterItem[] = [];
-    const trimmedSearch = filters.search.trim();
-    const dateRange = buildCreatedAtRange(filters.dateRange);
-
-    if (filters.status !== "all") {
-      items.push({ id: "status", operator: "eq", value: filters.status });
-    }
-    if (filters.configurationId) {
-      items.push({ id: "configurationId", operator: "eq", value: filters.configurationId });
-    }
-    if (dateRange) {
-      items.push({ id: "createdAt", operator: "between", value: dateRange });
-    }
-
-    return {
-      page: 1,
-      perPage: RUNS_PAGE_SIZE,
-      sort: "-createdAt",
-      q: trimmedSearch.length >= 2 ? trimmedSearch : undefined,
-      filters: items.length > 0 ? items : undefined,
-    };
-  }, [filters.configurationId, filters.dateRange, filters.search, filters.status]);
 
   const runsQuery = useQuery({
     queryKey: runsKeys.list(workspaceId, query),
@@ -49,16 +22,6 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
     [runsQuery.data?.items],
   );
   const counts = useMemo(() => buildCounts(runs), [runs]);
-  const configOptions = useMemo<RunConfigOption[]>(() => {
-    const options = new Map<string, string>();
-    runs.forEach((run) => {
-      if (!run.configurationId) return;
-      const label = run.configLabel && run.configLabel !== "—" ? run.configLabel : run.configurationId;
-      options.set(run.configurationId, label);
-    });
-    return Array.from(options, ([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [runs]);
-
   const activeRun = useMemo(
     () => (activeId ? runs.find((run) => run.id === activeId) ?? null : null),
     [activeId, runs],
@@ -92,18 +55,6 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
     refetchInterval: shouldPollDetails ? 10_000 : false,
   });
 
-  const updateFilters = useCallback((next: Partial<RunsFilters>) => {
-    setFilters((current) => ({ ...current, ...next }));
-  }, []);
-
-  const setFiltersAll = useCallback((next: RunsFilters) => {
-    setFilters(next);
-  }, []);
-
-  const resetFilters = useCallback(() => {
-    setFilters(DEFAULT_RUNS_FILTERS);
-  }, []);
-
   const openPreview = useCallback((id: string) => {
     setActiveId(id);
     setPreviewOpen(true);
@@ -127,7 +78,6 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
 
   return {
     state: {
-      filters,
       activeId,
       previewOpen,
     },
@@ -135,11 +85,11 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
       runs,
       visibleRuns: runs,
       counts,
-      configOptions,
       activeRun,
       isLoading: runsQuery.isLoading,
       isError: runsQuery.isError,
       totalCount: runsQuery.data?.total ?? runsQuery.data?.items?.length ?? 0,
+      pageCount: runsQuery.data?.pageCount ?? 0,
       metrics: metricsQuery.data ?? null,
       metricsLoading: metricsQuery.isLoading,
       metricsError: metricsQuery.isError,
@@ -151,9 +101,6 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
       columnsError: columnsQuery.isError,
     },
     actions: {
-      updateFilters,
-      setFilters: setFiltersAll,
-      resetFilters,
       openPreview,
       closePreview,
       togglePreview,

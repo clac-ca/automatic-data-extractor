@@ -7,8 +7,8 @@ import type { WorkspaceProfile } from "@schema/workspaces";
 
 export const GLOBAL_SEARCH_TRIGGER_LENGTH = 2;
 export const GLOBAL_SEARCH_RESULT_LIMIT = 5;
-export const GLOBAL_SEARCH_DOCUMENT_SORT = "-createdAt";
-export const GLOBAL_SEARCH_RUN_SORT = "-createdAt";
+export const GLOBAL_SEARCH_DOCUMENT_SORT = '[{"id":"createdAt","desc":true}]';
+export const GLOBAL_SEARCH_RUN_SORT = '[{"id":"createdAt","desc":true}]';
 
 export type GlobalSearchScope =
   | {

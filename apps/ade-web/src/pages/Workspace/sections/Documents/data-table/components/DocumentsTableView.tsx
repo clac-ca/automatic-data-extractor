@@ -13,13 +13,12 @@ import {
 import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
 import { buildWeakEtag } from "@api/etag";
 import { Link } from "react-router-dom";
-import { useSearchParams } from "@app/navigation/urlState";
+import { AlertTriangle } from "lucide-react";
 import { listWorkspaceMembers } from "@api/workspaces/api";
 import { Button } from "@/components/ui/button";
-import { SearchField } from "@components/inputs/SearchField";
 import type { PresenceParticipant } from "@schema/presence";
 import type { UploadManagerItem } from "@hooks/documents/uploadManager";
-import { useDebouncedCallback } from "@hooks/use-debounced-callback";
+import { SpinnerIcon } from "@components/icons";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +37,6 @@ import { useDocumentsView } from "@pages/Workspace/sections/Documents/hooks/useD
 import { DocumentsTable } from "./DocumentsTable";
 import { DocumentsEmptyState, DocumentsInlineBanner } from "./DocumentsEmptyState";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
-import { DEFAULT_DOCUMENT_SORT, normalizeDocumentsFilters, normalizeDocumentsSort } from "../utils";
 
 type CurrentUser = {
   id: string;
@@ -49,8 +47,6 @@ type CurrentUser = {
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 
 type RowMutation = "archive" | "restore" | "delete" | "assign" | "tags";
-
-const LOAD_MORE_SCROLL_THRESHOLD = 200;
 
 export function DocumentsTableView({
   workspaceId,
@@ -68,8 +64,6 @@ export function DocumentsTableView({
   uploadItems?: UploadItem[];
 }) {
   const { notifyToast } = useNotifications();
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const hasUserScrolledRef = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
   const [archivedFlashIds, setArchivedFlashIds] = useState<Set<string>>(() => new Set());
@@ -83,112 +77,34 @@ export function DocumentsTableView({
     >(),
   );
   const archiveFlashTimersRef = useRef<Map<string, number>>(new Map());
-  const lastScrolledDocumentRef = useRef<string | null>(null);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
-  const [isAtTop, setIsAtTop] = useState(true);
-  const [visibleRange, setVisibleRange] = useState<{ startIndex: number; endIndex: number; total: number } | null>(null);
 
   const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
 
-  const { perPage, sort, filters, joinOperator, q } = useDocumentsListParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [searchInput, setSearchInput] = useState(q ?? "");
-  const documentParam = useMemo(() => searchParams.get("document"), [searchParams]);
-  const applySearchParam = useCallback(
-    (nextValue: string) => {
-      const params = new URLSearchParams(searchParams);
-      const trimmed = nextValue.trim();
-      if (trimmed) {
-        params.set("q", trimmed);
-      } else {
-        params.delete("q");
-      }
-      const nextSearch = params.toString();
-      if (nextSearch === searchParams.toString()) {
-        return;
-      }
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
-  const debouncedApplySearchParam = useDebouncedCallback(applySearchParam, 250);
-  const handleSearchInputChange = useCallback(
-    (value: string) => {
-      setSearchInput(value);
-      debouncedApplySearchParam(value);
-    },
-    [debouncedApplySearchParam],
-  );
-  const handleSearchClear = useCallback(() => {
-    setSearchInput("");
-    applySearchParam("");
-  }, [applySearchParam]);
-  const syncDocumentParam = useCallback(
-    (documentId: string | null) => {
-      const params = new URLSearchParams(searchParams);
-      const current = params.get("document");
-      if (current === documentId) return;
-      if (documentId) {
-        params.set("document", documentId);
-      } else {
-        params.delete("document");
-      }
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
-
-  useEffect(() => {
-    const nextValue = q ?? "";
-    if (nextValue !== searchInput) {
-      setSearchInput(nextValue);
-    }
-  }, [q, searchInput]);
-  const normalizedSort = useMemo(() => normalizeDocumentsSort(sort), [sort]);
-  const effectiveSort = useMemo(
-    () => normalizedSort ?? DEFAULT_DOCUMENT_SORT,
-    [normalizedSort],
-  );
-  const normalizedFilters = useMemo(() => normalizeDocumentsFilters(filters), [filters]);
+  const { page, perPage, sort, filters, joinOperator } = useDocumentsListParams();
   const documentsView = useDocumentsView({
     workspaceId,
+    page,
     perPage,
-    sort: effectiveSort,
-    filters: normalizedFilters,
+    sort,
+    filters,
     joinOperator,
-    q,
     enabled: Boolean(workspaceId),
-    isAtTop,
-    visibleStartIndex: visibleRange?.startIndex ?? null,
   });
   const {
     rows: documents,
     documentsById,
     pageCount,
-    hasNextPage,
-    isFetchingNextPage,
     isLoading,
+    isFetching,
     error,
-    fetchNextPage,
     refreshSnapshot,
     updateRow,
     upsertRow,
     removeRow,
     setUploadProgress,
-    queuedChanges,
-    applyQueuedChanges,
   } = documentsView;
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
-  useEffect(() => {
-    hasUserScrolledRef.current = false;
-  }, [workspaceId, perPage, effectiveSort, normalizedFilters, joinOperator, q]);
-  const handleVisibleRangeChange = useCallback(
-    (range: { startIndex: number; endIndex: number; total: number }) => {
-      setVisibleRange(range);
-    },
-    [],
-  );
 
   const openDownload = useCallback((url: string) => {
     if (typeof window === "undefined") return;
@@ -225,76 +141,6 @@ export function DocumentsTableView({
     [openDownload, workspaceId],
   );
 
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      setIsAtTop(scrollTop <= 8);
-      if (scrollTop > 0) {
-        hasUserScrolledRef.current = true;
-      }
-      if (!hasNextPage || isFetchingNextPage || isLoading) return;
-      if (!hasUserScrolledRef.current) return;
-      if (scrollHeight <= clientHeight) return;
-      if (scrollHeight - scrollTop - clientHeight <= LOAD_MORE_SCROLL_THRESHOLD) {
-        fetchNextPage();
-      }
-    };
-    handleScroll();
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      container.removeEventListener("scroll", handleScroll);
-    };
-  }, [documents.length, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading]);
-
-  useEffect(() => {
-    if (!documentParam) {
-      if (expandedRowId) {
-        setExpandedRowId(null);
-      }
-      lastScrolledDocumentRef.current = null;
-      return;
-    }
-
-    if (documentsById[documentParam]) {
-      if (expandedRowId !== documentParam) {
-        setExpandedRowId(documentParam);
-      }
-      return;
-    }
-
-    if (!isLoading) {
-      syncDocumentParam(null);
-    }
-  }, [documentParam, documentsById, expandedRowId, isLoading, syncDocumentParam]);
-
-  useEffect(() => {
-    if (!documentParam || expandedRowId !== documentParam) return;
-    if (lastScrolledDocumentRef.current === documentParam) return;
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const selector = `[data-row-id="${escapeAttributeSelector(documentParam)}"]`;
-    const row = container.querySelector<HTMLElement>(selector);
-    if (!row) return;
-    row.scrollIntoView({ block: "center", behavior: "smooth" });
-    lastScrolledDocumentRef.current = documentParam;
-  }, [documentParam, expandedRowId, documents.length]);
-
-  useEffect(() => {
-    if (expandedRowId) {
-      setVisibleRange(null);
-    }
-  }, [expandedRowId]);
-
-  const handleApplyQueuedChanges = useCallback(() => {
-    applyQueuedChanges();
-    const container = scrollContainerRef.current;
-    if (container) {
-      container.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [applyQueuedChanges]);
-
   const toolbarParticipants = useMemo(
     () => dedupeParticipants(presence.participants, presence.clientId),
     [presence.clientId, presence.participants],
@@ -304,25 +150,6 @@ export function DocumentsTableView({
     () => mapPresenceByDocument(presence.participants, presence.clientId),
     [presence.clientId, presence.participants],
   );
-
-  const handleTogglePreview = useCallback(
-    (documentId: string) => {
-      setExpandedRowId((current) => {
-        const next = current === documentId ? null : documentId;
-        syncDocumentParam(next);
-        return next;
-      });
-    },
-    [syncDocumentParam],
-  );
-
-  useEffect(() => {
-    if (presence.connectionState !== "open") return;
-    const selection = expandedRowId
-      ? { documentId: expandedRowId, mode: "preview" }
-      : { documentId: null };
-    presence.sendSelection(selection);
-  }, [expandedRowId, presence.connectionState, presence.sendSelection]);
 
   const membersQuery = useQuery({
     queryKey: ["documents-members", workspaceId],
@@ -362,7 +189,7 @@ export function DocumentsTableView({
     queryFn: ({ signal }) =>
       fetchTagCatalog(
         workspaceId,
-        { page: 1, perPage: 200, sort: "-count" },
+        { page: 1, perPage: 200, sort: '[{"id":"count","desc":true}]' },
         signal,
       ),
     enabled: Boolean(workspaceId),
@@ -761,7 +588,11 @@ export function DocumentsTableView({
     workspaceId,
   ]);
 
-  if (isLoading) {
+  const hasDocuments = documents.length > 0;
+  const showInitialLoading = isLoading && !hasDocuments;
+  const showInitialError = Boolean(error) && !hasDocuments;
+
+  if (showInitialLoading) {
     return (
       <div className="min-h-[240px]">
         <DocumentsEmptyState
@@ -772,7 +603,7 @@ export function DocumentsTableView({
     );
   }
 
-  if (error) {
+  if (showInitialError) {
     return (
       <div className="min-h-[240px]">
         <DocumentsEmptyState
@@ -788,30 +619,31 @@ export function DocumentsTableView({
   const processingSettingsPath = `/workspaces/${workspaceId}/settings/processing`;
   const deletePending =
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
-  const queuedCount = queuedChanges.length;
   const toolbarPresence = (
     <DocumentsPresenceIndicator
       participants={toolbarParticipants}
       connectionState={presence.connectionState}
     />
   );
-  const toolbarSearch = (
-    <SearchField
-      value={searchInput}
-      onValueChange={handleSearchInputChange}
-      onClear={handleSearchClear}
-      placeholder="Search documents"
-      ariaLabel="Search documents"
-      className="w-full sm:w-[16rem]"
-    />
+  const toolbarStatus = (
+    <div className="flex h-4 w-4 items-center justify-center">
+      {isFetching ? (
+        <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : error && hasDocuments ? (
+        <AlertTriangle
+          className="h-4 w-4 text-destructive"
+          aria-label="Document list refresh failed"
+          title="Document list refresh failed"
+        />
+      ) : null}
+    </div>
   );
-  const toolbarContent = toolbarActions ? (
+  const toolbarContent = (
     <div className="flex flex-wrap items-center gap-3">
       {toolbarPresence}
       {toolbarActions}
+      {toolbarStatus}
     </div>
-  ) : (
-    toolbarPresence
   );
 
   return (
@@ -840,17 +672,6 @@ export function DocumentsTableView({
           }
         />
       ) : null}
-      {queuedCount > 0 && !isAtTop ? (
-        <DocumentsInlineBanner
-          title={`${queuedCount} new update${queuedCount === 1 ? "" : "s"} available`}
-          description="Scroll to the top or apply updates to refresh the list."
-          actions={
-            <Button size="sm" variant="outline" onClick={handleApplyQueuedChanges}>
-              Show updates
-            </Button>
-          }
-        />
-      ) : null}
       <DocumentsTable
         data={documents}
         pageCount={pageCount}
@@ -865,24 +686,9 @@ export function DocumentsTableView({
         onDeleteRequest={onDeleteRequest}
         onDownloadOutput={handleDownloadOutput}
         onDownloadOriginal={handleDownloadOriginal}
-        expandedRowId={expandedRowId}
-        onTogglePreview={handleTogglePreview}
         isRowActionPending={isRowMutationPending}
         archivedFlashIds={archivedFlashIds}
-        toolbarSearch={toolbarSearch}
         toolbarActions={toolbarContent}
-        scrollContainerRef={scrollContainerRef}
-        onVisibleRangeChange={handleVisibleRangeChange}
-        scrollFooter={
-          <>
-            {hasNextPage ? (
-              <div className="flex w-full items-center justify-center py-2 text-xs text-muted-foreground">
-                {isFetchingNextPage ? "Loading more documents..." : "Scroll to load more"}
-              </div>
-            ) : null}
-            <div className="h-1 w-full" />
-          </>
-        }
       />
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => (!open ? onDeleteCancel() : undefined)}>
         <DialogContent>
@@ -936,13 +742,6 @@ function sortParticipants(participants: PresenceParticipant[]) {
     const bLabel = getParticipantLabel(b).toLowerCase();
     return aLabel.localeCompare(bLabel);
   });
-}
-
-function escapeAttributeSelector(value: string) {
-  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-    return CSS.escape(value);
-  }
-  return value.replace(/[\"\\]/g, "\\$&");
 }
 
 function dedupeParticipants(participants: PresenceParticipant[], clientId: string | null) {

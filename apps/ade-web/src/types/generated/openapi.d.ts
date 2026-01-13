@@ -4408,7 +4408,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -4637,7 +4637,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -4892,7 +4892,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -5120,7 +5120,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -5165,7 +5165,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -5359,7 +5359,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -5716,7 +5716,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -6085,7 +6085,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -6254,7 +6254,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -6316,7 +6316,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -7468,7 +7468,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -8211,7 +8211,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;
@@ -8343,7 +8343,7 @@ export interface operations {
                 page?: number;
                 /** @description Items per page (max 200) */
                 perPage?: number;
-                /** @description CSV list of sort keys; prefix '-' for DESC. */
+                /** @description JSON array of {id, desc}. */
                 sort?: string | null;
                 /** @description URL-encoded JSON array of filter objects. */
                 filters?: string | null;

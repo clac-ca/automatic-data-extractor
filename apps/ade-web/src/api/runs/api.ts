@@ -1,7 +1,7 @@
 import { ApiError } from "@api/errors";
 import { createIdempotencyKey } from "@api/idempotency";
 import { client, resolveApiUrl } from "@api/client";
-import { encodeFilters, type FilterItem, type FilterJoinOperator } from "@api/listing";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@api/listing";
 
 import type { components, paths } from "@schema";
 import type { RunStreamEvent } from "@schema/runs";
@@ -47,14 +47,14 @@ export async function fetchWorkspaceRuns(
   query: RunsQuery,
   signal?: AbortSignal,
 ): Promise<RunPage> {
-  const requestQuery = {
+  const requestQuery = buildListQuery({
     page: query.page,
     perPage: query.perPage,
-    sort: query.sort ?? undefined,
-    q: query.q ?? undefined,
+    sort: query.sort ?? null,
+    q: query.q ?? null,
     joinOperator: query.joinOperator,
-    filters: encodeFilters(query.filters),
-  };
+    filters: query.filters,
+  });
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/runs", {
     params: { path: { workspaceId }, query: requestQuery },
     signal,
@@ -71,17 +71,17 @@ export async function fetchWorkspaceRunsForDocument(
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/runs", {
     params: {
       path: { workspaceId },
-      query: {
+      query: buildListQuery({
         page: 1,
         perPage: 25,
-        filters: encodeFilters([
+        filters: [
           {
             id: "inputDocumentId",
             operator: "eq",
             value: documentId,
           },
-        ]),
-      },
+        ],
+      }),
     },
     signal,
   });

@@ -2,7 +2,6 @@ import clsx from "clsx";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import type { WorkspacePerson } from "../types";
-import { UNASSIGNED_KEY } from "../filters";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "@components/icons";
 
 export function PeoplePicker({
@@ -11,7 +10,7 @@ export function PeoplePicker({
   onChange,
   placeholder,
   multiple = false,
-  includeUnassigned = false,
+  allowClear = false,
   disabled = false,
   buttonClassName,
   onOpenChange,
@@ -21,7 +20,7 @@ export function PeoplePicker({
   onChange: (next: string[]) => void;
   placeholder: string;
   multiple?: boolean;
-  includeUnassigned?: boolean;
+  allowClear?: boolean;
   disabled?: boolean;
   buttonClassName?: string;
   onOpenChange?: (open: boolean) => void;
@@ -76,10 +75,8 @@ export function PeoplePicker({
   }, [close, open]);
 
   const allOptions = useMemo(() => {
-    const base = people.slice().sort((a, b) => a.label.localeCompare(b.label));
-    if (!includeUnassigned) return base;
-    return [{ key: UNASSIGNED_KEY, label: "Unassigned", kind: "label" as const }, ...base];
-  }, [includeUnassigned, people]);
+    return people.slice().sort((a, b) => a.label.localeCompare(b.label));
+  }, [people]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,7 +86,7 @@ export function PeoplePicker({
 
   const selectedLabels = useMemo(() => {
     const map = new Map(allOptions.map((p) => [p.key, p.label]));
-    const labels = value.map((k) => map.get(k) ?? (k === UNASSIGNED_KEY ? "Unassigned" : k));
+    const labels = value.map((k) => map.get(k) ?? k);
     return labels.filter(Boolean);
   }, [allOptions, value]);
 
@@ -106,6 +103,12 @@ export function PeoplePicker({
     else next.add(key);
     onChange(Array.from(next));
   }
+
+  const clearSelection = useCallback(() => {
+    if (disabled) return;
+    onChange([]);
+    close();
+  }, [close, disabled, onChange]);
 
   const buttonText =
     selectedLabels.length === 0
@@ -169,6 +172,20 @@ export function PeoplePicker({
             </div>
           </div>
           <div className="max-h-72 overflow-auto p-2">
+            {allowClear && !multiple && value.length > 0 ? (
+              <button
+                type="button"
+                onClick={clearSelection}
+                className={clsx(
+                  "mb-2 flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
+                  "hover:bg-background dark:hover:bg-muted/40",
+                )}
+              >
+                <span className="min-w-0 truncate font-semibold text-foreground">
+                  Unassigned
+                </span>
+              </button>
+            ) : null}
             {filtered.length === 0 ? (
               <div className="px-3 py-3 text-xs text-muted-foreground">No matches.</div>
             ) : (
@@ -217,11 +234,5 @@ export function PeoplePicker({
 }
 
 export function normalizeSingleAssignee(keys: string[]) {
-  if (keys.length === 0) return null;
-  if (keys[0] === UNASSIGNED_KEY) return null;
-  return keys[0];
-}
-
-export function unassignedKey() {
-  return UNASSIGNED_KEY;
+  return keys[0] ?? null;
 }

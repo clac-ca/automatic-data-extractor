@@ -1,5 +1,5 @@
 import type { RunResource } from "@schema";
-import type { RunMetrics, RunRecord, RunsCounts, RunsDateRange, RunsStatusFilter } from "./types";
+import type { RunMetrics, RunRecord, RunsCounts } from "./types";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -54,19 +54,6 @@ export function formatResultLabel(run: RunRecord): string {
   return "—";
 }
 
-export function coerceStatus(value: string | null): RunsStatusFilter {
-  if (!value || value === "all") return "all";
-  if (["queued", "running", "succeeded", "failed"].includes(value)) {
-    return value as RunsStatusFilter;
-  }
-  return "all";
-}
-
-export function coerceDateRange(value: string | null): RunsDateRange {
-  if (!value) return "14d";
-  if (["14d", "7d", "24h", "30d", "custom"].includes(value)) return value as RunsDateRange;
-  return "14d";
-}
 
 export function buildCounts(runs: RunRecord[]): RunsCounts {
   let warningKnown = false;
@@ -133,23 +120,4 @@ export function buildRunRecord(run: RunResource): RunRecord {
     notes: run.failure_message ?? null,
     raw: run,
   };
-}
-
-export function buildCreatedAtRange(range: RunsDateRange, now = new Date()): [string, string] | null {
-  if (range === "custom") {
-    return null;
-  }
-  const end = new Date(now);
-  const start = new Date(now);
-  if (range === "24h") {
-    start.setHours(start.getHours() - 24);
-  } else if (range === "7d") {
-    start.setDate(start.getDate() - 7);
-  } else if (range === "30d") {
-    start.setDate(start.getDate() - 30);
-  } else {
-    start.setDate(start.getDate() - 14);
-  }
-
-  return [start.toISOString(), end.toISOString()];
 }

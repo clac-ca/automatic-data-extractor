@@ -18,6 +18,10 @@ const WORKSPACE_SCOPE: ScopeType = "workspace";
 type WorkspaceListParams = {
   readonly page: number;
   readonly pageSize: number;
+  readonly sort?: string | null;
+  readonly q?: string | null;
+  readonly filtersKey?: string | null;
+  readonly joinOperator?: "and" | "or" | null;
 };
 
 type PermissionListParams = {
@@ -29,6 +33,8 @@ type PermissionListParams = {
 const defaultWorkspaceListParams: WorkspaceListParams = {
   page: 1,
   pageSize: DEFAULT_WORKSPACE_PAGE_SIZE,
+  sort: null,
+  q: null,
 };
 
 const defaultMemberListParams: WorkspaceListParams = {
@@ -62,4 +68,6 @@ export const workspacesKeys = {
 export const WORKSPACE_LIST_DEFAULT_PARAMS = {
   page: defaultWorkspaceListParams.page,
   pageSize: defaultWorkspaceListParams.pageSize,
+  sort: defaultWorkspaceListParams.sort,
+  q: defaultWorkspaceListParams.q,
 } as const;

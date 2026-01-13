@@ -1,50 +1,48 @@
-import clsx from "clsx";
-import { useMemo } from "react";
+import * as React from "react"
+import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
-const SIZE_STYLES = {
-  xs: "h-6 w-6 text-[10px]",
-  sm: "h-8 w-8 text-sm",
-  md: "h-10 w-10 text-base",
-  lg: "h-12 w-12 text-lg",
-} as const;
+import { cn } from "@/lib/utils"
 
-export type AvatarSize = keyof typeof SIZE_STYLES;
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+Avatar.displayName = AvatarPrimitive.Root.displayName
 
-export interface AvatarProps {
-  readonly name?: string | null;
-  readonly email?: string | null;
-  readonly size?: AvatarSize;
-  readonly className?: string;
-}
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn("aspect-square h-full w-full", className)}
+    {...props}
+  />
+))
+AvatarImage.displayName = AvatarPrimitive.Image.displayName
 
-function getInitials(name?: string | null, email?: string | null) {
-  if (name && name.trim().length > 0) {
-    const parts = name.trim().split(/\s+/u);
-    const first = parts[0]?.[0];
-    const last = parts[parts.length - 1]?.[0];
-    if (first) {
-      return `${first}${last ?? ""}`.toUpperCase();
-    }
-  }
-  if (email && email.trim().length > 0) {
-    return email.trim()[0]?.toUpperCase();
-  }
-  return "?";
-}
+const AvatarFallback = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      className
+    )}
+    {...props}
+  />
+))
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
 
-export function Avatar({ name, email, size = "md", className }: AvatarProps) {
-  const initials = useMemo(() => getInitials(name, email), [name, email]);
-
-  return (
-    <span
-      aria-hidden="true"
-      className={clsx(
-        "inline-flex select-none items-center justify-center rounded-full bg-muted font-semibold text-foreground shadow-sm",
-        SIZE_STYLES[size],
-        className,
-      )}
-    >
-      {initials}
-    </span>
-  );
-}
+export { Avatar, AvatarFallback, AvatarImage }

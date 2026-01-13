@@ -851,10 +851,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -1344,10 +1344,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -1877,10 +1877,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -2351,10 +2351,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -2512,10 +2512,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -2992,10 +2992,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -3846,10 +3846,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -4440,10 +4440,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -4901,10 +4901,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -5224,10 +5224,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -7395,10 +7395,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -9442,10 +9442,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -9837,10 +9837,10 @@
                   "type": "null"
                 }
               ],
-              "description": "CSV list of sort keys; prefix '-' for DESC.",
+              "description": "JSON array of {id, desc}.",
               "title": "Sort"
             },
-            "description": "CSV list of sort keys; prefix '-' for DESC."
+            "description": "JSON array of {id, desc}."
           },
           {
             "name": "filters",
@@ -17314,7 +17314,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8000"
+      "url": "http://localhost:5173"
     }
   ],
   "security": [

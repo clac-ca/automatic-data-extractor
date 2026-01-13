@@ -4,21 +4,6 @@ export type RunMetrics = components["schemas"]["RunMetricsResource"];
 export type RunField = components["schemas"]["RunFieldResource"];
 export type RunColumn = components["schemas"]["RunColumnResource"];
 
-export type RunsStatusFilter = "all" | RunStatus;
-export type RunsDateRange = "14d" | "7d" | "24h" | "30d" | "custom";
-
-export interface RunsFilters {
-  readonly search: string;
-  readonly status: RunsStatusFilter;
-  readonly dateRange: RunsDateRange;
-  readonly configurationId: string | null;
-}
-
-export type RunConfigOption = {
-  id: string;
-  label: string;
-};
-
 export interface RunsCounts {
   readonly total: number;
   readonly success: number;

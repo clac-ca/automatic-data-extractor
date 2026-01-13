@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import UUID
@@ -55,6 +56,16 @@ class FilterValueType(str, Enum):
     ENUM = "enum"
 
 
+OPERATOR_ALIASES: dict[str, FilterOperator] = {
+    "inArray": FilterOperator.IN,
+    "notInArray": FilterOperator.NOT_IN,
+    "isBetween": FilterOperator.BETWEEN,
+    "isRelativeToToday": FilterOperator.BETWEEN,
+}
+
+RELATIVE_RANGE_PATTERN = re.compile(r"^(past|last|next)_(\d+)_days$")
+
+
 @dataclass(frozen=True)
 class FilterField:
     id: str
@@ -80,6 +91,200 @@ class FilterRegistry:
 
     def keys(self) -> Sequence[str]:
         return tuple(self._fields.keys())
+
+
+def _epoch_to_datetime(value: float) -> datetime:
+    seconds = value / 1000 if abs(value) > 100_000_000_000 else value
+    return datetime.fromtimestamp(seconds, tz=UTC)
+
+
+def _parse_epoch(value: str) -> float | None:
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _start_of_day(value: datetime) -> datetime:
+    return value.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _end_of_day(value: datetime) -> datetime:
+    return value.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+
+def _start_of_week(value: datetime) -> datetime:
+    return _start_of_day(value - timedelta(days=value.weekday()))
+
+
+def _end_of_week(value: datetime) -> datetime:
+    return _end_of_day(_start_of_week(value) + timedelta(days=6))
+
+
+def _start_of_month(value: datetime) -> datetime:
+    return _start_of_day(value.replace(day=1))
+
+
+def _end_of_month(value: datetime) -> datetime:
+    if value.month == 12:
+        next_month = value.replace(year=value.year + 1, month=1, day=1)
+    else:
+        next_month = value.replace(month=value.month + 1, day=1)
+    return _end_of_day(next_month - timedelta(days=1))
+
+
+def _start_of_year(value: datetime) -> datetime:
+    return _start_of_day(value.replace(month=1, day=1))
+
+
+def _end_of_year(value: datetime) -> datetime:
+    next_year = value.replace(year=value.year + 1, month=1, day=1)
+    return _end_of_day(next_year - timedelta(days=1))
+
+
+def _resolve_relative_date_range(value: Any) -> list[datetime] | None:
+    if value is None:
+        return None
+
+    if isinstance(value, list):
+        if len(value) != 2 or any(entry in {None, ""} for entry in value):
+            return None
+        return value
+
+    now = datetime.now(tz=UTC)
+
+    if isinstance(value, (int, float)):
+        timestamp = _epoch_to_datetime(float(value))
+        return [_start_of_day(timestamp), _end_of_day(timestamp)]
+
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if not token:
+            return None
+
+        if token == "today":
+            return [_start_of_day(now), _end_of_day(now)]
+        if token == "yesterday":
+            yesterday = now - timedelta(days=1)
+            return [_start_of_day(yesterday), _end_of_day(yesterday)]
+        if token == "tomorrow":
+            tomorrow = now + timedelta(days=1)
+            return [_start_of_day(tomorrow), _end_of_day(tomorrow)]
+        if token == "this_week":
+            return [_start_of_week(now), _end_of_week(now)]
+        if token == "last_week":
+            last_week = now - timedelta(days=7)
+            return [_start_of_week(last_week), _end_of_week(last_week)]
+        if token == "this_month":
+            return [_start_of_month(now), _end_of_month(now)]
+        if token == "last_month":
+            last_month = (now.replace(day=1) - timedelta(days=1))
+            return [_start_of_month(last_month), _end_of_month(last_month)]
+        if token == "this_year":
+            return [_start_of_year(now), _end_of_year(now)]
+        if token == "last_year":
+            last_year = now.replace(year=now.year - 1)
+            return [_start_of_year(last_year), _end_of_year(last_year)]
+
+        match = RELATIVE_RANGE_PATTERN.match(token)
+        if match:
+            direction, count_raw = match.groups()
+            try:
+                count = int(count_raw)
+            except ValueError:
+                return None
+            if count <= 0:
+                return None
+            if direction in {"past", "last"}:
+                start = _start_of_day(now - timedelta(days=count - 1))
+                end = _end_of_day(now)
+            else:
+                start = _start_of_day(now)
+                end = _end_of_day(now + timedelta(days=count - 1))
+            return [start, end]
+
+        epoch_value = _parse_epoch(token)
+        if epoch_value is not None:
+            timestamp = _epoch_to_datetime(epoch_value)
+            return [_start_of_day(timestamp), _end_of_day(timestamp)]
+
+        try:
+            timestamp = normalize_utc(token)
+        except ValueError:
+            return None
+        return [_start_of_day(timestamp), _end_of_day(timestamp)]
+
+    return None
+
+
+def _clean_filter_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.strip()
+
+    if isinstance(value, list):
+        cleaned: list[Any] = []
+        for entry in value:
+            if isinstance(entry, str):
+                trimmed = entry.strip()
+                if not trimmed:
+                    continue
+                cleaned.append(trimmed)
+            else:
+                cleaned.append(entry)
+        return cleaned
+
+    return value
+
+
+def _should_skip_filter(operator: str, value: Any) -> bool:
+    if operator in {FilterOperator.IS_EMPTY.value, FilterOperator.IS_NOT_EMPTY.value}:
+        return False
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value == ""
+    if isinstance(value, list):
+        return len(value) == 0
+    return False
+
+
+def _normalize_filter_raw(raw: dict[str, Any]) -> dict[str, Any] | None:
+    raw_operator = raw.get("operator")
+    if not isinstance(raw_operator, str):
+        return raw
+
+    normalized_operator = OPERATOR_ALIASES.get(raw_operator, raw_operator)
+    if isinstance(normalized_operator, FilterOperator):
+        normalized_operator_value = normalized_operator.value
+    else:
+        normalized_operator_value = normalized_operator
+    raw_value = _clean_filter_value(raw.get("value"))
+
+    if raw_operator == "isRelativeToToday":
+        relative_range = _resolve_relative_date_range(raw_value)
+        if relative_range is None:
+            return None
+        raw_value = relative_range
+
+    if normalized_operator_value in {FilterOperator.IS_EMPTY.value, FilterOperator.IS_NOT_EMPTY.value}:
+        raw_value = None
+
+    if normalized_operator_value == FilterOperator.BETWEEN.value:
+        if (
+            not isinstance(raw_value, list)
+            or len(raw_value) != 2
+            or any(entry is None or (isinstance(entry, str) and not entry) for entry in raw_value)
+        ):
+            return None
+
+    if normalized_operator_value in {FilterOperator.IN.value, FilterOperator.NOT_IN.value}:
+        if not isinstance(raw_value, list) or len(raw_value) == 0:
+            return None
+
+    if _should_skip_filter(normalized_operator_value, raw_value):
+        return None
+
+    return {**raw, "operator": normalized_operator_value, "value": raw_value}
 
 
 def parse_filter_items(
@@ -123,8 +328,11 @@ def parse_filter_items(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Filter #{index + 1} must be an object",
             )
+        normalized = _normalize_filter_raw(raw)
+        if normalized is None:
+            continue
         try:
-            item = FilterItem.model_validate(raw)
+            item = FilterItem.model_validate(normalized)
         except ValidationError as exc:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -378,17 +586,24 @@ def _coerce_scalar(value: Any | None, field: FilterField) -> Any | None:
     if value_type == FilterValueType.DATETIME:
         if isinstance(value, datetime):
             return normalize_utc(value)
+        if isinstance(value, (int, float)):
+            return _epoch_to_datetime(float(value))
         if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                epoch_value = _parse_epoch(trimmed)
+                if epoch_value is not None:
+                    return _epoch_to_datetime(epoch_value)
             try:
                 return normalize_utc(value)
             except ValueError as exc:
                 raise HTTPException(
                     status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=f"Filter '{field.id}' expects an ISO datetime value",
+                    detail=f"Filter '{field.id}' expects an ISO datetime or epoch value",
                 ) from exc
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Filter '{field.id}' expects an ISO datetime value",
+            detail=f"Filter '{field.id}' expects an ISO datetime or epoch value",
         )
 
     if value_type == FilterValueType.ENUM:

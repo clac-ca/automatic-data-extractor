@@ -1,7 +1,9 @@
 import type { PresenceParticipant } from "@schema/presence";
 
-import { AvatarStack, type AvatarStackItem } from "@/components/ui/avatar-stack";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarGroup } from "@/components/ui/avatar-group";
 import { Badge } from "@/components/ui/badge";
+import { getInitials } from "@/lib/format";
 
 export function DocumentPresenceBadges({
   participants,
@@ -10,11 +12,15 @@ export function DocumentPresenceBadges({
 }) {
   if (!participants.length) return null;
 
-  const avatarItems = participants.map((participant) => ({
-    id: participant.user_id,
-    name: participant.display_name ?? undefined,
-    email: participant.email ?? undefined,
-  })) satisfies AvatarStackItem[];
+  const avatarItems = participants.map((participant) => {
+    const name = participant.display_name ?? undefined;
+    const email = participant.email ?? undefined;
+    return {
+      id: participant.user_id,
+      label: name || email || "Participant",
+      initials: getInitials(name, email),
+    };
+  });
 
   return (
     <div className="mt-1 flex items-center gap-2">
@@ -24,7 +30,15 @@ export function DocumentPresenceBadges({
       >
         Viewing
       </Badge>
-      <AvatarStack items={avatarItems} size="xs" max={3} />
+      <AvatarGroup size={24} max={3}>
+        {avatarItems.map((item) => (
+          <Avatar key={item.id} aria-hidden="true" title={item.label}>
+            <AvatarFallback className="text-[10px] font-semibold text-foreground">
+              {item.initials}
+            </AvatarFallback>
+          </Avatar>
+        ))}
+      </AvatarGroup>
     </div>
   );
 }

@@ -64,7 +64,7 @@ def list_query_params(
     ),
     sort: str | None = Query(
         None,
-        description="CSV list of sort keys; prefix '-' for DESC.",
+        description="JSON array of {id, desc}.",
     ),
     filters: str | None = Query(
         None,

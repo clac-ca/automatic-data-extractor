@@ -2,7 +2,9 @@ export type FilterOperator =
   | "eq"
   | "ne"
   | "in"
+  | "inArray"
   | "notIn"
+  | "notInArray"
   | "lt"
   | "lte"
   | "gt"
@@ -11,7 +13,9 @@ export type FilterOperator =
   | "notILike"
   | "isEmpty"
   | "isNotEmpty"
-  | "between";
+  | "between"
+  | "isBetween"
+  | "isRelativeToToday";
 
 export type FilterJoinOperator = "and" | "or";
 
@@ -50,7 +54,7 @@ export function buildListQuery(options: {
   page?: number;
   perPage?: number;
   sort?: string | null;
-  filters?: FilterItem[];
+  filters?: FilterItem[] | string | null;
   joinOperator?: FilterJoinOperator;
   q?: string | null;
 }): ListQueryParams {
@@ -64,7 +68,10 @@ export function buildListQuery(options: {
   if (options.sort) {
     query.sort = options.sort;
   }
-  const encoded = encodeFilters(options.filters);
+  const encoded =
+    typeof options.filters === "string"
+      ? options.filters.trim()
+      : encodeFilters(options.filters);
   if (encoded) {
     query.filters = encoded;
     if (options.joinOperator) {

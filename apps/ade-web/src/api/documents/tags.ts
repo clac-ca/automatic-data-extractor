@@ -1,5 +1,5 @@
 import { client } from "@api/client";
-import type { ListQueryParams } from "@api/listing";
+import { buildListQuery, type ListQueryParams } from "@api/listing";
 import type { components } from "@schema";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
@@ -95,10 +95,16 @@ export async function fetchTagCatalog(
   query: TagCatalogQuery = {},
   signal?: AbortSignal,
 ): Promise<TagCatalogPage> {
+  const requestQuery = buildListQuery({
+    page: query.page,
+    perPage: query.perPage,
+    sort: query.sort ?? null,
+    q: query.q ?? null,
+  });
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/tags", {
     params: {
       path: { workspaceId },
-      query,
+      query: requestQuery,
     },
     signal,
   });

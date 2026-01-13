@@ -59,6 +59,16 @@ def test_sort_helpers_apply_defaults_and_tie_breakers() -> None:
     assert order[-1] is ID_FIELD[1]
 
 
+def test_parse_sort_accepts_json_sort_items() -> None:
+    raw = '[{"id":"createdAt","desc":false},{"id":"status","desc":true}]'
+    assert parse_sort(raw) == ["createdAt", "-status"]
+
+
+def test_parse_sort_rejects_csv_input() -> None:
+    with pytest.raises(HTTPException):
+        parse_sort("-createdAt,status")
+
+
 def test_sort_helpers_reject_unknown_fields() -> None:
     with pytest.raises(HTTPException):
         resolve_sort(["-unknown"], allowed=SORT_FIELDS, default=DEFAULT_SORT, id_field=ID_FIELD)

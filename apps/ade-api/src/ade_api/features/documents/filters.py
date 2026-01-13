@@ -51,9 +51,24 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
                 FilterOperator.NE,
                 FilterOperator.IN,
                 FilterOperator.NOT_IN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.ENUM,
             enum_type=DocumentStatus,
+        ),
+        FilterField(
+            id="name",
+            column=Document.original_filename,
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
+                FilterOperator.ILIKE,
+                FilterOperator.NOT_ILIKE,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
+            value_type=FilterValueType.STRING,
         ),
         FilterField(
             id="runStatus",
@@ -63,6 +78,8 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
                 FilterOperator.NE,
                 FilterOperator.IN,
                 FilterOperator.NOT_IN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.ENUM,
             enum_type=RunStatus,
@@ -70,7 +87,13 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         FilterField(
             id="fileType",
             column=Document.original_filename,
-            operators={FilterOperator.EQ, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
             value_type=FilterValueType.STRING,
         ),
         FilterField(
@@ -91,6 +114,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
             operators={
                 FilterOperator.EQ,
                 FilterOperator.IN,
+                FilterOperator.NOT_IN,
                 FilterOperator.IS_EMPTY,
                 FilterOperator.IS_NOT_EMPTY,
             },
@@ -112,11 +136,15 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
             id="createdAt",
             column=Document.created_at,
             operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
                 FilterOperator.LT,
                 FilterOperator.LTE,
                 FilterOperator.GT,
                 FilterOperator.GTE,
                 FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.DATETIME,
         ),
@@ -124,11 +152,15 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
             id="updatedAt",
             column=Document.updated_at,
             operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
                 FilterOperator.LT,
                 FilterOperator.LTE,
                 FilterOperator.GT,
                 FilterOperator.GTE,
                 FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.DATETIME,
         ),
@@ -136,11 +168,15 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
             id="activityAt",
             column=_activity_at_expr(),
             operators={
+                FilterOperator.EQ,
+                FilterOperator.NE,
                 FilterOperator.LT,
                 FilterOperator.LTE,
                 FilterOperator.GT,
                 FilterOperator.GTE,
                 FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.DATETIME,
         ),
@@ -149,6 +185,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
             column=Document.byte_size,
             operators={
                 FilterOperator.EQ,
+                FilterOperator.NE,
                 FilterOperator.IN,
                 FilterOperator.NOT_IN,
                 FilterOperator.LT,
@@ -156,6 +193,8 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
                 FilterOperator.GT,
                 FilterOperator.GTE,
                 FilterOperator.BETWEEN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.INT,
         ),
@@ -168,7 +207,13 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         FilterField(
             id="source",
             column=Document.source,
-            operators={FilterOperator.EQ, FilterOperator.IN, FilterOperator.NOT_IN},
+            operators={
+                FilterOperator.EQ,
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+                FilterOperator.IS_EMPTY,
+                FilterOperator.IS_NOT_EMPTY,
+            },
             value_type=FilterValueType.ENUM,
             enum_type=DocumentSource,
         ),
@@ -301,19 +346,6 @@ def apply_document_filters(
             if parsed.operator == FilterOperator.NOT_IN:
                 predicate = ~predicate
             predicates.append(predicate)
-            continue
-
-        if filter_id == "assigneeId" and parsed.operator == FilterOperator.IN:
-            values = parsed.value if isinstance(parsed.value, list) else [parsed.value]
-            include_unassigned = any(value is None for value in values)
-            ids = [value for value in values if value is not None]
-            predicates_for_filter = []
-            if ids:
-                predicates_for_filter.append(Document.assignee_user_id.in_(ids))
-            if include_unassigned:
-                predicates_for_filter.append(Document.assignee_user_id.is_(None))
-            if predicates_for_filter:
-                predicates.append(or_(*predicates_for_filter))
             continue
 
         if filter_id == "hasOutput":
