@@ -1,4 +1,4 @@
-export const DEFAULT_PAGE_SIZE = 50;
+export const DEFAULT_PAGE_SIZE = 10;
 
 export const DOCUMENTS_SORT_IDS = new Set([
   "id",
