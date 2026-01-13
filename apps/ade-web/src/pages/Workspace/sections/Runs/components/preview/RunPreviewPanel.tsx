@@ -4,9 +4,9 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 
-import { RUN_STATUS_META } from "../constants";
-import { computeMappingQuality, formatNumber, formatQuality, formatScore } from "../utils";
-import type { RunColumn, RunField, RunMetrics, RunRecord } from "../types";
+import { RUN_STATUS_META } from "../../constants";
+import { computeMappingQuality, formatNumber, formatQuality, formatScore } from "../../utils";
+import type { RunColumn, RunField, RunMetrics, RunRecord } from "../../types";
 
 type RunPreviewTab = "summary" | "metrics" | "fields" | "columns";
 

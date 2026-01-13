@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
-import type { RunsCounts } from "../types";
-import { formatNumber } from "../utils";
+import type { RunsCounts } from "../../types";
+import { formatNumber } from "../../utils";
 
 export function RunsMetrics({ counts, rangeLabel }: { counts: RunsCounts; rangeLabel: string }) {
   const completed = counts.success + counts.failed;

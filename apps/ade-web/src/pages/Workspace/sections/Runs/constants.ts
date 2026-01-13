@@ -1,5 +1,25 @@
 import type { RunStatus } from "@schema";
 
+export const DEFAULT_PAGE_SIZE = 50;
+
+export const RUNS_SORT_IDS = new Set([
+  "id",
+  "status",
+  "createdAt",
+  "startedAt",
+  "completedAt",
+]);
+
+export const RUNS_FILTER_IDS = new Set([
+  "status",
+  "configurationId",
+  "createdAt",
+  "startedAt",
+  "completedAt",
+  "fileType",
+  "hasOutput",
+]);
+
 export const RUN_STATUS_META: Record<
   RunStatus,
   {

@@ -1,5 +1,5 @@
 import type { RunResource } from "@schema";
-import type { RunMetrics, RunRecord, RunsCounts } from "./types";
+import type { RunFileType, RunMetrics, RunRecord, RunsCounts } from "./types";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -47,13 +47,41 @@ export function formatTimestamp(value: string | null | undefined): string {
   return date.toLocaleString();
 }
 
-export function formatResultLabel(run: RunRecord): string {
-  if (run.warnings === 0 && run.errors === 0) return "Clean";
-  if (typeof run.errors === "number" && run.errors > 0) return `${run.errors} errors`;
-  if (typeof run.warnings === "number") return `${run.warnings} warnings`;
-  return "—";
+export function fileTypeLabel(type: RunFileType) {
+  switch (type) {
+    case "xlsx":
+      return "XLSX";
+    case "xls":
+      return "XLS";
+    case "csv":
+      return "CSV";
+    case "pdf":
+      return "PDF";
+    default:
+      return "File";
+  }
 }
 
+function fileExtension(name: string) {
+  const match = name.toLowerCase().match(/\\.([a-z0-9]+)$/);
+  return match?.[1] ?? "";
+}
+
+export function inferFileType(name: string | null | undefined, contentType?: string | null): RunFileType {
+  const normalizedName = name ?? "";
+  const ext = fileExtension(normalizedName);
+  if (ext === "xlsx") return "xlsx";
+  if (ext === "xls") return "xls";
+  if (ext === "csv") return "csv";
+  if (ext === "pdf") return "pdf";
+
+  const ct = (contentType ?? "").toLowerCase();
+  if (ct.includes("spreadsheetml")) return "xlsx";
+  if (ct.includes("ms-excel")) return "xls";
+  if (ct.includes("csv")) return "csv";
+  if (ct.includes("pdf")) return "pdf";
+  return "unknown";
+}
 
 export function buildCounts(runs: RunRecord[]): RunsCounts {
   let warningKnown = false;
@@ -96,6 +124,7 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
 export function buildRunRecord(run: RunResource): RunRecord {
   const inputName = run.input?.filename ?? run.input?.document_id ?? `Run ${run.id}`;
   const outputName = run.output?.filename ?? null;
+  const fileType = inferFileType(run.input?.filename, run.input?.content_type ?? null);
   const startedAtLabel = formatTimestamp(run.started_at ?? run.created_at);
   const durationLabel = formatDuration(run.duration_seconds ?? null, run.status);
   const configLabel = run.configuration_id ?? "—";
@@ -109,6 +138,7 @@ export function buildRunRecord(run: RunResource): RunRecord {
     configLabel,
     startedAtLabel,
     durationLabel,
+    fileType,
     rows: null,
     warnings: null,
     errors: null,

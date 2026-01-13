@@ -1,8 +1,19 @@
 import type { components, RunResource, RunStatus } from "@schema";
+import type { FilterItem, FilterJoinOperator } from "@api/listing";
 
 export type RunMetrics = components["schemas"]["RunMetricsResource"];
 export type RunField = components["schemas"]["RunFieldResource"];
 export type RunColumn = components["schemas"]["RunColumnResource"];
+export type RunListRow = RunResource;
+export type RunFileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
+
+export type RunsListParams = {
+  page: number;
+  perPage: number;
+  sort: string | null;
+  filters: FilterItem[] | null;
+  joinOperator: FilterJoinOperator | null;
+};
 
 export interface RunsCounts {
   readonly total: number;
@@ -23,6 +34,7 @@ export interface RunRecord {
   readonly configLabel: string;
   readonly startedAtLabel: string;
   readonly durationLabel: string;
+  readonly fileType: RunFileType;
   readonly rows: number | null;
   readonly warnings: number | null;
   readonly errors: number | null;
