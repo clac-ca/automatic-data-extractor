@@ -32,7 +32,12 @@ function createSimpleFilterParsers() {
   const parsers: Record<string, SingleParser<string> | SingleParser<string[]>> = {};
 
   Object.entries(DOCUMENTS_SIMPLE_FILTERS).forEach(([id, variant]) => {
-    if (variant === "multiSelect" || variant === "select") {
+    if (
+      variant === "multiSelect" ||
+      variant === "select" ||
+      variant === "dateRange" ||
+      variant === "range"
+    ) {
       parsers[id] = parseAsArrayOf(parseAsString, ",");
     } else {
       parsers[id] = parseAsString;
@@ -89,9 +94,13 @@ export function useDocumentsListParams({
       if (Array.isArray(rawValue)) {
         const values = rawValue.filter(Boolean);
         if (!values.length) return;
+        if ((variant === "dateRange" || variant === "range") && values.length < 2) return;
         items.push({
           id,
-          operator: getDefaultFilterOperator(variant),
+          operator:
+            variant === "dateRange" || variant === "range"
+              ? "isBetween"
+              : getDefaultFilterOperator(variant),
           value: values,
         });
         return;

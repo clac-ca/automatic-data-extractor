@@ -41,4 +41,5 @@ export const DOCUMENTS_SIMPLE_FILTERS: Record<string, FilterVariant> = {
   assigneeId: "multiSelect",
   tags: "multiSelect",
   runStatus: "multiSelect",
+  createdAt: "dateRange",
 };

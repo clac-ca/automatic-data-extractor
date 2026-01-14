@@ -306,7 +306,7 @@ export function useDocumentsColumns({
           variant: "dateRange",
         },
         size: 150,
-        enableColumnFilter: enableAdvancedOnly,
+        enableColumnFilter: true,
         enableHiding: true,
       },
       {
