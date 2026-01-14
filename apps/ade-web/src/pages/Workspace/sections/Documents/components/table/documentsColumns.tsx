@@ -15,6 +15,7 @@ import { DocumentStatusCell } from "./cells/DocumentStatusCell";
 import { TagsCell } from "./cells/TagsCell";
 
 export type DocumentsColumnContext = {
+  filterMode: "simple" | "advanced";
   people: WorkspacePerson[];
   tagOptions: string[];
   rowPresence?: Map<string, PresenceParticipant[]>;
@@ -29,6 +30,7 @@ export type DocumentsColumnContext = {
 };
 
 export function useDocumentsColumns({
+  filterMode,
   people,
   tagOptions,
   rowPresence,
@@ -41,6 +43,7 @@ export function useDocumentsColumns({
   onDownloadOriginal,
   isRowActionPending,
 }: DocumentsColumnContext) {
+  const enableAdvancedOnly = filterMode === "advanced";
   const statusOptions = useMemo(
     () =>
       (["uploading", "uploaded", "processing", "processed", "failed", "archived"] as DocumentStatus[]).map(
@@ -141,7 +144,7 @@ export function useDocumentsColumns({
           variant: "text",
         },
         size: 260,
-        enableColumnFilter: true,
+        enableColumnFilter: enableAdvancedOnly,
         enableHiding: false,
       },
       {
@@ -247,7 +250,7 @@ export function useDocumentsColumns({
           unit: "bytes",
         },
         size: 110,
-        enableColumnFilter: true,
+        enableColumnFilter: enableAdvancedOnly,
         enableHiding: true,
       },
       {
@@ -289,7 +292,7 @@ export function useDocumentsColumns({
           variant: "boolean",
         },
         size: 110,
-        enableColumnFilter: true,
+        enableColumnFilter: enableAdvancedOnly,
         enableSorting: false,
         enableHiding: true,
       },
@@ -300,10 +303,10 @@ export function useDocumentsColumns({
         cell: ({ row }) => formatTimestamp(row.getValue<string>("createdAt")),
         meta: {
           label: "Created",
-          variant: "date",
+          variant: "dateRange",
         },
         size: 150,
-        enableColumnFilter: true,
+        enableColumnFilter: enableAdvancedOnly,
         enableHiding: true,
       },
       {
@@ -313,10 +316,10 @@ export function useDocumentsColumns({
         cell: ({ row }) => formatTimestamp(row.getValue<string>("updatedAt")),
         meta: {
           label: "Updated",
-          variant: "date",
+          variant: "dateRange",
         },
         size: 150,
-        enableColumnFilter: true,
+        enableColumnFilter: enableAdvancedOnly,
         enableHiding: true,
       },
       {
@@ -326,10 +329,10 @@ export function useDocumentsColumns({
         cell: ({ row }) => formatTimestamp(row.getValue<string>("activityAt")),
         meta: {
           label: "Activity",
-          variant: "date",
+          variant: "dateRange",
         },
         size: 150,
-        enableColumnFilter: true,
+        enableColumnFilter: enableAdvancedOnly,
         enableHiding: true,
       },
       {
@@ -374,6 +377,7 @@ export function useDocumentsColumns({
       },
     ],
     [
+      enableAdvancedOnly,
       fileTypeOptions,
       isRowActionPending,
       memberOptions,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import { parseAsStringEnum, useQueryState } from "nuqs";
 
 import { resolveApiUrl } from "@api/client";
 import {
@@ -81,8 +82,13 @@ export function DocumentsTableView({
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
 
+  const [filterFlag, setFilterFlag] = useQueryState(
+    "filterFlag",
+    parseAsStringEnum(["advancedFilters"]).withOptions({ clearOnDefault: true }),
+  );
+  const filterMode = filterFlag === "advancedFilters" ? "advanced" : "simple";
   const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
-  const { page, perPage, sort, filters, joinOperator } = useDocumentsListParams();
+  const { page, perPage, sort, filters, joinOperator } = useDocumentsListParams({ filterMode });
   const documentsView = useDocumentsView({
     workspaceId,
     page,
@@ -107,6 +113,10 @@ export function DocumentsTableView({
     cursor,
     setCursor,
   } = documentsView;
+
+  const onToggleFilterMode = useCallback(() => {
+    setFilterFlag(filterFlag === "advancedFilters" ? null : "advancedFilters");
+  }, [filterFlag, setFilterFlag]);
 
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
@@ -557,6 +567,7 @@ export function DocumentsTableView({
   });
 
   const columns = useDocumentsColumns({
+    filterMode,
     people,
     tagOptions,
     rowPresence,
@@ -657,6 +668,8 @@ export function DocumentsTableView({
         data={documents}
         pageCount={pageCount}
         columns={columns}
+        filterMode={filterMode}
+        onToggleFilterMode={onToggleFilterMode}
         toolbarActions={toolbarContent}
       />
       <Dialog

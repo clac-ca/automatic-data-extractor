@@ -1,4 +1,4 @@
-import type { ExtendedColumnSort } from "@/types/data-table";
+import type { ExtendedColumnSort, FilterVariant } from "@/types/data-table";
 
 import type { DocumentListRow } from "./types";
 
@@ -33,3 +33,12 @@ export const DOCUMENTS_FILTER_IDS = new Set([
   "byteSize",
   "hasOutput",
 ]);
+
+export const DOCUMENTS_SIMPLE_FILTERS: Record<string, FilterVariant> = {
+  status: "multiSelect",
+  fileType: "multiSelect",
+  uploaderId: "multiSelect",
+  assigneeId: "multiSelect",
+  tags: "multiSelect",
+  runStatus: "multiSelect",
+};
