@@ -22,6 +22,7 @@ export function useDocumentsView({
   page,
   perPage,
   sort,
+  q,
   filters,
   joinOperator,
   enabled = true,
@@ -30,6 +31,7 @@ export function useDocumentsView({
   page: number;
   perPage: number;
   sort: string | null;
+  q: string | null;
   filters: FilterItem[] | null;
   joinOperator: FilterJoinOperator | null;
   enabled?: boolean;
@@ -41,13 +43,14 @@ export function useDocumentsView({
     () => (filters?.length ? JSON.stringify(filters) : ""),
     [filters],
   );
+  const qKey = useMemo(() => q ?? "", [q]);
   const cursorKey = useMemo(
-    () => [workspaceId, perPage, sort ?? "", filtersKey, joinOperator ?? ""].join("|"),
-    [workspaceId, perPage, sort, filtersKey, joinOperator],
+    () => [workspaceId, perPage, sort ?? "", qKey, filtersKey, joinOperator ?? ""].join("|"),
+    [workspaceId, perPage, sort, qKey, filtersKey, joinOperator],
   );
   const queryKey = useMemo(
-    () => ["documents", workspaceId, page, perPage, sort ?? "", filtersKey, joinOperator ?? ""],
-    [workspaceId, page, perPage, sort, filtersKey, joinOperator],
+    () => ["documents", workspaceId, page, perPage, sort ?? "", qKey, filtersKey, joinOperator ?? ""],
+    [workspaceId, page, perPage, sort, qKey, filtersKey, joinOperator],
   );
 
   const cursorPager = useCursorPager<DocumentListRow>({
@@ -62,6 +65,7 @@ export function useDocumentsView({
           limit,
           cursor,
           sort,
+          q,
           filters,
           joinOperator: joinOperator ?? undefined,
           includeTotal,

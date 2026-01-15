@@ -11,7 +11,6 @@ from ade_api.models import (
     ConfigurationStatus,
     Document,
     DocumentSource,
-    DocumentStatus,
     Run,
     RunStatus,
 )
@@ -52,7 +51,6 @@ def make_document(
         sha256="deadbeef",
         stored_uri=stored_uri,
         attributes={},
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=utc_now(),
     )

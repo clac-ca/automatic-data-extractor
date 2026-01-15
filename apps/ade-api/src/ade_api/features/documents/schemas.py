@@ -12,11 +12,7 @@ from pydantic import Field, field_validator, model_validator
 from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
-from ade_api.models import (
-    DocumentSource,
-    DocumentStatus,
-    RunStatus,
-)
+from ade_api.models import DocumentSource, RunStatus
 
 
 class DocumentFileType(str, Enum):
@@ -56,12 +52,12 @@ class DocumentOut(BaseSchema):
     )
     content_type: str | None = Field(default=None, alias="contentType")
     byte_size: int = Field(alias="byteSize")
+    comment_count: int = Field(default=0, alias="commentCount")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         alias="attributes",
         serialization_alias="metadata",
     )
-    status: DocumentStatus
     source: DocumentSource
     expires_at: datetime = Field(alias="expiresAt")
     activity_at: datetime | None = Field(default=None, alias="activityAt")
@@ -97,14 +93,14 @@ class DocumentOut(BaseSchema):
         serialization_alias="assignee",
         description="Summary of the assigned user when available.",
     )
-    latest_run: DocumentRunSummary | None = Field(
+    last_run: DocumentRunSummary | None = Field(
         default=None,
-        alias="latestRun",
-        description="Latest run execution associated with the document when available.",
+        alias="lastRun",
+        description="Last run created for the document when available.",
     )
-    latest_successful_run: DocumentRunSummary | None = Field(
+    last_successful_run: DocumentRunSummary | None = Field(
         default=None,
-        alias="latestSuccessfulRun",
+        alias="lastSuccessfulRun",
         description="Latest successful run execution associated with the document when available.",
     )
     latest_result: DocumentResultSummary | None = Field(
@@ -242,23 +238,6 @@ class DocumentBatchDeleteResponse(BaseSchema):
     document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
 
 
-class DocumentBatchArchiveRequest(BaseSchema):
-    """Payload for archiving or restoring multiple documents."""
-
-    document_ids: list[UUIDStr] = Field(
-        ...,
-        min_length=1,
-        alias="documentIds",
-        description="Documents to archive or restore (all-or-nothing).",
-    )
-
-
-class DocumentBatchArchiveResponse(BaseSchema):
-    """Response envelope for batch archive or restore operations."""
-
-    documents: list[DocumentOut] = Field(default_factory=list)
-
-
 class TagCatalogItem(BaseSchema):
     """Tag entry with document counts."""
 
@@ -270,11 +249,42 @@ class TagCatalogPage(CursorPage[TagCatalogItem]):
     """Cursor-based tag catalog."""
 
 
+class DocumentRunPhase(str, Enum):
+    """UI-facing phase derived from run + environment state."""
+
+    QUEUED = "queued"
+    BUILDING = "building"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class DocumentRunPhaseReason(str, Enum):
+    """Reason for a derived run phase when queued but blocked by env readiness."""
+
+    ENVIRONMENT_MISSING = "environment_missing"
+    ENVIRONMENT_QUEUED = "environment_queued"
+    ENVIRONMENT_BUILDING = "environment_building"
+    ENVIRONMENT_FAILED = "environment_failed"
+
+
 class DocumentRunSummary(BaseSchema):
     """Minimal representation of a run associated with a document."""
 
     id: UUIDStr = Field(description="Run identifier.")
     status: RunStatus
+    phase: DocumentRunPhase = Field(
+        description="Derived phase used by the documents UI.",
+    )
+    phase_reason: DocumentRunPhaseReason | None = Field(
+        default=None,
+        alias="phaseReason",
+        description="Optional reason for a derived phase when the run is blocked.",
+    )
+    created_at: datetime = Field(
+        alias="createdAt",
+        description="Timestamp for when the run was created.",
+    )
     started_at: datetime | None = Field(
         default=None,
         alias="startedAt",
@@ -307,11 +317,11 @@ class DocumentListRow(BaseSchema):
     workspace_id: UUIDStr = Field(alias="workspaceId")
     name: str = Field(description="Display name mapped from the original filename.")
     file_type: DocumentFileType = Field(alias="fileType")
-    status: DocumentStatus
     uploader: UserSummary | None = None
     assignee: UserSummary | None = None
     tags: list[str] = Field(default_factory=list)
     byte_size: int = Field(alias="byteSize")
+    comment_count: int = Field(default=0, alias="commentCount")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     activity_at: datetime = Field(alias="activityAt")
@@ -320,16 +330,59 @@ class DocumentListRow(BaseSchema):
         default=None,
         description="Weak ETag for optimistic concurrency checks.",
     )
-    latest_run: DocumentRunSummary | None = Field(default=None, alias="latestRun")
-    latest_successful_run: DocumentRunSummary | None = Field(
+    last_run: DocumentRunSummary | None = Field(default=None, alias="lastRun")
+    last_successful_run: DocumentRunSummary | None = Field(
         default=None,
-        alias="latestSuccessfulRun",
+        alias="lastSuccessfulRun",
     )
     latest_result: DocumentResultSummary | None = Field(default=None, alias="latestResult")
 
 
 class DocumentListPage(CursorPage[DocumentListRow]):
     """Cursor-based envelope of document list rows."""
+
+
+class DocumentCommentCreate(BaseSchema):
+    """Payload for creating a document comment."""
+
+    body: str = Field(min_length=1, max_length=4000)
+    mentions: list[UUIDStr] | None = Field(
+        default=None,
+        description="Optional list of mentioned user IDs.",
+    )
+
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("body is required")
+        return stripped
+
+
+class DocumentCommentOut(BaseSchema):
+    """Serialized representation of a document comment."""
+
+    id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
+    document_id: UUIDStr = Field(alias="documentId")
+    body: str
+    author: UserSummary | None = Field(
+        default=None,
+        alias="author_user",
+        serialization_alias="author",
+    )
+    mentions: list[UserSummary] = Field(
+        default_factory=list,
+        alias="mentioned_users",
+        serialization_alias="mentions",
+    )
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class DocumentCommentPage(CursorPage[DocumentCommentOut]):
+    """Cursor-based envelope of document comments."""
 
 
 class DocumentChangeEntry(BaseSchema):
@@ -384,8 +437,6 @@ class DocumentSheet(BaseSchema):
 
 
 __all__ = [
-    "DocumentBatchArchiveRequest",
-    "DocumentBatchArchiveResponse",
     "DocumentBatchDeleteRequest",
     "DocumentBatchDeleteResponse",
     "DocumentBatchTagsRequest",
@@ -396,7 +447,12 @@ __all__ = [
     "DocumentListPage",
     "DocumentListRow",
     "DocumentOut",
+    "DocumentCommentCreate",
+    "DocumentCommentOut",
+    "DocumentCommentPage",
     "DocumentResultSummary",
+    "DocumentRunPhase",
+    "DocumentRunPhaseReason",
     "DocumentRunSummary",
     "DocumentSheet",
     "DocumentTagsPatch",

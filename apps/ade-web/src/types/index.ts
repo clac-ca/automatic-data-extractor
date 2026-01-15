@@ -27,6 +27,11 @@ export type RunBatchCreateRequest = GeneratedComponents["schemas"]["RunBatchCrea
 export type RunBatchCreateResponse = GeneratedComponents["schemas"]["RunBatchCreateResponse"];
 export type { RunSummary } from "./runSummary";
 
+// Document comments
+export type DocumentCommentCreate = GeneratedComponents["schemas"]["DocumentCommentCreate"];
+export type DocumentCommentOut = GeneratedComponents["schemas"]["DocumentCommentOut"];
+export type DocumentCommentPage = GeneratedComponents["schemas"]["DocumentCommentPage"];
+
 // RBAC and workspace types
 export type ScopeType = GeneratedComponents["schemas"]["ScopeType"];
 export type RoleOut = GeneratedComponents["schemas"]["RoleOut"];

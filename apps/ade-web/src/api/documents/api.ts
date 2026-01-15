@@ -12,7 +12,6 @@ export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "
 export type DocumentPageResult = DocumentListPage;
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
-export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
@@ -253,66 +252,4 @@ export async function deleteWorkspaceDocumentsBatch(
 
   if (!data) throw new Error("Expected delete response.");
   return data.documentIds ?? [];
-}
-
-export async function archiveWorkspaceDocument(
-  workspaceId: string,
-  documentId: string,
-  options: { ifMatch?: string | null } = {},
-): Promise<DocumentRecord> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
-    params: { path: { workspaceId, documentId } },
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-  });
-
-  if (!data) throw new Error("Expected updated document record.");
-  return data;
-}
-
-export async function restoreWorkspaceDocument(
-  workspaceId: string,
-  documentId: string,
-  options: { ifMatch?: string | null } = {},
-): Promise<DocumentRecord> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
-    params: { path: { workspaceId, documentId } },
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-  });
-
-  if (!data) throw new Error("Expected updated document record.");
-  return data;
-}
-
-export async function archiveWorkspaceDocumentsBatch(
-  workspaceId: string,
-  documentIds: string[],
-): Promise<DocumentRecord[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
-    params: { path: { workspaceId } },
-    body: { documentIds },
-  });
-
-  if (!data) throw new Error("Expected updated document records.");
-  return data.documents ?? [];
-}
-
-export async function restoreWorkspaceDocumentsBatch(
-  workspaceId: string,
-  documentIds: string[],
-): Promise<DocumentRecord[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
-    params: { path: { workspaceId } },
-    body: { documentIds },
-  });
-
-  if (!data) throw new Error("Expected updated document records.");
-  return data.documents ?? [];
 }

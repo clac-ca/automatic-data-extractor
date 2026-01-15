@@ -754,74 +754,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/batch/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Archive multiple documents */
-        post: operations["archive_documents_batch_endpoint_api_v1_workspaces__workspaceId__documents_batch_archive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/batch/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore multiple documents from the archive */
-        post: operations["restore_documents_batch_endpoint_api_v1_workspaces__workspaceId__documents_batch_restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Archive a document */
-        post: operations["archive_document_endpoint_api_v1_workspaces__workspaceId__documents__documentId__archive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore a document from the archive */
-        post: operations["restore_document_endpoint_api_v1_workspaces__workspaceId__documents__documentId__restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags": {
         parameters: {
             query?: never;
@@ -851,6 +783,24 @@ export type paths = {
         get: operations["read_document_list_row_api_v1_workspaces__workspaceId__documents__documentId__listrow_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document comments */
+        get: operations["list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get"];
+        put?: never;
+        /** Create a document comment */
+        post: operations["create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1891,11 +1841,11 @@ export type components = {
             /** Hasmore */
             hasMore: boolean;
             /** Nextcursor */
-            nextCursor: string | null;
+            nextCursor?: string | null;
             /** Totalincluded */
             totalIncluded: boolean;
             /** Totalcount */
-            totalCount: number | null;
+            totalCount?: number | null;
             /** Changescursor */
             changesCursor?: string | null;
         };
@@ -1905,25 +1855,6 @@ export type components = {
             path: string;
             /** Created */
             created: boolean;
-        };
-        /**
-         * DocumentBatchArchiveRequest
-         * @description Payload for archiving or restoring multiple documents.
-         */
-        DocumentBatchArchiveRequest: {
-            /**
-             * Documentids
-             * @description Documents to archive or restore (all-or-nothing).
-             */
-            documentIds: string[];
-        };
-        /**
-         * DocumentBatchArchiveResponse
-         * @description Response envelope for batch archive or restore operations.
-         */
-        DocumentBatchArchiveResponse: {
-            /** Documents */
-            documents?: components["schemas"]["DocumentOut"][];
         };
         /**
          * DocumentBatchDeleteRequest
@@ -2012,6 +1943,71 @@ export type components = {
             nextCursor: string;
         };
         /**
+         * DocumentCommentCreate
+         * @description Payload for creating a document comment.
+         */
+        DocumentCommentCreate: {
+            /** Body */
+            body: string;
+            /**
+             * Mentions
+             * @description Optional list of mentioned user IDs.
+             */
+            mentions?: string[] | null;
+        };
+        /**
+         * DocumentCommentOut
+         * @description Serialized representation of a document comment.
+         */
+        DocumentCommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /**
+             * Workspaceid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            workspaceId: string;
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            documentId: string;
+            /** Body */
+            body: string;
+            author?: components["schemas"]["UserSummary"] | null;
+            /** Mentions */
+            mentions?: components["schemas"]["UserSummary"][];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * DocumentCommentPage
+         * @description Cursor-based envelope of document comments.
+         */
+        DocumentCommentPage: {
+            /** Items */
+            items: components["schemas"]["DocumentCommentOut"][];
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
          * DocumentFileType
          * @description Normalized file types for documents.
          * @enum {string}
@@ -2053,13 +2049,17 @@ export type components = {
              */
             name: string;
             fileType: components["schemas"]["DocumentFileType"];
-            status: components["schemas"]["DocumentStatus"];
             uploader?: components["schemas"]["UserSummary"] | null;
             assignee?: components["schemas"]["UserSummary"] | null;
             /** Tags */
             tags?: string[];
             /** Bytesize */
             byteSize: number;
+            /**
+             * Commentcount
+             * @default 0
+             */
+            commentCount: number;
             /**
              * Createdat
              * Format: date-time
@@ -2085,8 +2085,8 @@ export type components = {
              * @description Weak ETag for optimistic concurrency checks.
              */
             etag?: string | null;
-            latestRun?: components["schemas"]["DocumentRunSummary"] | null;
-            latestSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
+            lastRun?: components["schemas"]["DocumentRunSummary"] | null;
+            lastSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
             latestResult?: components["schemas"]["DocumentResultSummary"] | null;
         };
         /**
@@ -2115,11 +2115,15 @@ export type components = {
             contentType?: string | null;
             /** Bytesize */
             byteSize: number;
+            /**
+             * Commentcount
+             * @default 0
+             */
+            commentCount: number;
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
             };
-            status: components["schemas"]["DocumentStatus"];
             source: components["schemas"]["DocumentSource"];
             /**
              * Expiresat
@@ -2163,10 +2167,10 @@ export type components = {
             uploader?: components["schemas"]["UserSummary"] | null;
             /** @description Summary of the assigned user when available. */
             assignee?: components["schemas"]["UserSummary"] | null;
-            /** @description Latest run execution associated with the document when available. */
-            latestRun?: components["schemas"]["DocumentRunSummary"] | null;
+            /** @description Last run created for the document when available. */
+            lastRun?: components["schemas"]["DocumentRunSummary"] | null;
             /** @description Latest successful run execution associated with the document when available. */
-            latestSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
+            lastSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
             /** @description Summary of the latest result metadata, when available. */
             latestResult?: components["schemas"]["DocumentResultSummary"] | null;
             /** @description Optional list row projection for table updates. */
@@ -2185,6 +2189,18 @@ export type components = {
             pending?: boolean | null;
         };
         /**
+         * DocumentRunPhase
+         * @description UI-facing phase derived from run + environment state.
+         * @enum {string}
+         */
+        DocumentRunPhase: "queued" | "building" | "running" | "succeeded" | "failed";
+        /**
+         * DocumentRunPhaseReason
+         * @description Reason for a derived run phase when queued but blocked by env readiness.
+         * @enum {string}
+         */
+        DocumentRunPhaseReason: "environment_missing" | "environment_queued" | "environment_building" | "environment_failed";
+        /**
          * DocumentRunSummary
          * @description Minimal representation of a run associated with a document.
          */
@@ -2196,6 +2212,16 @@ export type components = {
              */
             id: string;
             status: components["schemas"]["RunStatus"];
+            /** @description Derived phase used by the documents UI. */
+            phase: components["schemas"]["DocumentRunPhase"];
+            /** @description Optional reason for a derived phase when the run is blocked. */
+            phaseReason?: components["schemas"]["DocumentRunPhaseReason"] | null;
+            /**
+             * Createdat
+             * Format: date-time
+             * @description Timestamp for when the run was created.
+             */
+            createdAt: string;
             /**
              * Startedat
              * @description Timestamp for when the run started, if available.
@@ -2239,12 +2265,6 @@ export type components = {
          * @enum {string}
          */
         DocumentSource: "manual_upload";
-        /**
-         * DocumentStatus
-         * @description Canonical document processing states.
-         * @enum {string}
-         */
-        DocumentStatus: "uploading" | "uploaded" | "processing" | "processed" | "failed" | "archived";
         /**
          * DocumentTagsPatch
          * @description Payload for adding/removing tags on a document.
@@ -6778,262 +6798,6 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    archive_documents_batch_endpoint_api_v1_workspaces__workspaceId__documents_batch_archive_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
-                };
-            };
-            /** @description Authentication required to update documents. */
-            401: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more documents were not found within the workspace. */
-            404: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    restore_documents_batch_endpoint_api_v1_workspaces__workspaceId__documents_batch_restore_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
-                };
-            };
-            /** @description Authentication required to update documents. */
-            401: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more documents were not found within the workspace. */
-            404: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    archive_document_endpoint_api_v1_workspaces__workspaceId__documents__documentId__archive_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Document identifier */
-                documentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentOut"];
-                };
-            };
-            /** @description Authentication required to update documents. */
-            401: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Document not found within the workspace. */
-            404: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    restore_document_endpoint_api_v1_workspaces__workspaceId__documents__documentId__restore_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Document identifier */
-                documentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentOut"];
-                };
-            };
-            /** @description Authentication required to update documents. */
-            401: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Document not found within the workspace. */
-            404: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
     replace_document_tags_api_v1_workspaces__workspaceId__documents__documentId__tags_put: {
         parameters: {
             query?: never;
@@ -7221,6 +6985,149 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get: {
+        parameters: {
+            query?: {
+                /** @description Items per page (max 200) */
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
+                /** @description JSON array of {id, desc}. */
+                sort?: string | null;
+                /** @description URL-encoded JSON array of filter objects. */
+                filters?: string | null;
+                /** @description Logical operator to join filters (and/or). */
+                joinOperator?: components["schemas"]["FilterJoinOperator"];
+                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
+                q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCommentPage"];
+                };
+            };
+            /** @description Authentication required to access comments. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentCommentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCommentOut"];
+                };
+            };
+            /** @description Authentication required to create comments. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Comment payload is invalid. */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["ProblemDetails"];
         };

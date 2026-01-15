@@ -492,7 +492,7 @@ Feature hooks wrap these functions into React Query calls.
 * Domain types are singular, PascalCase:
 
   * `WorkspaceSummary`, `WorkspaceDetail`.
-  * `DocumentListRow`, `DocumentRecord`, `DocumentStatus`.
+  * `DocumentListRow`, `DocumentRecord`, `DocumentRunPhase`.
   * `RunResource`, `RunStatus`.
   * `Configuration`.
 
@@ -528,7 +528,7 @@ src/
       input/
       alert/
   types/
-    documents.ts                  # DocumentListRow, DocumentRecord, DocumentStatus
+    documents.ts                  # DocumentListRow, DocumentRecord, DocumentRunPhase
 ```
 
 Flow:

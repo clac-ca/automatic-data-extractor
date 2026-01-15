@@ -11,8 +11,8 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.sorting import parse_sort, resolve_sort
 from ade_api.features.documents.filters import DOCUMENT_FILTER_REGISTRY
+from ade_api.features.documents.schemas import DocumentRunPhase
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.models import DocumentStatus
 
 
 def test_parse_filters_rejects_invalid_json() -> None:
@@ -21,14 +21,14 @@ def test_parse_filters_rejects_invalid_json() -> None:
 
 
 def test_parse_filters_rejects_invalid_value_shapes() -> None:
-    raw = '[{"id":"status","operator":"in","value":"processed"}]'
+    raw = '[{"id":"lastRunPhase","operator":"in","value":"succeeded"}]'
     with pytest.raises(HTTPException):
         parse_filter_items(raw, max_filters=5, max_raw_length=200)
 
 
 def test_prepare_filters_coerces_enum_and_datetime() -> None:
     items = [
-        FilterItem(id="status", operator=FilterOperator.EQ, value="processed"),
+        FilterItem(id="lastRunPhase", operator=FilterOperator.EQ, value="succeeded"),
         FilterItem(
             id="createdAt",
             operator=FilterOperator.GTE,
@@ -37,7 +37,7 @@ def test_prepare_filters_coerces_enum_and_datetime() -> None:
     ]
     parsed = prepare_filters(items, DOCUMENT_FILTER_REGISTRY)
 
-    assert parsed[0].value == DocumentStatus.PROCESSED
+    assert parsed[0].value == DocumentRunPhase.SUCCEEDED
     assert getattr(parsed[1].value, "tzinfo", None) is UTC
 
 
@@ -60,8 +60,8 @@ def test_sort_helpers_apply_defaults_and_tie_breakers() -> None:
 
 
 def test_parse_sort_accepts_json_sort_items() -> None:
-    raw = '[{"id":"createdAt","desc":false},{"id":"status","desc":true}]'
-    assert parse_sort(raw) == ["createdAt", "-status"]
+    raw = '[{"id":"createdAt","desc":false},{"id":"lastRunAt","desc":true}]'
+    assert parse_sort(raw) == ["createdAt", "-lastRunAt"]
 
 
 def test_parse_sort_rejects_csv_input() -> None:

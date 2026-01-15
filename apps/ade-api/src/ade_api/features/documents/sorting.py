@@ -15,7 +15,7 @@ from ade_api.common.cursor_listing import (
     parse_uuid,
 )
 from ade_api.common.sql import nulls_last
-from ade_api.models import Document, DocumentSource, DocumentStatus
+from ade_api.models import Document, DocumentComment, DocumentSource
 
 
 def _activity_at_expr():
@@ -38,8 +38,7 @@ SORT_FIELDS = {
     "id": (Document.id.asc(), Document.id.desc()),
     "createdAt": (Document.created_at.asc(), Document.created_at.desc()),
     "updatedAt": (Document.updated_at.asc(), Document.updated_at.desc()),
-    "status": (Document.status.asc(), Document.status.desc()),
-    "latestRunAt": (
+    "lastRunAt": (
         tuple(nulls_last(Document.last_run_at.asc())),
         tuple(nulls_last(Document.last_run_at.desc())),
     ),
@@ -62,8 +61,7 @@ CURSOR_FIELDS: dict[str, CursorFieldSpec[Document]] = {
     "id": cursor_field(lambda doc: doc.id, parse_uuid),
     "createdAt": cursor_field(lambda doc: doc.created_at, parse_datetime),
     "updatedAt": cursor_field(lambda doc: doc.updated_at, parse_datetime),
-    "status": cursor_field(lambda doc: doc.status, parse_enum(DocumentStatus)),
-    "latestRunAt": cursor_field_nulls_last(lambda doc: doc.last_run_at, parse_datetime),
+    "lastRunAt": cursor_field_nulls_last(lambda doc: doc.last_run_at, parse_datetime),
     "activityAt": cursor_field_nulls_last(_activity_at_value, parse_datetime),
     "byteSize": cursor_field(lambda doc: doc.byte_size, parse_int),
     "source": cursor_field(lambda doc: doc.source, parse_enum(DocumentSource)),
@@ -71,3 +69,24 @@ CURSOR_FIELDS: dict[str, CursorFieldSpec[Document]] = {
 }
 
 __all__ = ["CURSOR_FIELDS", "DEFAULT_SORT", "ID_FIELD", "SORT_FIELDS"]
+
+
+COMMENT_SORT_FIELDS = {
+    "id": (DocumentComment.id.asc(), DocumentComment.id.desc()),
+    "createdAt": (DocumentComment.created_at.asc(), DocumentComment.created_at.desc()),
+}
+
+COMMENT_DEFAULT_SORT = ["createdAt"]
+COMMENT_ID_FIELD = (DocumentComment.id.asc(), DocumentComment.id.desc())
+
+COMMENT_CURSOR_FIELDS: dict[str, CursorFieldSpec[DocumentComment]] = {
+    "id": cursor_field(lambda comment: comment.id, parse_uuid),
+    "createdAt": cursor_field(lambda comment: comment.created_at, parse_datetime),
+}
+
+__all__ += [
+    "COMMENT_CURSOR_FIELDS",
+    "COMMENT_DEFAULT_SORT",
+    "COMMENT_ID_FIELD",
+    "COMMENT_SORT_FIELDS",
+]

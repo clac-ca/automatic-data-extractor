@@ -11,7 +11,6 @@ from ade_api.models import (
     ConfigurationStatus,
     Document,
     DocumentSource,
-    DocumentStatus,
     Run,
     RunStatus,
     Workspace,
@@ -48,7 +47,6 @@ def test_run_defaults(session: Session) -> None:
         sha256="deadbeef",
         stored_uri="documents/input.csv",
         attributes={},
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=utc_now(),
     )

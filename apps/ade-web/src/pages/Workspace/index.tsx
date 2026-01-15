@@ -474,7 +474,13 @@ export function resolveWorkspaceSection(
           to: `/workspaces/${workspaceId}/documents${query ? `?${query}` : ""}${hash}`,
         };
       }
-      return { kind: "content", key: "documents", element: <DocumentsScreen />, fullWidth: true };
+      return {
+        kind: "content",
+        key: "documents",
+        element: <DocumentsScreen />,
+        fullWidth: true,
+        fullHeight: true,
+      };
     }
     case "runs":
       return { kind: "content", key: "runs", element: <RunsScreen />, fullWidth: true };

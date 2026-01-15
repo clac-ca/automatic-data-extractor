@@ -10,7 +10,7 @@ from httpx import AsyncClient
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
-from ade_api.models import Document, DocumentSource, DocumentStatus
+from ade_api.models import Document, DocumentSource
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -41,7 +41,6 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
                 {"name": "Cached", "index": 0, "kind": "worksheet", "is_active": True},
             ]
         },
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=utc_now(),
     )

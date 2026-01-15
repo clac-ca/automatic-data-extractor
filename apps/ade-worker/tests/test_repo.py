@@ -7,7 +7,6 @@ from sqlalchemy.orm import sessionmaker
 
 from ade_worker.repo import Repo
 from ade_worker.schema import (
-    document_events,
     documents,
     environments,
     install_document_event_triggers,
@@ -71,10 +70,9 @@ def _insert_document(engine, *, document_id: str, workspace_id: str, now: dateti
                 workspace_id=workspace_id,
                 original_filename="input.xlsx",
                 stored_uri="file:documents/input.xlsx",
-                status="uploaded",
+                last_run_id=None,
                 version=1,
                 updated_at=now - timedelta(minutes=1),
-                last_run_at=None,
             )
         )
 
@@ -198,45 +196,6 @@ def test_ensure_environment_rows_requeues_failed_env() -> None:
     assert row is not None
     assert row.status == "queued"
     assert row.error_message is None
-
-
-def test_update_document_status_updates_version_and_last_run_at() -> None:
-    engine = _engine()
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    repo = Repo(SessionLocal)
-    now = datetime(2025, 1, 10, 12, 0, 0)
-
-    _insert_document(engine, document_id="doc-1", workspace_id="ws-1", now=now)
-
-    with SessionLocal.begin() as session:
-        version = repo.update_document_status(
-            session=session,
-            document_id="doc-1",
-            status="processing",
-            now=now,
-        )
-
-    assert version == 2
-
-    with engine.begin() as conn:
-        row = conn.execute(
-            select(documents.c.status, documents.c.version, documents.c.updated_at, documents.c.last_run_at)
-            .where(documents.c.id == "doc-1")
-        ).first()
-        event = conn.execute(
-            select(document_events.c.event_type, document_events.c.document_version)
-            .where(document_events.c.document_id == "doc-1")
-            .order_by(document_events.c.cursor.desc())
-        ).first()
-
-    assert row is not None
-    assert row.status == "processing"
-    assert row.version == 2
-    assert row.updated_at == now
-    assert row.last_run_at == now
-    assert event is not None
-    assert event.event_type == "document.changed"
-    assert event.document_version == 2
 
 
 def test_replace_run_metrics_overwrites() -> None:

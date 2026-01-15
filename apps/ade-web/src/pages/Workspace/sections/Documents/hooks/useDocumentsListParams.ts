@@ -81,6 +81,11 @@ export function useDocumentsListParams({
     "joinOperator",
     parseAsStringEnum(["and", "or"]).withDefault("and"),
   );
+  const [rawQ] = useQueryState("q", parseAsString);
+  const q = useMemo(() => {
+    const trimmed = rawQ?.trim();
+    return trimmed ? trimmed : null;
+  }, [rawQ]);
 
   const simpleFilterParsers = useMemo(createSimpleFilterParsers, []);
   const [simpleFilterValues] = useQueryStates(simpleFilterParsers);
@@ -95,6 +100,12 @@ export function useDocumentsListParams({
         const values = rawValue.filter(Boolean);
         if (!values.length) return;
         if ((variant === "dateRange" || variant === "range") && values.length < 2) return;
+        if (id === "lastRunPhase") {
+          if (values.includes("__empty__")) {
+            items.push({ id, operator: "isEmpty" });
+            return;
+          }
+        }
         items.push({
           id,
           operator:
@@ -129,6 +140,7 @@ export function useDocumentsListParams({
     page,
     perPage,
     sort,
+    q,
     filters,
     joinOperator: resolvedJoinOperator,
   };

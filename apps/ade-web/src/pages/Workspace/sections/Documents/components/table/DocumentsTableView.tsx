@@ -5,13 +5,11 @@ import { parseAsStringEnum, useQueryState } from "nuqs";
 
 import { resolveApiUrl } from "@api/client";
 import {
-  archiveWorkspaceDocument,
   deleteWorkspaceDocument,
   DocumentChangesResyncError,
   fetchWorkspaceDocumentChanges,
   fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
-  restoreWorkspaceDocument,
   type DocumentChangeEntry,
   type DocumentListRow,
   type DocumentRecord,
@@ -32,17 +30,22 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useNotifications } from "@components/providers/notifications";
+import { ApiError } from "@api/errors";
 import type { PresenceParticipant } from "@schema/presence";
 import type { UploadManagerItem } from "@hooks/documents/uploadManager";
 
 import { DocumentsPresenceIndicator } from "../presence/DocumentsPresenceIndicator";
 import { useDocumentsPresence } from "../../hooks/useDocumentsPresence";
 import { useDocumentsListParams } from "../../hooks/useDocumentsListParams";
+import { useDocumentsSelection } from "../../hooks/useDocumentsSelection";
 import { useDocumentsView } from "../../hooks/useDocumentsView";
 import { useDocumentsChangesStream } from "../../hooks/useDocumentsChangesStream";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
+import { DocumentsSplitLayout } from "../layout/DocumentsSplitLayout";
+import { DocumentsCommentsPane } from "../comments/DocumentsCommentsPane";
+import { DocumentsPreviewPane } from "../preview/DocumentsPreviewPane";
 import { shortId } from "../../utils";
 import type { DocumentRow, WorkspacePerson } from "../../types";
 
@@ -57,7 +60,7 @@ type CurrentUser = {
 
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 
-type RowMutation = "archive" | "restore" | "delete" | "assign" | "tags";
+type RowMutation = "delete" | "assign" | "tags";
 
 type HydratedChange = DocumentChangeEntry & { row?: DocumentListRow | null };
 
@@ -88,12 +91,13 @@ export function DocumentsTableView({
   );
   const filterMode = filterFlag === "advancedFilters" ? "advanced" : "simple";
   const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
-  const { page, perPage, sort, filters, joinOperator } = useDocumentsListParams({ filterMode });
+  const { page, perPage, sort, q, filters, joinOperator } = useDocumentsListParams({ filterMode });
   const documentsView = useDocumentsView({
     workspaceId,
     page,
     perPage,
     sort,
+    q,
     filters,
     joinOperator,
     enabled: Boolean(workspaceId),
@@ -113,6 +117,16 @@ export function DocumentsTableView({
     cursor,
     setCursor,
   } = documentsView;
+
+  const {
+    docId,
+    isPreviewOpen,
+    isCommentsOpen,
+    openPreview,
+    openComments,
+    closePreview,
+    closeComments,
+  } = useDocumentsSelection();
 
   const onToggleFilterMode = useCallback(() => {
     setFilterFlag(filterFlag === "advancedFilters" ? null : "advancedFilters");
@@ -204,7 +218,6 @@ export function DocumentsTableView({
       const activityAt = updated.activityAt ?? updated.updatedAt;
       const etag = updated.etag ?? buildWeakEtag(updated.id, String(updated.version));
       const updates: Partial<DocumentRow> = {
-        status: updated.status,
         updatedAt: updated.updatedAt,
         activityAt,
         version: updated.version,
@@ -212,8 +225,8 @@ export function DocumentsTableView({
         tags: updated.tags,
         assignee: updated.assignee ?? null,
         uploader: updated.uploader ?? null,
-        latestRun: updated.latestRun ?? null,
-        latestSuccessfulRun: updated.latestSuccessfulRun ?? null,
+        lastRun: updated.lastRun ?? null,
+        lastSuccessfulRun: updated.lastSuccessfulRun ?? null,
         latestResult: updated.latestResult ?? null,
       };
       updateRow(documentId, updates);
@@ -264,7 +277,7 @@ export function DocumentsTableView({
 
   const handleDownloadOutput = useCallback(
     (document: DocumentRow) => {
-      const runId = document.latestSuccessfulRun?.id ?? null;
+      const runId = document.lastSuccessfulRun?.id ?? null;
       if (!runId) {
         notifyToast({
           title: "Output not available",
@@ -363,61 +376,6 @@ export function DocumentsTableView({
       }
     },
     [applyDocumentUpdate, clearRowPending, documentsById, markRowPending, notifyToast, updateRow, workspaceId],
-  );
-
-  const onArchive = useCallback(
-    async (documentId: string) => {
-      const current = documentsById[documentId];
-      if (!current) return;
-
-      const snapshot = {
-        status: current.status,
-        updatedAt: current.updatedAt,
-        activityAt: current.activityAt,
-      };
-
-      const now = new Date().toISOString();
-      updateRow(documentId, { status: "archived", updatedAt: now, activityAt: now });
-
-      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
-      markRowPending(documentId, "archive");
-      try {
-        const updated = await archiveWorkspaceDocument(workspaceId, documentId, { ifMatch });
-        applyDocumentUpdate(documentId, updated);
-        notifyToast({ title: "Document archived.", intent: "success", duration: 4000 });
-      } catch (error) {
-        updateRow(documentId, snapshot);
-        notifyToast({
-          title: error instanceof Error ? error.message : "Unable to archive document.",
-          intent: "danger",
-        });
-      } finally {
-        clearRowPending(documentId, "archive");
-      }
-    },
-    [applyDocumentUpdate, clearRowPending, documentsById, markRowPending, notifyToast, updateRow, workspaceId],
-  );
-
-  const onRestore = useCallback(
-    async (documentId: string) => {
-      const current = documentsById[documentId];
-      if (!current) return;
-      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
-      markRowPending(documentId, "restore");
-      try {
-        const updated = await restoreWorkspaceDocument(workspaceId, documentId, { ifMatch });
-        applyDocumentUpdate(documentId, updated);
-        notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
-      } catch (error) {
-        notifyToast({
-          title: error instanceof Error ? error.message : "Unable to restore document.",
-          intent: "danger",
-        });
-      } finally {
-        clearRowPending(documentId, "restore");
-      }
-    },
-    [applyDocumentUpdate, clearRowPending, documentsById, markRowPending, notifyToast, workspaceId],
   );
 
   const onDeleteRequest = useCallback((document: DocumentRow) => {
@@ -566,15 +524,41 @@ export function DocumentsTableView({
     },
   });
 
+  const handleTogglePreview = useCallback(
+    (documentId: string) => {
+      if (docId === documentId && isPreviewOpen) {
+        closePreview();
+        return;
+      }
+      openPreview(documentId);
+    },
+    [closePreview, docId, isPreviewOpen, openPreview],
+  );
+
+  const handleToggleComments = useCallback(
+    (documentId: string) => {
+      if (docId === documentId && isCommentsOpen) {
+        closeComments();
+        return;
+      }
+      openComments(documentId);
+    },
+    [closeComments, docId, isCommentsOpen, openComments],
+  );
+
   const columns = useDocumentsColumns({
     filterMode,
     people,
     tagOptions,
     rowPresence,
+    selectedDocumentId: docId,
+    isPreviewOpen,
+    isCommentsOpen,
+    onOpenPreview: openPreview,
+    onTogglePreview: handleTogglePreview,
+    onToggleComments: handleToggleComments,
     onAssign,
     onToggleTag,
-    onArchive,
-    onRestore,
     onDeleteRequest,
     onDownloadOutput: handleDownloadOutput,
     onDownloadOriginal: handleDownloadOriginal,
@@ -584,7 +568,37 @@ export function DocumentsTableView({
   const hasDocuments = documents.length > 0;
   const showInitialLoading = isLoading && !hasDocuments;
   const showInitialError = Boolean(error) && !hasDocuments;
-  const hasActiveFilters = Boolean(filters?.length);
+  const hasActiveFilters = Boolean(filters?.length || q);
+
+  const previewFallbackQuery = useQuery({
+    queryKey: ["documents-preview-row", workspaceId, docId],
+    queryFn: ({ signal }) =>
+      docId
+        ? fetchWorkspaceDocumentRowById(workspaceId, docId, signal)
+        : Promise.resolve(null),
+    enabled: Boolean(workspaceId && docId && !documentsById[docId]),
+    staleTime: 30_000,
+  });
+
+  const previewFallback = previewFallbackQuery.data && docId ? previewFallbackQuery.data : null;
+  const selectedDocument = docId ? documentsById[docId] ?? previewFallback ?? null : null;
+  const previewErrorMessage = useMemo(() => {
+    if (!previewFallbackQuery.isError) return null;
+    const error = previewFallbackQuery.error;
+    if (error instanceof ApiError) {
+      if (error.status === 404) {
+        return "We couldn’t find that document. It may have been deleted.";
+      }
+      if (error.status === 403) {
+        return "You don’t have access to that document.";
+      }
+    }
+    return "We couldn’t load that document. Try again.";
+  }, [previewFallbackQuery.error, previewFallbackQuery.isError]);
+  const isPreviewLoading = Boolean(docId && !selectedDocument && previewFallbackQuery.isLoading);
+  const isCommentsLoading = isPreviewLoading;
+  const showPreview = Boolean(docId && isPreviewOpen);
+  const showComments = Boolean(docId && isCommentsOpen);
 
   const toolbarStatus = (
     <div className="flex h-4 w-4 items-center justify-center">
@@ -662,8 +676,8 @@ export function DocumentsTableView({
   const deletePending =
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
 
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+  const tableContent = (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
       <DocumentsTable
         data={documents}
         pageCount={pageCount}
@@ -671,6 +685,40 @@ export function DocumentsTableView({
         filterMode={filterMode}
         onToggleFilterMode={onToggleFilterMode}
         toolbarActions={toolbarContent}
+      />
+    </div>
+  );
+
+  const previewContent = (
+    <DocumentsPreviewPane
+      workspaceId={workspaceId}
+      document={selectedDocument}
+      onClose={closePreview}
+      onDownloadOriginal={handleDownloadOriginal}
+      onDownloadOutput={handleDownloadOutput}
+      isLoading={isPreviewLoading}
+      errorMessage={previewErrorMessage}
+    />
+  );
+
+  const commentsContent = (
+    <DocumentsCommentsPane
+      workspaceId={workspaceId}
+      document={selectedDocument}
+      onClose={closeComments}
+      isLoading={isCommentsLoading}
+      errorMessage={previewErrorMessage}
+    />
+  );
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <DocumentsSplitLayout
+        table={tableContent}
+        preview={previewContent}
+        comments={commentsContent}
+        showPreview={showPreview}
+        showComments={showComments}
       />
       <Dialog
         open={Boolean(deleteTarget)}

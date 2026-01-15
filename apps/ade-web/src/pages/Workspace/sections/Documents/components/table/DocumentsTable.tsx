@@ -55,11 +55,11 @@ export function DocumentsTable({
         fileType: false,
         uploaderId: false,
         byteSize: false,
-        runStatus: false,
+        lastRunAt: false,
         hasOutput: false,
         createdAt: false,
         updatedAt: false,
-        latestSuccessfulRun: false,
+        lastSuccessfulRun: false,
       },
       columnPinning: { left: ["select"], right: ["actions"] },
     },
@@ -102,7 +102,7 @@ export function DocumentsTable({
   ) : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {isAdvanced ? (
         <DataTableAdvancedToolbar table={table}>
           <DataTableSortList table={table} align="start" />

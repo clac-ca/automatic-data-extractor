@@ -8,6 +8,8 @@ export const uiStorageKeys = {
   documentsCursor: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.cursor`,
   documentsTableColumnSizing: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.table.columnSizing`,
+  documentsPreviewPaneHeight: (workspaceId: string) =>
+    `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.preview.height`,
   configBuilderLastSelection: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.configBuilder.lastSelection`,
   workbenchReturnPath: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.workbench.returnPath`,

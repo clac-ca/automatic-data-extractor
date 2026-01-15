@@ -23,6 +23,8 @@ import { useShortcutHint } from "@hooks/useShortcutHint";
 import { CloseIcon, DirectoryIcon, DocumentIcon, RunsIcon, SearchIcon, SpinnerIcon } from "@components/icons";
 
 const DEBOUNCE_DELAY_MS = 200;
+const GLOBAL_SEARCH_WORKSPACE_NAME_FILTER_ID = "global-search-workspace-name";
+const GLOBAL_SEARCH_WORKSPACE_SLUG_FILTER_ID = "global-search-workspace-slug";
 
 type GlobalNavItem = {
   readonly id: string;
@@ -148,15 +150,14 @@ export function GlobalNavSearch({
     if (canShowRemoteResults && scope.kind === "workspace") {
       const documentItems = documents.map((document) => {
         const label = document.name || "Untitled document";
+        const phase = document.lastRun?.phase;
+        const phaseLabel = phase ? `${phase[0]?.toUpperCase() ?? ""}${phase.slice(1)}` : null;
         return {
           id: `document-${document.id}`,
           label,
-          description: document.status ? `Status: ${document.status}` : "Document",
+          description: phaseLabel ? `Last run: ${phaseLabel}` : "Document",
           icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-          href: buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, {
-            q: normalizedQuery,
-            document: document.id,
-          }),
+          href: buildDocumentsSearchHref(scope.workspaceId, normalizedQuery, document.id),
         };
       });
       const viewAllDocuments = {
@@ -164,7 +165,7 @@ export function GlobalNavSearch({
         label: "Search documents",
         description: `View all document results for "${normalizedQuery}"`,
         icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-        href: buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, { q: normalizedQuery }),
+        href: buildDocumentsSearchHref(scope.workspaceId, normalizedQuery),
         meta: "All",
       };
       next.push({
@@ -180,10 +181,7 @@ export function GlobalNavSearch({
           label,
           description: run.status ? `Status: ${run.status}` : "Run",
           icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-          href: buildSearchHref(`/workspaces/${scope.workspaceId}/runs`, {
-            q: normalizedQuery,
-            run: run.id,
-          }),
+          href: buildRunsSearchHref(scope.workspaceId, run.id),
         };
       });
       const viewAllRuns = {
@@ -191,7 +189,7 @@ export function GlobalNavSearch({
         label: "Search runs",
         description: `View all run results for "${normalizedQuery}"`,
         icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-        href: buildSearchHref(`/workspaces/${scope.workspaceId}/runs`, { q: normalizedQuery }),
+        href: buildRunsSearchHref(scope.workspaceId),
         meta: "All",
       };
       next.push({
@@ -287,8 +285,8 @@ export function GlobalNavSearch({
   const fallbackHref =
     shouldSearch && normalizedQuery
       ? scope.kind === "workspace"
-        ? buildSearchHref(`/workspaces/${scope.workspaceId}/documents`, { q: normalizedQuery })
-        : buildSearchHref("/workspaces", { q: normalizedQuery })
+        ? buildDocumentsSearchHref(scope.workspaceId, normalizedQuery)
+        : buildWorkspacesSearchHref(normalizedQuery)
       : null;
 
   let statusMessage: string | null = null;
@@ -625,6 +623,57 @@ export function GlobalNavSearch({
       ) : null}
     </div>
   );
+}
+
+type GlobalSearchFilter = {
+  readonly id: string;
+  readonly value: string;
+  readonly variant: "text";
+  readonly operator: "iLike";
+  readonly filterId: string;
+};
+
+function buildTextFilter(id: string, value: string, filterId: string): GlobalSearchFilter | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return {
+    id,
+    value: trimmed,
+    variant: "text",
+    operator: "iLike",
+    filterId,
+  };
+}
+
+function buildFiltersParam(filters: Array<GlobalSearchFilter | null>) {
+  const active = filters.filter((filter): filter is GlobalSearchFilter => Boolean(filter));
+  if (!active.length) return null;
+  return JSON.stringify(active);
+}
+
+function buildDocumentsSearchHref(workspaceId: string, query: string, previewDocId?: string) {
+  return buildSearchHref(`/workspaces/${workspaceId}/documents`, {
+    previewDocId,
+    q: query,
+  });
+}
+
+function buildRunsSearchHref(workspaceId: string, runId?: string) {
+  return buildSearchHref(`/workspaces/${workspaceId}/runs`, {
+    run: runId,
+  });
+}
+
+function buildWorkspacesSearchHref(query: string) {
+  const filters = buildFiltersParam([
+    buildTextFilter("name", query, GLOBAL_SEARCH_WORKSPACE_NAME_FILTER_ID),
+    buildTextFilter("slug", query, GLOBAL_SEARCH_WORKSPACE_SLUG_FILTER_ID),
+  ]);
+
+  return buildSearchHref("/workspaces", {
+    filters,
+    joinOperator: filters ? "or" : undefined,
+  });
 }
 
 function buildSearchHref(path: string, params: Record<string, string | null | undefined>) {

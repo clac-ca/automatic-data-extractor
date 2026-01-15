@@ -16,8 +16,8 @@ from uuid import UUID
 import openpyxl
 from fastapi import UploadFile
 from pydantic import ValidationError
-from sqlalchemy import case, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func, literal, select
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
 from ade_api.common.etag import build_etag_token, format_weak_etag
@@ -40,14 +40,17 @@ from ade_api.common.workbook_preview import (
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.models import (
     Document,
+    DocumentComment,
+    DocumentCommentMention,
     DocumentEvent,
     DocumentEventType,
     DocumentSource,
-    DocumentStatus,
     DocumentTag,
+    Environment,
     Run,
     RunStatus,
     User,
+    WorkspaceMembership,
 )
 from ade_api.settings import Settings
 
@@ -60,6 +63,7 @@ from .exceptions import (
     DocumentPreviewUnsupportedError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
+    InvalidDocumentCommentMentionsError,
     InvalidDocumentTagsError,
 )
 from .filters import apply_document_filters
@@ -67,11 +71,15 @@ from .repository import DocumentsRepository
 from .schemas import (
     DocumentChangeEntry,
     DocumentChangesPage,
+    DocumentCommentOut,
+    DocumentCommentPage,
     DocumentFileType,
     DocumentListPage,
     DocumentListRow,
     DocumentOut,
     DocumentResultSummary,
+    DocumentRunPhase,
+    DocumentRunPhaseReason,
     DocumentRunSummary,
     DocumentSheet,
     DocumentUpdateRequest,
@@ -194,10 +202,8 @@ class DocumentsService:
                 stored_uri=stored_uri,
                 attributes=metadata_payload,
                 uploaded_by_user_id=actor_id,
-                status=DocumentStatus.UPLOADED,
                 source=DocumentSource.MANUAL_UPLOAD,
                 expires_at=expiration,
-                last_run_at=None,
             )
             self._session.add(document)
             self._session.flush()
@@ -211,6 +217,7 @@ class DocumentsService:
         hydrated = result.scalar_one()
 
         payload = DocumentOut.model_validate(hydrated)
+        self._attach_last_runs(workspace_id, [payload], last_run_ids={document_id: hydrated.last_run_id})
         self._apply_derived_fields(payload)
         payload.list_row = self._build_list_row(payload)
 
@@ -296,8 +303,10 @@ class DocumentsService:
             include_total=include_total,
             changes_cursor=str(changes_cursor),
         )
-        items = [DocumentOut.model_validate(item) for item in page_result.items]
-        self._attach_latest_runs(workspace_id, items)
+        raw_items = list(page_result.items)
+        items = [DocumentOut.model_validate(item) for item in raw_items]
+        last_run_ids = {doc.id: doc.last_run_id for doc in raw_items}
+        self._attach_last_runs(workspace_id, items, last_run_ids=last_run_ids)
         for item in items:
             self._apply_derived_fields(item)
 
@@ -314,6 +323,76 @@ class DocumentsService:
         rows = [self._build_list_row(item) for item in items]
 
         return DocumentListPage(items=rows, meta=page_result.meta, facets=facets)
+
+    def list_document_comments(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        limit: int,
+        cursor: str | None,
+        resolved_sort: ResolvedCursorSort[DocumentComment],
+        include_total: bool,
+    ) -> DocumentCommentPage:
+        self._get_document(workspace_id, document_id)
+
+        stmt = (
+            select(DocumentComment)
+            .where(DocumentComment.workspace_id == workspace_id)
+            .where(DocumentComment.document_id == document_id)
+            .options(
+                selectinload(DocumentComment.author_user),
+                selectinload(DocumentComment.mentions).selectinload(DocumentCommentMention.mentioned_user),
+            )
+        )
+
+        page_result = paginate_query_cursor(
+            self._session,
+            stmt,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
+            changes_cursor="0",
+        )
+
+        items = [DocumentCommentOut.model_validate(item) for item in page_result.items]
+        return DocumentCommentPage(items=items, meta=page_result.meta, facets=page_result.facets)
+
+    def create_document_comment(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        body: str,
+        mentions: Sequence[UUID] | None,
+        actor: User,
+    ) -> DocumentCommentOut:
+        document = self._get_document(workspace_id, document_id)
+
+        mention_users = self._resolve_comment_mentions(
+            workspace_id=workspace_id,
+            mentions=mentions,
+        )
+
+        comment = DocumentComment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            author_user_id=actor.id,
+            body=body,
+        )
+        comment.author_user = actor
+        comment.mentions = [
+            DocumentCommentMention(mentioned_user=user) for user in mention_users
+        ]
+
+        document.comment_count = (document.comment_count or 0) + 1
+        document.version += 1
+
+        self._session.add(comment)
+        self._session.flush()
+
+        return DocumentCommentOut.model_validate(comment)
 
     def list_document_changes(
         self,
@@ -365,7 +444,7 @@ class DocumentsService:
                 result = self._session.execute(stmt)
                 documents = list(result.scalars())
                 payloads = [DocumentOut.model_validate(item) for item in documents]
-                self._attach_latest_runs(workspace_id, payloads)
+                self._attach_last_runs(workspace_id, payloads, last_run_ids={doc.id: doc.last_run_id for doc in documents})
                 for payload in payloads:
                     self._apply_derived_fields(payload)
                     rows_by_id[payload.id] = self._build_list_row(payload)
@@ -396,7 +475,7 @@ class DocumentsService:
         )
         document = self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        self._attach_latest_runs(workspace_id, [payload])
+        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
         self._apply_derived_fields(payload)
 
         logger.info(
@@ -404,7 +483,6 @@ class DocumentsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                status=document.status,
                 byte_size=document.byte_size,
             ),
         )
@@ -424,7 +502,7 @@ class DocumentsService:
         )
         document = self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        self._attach_latest_runs(workspace_id, [payload])
+        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
         self._apply_derived_fields(payload)
         row = self._build_list_row(payload)
 
@@ -433,7 +511,6 @@ class DocumentsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                status=document.status,
                 byte_size=document.byte_size,
             ),
         )
@@ -467,132 +544,9 @@ class DocumentsService:
             self._session.refresh(document, attribute_names=["assignee_user"])
 
         updated = DocumentOut.model_validate(document)
+        self._attach_last_runs(workspace_id, [updated], last_run_ids={document.id: document.last_run_id})
         self._apply_derived_fields(updated)
         return updated
-
-    def archive_document(
-        self,
-        *,
-        workspace_id: UUID,
-        document_id: UUID,
-    ) -> DocumentOut:
-        """Archive a document to remove it from active workflows."""
-
-        document = self._get_document(workspace_id, document_id)
-        changed = document.status != DocumentStatus.ARCHIVED
-        if changed:
-            document.status = DocumentStatus.ARCHIVED
-            document.version += 1
-            self._session.flush()
-
-        payload = DocumentOut.model_validate(document)
-        self._apply_derived_fields(payload)
-        return payload
-
-    def archive_documents_batch(
-        self,
-        *,
-        workspace_id: UUID,
-        document_ids: Sequence[UUID],
-    ) -> list[DocumentOut]:
-        """Archive multiple documents."""
-
-        ordered_ids = list(dict.fromkeys(document_ids))
-        if not ordered_ids:
-            return []
-
-        documents = self._require_documents(
-            workspace_id=workspace_id,
-            document_ids=ordered_ids,
-        )
-        document_by_id = {doc.id: doc for doc in documents}
-        document_by_id = {doc.id: doc for doc in documents}
-        changed_ids: set[UUID] = set()
-
-        for document in documents:
-            if document.status == DocumentStatus.ARCHIVED:
-                continue
-            document.status = DocumentStatus.ARCHIVED
-            document.version += 1
-            changed_ids.add(document.id)
-
-        if changed_ids:
-            self._session.flush()
-
-        payloads: list[DocumentOut] = []
-        for doc_id in ordered_ids:
-            payload = DocumentOut.model_validate(document_by_id[doc_id])
-            self._apply_derived_fields(payload)
-            payloads.append(payload)
-
-        return payloads
-
-    def restore_document(
-        self,
-        *,
-        workspace_id: UUID,
-        document_id: UUID,
-    ) -> DocumentOut:
-        """Restore a document from the archive."""
-
-        document = self._get_document(workspace_id, document_id)
-        if document.status != DocumentStatus.ARCHIVED:
-            payload = DocumentOut.model_validate(document)
-            self._apply_derived_fields(payload)
-            return payload
-
-        status_map = self._latest_run_statuses(
-            workspace_id=workspace_id,
-            document_ids=[document.id],
-        )
-        document.status = self._status_from_last_run(status_map.get(document.id))
-        document.version += 1
-        self._session.flush()
-
-        payload = DocumentOut.model_validate(document)
-        self._apply_derived_fields(payload)
-        return payload
-
-    def restore_documents_batch(
-        self,
-        *,
-        workspace_id: UUID,
-        document_ids: Sequence[UUID],
-    ) -> list[DocumentOut]:
-        """Restore multiple documents from the archive."""
-
-        ordered_ids = list(dict.fromkeys(document_ids))
-        if not ordered_ids:
-            return []
-
-        documents = self._require_documents(
-            workspace_id=workspace_id,
-            document_ids=ordered_ids,
-        )
-        document_by_id = {doc.id: doc for doc in documents}
-        status_map = self._latest_run_statuses(
-            workspace_id=workspace_id,
-            document_ids=list(document_by_id.keys()),
-        )
-        changed_ids: set[UUID] = set()
-
-        for document in documents:
-            if document.status != DocumentStatus.ARCHIVED:
-                continue
-            document.status = self._status_from_last_run(status_map.get(document.id))
-            document.version += 1
-            changed_ids.add(document.id)
-
-        if changed_ids:
-            self._session.flush()
-
-        payloads: list[DocumentOut] = []
-        for doc_id in ordered_ids:
-            payload = DocumentOut.model_validate(document_by_id[doc_id])
-            self._apply_derived_fields(payload)
-            payloads.append(payload)
-
-        return payloads
 
     def list_document_sheets(
         self,
@@ -813,7 +767,7 @@ class DocumentsService:
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
-        self._attach_latest_runs(workspace_id, [payload])
+        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
         self._apply_derived_fields(payload)
 
         logger.info(
@@ -925,6 +879,7 @@ class DocumentsService:
         self._session.flush()
 
         payload = DocumentOut.model_validate(document)
+        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
         self._apply_derived_fields(payload)
         return payload
 
@@ -964,6 +919,7 @@ class DocumentsService:
         self._session.flush()
 
         payload = DocumentOut.model_validate(document)
+        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
         self._apply_derived_fields(payload)
         return payload
 
@@ -1010,12 +966,11 @@ class DocumentsService:
 
         self._session.flush()
 
-        payloads: list[DocumentOut] = []
-        for doc_id in ordered_ids:
-            payload = DocumentOut.model_validate(document_by_id[doc_id])
+        payloads = [DocumentOut.model_validate(document_by_id[doc_id]) for doc_id in ordered_ids]
+        last_run_ids = {doc.id: doc.last_run_id for doc in document_by_id.values()}
+        self._attach_last_runs(workspace_id, payloads, last_run_ids=last_run_ids)
+        for payload in payloads:
             self._apply_derived_fields(payload)
-            payloads.append(payload)
-
         return payloads
 
     def list_tag_catalog(
@@ -1102,6 +1057,34 @@ class DocumentsService:
             raise DocumentNotFoundError(document_id)
         return document
 
+    def _resolve_comment_mentions(
+        self,
+        *,
+        workspace_id: UUID,
+        mentions: Sequence[UUID] | None,
+    ) -> list[User]:
+        if not mentions:
+            return []
+        unique_ids = list(dict.fromkeys(mentions))
+        stmt = (
+            select(User)
+            .join(
+                WorkspaceMembership,
+                WorkspaceMembership.user_id == User.id,
+            )
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+            .where(User.id.in_(unique_ids))
+        )
+        users = list(self._session.execute(stmt).scalars())
+        found = {user.id for user in users}
+        missing = [str(user_id) for user_id in unique_ids if user_id not in found]
+        if missing:
+            raise InvalidDocumentCommentMentionsError(
+                f"Unknown or non-member mentions: {', '.join(missing)}"
+            )
+        user_by_id = {user.id: user for user in users}
+        return [user_by_id[user_id] for user_id in unique_ids]
+
     def _require_documents(
         self,
         *,
@@ -1133,31 +1116,48 @@ class DocumentsService:
 
         return documents
 
-    def _attach_latest_runs(
+    def _attach_last_runs(
         self,
         workspace_id: UUID,
         documents: Sequence[DocumentOut],
+        last_run_ids: dict[UUID, UUID | None] | None = None,
     ) -> None:
-        """Populate latest run summaries on each document."""
+        """Populate last run summaries on each document."""
 
         if not documents:
             return
 
-        latest_runs = self._latest_stream_runs(
+        if last_run_ids is None:
+            doc_ids = [doc.id for doc in documents]
+            result = self._session.execute(
+                select(Document.id, Document.last_run_id).where(Document.id.in_(doc_ids))
+            )
+            last_run_ids = {}
+            for doc_id, run_id in result.all():
+                if not isinstance(doc_id, UUID):
+                    doc_id = UUID(str(doc_id))
+                last_run_ids[doc_id] = run_id
+
+        last_run_ids = {
+            doc_id: run_id
+            for doc_id, run_id in (last_run_ids or {}).items()
+            if run_id is not None
+        }
+        last_runs = self._last_runs_by_id(
             workspace_id=workspace_id,
-            documents=documents,
+            last_run_ids=last_run_ids,
         )
-        latest_successful_runs = self._latest_successful_runs(
+        last_successful_runs = self._last_successful_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
         for document in documents:
-            document.latest_run = latest_runs.get(document.id)
-            document.latest_successful_run = latest_successful_runs.get(document.id)
+            document.last_run = last_runs.get(document.id)
+            document.last_successful_run = last_successful_runs.get(document.id)
 
     def _apply_derived_fields(self, document: DocumentOut) -> None:
         updated_at = document.updated_at
-        latest_at = self._latest_run_at(document.latest_run)
+        latest_at = self._last_run_at(document.last_run)
         document.activity_at = latest_at if latest_at and latest_at > updated_at else updated_at
         document.latest_result = self._derive_latest_result(document)
         document.etag = format_weak_etag(build_etag_token(document.id, document.version))
@@ -1169,18 +1169,18 @@ class DocumentsService:
             workspace_id=document.workspace_id,
             name=document.name,
             file_type=self._derive_file_type(document.name),
-            status=document.status,
             uploader=document.uploader,
             assignee=document.assignee,
             tags=document.tags,
             byte_size=document.byte_size,
+            comment_count=document.comment_count,
             created_at=document.created_at,
             updated_at=document.updated_at,
             activity_at=activity_at,
             version=document.version,
             etag=document.etag,
-            latest_run=document.latest_run,
-            latest_successful_run=document.latest_successful_run,
+            last_run=document.last_run,
+            last_successful_run=document.last_successful_run,
             latest_result=document.latest_result,
         )
 
@@ -1220,8 +1220,37 @@ class DocumentsService:
             else_=DocumentFileType.UNKNOWN.value,
         )
 
+        phase_expr = case(
+            (Run.id.is_(None), None),
+            (Run.status != RunStatus.QUEUED, Run.status),
+            (Environment.status == "ready", Run.status),
+            else_=literal("building"),
+        )
+        phase_rows = self._session.execute(
+            select(
+                phase_expr.label("value"),
+                func.count().label("count"),
+            )
+            .select_from(Document)
+            .join(filtered_ids, filtered_ids.c.id == Document.id)
+            .outerjoin(Run, Run.id == Document.last_run_id)
+            .outerjoin(
+                Environment,
+                (Environment.workspace_id == Run.workspace_id)
+                & (Environment.configuration_id == Run.configuration_id)
+                & (Environment.engine_spec == Run.engine_spec)
+                & (Environment.deps_digest == Run.deps_digest),
+            )
+            .group_by(phase_expr)
+        ).all()
+        phase_buckets = [
+            {"value": coerce_value(value), "count": int(count or 0)}
+            for value, count in phase_rows
+        ]
+        phase_buckets.sort(key=lambda bucket: str(bucket["value"]))
+
         return {
-            "status": {"buckets": build_buckets(Document.status)},
+            "lastRunPhase": {"buckets": phase_buckets},
             "fileType": {"buckets": build_buckets(file_type_expr)},
         }
 
@@ -1276,63 +1305,57 @@ class DocumentsService:
                 unmapped=unmapped or 0,
             )
 
-        if document.status in {DocumentStatus.UPLOADED, DocumentStatus.PROCESSING}:
+        if document.last_run and document.last_run.status in {RunStatus.QUEUED, RunStatus.RUNNING}:
             return DocumentResultSummary(attention=0, unmapped=0, pending=True)
 
         return DocumentResultSummary(attention=0, unmapped=0)
 
     @staticmethod
-    def _latest_run_at(run: DocumentRunSummary | None) -> datetime | None:
+    def _last_run_at(run: DocumentRunSummary | None) -> datetime | None:
         if run is None:
             return None
-        return run.completed_at or run.started_at
+        return run.completed_at or run.started_at or run.created_at
 
-    @staticmethod
-    def _status_from_last_run(status: RunStatus | None) -> DocumentStatus:
-        if status == RunStatus.SUCCEEDED:
-            return DocumentStatus.PROCESSED
-        if status == RunStatus.FAILED:
-            return DocumentStatus.FAILED
-        if status == RunStatus.RUNNING:
-            return DocumentStatus.PROCESSING
-        return DocumentStatus.UPLOADED
-
-    def _latest_run_statuses(
+    def _last_runs_by_id(
         self,
         *,
         workspace_id: UUID,
-        document_ids: Sequence[UUID],
-    ) -> dict[UUID, RunStatus]:
-        if not document_ids:
+        last_run_ids: dict[UUID, UUID],
+    ) -> dict[UUID, DocumentRunSummary]:
+        if not last_run_ids:
             return {}
 
-        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
-        ranked_runs = (
+        run_ids = list({run_id for run_id in last_run_ids.values() if run_id is not None})
+        if not run_ids:
+            return {}
+
+        stmt = (
             select(
+                Run.id.label("run_id"),
                 Run.input_document_id.label("document_id"),
                 Run.status.label("status"),
-                func.row_number()
-                .over(
-                    partition_by=Run.input_document_id,
-                    order_by=timestamp.desc(),
-                )
-                .label("rank"),
+                Run.error_message.label("error_message"),
+                Run.completed_at.label("completed_at"),
+                Run.started_at.label("started_at"),
+                Run.created_at.label("created_at"),
+                Environment.status.label("env_status"),
+            )
+            .outerjoin(
+                Environment,
+                (Environment.workspace_id == Run.workspace_id)
+                & (Environment.configuration_id == Run.configuration_id)
+                & (Environment.engine_spec == Run.engine_spec)
+                & (Environment.deps_digest == Run.deps_digest),
             )
             .where(
                 Run.workspace_id == workspace_id,
+                Run.id.in_(run_ids),
                 Run.input_document_id.is_not(None),
-                Run.input_document_id.in_(document_ids),
             )
-            .subquery()
-        )
-
-        stmt = (
-            select(ranked_runs.c.document_id, ranked_runs.c.status)
-            .where(ranked_runs.c.rank == 1)
         )
         result = self._session.execute(stmt)
 
-        latest: dict[UUID, RunStatus] = {}
+        runs_by_doc: dict[UUID, DocumentRunSummary] = {}
         for row in result.mappings():
             document_id = row["document_id"]
             if not isinstance(document_id, UUID):
@@ -1340,64 +1363,25 @@ class DocumentsService:
             status = row["status"]
             if not isinstance(status, RunStatus):
                 status = RunStatus(str(status))
-            latest[document_id] = status
-
-        return latest
-
-    def _latest_stream_runs(
-        self,
-        *,
-        workspace_id: UUID,
-        documents: Sequence[DocumentOut],
-    ) -> dict[UUID, DocumentRunSummary]:
-        doc_ids = [doc.id for doc in documents]
-        if not doc_ids:
-            return {}
-
-        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
-        ranked_runs = (
-            select(
-                Run.input_document_id.label("document_id"),
-                Run.id.label("run_id"),
-                Run.status.label("status"),
-                Run.error_message.label("error_message"),
-                Run.completed_at.label("completed_at"),
-                Run.started_at.label("started_at"),
-                Run.created_at.label("created_at"),
-                func.row_number()
-                .over(
-                    partition_by=Run.input_document_id,
-                    order_by=timestamp.desc(),
-                )
-                .label("rank"),
+            env_status = row.get("env_status")
+            phase, phase_reason = self._derive_run_phase_details(
+                status=status,
+                env_status=env_status,
             )
-            .where(
-                Run.workspace_id == workspace_id,
-                Run.input_document_id.is_not(None),
-                Run.input_document_id.in_(doc_ids),
-            )
-            .subquery()
-        )
-
-        stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
-        result = self._session.execute(stmt)
-
-        latest: dict[UUID, DocumentRunSummary] = {}
-        for row in result.mappings():
-            document_id = row["document_id"]
-            if not isinstance(document_id, UUID):
-                document_id = UUID(str(document_id))
-            latest[document_id] = DocumentRunSummary(
+            runs_by_doc[document_id] = DocumentRunSummary(
                 id=row["run_id"],
-                status=row["status"],
-                started_at=self._ensure_utc(row.get("started_at") or row.get("created_at")),
+                status=status,
+                phase=phase,
+                phase_reason=phase_reason,
+                created_at=self._ensure_utc(row.get("created_at")),
+                started_at=self._ensure_utc(row.get("started_at")),
                 completed_at=self._ensure_utc(row.get("completed_at")),
                 error_summary=self._last_run_message(error_message=row.get("error_message")),
             )
 
-        return latest
+        return runs_by_doc
 
-    def _latest_successful_runs(
+    def _last_successful_runs(
         self,
         *,
         workspace_id: UUID,
@@ -1441,10 +1425,15 @@ class DocumentsService:
             document_id = row["document_id"]
             if not isinstance(document_id, UUID):
                 document_id = UUID(str(document_id))
+            status = row["status"]
+            if not isinstance(status, RunStatus):
+                status = RunStatus(str(status))
             latest[document_id] = DocumentRunSummary(
                 id=row["run_id"],
-                status=row["status"],
-                started_at=self._ensure_utc(row.get("started_at") or row.get("created_at")),
+                status=status,
+                phase=DocumentRunPhase.SUCCEEDED,
+                created_at=self._ensure_utc(row.get("created_at")),
+                started_at=self._ensure_utc(row.get("started_at")),
                 completed_at=self._ensure_utc(row.get("completed_at")),
                 error_summary=self._last_run_message(error_message=row.get("error_message")),
             )
@@ -1456,6 +1445,29 @@ class DocumentsService:
         if error_message:
             return error_message
         return None
+
+    @staticmethod
+    def _derive_run_phase_details(
+        *,
+        status: RunStatus,
+        env_status: Any | None,
+    ) -> tuple[DocumentRunPhase, DocumentRunPhaseReason | None]:
+        if status != RunStatus.QUEUED:
+            return DocumentRunPhase(status.value), None
+        if env_status is None:
+            return DocumentRunPhase.BUILDING, DocumentRunPhaseReason.ENVIRONMENT_MISSING
+        if isinstance(env_status, Enum):
+            env_value = env_status.value
+        else:
+            env_value = str(env_status)
+        if env_value == "ready":
+            return DocumentRunPhase.QUEUED, None
+        reason = {
+            "queued": DocumentRunPhaseReason.ENVIRONMENT_QUEUED,
+            "building": DocumentRunPhaseReason.ENVIRONMENT_BUILDING,
+            "failed": DocumentRunPhaseReason.ENVIRONMENT_FAILED,
+        }.get(env_value)
+        return DocumentRunPhase.BUILDING, reason
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:

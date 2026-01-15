@@ -17,14 +17,8 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_api.models import (
-    Document,
-    DocumentSource,
-    DocumentStatus,
-    DocumentTag,
-    Run,
-    RunStatus,
-)
+from ade_api.models import Document, DocumentSource, DocumentTag, Environment, Run, RunStatus
+from .schemas import DocumentRunPhase
 from ade_api.settings import MAX_SET_SIZE
 
 from .tags import TagValidationError, normalize_tag_set
@@ -32,31 +26,26 @@ from .tags import TagValidationError, normalize_tag_set
 ALLOWED_FILE_TYPES = {"xlsx", "xls", "csv", "pdf"}
 
 
+def _last_run_at_expr():
+    return (
+        select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
+        .where(Run.id == Document.last_run_id)
+        .scalar_subquery()
+    )
+
+
 def _activity_at_expr():
+    last_run_at = _last_run_at_expr()
     return case(
-        (Document.last_run_at.is_(None), Document.updated_at),
-        (Document.updated_at.is_(None), Document.last_run_at),
-        (Document.last_run_at > Document.updated_at, Document.last_run_at),
+        (last_run_at.is_(None), Document.updated_at),
+        (Document.updated_at.is_(None), last_run_at),
+        (last_run_at > Document.updated_at, last_run_at),
         else_=Document.updated_at,
     )
 
 
 DOCUMENT_FILTER_REGISTRY = FilterRegistry(
     [
-        FilterField(
-            id="status",
-            column=Document.status,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.ENUM,
-            enum_type=DocumentStatus,
-        ),
         FilterField(
             id="name",
             column=Document.original_filename,
@@ -71,7 +60,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
             value_type=FilterValueType.STRING,
         ),
         FilterField(
-            id="runStatus",
+            id="lastRunPhase",
             column=Run.status,
             operators={
                 FilterOperator.EQ,
@@ -82,7 +71,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
                 FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.ENUM,
-            enum_type=RunStatus,
+            enum_type=DocumentRunPhase,
         ),
         FilterField(
             id="fileType",
@@ -231,58 +220,48 @@ def apply_document_filters(
     parsed_filters = prepare_filters(filters, DOCUMENT_FILTER_REGISTRY)
     predicates: list = []
 
-    latest_runs = None
+    last_run_joined = False
+    phase_expr = None
 
     for parsed in parsed_filters:
         filter_id = parsed.field.id
-        if filter_id == "status":
-            values = parsed.value
-            status_values = values if isinstance(values, list) else [values]
-            normalized = [
-                value.value if isinstance(value, DocumentStatus) else str(value)
-                for value in status_values
-            ]
-            if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
-                predicate = ~Document.status.in_(normalized)
-            else:
-                predicate = Document.status.in_(normalized)
-            predicates.append(predicate)
-            continue
+        if filter_id == "lastRunPhase":
+            if parsed.operator == FilterOperator.IS_EMPTY:
+                predicates.append(Document.last_run_id.is_(None))
+                continue
+            if parsed.operator == FilterOperator.IS_NOT_EMPTY:
+                predicates.append(Document.last_run_id.is_not(None))
+                continue
+            if not last_run_joined:
+                stmt = stmt.outerjoin(Run, Run.id == Document.last_run_id)
+                stmt = stmt.outerjoin(
+                    Environment,
+                    (Environment.workspace_id == Run.workspace_id)
+                    & (Environment.configuration_id == Run.configuration_id)
+                    & (Environment.engine_spec == Run.engine_spec)
+                    & (Environment.deps_digest == Run.deps_digest),
+                )
+                phase_expr = case(
+                    (Run.id.is_(None), None),
+                    (Run.status != RunStatus.QUEUED, Run.status),
+                    (Environment.status == "ready", Run.status),
+                    else_="building",
+                )
+                last_run_joined = True
 
-        if filter_id == "runStatus":
-            if latest_runs is None:
-                timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
-                latest_runs = (
-                    select(
-                        Run.input_document_id.label("document_id"),
-                        Run.status.label("status"),
-                        func.row_number()
-                        .over(
-                            partition_by=Run.input_document_id,
-                            order_by=timestamp.desc(),
-                        )
-                        .label("rank"),
-                    )
-                    .where(Run.input_document_id.is_not(None))
-                    .subquery()
-                )
-                stmt = stmt.join(latest_runs, latest_runs.c.document_id == Document.id)
             values = parsed.value
-            status_values = values if isinstance(values, list) else [values]
-            status_list = [
-                value.value if isinstance(value, RunStatus) else str(value)
-                for value in status_values
+            phase_values = values if isinstance(values, list) else [values]
+            normalized = [
+                value.value if isinstance(value, DocumentRunPhase) else str(value)
+                for value in phase_values
             ]
             if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
                 predicate = and_(
-                    latest_runs.c.rank == 1,
-                    ~latest_runs.c.status.in_(status_list),
+                    phase_expr.is_not(None),
+                    ~phase_expr.in_(normalized),
                 )
             else:
-                predicate = and_(
-                    latest_runs.c.rank == 1,
-                    latest_runs.c.status.in_(status_list),
-                )
+                predicate = phase_expr.in_(normalized)
             predicates.append(predicate)
             continue
 

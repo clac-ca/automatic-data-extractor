@@ -71,17 +71,19 @@ from .exceptions import (
     DocumentPreviewUnsupportedError,
     DocumentTooLargeError,
     DocumentWorksheetParseError,
+    InvalidDocumentCommentMentionsError,
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
 )
 from .schemas import (
-    DocumentBatchArchiveRequest,
-    DocumentBatchArchiveResponse,
     DocumentBatchDeleteRequest,
     DocumentBatchDeleteResponse,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
     DocumentChangesPage,
+    DocumentCommentCreate,
+    DocumentCommentOut,
+    DocumentCommentPage,
     DocumentListPage,
     DocumentListRow,
     DocumentOut,
@@ -93,7 +95,16 @@ from .schemas import (
     TagCatalogPage,
 )
 from .service import DocumentsService
-from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import (
+    COMMENT_CURSOR_FIELDS,
+    COMMENT_DEFAULT_SORT,
+    COMMENT_ID_FIELD,
+    COMMENT_SORT_FIELDS,
+    CURSOR_FIELDS,
+    DEFAULT_SORT,
+    ID_FIELD,
+    SORT_FIELDS,
+)
 
 router = APIRouter(
     prefix="/workspaces/{workspaceId}/documents",
@@ -636,164 +647,6 @@ def patch_document_tags_batch(
     return DocumentBatchTagsResponse(documents=documents)
 
 
-@router.post(
-    "/batch/archive",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentBatchArchiveResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Archive multiple documents",
-    response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to update documents.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document updates.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "One or more documents were not found within the workspace.",
-        },
-    },
-)
-def archive_documents_batch_endpoint(
-    workspace_id: WorkspacePath,
-    payload: DocumentBatchArchiveRequest,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> DocumentBatchArchiveResponse:
-    try:
-        documents = service.archive_documents_batch(
-            workspace_id=workspace_id,
-            document_ids=payload.document_ids,
-        )
-    except DocumentNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return DocumentBatchArchiveResponse(documents=documents)
-
-
-@router.post(
-    "/batch/restore",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentBatchArchiveResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Restore multiple documents from the archive",
-    response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to update documents.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document updates.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "One or more documents were not found within the workspace.",
-        },
-    },
-)
-def restore_documents_batch_endpoint(
-    workspace_id: WorkspacePath,
-    payload: DocumentBatchArchiveRequest,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> DocumentBatchArchiveResponse:
-    try:
-        documents = service.restore_documents_batch(
-            workspace_id=workspace_id,
-            document_ids=payload.document_ids,
-        )
-    except DocumentNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return DocumentBatchArchiveResponse(documents=documents)
-
-
-@router.post(
-    "/{documentId}/archive",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentOut,
-    status_code=status.HTTP_200_OK,
-    summary="Archive a document",
-    response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to update documents.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document updates.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Document not found within the workspace.",
-        },
-    },
-)
-def archive_document_endpoint(
-    workspace_id: WorkspacePath,
-    document_id: DocumentPath,
-    request: Request,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> DocumentOut:
-    try:
-        current = service.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.version),
-        )
-        return service.archive_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-    except DocumentNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-
-@router.post(
-    "/{documentId}/restore",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentOut,
-    status_code=status.HTTP_200_OK,
-    summary="Restore a document from the archive",
-    response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to update documents.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document updates.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Document not found within the workspace.",
-        },
-    },
-)
-def restore_document_endpoint(
-    workspace_id: WorkspacePath,
-    document_id: DocumentPath,
-    request: Request,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> DocumentOut:
-    try:
-        current = service.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.version),
-        )
-        return service.restore_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-    except DocumentNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-
 @router.put(
     "/{documentId}/tags",
     dependencies=[Security(require_csrf)],
@@ -964,6 +817,95 @@ def read_document_list_row(
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{documentId}/comments",
+    response_model=DocumentCommentPage,
+    status_code=status.HTTP_200_OK,
+    summary="List document comments",
+    response_model_exclude_none=False,
+    dependencies=[Depends(strict_cursor_query_guard())],
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to access comments.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document access.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+def list_document_comments(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+) -> DocumentCommentPage:
+    try:
+        resolved_sort = resolve_cursor_sort(
+            list_query.sort,
+            allowed=COMMENT_SORT_FIELDS,
+            cursor_fields=COMMENT_CURSOR_FIELDS,
+            default=COMMENT_DEFAULT_SORT,
+            id_field=COMMENT_ID_FIELD,
+        )
+        return service.list_document_comments(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            limit=list_query.limit,
+            cursor=list_query.cursor,
+            resolved_sort=resolved_sort,
+            include_total=list_query.include_total,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{documentId}/comments",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentCommentOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a document comment",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to create comments.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document access.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Comment payload is invalid.",
+        },
+    },
+)
+def create_document_comment(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    payload: DocumentCommentCreate,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> DocumentCommentOut:
+    try:
+        return service.create_document_comment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            body=payload.body,
+            mentions=payload.mentions,
+            actor=actor,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidDocumentCommentMentionsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
 @router.get(

@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import openpyxl
-from sqlalchemy import insert, select
+from sqlalchemy import case, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,7 +43,6 @@ from ade_api.models import (
     Configuration,
     ConfigurationStatus,
     Document,
-    DocumentStatus,
     Run,
     RunField,
     RunMetrics,
@@ -226,7 +225,6 @@ class RunsService:
             run_options_by_document_id={
                 input_document_id: run_options_payload,
             },
-            document_status=None,
             existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
         )
 
@@ -368,7 +366,6 @@ class RunsService:
                     doc_id: run_options.model_dump(mode="json", exclude_none=True)
                     for doc_id, run_options in run_options_by_document_id.items()
                 },
-                document_status=None,
                 existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
             )
 
@@ -545,7 +542,7 @@ class RunsService:
             select(Document)
             .where(
                 Document.workspace_id == workspace_id,
-                Document.status == DocumentStatus.UPLOADED,
+                Document.last_run_id.is_(None),
                 Document.deleted_at.is_(None),
                 ~pending_run_exists,
             )
@@ -589,7 +586,6 @@ class RunsService:
         deps_digest: str,
         input_sheet_names_by_document_id: dict[UUID, list[str] | None] | None,
         run_options_by_document_id: dict[UUID, dict[str, Any] | None] | None,
-        document_status: DocumentStatus | None,
         existing_statuses: Sequence[RunStatus] | None,
     ) -> None:
         if not document_ids:
@@ -600,8 +596,6 @@ class RunsService:
             Document.deleted_at.is_(None),
             Document.id.in_(document_ids),
         )
-        if document_status is not None:
-            base_stmt = base_stmt.where(Document.status == document_status)
         result = self._session.execute(base_stmt)
         eligible_ids = [doc_id for (doc_id,) in result.all()]
         if not eligible_ids:
@@ -647,11 +641,22 @@ class RunsService:
                 for doc_id in ids
             ]
 
+        def update_last_run_ids(rows: Sequence[dict[str, Any]]) -> None:
+            if not rows:
+                return
+            doc_to_run = {row["input_document_id"]: row["id"] for row in rows}
+            self._session.execute(
+                update(Document)
+                .where(Document.id.in_(list(doc_to_run.keys())))
+                .values(last_run_id=case(doc_to_run, value=Document.id))
+            )
+
         rows = build_rows(eligible_ids)
         for attempt in range(2):
             try:
                 with self._session.begin_nested():
                     self._session.execute(insert(Run), rows)
+                    update_last_run_ids(rows)
                 return
             except IntegrityError:
                 if attempt:

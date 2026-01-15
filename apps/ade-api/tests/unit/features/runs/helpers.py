@@ -12,7 +12,6 @@ from ade_api.models import (
     ConfigurationStatus,
     Document,
     DocumentSource,
-    DocumentStatus,
     Workspace,
 )
 from ade_api.settings import Settings
@@ -80,7 +79,6 @@ def build_runs_service(
         sha256="deadbeef",
         stored_uri=stored_uri,
         attributes={},
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=utc_now(),
     )

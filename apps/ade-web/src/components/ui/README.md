@@ -20,6 +20,7 @@ keep feature-specific UI in `src/pages/**/components/`.
 | data-table-sort-list | DiceUI | `npx shadcn@latest add "@diceui/data-table-sort-list"` | Adds sort list UI. |
 | action-bar | DiceUI | `npx shadcn@latest add "@diceui/action-bar"` | Floating action bar for row selection. |
 | stack | DiceUI | `npx shadcn@latest add "@diceui/stack"` | — |
+| mention | DiceUI | `npx shadcn@latest add "@diceui/mention"` | Mention input with suggestions. |
 | select | shadcn | `npx shadcn@latest add select` | — |
 | checkbox | shadcn | `npx shadcn@latest add checkbox` | — |
 | dialog | shadcn | `npx shadcn@latest add dialog` | — |

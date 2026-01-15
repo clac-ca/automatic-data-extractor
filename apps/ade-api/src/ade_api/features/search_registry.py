@@ -9,7 +9,6 @@ from ade_api.models import (
     ApiKey,
     Configuration,
     Document,
-    DocumentStatus,
     DocumentTag,
     Permission,
     Role,
@@ -46,14 +45,6 @@ def _any_field(field_id: str, relationship, column) -> SearchField:
     return SearchField(field_id, _builder)
 
 
-_DOCUMENT_STATUS_DISPLAY = case(
-    (Document.status == DocumentStatus.ARCHIVED, "archived"),
-    (Document.status == DocumentStatus.FAILED, "failed"),
-    (Document.status == DocumentStatus.PROCESSED, "ready"),
-    (Document.status == DocumentStatus.PROCESSING, "processing"),
-    else_="queued",
-)
-
 _ASSIGNMENT_SCOPE_TYPE = case(
     (UserRoleAssignment.workspace_id.is_(None), "global"),
     else_="workspace",
@@ -64,7 +55,6 @@ SEARCH_REGISTRY = SearchRegistry(
     {
         "documents": [
             _field("name", Document.original_filename),
-            _field("status", _DOCUMENT_STATUS_DISPLAY),
             _has_field("uploaderName", Document.uploaded_by_user, User.display_name),
             _has_field("uploaderEmail", Document.uploaded_by_user, User.email),
             _any_field("tags", Document.tags, DocumentTag.tag),

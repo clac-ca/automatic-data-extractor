@@ -116,6 +116,13 @@ class InvalidDocumentTagsError(Exception):
         super().__init__(message)
 
 
+class InvalidDocumentCommentMentionsError(Exception):
+    """Raised when document comment mentions are invalid."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
@@ -126,4 +133,5 @@ __all__ = [
     "DocumentPreviewSheetNotFoundError",
     "DocumentPreviewParseError",
     "InvalidDocumentTagsError",
+    "InvalidDocumentCommentMentionsError",
 ]

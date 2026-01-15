@@ -5,13 +5,16 @@ export type { DocumentPageResult, ListDocumentsQuery } from "@api/documents";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
 export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
-export type DocumentRow = DocumentListRow & { uploadProgress?: number | null };
+export type DocumentRow = DocumentListRow & {
+  uploadProgress?: number | null;
+  commentCount?: number | null;
+};
 export type DocumentResultSummary = components["schemas"]["DocumentResultSummary"];
 export type DocumentRunSummary = components["schemas"]["DocumentRunSummary"];
+export type DocumentRunPhase = components["schemas"]["DocumentRunPhase"];
+export type DocumentRunPhaseReason = components["schemas"]["DocumentRunPhaseReason"];
 
 export type RunResource = components["schemas"]["RunResource"];
-
-export type DocumentStatus = components["schemas"]["DocumentStatus"];
 
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 
@@ -29,6 +32,7 @@ export type DocumentsListParams = {
   page: number;
   perPage: number;
   sort: string | null;
+  q: string | null;
   filters: FilterItem[] | null;
   joinOperator: FilterJoinOperator | null;
 };

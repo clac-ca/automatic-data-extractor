@@ -14,7 +14,6 @@ from ade_api.models import (
     DocumentEvent,
     DocumentEventType,
     DocumentSource,
-    DocumentStatus,
 )
 from tests.utils import login
 
@@ -186,10 +185,8 @@ async def test_document_changes_cursor_too_old(async_client, seed_identity, db_s
         stored_uri="documents/stale.txt",
         attributes={},
         uploaded_by_user_id=user.id,
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=utc_now() + timedelta(days=1),
-        last_run_at=None,
     )
     db_session.add(doc)
 

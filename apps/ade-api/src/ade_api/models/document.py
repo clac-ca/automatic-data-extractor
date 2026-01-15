@@ -14,12 +14,14 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
-    text,
+    func,
+    select,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
@@ -27,20 +29,11 @@ if TYPE_CHECKING:
     from .user import User
     from .workspace import Workspace
 
+from .run import Run
+
 
 def _enum_values(enum_cls: type[Enum]) -> list[str]:
     return [member.value for member in enum_cls]
-
-
-class DocumentStatus(str, Enum):
-    """Canonical document processing states."""
-
-    UPLOADING = "uploading"
-    UPLOADED = "uploaded"
-    PROCESSING = "processing"
-    PROCESSED = "processed"
-    FAILED = "failed"
-    ARCHIVED = "archived"
 
 
 class DocumentSource(str, Enum):
@@ -56,7 +49,6 @@ class DocumentEventType(str, Enum):
     DELETED = "document.deleted"
 
 
-DOCUMENT_STATUS_VALUES = tuple(status.value for status in DocumentStatus)
 DOCUMENT_SOURCE_VALUES = tuple(source.value for source in DocumentSource)
 DOCUMENT_EVENT_TYPE_VALUES = tuple(change.value for change in DocumentEventType)
 
@@ -75,6 +67,12 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -105,18 +103,6 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
         foreign_keys=[assignee_user_id],
     )
-    status: Mapped[DocumentStatus] = mapped_column(
-        SAEnum(
-            DocumentStatus,
-            name="document_status",
-            native_enum=False,
-            length=20,
-            values_callable=_enum_values,
-        ),
-        nullable=False,
-        default=DocumentStatus.UPLOADED,
-        server_default=DocumentStatus.UPLOADED.value,
-    )
     source: Mapped[DocumentSource] = mapped_column(
         SAEnum(
             DocumentSource,
@@ -130,7 +116,13 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=DocumentSource.MANUAL_UPLOAD.value,
     )
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
-    last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_run_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
+    last_run_at: Mapped[datetime | None] = column_property(
+        select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
+        .where(Run.id == last_run_id)
+        .correlate_except(Run)
+        .scalar_subquery()
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_by_user_id: Mapped[UUID | None] = mapped_column(
         GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
@@ -144,28 +136,14 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __table_args__ = (
         Index(
-            "ix_documents_workspace_status_created",
-            "workspace_id",
-            "status",
-            "created_at",
-        ),
-        Index(
-            "ix_documents_workspace_status_created_live",
-            "workspace_id",
-            "status",
-            "created_at",
-            sqlite_where=text("deleted_at IS NULL"),
-            mssql_where=text("deleted_at IS NULL"),
-        ),
-        Index(
             "ix_documents_workspace_created",
             "workspace_id",
             "created_at",
         ),
         Index(
-            "ix_documents_workspace_last_run",
+            "ix_documents_workspace_last_run_id",
             "workspace_id",
-            "last_run_at",
+            "last_run_id",
         ),
         Index("ix_documents_workspace_source", "workspace_id", "source"),
         Index("ix_documents_workspace_uploader", "workspace_id", "uploaded_by_user_id"),
@@ -202,6 +180,89 @@ class DocumentTag(UUIDPrimaryKeyMixin, Base):
         Index("ix_document_tags_document_id", "document_id"),
         Index("ix_document_tags_tag", "tag"),
         Index("document_tags_tag_document_id_idx", "tag", "document_id"),
+    )
+
+
+class DocumentComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Threaded comments attached to a document."""
+
+    __tablename__ = "document_comments"
+
+    workspace_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("documents.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    author_user_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    author_user: Mapped[User] = relationship(
+        "User",
+        lazy="selectin",
+        foreign_keys=[author_user_id],
+    )
+    document: Mapped[Document] = relationship("Document", lazy="selectin")
+    mentions: Mapped[list[DocumentCommentMention]] = relationship(
+        "DocumentCommentMention",
+        back_populates="comment",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    __table_args__ = (
+        Index("ix_document_comments_document_created", "document_id", "created_at"),
+        Index("ix_document_comments_workspace_created", "workspace_id", "created_at"),
+    )
+
+    @property
+    def mentioned_users(self) -> list[User]:
+        return [
+            mention.mentioned_user
+            for mention in getattr(self, "mentions", [])
+            if mention.mentioned_user is not None
+        ]
+
+
+class DocumentCommentMention(UUIDPrimaryKeyMixin, Base):
+    """Join table for comment mentions."""
+
+    __tablename__ = "document_comment_mentions"
+
+    comment_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("document_comments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    mentioned_user_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+
+    comment: Mapped[DocumentComment] = relationship(
+        "DocumentComment",
+        back_populates="mentions",
+        lazy="selectin",
+    )
+    mentioned_user: Mapped[User] = relationship("User", lazy="selectin")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "comment_id",
+            "mentioned_user_id",
+            name="document_comment_mentions_comment_user_key",
+        ),
+        Index("ix_document_comment_mentions_comment", "comment_id"),
+        Index("ix_document_comment_mentions_user", "mentioned_user_id"),
     )
 
 
@@ -248,11 +309,9 @@ class DocumentEvent(Base):
 __all__ = [
     "DOCUMENT_EVENT_TYPE_VALUES",
     "DOCUMENT_SOURCE_VALUES",
-    "DOCUMENT_STATUS_VALUES",
     "DocumentEvent",
     "DocumentEventType",
     "Document",
     "DocumentSource",
-    "DocumentStatus",
     "DocumentTag",
 ]

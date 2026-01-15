@@ -7,7 +7,6 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ade_api.common.time import utc_now
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.models import Document
 
@@ -21,7 +20,7 @@ def stage_document_input(
     session: Session,
     run_dir: Path,
 ) -> Path:
-    """Copy ``document`` into ``run_dir/input`` and update access metadata."""
+    """Copy ``document`` into ``run_dir/input``."""
 
     input_dir = run_dir / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -30,7 +29,5 @@ def stage_document_input(
     destination = input_dir / document.original_filename
 
     shutil.copy2(source, destination)
-    document.last_run_at = utc_now()
-    session.flush()
 
     return destination

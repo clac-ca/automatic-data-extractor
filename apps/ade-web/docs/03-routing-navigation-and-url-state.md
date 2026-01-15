@@ -429,15 +429,15 @@ On `/workspaces/:workspaceId/documents`:
 
   * Free‑text query (document name, source, etc.).
 
-* `status` (string):
+* `lastRunPhase` (string):
 
-  * Comma‑separated document statuses.
-  * Example: `status=uploaded,processed,failed`.
+  * Comma‑separated run phases.
+  * Example: `lastRunPhase=queued,failed`.
 
 * `sort` (string):
 
   * Sort key and direction.
-  * Examples: `sort=-created_at`, `sort=-last_run_at`.
+  * Examples: `sort=-createdAt`, `sort=-lastRunAt`.
 
 * `view` (string):
 

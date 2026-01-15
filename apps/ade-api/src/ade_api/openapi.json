@@ -6307,486 +6307,6 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/batch/archive": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Archive multiple documents",
-        "operationId": "archive_documents_batch_endpoint_api_v1_workspaces__workspaceId__documents_batch_archive_post",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update documents.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspaceId}/documents/batch/restore": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Restore multiple documents from the archive",
-        "operationId": "restore_documents_batch_endpoint_api_v1_workspaces__workspaceId__documents_batch_restore_post",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update documents.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Archive a document",
-        "operationId": "archive_document_endpoint_api_v1_workspaces__workspaceId__documents__documentId__archive_post",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "documentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Document identifier",
-              "title": "Documentid"
-            },
-            "description": "Document identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentOut"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update documents.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Document not found within the workspace.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Restore a document from the archive",
-        "operationId": "restore_document_endpoint_api_v1_workspaces__workspaceId__documents__documentId__restore_post",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "documentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Document identifier",
-              "title": "Documentid"
-            },
-            "description": "Document identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentOut"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update documents.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Document not found within the workspace.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags": {
       "put": {
         "tags": [
@@ -7115,6 +6635,366 @@
                 }
               }
             },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List document comments",
+        "operationId": "list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Items per page (max 200)",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JSON array of {id, desc}.",
+              "title": "Sort"
+            },
+            "description": "JSON array of {id, desc}."
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "URL-encoded JSON array of filter objects.",
+              "examples": {
+                "statusIn": {
+                  "summary": "Status filter",
+                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+                }
+              },
+              "title": "Filters"
+            },
+            "description": "URL-encoded JSON array of filter objects."
+          },
+          {
+            "name": "joinOperator",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/FilterJoinOperator",
+              "description": "Logical operator to join filters (and/or).",
+              "default": "and"
+            },
+            "description": "Logical operator to join filters (and/or)."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
+              "examples": {
+                "multiToken": {
+                  "summary": "Search multiple tokens",
+                  "value": "acme invoice"
+                }
+              },
+              "title": "Q"
+            },
+            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCommentPage"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to access comments.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Create a document comment",
+        "operationId": "create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentCommentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCommentOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to create comments.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Comment payload is invalid.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -13014,9 +12894,7 @@
         "required": [
           "limit",
           "hasMore",
-          "nextCursor",
-          "totalIncluded",
-          "totalCount"
+          "totalIncluded"
         ],
         "title": "CursorMeta"
       },
@@ -13038,43 +12916,6 @@
           "created"
         ],
         "title": "DirectoryWriteResponse"
-      },
-      "DocumentBatchArchiveRequest": {
-        "properties": {
-          "documentIds": {
-            "items": {
-              "type": "string",
-              "format": "uuid",
-              "description": "UUIDv7 (RFC 9562) generated in the application layer."
-            },
-            "type": "array",
-            "minItems": 1,
-            "title": "Documentids",
-            "description": "Documents to archive or restore (all-or-nothing)."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "documentIds"
-        ],
-        "title": "DocumentBatchArchiveRequest",
-        "description": "Payload for archiving or restoring multiple documents."
-      },
-      "DocumentBatchArchiveResponse": {
-        "properties": {
-          "documents": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentOut"
-            },
-            "type": "array",
-            "title": "Documents"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "DocumentBatchArchiveResponse",
-        "description": "Response envelope for batch archive or restore operations."
       },
       "DocumentBatchDeleteRequest": {
         "properties": {
@@ -13257,6 +13098,139 @@
         "title": "DocumentChangesPage",
         "description": "Envelope for cursor-based change feed results."
       },
+      "DocumentCommentCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mentions",
+            "description": "Optional list of mentioned user IDs."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "DocumentCommentCreate",
+        "description": "Payload for creating a document comment."
+      },
+      "DocumentCommentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspaceid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Documentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mentions": {
+            "items": {
+              "$ref": "#/components/schemas/UserSummary"
+            },
+            "type": "array",
+            "title": "Mentions"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "documentId",
+          "body",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "DocumentCommentOut",
+        "description": "Serialized representation of a document comment."
+      },
+      "DocumentCommentPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentCommentOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
+          },
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "meta"
+        ],
+        "title": "DocumentCommentPage",
+        "description": "Cursor-based envelope of document comments."
+      },
       "DocumentFileType": {
         "type": "string",
         "enum": [
@@ -13325,9 +13299,6 @@
           "fileType": {
             "$ref": "#/components/schemas/DocumentFileType"
           },
-          "status": {
-            "$ref": "#/components/schemas/DocumentStatus"
-          },
           "uploader": {
             "anyOf": [
               {
@@ -13358,6 +13329,11 @@
           "byteSize": {
             "type": "integer",
             "title": "Bytesize"
+          },
+          "commentCount": {
+            "type": "integer",
+            "title": "Commentcount",
+            "default": 0
           },
           "createdAt": {
             "type": "string",
@@ -13391,7 +13367,7 @@
             "title": "Etag",
             "description": "Weak ETag for optimistic concurrency checks."
           },
-          "latestRun": {
+          "lastRun": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DocumentRunSummary"
@@ -13401,7 +13377,7 @@
               }
             ]
           },
-          "latestSuccessfulRun": {
+          "lastSuccessfulRun": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DocumentRunSummary"
@@ -13429,7 +13405,6 @@
           "workspaceId",
           "name",
           "fileType",
-          "status",
           "byteSize",
           "createdAt",
           "updatedAt",
@@ -13473,13 +13448,15 @@
             "type": "integer",
             "title": "Bytesize"
           },
+          "commentCount": {
+            "type": "integer",
+            "title": "Commentcount",
+            "default": 0
+          },
           "metadata": {
             "additionalProperties": true,
             "type": "object",
             "title": "Metadata"
-          },
-          "status": {
-            "$ref": "#/components/schemas/DocumentStatus"
           },
           "source": {
             "$ref": "#/components/schemas/DocumentSource"
@@ -13596,7 +13573,7 @@
             ],
             "description": "Summary of the assigned user when available."
           },
-          "latestRun": {
+          "lastRun": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DocumentRunSummary"
@@ -13605,9 +13582,9 @@
                 "type": "null"
               }
             ],
-            "description": "Latest run execution associated with the document when available."
+            "description": "Last run created for the document when available."
           },
-          "latestSuccessfulRun": {
+          "lastSuccessfulRun": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DocumentRunSummary"
@@ -13648,7 +13625,6 @@
           "workspaceId",
           "name",
           "byteSize",
-          "status",
           "source",
           "expiresAt",
           "createdAt",
@@ -13691,6 +13667,29 @@
         "title": "DocumentResultSummary",
         "description": "Summary of the latest document result metadata."
       },
+      "DocumentRunPhase": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "building",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "DocumentRunPhase",
+        "description": "UI-facing phase derived from run + environment state."
+      },
+      "DocumentRunPhaseReason": {
+        "type": "string",
+        "enum": [
+          "environment_missing",
+          "environment_queued",
+          "environment_building",
+          "environment_failed"
+        ],
+        "title": "DocumentRunPhaseReason",
+        "description": "Reason for a derived run phase when queued but blocked by env readiness."
+      },
       "DocumentRunSummary": {
         "properties": {
           "id": {
@@ -13701,6 +13700,27 @@
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/DocumentRunPhase",
+            "description": "Derived phase used by the documents UI."
+          },
+          "phaseReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRunPhaseReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional reason for a derived phase when the run is blocked."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat",
+            "description": "Timestamp for when the run was created."
           },
           "startedAt": {
             "anyOf": [
@@ -13745,7 +13765,9 @@
         "type": "object",
         "required": [
           "id",
-          "status"
+          "status",
+          "phase",
+          "createdAt"
         ],
         "title": "DocumentRunSummary",
         "description": "Minimal representation of a run associated with a document."
@@ -13792,19 +13814,6 @@
         ],
         "title": "DocumentSource",
         "description": "Origins for uploaded documents."
-      },
-      "DocumentStatus": {
-        "type": "string",
-        "enum": [
-          "uploading",
-          "uploaded",
-          "processing",
-          "processed",
-          "failed",
-          "archived"
-        ],
-        "title": "DocumentStatus",
-        "description": "Canonical document processing states."
       },
       "DocumentTagsPatch": {
         "properties": {

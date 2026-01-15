@@ -10,7 +10,6 @@ from ade_api.models import (
     DocumentEvent,
     DocumentEventType,
     DocumentSource,
-    DocumentStatus,
     Workspace,
 )
 
@@ -35,10 +34,8 @@ def _seed_document(session, workspace_id, document_id, now):
         sha256="0" * 64,
         stored_uri=f"{document_id}.bin",
         attributes={},
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=now + timedelta(days=1),
-        last_run_at=None,
     )
     session.add(document)
     session.flush()

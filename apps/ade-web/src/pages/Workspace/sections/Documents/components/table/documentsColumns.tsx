@@ -6,12 +6,12 @@ import { DataTableColumnHeader } from "@/components/data-table/data-table-column
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import type { DocumentRow, DocumentStatus, FileType, MappingHealth, WorkspacePerson } from "../../types";
+import type { DocumentRow, DocumentRunPhase, FileType, MappingHealth, WorkspacePerson } from "../../types";
 import { fileTypeLabel, formatBytes, formatTimestamp, shortId } from "../../utils";
 import { ActionsCell } from "./cells/ActionsCell";
 import { AssigneeCell } from "./cells/AssigneeCell";
 import { DocumentNameCell } from "./cells/DocumentNameCell";
-import { DocumentStatusCell } from "./cells/DocumentStatusCell";
+import { DocumentRunPhaseCell } from "./cells/DocumentRunPhaseCell";
 import { TagsCell } from "./cells/TagsCell";
 
 export type DocumentsColumnContext = {
@@ -19,10 +19,14 @@ export type DocumentsColumnContext = {
   people: WorkspacePerson[];
   tagOptions: string[];
   rowPresence?: Map<string, PresenceParticipant[]>;
+  selectedDocumentId?: string | null;
+  isPreviewOpen: boolean;
+  isCommentsOpen: boolean;
+  onOpenPreview?: (documentId: string) => void;
+  onTogglePreview: (documentId: string) => void;
+  onToggleComments: (documentId: string) => void;
   onAssign: (documentId: string, assigneeId: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
-  onArchive: (documentId: string) => void;
-  onRestore: (documentId: string) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
@@ -34,26 +38,29 @@ export function useDocumentsColumns({
   people,
   tagOptions,
   rowPresence,
+  selectedDocumentId,
+  isPreviewOpen,
+  isCommentsOpen,
+  onOpenPreview,
+  onTogglePreview,
+  onToggleComments,
   onAssign,
   onToggleTag,
-  onArchive,
-  onRestore,
   onDeleteRequest,
   onDownloadOutput,
   onDownloadOriginal,
   isRowActionPending,
 }: DocumentsColumnContext) {
   const enableAdvancedOnly = filterMode === "advanced";
-  const statusOptions = useMemo(
-    () =>
-      (["uploading", "uploaded", "processing", "processed", "failed", "archived"] as DocumentStatus[]).map(
-        (value) => ({
-          value,
-          label: value[0]?.toUpperCase() + value.slice(1),
-        }),
-      ),
-    [],
-  );
+  const runPhaseOptions = useMemo(() => {
+    const phases = (["queued", "building", "running", "succeeded", "failed"] as DocumentRunPhase[]).map(
+      (value) => ({
+        value,
+        label: value[0]?.toUpperCase() + value.slice(1),
+      }),
+    );
+    return [{ value: "__empty__", label: "No runs" }, ...phases];
+  }, []);
 
   const fileTypeOptions = useMemo(
     () =>
@@ -72,15 +79,6 @@ export function useDocumentsColumns({
   const tagFilterOptions = useMemo(
     () => tagOptions.map((tag) => ({ label: tag, value: tag })),
     [tagOptions],
-  );
-
-  const runStatusOptions = useMemo(
-    () =>
-      (["queued", "running", "succeeded", "failed"] as const).map((value) => ({
-        value,
-        label: value[0]?.toUpperCase() + value.slice(1),
-      })),
-    [],
   );
 
   return useMemo<ColumnDef<DocumentRow>[]>(
@@ -136,6 +134,10 @@ export function useDocumentsColumns({
           <DocumentNameCell
             name={row.getValue<string>("name")}
             viewers={rowPresence?.get(row.original.id) ?? []}
+            isSelected={row.original.id === selectedDocumentId}
+            onOpen={
+              onOpenPreview ? () => onOpenPreview(row.original.id) : undefined
+            }
           />
         ),
         meta: {
@@ -148,21 +150,21 @@ export function useDocumentsColumns({
         enableHiding: false,
       },
       {
-        id: "status",
-        accessorKey: "status",
-        header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,
+        id: "lastRunPhase",
+        accessorFn: (row) => row.lastRun?.phase ?? null,
+        header: ({ column }) => <DataTableColumnHeader column={column} label="Run phase" />,
         cell: ({ row }) => (
-          <DocumentStatusCell
-            status={row.getValue<DocumentStatus>("status")}
+          <DocumentRunPhaseCell
+            phase={row.original.lastRun?.phase ?? null}
             uploadProgress={row.original.uploadProgress ?? null}
           />
         ),
         meta: {
-          label: "Status",
+          label: "Run phase",
           variant: "multiSelect",
-          options: statusOptions,
+          options: runPhaseOptions,
         },
-        size: 120,
+        size: 130,
         enableColumnFilter: true,
         enableHiding: false,
       },
@@ -261,32 +263,15 @@ export function useDocumentsColumns({
         meta: {
           label: "Result",
         },
-        size: 140,
-        enableSorting: false,
-        enableHiding: true,
-      },
-      {
-        id: "runStatus",
-        accessorFn: (row) => row.latestRun?.status ?? null,
-        header: ({ column }) => <DataTableColumnHeader column={column} label="Run Status" />,
-        cell: ({ row }) => (
-          <span className="capitalize">{row.original.latestRun?.status ?? "-"}</span>
-        ),
-        meta: {
-          label: "Run Status",
-          variant: "multiSelect",
-          options: runStatusOptions,
-        },
-        size: 120,
-        enableColumnFilter: true,
+        size: 200,
         enableSorting: false,
         enableHiding: true,
       },
       {
         id: "hasOutput",
-        accessorFn: (row) => (row.latestSuccessfulRun ? "true" : "false"),
+        accessorFn: (row) => (row.lastSuccessfulRun ? "true" : "false"),
         header: ({ column }) => <DataTableColumnHeader column={column} label="Has Output" />,
-        cell: ({ row }) => (row.original.latestSuccessfulRun ? "Yes" : "No"),
+        cell: ({ row }) => (row.original.lastSuccessfulRun ? "Yes" : "No"),
         meta: {
           label: "Has Output",
           variant: "boolean",
@@ -336,23 +321,25 @@ export function useDocumentsColumns({
         enableHiding: true,
       },
       {
-        id: "latestRunAt",
-        accessorFn: (row) => row.latestRun?.completedAt ?? row.latestRun?.startedAt ?? null,
-        header: ({ column }) => <DataTableColumnHeader column={column} label="Latest Run" />,
-        cell: ({ row }) => renderRunSummary(row.original.latestRun),
+        id: "lastRunAt",
+        accessorFn: (row) =>
+          row.lastRun?.completedAt ?? row.lastRun?.startedAt ?? row.lastRun?.createdAt ?? null,
+        header: ({ column }) => <DataTableColumnHeader column={column} label="Last Run" />,
+        cell: ({ row }) => renderRunSummary(row.original.lastRun),
         meta: {
-          label: "Latest Run",
+          label: "Last Run",
         },
         size: 180,
         enableHiding: true,
       },
       {
-        id: "latestSuccessfulRun",
-        accessorFn: (row) => row.latestSuccessfulRun?.completedAt ?? row.latestSuccessfulRun?.startedAt ?? null,
-        header: ({ column }) => <DataTableColumnHeader column={column} label="Latest Success" />,
-        cell: ({ row }) => renderRunSummary(row.original.latestSuccessfulRun),
+        id: "lastSuccessfulRun",
+        accessorFn: (row) =>
+          row.lastSuccessfulRun?.completedAt ?? row.lastSuccessfulRun?.startedAt ?? null,
+        header: ({ column }) => <DataTableColumnHeader column={column} label="Last Success" />,
+        cell: ({ row }) => renderRunSummary(row.original.lastSuccessfulRun),
         meta: {
-          label: "Latest Success",
+          label: "Last Success",
         },
         size: 180,
         enableSorting: false,
@@ -363,15 +350,17 @@ export function useDocumentsColumns({
         cell: ({ row }) => (
           <ActionsCell
             document={row.original}
+            isPreviewOpen={row.original.id === selectedDocumentId && isPreviewOpen}
+            isCommentsOpen={row.original.id === selectedDocumentId && isCommentsOpen}
+            onTogglePreview={() => onTogglePreview(row.original.id)}
+            onToggleComments={() => onToggleComments(row.original.id)}
             isBusy={isRowActionPending?.(row.original.id) ?? false}
-            onArchive={onArchive}
-            onRestore={onRestore}
             onDeleteRequest={onDeleteRequest}
             onDownloadOutput={onDownloadOutput}
             onDownloadOriginal={onDownloadOriginal}
           />
         ),
-        size: 56,
+        size: 140,
         enableSorting: false,
         enableHiding: false,
       },
@@ -379,19 +368,22 @@ export function useDocumentsColumns({
     [
       enableAdvancedOnly,
       fileTypeOptions,
+      isCommentsOpen,
+      isPreviewOpen,
       isRowActionPending,
       memberOptions,
-      onArchive,
+      onOpenPreview,
       onAssign,
       onDeleteRequest,
       onDownloadOriginal,
       onDownloadOutput,
-      onRestore,
+      onToggleComments,
+      onTogglePreview,
       onToggleTag,
       people,
       rowPresence,
-      runStatusOptions,
-      statusOptions,
+      runPhaseOptions,
+      selectedDocumentId,
       tagFilterOptions,
       tagOptions,
     ],
@@ -438,19 +430,19 @@ function MappingBadge({ mapping, showPending = false }: { mapping: MappingHealth
   );
 }
 
-function formatRunStatus(value: string) {
+function formatRunPhase(value: string) {
   if (!value) return "-";
   const normalized = value.replace(/_/g, " ");
   return normalized[0]?.toUpperCase() + normalized.slice(1);
 }
 
-function renderRunSummary(run: DocumentRow["latestRun"] | null | undefined) {
+function renderRunSummary(run: DocumentRow["lastRun"] | null | undefined) {
   if (!run) {
     return <span className="text-muted-foreground">-</span>;
   }
 
-  const timestamp = run.completedAt ?? run.startedAt;
-  const statusLabel = formatRunStatus(String(run.status));
+  const timestamp = run.completedAt ?? run.startedAt ?? run.createdAt;
+  const statusLabel = formatRunPhase(String(run.phase ?? run.status));
   return (
     <div className="flex min-w-0 flex-col gap-0.5" title={run.errorSummary ?? undefined}>
       <span className="truncate capitalize">{statusLabel}</span>

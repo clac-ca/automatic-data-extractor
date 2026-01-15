@@ -11,18 +11,16 @@ export const DEFAULT_SORTING: ExtendedColumnSort<DocumentListRow>[] = [
 export const DOCUMENTS_SORT_IDS = new Set([
   "id",
   "name",
-  "status",
   "createdAt",
   "updatedAt",
   "activityAt",
-  "latestRunAt",
+  "lastRunAt",
   "byteSize",
 ]);
 
 export const DOCUMENTS_FILTER_IDS = new Set([
-  "status",
+  "lastRunPhase",
   "name",
-  "runStatus",
   "fileType",
   "tags",
   "assigneeId",
@@ -35,11 +33,10 @@ export const DOCUMENTS_FILTER_IDS = new Set([
 ]);
 
 export const DOCUMENTS_SIMPLE_FILTERS: Record<string, FilterVariant> = {
-  status: "multiSelect",
+  lastRunPhase: "multiSelect",
   fileType: "multiSelect",
   uploaderId: "multiSelect",
   assigneeId: "multiSelect",
   tags: "multiSelect",
-  runStatus: "multiSelect",
   createdAt: "dateRange",
 };

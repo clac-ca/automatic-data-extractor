@@ -129,4 +129,5 @@ Workspace
 ### 4.5 Document
 
 * Immutable input file uploaded into a workspace.
-* Status: `uploaded`, `processing`, `processed`, `failed`, `archived`.
+* No top-level status; run state is exposed via `lastRun.phase` (`queued`, `building`, `running`, `succeeded`, `failed`) with optional `lastRun.phaseReason` when `phase=building`.
+* `lastSuccessfulRun` points at the latest successful output when available.

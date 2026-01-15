@@ -13,7 +13,6 @@ from ade_api.models import (
     ConfigurationStatus,
     Document,
     DocumentSource,
-    DocumentStatus,
     DocumentTag,
     Run,
     RunStatus,
@@ -58,10 +57,8 @@ async def build_documents_fixture(session):
         stored_uri="alpha-report",
         attributes={},
         uploaded_by_user_id=uploader.id,
-        status=DocumentStatus.PROCESSED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-        last_run_at=now - timedelta(days=1),
     )
     processed.tags.append(DocumentTag(document_id=processed.id, tag="finance"))
 
@@ -75,13 +72,29 @@ async def build_documents_fixture(session):
         stored_uri="zeta-draft",
         attributes={},
         uploaded_by_user_id=colleague.id,
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-        last_run_at=None,
     )
 
     session.add_all([processed, uploaded])
+    await _flush(session)
+
+    configuration_id = await ensure_configuration(session, workspace.id)
+    run = Run(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration_id,
+        submitted_by_user_id=uploader.id,
+        status=RunStatus.SUCCEEDED,
+        input_document_id=processed.id,
+        engine_spec="apps/ade-engine",
+        deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
+        created_at=now - timedelta(hours=2),
+        started_at=now - timedelta(hours=1, minutes=30),
+        completed_at=now - timedelta(hours=1),
+    )
+    processed.last_run_id = run.id
+    session.add(run)
     await _flush(session)
 
     return workspace, uploader, colleague, processed, uploaded
@@ -126,10 +139,8 @@ async def build_tag_filter_fixture(session):
         stored_uri="alpha",
         attributes={},
         uploaded_by_user_id=uploader.id,
-        status=DocumentStatus.PROCESSED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-        last_run_at=None,
     )
     doc_all.tags.extend(
         [
@@ -148,10 +159,8 @@ async def build_tag_filter_fixture(session):
         stored_uri="bravo",
         attributes={},
         uploaded_by_user_id=uploader.id,
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-        last_run_at=None,
     )
     doc_finance.tags.append(DocumentTag(document_id=doc_finance.id, tag="finance"))
 
@@ -165,10 +174,8 @@ async def build_tag_filter_fixture(session):
         stored_uri="charlie",
         attributes={},
         uploaded_by_user_id=uploader.id,
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-        last_run_at=None,
     )
     doc_priority.tags.append(DocumentTag(document_id=doc_priority.id, tag="priority"))
 
@@ -182,10 +189,8 @@ async def build_tag_filter_fixture(session):
         stored_uri="delta",
         attributes={},
         uploaded_by_user_id=uploader.id,
-        status=DocumentStatus.UPLOADED,
         source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-        last_run_at=None,
     )
 
     session.add_all([doc_all, doc_finance, doc_priority, doc_empty])
@@ -211,6 +216,9 @@ async def seed_failed_run(session, *, workspace_id, document_id, uploader_id):
         completed_at=now - timedelta(minutes=1),
         error_message="Request failed with status 404",
     )
+    document = session.get(Document, document_id)
+    if document is not None:
+        document.last_run_id = run.id
     session.add(run)
     await _flush(session)
     return run

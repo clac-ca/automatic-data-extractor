@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, text, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -175,57 +175,6 @@ class Repo:
             .where(environments.c.id == env_id)
             .values(last_used_at=now, updated_at=now)
         )
-
-    def update_document_status(
-        self,
-        *,
-        session: Session,
-        document_id: str,
-        status: str,
-        now: datetime,
-    ) -> int | None:
-        dialect = session.get_bind().dialect.name
-        params = {"status": status, "now": now, "document_id": document_id}
-
-        if dialect == "sqlite":
-            stmt = text(
-                """
-                UPDATE documents
-                SET status = :status,
-                    updated_at = :now,
-                    last_run_at = :now,
-                    version = version + 1
-                WHERE id = :document_id
-                RETURNING version;
-                """
-            )
-        elif dialect == "mssql":
-            update_stmt = text(
-                """
-                UPDATE documents
-                SET status = :status,
-                    updated_at = :now,
-                    last_run_at = :now,
-                    version = version + 1
-                WHERE id = :document_id;
-                """
-            )
-            result = session.execute(update_stmt, params)
-            if getattr(result, "rowcount", 0) != 1:
-                return None
-            row = session.execute(
-                text("SELECT version FROM documents WHERE id = :document_id"),
-                {"document_id": document_id},
-            ).mappings().first()
-            return int(row.get("version") or 0) if row else None
-        else:
-            raise ValueError(f"Unsupported dialect: {dialect}")
-
-        row = session.execute(stmt, params).mappings().first()
-        if not row:
-            return None
-        version = int(row.get("version") or 0)
-        return version
 
     def record_run_result(
         self,

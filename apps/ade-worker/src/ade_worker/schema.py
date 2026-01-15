@@ -98,10 +98,9 @@ documents = Table(
     Column("workspace_id", String(36), nullable=False),
     Column("original_filename", String(255), nullable=False),
     Column("stored_uri", String(512), nullable=False),   # typically file:<relative-path>
-    Column("status", String(20), nullable=False),        # uploaded|processing|processed|failed
+    Column("last_run_id", String(36), nullable=True),
     Column("version", Integer, nullable=False),
     Column("updated_at", DateTime, nullable=False),
-    Column("last_run_at", DateTime, nullable=True),
     Column("deleted_at", DateTime, nullable=True),
 )
 

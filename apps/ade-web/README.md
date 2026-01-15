@@ -101,7 +101,7 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#32-workspace)
 
 - **Document**  
-  Immutable input file (Excel, CSV, PDF, etc.) uploaded into a workspace. Tracks status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and the last run status. Multi-sheet spreadsheets expose worksheet metadata via a document-sheets endpoint.  
+  Immutable input file (Excel, CSV, PDF, etc.) uploaded into a workspace. Tracks `lastRun` (latest run summary with `phase` and optional `phaseReason`) and `lastSuccessfulRun` (latest good output) instead of a top-level status. Multi-sheet spreadsheets expose worksheet metadata via a document-sheets endpoint.  
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#2-documents)
 
 - **Run**  
@@ -171,7 +171,7 @@ See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigatio
 
 Important UI state is encoded in **query parameters**, not local component state, so views are shareable and refresh-safe. Examples:
 
-- Documents filters: `q`, `status`, `sort`, `view`  
+- Documents filters: `q`, `lastRunPhase`, `sort`, `view`  
   (See [`docs/07`](./docs/07-documents-and-runs.md#31-documents-screen-architecture))
 - Runs filters: `status`, `configurationId`, `initiator`, `from`, `to`  
   (See [`docs/07`](./docs/07-documents-and-runs.md#6-runs-ledger-screen))
@@ -196,7 +196,7 @@ Responsibilities:
 
 - List and filter documents in the workspace.
 - Upload new documents (`⌘U` / `Ctrl+U`).
-- Show status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and the last run status.
+- Show last run phase (`queued`, `building`, `running`, `succeeded`, `failed`) and the latest successful output.
 - Trigger runs for a selected configuration, optionally per-document run preferences (preferred configuration and sheet selection).
 
 See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-documents-screen-architecture)

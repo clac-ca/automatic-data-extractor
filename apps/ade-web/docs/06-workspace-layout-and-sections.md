@@ -315,8 +315,8 @@ Responsibilities:
 
 - List and filter documents in the workspace.
 - Provide upload capabilities.
-- Show each document’s status and **last run** status.
-- Offer actions such as “Run extraction”, “Download source file”, “Delete/archive”.
+- Show each document’s **last run phase** and latest successful output.
+- Offer actions such as “Run extraction”, “Download source file”, “Delete”.
 
 Shell integration:
 

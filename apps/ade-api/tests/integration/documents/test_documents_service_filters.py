@@ -10,7 +10,8 @@ from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOp
 from ade_api.common.cursor_listing import resolve_cursor_sort
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.models import DocumentStatus, RunStatus
+from ade_api.features.documents.schemas import DocumentRunPhase
+from ade_api.models import RunStatus
 from tests.integration.documents.helpers import (
     build_documents_fixture,
     seed_failed_run,
@@ -26,9 +27,9 @@ async def test_list_documents_applies_filters_and_sorting(db_session, settings) 
 
     filters = [
         FilterItem(
-            id="status",
+            id="lastRunPhase",
             operator=FilterOperator.IN,
-            value=[DocumentStatus.PROCESSED],
+            value=[DocumentRunPhase.SUCCEEDED],
         ),
         FilterItem(
             id="tags",
@@ -80,7 +81,7 @@ async def test_list_documents_applies_filters_and_sorting(db_session, settings) 
     assert [item.id for item in name_sorted.items] == [processed.id, uploaded.id]
 
 
-async def test_list_documents_facets_include_status_and_file_type(db_session, settings) -> None:
+async def test_list_documents_facets_include_last_run_phase_and_file_type(db_session, settings) -> None:
     workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
     service = DocumentsService(session=db_session, settings=settings)
@@ -104,17 +105,17 @@ async def test_list_documents_facets_include_status_and_file_type(db_session, se
     )
 
     assert result.facets is not None
-    status_buckets = {
+    phase_buckets = {
         bucket["value"]: bucket["count"]
-        for bucket in result.facets["status"]["buckets"]
+        for bucket in result.facets["lastRunPhase"]["buckets"]
     }
     file_type_buckets = {
         bucket["value"]: bucket["count"]
         for bucket in result.facets["fileType"]["buckets"]
     }
 
-    assert status_buckets["processed"] == 1
-    assert status_buckets["uploaded"] == 1
+    assert phase_buckets["succeeded"] == 1
+    assert phase_buckets[None] == 1
     assert file_type_buckets["pdf"] == 1
     assert file_type_buckets["unknown"] == 1
 
@@ -162,7 +163,7 @@ async def test_sorting_last_run_places_nulls_last(db_session, settings) -> None:
     service = DocumentsService(session=db_session, settings=settings)
 
     order_by_last_run = resolve_cursor_sort(
-        ["-latestRunAt"],
+        ["-lastRunAt"],
         allowed=SORT_FIELDS,
         cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
@@ -213,11 +214,11 @@ async def test_list_documents_includes_last_run_message(db_session, settings) ->
     )
 
     processed_record = next(item for item in result.items if item.id == processed.id)
-    assert processed_record.latest_run is not None
-    assert processed_record.latest_run.id == run.id
-    assert processed_record.latest_run.status == RunStatus.FAILED
-    assert processed_record.latest_run.error_summary == "Request failed with status 404"
-    assert processed_record.latest_run.completed_at == run.completed_at
+    assert processed_record.last_run is not None
+    assert processed_record.last_run.id == run.id
+    assert processed_record.last_run.status == RunStatus.FAILED
+    assert processed_record.last_run.error_summary == "Request failed with status 404"
+    assert processed_record.last_run.completed_at == run.completed_at
 
     uploaded_record = next(item for item in result.items if item.id == uploaded.id)
-    assert uploaded_record.latest_run is None
+    assert uploaded_record.last_run is None

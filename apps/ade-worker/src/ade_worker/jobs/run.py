@@ -534,18 +534,6 @@ class RunJob:
         staged_input = input_dir / original_name
         _copy_file(source_path, staged_input)
 
-        # Mark document processing (best effort; not fatal if it fails).
-        try:
-            with self.SessionLocal.begin() as session:
-                self.repo.update_document_status(
-                    session=session,
-                    document_id=document_id,
-                    status="processing",
-                    now=utcnow(),
-                )
-        except Exception:
-            logger.exception("failed to mark document processing")
-
         # Run engine
         engine_payload: dict[str, Any] | None = None
 
@@ -625,12 +613,6 @@ class RunJob:
                     exit_code=0,
                     output_path=output_path,
                     error_message=None,
-                )
-                self.repo.update_document_status(
-                    session=session,
-                    document_id=document_id,
-                    status="processed",
-                    now=finished_at,
                 )
 
                 if results_payload is None:
@@ -716,12 +698,6 @@ class RunJob:
                     exit_code=exit_code,
                     output_path=None,
                     error_message=error_message,
-                )
-                self.repo.update_document_status(
-                    session=session,
-                    document_id=document_id,
-                    status="failed",
-                    now=now,
                 )
             else:
                 self.repo.record_run_result(
