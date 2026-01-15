@@ -23,10 +23,15 @@ keep feature-specific UI in `src/pages/**/components/`.
 | mention | DiceUI | `npx shadcn@latest add "@diceui/mention"` | Mention input with suggestions. |
 | select | shadcn | `npx shadcn@latest add select` | — |
 | checkbox | shadcn | `npx shadcn@latest add checkbox` | — |
+| scroll-area | shadcn | `npx shadcn@latest add scroll-area` | — |
+| switch | shadcn | `npx shadcn@latest add switch` | — |
 | dialog | shadcn | `npx shadcn@latest add dialog` | — |
 | avatar | shadcn | `npx shadcn@latest add avatar` | — |
 | avatar-group | DiceUI | `npx shadcn@latest add "@diceui/avatar-group"` | — |
 | confirm-dialog | app | — | Uses `bg-overlay` token for the overlay. |
+| sidebar | shadcn | `npx shadcn@latest add sidebar` | Adds sidebar primitives (depends on `sheet`, `tooltip`, `use-mobile`). |
+| sheet | shadcn | `npx shadcn@latest add sidebar` | Added as sidebar dependency. |
+| tooltip | shadcn | `npx shadcn@latest add sidebar` | Added as sidebar dependency. |
 
 ## Maintenance / Updating
 
