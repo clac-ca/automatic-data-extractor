@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, case, func, literal, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.sql import Select
 
 from ade_api.common.list_filters import (
@@ -17,8 +17,7 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_api.models import Document, DocumentSource, DocumentTag, Environment, Run, RunStatus
-from .schemas import DocumentRunPhase
+from ade_api.models import Document, DocumentSource, DocumentTag, Run, RunStatus
 from ade_api.settings import MAX_SET_SIZE
 
 from .tags import TagValidationError, normalize_tag_set
@@ -28,8 +27,11 @@ ALLOWED_FILE_TYPES = {"xlsx", "xls", "csv", "pdf"}
 
 def _last_run_at_expr():
     return (
-        select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
-        .where(Run.id == Document.last_run_id)
+        select(func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at)))
+        .where(
+            Run.input_document_id == Document.id,
+            Run.workspace_id == Document.workspace_id,
+        )
         .scalar_subquery()
     )
 
@@ -220,33 +222,41 @@ def apply_document_filters(
     predicates: list = []
 
     last_run_joined = False
-    phase_expr = None
+    status_expr = None
+    last_run_subquery = None
 
     for parsed in parsed_filters:
         filter_id = parsed.field.id
         if filter_id == "lastRunPhase":
+            if not last_run_joined:
+                timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
+                last_run_subquery = (
+                    select(
+                        Run.input_document_id.label("document_id"),
+                        Run.status.label("status"),
+                        func.row_number()
+                        .over(
+                            partition_by=Run.input_document_id,
+                            order_by=timestamp.desc(),
+                        )
+                        .label("rank"),
+                    )
+                    .where(Run.input_document_id.is_not(None))
+                    .subquery()
+                )
+                stmt = stmt.outerjoin(
+                    last_run_subquery,
+                    (last_run_subquery.c.document_id == Document.id)
+                    & (last_run_subquery.c.rank == 1),
+                )
+                status_expr = last_run_subquery.c.status
+                last_run_joined = True
             if parsed.operator == FilterOperator.IS_EMPTY:
-                predicates.append(Document.last_run_id.is_(None))
+                predicates.append(status_expr.is_(None))
                 continue
             if parsed.operator == FilterOperator.IS_NOT_EMPTY:
-                predicates.append(Document.last_run_id.is_not(None))
+                predicates.append(status_expr.is_not(None))
                 continue
-            if not last_run_joined:
-                stmt = stmt.outerjoin(Run, Run.id == Document.last_run_id)
-                stmt = stmt.outerjoin(
-                    Environment,
-                    (Environment.workspace_id == Run.workspace_id)
-                    & (Environment.configuration_id == Run.configuration_id)
-                    & (Environment.engine_spec == Run.engine_spec)
-                    & (Environment.deps_digest == Run.deps_digest),
-                )
-                phase_expr = case(
-                    (Run.id.is_(None), None),
-                    (Run.status != RunStatus.QUEUED, Run.status),
-                    (Environment.status == "ready", Run.status),
-                    else_=literal("building"),
-                )
-                last_run_joined = True
 
             values = parsed.value
             phase_values = values if isinstance(values, list) else [values]
@@ -254,7 +264,7 @@ def apply_document_filters(
             include_empty = False
             invalid: list[str] = []
             for value in phase_values:
-                if isinstance(value, DocumentRunPhase):
+                if isinstance(value, RunStatus):
                     raw = value.value
                 else:
                     raw = str(value).strip().lower()
@@ -264,7 +274,7 @@ def apply_document_filters(
                     include_empty = True
                     continue
                 try:
-                    normalized.append(DocumentRunPhase(raw).value)
+                    normalized.append(RunStatus(raw).value)
                 except ValueError:
                     invalid.append(raw)
             if invalid:
@@ -274,9 +284,9 @@ def apply_document_filters(
                 )
             if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
                 base = (
-                    and_(phase_expr.is_not(None), ~phase_expr.in_(normalized))
+                    and_(status_expr.is_not(None), ~status_expr.in_(normalized))
                     if normalized
-                    else phase_expr.is_not(None)
+                    else status_expr.is_not(None)
                 )
                 predicate = base if not include_empty else base
             else:
@@ -284,13 +294,13 @@ def apply_document_filters(
                     continue
                 phase_predicates = []
                 if normalized:
-                    phase_predicates.append(phase_expr.in_(normalized))
+                    phase_predicates.append(status_expr.in_(normalized))
                 if include_empty:
-                    phase_predicates.append(phase_expr.is_(None))
+                    phase_predicates.append(status_expr.is_(None))
                 predicate = (
                     or_(*phase_predicates)
                     if phase_predicates
-                    else phase_expr.is_(None)
+                    else status_expr.is_(None)
                 )
             predicates.append(predicate)
             continue

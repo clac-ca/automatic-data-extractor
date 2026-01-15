@@ -42,8 +42,8 @@ export function DocumentsPreviewPane({
       : "Document unavailable";
   const subtitle =
     document
-      ? document.lastRun?.phase
-        ? `Last run: ${formatPhase(document.lastRun.phase)}`
+      ? document.lastRun?.status
+        ? `Last run: ${formatStatus(document.lastRun.status)}`
         : "No runs yet"
       : undefined;
 
@@ -79,7 +79,7 @@ export function DocumentsPreviewPane({
   );
 }
 
-function formatPhase(value: string) {
+function formatStatus(value: string) {
   const normalized = value.replace(/_/g, " ");
   return normalized[0]?.toUpperCase() + normalized.slice(1);
 }

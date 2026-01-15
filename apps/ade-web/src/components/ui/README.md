@@ -32,6 +32,7 @@ keep feature-specific UI in `src/pages/**/components/`.
 | sidebar | shadcn | `npx shadcn@latest add sidebar` | Adds sidebar primitives (depends on `sheet`, `tooltip`, `use-mobile`). |
 | sheet | shadcn | `npx shadcn@latest add sidebar` | Added as sidebar dependency. |
 | tooltip | shadcn | `npx shadcn@latest add sidebar` | Added as sidebar dependency. |
+| topbar | app | — | App shell topbar primitive (modeled after sidebar patterns). |
 
 ## Maintenance / Updating
 

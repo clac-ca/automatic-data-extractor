@@ -2086,8 +2086,11 @@ export type components = {
              */
             etag?: string | null;
             lastRun?: components["schemas"]["DocumentRunSummary"] | null;
-            lastSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
-            latestResult?: components["schemas"]["DocumentResultSummary"] | null;
+            lastRunMetrics?: components["schemas"]["RunMetricsResource"] | null;
+            /** Lastruntablecolumns */
+            lastRunTableColumns?: components["schemas"]["RunColumnResource"][] | null;
+            /** Lastrunfields */
+            lastRunFields?: components["schemas"]["RunFieldResource"][] | null;
         };
         /**
          * DocumentOut
@@ -2169,40 +2172,24 @@ export type components = {
             assignee?: components["schemas"]["UserSummary"] | null;
             /** @description Last run created for the document when available. */
             lastRun?: components["schemas"]["DocumentRunSummary"] | null;
-            /** @description Latest successful run execution associated with the document when available. */
-            lastSuccessfulRun?: components["schemas"]["DocumentRunSummary"] | null;
-            /** @description Summary of the latest result metadata, when available. */
-            latestResult?: components["schemas"]["DocumentResultSummary"] | null;
+            /** @description Last run metrics summary when available. */
+            lastRunMetrics?: components["schemas"]["RunMetricsResource"] | null;
+            /**
+             * Lastruntablecolumns
+             * @description Last run table column details when available.
+             */
+            lastRunTableColumns?: components["schemas"]["RunColumnResource"][] | null;
+            /**
+             * Lastrunfields
+             * @description Last run field detection summaries when available.
+             */
+            lastRunFields?: components["schemas"]["RunFieldResource"][] | null;
             /** @description Optional list row projection for table updates. */
             listRow?: components["schemas"]["DocumentListRow"] | null;
         };
         /**
-         * DocumentResultSummary
-         * @description Summary of the latest document result metadata.
-         */
-        DocumentResultSummary: {
-            /** Attention */
-            attention: number;
-            /** Unmapped */
-            unmapped: number;
-            /** Pending */
-            pending?: boolean | null;
-        };
-        /**
-         * DocumentRunPhase
-         * @description UI-facing phase derived from run + environment state.
-         * @enum {string}
-         */
-        DocumentRunPhase: "queued" | "building" | "running" | "succeeded" | "failed";
-        /**
-         * DocumentRunPhaseReason
-         * @description Reason for a derived run phase when queued but blocked by env readiness.
-         * @enum {string}
-         */
-        DocumentRunPhaseReason: "environment_missing" | "environment_queued" | "environment_building" | "environment_failed";
-        /**
          * DocumentRunSummary
-         * @description Minimal representation of a run associated with a document.
+         * @description Minimal representation of the latest run row for a document.
          */
         DocumentRunSummary: {
             /**
@@ -2212,10 +2199,6 @@ export type components = {
              */
             id: string;
             status: components["schemas"]["RunStatus"];
-            /** @description Derived phase used by the documents UI. */
-            phase: components["schemas"]["DocumentRunPhase"];
-            /** @description Optional reason for a derived phase when the run is blocked. */
-            phaseReason?: components["schemas"]["DocumentRunPhaseReason"] | null;
             /**
              * Createdat
              * Format: date-time
@@ -2233,10 +2216,10 @@ export type components = {
              */
             completedAt?: string | null;
             /**
-             * Errorsummary
-             * @description Optional error summary from the run.
+             * Errormessage
+             * @description Optional error message from the run.
              */
-            errorSummary?: string | null;
+            errorMessage?: string | null;
         };
         /**
          * DocumentSheet
@@ -6325,6 +6308,9 @@ export interface operations {
     list_documents_api_v1_workspaces__workspaceId__documents_get: {
         parameters: {
             query?: {
+                includeRunMetrics?: boolean;
+                includeRunTableColumns?: boolean;
+                includeRunFields?: boolean;
                 /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
@@ -6543,7 +6529,11 @@ export interface operations {
     };
     read_document_api_v1_workspaces__workspaceId__documents__documentId__get: {
         parameters: {
-            query?: never;
+            query?: {
+                includeRunMetrics?: boolean;
+                includeRunTableColumns?: boolean;
+                includeRunFields?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Workspace identifier */
@@ -6930,7 +6920,11 @@ export interface operations {
     };
     read_document_list_row_api_v1_workspaces__workspaceId__documents__documentId__listrow_get: {
         parameters: {
-            query?: never;
+            query?: {
+                includeRunMetrics?: boolean;
+                includeRunTableColumns?: boolean;
+                includeRunFields?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Workspace identifier */

@@ -225,8 +225,9 @@ export function DocumentsTableView({
         assignee: updated.assignee ?? null,
         uploader: updated.uploader ?? null,
         lastRun: updated.lastRun ?? null,
-        lastSuccessfulRun: updated.lastSuccessfulRun ?? null,
-        latestResult: updated.latestResult ?? null,
+        lastRunMetrics: updated.lastRunMetrics ?? null,
+        lastRunTableColumns: updated.lastRunTableColumns ?? null,
+        lastRunFields: updated.lastRunFields ?? null,
       };
       updateRow(documentId, updates);
     },
@@ -276,7 +277,7 @@ export function DocumentsTableView({
 
   const handleDownloadOutput = useCallback(
     (document: DocumentRow) => {
-      const runId = document.lastSuccessfulRun?.id ?? null;
+      const runId = document.lastRun?.status === "succeeded" ? document.lastRun.id : null;
       if (!runId) {
         notifyToast({
           title: "Output not available",
@@ -572,14 +573,43 @@ export function DocumentsTableView({
     queryKey: ["documents-preview-row", workspaceId, docId],
     queryFn: ({ signal }) =>
       docId
-        ? fetchWorkspaceDocumentRowById(workspaceId, docId, signal)
+        ? fetchWorkspaceDocumentRowById(workspaceId, docId, {}, signal)
         : Promise.resolve(null),
     enabled: Boolean(workspaceId && docId && !documentsById[docId]),
     staleTime: 30_000,
   });
 
+  const previewDetailsQuery = useQuery({
+    queryKey: ["documents-preview-details", workspaceId, docId],
+    queryFn: ({ signal }) =>
+      docId
+        ? fetchWorkspaceDocumentRowById(
+            workspaceId,
+            docId,
+            {
+              includeRunMetrics: true,
+              includeRunTableColumns: true,
+              includeRunFields: true,
+            },
+            signal,
+          )
+        : Promise.resolve(null),
+    enabled: Boolean(workspaceId && docId && isPreviewOpen),
+    staleTime: 30_000,
+  });
+
   const previewFallback = previewFallbackQuery.data && docId ? previewFallbackQuery.data : null;
-  const selectedDocument = docId ? documentsById[docId] ?? previewFallback ?? null : null;
+  const previewDetails = previewDetailsQuery.data && docId ? previewDetailsQuery.data : null;
+  const baseDocument = docId ? documentsById[docId] ?? previewFallback ?? null : null;
+  const selectedDocument = useMemo(() => {
+    if (!docId) return null;
+    if (!baseDocument && !previewDetails) return null;
+    return {
+      ...(baseDocument ?? {}),
+      ...(previewDetails ?? {}),
+      uploadProgress: baseDocument?.uploadProgress ?? null,
+    } as DocumentRow;
+  }, [baseDocument, docId, previewDetails]);
   const previewErrorMessage = useMemo(() => {
     if (!previewFallbackQuery.isError) return null;
     const error = previewFallbackQuery.error;

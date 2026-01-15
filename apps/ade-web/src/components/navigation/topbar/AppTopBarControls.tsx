@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { AppearanceMenu } from "@/components/navigation/AppearanceMenu";
-import { AboutVersionsModal } from "@/components/navigation/AboutVersionsModal";
-import { ProfileDropdown } from "@/components/navigation/ProfileDropdown";
+import { AppearanceMenu } from "@/components/navigation/menus/AppearanceMenu";
+import { AboutVersionsModal } from "@/components/navigation/menus/AboutVersionsModal";
+import { ProfileDropdown } from "@/components/navigation/menus/ProfileDropdown";
 import { useSession } from "@/providers/auth/SessionContext";
 
 export function AppTopBarControls() {

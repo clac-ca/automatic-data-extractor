@@ -12,6 +12,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   SidebarRail,
   SidebarSeparator,
   useSidebar,
@@ -23,15 +24,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { WorkspaceSwitcher } from "@/components/navigation/WorkspaceSwitcher";
+import { WorkspaceSwitcher } from "@/components/navigation/sidebar/WorkspaceSwitcher";
 import type { WorkspaceNavigationItem } from "@/pages/Workspace/components/workspaceNavigation";
 
-interface AppSidebarProps {
+interface WorkspaceSidebarProps {
   readonly items: readonly WorkspaceNavigationItem[];
 }
 
-export function AppSidebar({ items }: AppSidebarProps) {
+export function WorkspaceSidebar({ items }: WorkspaceSidebarProps) {
   const { isMobile, openMobile, setOpenMobile, state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   const settingsItem = findSettingsItem(items);
   const mainItems = settingsItem ? items.filter((item) => item.id !== settingsItem.id) : items;
@@ -44,8 +46,18 @@ export function AppSidebar({ items }: AppSidebarProps) {
 
   const sidebarContent = (
     <>
-      <SidebarHeader>
-        <WorkspaceSwitcher onNavigate={handleNavigate} />
+      <SidebarHeader className="relative">
+        <div className="flex items-center justify-between gap-2">
+          <WorkspaceSwitcher onNavigate={handleNavigate} />
+          <SidebarTrigger
+            className={clsx(
+              "shrink-0",
+              isCollapsed
+                ? "absolute right-0 top-1/2 z-[var(--app-z-nav)] -translate-y-1/2 translate-x-full"
+                : null,
+            )}
+          />
+        </div>
       </SidebarHeader>
       <SidebarSeparator />
       <SidebarContent>
@@ -92,8 +104,8 @@ export function AppSidebar({ items }: AppSidebarProps) {
   return (
     <aside
       className={clsx(
-        "group hidden h-[calc(100svh_-_var(--app-shell-header-height))] flex-shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex",
-        "sticky top-0 transition-[width] duration-200 ease-linear",
+        "group relative hidden h-full min-h-0 flex-shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex",
+        "transition-[width] duration-200 ease-linear",
         state === "collapsed" ? "w-[var(--sidebar-width-icon)]" : "w-[var(--sidebar-width)]",
       )}
       aria-label="Workspace navigation"

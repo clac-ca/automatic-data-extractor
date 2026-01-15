@@ -38,7 +38,25 @@ export type ListDocumentsQuery = {
   q?: string | null;
   includeTotal?: boolean;
   includeFacets?: boolean;
+  includeRunMetrics?: boolean;
+  includeRunTableColumns?: boolean;
+  includeRunFields?: boolean;
 };
+
+type DocumentIncludeOptions = {
+  includeRunMetrics?: boolean;
+  includeRunTableColumns?: boolean;
+  includeRunFields?: boolean;
+};
+
+function buildDocumentIncludeQuery(options?: DocumentIncludeOptions) {
+  if (!options) return {};
+  const query: Record<string, unknown> = {};
+  if (options.includeRunMetrics) query.includeRunMetrics = true;
+  if (options.includeRunTableColumns) query.includeRunTableColumns = true;
+  if (options.includeRunFields) query.includeRunFields = true;
+  return query;
+}
 
 const DEFAULT_DOCUMENTS_PAGE_SIZE = 50;
 
@@ -102,19 +120,25 @@ export async function fetchWorkspaceDocuments(
     q?: string | null;
     includeTotal?: boolean;
     includeFacets?: boolean;
+    includeRunMetrics?: boolean;
+    includeRunTableColumns?: boolean;
+    includeRunFields?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<DocumentPageResult> {
-  const query = buildListQuery({
-    sort: options.sort ?? null,
-    limit: options.limit > 0 ? options.limit : DEFAULT_DOCUMENTS_PAGE_SIZE,
-    cursor: options.cursor ?? null,
-    q: options.q ?? null,
-    filters: options.filters,
-    joinOperator: options.joinOperator,
-    includeTotal: options.includeTotal,
-    includeFacets: options.includeFacets,
-  });
+  const query = {
+    ...buildListQuery({
+      sort: options.sort ?? null,
+      limit: options.limit > 0 ? options.limit : DEFAULT_DOCUMENTS_PAGE_SIZE,
+      cursor: options.cursor ?? null,
+      q: options.q ?? null,
+      filters: options.filters,
+      joinOperator: options.joinOperator,
+      includeTotal: options.includeTotal,
+      includeFacets: options.includeFacets,
+    }),
+    ...buildDocumentIncludeQuery(options),
+  };
 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
     params: { path: { workspaceId }, query },
@@ -170,10 +194,12 @@ export async function fetchWorkspaceDocumentChanges(
 export async function fetchWorkspaceDocumentById(
   workspaceId: string,
   documentId: string,
+  options: DocumentIncludeOptions = {},
   signal?: AbortSignal,
 ): Promise<DocumentRecord> {
+  const query = buildDocumentIncludeQuery(options);
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
-    params: { path: { workspaceId, documentId } },
+    params: { path: { workspaceId, documentId }, query },
     signal,
   });
   if (!data) throw new Error("Expected document payload.");
@@ -183,10 +209,12 @@ export async function fetchWorkspaceDocumentById(
 export async function fetchWorkspaceDocumentRowById(
   workspaceId: string,
   documentId: string,
+  options: DocumentIncludeOptions = {},
   signal?: AbortSignal,
 ): Promise<DocumentListRow> {
+  const query = buildDocumentIncludeQuery(options);
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/{documentId}/listrow", {
-    params: { path: { workspaceId, documentId } },
+    params: { path: { workspaceId, documentId }, query },
     signal,
   });
   if (!data) throw new Error("Expected document list row payload.");

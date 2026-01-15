@@ -1,7 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 
 import { AppShell, ProtectedLayout } from "@/App";
-import { AppLayout } from "@/layouts/AppLayout";
+import { AuthenticatedLayout } from "@/layouts/AuthenticatedLayout";
 import HomeScreen from "@/pages/Home";
 import LoginScreen from "@/pages/Login";
 import SetupScreen from "@/pages/Setup";
@@ -22,15 +22,15 @@ export const appRoutes: RouteObject[] = [
         element: <ProtectedLayout />,
         children: [
           {
-            element: <AppLayout />,
+            element: <AuthenticatedLayout />,
             children: [
               { index: true, element: <HomeScreen /> },
               { path: "workspaces", element: <WorkspacesScreen /> },
               { path: "workspaces/new", element: <WorkspaceCreateScreen /> },
-              { path: "workspaces/:workspaceId/*", element: <WorkspaceScreen /> },
               { path: "*", element: <NotFoundScreen /> },
             ],
           },
+          { path: "workspaces/:workspaceId/*", element: <WorkspaceScreen /> },
         ],
       },
     ],

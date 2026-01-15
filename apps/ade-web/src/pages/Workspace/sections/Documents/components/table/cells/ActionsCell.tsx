@@ -33,7 +33,7 @@ export function ActionsCell({
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
 }) {
-  const canDownloadOutput = Boolean(document.lastSuccessfulRun?.id);
+  const canDownloadOutput = document.lastRun?.status === "succeeded";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
 

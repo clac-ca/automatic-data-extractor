@@ -16,7 +16,7 @@ from uuid import UUID
 import openpyxl
 from fastapi import UploadFile
 from pydantic import ValidationError
-from sqlalchemy import case, func, literal, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
@@ -46,13 +46,16 @@ from ade_api.models import (
     DocumentEventType,
     DocumentSource,
     DocumentTag,
-    Environment,
     Run,
+    RunField,
+    RunMetrics,
     RunStatus,
+    RunTableColumn,
     User,
     WorkspaceMembership,
 )
 from ade_api.settings import Settings
+from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 
 from .change_feed import DocumentEventsService
 from .exceptions import (
@@ -77,9 +80,6 @@ from .schemas import (
     DocumentListPage,
     DocumentListRow,
     DocumentOut,
-    DocumentResultSummary,
-    DocumentRunPhase,
-    DocumentRunPhaseReason,
     DocumentRunSummary,
     DocumentSheet,
     DocumentUpdateRequest,
@@ -223,7 +223,7 @@ class DocumentsService:
         hydrated = result.scalar_one()
 
         payload = DocumentOut.model_validate(hydrated)
-        self._attach_last_runs(workspace_id, [payload], last_run_ids={document_id: hydrated.last_run_id})
+        self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
         payload.list_row = self._build_list_row(payload)
 
@@ -276,6 +276,9 @@ class DocumentsService:
         q: str | None,
         include_total: bool,
         include_facets: bool,
+        include_run_metrics: bool = False,
+        include_run_table_columns: bool = False,
+        include_run_fields: bool = False,
     ) -> DocumentListPage:
         """Return paginated documents with the shared envelope."""
 
@@ -297,8 +300,13 @@ class DocumentsService:
             q=q,
         )
         last_run_at_expr = (
-            select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
-            .where(Run.id == Document.last_run_id)
+            select(
+                func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
+            )
+            .where(
+                Run.input_document_id == Document.id,
+                Run.workspace_id == Document.workspace_id,
+            )
             .scalar_subquery()
             .label("last_run_at")
         )
@@ -319,8 +327,13 @@ class DocumentsService:
         )
         raw_items = list(page_result.items)
         items = [DocumentOut.model_validate(item) for item in raw_items]
-        last_run_ids = {doc.id: doc.last_run_id for doc in raw_items}
-        self._attach_last_runs(workspace_id, items, last_run_ids=last_run_ids)
+        self._attach_last_runs(
+            workspace_id,
+            items,
+            include_run_metrics=include_run_metrics,
+            include_run_table_columns=include_run_table_columns,
+            include_run_fields=include_run_fields,
+        )
         for item in items:
             self._apply_derived_fields(item)
 
@@ -458,7 +471,7 @@ class DocumentsService:
                 result = self._session.execute(stmt)
                 documents = list(result.scalars())
                 payloads = [DocumentOut.model_validate(item) for item in documents]
-                self._attach_last_runs(workspace_id, payloads, last_run_ids={doc.id: doc.last_run_id for doc in documents})
+                self._attach_last_runs(workspace_id, payloads)
                 for payload in payloads:
                     self._apply_derived_fields(payload)
                     rows_by_id[payload.id] = self._build_list_row(payload)
@@ -480,7 +493,15 @@ class DocumentsService:
             )
         return entries
 
-    def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
+    def get_document(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        include_run_metrics: bool = False,
+        include_run_table_columns: bool = False,
+        include_run_fields: bool = False,
+    ) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
         logger.debug(
@@ -489,7 +510,13 @@ class DocumentsService:
         )
         document = self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
+        self._attach_last_runs(
+            workspace_id,
+            [payload],
+            include_run_metrics=include_run_metrics,
+            include_run_table_columns=include_run_table_columns,
+            include_run_fields=include_run_fields,
+        )
         self._apply_derived_fields(payload)
 
         logger.info(
@@ -507,6 +534,9 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
+        include_run_metrics: bool = False,
+        include_run_table_columns: bool = False,
+        include_run_fields: bool = False,
     ) -> DocumentListRow:
         """Return a table-ready row projection for ``document_id``."""
 
@@ -516,7 +546,13 @@ class DocumentsService:
         )
         document = self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
-        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
+        self._attach_last_runs(
+            workspace_id,
+            [payload],
+            include_run_metrics=include_run_metrics,
+            include_run_table_columns=include_run_table_columns,
+            include_run_fields=include_run_fields,
+        )
         self._apply_derived_fields(payload)
         row = self._build_list_row(payload)
 
@@ -558,7 +594,7 @@ class DocumentsService:
             self._session.refresh(document, attribute_names=["assignee_user"])
 
         updated = DocumentOut.model_validate(document)
-        self._attach_last_runs(workspace_id, [updated], last_run_ids={document.id: document.last_run_id})
+        self._attach_last_runs(workspace_id, [updated])
         self._apply_derived_fields(updated)
         return updated
 
@@ -781,7 +817,7 @@ class DocumentsService:
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
-        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
+        self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
 
         logger.info(
@@ -893,7 +929,7 @@ class DocumentsService:
         self._session.flush()
 
         payload = DocumentOut.model_validate(document)
-        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
+        self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
         return payload
 
@@ -933,7 +969,7 @@ class DocumentsService:
         self._session.flush()
 
         payload = DocumentOut.model_validate(document)
-        self._attach_last_runs(workspace_id, [payload], last_run_ids={document.id: document.last_run_id})
+        self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
         return payload
 
@@ -981,8 +1017,7 @@ class DocumentsService:
         self._session.flush()
 
         payloads = [DocumentOut.model_validate(document_by_id[doc_id]) for doc_id in ordered_ids]
-        last_run_ids = {doc.id: doc.last_run_id for doc in document_by_id.values()}
-        self._attach_last_runs(workspace_id, payloads, last_run_ids=last_run_ids)
+        self._attach_last_runs(workspace_id, payloads)
         for payload in payloads:
             self._apply_derived_fields(payload)
         return payloads
@@ -1134,46 +1169,50 @@ class DocumentsService:
         self,
         workspace_id: UUID,
         documents: Sequence[DocumentOut],
-        last_run_ids: dict[UUID, UUID | None] | None = None,
+        *,
+        include_run_metrics: bool = False,
+        include_run_table_columns: bool = False,
+        include_run_fields: bool = False,
     ) -> None:
-        """Populate last run summaries on each document."""
+        """Populate last run summaries and metrics on each document."""
 
         if not documents:
             return
 
-        if last_run_ids is None:
-            doc_ids = [doc.id for doc in documents]
-            result = self._session.execute(
-                select(Document.id, Document.last_run_id).where(Document.id.in_(doc_ids))
-            )
-            last_run_ids = {}
-            for doc_id, run_id in result.all():
-                if not isinstance(doc_id, UUID):
-                    doc_id = UUID(str(doc_id))
-                last_run_ids[doc_id] = run_id
-
-        last_run_ids = {
-            doc_id: run_id
-            for doc_id, run_id in (last_run_ids or {}).items()
-            if run_id is not None
-        }
-        last_runs = self._last_runs_by_id(
+        doc_ids = [doc.id for doc in documents]
+        last_runs = self._last_runs_by_document(
             workspace_id=workspace_id,
-            last_run_ids=last_run_ids,
+            document_ids=doc_ids,
         )
-        last_successful_runs = self._last_successful_runs(
-            workspace_id=workspace_id,
-            documents=documents,
+        run_ids = [run.id for run in last_runs.values()]
+        metrics_by_run_id = (
+            self._last_run_metrics(run_ids=run_ids) if include_run_metrics else {}
+        )
+        table_columns_by_run_id = (
+            self._last_run_table_columns(run_ids=run_ids) if include_run_table_columns else {}
+        )
+        fields_by_run_id = (
+            self._last_run_fields(run_ids=run_ids) if include_run_fields else {}
         )
         for document in documents:
-            document.last_run = last_runs.get(document.id)
-            document.last_successful_run = last_successful_runs.get(document.id)
+            run = last_runs.get(document.id)
+            document.last_run = run
+            document.last_run_metrics = (
+                metrics_by_run_id.get(run.id) if run and include_run_metrics else None
+            )
+            document.last_run_table_columns = (
+                table_columns_by_run_id.get(run.id, [])
+                if run and include_run_table_columns
+                else None
+            )
+            document.last_run_fields = (
+                fields_by_run_id.get(run.id, []) if run and include_run_fields else None
+            )
 
     def _apply_derived_fields(self, document: DocumentOut) -> None:
         updated_at = document.updated_at
         latest_at = self._last_run_at(document.last_run)
         document.activity_at = latest_at if latest_at and latest_at > updated_at else updated_at
-        document.latest_result = self._derive_latest_result(document)
         document.etag = format_weak_etag(build_etag_token(document.id, document.version))
 
     def _build_list_row(self, document: DocumentOut) -> DocumentListRow:
@@ -1194,8 +1233,9 @@ class DocumentsService:
             version=document.version,
             etag=document.etag,
             last_run=document.last_run,
-            last_successful_run=document.last_successful_run,
-            latest_result=document.latest_result,
+            last_run_metrics=document.last_run_metrics,
+            last_run_table_columns=document.last_run_table_columns,
+            last_run_fields=document.last_run_fields,
         )
 
     def _build_document_facets(self, stmt: Select) -> dict[str, Any]:
@@ -1234,37 +1274,43 @@ class DocumentsService:
             else_=DocumentFileType.UNKNOWN.value,
         )
 
-        phase_expr = case(
-            (Run.id.is_(None), None),
-            (Run.status != RunStatus.QUEUED, Run.status),
-            (Environment.status == "ready", Run.status),
-            else_=literal("building"),
-        )
-        phase_rows = self._session.execute(
+        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
+        ranked_runs = (
             select(
-                phase_expr.label("value"),
+                Run.input_document_id.label("document_id"),
+                Run.status.label("status"),
+                func.row_number()
+                .over(
+                    partition_by=Run.input_document_id,
+                    order_by=timestamp.desc(),
+                )
+                .label("rank"),
+            )
+            .where(Run.input_document_id.in_(select(filtered_ids.c.id)))
+            .subquery()
+        )
+        status_rows = self._session.execute(
+            select(
+                ranked_runs.c.status.label("value"),
                 func.count().label("count"),
             )
             .select_from(Document)
             .join(filtered_ids, filtered_ids.c.id == Document.id)
-            .outerjoin(Run, Run.id == Document.last_run_id)
             .outerjoin(
-                Environment,
-                (Environment.workspace_id == Run.workspace_id)
-                & (Environment.configuration_id == Run.configuration_id)
-                & (Environment.engine_spec == Run.engine_spec)
-                & (Environment.deps_digest == Run.deps_digest),
+                ranked_runs,
+                (ranked_runs.c.document_id == Document.id)
+                & (ranked_runs.c.rank == 1),
             )
-            .group_by(phase_expr)
+            .group_by(ranked_runs.c.status)
         ).all()
-        phase_buckets = [
+        status_buckets = [
             {"value": coerce_value(value), "count": int(count or 0)}
-            for value, count in phase_rows
+            for value, count in status_rows
         ]
-        phase_buckets.sort(key=lambda bucket: str(bucket["value"]))
+        status_buckets.sort(key=lambda bucket: str(bucket["value"]))
 
         return {
-            "lastRunPhase": {"buckets": phase_buckets},
+            "lastRunPhase": {"buckets": status_buckets},
             "fileType": {"buckets": build_buckets(file_type_expr)},
         }
 
@@ -1282,127 +1328,18 @@ class DocumentsService:
         return DocumentFileType.UNKNOWN
 
     @staticmethod
-    def _coerce_int(value: Any) -> int | None:
-        if isinstance(value, bool):
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, float):
-            return int(value)
-        return None
-
-    @classmethod
-    def _derive_latest_result(cls, document: DocumentOut) -> DocumentResultSummary:
-        metadata = document.metadata or {}
-        candidate = (
-            metadata.get("mapping")
-            or metadata.get("mapping_health")
-            or metadata.get("mapping_quality")
-        )
-        if isinstance(candidate, Mapping):
-            attention = cls._coerce_int(candidate.get("issues"))
-            if attention is None:
-                attention = cls._coerce_int(candidate.get("attention")) or 0
-            unmapped = cls._coerce_int(candidate.get("unmapped")) or 0
-            pending = candidate.get("status") == "pending"
-            return DocumentResultSummary(
-                attention=attention,
-                unmapped=unmapped,
-                pending=True if pending else None,
-            )
-
-        attention = cls._coerce_int(metadata.get("mapping_issues"))
-        unmapped = cls._coerce_int(metadata.get("unmapped_columns"))
-        if attention is not None or unmapped is not None:
-            return DocumentResultSummary(
-                attention=attention or 0,
-                unmapped=unmapped or 0,
-            )
-
-        if document.last_run and document.last_run.status in {RunStatus.QUEUED, RunStatus.RUNNING}:
-            return DocumentResultSummary(attention=0, unmapped=0, pending=True)
-
-        return DocumentResultSummary(attention=0, unmapped=0)
-
-    @staticmethod
     def _last_run_at(run: DocumentRunSummary | None) -> datetime | None:
         if run is None:
             return None
         return run.completed_at or run.started_at or run.created_at
 
-    def _last_runs_by_id(
+    def _last_runs_by_document(
         self,
         *,
         workspace_id: UUID,
-        last_run_ids: dict[UUID, UUID],
+        document_ids: Sequence[UUID],
     ) -> dict[UUID, DocumentRunSummary]:
-        if not last_run_ids:
-            return {}
-
-        run_ids = list({run_id for run_id in last_run_ids.values() if run_id is not None})
-        if not run_ids:
-            return {}
-
-        stmt = (
-            select(
-                Run.id.label("run_id"),
-                Run.input_document_id.label("document_id"),
-                Run.status.label("status"),
-                Run.error_message.label("error_message"),
-                Run.completed_at.label("completed_at"),
-                Run.started_at.label("started_at"),
-                Run.created_at.label("created_at"),
-                Environment.status.label("env_status"),
-            )
-            .outerjoin(
-                Environment,
-                (Environment.workspace_id == Run.workspace_id)
-                & (Environment.configuration_id == Run.configuration_id)
-                & (Environment.engine_spec == Run.engine_spec)
-                & (Environment.deps_digest == Run.deps_digest),
-            )
-            .where(
-                Run.workspace_id == workspace_id,
-                Run.id.in_(run_ids),
-                Run.input_document_id.is_not(None),
-            )
-        )
-        result = self._session.execute(stmt)
-
-        runs_by_doc: dict[UUID, DocumentRunSummary] = {}
-        for row in result.mappings():
-            document_id = row["document_id"]
-            if not isinstance(document_id, UUID):
-                document_id = UUID(str(document_id))
-            status = row["status"]
-            if not isinstance(status, RunStatus):
-                status = RunStatus(str(status))
-            env_status = row.get("env_status")
-            phase, phase_reason = self._derive_run_phase_details(
-                status=status,
-                env_status=env_status,
-            )
-            runs_by_doc[document_id] = DocumentRunSummary(
-                id=row["run_id"],
-                status=status,
-                phase=phase,
-                phase_reason=phase_reason,
-                created_at=self._ensure_utc(row.get("created_at")),
-                started_at=self._ensure_utc(row.get("started_at")),
-                completed_at=self._ensure_utc(row.get("completed_at")),
-                error_summary=self._last_run_message(error_message=row.get("error_message")),
-            )
-
-        return runs_by_doc
-
-    def _last_successful_runs(
-        self,
-        *,
-        workspace_id: UUID,
-        documents: Sequence[DocumentOut],
-    ) -> dict[UUID, DocumentRunSummary]:
-        doc_ids = [doc.id for doc in documents]
-        if not doc_ids:
+        if not document_ids:
             return {}
 
         timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
@@ -1424,9 +1361,7 @@ class DocumentsService:
             )
             .where(
                 Run.workspace_id == workspace_id,
-                Run.input_document_id.is_not(None),
-                Run.input_document_id.in_(doc_ids),
-                Run.status == RunStatus.SUCCEEDED,
+                Run.input_document_id.in_(list(document_ids)),
             )
             .subquery()
         )
@@ -1434,7 +1369,7 @@ class DocumentsService:
         stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
         result = self._session.execute(stmt)
 
-        latest: dict[UUID, DocumentRunSummary] = {}
+        runs_by_doc: dict[UUID, DocumentRunSummary] = {}
         for row in result.mappings():
             document_id = row["document_id"]
             if not isinstance(document_id, UUID):
@@ -1442,46 +1377,69 @@ class DocumentsService:
             status = row["status"]
             if not isinstance(status, RunStatus):
                 status = RunStatus(str(status))
-            latest[document_id] = DocumentRunSummary(
+            runs_by_doc[document_id] = DocumentRunSummary(
                 id=row["run_id"],
                 status=status,
-                phase=DocumentRunPhase.SUCCEEDED,
                 created_at=self._ensure_utc(row.get("created_at")),
                 started_at=self._ensure_utc(row.get("started_at")),
                 completed_at=self._ensure_utc(row.get("completed_at")),
-                error_summary=self._last_run_message(error_message=row.get("error_message")),
+                error_message=row.get("error_message"),
             )
 
-        return latest
+        return runs_by_doc
 
-    @staticmethod
-    def _last_run_message(*, error_message: str | None) -> str | None:
-        if error_message:
-            return error_message
-        return None
+    def _last_run_metrics(self, *, run_ids: Sequence[UUID]) -> dict[UUID, RunMetricsResource]:
+        unique_ids = list({run_id for run_id in run_ids if run_id is not None})
+        if not unique_ids:
+            return {}
+        stmt = select(RunMetrics).where(RunMetrics.run_id.in_(unique_ids))
+        result = self._session.execute(stmt)
+        metrics_by_run: dict[UUID, RunMetricsResource] = {}
+        for metrics in result.scalars():
+            metrics_by_run[metrics.run_id] = RunMetricsResource.model_validate(metrics)
+        return metrics_by_run
 
-    @staticmethod
-    def _derive_run_phase_details(
-        *,
-        status: RunStatus,
-        env_status: Any | None,
-    ) -> tuple[DocumentRunPhase, DocumentRunPhaseReason | None]:
-        if status != RunStatus.QUEUED:
-            return DocumentRunPhase(status.value), None
-        if env_status is None:
-            return DocumentRunPhase.BUILDING, DocumentRunPhaseReason.ENVIRONMENT_MISSING
-        if isinstance(env_status, Enum):
-            env_value = env_status.value
-        else:
-            env_value = str(env_status)
-        if env_value == "ready":
-            return DocumentRunPhase.QUEUED, None
-        reason = {
-            "queued": DocumentRunPhaseReason.ENVIRONMENT_QUEUED,
-            "building": DocumentRunPhaseReason.ENVIRONMENT_BUILDING,
-            "failed": DocumentRunPhaseReason.ENVIRONMENT_FAILED,
-        }.get(env_value)
-        return DocumentRunPhase.BUILDING, reason
+    def _last_run_fields(self, *, run_ids: Sequence[UUID]) -> dict[UUID, list[RunFieldResource]]:
+        unique_ids = list({run_id for run_id in run_ids if run_id is not None})
+        if not unique_ids:
+            return {}
+        stmt = (
+            select(RunField)
+            .where(RunField.run_id.in_(unique_ids))
+            .order_by(RunField.run_id.asc(), RunField.field.asc())
+        )
+        result = self._session.execute(stmt)
+        fields_by_run: dict[UUID, list[RunFieldResource]] = {}
+        for field in result.scalars():
+            fields_by_run.setdefault(field.run_id, []).append(
+                RunFieldResource.model_validate(field)
+            )
+        return fields_by_run
+
+    def _last_run_table_columns(
+        self, *, run_ids: Sequence[UUID]
+    ) -> dict[UUID, list[RunColumnResource]]:
+        unique_ids = list({run_id for run_id in run_ids if run_id is not None})
+        if not unique_ids:
+            return {}
+        stmt = (
+            select(RunTableColumn)
+            .where(RunTableColumn.run_id.in_(unique_ids))
+            .order_by(
+                RunTableColumn.run_id.asc(),
+                RunTableColumn.workbook_index.asc(),
+                RunTableColumn.sheet_index.asc(),
+                RunTableColumn.table_index.asc(),
+                RunTableColumn.column_index.asc(),
+            )
+        )
+        result = self._session.execute(stmt)
+        columns_by_run: dict[UUID, list[RunColumnResource]] = {}
+        for column in result.scalars():
+            columns_by_run.setdefault(column.run_id, []).append(
+                RunColumnResource.model_validate(column)
+            )
+        return columns_by_run
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:

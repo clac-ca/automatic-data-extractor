@@ -60,7 +60,7 @@ export function DocumentsRowContextMenu({
   readonly isBusy: boolean;
   readonly children: ReactNode;
 }) {
-  const canDownloadOutput = Boolean(document.lastSuccessfulRun?.id);
+  const canDownloadOutput = document.lastRun?.status === "succeeded";
   const outputLabel = canDownloadOutput ? "Download output" : "Output not ready";
   const previewLabel = isPreviewOpen ? "Close preview" : "Open preview";
   const commentsLabel = isCommentsOpen ? "Close comments" : "Open comments";

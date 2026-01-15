@@ -46,7 +46,7 @@ export function DocumentsPreviewTable({
   onDownloadOriginal?: (document: DocumentRow) => void;
   onDownloadOutput?: (document: DocumentRow) => void;
 }) {
-  const outputRunId = document.lastSuccessfulRun?.id ?? null;
+  const outputRunId = document.lastRun?.status === "succeeded" ? document.lastRun.id : null;
   const hasOutput = Boolean(outputRunId);
   const [previewSource, setPreviewSource] = useState<PreviewSource>(
     hasOutput ? "output" : "original",
@@ -159,6 +159,38 @@ export function DocumentsPreviewTable({
   const selectedSheetValue = sheetIndex !== null ? String(sheetIndex) : "";
   const showOutputNotice = !hasOutput;
 
+  const runInsights = useMemo(() => {
+    const insights: Array<{ label: string; value: string }> = [];
+    const metrics = document.lastRunMetrics ?? null;
+    const columns = document.lastRunTableColumns ?? null;
+    const fields = document.lastRunFields ?? null;
+
+    if (metrics?.evaluation_outcome) {
+      insights.push({
+        label: "Eval",
+        value: metrics.evaluation_outcome.replace(/_/g, " "),
+      });
+    }
+
+    if (Array.isArray(columns) && columns.length > 0) {
+      const mapped = columns.filter((column) => column.mapping_status === "mapped").length;
+      insights.push({
+        label: "Mapped columns",
+        value: `${mapped}/${columns.length}`,
+      });
+    }
+
+    if (Array.isArray(fields) && fields.length > 0) {
+      const detected = fields.filter((field) => field.detected).length;
+      insights.push({
+        label: "Detected fields",
+        value: `${detected}/${fields.length}`,
+      });
+    }
+
+    return insights;
+  }, [document.lastRunFields, document.lastRunMetrics, document.lastRunTableColumns]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-background px-3 py-2 text-xs text-muted-foreground">
@@ -195,6 +227,15 @@ export function DocumentsPreviewTable({
               {truncationLabel}
             </span>
           ) : null}
+          {runInsights.map((insight) => (
+            <span
+              key={insight.label}
+              className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+            >
+              <span className="font-medium text-foreground">{insight.label}</span>
+              <span className="ml-1 tabular-nums">{insight.value}</span>
+            </span>
+          ))}
           {showOutputNotice ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
               No normalized output yet
@@ -210,7 +251,7 @@ export function DocumentsPreviewTable({
               Download original
             </Button>
           ) : null}
-          {onDownloadOutput && document.lastSuccessfulRun ? (
+          {onDownloadOutput && outputRunId ? (
             <Button size="sm" variant="outline" onClick={() => onDownloadOutput(document)}>
               Download output
             </Button>

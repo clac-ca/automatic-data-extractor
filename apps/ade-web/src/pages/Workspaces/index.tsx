@@ -10,8 +10,6 @@ import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
 import { PageState } from "@/components/layout";
-import { useAppTopBar } from "@/layouts/AppLayout";
-import { GlobalNavSearch } from "@/components/navigation/GlobalNavSearch";
 import { Alert } from "@/components/ui/alert";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
@@ -117,14 +115,6 @@ function WorkspacesIndexContent() {
     [navigate],
   );
 
-  const actions = useMemo(
-    () =>
-      canCreateWorkspace ? (
-        <Button onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
-      ) : undefined,
-    [canCreateWorkspace, navigate],
-  );
-
   const handleResetFilters = useCallback(() => {
     setFiltersValue(null);
   }, [setFiltersValue]);
@@ -145,16 +135,6 @@ function WorkspacesIndexContent() {
     },
     [setDefaultWorkspaceMutation],
   );
-
-  const topBarSearch = useMemo(() => <GlobalNavSearch scope={{ kind: "directory" }} />, []);
-  const topBarConfig = useMemo(
-    () => ({
-      actions,
-      search: topBarSearch,
-    }),
-    [actions, topBarSearch],
-  );
-  useAppTopBar(topBarConfig);
 
   const { table } = useDataTable({
     data: workspaces,

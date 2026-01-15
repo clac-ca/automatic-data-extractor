@@ -5446,6 +5446,36 @@
             "description": "Workspace identifier"
           },
           {
+            "name": "includeRunMetrics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerunmetrics"
+            }
+          },
+          {
+            "name": "includeRunTableColumns",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includeruntablecolumns"
+            }
+          },
+          {
+            "name": "includeRunFields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerunfields"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -6003,6 +6033,36 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
+          },
+          {
+            "name": "includeRunMetrics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerunmetrics"
+            }
+          },
+          {
+            "name": "includeRunTableColumns",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includeruntablecolumns"
+            }
+          },
+          {
+            "name": "includeRunFields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerunfields"
+            }
           }
         ],
         "responses": {
@@ -6584,6 +6644,36 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
+          },
+          {
+            "name": "includeRunMetrics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerunmetrics"
+            }
+          },
+          {
+            "name": "includeRunTableColumns",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includeruntablecolumns"
+            }
+          },
+          {
+            "name": "includeRunFields",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includerunfields"
+            }
           }
         ],
         "responses": {
@@ -13377,25 +13467,43 @@
               }
             ]
           },
-          "lastSuccessfulRun": {
+          "lastRunMetrics": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DocumentRunSummary"
+                "$ref": "#/components/schemas/RunMetricsResource"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "latestResult": {
+          "lastRunTableColumns": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DocumentResultSummary"
+                "items": {
+                  "$ref": "#/components/schemas/RunColumnResource"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Lastruntablecolumns"
+          },
+          "lastRunFields": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunFieldResource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastrunfields"
           }
         },
         "additionalProperties": false,
@@ -13584,27 +13692,46 @@
             ],
             "description": "Last run created for the document when available."
           },
-          "lastSuccessfulRun": {
+          "lastRunMetrics": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DocumentRunSummary"
+                "$ref": "#/components/schemas/RunMetricsResource"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Latest successful run execution associated with the document when available."
+            "description": "Last run metrics summary when available."
           },
-          "latestResult": {
+          "lastRunTableColumns": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DocumentResultSummary"
+                "items": {
+                  "$ref": "#/components/schemas/RunColumnResource"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Summary of the latest result metadata, when available."
+            "title": "Lastruntablecolumns",
+            "description": "Last run table column details when available."
+          },
+          "lastRunFields": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunFieldResource"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastrunfields",
+            "description": "Last run field detection summaries when available."
           },
           "listRow": {
             "anyOf": [
@@ -13634,62 +13761,6 @@
         "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
       },
-      "DocumentResultSummary": {
-        "properties": {
-          "attention": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Attention"
-          },
-          "unmapped": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Unmapped"
-          },
-          "pending": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pending"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "attention",
-          "unmapped"
-        ],
-        "title": "DocumentResultSummary",
-        "description": "Summary of the latest document result metadata."
-      },
-      "DocumentRunPhase": {
-        "type": "string",
-        "enum": [
-          "queued",
-          "building",
-          "running",
-          "succeeded",
-          "failed"
-        ],
-        "title": "DocumentRunPhase",
-        "description": "UI-facing phase derived from run + environment state."
-      },
-      "DocumentRunPhaseReason": {
-        "type": "string",
-        "enum": [
-          "environment_missing",
-          "environment_queued",
-          "environment_building",
-          "environment_failed"
-        ],
-        "title": "DocumentRunPhaseReason",
-        "description": "Reason for a derived run phase when queued but blocked by env readiness."
-      },
       "DocumentRunSummary": {
         "properties": {
           "id": {
@@ -13700,21 +13771,6 @@
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
-          },
-          "phase": {
-            "$ref": "#/components/schemas/DocumentRunPhase",
-            "description": "Derived phase used by the documents UI."
-          },
-          "phaseReason": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DocumentRunPhaseReason"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional reason for a derived phase when the run is blocked."
           },
           "createdAt": {
             "type": "string",
@@ -13748,7 +13804,7 @@
             "title": "Completedat",
             "description": "Timestamp for when the run completed, if available."
           },
-          "errorSummary": {
+          "errorMessage": {
             "anyOf": [
               {
                 "type": "string"
@@ -13757,8 +13813,8 @@
                 "type": "null"
               }
             ],
-            "title": "Errorsummary",
-            "description": "Optional error summary from the run."
+            "title": "Errormessage",
+            "description": "Optional error message from the run."
           }
         },
         "additionalProperties": false,
@@ -13766,11 +13822,10 @@
         "required": [
           "id",
           "status",
-          "phase",
           "createdAt"
         ],
         "title": "DocumentRunSummary",
-        "description": "Minimal representation of a run associated with a document."
+        "description": "Minimal representation of the latest run row for a document."
       },
       "DocumentSheet": {
         "properties": {

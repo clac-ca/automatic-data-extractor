@@ -29,7 +29,6 @@ export const DOCUMENTS_FILTER_IDS = new Set([
   "updatedAt",
   "activityAt",
   "byteSize",
-  "hasOutput",
 ]);
 
 export const DOCUMENTS_SIMPLE_FILTERS: Record<string, FilterVariant> = {

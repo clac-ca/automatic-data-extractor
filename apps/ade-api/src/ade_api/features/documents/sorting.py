@@ -20,8 +20,11 @@ from ade_api.models import Document, DocumentComment, DocumentSource, Run
 
 def _last_run_at_expr():
     return (
-        select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
-        .where(Run.id == Document.last_run_id)
+        select(func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at)))
+        .where(
+            Run.input_document_id == Document.id,
+            Run.workspace_id == Document.workspace_id,
+        )
         .scalar_subquery()
     )
 

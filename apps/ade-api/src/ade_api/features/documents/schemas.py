@@ -12,6 +12,7 @@ from pydantic import Field, field_validator, model_validator
 from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
+from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 from ade_api.models import DocumentSource, RunStatus
 
 
@@ -98,15 +99,20 @@ class DocumentOut(BaseSchema):
         alias="lastRun",
         description="Last run created for the document when available.",
     )
-    last_successful_run: DocumentRunSummary | None = Field(
+    last_run_metrics: RunMetricsResource | None = Field(
         default=None,
-        alias="lastSuccessfulRun",
-        description="Latest successful run execution associated with the document when available.",
+        alias="lastRunMetrics",
+        description="Last run metrics summary when available.",
     )
-    latest_result: DocumentResultSummary | None = Field(
+    last_run_table_columns: list[RunColumnResource] | None = Field(
         default=None,
-        alias="latestResult",
-        description="Summary of the latest result metadata, when available.",
+        alias="lastRunTableColumns",
+        description="Last run table column details when available.",
+    )
+    last_run_fields: list[RunFieldResource] | None = Field(
+        default=None,
+        alias="lastRunFields",
+        description="Last run field detection summaries when available.",
     )
     list_row: DocumentListRow | None = Field(
         default=None,
@@ -249,38 +255,11 @@ class TagCatalogPage(CursorPage[TagCatalogItem]):
     """Cursor-based tag catalog."""
 
 
-class DocumentRunPhase(str, Enum):
-    """UI-facing phase derived from run + environment state."""
-
-    QUEUED = "queued"
-    BUILDING = "building"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-
-
-class DocumentRunPhaseReason(str, Enum):
-    """Reason for a derived run phase when queued but blocked by env readiness."""
-
-    ENVIRONMENT_MISSING = "environment_missing"
-    ENVIRONMENT_QUEUED = "environment_queued"
-    ENVIRONMENT_BUILDING = "environment_building"
-    ENVIRONMENT_FAILED = "environment_failed"
-
-
 class DocumentRunSummary(BaseSchema):
-    """Minimal representation of a run associated with a document."""
+    """Minimal representation of the latest run row for a document."""
 
     id: UUIDStr = Field(description="Run identifier.")
     status: RunStatus
-    phase: DocumentRunPhase = Field(
-        description="Derived phase used by the documents UI.",
-    )
-    phase_reason: DocumentRunPhaseReason | None = Field(
-        default=None,
-        alias="phaseReason",
-        description="Optional reason for a derived phase when the run is blocked.",
-    )
     created_at: datetime = Field(
         alias="createdAt",
         description="Timestamp for when the run was created.",
@@ -295,19 +274,11 @@ class DocumentRunSummary(BaseSchema):
         alias="completedAt",
         description="Timestamp for when the run completed, if available.",
     )
-    error_summary: str | None = Field(
+    error_message: str | None = Field(
         default=None,
-        alias="errorSummary",
-        description="Optional error summary from the run.",
+        alias="errorMessage",
+        description="Optional error message from the run.",
     )
-
-
-class DocumentResultSummary(BaseSchema):
-    """Summary of the latest document result metadata."""
-
-    attention: int = Field(ge=0)
-    unmapped: int = Field(ge=0)
-    pending: bool | None = None
 
 
 class DocumentListRow(BaseSchema):
@@ -331,11 +302,12 @@ class DocumentListRow(BaseSchema):
         description="Weak ETag for optimistic concurrency checks.",
     )
     last_run: DocumentRunSummary | None = Field(default=None, alias="lastRun")
-    last_successful_run: DocumentRunSummary | None = Field(
+    last_run_metrics: RunMetricsResource | None = Field(default=None, alias="lastRunMetrics")
+    last_run_table_columns: list[RunColumnResource] | None = Field(
         default=None,
-        alias="lastSuccessfulRun",
+        alias="lastRunTableColumns",
     )
-    latest_result: DocumentResultSummary | None = Field(default=None, alias="latestResult")
+    last_run_fields: list[RunFieldResource] | None = Field(default=None, alias="lastRunFields")
 
 
 class DocumentListPage(CursorPage[DocumentListRow]):
@@ -450,9 +422,6 @@ __all__ = [
     "DocumentCommentCreate",
     "DocumentCommentOut",
     "DocumentCommentPage",
-    "DocumentResultSummary",
-    "DocumentRunPhase",
-    "DocumentRunPhaseReason",
     "DocumentRunSummary",
     "DocumentSheet",
     "DocumentTagsPatch",

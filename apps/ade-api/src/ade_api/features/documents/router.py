@@ -404,6 +404,9 @@ def list_documents(
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     service: DocumentsServiceDep,
     actor: DocumentReader,
+    include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
+    include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
+    include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
 ) -> DocumentListPage:
     resolved_sort = resolve_cursor_sort(
         list_query.sort,
@@ -422,6 +425,9 @@ def list_documents(
         q=list_query.q,
         include_total=list_query.include_total,
         include_facets=list_query.include_facets,
+        include_run_metrics=include_run_metrics,
+        include_run_table_columns=include_run_table_columns,
+        include_run_fields=include_run_fields,
     )
     return page_result
 
@@ -780,11 +786,17 @@ def read_document(
     response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
+    include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
+    include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
+    include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
 ) -> DocumentOut:
     try:
         document = service.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
+            include_run_metrics=include_run_metrics,
+            include_run_table_columns=include_run_table_columns,
+            include_run_fields=include_run_fields,
         )
         etag = format_weak_etag(build_etag_token(document.id, document.version))
         if etag:
@@ -817,11 +829,17 @@ def read_document_list_row(
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
+    include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
+    include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
+    include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
 ) -> DocumentListRow:
     try:
         return service.get_document_list_row(
             workspace_id=workspace_id,
             document_id=document_id,
+            include_run_metrics=include_run_metrics,
+            include_run_table_columns=include_run_table_columns,
+            include_run_fields=include_run_fields,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

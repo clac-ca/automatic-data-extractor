@@ -27,18 +27,6 @@ vi.mock("@/lib/workspacePreferences", () => ({
   writePreferredWorkspaceId: () => undefined,
 }));
 
-vi.mock("@/layouts/AppLayout", () => ({
-  useAppTopBar: () => undefined,
-}));
-
-vi.mock("@/components/navigation/GlobalNavSearch", () => ({
-  GlobalNavSearch: () => <div data-testid="global-search" />,
-}));
-
-vi.mock("@/hooks/useShortcutHint", () => ({
-  useShortcutHint: () => undefined,
-}));
-
 describe("WorkspacesScreen", () => {
   beforeEach(() => {
     mockUseWorkspacesQuery.mockReset();
