@@ -40,6 +40,7 @@ import { useDocumentsListParams } from "../../hooks/useDocumentsListParams";
 import { useDocumentsSelection } from "../../hooks/useDocumentsSelection";
 import { useDocumentsView } from "../../hooks/useDocumentsView";
 import { useDocumentsChangesStream } from "../../hooks/useDocumentsChangesStream";
+import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
@@ -71,7 +72,6 @@ export function DocumentsTableView({
   processingPaused = false,
   toolbarActions,
   uploadItems,
-  onUploadClick,
 }: {
   workspaceId: string;
   currentUser: CurrentUser;
@@ -79,7 +79,6 @@ export function DocumentsTableView({
   processingPaused?: boolean;
   toolbarActions?: ReactNode;
   uploadItems?: UploadItem[];
-  onUploadClick?: () => void;
 }) {
   const { notifyToast } = useNotifications();
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
@@ -568,7 +567,6 @@ export function DocumentsTableView({
   const hasDocuments = documents.length > 0;
   const showInitialLoading = isLoading && !hasDocuments;
   const showInitialError = Boolean(error) && !hasDocuments;
-  const hasActiveFilters = Boolean(filters?.length || q);
 
   const previewFallbackQuery = useQuery({
     queryKey: ["documents-preview-row", workspaceId, docId],
@@ -663,21 +661,14 @@ export function DocumentsTableView({
     );
   }
 
-  if (!hasDocuments && !hasActiveFilters) {
-    return (
-      <DocumentsEmptyState
-        title="No documents yet"
-        description="Upload a spreadsheet to start processing."
-        action={onUploadClick ? { label: "Upload", onClick: onUploadClick } : undefined}
-      />
-    );
-  }
+  const configBanner = configMissing ? <DocumentsConfigBanner workspaceId={workspaceId} /> : null;
 
   const deletePending =
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
 
   const tableContent = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+      {configBanner}
       <DocumentsTable
         data={documents}
         pageCount={pageCount}

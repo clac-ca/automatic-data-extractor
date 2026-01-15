@@ -144,7 +144,6 @@ export default function DocumentsScreen() {
             processingPaused={processingPaused}
             toolbarActions={toolbarActions}
             uploadItems={uploadManager.items}
-            onUploadClick={handleUploadClick}
           />
         </section>
       </div>
