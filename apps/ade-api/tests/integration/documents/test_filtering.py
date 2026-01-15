@@ -11,7 +11,6 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.sorting import parse_sort, resolve_sort
 from ade_api.features.documents.filters import DOCUMENT_FILTER_REGISTRY
-from ade_api.features.documents.schemas import DocumentRunPhase
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 
@@ -26,7 +25,7 @@ def test_parse_filters_rejects_invalid_value_shapes() -> None:
         parse_filter_items(raw, max_filters=5, max_raw_length=200)
 
 
-def test_prepare_filters_coerces_enum_and_datetime() -> None:
+def test_prepare_filters_coerces_datetime() -> None:
     items = [
         FilterItem(id="lastRunPhase", operator=FilterOperator.EQ, value="succeeded"),
         FilterItem(
@@ -37,7 +36,7 @@ def test_prepare_filters_coerces_enum_and_datetime() -> None:
     ]
     parsed = prepare_filters(items, DOCUMENT_FILTER_REGISTRY)
 
-    assert parsed[0].value == DocumentRunPhase.SUCCEEDED
+    assert parsed[0].value == "succeeded"
     assert getattr(parsed[1].value, "tzinfo", None) is UTC
 
 

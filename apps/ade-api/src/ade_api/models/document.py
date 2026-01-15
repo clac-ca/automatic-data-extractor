@@ -16,20 +16,16 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    func,
-    select,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ade_api.db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from .user import User
     from .workspace import Workspace
-
-from .run import Run
 
 
 def _enum_values(enum_cls: type[Enum]) -> list[str]:
@@ -117,12 +113,6 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     last_run_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
-    last_run_at: Mapped[datetime | None] = column_property(
-        select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
-        .where(Run.id == last_run_id)
-        .correlate_except(Run)
-        .scalar_subquery()
-    )
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_by_user_id: Mapped[UUID | None] = mapped_column(
         GUID(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True

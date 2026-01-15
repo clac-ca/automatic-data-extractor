@@ -232,10 +232,10 @@ def _try_enqueue_run(
     workspace_id: UUID,
     document_id: UUID,
     run_options: DocumentUploadRunOptions | None = None,
-) -> None:
+) -> bool:
     try:
         if runs_service.is_processing_paused(workspace_id=workspace_id):
-            return
+            return False
         options = None
         if run_options:
             options = RunCreateOptionsBase(
@@ -248,13 +248,15 @@ def _try_enqueue_run(
             configuration_id=None,
             options=options,
         )
+        return True
     except ConfigurationNotFoundError:
-        return
+        return False
     except Exception:
         logger.exception(
             "document.auto_run.failed",
             extra=log_context(workspace_id=workspace_id, document_id=document_id),
         )
+    return False
 
 
 @router.post(
@@ -355,12 +357,18 @@ def upload_document(
         if upload_slot_acquired:
             upload_semaphore.release()
 
-    _try_enqueue_run(
+    run_enqueued = _try_enqueue_run(
         runs_service=runs_service,
         workspace_id=workspace_id,
         document_id=document.id,
         run_options=upload_run_options,
     )
+    if run_enqueued:
+        document = service.get_document(
+            workspace_id=workspace_id,
+            document_id=document.id,
+        )
+        document.list_row = service._build_list_row(document)
 
     idempotency.store_response(
         key=idempotency_key,

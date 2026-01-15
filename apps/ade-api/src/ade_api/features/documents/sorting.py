@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, select
 
 from ade_api.common.cursor_listing import (
     CursorFieldSpec,
@@ -15,23 +15,34 @@ from ade_api.common.cursor_listing import (
     parse_uuid,
 )
 from ade_api.common.sql import nulls_last
-from ade_api.models import Document, DocumentComment, DocumentSource
+from ade_api.models import Document, DocumentComment, DocumentSource, Run
+
+
+def _last_run_at_expr():
+    return (
+        select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
+        .where(Run.id == Document.last_run_id)
+        .scalar_subquery()
+    )
 
 
 def _activity_at_expr():
+    last_run_at = _last_run_at_expr()
     return case(
-        (Document.last_run_at.is_(None), Document.updated_at),
-        (Document.updated_at.is_(None), Document.last_run_at),
-        (Document.last_run_at > Document.updated_at, Document.last_run_at),
+        (last_run_at.is_(None), Document.updated_at),
+        (Document.updated_at.is_(None), last_run_at),
+        (last_run_at > Document.updated_at, last_run_at),
         else_=Document.updated_at,
     )
 
+
 def _activity_at_value(document: Document) -> datetime | None:
-    if document.last_run_at is None:
+    last_run_at = getattr(document, "_last_run_at", None)
+    if last_run_at is None:
         return document.updated_at
     if document.updated_at is None:
-        return document.last_run_at
-    return document.last_run_at if document.last_run_at > document.updated_at else document.updated_at
+        return last_run_at
+    return last_run_at if last_run_at > document.updated_at else document.updated_at
 
 
 SORT_FIELDS = {
@@ -39,8 +50,8 @@ SORT_FIELDS = {
     "createdAt": (Document.created_at.asc(), Document.created_at.desc()),
     "updatedAt": (Document.updated_at.asc(), Document.updated_at.desc()),
     "lastRunAt": (
-        tuple(nulls_last(Document.last_run_at.asc())),
-        tuple(nulls_last(Document.last_run_at.desc())),
+        tuple(nulls_last(_last_run_at_expr().asc())),
+        tuple(nulls_last(_last_run_at_expr().desc())),
     ),
     "activityAt": (
         tuple(nulls_last(_activity_at_expr().asc())),
@@ -61,7 +72,10 @@ CURSOR_FIELDS: dict[str, CursorFieldSpec[Document]] = {
     "id": cursor_field(lambda doc: doc.id, parse_uuid),
     "createdAt": cursor_field(lambda doc: doc.created_at, parse_datetime),
     "updatedAt": cursor_field(lambda doc: doc.updated_at, parse_datetime),
-    "lastRunAt": cursor_field_nulls_last(lambda doc: doc.last_run_at, parse_datetime),
+    "lastRunAt": cursor_field_nulls_last(
+        lambda doc: getattr(doc, "_last_run_at", None),
+        parse_datetime,
+    ),
     "activityAt": cursor_field_nulls_last(_activity_at_value, parse_datetime),
     "byteSize": cursor_field(lambda doc: doc.byte_size, parse_int),
     "source": cursor_field(lambda doc: doc.source, parse_enum(DocumentSource)),

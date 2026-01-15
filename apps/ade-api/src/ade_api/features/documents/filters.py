@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, literal, or_, select
 from sqlalchemy.sql import Select
 
 from ade_api.common.list_filters import (
@@ -70,8 +70,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
                 FilterOperator.IS_EMPTY,
                 FilterOperator.IS_NOT_EMPTY,
             },
-            value_type=FilterValueType.ENUM,
-            enum_type=DocumentRunPhase,
+            value_type=FilterValueType.STRING,
         ),
         FilterField(
             id="fileType",
@@ -245,23 +244,54 @@ def apply_document_filters(
                     (Run.id.is_(None), None),
                     (Run.status != RunStatus.QUEUED, Run.status),
                     (Environment.status == "ready", Run.status),
-                    else_="building",
+                    else_=literal("building"),
                 )
                 last_run_joined = True
 
             values = parsed.value
             phase_values = values if isinstance(values, list) else [values]
-            normalized = [
-                value.value if isinstance(value, DocumentRunPhase) else str(value)
-                for value in phase_values
-            ]
-            if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
-                predicate = and_(
-                    phase_expr.is_not(None),
-                    ~phase_expr.in_(normalized),
+            normalized: list[str] = []
+            include_empty = False
+            invalid: list[str] = []
+            for value in phase_values:
+                if isinstance(value, DocumentRunPhase):
+                    raw = value.value
+                else:
+                    raw = str(value).strip().lower()
+                if not raw:
+                    continue
+                if raw == "__empty__":
+                    include_empty = True
+                    continue
+                try:
+                    normalized.append(DocumentRunPhase(raw).value)
+                except ValueError:
+                    invalid.append(raw)
+            if invalid:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Invalid lastRunPhase value(s): {', '.join(sorted(invalid))}",
                 )
+            if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
+                base = (
+                    and_(phase_expr.is_not(None), ~phase_expr.in_(normalized))
+                    if normalized
+                    else phase_expr.is_not(None)
+                )
+                predicate = base if not include_empty else base
             else:
-                predicate = phase_expr.in_(normalized)
+                if not normalized and not include_empty:
+                    continue
+                phase_predicates = []
+                if normalized:
+                    phase_predicates.append(phase_expr.in_(normalized))
+                if include_empty:
+                    phase_predicates.append(phase_expr.is_(None))
+                predicate = (
+                    or_(*phase_predicates)
+                    if phase_predicates
+                    else phase_expr.is_(None)
+                )
             predicates.append(predicate)
             continue
 

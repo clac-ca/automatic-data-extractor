@@ -10,7 +10,6 @@ from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOp
 from ade_api.common.cursor_listing import resolve_cursor_sort
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.features.documents.schemas import DocumentRunPhase
 from ade_api.models import RunStatus
 from tests.integration.documents.helpers import (
     build_documents_fixture,
@@ -29,7 +28,7 @@ async def test_list_documents_applies_filters_and_sorting(db_session, settings) 
         FilterItem(
             id="lastRunPhase",
             operator=FilterOperator.IN,
-            value=[DocumentRunPhase.SUCCEEDED],
+            value=["succeeded"],
         ),
         FilterItem(
             id="tags",

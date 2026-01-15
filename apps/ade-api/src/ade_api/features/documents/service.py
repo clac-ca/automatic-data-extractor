@@ -102,6 +102,7 @@ UPLOAD_RUN_OPTIONS_KEY = "__ade_run_options"
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 
+
 def _run_with_timeout(func, *, timeout: float, **kwargs):
     """Run a callable with a timeout to avoid hanging on large workbook operations."""
     if timeout <= 0:
@@ -110,6 +111,11 @@ def _run_with_timeout(func, *, timeout: float, **kwargs):
         future = executor.submit(func, **kwargs)
         return future.result(timeout=timeout)
 
+
+def _map_document_row(row: Mapping[str, Any]) -> Document:
+    document = row[Document]
+    setattr(document, "_last_run_at", row.get("last_run_at"))
+    return document
 
 
 @dataclass(slots=True)
@@ -290,6 +296,13 @@ class DocumentsService:
             join_operator=join_operator,
             q=q,
         )
+        last_run_at_expr = (
+            select(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
+            .where(Run.id == Document.last_run_id)
+            .scalar_subquery()
+            .label("last_run_at")
+        )
+        stmt = stmt.add_columns(last_run_at_expr)
 
         # Capture the cursor before listing to avoid skipping changes committed during the query.
         changes_cursor = self._events.current_cursor(workspace_id=workspace_id)
@@ -302,6 +315,7 @@ class DocumentsService:
             cursor=cursor,
             include_total=include_total,
             changes_cursor=str(changes_cursor),
+            row_mapper=lambda row: _map_document_row(row),
         )
         raw_items = list(page_result.items)
         items = [DocumentOut.model_validate(item) for item in raw_items]

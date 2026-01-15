@@ -50,7 +50,7 @@ async def test_list_documents_invalid_filter_returns_422(
         headers=headers,
         params={
             "filters": json.dumps(
-                [{"id": "status", "operator": "eq", "value": "bogus"}]
+                [{"id": "lastRunPhase", "operator": "eq", "value": "bogus"}]
             )
         },
     )
@@ -58,7 +58,7 @@ async def test_list_documents_invalid_filter_returns_422(
     assert response.status_code == 422
     payload = response.json()
     assert payload["type"] == "validation_error"
-    assert payload["detail"] == "Filter 'status' expects a supported enum value"
+    assert payload["detail"] == "Invalid lastRunPhase value(s): bogus"
 
 
 async def test_list_documents_uploader_me_filters(
