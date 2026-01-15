@@ -21,15 +21,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolveSrc(""),
-      "@pages": resolveSrc("pages"),
-      "@app": resolveSrc("app"),
-      "@components": resolveSrc("components"),
-      "@api": resolveSrc("api"),
-      "@hooks": resolveSrc("hooks"),
-      "@lib": resolveSrc("lib"),
-      "@schema": resolveSrc("types"),
-      "@schema/generated": resolveSrc("types/generated"),
-      "@test": resolveSrc("test"),
     },
   },
   define: {
