@@ -1,11 +1,11 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { MAX_PAGE_SIZE, useFlattenedPages } from "@api/pagination";
+import { MAX_PAGE_SIZE, useFlattenedPages } from "@/api/pagination";
 
-import { addWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberRoles } from "@api/workspaces/api";
-import { workspacesKeys } from "@hooks/workspaces";
-import type { WorkspaceMember, WorkspaceMemberCreatePayload, WorkspaceMemberPage } from "@schema/workspaces";
-import type { User } from "@schema";
+import { addWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberRoles } from "@/api/workspaces/api";
+import { workspacesKeys } from "@/hooks/workspaces";
+import type { WorkspaceMember, WorkspaceMemberCreatePayload, WorkspaceMemberPage } from "@/types/workspaces";
+import type { User } from "@/types";
 
 const MEMBERS_PAGE_SIZE = MAX_PAGE_SIZE;
 

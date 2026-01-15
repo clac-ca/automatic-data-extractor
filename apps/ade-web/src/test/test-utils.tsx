@@ -5,8 +5,8 @@ import { NuqsAdapter } from "nuqs/adapters/react-router/v7";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { ThemeProvider } from "@components/providers/theme";
-import { NotificationsProvider } from "@components/providers/notifications";
+import { ThemeProvider } from "@/providers/theme";
+import { NotificationsProvider } from "@/providers/notifications";
 
 export * from "@testing-library/react";
 

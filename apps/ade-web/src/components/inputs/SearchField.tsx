@@ -1,7 +1,7 @@
 import { type KeyboardEvent } from "react";
 import clsx from "clsx";
 
-import { CloseIcon, SearchIcon } from "@components/icons";
+import { CloseIcon, SearchIcon } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 
 interface SearchFieldProps {

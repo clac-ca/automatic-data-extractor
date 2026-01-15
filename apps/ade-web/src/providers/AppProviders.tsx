@@ -3,8 +3,8 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { ThemeProvider } from "@components@/providers/theme";
-import { NotificationsProvider } from "@components@/providers/notifications";
+import { ThemeProvider } from "@/providers/theme";
+import { NotificationsProvider } from "@/providers/notifications";
 
 interface AppProvidersProps {
   readonly children: ReactNode;

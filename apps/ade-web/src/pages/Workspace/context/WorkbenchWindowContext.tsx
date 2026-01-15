@@ -4,17 +4,17 @@ import clsx from "clsx";
 
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { Workbench } from "@pages/Workspace/sections/ConfigBuilder/workbench/Workbench";
-import type { WorkbenchDataSeed } from "@pages/Workspace/sections/ConfigBuilder/workbench/types";
-import { getWorkbenchReturnPathStorageKey } from "@pages/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
+import { Workbench } from "@/pages/Workspace/sections/ConfigBuilder/workbench/Workbench";
+import type { WorkbenchDataSeed } from "@/pages/Workspace/sections/ConfigBuilder/workbench/types";
+import { getWorkbenchReturnPathStorageKey } from "@/pages/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 
-import { createScopedStorage } from "@lib/storage";
+import { createScopedStorage } from "@/lib/storage";
 import {
   SearchParamsOverrideProvider,
   toURLSearchParams,
   type SetSearchParamsInit,
-} from "@app/navigation/urlState";
-import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@components/icons";
+} from "@/navigation/urlState";
+import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@/components/icons";
 
 type WorkbenchWindowState = "restored" | "maximized" | "minimized";
 

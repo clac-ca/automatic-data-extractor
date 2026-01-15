@@ -3,8 +3,8 @@ import {
   DEFAULT_PERMISSION_PAGE_SIZE,
   DEFAULT_ROLE_PAGE_SIZE,
   DEFAULT_WORKSPACE_PAGE_SIZE,
-} from "@api/workspaces/api";
-import type { ScopeType } from "@schema";
+} from "@/api/workspaces/api";
+import type { ScopeType } from "@/types";
 
 export {
   DEFAULT_WORKSPACE_PAGE_SIZE,

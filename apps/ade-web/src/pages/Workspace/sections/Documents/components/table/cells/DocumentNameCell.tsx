@@ -1,4 +1,4 @@
-import type { PresenceParticipant } from "@schema/presence";
+import type { PresenceParticipant } from "@/types/presence";
 
 import { cn } from "@/lib/utils";
 

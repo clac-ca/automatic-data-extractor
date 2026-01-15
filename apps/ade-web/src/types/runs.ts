@@ -32,4 +32,4 @@ export function eventPayload(event: EventRecord): Record<string, unknown> {
   return {};
 }
 
-export type RunStatus = import("@schema").RunStatus;
+export type RunStatus = import("@/types").RunStatus;

@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { render } from "@test/test-utils";
+import { render } from "@/test/test-utils";
 import type { WorkbenchFileNode } from "../../types";
 import { Explorer } from "../Explorer";
 

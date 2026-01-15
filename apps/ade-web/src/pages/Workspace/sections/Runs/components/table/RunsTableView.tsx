@@ -2,8 +2,8 @@ import { useCallback, useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { parseAsString, useQueryState } from "nuqs";
 
-import { PageState } from "@components/layouts/page-state";
-import { SpinnerIcon } from "@components/icons";
+import { PageState } from "@/components/layout";
+import { SpinnerIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 
 import { useRunsListParams } from "../../hooks/useRunsListParams";

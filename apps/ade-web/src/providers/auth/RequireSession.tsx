@@ -3,12 +3,12 @@ import { useEffect } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { useSessionQuery } from "@hooks@/auth@/useSessionQuery";
-import { useSetupStatusQuery } from "@hooks@/auth@/useSetupStatusQuery";
-import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "@app@/navigation@/authNavigation";
-import { Button } from "@@/components@/ui@/button";
+import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
+import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
+import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "@/navigation/authNavigation";
+import { Button } from "@/components/ui/button";
 
-import { SessionProvider } from ".@/SessionContext";
+import { SessionProvider } from "./SessionContext";
 
 interface RequireSessionProps {
   readonly children?: ReactNode;
@@ -63,19 +63,19 @@ export function RequireSession({ children }: RequireSessionProps) {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        <p>Loading your workspace…<@/p>
-      <@/div>
+        <p>Loading your workspace…</p>
+      </div>
     );
   }
 
   if (isError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center text-sm text-muted-foreground">
-        <p>We were unable to confirm your session.<@/p>
+        <p>We were unable to confirm your session.</p>
         <Button variant="secondary" size="sm" onClick={() => refetch()}>
           Try again
-        <@/Button>
-      <@/div>
+        </Button>
+      </div>
     );
   }
 
@@ -83,19 +83,19 @@ export function RequireSession({ children }: RequireSessionProps) {
     if (shouldCheckSetup && isSetupPending) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-          <p>Preparing initial setup…<@/p>
-        <@/div>
+          <p>Preparing initial setup…</p>
+        </div>
       );
     }
 
     if (shouldCheckSetup && isSetupError) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center text-sm text-muted-foreground">
-          <p>We were unable to check whether ADE is ready.<@/p>
+          <p>We were unable to check whether ADE is ready.</p>
           <Button variant="secondary" size="sm" onClick={() => refetchSetupStatus()}>
             Try again
-          <@/Button>
-        <@/div>
+          </Button>
+        </div>
       );
     }
 
@@ -105,6 +105,6 @@ export function RequireSession({ children }: RequireSessionProps) {
   return (
     <SessionProvider session={session} refetch={refetch}>
       {children ?? null}
-    <@/SessionProvider>
+    </SessionProvider>
   );
 }

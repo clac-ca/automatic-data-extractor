@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
-import { CloseIcon } from "@components/icons";
+import { CloseIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

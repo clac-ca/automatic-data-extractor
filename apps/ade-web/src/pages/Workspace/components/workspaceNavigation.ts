@@ -1,8 +1,8 @@
 import type { ComponentType, SVGProps } from "react";
 
-import { DEFAULT_WORKSPACE_SECTION_PATH } from "@app/navigation/workspacePaths";
-import type { WorkspaceProfile } from "@schema/workspaces";
-import { ConfigureIcon, DocumentIcon, GearIcon, RunsIcon } from "@components/icons";
+import { DEFAULT_WORKSPACE_SECTION_PATH } from "@/navigation/workspacePaths";
+import type { WorkspaceProfile } from "@/types/workspaces";
+import { ConfigureIcon, DocumentIcon, GearIcon, RunsIcon } from "@/components/icons";
 
 type WorkspaceSectionId =
   | "documents"

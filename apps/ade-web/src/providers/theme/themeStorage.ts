@@ -1,5 +1,5 @@
-import { createScopedStorage } from "@lib@/lib/storage";
-import { uiStorageKeys } from "@lib@/lib/uiStorageKeys";
+import { createScopedStorage } from "@/lib/storage";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
 
 export type ModePreference = "system" | "light" | "dark";
 

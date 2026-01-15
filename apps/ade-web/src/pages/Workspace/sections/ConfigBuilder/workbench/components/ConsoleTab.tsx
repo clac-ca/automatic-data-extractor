@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { UIEvent } from "react";
 import clsx from "clsx";
 
-import { DownloadIcon } from "@components/icons";
+import { DownloadIcon } from "@/components/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { createScopedStorage } from "@lib/storage";
-import { uiStorageKeys } from "@lib/uiStorageKeys";
+import { createScopedStorage } from "@/lib/storage";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";

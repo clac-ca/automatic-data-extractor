@@ -1,10 +1,10 @@
-import { ApiError } from "@api/errors";
-import { createIdempotencyKey } from "@api/idempotency";
-import { client, resolveApiUrl } from "@api/client";
-import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@api/listing";
+import { ApiError } from "@/api/errors";
+import { createIdempotencyKey } from "@/api/idempotency";
+import { client, resolveApiUrl } from "@/api/client";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
 
-import type { components, paths } from "@schema";
-import type { RunStreamEvent } from "@schema/runs";
+import type { components, paths } from "@/types";
+import type { RunStreamEvent } from "@/types/runs";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];

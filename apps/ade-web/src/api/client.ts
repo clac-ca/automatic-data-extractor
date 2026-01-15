@@ -2,7 +2,7 @@ import createClient, { type Middleware } from "openapi-fetch";
 
 import { readCsrfToken } from "./csrf";
 import { ApiError, tryParseProblemDetails } from "./errors";
-import type { paths } from "@schema";
+import type { paths } from "@/types";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 

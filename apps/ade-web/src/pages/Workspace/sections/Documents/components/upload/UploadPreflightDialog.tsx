@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { UploadManagerQueueItem } from "@hooks/documents/uploadManager";
+import type { UploadManagerQueueItem } from "@/hooks/documents/uploadManager";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CloseIcon, UploadIcon } from "@components/icons";
+import { CloseIcon, UploadIcon } from "@/components/icons";
 
 import type { FileType } from "../../types";
 import { fileTypeLabel, formatBytes, inferFileType, stableId } from "../../utils";

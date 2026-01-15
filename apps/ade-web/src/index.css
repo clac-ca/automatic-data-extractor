@@ -71,9 +71,16 @@
   --app-z-toast: 200;
 
   /* App shell layout tokens */
-  --app-shell-header-h: 3.5rem;
+  --app-shell-header-height: 3.5rem;
+  --app-shell-header-h: var(--app-shell-header-height);
   --app-shell-control-h: 2.25rem;
   --app-shell-search-max-w: 42rem;
+  --app-shell-sidebar-width: 16rem;
+  --app-shell-sidebar-collapsed-width: 3rem;
+  --app-shell-sidebar-mobile-width: 18rem;
+  --app-shell-content-max-width: 80rem;
+  --app-shell-content-padding-x: 1.5rem;
+  --app-shell-content-padding-y: 1.5rem;
 
   /* Monaco editor tokens (derived from theme palette) */
   --code-editor-bg: var(--background);

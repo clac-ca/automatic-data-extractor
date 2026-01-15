@@ -3,7 +3,7 @@ import { parseAsInteger, parseAsStringEnum, useQueryState } from "nuqs";
 
 import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
 import { getValidFilters } from "@/lib/data-table";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
+import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 
 import { DEFAULT_PAGE_SIZE, RUNS_FILTER_IDS, RUNS_SORT_IDS } from "../constants";
 import type { RunListRow, RunsListParams } from "../types";

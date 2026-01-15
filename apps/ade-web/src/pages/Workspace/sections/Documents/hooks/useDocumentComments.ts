@@ -6,13 +6,13 @@ import {
   type InfiniteData,
 } from "@tanstack/react-query";
 
-import { useFlattenedPages } from "@api/pagination";
+import { useFlattenedPages } from "@/api/pagination";
 import {
   createDocumentComment,
   listDocumentComments,
   type DocumentComment,
   type DocumentCommentPage,
-} from "@api/documents";
+} from "@/api/documents";
 import { stableId } from "../utils";
 
 const COMMENTS_PAGE_SIZE = 50;

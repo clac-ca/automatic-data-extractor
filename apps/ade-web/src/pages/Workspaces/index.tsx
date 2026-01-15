@@ -3,15 +3,15 @@ import { parseAsInteger, parseAsString, parseAsStringEnum, useQueryState } from 
 
 import { useNavigate } from "react-router-dom";
 
-import { useSession } from "@components/providers/auth/SessionContext";
-import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@hooks/workspaces";
-import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
-import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
-import type { WorkspaceProfile } from "@schema/workspaces";
+import { useSession } from "@/providers/auth/SessionContext";
+import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@/hooks/workspaces";
+import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
+import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
+import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
-import { PageState } from "@components/layouts/page-state";
-import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
-import { GlobalNavSearch } from "@components/shell/GlobalNavSearch";
+import { PageState } from "@/components/layout";
+import { useAppTopBar } from "@/layouts/AppLayout";
+import { GlobalNavSearch } from "@/components/navigation/GlobalNavSearch";
 import { Alert } from "@/components/ui/alert";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
@@ -20,9 +20,9 @@ import { DataTableAdvancedToolbar } from "@/components/data-table/data-table-adv
 import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
 import type { ColumnDef } from "@tanstack/react-table";
 import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
-import { DEFAULT_WORKSPACE_PAGE_SIZE } from "@hooks/workspaces";
+import { DEFAULT_WORKSPACE_PAGE_SIZE } from "@/hooks/workspaces";
 import { getValidFilters } from "@/lib/data-table";
-import type { FilterJoinOperator } from "@api/listing";
+import type { FilterJoinOperator } from "@/api/listing";
 
 export default function WorkspacesScreen() {
   return <WorkspacesIndexContent />;
@@ -117,9 +117,13 @@ function WorkspacesIndexContent() {
     [navigate],
   );
 
-  const actions = canCreateWorkspace ? (
-    <Button onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
-  ) : undefined;
+  const actions = useMemo(
+    () =>
+      canCreateWorkspace ? (
+        <Button onClick={() => navigate("/workspaces/new")}>Create workspace</Button>
+      ) : undefined,
+    [canCreateWorkspace, navigate],
+  );
 
   const handleResetFilters = useCallback(() => {
     setFiltersValue(null);
@@ -142,7 +146,15 @@ function WorkspacesIndexContent() {
     [setDefaultWorkspaceMutation],
   );
 
-  const topBarSearch = <GlobalNavSearch scope={{ kind: "directory" }} />;
+  const topBarSearch = useMemo(() => <GlobalNavSearch scope={{ kind: "directory" }} />, []);
+  const topBarConfig = useMemo(
+    () => ({
+      actions,
+      search: topBarSearch,
+    }),
+    [actions, topBarSearch],
+  );
+  useAppTopBar(topBarConfig);
 
   const { table } = useDataTable({
     data: workspaces,
@@ -165,7 +177,7 @@ function WorkspacesIndexContent() {
 
   if (workspacesQuery.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex min-h-full items-center justify-center bg-background px-6">
         <PageState title="Loading workspaces" variant="loading" />
       </div>
     );
@@ -173,7 +185,7 @@ function WorkspacesIndexContent() {
 
   if (workspacesQuery.isError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex min-h-full items-center justify-center bg-background px-6">
         <PageState
           title="We couldn't load your workspaces"
           description="Refresh the page or try again later."
@@ -290,13 +302,14 @@ function WorkspacesIndexContent() {
     );
 
   return (
-    <WorkspaceDirectoryLayout
-      actions={actions}
-      search={topBarSearch}
-      sidePanel={<DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />}
-    >
-      {mainContent}
-    </WorkspaceDirectoryLayout>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div>{mainContent}</div>
+        <aside className="space-y-6">
+          <DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />
+        </aside>
+      </div>
+    </div>
   );
 }
 

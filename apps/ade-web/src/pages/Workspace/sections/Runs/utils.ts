@@ -1,4 +1,4 @@
-import type { RunResource } from "@schema";
+import type { RunResource } from "@/types";
 import type { RunFileType, RunMetrics, RunRecord, RunsCounts } from "./types";
 
 const numberFormatter = new Intl.NumberFormat("en-US");

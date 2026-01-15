@@ -3,7 +3,7 @@ import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { render, screen } from "@test/test-utils";
+import { render, screen } from "@/test/test-utils";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 
 function ExampleTabs() {

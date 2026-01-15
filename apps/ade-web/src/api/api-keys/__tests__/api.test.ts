@@ -8,9 +8,9 @@ import {
   revokeMyApiKey,
   revokeUserApiKey,
 } from "../api";
-import { client } from "@api/client";
+import { client } from "@/api/client";
 
-vi.mock("@api/client", () => {
+vi.mock("@/api/client", () => {
   return {
     client: {
       GET: vi.fn(),

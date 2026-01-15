@@ -1,7 +1,7 @@
-import { client } from "@api/client";
-import { createIdempotencyKey } from "@api/idempotency";
-import { buildListQuery, type FilterItem } from "@api/listing";
-import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@schema";
+import { client } from "@/api/client";
+import { createIdempotencyKey } from "@/api/idempotency";
+import { buildListQuery, type FilterItem } from "@/api/listing";
+import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@/types";
 
 export interface ListPageOptions {
   readonly limit?: number;

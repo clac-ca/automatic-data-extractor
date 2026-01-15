@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { EyeIcon, LogsIcon, OutputIcon } from "@components/icons";
+import { EyeIcon, LogsIcon, OutputIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 
 import type { RunRecord } from "../../../types";

@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { render, screen } from "@test/test-utils";
-import LoginScreen from "@pages/Login";
+import { render, screen } from "@/test/test-utils";
+import LoginScreen from "@/pages/Login";
 
 const mockUseSessionQuery = vi.fn();
 const mockUseSetupStatusQuery = vi.fn();
 const mockUseAuthProvidersQuery = vi.fn();
 
-vi.mock("@hooks/auth/useSessionQuery", () => ({
+vi.mock("@/hooks/auth/useSessionQuery", () => ({
   useSessionQuery: () => mockUseSessionQuery(),
 }));
 
-vi.mock("@hooks/auth/useSetupStatusQuery", () => ({
+vi.mock("@/hooks/auth/useSetupStatusQuery", () => ({
   useSetupStatusQuery: (enabled?: boolean) => mockUseSetupStatusQuery(enabled),
 }));
 
-vi.mock("@hooks/auth/useAuthProvidersQuery", () => ({
+vi.mock("@/hooks/auth/useAuthProvidersQuery", () => ({
   useAuthProvidersQuery: () => mockUseAuthProvidersQuery(),
 }));
 

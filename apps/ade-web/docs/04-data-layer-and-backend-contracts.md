@@ -62,7 +62,7 @@ Design goals:
 
 ## 2. HTTP client
 
-All HTTP calls go through `src/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
+All HTTP calls go through `src/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@/types`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
 
 ### 2.1 Responsibilities
 
@@ -637,7 +637,7 @@ API keys:
 Hooks:
 
 * `useUsersQuery()`
-* (API keys hooks not yet defined; call `@api/api-keys/api` directly from pages as needed.)
+* (API keys hooks not yet defined; call `@/api/api-keys/api` directly from pages as needed.)
 
 ---
 

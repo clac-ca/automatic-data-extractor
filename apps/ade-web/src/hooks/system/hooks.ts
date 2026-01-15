@@ -8,7 +8,7 @@ import {
   type SafeModeStatus,
   type SafeModeUpdateRequest,
   type SystemVersions,
-} from "@api/system/api";
+} from "@/api/system/api";
 
 export const SAFE_MODE_QUERY_KEY = ["system", "safeMode"] as const;
 export const SYSTEM_VERSIONS_QUERY_KEY = ["system", "versions"] as const;

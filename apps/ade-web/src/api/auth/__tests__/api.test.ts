@@ -7,7 +7,7 @@ const mockClient = {
 
 const mockApiFetch = vi.fn();
 
-vi.mock("@api/client", () => ({
+vi.mock("@/api/client", () => ({
   client: mockClient,
   apiFetch: mockApiFetch,
 }));

@@ -1,4 +1,4 @@
-import type { PresenceConnectionState, PresenceParticipant } from "@schema/presence";
+import type { PresenceConnectionState, PresenceParticipant } from "@/types/presence";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarGroup } from "@/components/ui/avatar-group";

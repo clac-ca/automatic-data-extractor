@@ -20,7 +20,7 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
-  Build URLs via helpers in `@app/navigation`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
+  Build URLs via helpers in `@/navigation`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
@@ -28,7 +28,7 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)
 
 - **Reuse existing patterns**  
-  New list/detail flows should copy Documents/Runs; NDJSON streaming should use `api/ndjson` and the `ade.event/v1` model; permissions should go through `@schema` and the workspace context helpers.  
+  New list/detail flows should copy Documents/Runs; NDJSON streaming should use `api/ndjson` and the `ade.event/v1` model; permissions should go through `@/types` and the workspace context helpers.  
   See: [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Check RBAC & Safe mode rules**  
@@ -140,7 +140,7 @@ ADE Web is a single-page React app using **React Router v7 (data router)**.
 
 ### Top-level routes
 
-Defined in `src/app/routes.tsx` (root shell + protected branch):
+Defined in `src/routes.tsx` (root shell + protected branch):
 
 - `/` – entry strategy (decide login vs setup vs app).
 - `/login`, `/logout`, `/setup` – auth and first-run setup.
@@ -155,7 +155,7 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/config-builder`
 - `/workspaces/:workspaceId/settings`
 
-Route helpers live in `@app/navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
+Route helpers live in `@/navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
 
 See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)
 
@@ -180,7 +180,7 @@ Important UI state is encoded in **query parameters**, not local component state
 - Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
-Utilities for this live in `@app/navigation/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
+Utilities for this live in `@/navigation/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
 
 ---
 
@@ -285,7 +285,7 @@ High-level layout (under `apps/ade-web/src`):
 - `main.tsx` – Vite entry point.
 - `app/` – application shell (App.tsx, providers, navigation).
 - `api/` – HTTP client + domain API calls.
-- `pages/` (aliased as `@pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
+- `pages/` (aliased as `@/pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
 - `components/` – shared UI primitives, layouts, providers, and shell chrome.
 - `hooks/` – shared React hooks (React Query + app hooks).
 - `lib/` – cross-cutting helpers (storage, uploads, local preferences).

@@ -4,7 +4,7 @@ import type {
   components as GeneratedComponents,
   paths as GeneratedPaths,
   operations as GeneratedOperations,
-} from "@schema/generated/openapi";
+} from "@/types/generated/openapi";
 
 // Base OpenAPI maps. Useful when you need to index into components or paths directly.
 export type components = GeneratedComponents;

@@ -33,9 +33,9 @@ import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./u
 import { hasFileDrag } from "./utils/fileDrop";
 import { isAssetsWorkbenchPath, isSafeWorkbenchPath, joinWorkbenchPath, normalizeWorkbenchPath } from "./utils/paths";
 
-import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { PageState } from "@components/layouts/page-state";
+import { PageState } from "@/components/layout";
 import {
   ActionsIcon,
   CheckIcon,
@@ -49,9 +49,9 @@ import {
   SpinnerIcon,
   WindowMaximizeIcon,
   WindowRestoreIcon,
-} from "@components/icons";
+} from "@/components/icons";
 
-import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@api/configurations/api";
+import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@/api/configurations/api";
 import {
   configurationKeys,
   useConfigurationFilesQuery,
@@ -63,17 +63,17 @@ import {
   useMakeActiveConfigurationMutation,
   useReplaceConfigurationMutation,
   useSaveConfigurationFileMutation,
-} from "@hooks/configurations";
-import type { FileReadJson } from "@schema/configurations";
-import { createScopedStorage } from "@lib/storage";
-import { uiStorageKeys } from "@lib/uiStorageKeys";
-import { isDarkMode, useTheme } from "@components/providers/theme";
+} from "@/hooks/configurations";
+import type { FileReadJson } from "@/types/configurations";
+import { createScopedStorage } from "@/lib/storage";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
+import { isDarkMode, useTheme } from "@/providers/theme";
 import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
-import { ApiError } from "@api";
-import type { components } from "@schema";
-import { fetchDocumentSheets, type DocumentSheet } from "@api/documents";
-import { client } from "@api/client";
-import { useNotifications, type NotificationIntent } from "@components/providers/notifications";
+import { ApiError } from "@/api";
+import type { components } from "@/types";
+import { fetchDocumentSheets, type DocumentSheet } from "@/api/documents";
+import { client } from "@/api/client";
+import { useNotifications, type NotificationIntent } from "@/providers/notifications";
 import {
   Select,
   SelectContent,

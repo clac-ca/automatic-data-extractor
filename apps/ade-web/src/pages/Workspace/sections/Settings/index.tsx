@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { PageState } from "@components/layouts/page-state";
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
+import { PageState } from "@/components/layout";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { SettingsShell } from "./components/SettingsShell";
 import { SettingsSectionProvider } from "./sectionContext";
 import {

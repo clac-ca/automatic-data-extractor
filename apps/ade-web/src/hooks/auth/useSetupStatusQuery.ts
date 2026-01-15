@@ -1,7 +1,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { fetchSetupStatus, type SetupStatus } from "@api/setup/api";
-import { sessionKeys } from "@api/auth/api";
+import { fetchSetupStatus, type SetupStatus } from "@/api/setup/api";
+import { sessionKeys } from "@/api/auth/api";
 
 export function useSetupStatusQuery(enabled = true): UseQueryResult<SetupStatus> {
   return useQuery<SetupStatus>({

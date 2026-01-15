@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { documentsChangesStreamUrl, type DocumentChangeEntry } from "@api/documents";
+import { documentsChangesStreamUrl, type DocumentChangeEntry } from "@/api/documents";
 
 type ConnectionState = "idle" | "connecting" | "open" | "closed";
 

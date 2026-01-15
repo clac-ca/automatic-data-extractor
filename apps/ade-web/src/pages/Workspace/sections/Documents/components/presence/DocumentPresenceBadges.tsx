@@ -1,4 +1,4 @@
-import type { PresenceParticipant } from "@schema/presence";
+import type { PresenceParticipant } from "@/types/presence";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarGroup } from "@/components/ui/avatar-group";

@@ -9,11 +9,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import type { BannerOptions, NotificationAction, NotificationIntent, ToastOptions } from ".@/components/types";
-import { CloseIcon, ErrorIcon, InfoIcon, SuccessIcon, WarningIcon } from "@components@/components/icons";
-import { Button } from "@@/components/components@/components/ui@/components/button";
-import { Stack, StackItem } from "@@/components/components@/components/ui@/components/stack";
-import { cn } from "@@/components/lib@/components/utils";
+import type { BannerOptions, NotificationAction, NotificationIntent, ToastOptions } from "./types";
+import { CloseIcon, ErrorIcon, InfoIcon, SuccessIcon, WarningIcon } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { Stack, StackItem } from "@/components/ui/stack";
+import { cn } from "@/lib/utils";
 
 interface ToastEntry {
   readonly kind: "toast";
@@ -174,8 +174,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   return (
     <NotificationsContext.Provider value={contextValue}>
       {children}
-      <NotificationHost @/components/>
-    <@/components/NotificationsContext.Provider>
+      <NotificationHost />
+    </NotificationsContext.Provider>
   );
 }
 
@@ -222,12 +222,12 @@ function NotificationHost() {
                   entry={banner}
                   onDismiss={dismiss}
                   dismissOnAction={!banner.sticky}
-                @/components/>
-              <@/components/StackItem>
+                />
+              </StackItem>
             ))}
-          <@/components/Stack>
+          </Stack>
         ) : null}
-      <@/components/div>
+      </div>
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[var(--app-z-toast)] flex justify-center px-4 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:justify-end sm:px-0">
         {sortedToasts.length > 0 ? (
           <Stack
@@ -238,13 +238,13 @@ function NotificationHost() {
           >
             {sortedToasts.map((toast) => (
               <StackItem key={toast.id}>
-                <NotificationCard entry={toast} onDismiss={dismiss} dismissOnAction @/components/>
-              <@/components/StackItem>
+                <NotificationCard entry={toast} onDismiss={dismiss} dismissOnAction />
+              </StackItem>
             ))}
-          <@/components/Stack>
+          </Stack>
         ) : null}
-      <@/components/div>
-    <@/components/>,
+      </div>
+    </>,
     document.body,
   );
 }
@@ -264,11 +264,11 @@ function NotificationCard({
     <div className="flex items-start gap-3">
       <div className={cn("mt-0.5 flex h-8 w-8 items-center justify-center rounded-full", intentStyle.icon)}>
         {entry.icon ?? renderNotificationIcon(entry.intent)}
-      <@/components/div>
+      </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold leading-snug text-foreground">{entry.title}<@/components/p>
+        <p className="text-sm font-semibold leading-snug text-foreground">{entry.title}</p>
         {entry.description ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{entry.description}<@/components/p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{entry.description}</p>
         ) : null}
         {entry.actions.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -285,22 +285,22 @@ function NotificationCard({
                 }}
               >
                 {action.label}
-              <@/components/Button>
+              </Button>
             ))}
-          <@/components/div>
+          </div>
         ) : null}
-      <@/components/div>
+      </div>
       {entry.dismissible ? (
         <button
           type="button"
-          className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring@/components/40"
+          className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           aria-label="Dismiss notification"
           onClick={() => onDismiss(entry.id)}
         >
-          <CloseIcon className="h-4 w-4" @/components/>
-        <@/components/button>
+          <CloseIcon className="h-4 w-4" />
+        </button>
       ) : null}
-    <@/components/div>
+    </div>
   );
 }
 
@@ -319,13 +319,13 @@ function resolveActionVariant(action: NotificationAction) {
 function renderNotificationIcon(intent: NotificationIntent) {
   switch (intent) {
     case "success":
-      return <SuccessIcon className="h-5 w-5" @/components/>;
+      return <SuccessIcon className="h-5 w-5" />;
     case "warning":
-      return <WarningIcon className="h-5 w-5" @/components/>;
+      return <WarningIcon className="h-5 w-5" />;
     case "danger":
-      return <ErrorIcon className="h-5 w-5" @/components/>;
+      return <ErrorIcon className="h-5 w-5" />;
     default:
-      return <InfoIcon className="h-5 w-5" @/components/>;
+      return <InfoIcon className="h-5 w-5" />;
   }
 }
 
@@ -334,13 +334,13 @@ const INTENT_STYLES: Record<NotificationIntent, { icon: string }> = {
     icon: "bg-muted text-muted-foreground",
   },
   success: {
-    icon: "bg-primary@/components/15 text-primary",
+    icon: "bg-primary/15 text-primary",
   },
   warning: {
     icon: "bg-accent text-accent-foreground",
   },
   danger: {
-    icon: "bg-destructive@/components/15 text-destructive",
+    icon: "bg-destructive/15 text-destructive",
   },
 };
 

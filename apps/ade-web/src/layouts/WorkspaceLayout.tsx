@@ -1,167 +1,122 @@
-@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesu@/typess@/typese@/typesM@/typese@/typesm@/typeso@/types,@/types @/typesu@/typess@/typese@/typesS@/typest@/typesa@/typest@/typese@/types,@/types @/typest@/typesy@/typesp@/typese@/types @/typesR@/typese@/typesa@/typesc@/typest@/typesN@/typeso@/typesd@/typese@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/typesr@/typese@/typesa@/typesc@/typest@/types"@/types;@/types
-@/types@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/typesc@/typesl@/typess@/typesx@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/typesc@/typesl@/typess@/typesx@/types"@/types;@/types
-@/types@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesu@/typess@/typese@/typesS@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types@@/types/@/typesp@/typesr@/typeso@/typesv@/typesi@/typesd@/typese@/typesr@/typess@/types@@/types/@/typesa@/typesu@/typest@/typesh@/types@@/types/@/typesS@/typese@/typess@/typess@/typesi@/typeso@/typesn@/typesC@/typeso@/typesn@/typest@/typese@/typesx@/typest@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesA@/typesb@/typeso@/typesu@/typest@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesn@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/types@@/types/@/typesA@/typesb@/typeso@/typesu@/typest@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesA@/typesp@/typesp@/typese@/typesa@/typesr@/typesa@/typesn@/typesc@/typese@/typesM@/typese@/typesn@/typesu@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesn@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/types@@/types/@/typesA@/typesp@/typesp@/typese@/typesa@/typesr@/typesa@/typesn@/typesc@/typese@/typesM@/typese@/typesn@/typesu@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesA@/typesp@/typesp@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesn@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/types@@/types/@/typesA@/typesp@/typesp@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesG@/typesl@/typeso@/typesb@/typesa@/typesl@/typesN@/typesa@/typesv@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesn@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/types@@/types/@/typesG@/typesl@/typeso@/typesb@/typesa@/typesl@/typesN@/typesa@/typesv@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesP@/typesr@/typeso@/typesf@/typesi@/typesl@/typese@/typesD@/typesr@/typeso@/typesp@/typesd@/typeso@/typesw@/typesn@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesn@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/types@@/types/@/typesP@/typesr@/typeso@/typesf@/typesi@/typesl@/typese@/typesD@/typesr@/typeso@/typesp@/typesd@/typeso@/typesw@/typesn@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesD@/typesE@/typesF@/typesA@/typesU@/typesL@/typesT@/types_@/typesS@/typesA@/typesF@/typesE@/types_@/typesM@/typesO@/typesD@/typesE@/types_@/typesM@/typesE@/typesS@/typesS@/typesA@/typesG@/typesE@/types,@/types @/typesu@/typess@/typese@/typesS@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/typesS@/typest@/typesa@/typest@/typesu@/typess@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesh@/typeso@/typeso@/typesk@/typess@/types@@/types/@/typess@/typesy@/typess@/typest@/typese@/typesm@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/typest@/typesy@/typesp@/typese@/types @/types{@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesP@/typesr@/typeso@/typesf@/typesi@/typesl@/typese@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typess@/typesc@/typesh@/typese@/typesm@/typesa@/types@@/types/@/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typess@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/typest@/typesy@/typesp@/typese@/types @/types{@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesN@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/typesI@/typest@/typese@/typesm@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesa@/typesp@/typesp@/types@@/types/@/typesn@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/types@@/types/@/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesN@/typesa@/typesv@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesu@/typess@/typese@/typesW@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesW@/typesi@/typesn@/typesd@/typeso@/typesw@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/typesp@/typesa@/typesg@/typese@/typess@/types@@/types/@/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types@@/types/@/typesc@/typeso@/typesn@/typest@/typese@/typesx@/typest@/types@@/types/@/typesW@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesW@/typesi@/typesn@/typesd@/typeso@/typesw@/typesC@/typeso@/typesn@/typest@/typese@/typesx@/typest@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesA@/typesl@/typese@/typesr@/typest@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesu@/typesi@/types@@/types/@/typesa@/typesl@/typese@/typesr@/typest@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesS@/typese@/typesp@/typesa@/typesr@/typesa@/typest@/typeso@/typesr@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesu@/typesi@/types@@/types/@/typess@/typese@/typesp@/typesa@/typesr@/typesa@/typest@/typeso@/typesr@/types"@/types;@/types
-@/types@/typesi@/typesm@/typesp@/typeso@/typesr@/typest@/types @/types{@/types @/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesI@/typesn@/typess@/typese@/typest@/types,@/types @/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesP@/typesr@/typeso@/typesv@/typesi@/typesd@/typese@/typesr@/types,@/types @/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesT@/typesr@/typesi@/typesg@/typesg@/typese@/typesr@/types @/types}@/types @/typesf@/typesr@/typeso@/typesm@/types @/types"@/types@@/types@@/types/@/typesc@/typeso@/typesm@/typesp@/typeso@/typesn@/typese@/typesn@/typest@/typess@/types@@/types/@/typesu@/typesi@/types@@/types/@/typess@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/types"@/types;@/types
-@/types@/types
-@/types@/typesi@/typesn@/typest@/typese@/typesr@/typesf@/typesa@/typesc@/typese@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesL@/typesa@/typesy@/typeso@/typesu@/typest@/typesP@/typesr@/typeso@/typesp@/typess@/types @/types{@/types
-@/types@/types @/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types:@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesP@/typesr@/typeso@/typesf@/typesi@/typesl@/typese@/types;@/types
-@/types@/types @/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typesn@/typesa@/typesv@/typesI@/typest@/typese@/typesm@/typess@/types:@/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesN@/typesa@/typesv@/typesi@/typesg@/typesa@/typest@/typesi@/typeso@/typesn@/typesI@/typest@/typese@/typesm@/types[@/types]@/types;@/types
-@/types@/types @/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typess@/typese@/typesc@/typest@/typesi@/typeso@/typesn@/typesK@/typese@/typesy@/types:@/types @/typess@/typest@/typesr@/typesi@/typesn@/typesg@/types;@/types
-@/types@/types @/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typesf@/typesu@/typesl@/typesl@/typesH@/typese@/typesi@/typesg@/typesh@/typest@/types?@/types:@/types @/typesb@/typeso@/typeso@/typesl@/typese@/typesa@/typesn@/types;@/types
-@/types@/types @/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typesf@/typesu@/typesl@/typesl@/typesW@/typesi@/typesd@/typest@/typesh@/types?@/types:@/types @/typesb@/typeso@/typeso@/typesl@/typese@/typesa@/typesn@/types;@/types
-@/types@/types @/types @/typesr@/typese@/typesa@/typesd@/typeso@/typesn@/typesl@/typesy@/types @/typesc@/typesh@/typesi@/typesl@/typesd@/typesr@/typese@/typesn@/types:@/types @/typesR@/typese@/typesa@/typesc@/typest@/typesN@/typeso@/typesd@/typese@/types;@/types
-@/types@/types}@/types
-@/types@/types
-@/types@/typese@/typesx@/typesp@/typeso@/typesr@/typest@/types @/typesf@/typesu@/typesn@/typesc@/typest@/typesi@/typeso@/typesn@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesL@/typesa@/typesy@/typeso@/typesu@/typest@/types(@/types{@/types
-@/types@/types @/types @/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types,@/types
-@/types@/types @/types @/typesn@/typesa@/typesv@/typesI@/typest@/typese@/typesm@/typess@/types,@/types
-@/types@/types @/types @/typess@/typese@/typesc@/typest@/typesi@/typeso@/typesn@/typesK@/typese@/typesy@/types,@/types
-@/types@/types @/types @/typesf@/typesu@/typesl@/typesl@/typesH@/typese@/typesi@/typesg@/typesh@/typest@/types @/types=@/types @/typesf@/typesa@/typesl@/typess@/typese@/types,@/types
-@/types@/types @/types @/typesf@/typesu@/typesl@/typesl@/typesW@/typesi@/typesd@/typest@/typesh@/types @/types=@/types @/typesf@/typesa@/typesl@/typess@/typese@/types,@/types
-@/types@/types @/types @/typesc@/typesh@/typesi@/typesl@/typesd@/typesr@/typese@/typesn@/types,@/types
-@/types@/types}@/types:@/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesL@/typesa@/typesy@/typeso@/typesu@/typest@/typesP@/typesr@/typeso@/typesp@/typess@/types)@/types @/types{@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typess@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types @/types=@/types @/typesu@/typess@/typese@/typesS@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types(@/types)@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/types{@/types @/typess@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types:@/types @/typesw@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesS@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types,@/types @/typesw@/typesi@/typesn@/typesd@/typeso@/typesw@/typesS@/typest@/typesa@/typest@/typese@/types @/types}@/types @/types=@/types @/typesu@/typess@/typese@/typesW@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesW@/typesi@/typesn@/typesd@/typeso@/typesw@/types(@/types)@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/types @/types=@/types @/typesu@/typess@/typese@/typesS@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/typesS@/typest@/typesa@/typest@/typesu@/typess@/types(@/types)@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/typesE@/typesn@/typesa@/typesb@/typesl@/typese@/typesd@/types @/types=@/types @/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/types.@/typesd@/typesa@/typest@/typesa@/types?@/types.@/typese@/typesn@/typesa@/typesb@/typesl@/typese@/typesd@/types @/types?@/types?@/types @/typesf@/typesa@/typesl@/typess@/typese@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/typesD@/typese@/typest@/typesa@/typesi@/typesl@/types @/types=@/types @/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/types.@/typesd@/typesa@/typest@/typesa@/types?@/types.@/typesd@/typese@/typest@/typesa@/typesi@/typesl@/types @/types?@/types?@/types @/typesD@/typesE@/typesF@/typesA@/typesU@/typesL@/typesT@/types_@/typesS@/typesA@/typesF@/typesE@/types_@/typesM@/typesO@/typesD@/typesE@/types_@/typesM@/typesE@/typesS@/typesS@/typesA@/typesG@/typesE@/types;@/types
-@/types@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/types[@/typesi@/typess@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/typesO@/typesp@/typese@/typesn@/types,@/types @/typess@/typese@/typest@/typesI@/typess@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/typesO@/typesp@/typese@/typesn@/types]@/types @/types=@/types @/typesu@/typess@/typese@/typesS@/typest@/typesa@/typest@/typese@/types(@/typesf@/typesa@/typesl@/typess@/typese@/types)@/types;@/types
-@/types@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typesi@/typesm@/typesm@/typese@/typesr@/typess@/typesi@/typesv@/typese@/typesW@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesA@/typesc@/typest@/typesi@/typesv@/typese@/types @/types=@/types @/typesB@/typeso@/typeso@/typesl@/typese@/typesa@/typesn@/types(@/typesw@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesS@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types @/types&@/types&@/types @/typesw@/typesi@/typesn@/typesd@/typeso@/typesw@/typesS@/typest@/typesa@/typest@/typese@/types @/types=@/types=@/types=@/types @/types"@/typesm@/typesa@/typesx@/typesi@/typesm@/typesi@/typesz@/typese@/typesd@/types"@/types)@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typesd@/typese@/typesf@/typesa@/typesu@/typesl@/typest@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesO@/typesp@/typese@/typesn@/types @/types=@/types @/typesu@/typess@/typese@/typesM@/typese@/typesm@/typeso@/types(@/types(@/types)@/types @/types=@/types>@/types @/typesg@/typese@/typest@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesD@/typese@/typesf@/typesa@/typesu@/typesl@/typest@/typesO@/typesp@/typese@/typesn@/types(@/types)@/types,@/types @/types[@/types]@/types)@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typesc@/typeso@/typesn@/typest@/typese@/typesn@/typest@/typesH@/typesa@/typess@/typesP@/typesa@/typesd@/typesd@/typesi@/typesn@/typesg@/types @/types=@/types @/types!@/typesf@/typesu@/typesl@/typesl@/typesH@/typese@/typesi@/typesg@/typesh@/typest@/types @/types&@/types&@/types @/types!@/typesf@/typesu@/typesl@/typesl@/typesW@/typesi@/typesd@/typest@/typesh@/types;@/types
-@/types@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typesd@/typesi@/typess@/typesp@/typesl@/typesa@/typesy@/typesN@/typesa@/typesm@/typese@/types @/types=@/types @/typess@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types.@/typesu@/typess@/typese@/typesr@/types.@/typesd@/typesi@/typess@/typesp@/typesl@/typesa@/typesy@/types_@/typesn@/typesa@/typesm@/typese@/types @/types|@/types|@/types @/typess@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types.@/typesu@/typess@/typese@/typesr@/types.@/typese@/typesm@/typesa@/typesi@/typesl@/types @/types|@/types|@/types @/types"@/typesS@/typesi@/typesg@/typesn@/typese@/typesd@/types @/typesi@/typesn@/types"@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typese@/typesm@/typesa@/typesi@/typesl@/types @/types=@/types @/typess@/typese@/typess@/typess@/typesi@/typeso@/typesn@/types.@/typesu@/typess@/typese@/typesr@/types.@/typese@/typesm@/typesa@/typesi@/typesl@/types @/types?@/types?@/types @/types"@/types"@/types;@/types
-@/types@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typest@/typeso@/typesp@/typesB@/typesa@/typesr@/typesT@/typesr@/typesa@/typesi@/typesl@/typesi@/typesn@/typesg@/types @/types=@/types @/types(@/types
-@/types@/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesf@/typesl@/typese@/typesx@/types @/typesm@/typesi@/typesn@/types-@/typesw@/types-@/types0@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesn@/typeso@/typesw@/typesr@/typesa@/typesp@/types @/typesi@/typest@/typese@/typesm@/typess@/types-@/typesc@/typese@/typesn@/typest@/typese@/typesr@/types @/typesg@/typesa@/typesp@/types-@/types2@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types<@/typesA@/typesp@/typesp@/typese@/typesa@/typesr@/typesa@/typesn@/typesc@/typese@/typesM@/typese@/typesn@/typesu@/types @/typest@/typeso@/typesn@/typese@/types=@/types"@/typesh@/typese@/typesa@/typesd@/typese@/typesr@/types"@/types @/types@@/types/@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types<@/typesP@/typesr@/typeso@/typesf@/typesi@/typesl@/typese@/typesD@/typesr@/typeso@/typesp@/typesd@/typeso@/typesw@/typesn@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typesd@/typesi@/typess@/typesp@/typesl@/typesa@/typesy@/typesN@/typesa@/typesm@/typese@/types=@/types{@/typesd@/typesi@/typess@/typesp@/typesl@/typesa@/typesy@/typesN@/typesa@/typesm@/typese@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typese@/typesm@/typesa@/typesi@/typesl@/types=@/types{@/typese@/typesm@/typesa@/typesi@/typesl@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typest@/typeso@/typesn@/typese@/types=@/types"@/typesh@/typese@/typesa@/typesd@/typese@/typesr@/types"@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typesa@/typesc@/typest@/typesi@/typeso@/typesn@/typess@/types=@/types{@/types[@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesi@/typesd@/types:@/types @/types"@/typesa@/typesb@/typeso@/typesu@/typest@/types-@/typesv@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesl@/typesa@/typesb@/typese@/typesl@/types:@/types @/types"@/typesA@/typesb@/typeso@/typesu@/typest@/types @/types@@/types/@/types @/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesd@/typese@/typess@/typesc@/typesr@/typesi@/typesp@/typest@/typesi@/typeso@/typesn@/types:@/types @/types"@/typesa@/typesd@/typese@/types-@/typesw@/typese@/typesb@/types,@/types @/typesa@/typesd@/typese@/types-@/typesa@/typesp@/typesi@/types,@/types @/typesa@/typesd@/typese@/types-@/typese@/typesn@/typesg@/typesi@/typesn@/typese@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typeso@/typesn@/typesS@/typese@/typesl@/typese@/typesc@/typest@/types:@/types @/types(@/types)@/types @/types=@/types>@/types @/typess@/typese@/typest@/typesI@/typess@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/typesO@/typesp@/typese@/typesn@/types(@/typest@/typesr@/typesu@/typese@/types)@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types}@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types]@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types@@/types/@/types>@/types
-@/types@/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types)@/types;@/types
-@/types@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typest@/typeso@/typesp@/typesB@/typesa@/typesr@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types @/types=@/types @/types(@/types
-@/types@/types @/types @/types @/types @/types<@/typesG@/typesl@/typeso@/typesb@/typesa@/typesl@/typesN@/typesa@/typesv@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types
-@/types@/types @/types @/types @/types @/types @/types @/typess@/typesc@/typeso@/typesp@/typese@/types=@/types{@/types{@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typesk@/typesi@/typesn@/typesd@/types:@/types @/types"@/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesI@/typesd@/types:@/types @/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types.@/typesi@/typesd@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/typesN@/typesa@/typesm@/typese@/types:@/types @/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types.@/typesn@/typesa@/typesm@/typese@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/typesn@/typesa@/typesv@/typesI@/typest@/typese@/typesm@/typess@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types}@/types}@/types
-@/types@/types @/types @/types @/types @/types@@/types/@/types>@/types
-@/types@/types @/types @/types)@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typess@/typesh@/typeso@/typesw@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types @/types=@/types @/typesB@/typeso@/typeso@/typesl@/typese@/typesa@/typesn@/types(@/typest@/typeso@/typesp@/typesB@/typesa@/typesr@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types)@/types;@/types
-@/types@/types
-@/types@/types @/types @/typesr@/typese@/typest@/typesu@/typesr@/typesn@/types @/types(@/types
-@/types@/types @/types @/types @/types @/types<@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types<@/typesA@/typesb@/typeso@/typesu@/typest@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/types @/typeso@/typesp@/typese@/typesn@/types=@/types{@/typesi@/typess@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/typesO@/typesp@/typese@/typesn@/types}@/types @/typeso@/typesn@/typesC@/typesl@/typeso@/typess@/typese@/types=@/types{@/types(@/types)@/types @/types=@/types>@/types @/typess@/typese@/typest@/typesI@/typess@/typesV@/typese@/typesr@/typess@/typesi@/typeso@/typesn@/typess@/typesM@/typeso@/typesd@/typesa@/typesl@/typesO@/typesp@/typese@/typesn@/types(@/typesf@/typesa@/typesl@/typess@/typese@/types)@/types}@/types @/types@@/types/@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types<@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesP@/typesr@/typeso@/typesv@/typesi@/typesd@/typese@/typesr@/types @/typesd@/typese@/typesf@/typesa@/typesu@/typesl@/typest@/typesO@/typesp@/typese@/typesn@/types=@/types{@/typesd@/typese@/typesf@/typesa@/typesu@/typesl@/typest@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesO@/typesp@/typese@/typesn@/types}@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types{@/types!@/typesi@/typesm@/typesm@/typese@/typesr@/typess@/typesi@/typesv@/typese@/typesW@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesA@/typesc@/typest@/typesi@/typesv@/typese@/types @/types?@/types @/types<@/typesA@/typesp@/typesp@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/types @/types@@/types/@/types>@/types @/types:@/types @/typesn@/typesu@/typesl@/typesl@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesI@/typesn@/typess@/typese@/typest@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesm@/typesi@/typesn@/types-@/typesw@/types-@/types0@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/types!@/typesi@/typesm@/typesm@/typese@/typesr@/typess@/typesi@/typesv@/typese@/typesW@/typeso@/typesr@/typesk@/typesb@/typese@/typesn@/typesc@/typesh@/typesA@/typesc@/typest@/typesi@/typesv@/typese@/types @/types?@/types @/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesh@/typese@/typesa@/typesd@/typese@/typesr@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types{@/typesc@/typesl@/typess@/typesx@/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typesf@/typesl@/typese@/typesx@/types @/typesh@/types-@/types1@/types6@/types @/typess@/typesh@/typesr@/typesi@/typesn@/typesk@/types-@/types0@/types @/typesi@/typest@/typese@/typesm@/typess@/types-@/typesc@/typese@/typesn@/typest@/typese@/typesr@/types @/typesg@/typesa@/typesp@/types-@/types2@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typest@/typesr@/typesa@/typesn@/typess@/typesi@/typest@/typesi@/typeso@/typesn@/types-@/types[@/typesw@/typesi@/typesd@/typest@/typesh@/types,@/typesh@/typese@/typesi@/typesg@/typesh@/typest@/types]@/types @/typese@/typesa@/typess@/typese@/types-@/typesl@/typesi@/typesn@/typese@/typesa@/typesr@/types @/typesg@/typesr@/typeso@/typesu@/typesp@/types-@/typesh@/typesa@/typess@/types-@/typesd@/typesa@/typest@/typesa@/types-@/types[@/typesc@/typeso@/typesl@/typesl@/typesa@/typesp@/typess@/typesi@/typesb@/typesl@/typese@/types=@/typesi@/typesc@/typeso@/typesn@/types]@/types@@/types/@/typess@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/types-@/typesw@/typesr@/typesa@/typesp@/typesp@/typese@/typesr@/types:@/typesh@/types-@/types1@/types2@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesr@/typeso@/typesl@/typese@/types=@/types"@/typesb@/typesa@/typesn@/typesn@/typese@/typesr@/types"@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesa@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesh@/typesr@/typese@/typesf@/types=@/types"@/types#@/typesm@/typesa@/typesi@/typesn@/types-@/typesc@/typeso@/typesn@/typest@/typese@/typesn@/typest@/types"@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types{@/typesc@/typesl@/typess@/typesx@/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typess@/typesr@/types-@/typeso@/typesn@/typesl@/typesy@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesn@/typeso@/typest@/types-@/typess@/typesr@/types-@/typeso@/typesn@/typesl@/typesy@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesa@/typesb@/typess@/typeso@/typesl@/typesu@/typest@/typese@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesl@/typese@/typesf@/typest@/types-@/types4@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typest@/typeso@/typesp@/types-@/types3@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesz@/types-@/types[@/typesv@/typesa@/typesr@/types(@/types-@/types-@/typesa@/typesp@/typesp@/types-@/typesz@/types-@/typesp@/typeso@/typesp@/typeso@/typesv@/typese@/typesr@/types)@/types]@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typesr@/typeso@/typesu@/typesn@/typesd@/typese@/typesd@/types-@/typesl@/typesg@/types @/typesb@/typeso@/typesr@/typesd@/typese@/typesr@/types @/typesb@/typeso@/typesr@/typesd@/typese@/typesr@/types-@/typesb@/typeso@/typesr@/typesd@/typese@/typesr@/types @/typesb@/typesg@/types-@/typesc@/typesa@/typesr@/typesd@/types @/typesp@/typesx@/types-@/types3@/types @/typesp@/typesy@/types-@/types2@/types @/typest@/typese@/typesx@/typest@/types-@/typess@/typesm@/types @/typesf@/typeso@/typesn@/typest@/types-@/typess@/typese@/typesm@/typesi@/typesb@/typeso@/typesl@/typesd@/types @/typest@/typese@/typesx@/typest@/types-@/typesf@/typeso@/typesr@/typese@/typesg@/typesr@/typeso@/typesu@/typesn@/typesd@/types @/typess@/typesh@/typesa@/typesd@/typeso@/typesw@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typeso@/typesu@/typest@/typesl@/typesi@/typesn@/typese@/types-@/typesn@/typeso@/typesn@/typese@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesr@/typesi@/typesn@/typesg@/types-@/types2@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesr@/typesi@/typesn@/typesg@/types-@/typesr@/typesi@/typesn@/typesg@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesr@/typesi@/typesn@/typesg@/types-@/typeso@/typesf@/typesf@/typess@/typese@/typest@/types-@/types2@/types @/typesf@/typeso@/typesc@/typesu@/typess@/types:@/typesr@/typesi@/typesn@/typesg@/types-@/typeso@/typesf@/typesf@/typess@/typese@/typest@/types-@/typesb@/typesa@/typesc@/typesk@/typesg@/typesr@/typeso@/typesu@/typesn@/typesd@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesS@/typesk@/typesi@/typesp@/types @/typest@/typeso@/types @/typesc@/typeso@/typesn@/typest@/typese@/typesn@/typest@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesa@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesf@/typesl@/typese@/typesx@/types @/typesw@/types-@/typesf@/typesu@/typesl@/typesl@/types @/typesi@/typest@/typese@/typesm@/typess@/types-@/typesc@/typese@/typesn@/typest@/typese@/typesr@/types @/typesg@/typesa@/typesp@/types-@/types2@/types @/typesp@/typesx@/types-@/types4@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesT@/typesr@/typesi@/typesg@/typesg@/typese@/typesr@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/types-@/typesm@/typesl@/types-@/types1@/types"@/types @/types@@/types/@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesS@/typese@/typesp@/typesa@/typesr@/typesa@/typest@/typeso@/typesr@/types @/typeso@/typesr@/typesi@/typese@/typesn@/typest@/typesa@/typest@/typesi@/typeso@/typesn@/types=@/types"@/typesv@/typese@/typesr@/typest@/typesi@/typesc@/typesa@/typesl@/types"@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesm@/typesr@/types-@/types2@/types @/typesd@/typesa@/typest@/typesa@/types-@/types[@/typeso@/typesr@/typesi@/typese@/typesn@/typest@/typesa@/typest@/typesi@/typeso@/typesn@/types=@/typesv@/typese@/typesr@/typest@/typesi@/typesc@/typesa@/typesl@/types]@/types:@/typesh@/types-@/types4@/types"@/types @/types@@/types/@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesh@/typesi@/typesd@/typesd@/typese@/typesn@/types @/typesm@/typesi@/typesn@/types-@/typesw@/types-@/types0@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesc@/typeso@/typesl@/types @/typesl@/typese@/typesa@/typesd@/typesi@/typesn@/typesg@/types-@/typest@/typesi@/typesg@/typesh@/typest@/types @/typess@/typesm@/types:@/typesf@/typesl@/typese@/typesx@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typess@/typesp@/typesa@/typesn@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typest@/typese@/typesx@/typest@/types-@/types[@/types0@/types.@/types6@/types3@/typesr@/typese@/typesm@/types]@/types @/typesf@/typeso@/typesn@/typest@/types-@/typess@/typese@/typesm@/typesi@/typesb@/typeso@/typesl@/typesd@/types @/typesu@/typesp@/typesp@/typese@/typesr@/typesc@/typesa@/typess@/typese@/types @/typest@/typesr@/typesa@/typesc@/typesk@/typesi@/typesn@/typesg@/types-@/types[@/types0@/types.@/types3@/types5@/typese@/typesm@/types]@/types @/typest@/typese@/typesx@/typest@/types-@/typesm@/typesu@/typest@/typese@/typesd@/types-@/typesf@/typeso@/typesr@/typese@/typesg@/typesr@/typeso@/typesu@/typesn@/typesd@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesW@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typess@/typesp@/typesa@/typesn@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typess@/typesp@/typesa@/typesn@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typest@/typesr@/typesu@/typesn@/typesc@/typesa@/typest@/typese@/types @/typest@/typese@/typesx@/typest@/types-@/typess@/typesm@/types @/typesf@/typeso@/typesn@/typest@/types-@/typess@/typese@/typesm@/typesi@/typesb@/typeso@/typesl@/typesd@/types @/typest@/typese@/typesx@/typest@/types-@/typesf@/typeso@/typesr@/typese@/typesg@/typesr@/typeso@/typesu@/typesn@/typesd@/types"@/types>@/types{@/typesw@/typeso@/typesr@/typesk@/typess@/typesp@/typesa@/typesc@/typese@/types.@/typesn@/typesa@/typesm@/typese@/types}@/types<@/types@@/types/@/typess@/typesp@/typesa@/typesn@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesm@/typesl@/types-@/typesa@/typesu@/typest@/typeso@/types @/typesf@/typesl@/typese@/typesx@/types @/typesm@/typesi@/typesn@/types-@/typesw@/types-@/types0@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesn@/typeso@/typesw@/typesr@/typesa@/typesp@/types @/typesi@/typest@/typese@/typesm@/typess@/types-@/typesc@/typese@/typesn@/typest@/typese@/typesr@/types @/typesg@/typesa@/typesp@/types-@/types2@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/typess@/typesh@/typeso@/typesw@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types @/types?@/types @/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesh@/typesi@/typesd@/typesd@/typese@/typesn@/types @/typesw@/types-@/typesf@/typesu@/typesl@/typesl@/types @/typesm@/typesa@/typesx@/types-@/typesw@/types-@/types[@/typesv@/typesa@/typesr@/types(@/types-@/types-@/typesa@/typesp@/typesp@/types-@/typess@/typesh@/typese@/typesl@/typesl@/types-@/typess@/typese@/typesa@/typesr@/typesc@/typesh@/types-@/typesm@/typesa@/typesx@/types-@/typesw@/types)@/types]@/types @/typess@/typesm@/types:@/typesb@/typesl@/typeso@/typesc@/typesk@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/typest@/typeso@/typesp@/typesB@/typesa@/typesr@/typesS@/typese@/typesa@/typesr@/typesc@/typesh@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types @/types:@/types @/typesn@/typesu@/typesl@/typesl@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/typest@/typeso@/typesp@/typesB@/typesa@/typesr@/typesT@/typesr@/typesa@/typesi@/typesl@/typesi@/typesn@/typesg@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesh@/typese@/typesa@/typesd@/typese@/typesr@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types @/types:@/types @/typesn@/typesu@/typesl@/typesl@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesi@/typesd@/types=@/types"@/typesm@/typesa@/typesi@/typesn@/types-@/typesc@/typeso@/typesn@/typest@/typese@/typesn@/typest@/types"@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typest@/typesa@/typesb@/typesI@/typesn@/typesd@/typese@/typesx@/types=@/types{@/types-@/types1@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types{@/typesc@/typesl@/typess@/typesx@/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types"@/typesr@/typese@/typesl@/typesa@/typest@/typesi@/typesv@/typese@/types @/typesf@/typesl@/typese@/typesx@/types @/typesm@/typesi@/typesn@/types-@/typesh@/types-@/types0@/types @/typesm@/typesi@/typesn@/types-@/typesw@/types-@/types0@/types @/typesf@/typesl@/typese@/typesx@/types-@/types1@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesc@/typeso@/typesl@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesf@/typesu@/typesl@/typesl@/typesH@/typese@/typesi@/typesg@/typesh@/typest@/types @/types?@/types @/types"@/typeso@/typesv@/typese@/typesr@/typesf@/typesl@/typeso@/typesw@/types-@/typesh@/typesi@/typesd@/typesd@/typese@/typesn@/types"@/types @/types:@/types @/types"@/typeso@/typesv@/typese@/typesr@/typesf@/typesl@/typeso@/typesw@/types-@/typesy@/types-@/typesa@/typesu@/typest@/typeso@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesk@/typese@/typesy@/types=@/types{@/typess@/typese@/typesc@/typest@/typesi@/typeso@/typesn@/typesK@/typese@/typesy@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types{@/typesc@/typesl@/typess@/typesx@/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/typesf@/typesu@/typesl@/typesl@/typesH@/typese@/typesi@/typesg@/typesh@/typest@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types?@/types @/types"@/typesf@/typesl@/typese@/typesx@/types @/typesw@/types-@/typesf@/typesu@/typesl@/typesl@/types @/typesf@/typesl@/typese@/typesx@/types-@/types1@/types @/typesm@/typesi@/typesn@/types-@/typesh@/types-@/types0@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesc@/typeso@/typesl@/types @/typesp@/typesx@/types-@/types0@/types @/typesp@/typesy@/types-@/types0@/types"@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types:@/types @/typesf@/typesu@/typesl@/typesl@/typesW@/typesi@/typesd@/typest@/typesh@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types?@/types @/types"@/typesf@/typesl@/typese@/typesx@/types @/typesw@/types-@/typesf@/typesu@/typesl@/typesl@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesc@/typeso@/typesl@/types @/typesp@/typesx@/types-@/types0@/types @/typesp@/typesy@/types-@/types0@/types"@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types:@/types @/types"@/typesm@/typesx@/types-@/typesa@/typesu@/typest@/typeso@/types @/typesf@/typesl@/typese@/typesx@/types @/typesw@/types-@/typesf@/typesu@/typesl@/typesl@/types @/typesm@/typesa@/typesx@/types-@/typesw@/types-@/types7@/typesx@/typesl@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesc@/typeso@/typesl@/types @/typesp@/typesx@/types-@/types4@/types @/typesp@/typesy@/types-@/types6@/types"@/types,@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/typesE@/typesn@/typesa@/typesb@/typesl@/typese@/typesd@/types @/types?@/types @/types(@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types{@/typesc@/typesl@/typess@/typesx@/types(@/types"@/typesm@/typesb@/types-@/types4@/types"@/types,@/types @/typesc@/typeso@/typesn@/typest@/typese@/typesn@/typest@/typesH@/typesa@/typess@/typesP@/typesa@/typesd@/typesd@/typesi@/typesn@/typesg@/types @/types?@/types @/types"@/types"@/types @/types:@/types @/types"@/typesp@/typesx@/types-@/types6@/types @/typesp@/typest@/types-@/types4@/types"@/types)@/types}@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesA@/typesl@/typese@/typesr@/typest@/types @/typest@/typeso@/typesn@/typese@/types=@/types"@/typesw@/typesa@/typesr@/typesn@/typesi@/typesn@/typesg@/types"@/types @/typesh@/typese@/typesa@/typesd@/typesi@/typesn@/typesg@/types=@/types"@/typesS@/typesa@/typesf@/typese@/types @/typesm@/typeso@/typesd@/typese@/types @/typesa@/typesc@/typest@/typesi@/typesv@/typese@/types"@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types{@/typess@/typesa@/typesf@/typese@/typesM@/typeso@/typesd@/typese@/typesD@/typese@/typest@/typesa@/typesi@/typesl@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesA@/typesl@/typese@/typesr@/typest@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types)@/types @/types:@/types @/typesn@/typesu@/typesl@/typesl@/types}@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/typesd@/typesi@/typesv@/types @/typesc@/typesl@/typesa@/typess@/typess@/typesN@/typesa@/typesm@/typese@/types=@/types"@/typesf@/typesl@/typese@/typesx@/types @/typesm@/typesi@/typesn@/types-@/typesh@/types-@/types0@/types @/typesm@/typesi@/typesn@/types-@/typesw@/types-@/types0@/types @/typesf@/typesl@/typese@/typesx@/types-@/types1@/types @/typesf@/typesl@/typese@/typesx@/types-@/typesc@/typeso@/typesl@/types"@/types>@/types{@/typesc@/typesh@/typesi@/typesl@/typesd@/typesr@/typese@/typesn@/types}@/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesd@/typesi@/typesv@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesI@/typesn@/typess@/typese@/typest@/types>@/types
-@/types@/types @/types @/types @/types @/types @/types @/types<@/types@@/types/@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesP@/typesr@/typeso@/typesv@/typesi@/typesd@/typese@/typesr@/types>@/types
-@/types@/types @/types @/types @/types @/types<@/types@@/types/@/types>@/types
-@/types@/types @/types @/types)@/types;@/types
-@/types@/types}@/types
-@/types@/types
-@/types@/typesf@/typesu@/typesn@/typesc@/typest@/typesi@/typeso@/typesn@/types @/typesg@/typese@/typest@/typesS@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/typesD@/typese@/typesf@/typesa@/typesu@/typesl@/typest@/typesO@/typesp@/typese@/typesn@/types(@/types)@/types @/types{@/types
-@/types@/types @/types @/typesi@/typesf@/types @/types(@/typest@/typesy@/typesp@/typese@/typeso@/typesf@/types @/typesd@/typeso@/typesc@/typesu@/typesm@/typese@/typesn@/typest@/types @/types=@/types=@/types=@/types @/types"@/typesu@/typesn@/typesd@/typese@/typesf@/typesi@/typesn@/typese@/typesd@/types"@/types)@/types @/typesr@/typese@/typest@/typesu@/typesr@/typesn@/types @/typest@/typesr@/typesu@/typese@/types;@/types
-@/types@/types @/types @/typesc@/typeso@/typesn@/typess@/typest@/types @/typesm@/typesa@/typest@/typesc@/typesh@/types @/types=@/types @/typesd@/typeso@/typesc@/typesu@/typesm@/typese@/typesn@/typest@/types.@/typesc@/typeso@/typeso@/typesk@/typesi@/typese@/types.@/typesm@/typesa@/typest@/typesc@/typesh@/types(@/types@@/types/@/types(@/types?@/types:@/types^@/types|@/types;@/types @/types)@/typess@/typesi@/typesd@/typese@/typesb@/typesa@/typesr@/types_@/typess@/typest@/typesa@/typest@/typese@/types=@/types(@/types[@/types^@/types;@/types]@/types+@/types)@/types@@/types/@/types)@/types;@/types
-@/types@/types @/types @/typesi@/typesf@/types @/types(@/types!@/typesm@/typesa@/typest@/typesc@/typesh@/types)@/types @/typesr@/typese@/typest@/typesu@/typesr@/typesn@/types @/typest@/typesr@/typesu@/typese@/types;@/types
-@/types@/types @/types @/typesr@/typese@/typest@/typesu@/typesr@/typesn@/types @/typesm@/typesa@/typest@/typesc@/typesh@/types[@/types1@/types]@/types @/types=@/types=@/types=@/types @/types"@/typest@/typesr@/typesu@/typese@/types"@/types;@/types
-@/types@/types}@/types
-@/types
+import { useMemo, type ReactElement } from "react";
+import clsx from "clsx";
+
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { GlobalNavSearch } from "@/components/navigation/GlobalNavSearch";
+import { AppSidebar } from "@/components/navigation/AppSidebar";
+import { Alert } from "@/components/ui/alert";
+import { useAppTopBar } from "@/layouts/AppLayout";
+import { useWorkbenchWindow } from "@/pages/Workspace/context/WorkbenchWindowContext";
+import type { WorkspaceNavigationItem } from "@/pages/Workspace/components/workspaceNavigation";
+import type { WorkspaceProfile } from "@/types/workspaces";
+
+interface WorkspaceLayoutProps {
+  readonly workspace: WorkspaceProfile;
+  readonly navItems: readonly WorkspaceNavigationItem[];
+  readonly contentKey: string;
+  readonly children: ReactElement;
+  readonly fullHeight?: boolean;
+  readonly fullWidth?: boolean;
+  readonly safeModeEnabled?: boolean;
+  readonly safeModeDetail?: string;
+}
+
+export function WorkspaceLayout({
+  workspace,
+  navItems,
+  contentKey,
+  children,
+  fullHeight,
+  fullWidth,
+  safeModeEnabled = false,
+  safeModeDetail,
+}: WorkspaceLayoutProps) {
+  const { session: workbenchSession, windowState } = useWorkbenchWindow();
+
+  const immersiveWorkbenchActive = Boolean(workbenchSession && windowState === "maximized");
+  const fullHeightLayout = fullHeight ?? false;
+  const fullWidthLayout = fullWidth ?? fullHeightLayout;
+  const contentHasPadding = !fullHeightLayout && !fullWidthLayout;
+
+  const topBarSearch = useMemo(
+    () => (
+      <GlobalNavSearch
+        scope={{
+          kind: "workspace",
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          navItems,
+        }}
+      />
+    ),
+    [navItems, workspace.id, workspace.name],
+  );
+
+  const topBarLeading = useMemo(
+    () => (
+      <div className="flex min-w-0 items-center gap-3">
+        <SidebarTrigger />
+        <div className="hidden min-w-0 flex-col leading-tight sm:flex">
+          <span className="text-[0.63rem] font-semibold uppercase tracking-[0.35em] text-muted-foreground">
+            Workspace
+          </span>
+          <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
+        </div>
+      </div>
+    ),
+    [workspace.name],
+  );
+
+  const topBarConfig = useMemo(
+    () =>
+      immersiveWorkbenchActive
+        ? { hidden: true }
+        : {
+            leading: topBarLeading,
+            search: topBarSearch,
+          },
+    [immersiveWorkbenchActive, topBarLeading, topBarSearch],
+  );
+
+  useAppTopBar(topBarConfig);
+
+  return (
+    <div className="flex min-h-full min-w-0">
+      {!immersiveWorkbenchActive ? <AppSidebar items={navItems} /> : null}
+      <div
+        className={clsx(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          fullHeightLayout ? "overflow-hidden" : "overflow-visible",
+        )}
+      >
+        <div className="relative flex min-h-0 min-w-0 flex-1" key={`section-${contentKey}`}>
+          <div
+            className={clsx(
+              fullHeightLayout
+                ? "flex w-full flex-1 min-h-0 flex-col px-0 py-0"
+                : fullWidthLayout
+                  ? "flex w-full flex-col px-0 py-0"
+                  : "mx-auto flex w-full max-w-[var(--app-shell-content-max-width)] flex-col px-[var(--app-shell-content-padding-x)] py-[var(--app-shell-content-padding-y)]",
+            )}
+          >
+            {safeModeEnabled && safeModeDetail ? (
+              <div
+                className={clsx(
+                  "mb-4",
+                  contentHasPadding
+                    ? ""
+                    : "px-[var(--app-shell-content-padding-x)] pt-[var(--app-shell-content-padding-y)]",
+                )}
+              >
+                <Alert tone="warning" heading="Safe mode active">
+                  {safeModeDetail}
+                </Alert>
+              </div>
+            ) : null}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

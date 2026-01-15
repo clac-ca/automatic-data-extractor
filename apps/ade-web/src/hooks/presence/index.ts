@@ -1,2 +1,2 @@
 export { usePresenceChannel } from "./usePresenceChannel";
-export type { PresenceConnectionState, PresenceContext, PresenceParticipant } from "@schema/presence";
+export type { PresenceConnectionState, PresenceContext, PresenceParticipant } from "@/types/presence";

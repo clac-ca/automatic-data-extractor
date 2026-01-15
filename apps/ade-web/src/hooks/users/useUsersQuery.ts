@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
-import { fetchUsers, type UserListPage } from "@api/users/api";
-import { useFlattenedPages } from "@api/pagination";
+import { fetchUsers, type UserListPage } from "@/api/users/api";
+import { useFlattenedPages } from "@/api/pagination";
 
 export interface UseUsersQueryOptions {
   readonly enabled?: boolean;

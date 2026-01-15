@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchAuthProviders, sessionKeys, type AuthProviderResponse } from "@api/auth/api";
+import { fetchAuthProviders, sessionKeys, type AuthProviderResponse } from "@/api/auth/api";
 
 export function useAuthProvidersQuery() {
   return useQuery<AuthProviderResponse>({

@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { fetchWorkspaces } from "@api/workspaces/api";
+import { fetchWorkspaces } from "@/api/workspaces/api";
 import { WORKSPACE_LIST_DEFAULT_PARAMS, workspacesKeys } from "./keys";
-import type { WorkspaceListPage } from "@schema/workspaces";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
-import { useCursorPager } from "@hooks/use-cursor-pager";
+import type { WorkspaceListPage } from "@/types/workspaces";
+import type { FilterItem, FilterJoinOperator } from "@/api/listing";
+import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 interface WorkspacesQueryOptions {
   readonly enabled?: boolean;

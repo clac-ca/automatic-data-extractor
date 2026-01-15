@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { useNavigate } from "react-router-dom";
-import { ChevronDownIcon, SpinnerIcon } from "@components@/components/icons";
+import { ChevronDownIcon, SpinnerIcon } from "@/components/icons";
 
 interface ProfileDropdownAction {
   readonly id: string;
@@ -44,7 +44,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
   const closeMenu = useCallback((opts?: { restoreFocus?: boolean }) => {
     setOpen(false);
 
-    @/components/@/components/ For Esc: restore focus to trigger (Radix-like behavior).
+    // For Esc: restore focus to trigger (Radix-like behavior).
     if (opts?.restoreFocus) {
       requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
     }
@@ -70,7 +70,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
     setMenuPosition({ top, left });
   }, []);
 
-  @/components/@/components/ Mount@/components/unmount with a small transition for “polish”.
+  // Mount/unmount with a small transition for “polish”.
   useEffect(() => {
     if (open) {
       setIsMounted(true);
@@ -81,7 +81,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
       return () => window.cancelAnimationFrame(raf);
     }
 
-    @/components/@/components/ Start exit transition
+    // Start exit transition
     setIsVisible(false);
     setMenuPosition(null);
     const t = window.setTimeout(() => setIsMounted(false), MENU_ANIMATION_MS);
@@ -109,7 +109,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
 
       if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
 
-      @/components/@/components/ Click outside: close without stealing focus.
+      // Click outside: close without stealing focus.
       closeMenu();
     };
 
@@ -150,7 +150,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
 
     closeMenu();
     setIsSigningOut(true);
-    navigate("@/components/logout", { replace: true });
+    navigate("/logout", { replace: true });
   }, [closeMenu, isSigningOut, navigate]);
 
   const focusMenuItem = (index: number) => {
@@ -179,16 +179,16 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
           "inline-flex items-center rounded-xl border text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isHeaderTone ? "h-[var(--app-shell-control-h)] gap-2 px-2.5" : "gap-3 px-2.5 py-1.5",
           isHeaderTone
-            ? "border-border@/components/50 bg-background@/components/60 text-foreground shadow-none hover:border-border@/components/70 hover:bg-background@/components/80"
-            : "border-border bg-card text-muted-foreground shadow-sm hover:border-ring@/components/40 hover:text-foreground",
-          open && "border-ring ring-2 ring-ring@/components/30",
+            ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
+            : "border-border bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",
+          open && "border-ring ring-2 ring-ring/30",
         )}
         aria-haspopup="menu"
         aria-controls={menuId}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(e) => {
-          @/components/@/components/ Open with Enter@/components/Space@/components/ArrowDown like native menus.
+          // Open with Enter/Space/ArrowDown like native menus.
           if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             setOpen(true);
@@ -202,16 +202,16 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
           )}
         >
           {initials}
-        <@/components/span>
+        </span>
         {isHeaderTone ? (
           <span className="hidden min-w-0 xl:block">
-            <span className="truncate text-sm font-semibold text-foreground">{displayName}<@/components/span>
-          <@/components/span>
+            <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+          </span>
         ) : (
           <span className="hidden min-w-0 flex-col xl:flex">
-            <span className="truncate text-sm font-semibold text-foreground">{displayName}<@/components/span>
-            <span className="truncate text-xs text-muted-foreground">{email}<@/components/span>
-          <@/components/span>
+            <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+            <span className="truncate text-xs text-muted-foreground">{email}</span>
+          </span>
         )}
         <ChevronDownIcon
           className={clsx(
@@ -219,8 +219,8 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
             "text-muted-foreground",
             open && "rotate-180",
           )}
-        @/components/>
-      <@/components/button>
+        />
+      </button>
 
       {isMounted && typeof document !== "undefined"
         ? createPortal(
@@ -230,7 +230,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
               role="menu"
               tabIndex={-1}
               className={clsx(
-                "fixed w-72 origin-top-right rounded-xl border border-border bg-popover p-2 text-sm shadow-2xl ring-1 ring-border@/components/50",
+                "fixed w-72 origin-top-right rounded-xl border border-border bg-popover p-2 text-sm shadow-2xl ring-1 ring-border/50",
                 "isolate",
                 "transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none",
                 isVisible ? "opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 -translate-y-1 scale-[0.98]",
@@ -247,7 +247,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
                   : { top: 0, left: 0, visibility: "hidden" }
               }
               onKeyDown={(e) => {
-                @/components/@/components/ Arrow key navigation (Radix-like).
+                // Arrow key navigation (Radix-like).
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
                   moveFocus(1);
@@ -275,9 +275,9 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
               }}
             >
               <div className="px-2 pb-2">
-                <p className="text-sm font-semibold text-foreground">Signed in as<@/components/p>
-                <p className="truncate text-xs text-muted-foreground">{email}<@/components/p>
-              <@/components/div>
+                <p className="text-sm font-semibold text-foreground">Signed in as</p>
+                <p className="truncate text-xs text-muted-foreground">{email}</p>
+              </div>
 
               <ul className="space-y-1" role="none">
                 {actions.map((action) => (
@@ -291,36 +291,36 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
                     >
                       <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold text-muted-foreground">
                         {action.icon ?? action.label.charAt(0).toUpperCase()}
-                      <@/components/span>
+                      </span>
                       <span className="flex min-w-0 flex-col">
-                        <span className="truncate">{action.label}<@/components/span>
+                        <span className="truncate">{action.label}</span>
                         {action.description ? (
-                          <span className="truncate text-xs font-normal text-muted-foreground">{action.description}<@/components/span>
+                          <span className="truncate text-xs font-normal text-muted-foreground">{action.description}</span>
                         ) : null}
-                      <@/components/span>
-                    <@/components/button>
-                  <@/components/li>
+                      </span>
+                    </button>
+                  </li>
                 ))}
-              <@/components/ul>
+              </ul>
 
               <div className="mt-3 border-t border-border pt-3">
                 <button
                   type="button"
                   role="menuitem"
                   data-menu-item
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:border-ring@/components/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:border-ring/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleSignOut}
                   disabled={isSigningOut}
                 >
-                  <span>Sign out<@/components/span>
-                  {isSigningOut ? <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" @/components/> : null}
-                <@/components/button>
-              <@/components/div>
-            <@/components/div>,
+                  <span>Sign out</span>
+                  {isSigningOut ? <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+                </button>
+              </div>
+            </div>,
             document.body,
           )
         : null}
-    <@/components/div>
+    </div>
   );
 }
 

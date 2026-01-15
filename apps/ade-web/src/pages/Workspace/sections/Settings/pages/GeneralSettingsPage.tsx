@@ -4,16 +4,16 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@hooks/workspaces";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
+import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@/hooks/workspaces";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
-import { MODE_OPTIONS, useTheme } from "@components/providers/theme";
+import { MODE_OPTIONS, useTheme } from "@/providers/theme";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "../components/SettingsSection";
-import { CheckIcon } from "@components/icons";
+import { CheckIcon } from "@/components/icons";
 import { ThemeSelect } from "../components/ThemeSelect";
 
 const generalSchema = z.object({

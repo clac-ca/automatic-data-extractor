@@ -11,7 +11,7 @@ import {
 
 import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
 import { getDefaultFilterOperator, getValidFilters } from "@/lib/data-table";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
+import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 
 import {
   DEFAULT_PAGE_SIZE,

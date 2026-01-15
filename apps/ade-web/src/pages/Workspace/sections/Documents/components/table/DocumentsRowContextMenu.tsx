@@ -13,7 +13,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from "@@/components/components@/components/ui@/components/context-menu";
+} from "@/components/ui/context-menu";
 import {
   ChatIcon,
   CopyIcon,
@@ -23,9 +23,9 @@ import {
   TagIcon,
   TrashIcon,
   UserIcon,
-} from "@components@/components/icons";
+} from "@/components/icons";
 
-import type { DocumentRow, WorkspacePerson } from "..@/components/..@/components/types";
+import type { DocumentRow, WorkspacePerson } from "../../types";
 
 const MENU_ICON_CLASS = "h-4 w-4";
 
@@ -69,35 +69,35 @@ export function DocumentsRowContextMenu({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}<@/components/ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-64">
         <ContextMenuLabel className="max-w-[240px] truncate" title={document.name}>
           {document.name}
-        <@/components/ContextMenuLabel>
-        <ContextMenuSeparator @/components/>
+        </ContextMenuLabel>
+        <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => onTogglePreview(document.id)}>
-          <EyeIcon className={MENU_ICON_CLASS} @/components/>
-          <span className="flex-1">{previewLabel}<@/components/span>
-        <@/components/ContextMenuItem>
+          <EyeIcon className={MENU_ICON_CLASS} />
+          <span className="flex-1">{previewLabel}</span>
+        </ContextMenuItem>
         <ContextMenuItem onSelect={() => onToggleComments(document.id)}>
-          <ChatIcon className={MENU_ICON_CLASS} @/components/>
-          <span className="flex-1">{commentsLabel}<@/components/span>
-        <@/components/ContextMenuItem>
-        <ContextMenuSeparator @/components/>
+          <ChatIcon className={MENU_ICON_CLASS} />
+          <span className="flex-1">{commentsLabel}</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem disabled={!canDownloadOutput} onSelect={() => onDownloadOutput(document)}>
-          <OutputIcon className={MENU_ICON_CLASS} @/components/>
-          <span className="flex-1">{outputLabel}<@/components/span>
-        <@/components/ContextMenuItem>
+          <OutputIcon className={MENU_ICON_CLASS} />
+          <span className="flex-1">{outputLabel}</span>
+        </ContextMenuItem>
         <ContextMenuItem onSelect={() => onDownloadOriginal(document)}>
-          <DownloadIcon className={MENU_ICON_CLASS} @/components/>
-          <span className="flex-1">Download original<@/components/span>
-        <@/components/ContextMenuItem>
-        <ContextMenuSeparator @/components/>
+          <DownloadIcon className={MENU_ICON_CLASS} />
+          <span className="flex-1">Download original</span>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuSub>
           <ContextMenuSubTrigger className="gap-2">
-            <UserIcon className={MENU_ICON_CLASS} @/components/>
-            <span className="flex-1">Assignee<@/components/span>
-          <@/components/ContextMenuSubTrigger>
+            <UserIcon className={MENU_ICON_CLASS} />
+            <span className="flex-1">Assignee</span>
+          </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-56 max-h-72 overflow-y-auto overflow-x-hidden">
             <ContextMenuRadioGroup
               value={assigneeValue}
@@ -105,23 +105,23 @@ export function DocumentsRowContextMenu({
             >
               <ContextMenuRadioItem value="unassigned" disabled={isBusy}>
                 Unassigned
-              <@/components/ContextMenuRadioItem>
+              </ContextMenuRadioItem>
               {people.map((person) => (
                 <ContextMenuRadioItem key={person.id} value={person.id} disabled={isBusy}>
                   {person.label}
-                <@/components/ContextMenuRadioItem>
+                </ContextMenuRadioItem>
               ))}
-            <@/components/ContextMenuRadioGroup>
-          <@/components/ContextMenuSubContent>
-        <@/components/ContextMenuSub>
+            </ContextMenuRadioGroup>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuSub>
           <ContextMenuSubTrigger className="gap-2">
-            <TagIcon className={MENU_ICON_CLASS} @/components/>
-            <span className="flex-1">Tags<@/components/span>
-          <@/components/ContextMenuSubTrigger>
+            <TagIcon className={MENU_ICON_CLASS} />
+            <span className="flex-1">Tags</span>
+          </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-56 max-h-72 overflow-y-auto overflow-x-hidden">
             {tagOptions.length === 0 ? (
-              <ContextMenuItem disabled>No tags available<@/components/ContextMenuItem>
+              <ContextMenuItem disabled>No tags available</ContextMenuItem>
             ) : (
               tagOptions.map((tag) => (
                 <ContextMenuCheckboxItem
@@ -132,16 +132,16 @@ export function DocumentsRowContextMenu({
                   disabled={isBusy}
                 >
                   {tag}
-                <@/components/ContextMenuCheckboxItem>
+                </ContextMenuCheckboxItem>
               ))
             )}
-          <@/components/ContextMenuSubContent>
-        <@/components/ContextMenuSub>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuSub>
           <ContextMenuSubTrigger className="gap-2">
-            <CopyIcon className={MENU_ICON_CLASS} @/components/>
-            <span className="flex-1">Copy<@/components/span>
-          <@/components/ContextMenuSubTrigger>
+            <CopyIcon className={MENU_ICON_CLASS} />
+            <span className="flex-1">Copy</span>
+          </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-52">
             <ContextMenuItem
               onSelect={() => {
@@ -149,27 +149,27 @@ export function DocumentsRowContextMenu({
               }}
             >
               Copy name
-            <@/components/ContextMenuItem>
+            </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
                 void copyText(document.id);
               }}
             >
               Copy ID
-            <@/components/ContextMenuItem>
-          <@/components/ContextMenuSubContent>
-        <@/components/ContextMenuSub>
-        <ContextMenuSeparator @/components/>
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSeparator />
         <ContextMenuItem
           variant="destructive"
           onSelect={() => onDeleteRequest(document)}
           disabled={isBusy}
         >
-          <TrashIcon className={MENU_ICON_CLASS} @/components/>
-          <span className="flex-1">Delete document<@/components/span>
-        <@/components/ContextMenuItem>
-      <@/components/ContextMenuContent>
-    <@/components/ContextMenu>
+          <TrashIcon className={MENU_ICON_CLASS} />
+          <span className="flex-1">Delete document</span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -179,7 +179,7 @@ async function copyText(value: string) {
       await navigator.clipboard.writeText(value);
       return;
     } catch {
-      @/components/@/components/ fall through to manual copy
+      // Fall through to manual copy.
     }
   }
   if (typeof document === "undefined") {

@@ -6,7 +6,7 @@ import {
   fetchDocumentSheets,
   type DocumentSheet,
   type WorkbookSheetPreview,
-} from "@api/documents";
+} from "@/api/documents";
 
 const DEFAULT_PREVIEW_ROWS = 200;
 const DEFAULT_PREVIEW_COLUMNS = 50;

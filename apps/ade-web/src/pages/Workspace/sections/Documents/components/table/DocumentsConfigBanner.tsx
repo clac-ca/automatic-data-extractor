@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { ConfigureIcon } from "@components/icons";
+import { ConfigureIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 
 export function DocumentsConfigBanner({ workspaceId }: { workspaceId: string }) {

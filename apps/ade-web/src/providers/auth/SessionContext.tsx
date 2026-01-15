@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 
-import type { SessionEnvelope } from "@api@/api/auth@/api/api";
+import type { SessionEnvelope } from "@/api/auth/api";
 
 type RefetchSession = () => Promise<unknown>;
 
@@ -21,7 +21,7 @@ export function SessionProvider({ session, refetch, children }: SessionProviderP
   return (
     <SessionContext.Provider value={{ session, refetch }}>
       {children}
-    <@/api/SessionContext.Provider>
+    </SessionContext.Provider>
   );
 }
 

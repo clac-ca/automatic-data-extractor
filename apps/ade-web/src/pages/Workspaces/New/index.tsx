@@ -5,13 +5,12 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { ApiError, groupProblemDetailsErrors } from "@api";
-import type { UserSummary } from "@api/users/api";
-import { useSession } from "@components/providers/auth/SessionContext";
-import { useCreateWorkspaceMutation } from "@hooks/workspaces";
-import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
-import { useUsersQuery } from "@hooks/users/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
+import { ApiError, groupProblemDetailsErrors } from "@/api";
+import type { UserSummary } from "@/api/users/api";
+import { useSession } from "@/providers/auth/SessionContext";
+import { useCreateWorkspaceMutation } from "@/hooks/workspaces";
+import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
+import { useUsersQuery } from "@/hooks/users/useUsersQuery";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -145,7 +144,7 @@ function WorkspaceCreateContent() {
   });
 
   return (
-    <WorkspaceDirectoryLayout>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="space-y-6">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold text-foreground">Create a workspace</h1>
@@ -238,7 +237,7 @@ function WorkspaceCreateContent() {
           </div>
         </form>
       </div>
-    </WorkspaceDirectoryLayout>
+    </div>
   );
 }
 

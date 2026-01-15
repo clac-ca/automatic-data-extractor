@@ -3,15 +3,15 @@ import type { ReactElement } from "react";
 
 import { resolveWorkspaceSection } from "../index";
 
-vi.mock("@pages/Workspace/sections/Documents", () => ({ default: () => <div>documents</div> }));
-vi.mock("@pages/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
-vi.mock("@pages/Workspace/sections/ConfigBuilder", () => ({ default: () => <div>configs</div> }));
-vi.mock("@pages/Workspace/sections/ConfigBuilder/detail", () => ({
+vi.mock("@/pages/Workspace/sections/Documents", () => ({ default: () => <div>documents</div> }));
+vi.mock("@/pages/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
+vi.mock("@/pages/Workspace/sections/ConfigBuilder", () => ({ default: () => <div>configs</div> }));
+vi.mock("@/pages/Workspace/sections/ConfigBuilder/detail", () => ({
   default: () => <div>config detail</div>,
 }));
-vi.mock("@pages/Workspace/sections/ConfigBuilder/workbench", () => ({ default: () => <div>editor</div> }));
-vi.mock("@pages/Workspace/sections/Settings", () => ({ default: () => <div>settings</div> }));
-vi.mock("@components/layouts/page-state", () => ({
+vi.mock("@/pages/Workspace/sections/ConfigBuilder/workbench", () => ({ default: () => <div>editor</div> }));
+vi.mock("@/pages/Workspace/sections/Settings", () => ({ default: () => <div>settings</div> }));
+vi.mock("@/components/layout", () => ({
   PageState: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 

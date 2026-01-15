@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createWorkbenchTreeFromListing } from "../tree";
 
-import type { FileListing } from "@schema/configurations";
+import type { FileListing } from "@/types/configurations";
 
 const ISO = "2024-01-01T00:00:00.000Z";
 

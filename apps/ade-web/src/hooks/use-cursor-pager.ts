@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import type { CursorPage } from "@api/pagination";
+import type { CursorPage } from "@/api/pagination";
 
 type CursorFetchOptions = {
   cursor: string | null;

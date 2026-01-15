@@ -1,4 +1,4 @@
-import type { RunColumnsQuery } from "@api/runs/api";
+import type { RunColumnsQuery } from "@/api/runs/api";
 
 export const runsKeys = {
   root: () => ["runs"] as const,

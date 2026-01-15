@@ -1,4 +1,4 @@
-import type { components } from "@schema";
+import type { components } from "@/types";
 
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];

@@ -3,22 +3,22 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { PageState } from "@components/layouts/page-state";
+import { PageState } from "@/components/layout";
 
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
-import { exportConfiguration, validateConfiguration } from "@api/configurations/api";
+import { exportConfiguration, validateConfiguration } from "@/api/configurations/api";
 import {
   useArchiveConfigurationMutation,
   useConfigurationQuery,
   useConfigurationsQuery,
   useDuplicateConfigurationMutation,
   useMakeActiveConfigurationMutation,
-} from "@hooks/configurations";
-import { useNotifications } from "@components/providers/notifications";
+} from "@/hooks/configurations";
+import { useNotifications } from "@/providers/notifications";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";
 import { StatusPill } from "../components/StatusPill";
 import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";

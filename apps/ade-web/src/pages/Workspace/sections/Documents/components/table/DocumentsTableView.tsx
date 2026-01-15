@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { parseAsStringEnum, useQueryState } from "nuqs";
 
-import { resolveApiUrl } from "@api/client";
+import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
   DocumentChangesResyncError,
@@ -14,12 +14,12 @@ import {
   type DocumentListRow,
   type DocumentRecord,
   type DocumentUploadResponse,
-} from "@api/documents";
-import { patchDocumentTags, fetchTagCatalog } from "@api/documents/tags";
-import { buildWeakEtag } from "@api/etag";
-import { listWorkspaceMembers } from "@api/workspaces/api";
+} from "@/api/documents";
+import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
+import { buildWeakEtag } from "@/api/etag";
+import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
-import { SpinnerIcon } from "@components/icons";
+import { SpinnerIcon } from "@/components/icons";
 import {
   Dialog,
   DialogContent,
@@ -29,10 +29,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { useNotifications } from "@components/providers/notifications";
-import { ApiError } from "@api/errors";
-import type { PresenceParticipant } from "@schema/presence";
-import type { UploadManagerItem } from "@hooks/documents/uploadManager";
+import { useNotifications } from "@/providers/notifications";
+import { ApiError } from "@/api/errors";
+import type { PresenceParticipant } from "@/types/presence";
+import type { UploadManagerItem } from "@/hooks/documents/uploadManager";
 
 import { DocumentsPresenceIndicator } from "../presence/DocumentsPresenceIndicator";
 import { useDocumentsPresence } from "../../hooks/useDocumentsPresence";

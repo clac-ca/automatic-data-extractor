@@ -390,7 +390,7 @@ A more detailed run detail view extends this with:
 
 ### 5.2 Run status
 
-Canonical `RunStatus` values (defined centrally in `@schema`):
+Canonical `RunStatus` values (defined centrally in `@/types`):
 
 * `queued` – accepted, waiting to start.
 * `running` – in progress.

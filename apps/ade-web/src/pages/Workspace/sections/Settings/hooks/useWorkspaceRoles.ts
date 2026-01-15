@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { collectAllPages, MAX_PAGE_SIZE } from "@api/pagination";
+import { collectAllPages, MAX_PAGE_SIZE } from "@/api/pagination";
 
 import {
   createWorkspaceRole,
@@ -8,15 +8,15 @@ import {
   listPermissions,
   listWorkspaceRoles,
   updateWorkspaceRole,
-} from "@api/workspaces/api";
-import { workspacesKeys } from "@hooks/workspaces";
+} from "@/api/workspaces/api";
+import { workspacesKeys } from "@/hooks/workspaces";
 import type {
   PermissionListPage,
   RoleCreatePayload,
   RoleDefinition,
   RoleListPage,
   RoleUpdatePayload,
-} from "@schema/workspaces";
+} from "@/types/workspaces";
 
 const ROLE_PAGE_SIZE = MAX_PAGE_SIZE;
 const PERMISSION_PAGE_SIZE = MAX_PAGE_SIZE;

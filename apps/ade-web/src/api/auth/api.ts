@@ -1,6 +1,6 @@
-import { ApiError, tryParseProblemDetails } from "@api/errors";
-import { apiFetch, client } from "@api/client";
-import type { components } from "@schema";
+import { ApiError, tryParseProblemDetails } from "@/api/errors";
+import { apiFetch, client } from "@/api/client";
+import type { components } from "@/types";
 
 export const sessionKeys = {
   root: ["auth"] as const,

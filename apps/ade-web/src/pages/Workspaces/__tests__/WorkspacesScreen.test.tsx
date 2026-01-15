@@ -1,45 +1,41 @@
-import type { ReactNode } from "react";
-
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { render, screen } from "@test/test-utils";
+import { render, screen } from "@/test/test-utils";
 import WorkspacesScreen from "..";
 
 const mockUseWorkspacesQuery = vi.fn();
 const mockUseSetDefaultWorkspaceMutation = vi.fn();
 
-vi.mock("@components/providers/auth/SessionContext", () => ({
+vi.mock("@/providers/auth/SessionContext", () => ({
   useSession: () => ({
     user: { permissions: ["workspaces.manage_all"] },
   }),
 }));
 
-vi.mock("@hooks/workspaces", () => ({
+vi.mock("@/hooks/workspaces", () => ({
   useWorkspacesQuery: (...args: unknown[]) => mockUseWorkspacesQuery(...args),
   useSetDefaultWorkspaceMutation: () => mockUseSetDefaultWorkspaceMutation(),
   DEFAULT_WORKSPACE_PAGE_SIZE: 200,
 }));
 
-vi.mock("@app/navigation/workspacePaths", () => ({
+vi.mock("@/navigation/workspacePaths", () => ({
   getDefaultWorkspacePath: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
 }));
 
-vi.mock("@lib/workspacePreferences", () => ({
+vi.mock("@/lib/workspacePreferences", () => ({
   writePreferredWorkspaceId: () => undefined,
 }));
 
-vi.mock("@pages/Workspaces/components/WorkspaceDirectoryLayout", () => ({
-  WorkspaceDirectoryLayout: ({ children }: { readonly children: ReactNode }) => (
-    <div data-testid="workspace-layout">{children}</div>
-  ),
+vi.mock("@/layouts/AppLayout", () => ({
+  useAppTopBar: () => undefined,
 }));
 
-vi.mock("@components/shell/GlobalNavSearch", () => ({
+vi.mock("@/components/navigation/GlobalNavSearch", () => ({
   GlobalNavSearch: () => <div data-testid="global-search" />,
 }));
 
-vi.mock("@hooks/useShortcutHint", () => ({
+vi.mock("@/hooks/useShortcutHint", () => ({
   useShortcutHint: () => undefined,
 }));
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
-import { getDefaultWorkspacePath } from "@app@/components/navigation@/components/workspacePaths";
+import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
 import {
   Command,
   CommandEmpty,
@@ -11,12 +11,12 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@@/components/components@/components/ui@/components/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@@/components/components@/components/ui@/components/popover";
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@@/components/components@/components/ui@/components/sidebar";
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from "@components@/components/icons";
-import { useWorkspaceContext } from "@pages@/components/Workspace@/components/context@/components/WorkspaceContext";
-import { writePreferredWorkspaceId } from "@lib@/components/workspacePreferences";
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from "@/components/icons";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
+import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
 
 interface WorkspaceSwitcherProps {
   readonly onNavigate?: () => void;
@@ -47,7 +47,7 @@ export function WorkspaceSwitcher({ onNavigate }: WorkspaceSwitcherProps) {
   const handleManageWorkspaces = () => {
     setOpen(false);
     onNavigate?.();
-    navigate("@/components/workspaces");
+    navigate("/workspaces");
   };
 
   return (
@@ -61,24 +61,19 @@ export function WorkspaceSwitcher({ onNavigate }: WorkspaceSwitcherProps) {
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary text-[0.6rem] font-semibold uppercase text-sidebar-primary-foreground group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6">
                 {getWorkspaceInitials(workspace.name)}
-              <@/components/span>
+              </span>
               <span className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-sm font-semibold">{workspace.name}<@/components/span>
-                <span className="truncate text-xs text-sidebar-foreground@/components/60">Switch workspace<@/components/span>
-              <@/components/span>
-              <ChevronDownIcon className="ml-auto h-4 w-4 text-sidebar-foreground@/components/70 group-data-[collapsible=icon]:hidden" @/components/>
-            <@/components/SidebarMenuButton>
-          <@/components/PopoverTrigger>
-          <PopoverContent
-            side={popoverSide}
-            align="start"
-            sideOffset={popoverOffset}
-            className={`${popoverWidthClass} p-0`}
-          >
+                <span className="truncate text-sm font-semibold">{workspace.name}</span>
+                <span className="truncate text-xs text-sidebar-foreground/60">Switch workspace</span>
+              </span>
+              <ChevronDownIcon className="ml-auto h-4 w-4 text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden" />
+            </SidebarMenuButton>
+          </PopoverTrigger>
+          <PopoverContent side={popoverSide} align="start" sideOffset={popoverOffset} className={`${popoverWidthClass} p-0`}>
             <Command loop>
-              <CommandInput placeholder="Search workspaces..." @/components/>
+              <CommandInput placeholder="Search workspaces..." autoFocus />
               <CommandList>
-                <CommandEmpty>No workspaces found.<@/components/CommandEmpty>
+                <CommandEmpty>No workspaces found.</CommandEmpty>
                 <CommandGroup heading="Workspaces">
                   {workspaces.map((entry) => {
                     const isActive = entry.id === workspace.id;
@@ -90,38 +85,38 @@ export function WorkspaceSwitcher({ onNavigate }: WorkspaceSwitcherProps) {
                         onSelect={() => handleSelectWorkspace(entry.id)}
                         className="gap-3"
                       >
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary@/components/10 text-[0.6rem] font-semibold uppercase text-primary">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-[0.6rem] font-semibold uppercase text-primary">
                           {getWorkspaceInitials(entry.name)}
-                        <@/components/span>
+                        </span>
                         <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate text-sm font-medium">{entry.name}<@/components/span>
-                          <span className="truncate text-xs text-muted-foreground">{secondaryLabel}<@/components/span>
-                        <@/components/span>
-                        {isActive ? <CheckIcon className="h-4 w-4 text-primary" @/components/> : null}
-                      <@/components/CommandItem>
+                          <span className="truncate text-sm font-medium">{entry.name}</span>
+                          <span className="truncate text-xs text-muted-foreground">{secondaryLabel}</span>
+                        </span>
+                        {isActive ? <CheckIcon className="h-4 w-4 text-primary" /> : null}
+                      </CommandItem>
                     );
                   })}
-                <@/components/CommandGroup>
-                <CommandSeparator @/components/>
+                </CommandGroup>
+                <CommandSeparator />
                 <CommandGroup>
                   <CommandItem value="Manage workspaces" onSelect={handleManageWorkspaces} className="gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                      <ChevronRightIcon className="h-4 w-4" @/components/>
-                    <@/components/span>
-                    <span className="flex-1 text-sm font-medium">All workspaces<@/components/span>
-                  <@/components/CommandItem>
-                <@/components/CommandGroup>
-              <@/components/CommandList>
-            <@/components/Command>
-          <@/components/PopoverContent>
-        <@/components/Popover>
-      <@/components/SidebarMenuItem>
-    <@/components/SidebarMenu>
+                      <ChevronRightIcon className="h-4 w-4" />
+                    </span>
+                    <span className="flex-1 text-sm font-medium">All workspaces</span>
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 
 function getWorkspaceInitials(name: string) {
-  const parts = name.trim().split(@/components/\s+@/components/);
+  const parts = name.trim().split(/\s+/);
   if (parts.length === 0) return "WS";
   const initials = parts.slice(0, 2).map((part) => part[0] ?? "");
   return initials.join("").toUpperCase();

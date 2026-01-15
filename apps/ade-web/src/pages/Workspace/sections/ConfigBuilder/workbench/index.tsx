@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 
-import { PageState } from "@components/layouts/page-state";
+import { PageState } from "@/components/layout";
 
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { useWorkbenchWindow } from "@pages/Workspace/context/WorkbenchWindowContext";
-import { useConfigurationQuery } from "@hooks/configurations";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
+import { useWorkbenchWindow } from "@/pages/Workspace/context/WorkbenchWindowContext";
+import { useConfigurationQuery } from "@/hooks/configurations";
 
 import { Workbench } from "./Workbench";
 

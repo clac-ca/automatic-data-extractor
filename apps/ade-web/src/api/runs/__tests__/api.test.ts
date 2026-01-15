@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { client } from "@api/client";
-import { createRun, runEventsUrl, streamRunEvents, streamRunEventsForRun } from "@api/runs/api";
-import type { RunResource } from "@api/runs/api";
-import type { RunStreamEvent } from "@schema/runs";
+import { client } from "@/api/client";
+import { createRun, runEventsUrl, streamRunEvents, streamRunEventsForRun } from "@/api/runs/api";
+import type { RunResource } from "@/api/runs/api";
+import type { RunStreamEvent } from "@/types/runs";
 
 const encoder = new TextEncoder();
 

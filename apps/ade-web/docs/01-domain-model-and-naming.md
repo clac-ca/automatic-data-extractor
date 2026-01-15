@@ -98,7 +98,7 @@ Workspace
 | Run                   | Run           | `Run`                  | `runId`                          | `runs/<run_id>/…`                                        |
 | Document              | Document      | `Document`             | `documentId`, `workspaceId`      | `documents/<document_id>.<ext>`                          |
 
-> OpenAPI-generated types live under `@schema`. In app code we alias them to clean domain names instead of using the raw generated names everywhere.
+> OpenAPI-generated types live under `@/types`. In app code we alias them to clean domain names instead of using the raw generated names everywhere.
 
 ---
 

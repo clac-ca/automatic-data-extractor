@@ -1,4 +1,4 @@
-import type { RunStatus } from "@schema";
+import type { RunStatus } from "@/types";
 
 export const DEFAULT_PAGE_SIZE = 10;
 

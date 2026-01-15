@@ -1,4 +1,4 @@
-import { normalizePathname } from "@app@/navigation@/paths";
+import { normalizePathname } from "@/navigation/paths";
 
 export type LocationLike = {
   readonly pathname: string;
@@ -6,10 +6,10 @@ export type LocationLike = {
   readonly hash: string;
 };
 
-export const DEFAULT_APP_HOME = "@/workspaces";
-export const DEFAULT_RETURN_TO = "@/";
+export const DEFAULT_APP_HOME = "/workspaces";
+export const DEFAULT_RETURN_TO = "/";
 
-const PUBLIC_PATHS = new Set<string>(["@/", "@/login", "@/setup", "@/logout"]);
+const PUBLIC_PATHS = new Set<string>(["/", "/login", "/setup", "/logout"]);
 
 export function isPublicPath(path: string): boolean {
   if (!path) {
@@ -29,7 +29,7 @@ export function joinPath(location: LocationLike): string {
 }
 
 export function normalizeNextFromLocation(location: LocationLike): string {
-  const raw = joinPath(location) || "@/";
+  const raw = joinPath(location) || "/";
   const sanitized = sanitizeNextPath(raw);
   return sanitized ?? DEFAULT_RETURN_TO;
 }
@@ -40,15 +40,15 @@ export function sanitizeNextPath(value: string | null | undefined): string | nul
   }
 
   const trimmed = value.trim();
-  if (!trimmed.startsWith("@/")) {
+  if (!trimmed.startsWith("/")) {
     return null;
   }
 
-  if (trimmed.startsWith("@/@/")) {
+  if (trimmed.startsWith("//")) {
     return null;
   }
 
-  if (@/[\u0000-\u001F\u007F]@/.test(trimmed)) {
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
     return null;
   }
 
@@ -60,11 +60,11 @@ export function resolveRedirectParam(value: string | null | undefined): string {
 }
 
 export function buildLoginRedirect(next: string): string {
-  return buildRedirectUrl("@/login", next);
+  return buildRedirectUrl("/login", next);
 }
 
 export function buildSetupRedirect(next: string): string {
-  return buildRedirectUrl("@/setup", next);
+  return buildRedirectUrl("/setup", next);
 }
 
 export function buildRedirectUrl(basePath: string, next: string): string {

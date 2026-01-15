@@ -1,8 +1,8 @@
-import { client } from "@api/client";
-import { apiFetch } from "@api/client";
-import { ApiError } from "@api/errors";
-import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@api/listing";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import { apiFetch } from "@/api/client";
+import { ApiError } from "@/api/errors";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
+import type { components } from "@/types";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
 export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };

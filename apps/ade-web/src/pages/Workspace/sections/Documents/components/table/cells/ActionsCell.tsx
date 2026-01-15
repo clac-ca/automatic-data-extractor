@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Ellipsis } from "lucide-react";
 
-import { ChatIcon, DownloadIcon, EyeIcon, OutputIcon } from "@components/icons";
+import { ChatIcon, DownloadIcon, EyeIcon, OutputIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

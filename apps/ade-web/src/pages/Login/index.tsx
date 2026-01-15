@@ -4,12 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { ApiError } from "@api";
-import { createSession, sessionKeys, type AuthProvider } from "@api/auth/api";
-import { useAuthProvidersQuery } from "@hooks/auth/useAuthProvidersQuery";
-import { useSessionQuery } from "@hooks/auth/useSessionQuery";
-import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
-import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@app/navigation/authNavigation";
+import { ApiError } from "@/api";
+import { createSession, sessionKeys, type AuthProvider } from "@/api/auth/api";
+import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
+import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
+import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
+import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@/navigation/authNavigation";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";

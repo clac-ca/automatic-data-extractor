@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 
-import { useSession } from "@components/providers/auth/SessionContext";
-import { useWorkspacesQuery } from "@hooks/workspaces";
-import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
-import { readPreferredWorkspaceId } from "@lib/workspacePreferences";
-import type { WorkspaceProfile } from "@schema/workspaces";
+import { useSession } from "@/providers/auth/SessionContext";
+import { useWorkspacesQuery } from "@/hooks/workspaces";
+import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
+import { readPreferredWorkspaceId } from "@/lib/workspacePreferences";
+import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
-import { PageState } from "@components/layouts/page-state";
+import { PageState } from "@/components/layout";
 import { useLocation, useNavigate } from "react-router-dom";
 
 export default function HomeScreen() {

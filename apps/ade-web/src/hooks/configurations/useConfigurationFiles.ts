@@ -11,7 +11,7 @@ import {
   type ListConfigurationFilesOptions,
   type RenameConfigurationFilePayload,
   type UpsertConfigurationFilePayload,
-} from "@api/configurations/api";
+} from "@/api/configurations/api";
 import { configurationKeys } from "./keys";
 import type {
   DirectoryWriteResponse,
@@ -19,7 +19,7 @@ import type {
   FileReadJson,
   FileRenameResponse,
   FileWriteResponse,
-} from "@schema/configurations";
+} from "@/types/configurations";
 
 interface UseConfigurationFilesQueryOptions extends Partial<ListConfigurationFilesOptions> {
   readonly workspaceId: string;

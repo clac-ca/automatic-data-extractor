@@ -57,7 +57,7 @@ export function GlobalTopBar({
   return (
     <header
       className={clsx(
-        "sticky top-0 z-[var(--app-z-header)] relative",
+        "sticky top-0 z-[var(--app-z-header)]",
         "border-b border-border/60",
         "bg-card/80 text-foreground backdrop-blur-md",
         "bg-gradient-to-r from-card/90 via-accent/45 to-card/90",
@@ -82,7 +82,7 @@ export function GlobalTopBar({
       <div className="relative z-10 flex flex-col gap-2 px-4 sm:px-6 lg:px-10">
         <div
           className={clsx(
-            "grid h-[var(--app-shell-header-h)] w-full items-center gap-3 sm:gap-4",
+            "grid h-[var(--app-shell-header-height)] w-full items-center gap-3 sm:gap-4",
             showSearch
               ? "grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_minmax(0,var(--app-shell-search-max-w))_minmax(0,1fr)] lg:gap-8"
               : "grid-cols-[minmax(0,1fr)_auto]",

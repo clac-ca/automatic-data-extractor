@@ -1,6 +1,6 @@
-import type { components } from "@schema";
-import { createIdempotencyKey } from "@api/idempotency";
-import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@lib/uploads/xhr";
+import type { components } from "@/types";
+import { createIdempotencyKey } from "@/api/idempotency";
+import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@/lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
 export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];

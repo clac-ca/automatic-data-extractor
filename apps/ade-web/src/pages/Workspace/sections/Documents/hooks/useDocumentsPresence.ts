@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import { usePresenceChannel } from "@hooks/presence";
+import { usePresenceChannel } from "@/hooks/presence";
 
 const IDLE_TIMEOUT_MS = 120_000;
 const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"] as const;

@@ -12,7 +12,7 @@ import {
 
 import clsx from "clsx";
 
-import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
 import {
   ChevronDownSmallIcon,
   ChevronRightTinyIcon,
@@ -27,8 +27,8 @@ import {
   NewFolderIcon,
   OpenFileIcon,
   UploadIcon,
-} from "@components/icons";
-import { createScopedStorage } from "@lib/storage";
+} from "@/components/icons";
+import { createScopedStorage } from "@/lib/storage";
 
 import type { WorkbenchFileNode, WorkbenchUploadFile } from "../types";
 import { extractDroppedFiles, hasFileDrag } from "../utils/fileDrop";

@@ -1,5 +1,5 @@
-import type { components, RunResource, RunStatus } from "@schema";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
+import type { components, RunResource, RunStatus } from "@/types";
+import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 
 export type RunMetrics = components["schemas"]["RunMetricsResource"];
 export type RunField = components["schemas"]["RunFieldResource"];

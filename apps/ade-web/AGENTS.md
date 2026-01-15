@@ -1,4 +1,4 @@
-## Frontend Structure (React Router v7, Layer-Based)
+## Frontend Structure (React Router v7, Standard Vite Layout)
 
 ```
 apps/ade-web/
@@ -8,36 +8,34 @@ apps/ade-web/
 ├─ index.html
 └─ src/
    ├─ main.tsx                     # Vite entry point → renders <RouterProvider />
-   ├─ app/                         # Composition root (App shell, routes, providers)
-   │  ├─ App.tsx                   # App shell + ProtectedLayout
-   │  ├─ routes.tsx                # Route definitions
-   │  ├─ router.tsx                # createBrowserRouter wiring
-   │  ├─ providers/                # AppProviders + bootstrapping
-   │  └─ navigation/               # URL helpers (authNavigation, urlState, paths)
+   ├─ App.tsx                      # App shell + ProtectedLayout
+   ├─ routes.tsx                   # Route definitions
+   ├─ router.tsx                   # createBrowserRouter wiring
+   ├─ layouts/                     # Page-level layouts (WorkspaceLayout, DirectoryLayout, ...)
+   ├─ navigation/                  # URL helpers (authNavigation, urlState, paths)
+   ├─ providers/                   # AppProviders + auth/theme/notifications
    ├─ api/                         # HTTP client + domain API calls
-   ├─ pages/                       # Route-level pages (Home, Login, Workspace, …)
-	   ├─ components/                  # Shared UI primitives + layouts + providers
-	   │  ├─ ui/                        # Buttons, inputs, tabs, dialogs, etc.
-	   │  ├─ layouts/                   # Layout scaffolding (PageState, etc.)
-	   │  ├─ providers/                 # Auth, theme, notifications
-	   │  ├─ shell/                     # Global chrome (top bar, profile menu, etc.)
-	   │  ├─ icons.tsx                  # Icon exports
-	   ├─ globals.css                  # Global styles + theme tokens
-	   ├─ vite-env.d.ts                # Vite client typings + globals
-	   ├─ hooks/                       # React Query + shared app hooks
-	   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
-	   ├─ types/                       # Curated, app-facing type exports
-   │  └─ generated/                # Raw OpenAPI-derived types
-   └─ test/                        # Vitest setup + helpers
+   ├─ pages/                       # Route-level pages (Home, Login, Workspace, ...)
+   ├─ components/                  # Shared UI + navigation + layout primitives
+   │  ├─ navigation/               # Global chrome (top bar, sidebar, profile menu)
+   │  ├─ layout/                   # Reusable layout components (PageState, ...)
+   │  ├─ ui/                       # Buttons, inputs, dialogs, etc. (shadcn)
+   │  └─ icons.tsx                 # Icon exports
+   ├─ hooks/                       # React Query + shared app hooks
+   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
+   ├─ types/                       # Human-authored, app-facing type exports
+   │  └─ generated/                # Raw OpenAPI-derived types (never edit)
+   ├─ test/                        # Vitest setup + helpers
+   └─ index.css                    # Global styles + theme tokens
 ```
 
 ### Navigation & URL helpers
 
 * The app uses **React Router v7 (data router)**.
-* Route definitions live in `src/app/routes.tsx`; the router is created in `src/app/router.tsx`.
+* Route definitions live in `src/routes.tsx`; the router is created in `src/router.tsx`.
+* URL helpers (auth redirects, URL param overrides) live in `src/navigation/`.
 * Use `react-router-dom` hooks/components:
   * `useNavigate`, `useLocation`, `useSearchParams`, `Link`, `NavLink`.
-* URL helpers (auth redirects, URL param overrides) live in `@app/navigation/*`.
 
 ### Commands
 
@@ -53,7 +51,7 @@ ade openapi-types  # regenerate TS types from the FastAPI schema
 
 * Co-locate page-specific components under the owning page. Promote to `components/`, `hooks/`, `api/`, or `lib/` only when reuse emerges.
 * Keep OpenAPI types in `types/generated/`. Run `ade openapi-types` after backend schema changes.
-* Import API contracts from `@schema` (curated) instead of `@schema/generated`. Extend `src/types/` when new types are needed.
+* Import app types from `@/types` and `@/types/generated` as needed.
 * Prefer the shared API client and generated types for HTTP interactions.
 
 ---
@@ -66,7 +64,7 @@ This app is a **Vite + React + TypeScript SPA** built to be boringly predictable
 
 Think in three layers:
 
-1. **App shell** – global providers, layout, navigation wiring (`src/app/`).
+1. **App shell** – global providers, layout, navigation wiring (`src/App.tsx`, `src/layouts/`, `src/providers/`).
 2. **Pages** – URL-addressable pages and big experiences (`src/pages`).
 3. **Shared building blocks** – reusable UI + app infrastructure (`src/components`, `src/api`, `src/hooks`, `src/lib`).
 
@@ -76,23 +74,28 @@ Screens are thin: they **compose** things, they don’t invent new infra.
 
 ### 2. Folder contracts
 
-- `src/app/`
-  - Bootstrapping and global wiring (App shell, providers, navigation).
+- `src/`
+  - `App.tsx`, `routes.tsx`, `router.tsx` for app bootstrapping and routing.
+- `src/layouts/`
+  - Page-level layouts and app shell containers.
+- `src/navigation/`
+  - URL helpers and navigation utilities (auth redirects, URL state helpers).
+- `src/providers/`
+  - AppProviders + auth/theme/notifications providers.
 - `src/pages/`
   - One folder per **page**, with an `index.tsx`.
   - Subfolders like `sections/` and `components/` are allowed, but keep them page-specific.
-  - Put **page-specific logic and UI** here.
 - `src/components/`
-  - Small, reusable, **a11y-correct** UI primitives under `components/ui/` (e.g., Tabs, Button, Dialog).
-  - Shared layouts under `components/layouts/` and shell chrome under `components/shell/`.
-  - Shared providers and UI-level contexts under `components/providers/`.
+  - UI primitives under `components/ui/`.
+  - Shared navigation chrome under `components/navigation/`.
+  - Reusable layout helpers under `components/layout/`.
 - `src/api/`
   - HTTP client + domain API calls (no React).
 - `src/hooks/`
   - Shared React hooks (React Query hooks, global app hooks).
 - `src/lib/`
   - Cross-cutting helpers (storage, uploads, local preferences).
-- `src/globals.css`
+- `src/index.css`
   - Global styles and theme tokens.
 - `src/types/`
   - Human-authored, app-facing types (and curated re-exports from generated types).
@@ -106,7 +109,7 @@ If you’re not sure where something goes: default to co-locating it under the *
 ### 3. Navigation
 
 - We use **React Router v7** with a central route config.
-- Route wiring lives in `src/app/routes.tsx` and `src/app/router.tsx`.
+- Route wiring lives in `src/routes.tsx` and `src/router.tsx`.
 - When you add or change pages:
   - Update the route table explicitly.
   - Keep path → page mapping **simple and obvious** (no hidden routing magic).
@@ -132,8 +135,8 @@ If you’re not sure where something goes: default to co-locating it under the *
 
 ### 5. Types
 
-- Prefer importing app types from **`@schema`**.
-- Generated types live in **`@schema/generated`**; treat them as low-level building blocks, not the main API.
+- Prefer importing app types from `@/types`.
+- Generated types live in `@/types/generated`; treat them as low-level building blocks, not the main API.
 - It’s normal to define small domain types for UI and derived models (e.g., editor file, workspace section enum, dirty state). Put those in `types/` or in a local `types/` under the relevant page/section.
 
 ---
@@ -163,17 +166,17 @@ When you add new functionality:
 
 1. **New page or major experience**  
    - Create a folder under `src/pages/YourPage` with `index.tsx`.
-   - Wire it into `src/app/routes.tsx`.
+   - Wire it into `src/routes.tsx`.
 2. **New sub-area inside a page**  
    - Create `sections/SubArea/index.tsx` under the relevant page.
 3. **Reusable pieces**  
-   - UI widgets → `src/components/ui/` or `src/components/layouts/`.  
+   - UI widgets → `src/components/ui/` or `src/components/layout/`.  
+   - Navigation chrome → `src/components/navigation/`.  
    - API calls → `src/api/`.  
    - Shared React hooks → `src/hooks/`.  
    - Non-React helpers → `src/lib/` (uploads, storage, etc.).  
-   - Utilities → `src/lib/`.
 4. **Types**  
-   - Add or refine app-facing types in `src/types/`, not next to generated types.
+   - Add or refine app-facing types in `src/types/`.
 
 ---
 

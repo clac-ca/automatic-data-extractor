@@ -1,6 +1,6 @@
-import { client } from "@api/client";
-import { buildListQuery, type ListQueryParams } from "@api/listing";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import { buildListQuery, type ListQueryParams } from "@/api/listing";
+import type { components } from "@/types";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];

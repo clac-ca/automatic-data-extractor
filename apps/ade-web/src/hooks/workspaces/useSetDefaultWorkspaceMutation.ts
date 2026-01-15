@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { setDefaultWorkspace } from "@api/workspaces/api";
+import { setDefaultWorkspace } from "@/api/workspaces/api";
 import { workspacesKeys } from "./keys";
-import type { WorkspaceListPage, WorkspaceProfile } from "@schema/workspaces";
+import type { WorkspaceListPage, WorkspaceProfile } from "@/types/workspaces";
 
 function applyDefaultWorkspaceSelection(cached: unknown, workspaceId: string): unknown {
   if (!cached || typeof cached !== "object") {

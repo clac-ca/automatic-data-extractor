@@ -1,7 +1,7 @@
-import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@api/listing";
-import { clampPageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@api/pagination";
-import { client } from "@api/client";
-import type { paths, ScopeType } from "@schema";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
+import { clampPageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/api/pagination";
+import { client } from "@/api/client";
+import type { paths, ScopeType } from "@/types";
 import type { PathsWithMethod } from "openapi-typescript-helpers";
 
 import type {
@@ -17,7 +17,7 @@ import type {
   WorkspaceMemberRolesUpdatePayload,
   WorkspaceProfile,
   WorkspaceUpdatePayload,
-} from "@schema/workspaces";
+} from "@/types/workspaces";
 
 export const DEFAULT_WORKSPACE_PAGE_SIZE = MAX_PAGE_SIZE;
 export const DEFAULT_MEMBER_PAGE_SIZE = DEFAULT_PAGE_SIZE;

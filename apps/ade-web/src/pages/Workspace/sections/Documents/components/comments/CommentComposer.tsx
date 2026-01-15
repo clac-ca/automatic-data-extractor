@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { listWorkspaceMembers } from "@api/workspaces/api";
+import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
 import { Mention, MentionContent, MentionInput, MentionItem, MentionLabel } from "@/components/ui/mention";
 

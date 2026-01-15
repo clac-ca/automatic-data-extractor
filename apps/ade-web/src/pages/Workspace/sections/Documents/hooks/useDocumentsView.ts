@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult } from "@api/documents";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
-import { createScopedStorage } from "@lib/storage";
-import { uiStorageKeys } from "@lib/uiStorageKeys";
-import { useCursorPager } from "@hooks/use-cursor-pager";
+import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult } from "@/api/documents";
+import type { FilterItem, FilterJoinOperator } from "@/api/listing";
+import { createScopedStorage } from "@/lib/storage";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
+import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 import type { DocumentRow } from "../types";
 

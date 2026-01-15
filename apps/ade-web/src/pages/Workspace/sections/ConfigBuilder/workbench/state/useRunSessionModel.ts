@@ -9,8 +9,8 @@ import {
   runLogsUrl,
   runOutputUrl,
   type RunStreamOptions,
-} from "@api/runs/api";
-import type { RunStatus } from "@schema/runs";
+} from "@/api/runs/api";
+import type { RunStatus } from "@/types/runs";
 
 export type RunCompletionInfo = {
   readonly runId: string;

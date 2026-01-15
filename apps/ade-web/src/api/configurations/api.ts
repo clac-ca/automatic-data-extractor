@@ -1,6 +1,6 @@
-import { apiFetch, client } from "@api/client";
-import { buildListQuery } from "@api/listing";
-import { ApiError, tryParseProblemDetails } from "@api/errors";
+import { apiFetch, client } from "@/api/client";
+import { buildListQuery } from "@/api/listing";
+import { ApiError, tryParseProblemDetails } from "@/api/errors";
 
 import type {
   ConfigurationPage,
@@ -11,8 +11,8 @@ import type {
   FileReadJson,
   FileRenameResponse,
   FileWriteResponse,
-} from "@schema/configurations";
-import type { paths } from "@schema";
+} from "@/types/configurations";
+import type { paths } from "@/types";
 
 type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];

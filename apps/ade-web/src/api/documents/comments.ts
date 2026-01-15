@@ -1,6 +1,6 @@
-import { buildListQuery } from "@api/listing";
-import { client } from "@api/client";
-import type { components } from "@schema";
+import { buildListQuery } from "@/api/listing";
+import { client } from "@/api/client";
+import type { components } from "@/types";
 
 export type DocumentComment = components["schemas"]["DocumentCommentOut"];
 export type DocumentCommentCreate = components["schemas"]["DocumentCommentCreate"];

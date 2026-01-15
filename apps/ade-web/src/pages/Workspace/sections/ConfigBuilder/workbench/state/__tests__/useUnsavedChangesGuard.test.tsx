@@ -1,6 +1,6 @@
 import React from "react";
 import userEvent from "@testing-library/user-event";
-import { render, screen } from "@test/test-utils";
+import { render, screen } from "@/test/test-utils";
 import { describe, expect, it, vi } from "vitest";
 
 import { useNavigate } from "react-router-dom";

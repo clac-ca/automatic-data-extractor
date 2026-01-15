@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
-import { BUILTIN_THEMES, type ThemeId } from "@components/providers/theme";
-import { CheckIcon } from "@components/icons";
+import { BUILTIN_THEMES, type ThemeId } from "@/providers/theme";
+import { CheckIcon } from "@/components/icons";
 
 interface ThemeSelectProps {
   readonly theme: ThemeId;

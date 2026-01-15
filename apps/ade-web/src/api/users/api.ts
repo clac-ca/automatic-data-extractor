@@ -1,6 +1,6 @@
-import { client } from "@api/client";
-import { buildListQuery } from "@api/listing";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import { buildListQuery } from "@/api/listing";
+import type { components } from "@/types";
 
 export interface FetchUsersOptions {
   readonly limit?: number;

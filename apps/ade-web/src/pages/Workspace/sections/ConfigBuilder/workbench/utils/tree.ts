@@ -1,4 +1,4 @@
-import type { FileListing } from "@schema/configurations";
+import type { FileListing } from "@/types/configurations";
 
 import type { WorkbenchFileNode } from "../types";
 

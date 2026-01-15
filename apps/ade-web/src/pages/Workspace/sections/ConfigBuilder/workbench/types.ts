@@ -1,4 +1,4 @@
-import type { RunStatus } from "@schema/runs";
+import type { RunStatus } from "@/types/runs";
 
 export type WorkbenchFileKind = "file" | "folder";
 

@@ -13,14 +13,14 @@ import {
 import clsx from "clsx";
 
 import { useNavigate } from "react-router-dom";
-import { getDefaultWorkspacePath } from "@app@/components/navigation@/components/workspacePaths";
+import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
 import {
   GLOBAL_SEARCH_TRIGGER_LENGTH,
   type GlobalSearchScope,
   useGlobalSearchData,
-} from "@hooks@/components/use-global-search";
-import { useShortcutHint } from "@hooks@/components/useShortcutHint";
-import { CloseIcon, DirectoryIcon, DocumentIcon, RunsIcon, SearchIcon, SpinnerIcon } from "@components@/components/icons";
+} from "@/hooks/use-global-search";
+import { useShortcutHint } from "@/hooks/useShortcutHint";
+import { CloseIcon, DirectoryIcon, DocumentIcon, RunsIcon, SearchIcon, SpinnerIcon } from "@/components/icons";
 
 const DEBOUNCE_DELAY_MS = 200;
 const GLOBAL_SEARCH_WORKSPACE_NAME_FILTER_ID = "global-search-workspace-name";
@@ -140,7 +140,7 @@ export function GlobalNavSearch({
           id: `nav-${item.id}`,
           label: item.label,
           description: "Workspace section",
-          icon: item.icon ? <item.icon className="h-4 w-4 text-muted-foreground" aria-hidden @/components/> : undefined,
+          icon: item.icon ? <item.icon className="h-4 w-4 text-muted-foreground" aria-hidden /> : undefined,
           href: item.href,
           meta: "Section",
         })),
@@ -156,7 +156,7 @@ export function GlobalNavSearch({
           id: `document-${document.id}`,
           label,
           description: phaseLabel ? `Last run: ${phaseLabel}` : "Document",
-          icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden @/components/>,
+          icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
           href: buildDocumentsSearchHref(scope.workspaceId, normalizedQuery, document.id),
         };
       });
@@ -164,7 +164,7 @@ export function GlobalNavSearch({
         id: "documents-all",
         label: "Search documents",
         description: `View all document results for "${normalizedQuery}"`,
-        icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden @/components/>,
+        icon: <DocumentIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
         href: buildDocumentsSearchHref(scope.workspaceId, normalizedQuery),
         meta: "All",
       };
@@ -180,7 +180,7 @@ export function GlobalNavSearch({
           id: `run-${run.id}`,
           label,
           description: run.status ? `Status: ${run.status}` : "Run",
-          icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden @/components/>,
+          icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
           href: buildRunsSearchHref(scope.workspaceId, run.id),
         };
       });
@@ -188,7 +188,7 @@ export function GlobalNavSearch({
         id: "runs-all",
         label: "Search runs",
         description: `View all run results for "${normalizedQuery}"`,
-        icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden @/components/>,
+        icon: <RunsIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
         href: buildRunsSearchHref(scope.workspaceId),
         meta: "All",
       };
@@ -204,7 +204,7 @@ export function GlobalNavSearch({
         id: `workspace-${workspace.id}`,
         label: workspace.name,
         description: workspace.slug ? `Slug: ${workspace.slug}` : "Workspace",
-        icon: <DirectoryIcon className="h-4 w-4 text-muted-foreground" aria-hidden @/components/>,
+        icon: <DirectoryIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
         href: getDefaultWorkspacePath(workspace.id),
         meta: "Workspace",
       }));
@@ -440,13 +440,13 @@ export function GlobalNavSearch({
     >
       <div
         className={clsx(
-          "flex h-[var(--app-shell-control-h)] items-center gap-3 rounded-2xl border border-border@/components/60 bg-background@/components/70 px-3 shadow-sm ring-1 ring-inset ring-border@/components/30 backdrop-blur-sm transition",
-          "focus-within:border-ring focus-within:bg-background focus-within:ring-ring@/components/40",
+          "flex h-[var(--app-shell-control-h)] items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-3 shadow-sm ring-1 ring-inset ring-border/30 backdrop-blur-sm transition",
+          "focus-within:border-ring focus-within:bg-background focus-within:ring-ring/40",
         )}
       >
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-background@/components/80 text-muted-foreground ring-1 ring-inset ring-border@/components/40">
-          <SearchIcon className="h-4 w-4" aria-hidden @/components/>
-        <@/components/span>
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-background/80 text-muted-foreground ring-1 ring-inset ring-border/40">
+          <SearchIcon className="h-4 w-4" aria-hidden />
+        </span>
         <input
           ref={inputRef}
           id={inputId}
@@ -467,41 +467,41 @@ export function GlobalNavSearch({
           placeholder={searchPlaceholder}
           autoComplete="off"
           className="w-full min-w-0 border-0 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground focus:outline-none"
-        @/components/>
+        />
 
         <div className="flex items-center gap-1">
           {query ? (
             <button
               type="button"
               onClick={handleClear}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-muted-foreground transition hover:border-border@/components/60 hover:bg-background@/components/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-muted-foreground transition hover:border-border/60 hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               aria-label="Clear search"
             >
-              <CloseIcon className="h-3.5 w-3.5" @/components/>
-            <@/components/button>
+              <CloseIcon className="h-3.5 w-3.5" />
+            </button>
           ) : null}
 
           {isSearchPending ? (
             <span className="inline-flex h-7 w-7 items-center justify-center" aria-live="polite" aria-label="Searching">
-              <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" @/components/>
-            <@/components/span>
+              <SpinnerIcon className="h-4 w-4 animate-spin text-muted-foreground" />
+            </span>
           ) : null}
 
           {enableShortcut ? (
-            <span className="hidden items-center gap-1 rounded-full border border-border@/components/40 bg-background@/components/80 px-2 py-1 text-xs font-semibold text-muted-foreground shadow-inner sm:inline-flex">
+            <span className="hidden items-center gap-1 rounded-full border border-border/40 bg-background/80 px-2 py-1 text-xs font-semibold text-muted-foreground shadow-inner sm:inline-flex">
               {shortcutHint}
-            <@/components/span>
+            </span>
           ) : null}
-        <@/components/div>
-      <@/components/div>
+        </div>
+      </div>
 
       {showDropdown ? (
         <div
-          className="absolute left-0 right-0 top-full z-[var(--app-z-header)] mt-2 overflow-hidden rounded-2xl border border-border@/components/70 bg-popover shadow-2xl ring-1 ring-inset ring-border@/components/30"
+          className="absolute left-0 right-0 top-full z-[var(--app-z-header)] mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl ring-1 ring-inset ring-border/30"
         >
           {sections.length > 0 ? (
             <div
-              className="divide-y divide-border@/components/60"
+              className="divide-y divide-border/60"
               role="listbox"
               aria-label="Global search results"
               id={listId}
@@ -513,7 +513,7 @@ export function GlobalNavSearch({
                   <div key={section.id} className="py-2">
                     <div className="px-4 pb-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       {section.label}
-                    <@/components/div>
+                    </div>
                     <div className="flex flex-col">
                       {section.items.map((item, itemIndex) => {
                         const absoluteIndex = sectionIndexOffset + itemIndex;
@@ -536,19 +536,19 @@ export function GlobalNavSearch({
                               className={rowClassName}
                             >
                               {item.icon ? (
-                                <span className="mt-0.5 text-muted-foreground">{item.icon}<@/components/span>
+                                <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
                               ) : (
-                                <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden @/components/>
+                                <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden />
                               )}
                               <span className="flex min-w-0 flex-1 flex-col">
                                 <span className="flex items-center gap-2">
-                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}<@/components/span>
+                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
                                   {item.meta ? (
                                     <span className="rounded border border-border bg-card px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
                                       {item.meta}
-                                    <@/components/span>
+                                    </span>
                                   ) : null}
-                                <@/components/span>
+                                </span>
                                 {item.description ? (
                                   <span
                                     className={clsx(
@@ -557,10 +557,10 @@ export function GlobalNavSearch({
                                     )}
                                   >
                                     {item.description}
-                                  <@/components/span>
+                                  </span>
                                 ) : null}
-                              <@/components/span>
-                            <@/components/a>
+                              </span>
+                            </a>
                           ) : (
                             <button
                               key={item.id}
@@ -574,19 +574,19 @@ export function GlobalNavSearch({
                               className={rowClassName}
                             >
                               {item.icon ? (
-                                <span className="mt-0.5 text-muted-foreground">{item.icon}<@/components/span>
+                                <span className="mt-0.5 text-muted-foreground">{item.icon}</span>
                               ) : (
-                                <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden @/components/>
+                                <span className="mt-2 h-2 w-2 rounded-full bg-border" aria-hidden />
                               )}
                               <span className="flex min-w-0 flex-1 flex-col">
                                 <span className="flex items-center gap-2">
-                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}<@/components/span>
+                                  <span className="truncate text-sm font-semibold text-foreground">{item.label}</span>
                                   {item.meta ? (
                                     <span className="rounded border border-border bg-card px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
                                       {item.meta}
-                                    <@/components/span>
+                                    </span>
                                   ) : null}
-                                <@/components/span>
+                                </span>
                                 {item.description ? (
                                   <span
                                     className={clsx(
@@ -595,18 +595,18 @@ export function GlobalNavSearch({
                                     )}
                                   >
                                     {item.description}
-                                  <@/components/span>
+                                  </span>
                                 ) : null}
-                              <@/components/span>
-                            <@/components/button>
+                              </span>
+                            </button>
                           )
                         );
                       })}
-                    <@/components/div>
-                  <@/components/div>
+                    </div>
+                  </div>
                 );
               })}
-            <@/components/div>
+            </div>
           ) : null}
 
           {statusMessage ? (
@@ -617,11 +617,11 @@ export function GlobalNavSearch({
               aria-live="polite"
             >
               {statusMessage}
-            <@/components/div>
+            </div>
           ) : null}
-        <@/components/div>
+        </div>
       ) : null}
-    <@/components/div>
+    </div>
   );
 }
 
@@ -652,14 +652,14 @@ function buildFiltersParam(filters: Array<GlobalSearchFilter | null>) {
 }
 
 function buildDocumentsSearchHref(workspaceId: string, query: string, previewDocId?: string) {
-  return buildSearchHref(`@/components/workspaces@/components/${workspaceId}@/components/documents`, {
+  return buildSearchHref(`/workspaces/${workspaceId}/documents`, {
     previewDocId,
     q: query,
   });
 }
 
 function buildRunsSearchHref(workspaceId: string, runId?: string) {
-  return buildSearchHref(`@/components/workspaces@/components/${workspaceId}@/components/runs`, {
+  return buildSearchHref(`/workspaces/${workspaceId}/runs`, {
     run: runId,
   });
 }
@@ -670,7 +670,7 @@ function buildWorkspacesSearchHref(query: string) {
     buildTextFilter("slug", query, GLOBAL_SEARCH_WORKSPACE_SLUG_FILTER_ID),
   ]);
 
-  return buildSearchHref("@/components/workspaces", {
+  return buildSearchHref("/workspaces", {
     filters,
     joinOperator: filters ? "or" : undefined,
   });

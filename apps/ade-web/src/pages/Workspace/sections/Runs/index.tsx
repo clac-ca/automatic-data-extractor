@@ -1,4 +1,4 @@
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
 import { RunsTableView } from "./components/table/RunsTableView";
 

@@ -4,7 +4,7 @@ import {
   uploadWorkspaceDocument,
   type DocumentUploadResponse,
   type DocumentUploadRunOptions,
-} from "@api/documents/uploads";
+} from "@/api/documents/uploads";
 
 export type UploadManagerStatus =
   | "queued"

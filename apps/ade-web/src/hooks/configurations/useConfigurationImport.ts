@@ -5,8 +5,8 @@ import {
   replaceConfigurationFromArchive,
   type ImportConfigurationPayload,
   type ReplaceConfigurationPayload,
-} from "@api/configurations/api";
-import type { ConfigurationRecord } from "@schema/configurations";
+} from "@/api/configurations/api";
+import type { ConfigurationRecord } from "@/types/configurations";
 
 export function useImportConfigurationMutation(workspaceId: string) {
   return useMutation<ConfigurationRecord, Error, ImportConfigurationPayload>({

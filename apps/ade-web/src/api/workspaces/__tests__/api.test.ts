@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { client } from "@api/client";
-import { MAX_PAGE_SIZE } from "@api/pagination";
+import { client } from "@/api/client";
+import { MAX_PAGE_SIZE } from "@/api/pagination";
 import { listPermissions, listWorkspaceMembers, listWorkspaceRoles, setDefaultWorkspace } from "../api";
 
 describe("workspaces api", () => {

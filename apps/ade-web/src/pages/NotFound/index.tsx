@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function NotFoundScreen() {
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16 text-center">
+    <div className="mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-16 text-center">
       <div className="space-y-4">
         <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           404

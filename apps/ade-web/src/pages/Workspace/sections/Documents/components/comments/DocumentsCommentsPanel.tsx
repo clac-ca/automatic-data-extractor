@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { useSession } from "@components/providers/auth/SessionContext";
+import { useSession } from "@/providers/auth/SessionContext";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";

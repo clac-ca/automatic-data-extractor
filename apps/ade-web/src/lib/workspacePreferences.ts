@@ -1,5 +1,5 @@
-import { createScopedStorage } from "@lib/storage";
-import { uiStorageKeys } from "@lib/uiStorageKeys";
+import { createScopedStorage } from "@/lib/storage";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
 
 const storage = createScopedStorage(uiStorageKeys.workspaceLastActive);
 

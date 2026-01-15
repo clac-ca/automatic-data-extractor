@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { archiveConfiguration, createConfiguration, makeActiveConfiguration } from "@api/configurations/api";
+import { archiveConfiguration, createConfiguration, makeActiveConfiguration } from "@/api/configurations/api";
 import { configurationKeys } from "./keys";
-import type { ConfigurationRecord } from "@schema/configurations";
+import type { ConfigurationRecord } from "@/types/configurations";
 
 export function useMakeActiveConfigurationMutation(workspaceId: string) {
   const queryClient = useQueryClient();

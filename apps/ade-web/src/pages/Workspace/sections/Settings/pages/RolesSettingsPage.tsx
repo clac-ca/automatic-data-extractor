@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { useSettingsSection } from "../sectionContext";
-import { buildWeakEtag } from "@api/etag";
+import { buildWeakEtag } from "@/api/etag";
 import {
   useCreateWorkspaceRoleMutation,
   useDeleteWorkspaceRoleMutation,
@@ -12,7 +12,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
-import type { PermissionDefinition, RoleDefinition } from "@schema/workspaces";
+import type { PermissionDefinition, RoleDefinition } from "@/types/workspaces";
 import { Alert } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";

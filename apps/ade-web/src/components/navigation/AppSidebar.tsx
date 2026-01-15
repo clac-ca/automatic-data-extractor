@@ -1,12 +1,8 @@
-import { useCallback, useMemo } from "react";
-
+import { useCallback } from "react";
 import { NavLink, matchPath, useLocation } from "react-router-dom";
+import clsx from "clsx";
 
-import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@app@/navigation@/workspaceNav";
-import { WorkspaceSwitcher } from "@components@@/components@/navigation@/WorkspaceSwitcher";
-import { useWorkspaceContext } from "@pages@/Workspace@/context@/WorkspaceContext";
 import {
-  Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -19,15 +15,26 @@ import {
   SidebarRail,
   SidebarSeparator,
   useSidebar,
-} from "@@/components@/ui@/sidebar";
+} from "@/components/ui/sidebar";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { WorkspaceSwitcher } from "@/components/navigation/WorkspaceSwitcher";
+import type { WorkspaceNavigationItem } from "@/pages/Workspace/components/workspaceNavigation";
 
-export function AppSidebar() {
-  const { workspace } = useWorkspaceContext();
-  const { isMobile, setOpenMobile } = useSidebar();
-  const navItems = useMemo(() => getWorkspacePrimaryNavigation(workspace), [workspace]);
+interface AppSidebarProps {
+  readonly items: readonly WorkspaceNavigationItem[];
+}
 
-  const settingsItem = navItems.find((item) => item.id === "settings");
-  const primaryItems = settingsItem ? navItems.filter((item) => item.id !== "settings") : navItems;
+export function AppSidebar({ items }: AppSidebarProps) {
+  const { isMobile, openMobile, setOpenMobile, state } = useSidebar();
+
+  const settingsItem = findSettingsItem(items);
+  const mainItems = settingsItem ? items.filter((item) => item.id !== settingsItem.id) : items;
 
   const handleNavigate = useCallback(() => {
     if (isMobile) {
@@ -35,36 +42,70 @@ export function AppSidebar() {
     }
   }, [isMobile, setOpenMobile]);
 
-  return (
-    <Sidebar collapsible="icon" variant="sidebar">
+  const sidebarContent = (
+    <>
       <SidebarHeader>
-        <WorkspaceSwitcher onNavigate={handleNavigate} @/>
-      <@/SidebarHeader>
-      <SidebarSeparator @/>
+        <WorkspaceSwitcher onNavigate={handleNavigate} />
+      </SidebarHeader>
+      <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Workspace<@/SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {primaryItems.map((item) => (
-                <SidebarNavItem key={item.id} item={item} onNavigate={handleNavigate} @/>
+              {mainItems.map((item) => (
+                <SidebarNavItem key={item.id} item={item} onNavigate={handleNavigate} />
               ))}
-            <@/SidebarMenu>
-          <@/SidebarGroupContent>
-        <@/SidebarGroup>
-      <@/SidebarContent>
-      {settingsItem ? (
-        <>
-          <SidebarSeparator @/>
-          <SidebarFooter>
-            <SidebarMenu>
-              <SidebarNavItem item={settingsItem} onNavigate={handleNavigate} @/>
-            <@/SidebarMenu>
-          <@/SidebarFooter>
-        <@/>
-      ) : null}
-      <SidebarRail @/>
-    <@/Sidebar>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarSeparator />
+      <SidebarFooter>
+        <SidebarMenu>
+          {settingsItem ? <SidebarNavItem item={settingsItem} onNavigate={handleNavigate} /> : null}
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={openMobile} onOpenChange={setOpenMobile}>
+        <SheetContent
+          data-sidebar="sidebar"
+          data-mobile="true"
+          className="w-[var(--app-shell-sidebar-mobile-width)] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          side="left"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Sidebar</SheetTitle>
+            <SheetDescription>Displays the workspace navigation.</SheetDescription>
+          </SheetHeader>
+          <div className="flex h-full w-full flex-col">{sidebarContent}</div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <aside
+      className={clsx(
+        "group hidden h-[calc(100svh_-_var(--app-shell-header-height))] flex-shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex",
+        "sticky top-0 transition-[width] duration-200 ease-linear",
+        state === "collapsed" ? "w-[var(--sidebar-width-icon)]" : "w-[var(--sidebar-width)]",
+      )}
+      aria-label="Workspace navigation"
+      data-state={state}
+      data-collapsible={state === "collapsed" ? "icon" : ""}
+      data-variant="sidebar"
+      data-side="left"
+    >
+      <div data-sidebar="sidebar" className="flex h-full w-full flex-col">
+        {sidebarContent}
+      </div>
+    </aside>
   );
 }
 
@@ -87,21 +128,40 @@ function SidebarNavItem({
           to={item.href}
           end={!(item.matchPrefix ?? false)}
           onClick={(event) => {
-            if (isPlainLeftClick(event) && event.currentTarget.getAttribute("aria-current") === "page") {
+            if (
+              isPlainLeftClick(event) &&
+              (event.currentTarget as HTMLElement).getAttribute("aria-current") === "page"
+            ) {
               event.preventDefault();
               return;
             }
             onNavigate?.();
           }}
         >
-          <item.icon @/>
-          <span>{item.label}<@/span>
-        <@/NavLink>
-      <@/SidebarMenuButton>
-    <@/SidebarMenuItem>
+          <item.icon />
+          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+        </NavLink>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
 function isPlainLeftClick(event: React.MouseEvent) {
   return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+}
+
+function findSettingsItem(items: readonly WorkspaceNavigationItem[]) {
+  const exactIds = new Set(["settings", "workspace-settings", "workspacesettings", "preferences"]);
+
+  const byExactId = items.find((item) => exactIds.has(item.id.toLowerCase()));
+  if (byExactId) return byExactId;
+
+  const byIdIncludes = items.find((item) => item.id.toLowerCase().includes("settings"));
+  if (byIdIncludes) return byIdIncludes;
+
+  const byHref = items.find((item) => /settings|preferences/i.test(item.href));
+  if (byHref) return byHref;
+
+  const byLabel = items.find((item) => /settings|preferences/i.test(item.label));
+  return byLabel;
 }

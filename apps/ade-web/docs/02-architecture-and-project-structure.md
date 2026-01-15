@@ -20,7 +20,7 @@ Everything below exists to make those goals explicit.
 ### Instant understanding defaults
 
 - **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `pages/Workspace/sections/...`).
-- **One canonical home per concept:** navigation helpers live under `@app/navigation`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
+- **One canonical home per concept:** navigation helpers live under `@/navigation`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
 - **Reuse patterns:** new list/detail flows should copy Documents/Runs; new URL‑backed filters should reuse the existing filter helpers rather than inventing new query names; NDJSON streaming should go through the helper in `api/ndjson`.
 - **Respect the layers:** never import “upwards” (e.g. `api/` → `pages/`); linting enforces the boundaries.
 
@@ -38,7 +38,7 @@ apps/ade-web/
     main.tsx          # Vite entry point
     app/              # App shell: App.tsx, providers, navigation
     api/              # HTTP client + domain API calls
-    pages/            # Route-level pages (aliased as "@pages")
+    pages/            # Route-level pages (aliased as "@/pages")
     components/       # Shared UI primitives, layouts, providers, shell
     hooks/            # Shared React hooks (React Query + app hooks)
     lib/              # Cross-cutting utilities (storage, uploads, preferences)
@@ -49,7 +49,7 @@ apps/ade-web/
     test/             # Vitest setup and shared testing helpers
 ````
 
-> Page folders live in `src/pages` and are imported via `@pages/*`. There is no `src/features` directory.
+> Page folders live in `src/pages` and are imported via `@/pages/*`. There is no `src/features` directory.
 
 At a high level:
 
@@ -69,7 +69,7 @@ We treat the codebase as layered, with imports flowing “down” only:
 ```text
         app/
           ↑
-      pages (@pages)
+      pages (@/pages)
    ↑    ↑    ↑     ↑
 components api hooks lib
         ↑
@@ -87,7 +87,7 @@ Allowed dependencies:
 * `components/`, `api/`, `hooks/`, `lib/` → may import from `types/`, `types/generated/`, and `app/navigation`.
 * `types/` → may import from `types/generated/` (if needed).
 * `types/generated/` → must not import from anywhere else.
-* `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@test`.
+* `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@/test`.
 
 Forbidden dependencies:
 
@@ -140,7 +140,7 @@ The app shell is glue and composition only.
 
 ## 5. `pages/` – page/feature slices
 
-**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings). The physical folder is `src/pages/`, imported via the `@pages/*` alias.
+**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings). The physical folder is `src/pages/`, imported via the `@/pages/*` alias.
 
 Example structure:
 
@@ -257,7 +257,7 @@ What belongs here:
 * Alerts, banners, toasts.
 * Tabs, context menus, dropdowns.
 * Avatars and profile menus.
-* Global top bar and search field components (under `components/shell/`).
+* Global top bar and search field components (under `components/navigation/`).
 * Monaco editor wrapper (`components/ui/code-editor`).
 
 What does **not** belong here:
@@ -305,7 +305,7 @@ src/lib/
   storage.ts
   workspacePreferences.ts
 
-src/app/navigation/
+src/navigation/
   authNavigation.ts
   workspacePaths.ts
 ```
@@ -362,7 +362,7 @@ Typical content:
 
 The curated types already use wire shapes, so mapping helpers are only needed when you introduce UI‑specific view models.
 
-Features import types from `@schema`, not from `@schema/generated`, to keep the rest of the code insulated from backend schema churn.
+Features import types from `@/types`, not from `@/types/generated`, to keep the rest of the code insulated from backend schema churn.
 
 ---
 
@@ -381,7 +381,7 @@ src/test/
 
 * `setup.ts` is referenced from `vitest.config.ts` and runs before each test.
 * Factories can live here or near their domains, but this is the central place for shared ones.
-* Only test code should import from `@test/*`.
+* Only test code should import from `@/test/*`.
 
 Tests for a specific component or hook live alongside that code (e.g. `RunsScreen.test.tsx` next to `RunsScreen.tsx`).
 
@@ -389,17 +389,16 @@ Tests for a specific component or hook live alongside that code (e.g. `RunsScree
 
 ## 10. Path aliases and import style
 
-We use a small set of TS/Vite aliases to keep imports readable:
+We use a single TS/Vite alias (`@`) for `src/` to keep imports readable:
 
-* `@pages` → `src/pages`
-* `@app` → `src/app`
-* `@components` → `src/components`
-* `@api` → `src/api`
-* `@hooks` → `src/hooks`
-* `@lib` → `src/lib`
-* `@schema` → `src/types`
-* `@schema/generated` → `src/types/generated`
-* `@test` → `src/test` (tests only)
+* `@/pages` → `src/pages`
+* `@/components` → `src/components`
+* `@/api` → `src/api`
+* `@/hooks` → `src/hooks`
+* `@/lib` → `src/lib`
+* `@/types` → `src/types`
+* `@/types/generated` → `src/types/generated`
+* `@/test` → `src/test` (tests only)
 
 Guidelines:
 
@@ -407,10 +406,10 @@ Guidelines:
 
   ```ts
   // Good
-  import WorkspaceScreen from "@pages/Workspace";
-  import { GlobalTopBar } from "@components/shell/GlobalTopBar";
-  import { createRun } from "@api/runs/api";
-  import type { RunResource } from "@schema";
+  import WorkspaceScreen from "@/pages/Workspace";
+  import { GlobalTopBar } from "@/components/navigation/GlobalTopBar";
+  import { createRun } from "@/api/runs/api";
+  import type { RunResource } from "@/types";
 
   // Avoid
   import { createRun } from "../../../api/runs/api";
@@ -542,16 +541,16 @@ Flow:
 
    * `DocumentsScreen`:
 
-     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@app/navigation/urlState`.
+     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@/navigation/urlState`.
      * Calls `useDocumentsQuery(workspaceId, filters)` to fetch data.
      * Renders the page layout.
      * Composes `DocumentsFilters`, `DocumentsTable`, and `RunExtractionDialog`.
 
 3. **Data fetching**
 
-   * `useDocumentsQuery` uses React Query and `@api/documents` under the hood.
-   * `@api/documents` builds the `/api/v1/workspaces/{workspaceId}/documents` URL and parses the JSON response.
-   * The response is mapped into `DocumentListRow[]` using types from `@schema`.
+   * `useDocumentsQuery` uses React Query and `@/api/documents` under the hood.
+   * `@/api/documents` builds the `/api/v1/workspaces/{workspaceId}/documents` URL and parses the JSON response.
+   * The response is mapped into `DocumentListRow[]` using types from `@/types`.
 
 4. **Presentation**
 

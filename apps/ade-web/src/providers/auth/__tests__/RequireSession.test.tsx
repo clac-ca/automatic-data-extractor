@@ -1,32 +1,32 @@
-import userEvent from "@testing-library@/hooks/user-event";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-import { render as rtlRender, screen, waitFor } from "@testing-library@/hooks/react";
-import { AllProviders } from "@test@/hooks/test-utils";
-import { RequireSession } from "@components@@/hooks/providers@/hooks/auth@/hooks/RequireSession";
-import { useSession } from "@components@@/hooks/providers@/hooks/auth@/hooks/SessionContext";
-import type { SessionEnvelope } from "@api@/hooks/auth@/hooks/api";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { AllProviders } from "@/test/test-utils";
+import { RequireSession } from "@/providers/auth/RequireSession";
+import { useSession } from "@/providers/auth/SessionContext";
+import type { SessionEnvelope } from "@/api/auth/api";
 
 const mockUseSessionQuery = vi.fn();
 const mockUseSetupStatusQuery = vi.fn();
 
-vi.mock("@hooks@/hooks/auth@/hooks/useSessionQuery", () => ({
+vi.mock("@/hooks/auth/useSessionQuery", () => ({
   useSessionQuery: () => mockUseSessionQuery(),
 }));
 
-vi.mock("@hooks@/hooks/auth@/hooks/useSetupStatusQuery", () => ({
+vi.mock("@/hooks/auth/useSetupStatusQuery", () => ({
   useSetupStatusQuery: (enabled?: boolean) => mockUseSetupStatusQuery(enabled),
 }));
 
-function renderWithHistory(ui: React.ReactElement, path = "@/hooks/") {
+function renderWithHistory(ui: React.ReactElement, path = "/") {
   window.history.replaceState(null, "", path);
   const router = createBrowserRouter([
-    { path: "@/hooks/login", element: <AllProviders>Login<@/hooks/AllProviders> },
-    { path: "@/hooks/setup", element: <AllProviders>Setup<@/hooks/AllProviders> },
-    { path: "*", element: <AllProviders>{ui}<@/hooks/AllProviders> },
+    { path: "/login", element: <AllProviders>Login</AllProviders> },
+    { path: "/setup", element: <AllProviders>Setup</AllProviders> },
+    { path: "*", element: <AllProviders>{ui}</AllProviders> },
   ]);
-  return rtlRender(<RouterProvider router={router} @/hooks/>);
+  return rtlRender(<RouterProvider router={router} />);
 }
 
 describe("RequireSession", () => {
@@ -56,7 +56,7 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithHistory(<RequireSession>Loading test<@/hooks/RequireSession>);
+    renderWithHistory(<RequireSession>Loading test</RequireSession>);
 
     expect(screen.getByText("Loading your workspace…")).toBeInTheDocument();
   });
@@ -70,7 +70,7 @@ describe("RequireSession", () => {
       refetch,
     });
 
-    renderWithHistory(<RequireSession>Error state<@/hooks/RequireSession>);
+    renderWithHistory(<RequireSession>Error state</RequireSession>);
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -85,9 +85,9 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithHistory(<RequireSession>Protected<@/hooks/RequireSession>, "@/hooks/workspaces");
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
-    await waitFor(() => expect(window.location.pathname).toBe("@/hooks/login"));
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
     expect(window.location.search).toBe("?returnTo=%2Fworkspaces");
   });
 
@@ -112,9 +112,9 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithHistory(<RequireSession>Protected<@/hooks/RequireSession>, "@/hooks/workspaces");
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
-    await waitFor(() => expect(window.location.pathname).toBe("@/hooks/setup"));
+    await waitFor(() => expect(window.location.pathname).toBe("/setup"));
   });
 
   it("preserves the redirect path for non-default routes", async () => {
@@ -125,9 +125,9 @@ describe("RequireSession", () => {
       refetch: vi.fn(),
     });
 
-    renderWithHistory(<RequireSession>Protected<@/hooks/RequireSession>, "@/hooks/workspaces@/hooks/alpha");
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces/alpha");
 
-    await waitFor(() => expect(window.location.pathname).toBe("@/hooks/login"));
+    await waitFor(() => expect(window.location.pathname).toBe("/login"));
     expect(window.location.search).toBe("?returnTo=%2Fworkspaces%2Falpha");
   });
 
@@ -148,7 +148,7 @@ describe("RequireSession", () => {
       refetch,
     });
 
-    renderWithHistory(<RequireSession>Error state<@/hooks/RequireSession>);
+    renderWithHistory(<RequireSession>Error state</RequireSession>);
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -183,13 +183,13 @@ describe("RequireSession", () => {
 
     function SessionConsumer() {
       const activeSession = useSession();
-      return <p>Signed in as {activeSession.user.display_name}<@/hooks/p>;
+      return <p>Signed in as {activeSession.user.display_name}</p>;
     }
 
     renderWithHistory(
       <RequireSession>
-        <SessionConsumer @/hooks/>
-      <@/hooks/RequireSession>,
+        <SessionConsumer />
+      </RequireSession>,
     );
 
     expect(await screen.findByText("Signed in as Test User")).toBeInTheDocument();

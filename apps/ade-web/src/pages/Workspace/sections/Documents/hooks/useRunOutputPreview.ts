@@ -6,7 +6,7 @@ import {
   fetchRunOutputSheets,
   type RunOutputSheet,
   type WorkbookSheetPreview,
-} from "@api/runs";
+} from "@/api/runs/api";
 
 const DEFAULT_PREVIEW_ROWS = 200;
 const DEFAULT_PREVIEW_COLUMNS = 50;

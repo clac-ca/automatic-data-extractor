@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchWorkspaceDocuments, type DocumentListRow } from "@api/documents";
-import { fetchWorkspaceRuns, type RunResource } from "@api/runs/api";
-import { fetchWorkspaces } from "@api/workspaces/api";
-import type { WorkspaceProfile } from "@schema/workspaces";
+import { fetchWorkspaceDocuments, type DocumentListRow } from "@/api/documents";
+import { fetchWorkspaceRuns, type RunResource } from "@/api/runs/api";
+import { fetchWorkspaces } from "@/api/workspaces/api";
+import type { WorkspaceProfile } from "@/types/workspaces";
 
 export const GLOBAL_SEARCH_TRIGGER_LENGTH = 2;
 export const GLOBAL_SEARCH_RESULT_LIMIT = 5;

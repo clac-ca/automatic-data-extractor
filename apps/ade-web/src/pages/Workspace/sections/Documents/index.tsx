@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useRef, useState, type ChangeEvent } from "react";
 
-import { useSession } from "@components/providers/auth/SessionContext";
-import { useNotifications } from "@components/providers/notifications";
+import { useSession } from "@/providers/auth/SessionContext";
+import { useNotifications } from "@/providers/notifications";
 import { Button } from "@/components/ui/button";
-import { UploadIcon } from "@components/icons";
-import { useConfigurationsQuery } from "@hooks/configurations";
-import { useUploadManager, type UploadManagerQueueItem } from "@hooks/documents/uploadManager";
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
+import { UploadIcon } from "@/components/icons";
+import { useConfigurationsQuery } from "@/hooks/configurations";
+import { useUploadManager, type UploadManagerQueueItem } from "@/hooks/documents/uploadManager";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
 import { UploadManager } from "./components/upload/UploadManager";
 import { UploadPreflightDialog } from "./components/upload/UploadPreflightDialog";

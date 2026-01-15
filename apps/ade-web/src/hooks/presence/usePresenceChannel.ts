@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { presenceSocketUrl } from "@api/presence/client";
-import type { PresenceConnectionState, PresenceContext, PresenceParticipant } from "@schema/presence";
+import { presenceSocketUrl } from "@/api/presence/client";
+import type { PresenceConnectionState, PresenceContext, PresenceParticipant } from "@/types/presence";
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const MAX_RETRY_MS = 30_000;
