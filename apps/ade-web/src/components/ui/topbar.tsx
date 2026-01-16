@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Menu } from "lucide-react"
+import { Menu, X } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -25,28 +25,23 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-const TOPBAR_COOKIE_NAME = "topbar_state"
-const TOPBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-
+/**
+ * Layout vars (mirrors Sidebar's "width vars live on the Provider" approach).
+ * Override per app using <TopbarProvider style={{ "--topbar-height": "4rem" }} />
+ */
 const TOPBAR_HEIGHT = "3.5rem" // 56px
-const TOPBAR_HEIGHT_COMPACT = "3rem" // 48px
-const TOPBAR_HEIGHT_MOBILE = "3.5rem"
+const TOPBAR_HEIGHT_MOBILE = "3.5rem" // 56px
+const TOPBAR_SHEET_WIDTH_MOBILE = "18rem"
 
-// Keyboard shortcut: cmd/ctrl + shift + m
-const TOPBAR_KEYBOARD_SHORTCUT = "m"
-
-type TopbarMode = "expanded" | "compact"
+// Optional keyboard shortcut: cmd/ctrl + shift + m (disabled by default)
+const TOPBAR_KEYBOARD_SHORTCUT_DEFAULT: string | null = null
 
 type TopbarContextProps = {
-  state: TopbarMode
-  mode: TopbarMode
-  setMode: (mode: TopbarMode | ((mode: TopbarMode) => TopbarMode)) => void
-  openMobile: boolean
-  setOpenMobile: (open: boolean) => void
   isMobile: boolean
-  toggleMode: () => void
+  openMobile: boolean
+  setOpenMobile: (open: boolean | ((open: boolean) => boolean)) => void
   toggleMobile: () => void
-  toggleTopbar: () => void
+  mobileContentId: string
 }
 
 const TopbarContext = React.createContext<TopbarContextProps | null>(null)
@@ -56,29 +51,36 @@ function useTopbar() {
   if (!context) {
     throw new Error("useTopbar must be used within a TopbarProvider.")
   }
-
   return context
 }
 
 const TopbarProvider = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> & {
-    defaultMode?: TopbarMode
-    mode?: TopbarMode
-    onModeChange?: (mode: TopbarMode) => void
+  React.ComponentPropsWithoutRef<"div"> & {
     defaultOpenMobile?: boolean
     openMobile?: boolean
     onOpenMobileChange?: (open: boolean) => void
+
+    /**
+     * If provided, enables cmd/ctrl + shift + <key> to toggle the mobile menu.
+     * Example: keyboardShortcut="m"
+     */
+    keyboardShortcut?: string | null
+
+    /**
+     * Convenience: TopbarNavButton tooltips work out of the box.
+     * If your app already has a TooltipProvider, you can set this false.
+     */
+    withTooltipProvider?: boolean
   }
 >(
   (
     {
-      defaultMode = "expanded",
-      mode: modeProp,
-      onModeChange: setModeProp,
       defaultOpenMobile = false,
       openMobile: openMobileProp,
-      onOpenMobileChange: setOpenMobileProp,
+      onOpenMobileChange,
+      keyboardShortcut = TOPBAR_KEYBOARD_SHORTCUT_DEFAULT,
+      withTooltipProvider = true,
       className,
       style,
       children,
@@ -87,185 +89,148 @@ const TopbarProvider = React.forwardRef<
     ref
   ) => {
     const isMobile = useIsMobile()
-
-    const [_mode, _setMode] = React.useState<TopbarMode>(defaultMode)
-    const mode = modeProp ?? _mode
+    const reactId = React.useId()
+    const mobileContentId = `topbar-mobile-${reactId}`
 
     const [_openMobile, _setOpenMobile] = React.useState(defaultOpenMobile)
     const openMobile = openMobileProp ?? _openMobile
 
-    const setMode = React.useCallback(
-      (value: TopbarMode | ((value: TopbarMode) => TopbarMode)) => {
-        const nextMode = typeof value === "function" ? value(mode) : value
-
-        if (setModeProp) {
-          setModeProp(nextMode)
-        } else {
-          _setMode(nextMode)
-        }
-
-        // Persist mode as a cookie for client navigations.
-        // (In Next.js you can read this cookie in app/layout.tsx and pass it as defaultMode.)
-        if (typeof document !== "undefined") {
-          document.cookie = `${TOPBAR_COOKIE_NAME}=${nextMode}; path=/; max-age=${TOPBAR_COOKIE_MAX_AGE}`
-        }
-      },
-      [mode, setModeProp]
-    )
-
     const setOpenMobile = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
         const nextOpen = typeof value === "function" ? value(openMobile) : value
-        if (setOpenMobileProp) {
-          setOpenMobileProp(nextOpen)
+        if (onOpenMobileChange) {
+          onOpenMobileChange(nextOpen)
         } else {
           _setOpenMobile(nextOpen)
         }
       },
-      [openMobile, setOpenMobileProp]
+      [openMobile, onOpenMobileChange]
     )
-
-    const toggleMode = React.useCallback(() => {
-      setMode((prev) => (prev === "expanded" ? "compact" : "expanded"))
-    }, [setMode])
 
     const toggleMobile = React.useCallback(() => {
       setOpenMobile((prev) => !prev)
     }, [setOpenMobile])
 
-    // A convenience toggle: mobile toggles the mobile menu, desktop toggles compact mode.
-    const toggleTopbar = React.useCallback(() => {
-      return isMobile ? toggleMobile() : toggleMode()
-    }, [isMobile, toggleMobile, toggleMode])
-
-    // Keyboard shortcut: cmd/ctrl + shift + m
     React.useEffect(() => {
+      if (!keyboardShortcut) return
+
       const handleKeyDown = (event: KeyboardEvent) => {
+        // Ignore typing contexts
+        const target = event.target as HTMLElement | null
+        const isTypingContext =
+          !!target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT" ||
+            target.isContentEditable)
+
+        if (isTypingContext) return
+
         if (
-          event.key.toLowerCase() === TOPBAR_KEYBOARD_SHORTCUT &&
+          event.key.toLowerCase() === keyboardShortcut.toLowerCase() &&
           (event.metaKey || event.ctrlKey) &&
           event.shiftKey
         ) {
           event.preventDefault()
-          toggleTopbar()
+          toggleMobile()
         }
       }
 
       window.addEventListener("keydown", handleKeyDown)
       return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [toggleTopbar])
-
-    const state = mode
+    }, [keyboardShortcut, toggleMobile])
 
     const contextValue = React.useMemo<TopbarContextProps>(
       () => ({
-        state,
-        mode,
-        setMode,
+        isMobile,
         openMobile,
         setOpenMobile,
-        isMobile,
-        toggleMode,
         toggleMobile,
-        toggleTopbar,
+        mobileContentId,
       }),
-      [
-        state,
-        mode,
-        setMode,
-        openMobile,
-        setOpenMobile,
-        isMobile,
-        toggleMode,
-        toggleMobile,
-        toggleTopbar,
-      ]
+      [isMobile, openMobile, setOpenMobile, toggleMobile, mobileContentId]
+    )
+
+    const wrapper = (
+      <div
+        ref={ref}
+        data-slot="topbar-wrapper"
+        style={
+          {
+            "--topbar-height": TOPBAR_HEIGHT,
+            "--topbar-height-mobile": TOPBAR_HEIGHT_MOBILE,
+            "--topbar-height-current": isMobile
+              ? "var(--topbar-height-mobile)"
+              : "var(--topbar-height)",
+            "--topbar-sheet-width": TOPBAR_SHEET_WIDTH_MOBILE,
+            ...style,
+          } as React.CSSProperties
+        }
+        className={cn("group/topbar-wrapper w-full", className)}
+        {...props}
+      >
+        {children}
+      </div>
     )
 
     return (
       <TopbarContext.Provider value={contextValue}>
-        <TooltipProvider delayDuration={0}>
-          <div
-            ref={ref}
-            style={
-              {
-                "--topbar-height": TOPBAR_HEIGHT,
-                "--topbar-height-compact": TOPBAR_HEIGHT_COMPACT,
-                "--topbar-height-mobile": TOPBAR_HEIGHT_MOBILE,
-                ...style,
-              } as React.CSSProperties
-            }
-            className={cn(
-              "group/topbar-wrapper flex min-h-svh w-full flex-col",
-              className
-            )}
-            {...props}
-          >
-            {children}
-          </div>
-        </TooltipProvider>
+        {withTooltipProvider ? (
+          <TooltipProvider delayDuration={0}>{wrapper}</TooltipProvider>
+        ) : (
+          wrapper
+        )}
       </TopbarContext.Provider>
     )
   }
 )
 TopbarProvider.displayName = "TopbarProvider"
 
-const TOPBAR_SHEET_WIDTH_MOBILE = "18rem"
-
 const Topbar = React.forwardRef<
   HTMLElement,
-  React.ComponentProps<"header"> & {
+  React.ComponentPropsWithoutRef<"header"> & {
     position?: "sticky" | "fixed" | "static"
-    variant?: "topbar" | "floating" | "inset"
+    variant?: "default" | "floating" | "inset"
     bordered?: boolean
+    /**
+     * A common header pattern: slightly translucent + blur for sticky headers.
+     */
+    blur?: boolean
   }
 >(
   (
     {
       position = "sticky",
-      variant = "topbar",
+      variant = "default",
       bordered = true,
+      blur = false,
       className,
-      style,
-      children,
       ...props
     },
     ref
   ) => {
-    const { state } = useTopbar()
-
-    const heightVar =
-      state === "compact" ? "var(--topbar-height-compact)" : "var(--topbar-height)"
-
     return (
       <header
         ref={ref}
-        data-topbar="topbar"
-        data-state={state}
-        data-variant={variant}
+        data-slot="topbar"
         data-position={position}
-        style={
-          {
-            "--topbar-height-current": heightVar,
-            ...style,
-          } as React.CSSProperties
-        }
+        data-variant={variant}
         className={cn(
-          "peer/topbar group/topbar z-30 w-full bg-topbar text-topbar-foreground",
+          "peer/topbar group/topbar z-40 w-full",
           "h-[var(--topbar-height-current)]",
+          "bg-background text-foreground",
           position === "sticky" && "sticky top-0",
           position === "fixed" && "fixed inset-x-0 top-0",
-          bordered && variant === "topbar" && "border-b border-topbar-border",
-          variant === "floating" &&
-            "m-2 rounded-lg border border-topbar-border shadow",
+          blur &&
+            "bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+          bordered && variant === "default" && "border-b border-border",
+          variant === "floating" && "m-2 rounded-lg border border-border shadow",
           variant === "inset" &&
-            "md:m-2 md:rounded-xl md:border md:border-topbar-border md:shadow-sm",
+            "md:m-2 md:rounded-xl md:border md:border-border md:shadow-sm",
           className
         )}
         {...props}
-      >
-        {children}
-      </header>
+      />
     )
   }
 )
@@ -273,16 +238,16 @@ Topbar.displayName = "Topbar"
 
 const TopbarContent = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> & {
+  React.ComponentPropsWithoutRef<"div"> & {
     maxWidth?: "full" | "screen" | "xl"
   }
 >(({ className, maxWidth = "screen", ...props }, ref) => {
   return (
     <div
       ref={ref}
-      data-topbar="content"
+      data-slot="topbar-content"
       className={cn(
-        "flex h-full w-full items-center gap-2 px-2",
+        "flex h-full w-full items-center gap-2 px-2 sm:px-4",
         maxWidth === "screen" && "mx-auto max-w-screen-2xl",
         maxWidth === "xl" && "mx-auto max-w-6xl",
         className
@@ -293,68 +258,60 @@ const TopbarContent = React.forwardRef<
 })
 TopbarContent.displayName = "TopbarContent"
 
-const TopbarStart = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      data-topbar="start"
-      className={cn(
-        "flex min-w-0 items-center gap-2",
-        "group-data-[state=compact]/topbar:gap-1",
-        className
-      )}
-      {...props}
-    />
-  )
-)
+const TopbarStart = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<"div">
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    data-slot="topbar-start"
+    className={cn("flex min-w-0 items-center gap-2", className)}
+    {...props}
+  />
+))
 TopbarStart.displayName = "TopbarStart"
 
-const TopbarCenter = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      data-topbar="center"
-      className={cn(
-        "flex min-w-0 flex-1 items-center justify-center gap-2",
-        "group-data-[state=compact]/topbar:justify-start",
-        className
-      )}
-      {...props}
-    />
-  )
-)
+const TopbarCenter = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<"div">
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    data-slot="topbar-center"
+    className={cn(
+      "flex min-w-0 flex-1 items-center justify-center gap-2",
+      className
+    )}
+    {...props}
+  />
+))
 TopbarCenter.displayName = "TopbarCenter"
 
-const TopbarEnd = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      data-topbar="end"
-      className={cn(
-        "ml-auto flex min-w-0 items-center justify-end gap-2",
-        "group-data-[state=compact]/topbar:gap-1",
-        className
-      )}
-      {...props}
-    />
-  )
-)
+const TopbarEnd = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<"div">
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    data-slot="topbar-end"
+    className={cn("ml-auto flex min-w-0 items-center justify-end gap-2", className)}
+    {...props}
+  />
+))
 TopbarEnd.displayName = "TopbarEnd"
 
 const TopbarBrand = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> & { asChild?: boolean }
+  React.ComponentPropsWithoutRef<"div"> & { asChild?: boolean }
 >(({ className, asChild = false, ...props }, ref) => {
   const Comp = asChild ? Slot : "div"
-
   return (
     <Comp
       ref={ref}
-      data-topbar="brand"
+      data-slot="topbar-brand"
       className={cn(
         "flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-sm font-medium",
         "[&>span:last-child]:truncate",
-        "group-data-[state=compact]/topbar:px-1",
         className
       )}
       {...props}
@@ -363,78 +320,17 @@ const TopbarBrand = React.forwardRef<
 })
 TopbarBrand.displayName = "TopbarBrand"
 
-const TopbarTrigger = React.forwardRef<
-  React.ElementRef<typeof Button>,
-  React.ComponentProps<typeof Button> & {
-    showOnDesktop?: boolean
-  }
->(({ className, onClick, showOnDesktop = false, ...props }, ref) => {
-  const { toggleMobile } = useTopbar()
-
-  return (
-    <Button
-      ref={ref}
-      data-topbar="trigger"
-      variant="ghost"
-      size="icon"
-      aria-label="Open menu"
-      className={cn("h-9 w-9", !showOnDesktop && "md:hidden", className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleMobile()
-      }}
-      {...props}
-    >
-      <Menu />
-      <span className="sr-only">Open menu</span>
-    </Button>
-  )
-})
-TopbarTrigger.displayName = "TopbarTrigger"
-
-/**
- * A convenience toggle that mirrors `SidebarTrigger`:
- * - mobile: toggles the `TopbarSheet`
- * - desktop: toggles compact mode
- */
-const TopbarToggle = React.forwardRef<
-  React.ElementRef<typeof Button>,
-  React.ComponentProps<typeof Button>
->(({ className, onClick, ...props }, ref) => {
-  const { toggleTopbar } = useTopbar()
-
-  return (
-    <Button
-      ref={ref}
-      data-topbar="toggle"
-      variant="ghost"
-      size="icon"
-      aria-label="Toggle topbar"
-      className={cn("h-9 w-9", className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleTopbar()
-      }}
-      {...props}
-    >
-      <Menu />
-      <span className="sr-only">Toggle topbar</span>
-    </Button>
-  )
-})
-TopbarToggle.displayName = "TopbarToggle"
-
 const TopbarInset = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<"main">
+  HTMLElement,
+  React.ComponentPropsWithoutRef<"main">
 >(({ className, ...props }, ref) => {
   return (
     <main
       ref={ref}
-      data-topbar="inset"
+      data-slot="topbar-inset"
       className={cn(
         "relative flex w-full flex-1 flex-col bg-background",
-        // If the topbar is fixed, create space for it.
+        // If the Topbar is fixed, create space for it.
         "peer-data-[position=fixed]/topbar:pt-[var(--topbar-height-current)]",
         className
       )}
@@ -446,15 +342,14 @@ TopbarInset.displayName = "TopbarInset"
 
 const TopbarSearch = React.forwardRef<
   React.ElementRef<typeof Input>,
-  React.ComponentProps<typeof Input>
+  React.ComponentPropsWithoutRef<typeof Input>
 >(({ className, ...props }, ref) => (
   <Input
     ref={ref}
-    data-topbar="search"
+    data-slot="topbar-search"
     className={cn(
-      "h-9 w-full bg-background shadow-none focus-visible:ring-2 focus-visible:ring-topbar-ring",
-      // By default, hide the search in compact mode (override with className if you want).
-      "group-data-[state=compact]/topbar:hidden",
+      "h-9 w-full bg-background shadow-none",
+      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
       className
     )}
     {...props}
@@ -464,21 +359,53 @@ TopbarSearch.displayName = "TopbarSearch"
 
 const TopbarSeparator = React.forwardRef<
   React.ElementRef<typeof Separator>,
-  React.ComponentProps<typeof Separator>
+  React.ComponentPropsWithoutRef<typeof Separator>
 >(({ className, orientation = "vertical", ...props }, ref) => (
   <Separator
     ref={ref}
-    data-topbar="separator"
+    data-slot="topbar-separator"
     orientation={orientation}
     className={cn(
       orientation === "vertical" ? "mx-1 h-6" : "my-1 w-full",
-      "bg-topbar-border",
       className
     )}
     {...props}
   />
 ))
 TopbarSeparator.displayName = "TopbarSeparator"
+
+const TopbarTrigger = React.forwardRef<
+  React.ElementRef<typeof Button>,
+  React.ComponentPropsWithoutRef<typeof Button> & {
+    showOnDesktop?: boolean
+  }
+>(({ className, onClick, showOnDesktop = false, ...props }, ref) => {
+  const { openMobile, toggleMobile, mobileContentId } = useTopbar()
+
+  return (
+    <Button
+      ref={ref}
+      data-slot="topbar-trigger"
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-haspopup="dialog"
+      aria-controls={mobileContentId}
+      aria-expanded={openMobile}
+      aria-label={openMobile ? "Close menu" : "Open menu"}
+      className={cn("h-9 w-9", !showOnDesktop && "md:hidden", className)}
+      onClick={(event) => {
+        onClick?.(event)
+        toggleMobile()
+      }}
+      {...props}
+    >
+      {openMobile ? <X /> : <Menu />}
+      <span className="sr-only">{openMobile ? "Close menu" : "Open menu"}</span>
+    </Button>
+  )
+})
+TopbarTrigger.displayName = "TopbarTrigger"
 
 const TopbarSheet = React.forwardRef<
   React.ElementRef<typeof SheetContent>,
@@ -493,40 +420,31 @@ const TopbarSheet = React.forwardRef<
       className,
       children,
       title = "Menu",
-      description = "Displays the mobile navigation.",
+      description = "Mobile navigation",
       side = "left",
-      style,
       ...props
     },
     ref
   ) => {
-    const { isMobile, openMobile, setOpenMobile } = useTopbar()
+    const { isMobile, openMobile, setOpenMobile, mobileContentId } = useTopbar()
 
-    // No-op on desktop.
     if (!isMobile) return null
 
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile}>
         <SheetContent
           ref={ref}
-          data-topbar="sheet"
-          className={cn(
-            "w-[var(--topbar-sheet-width)] bg-topbar p-0 text-topbar-foreground [&>button]:hidden",
-            className
-          )}
-          style={
-            {
-              "--topbar-sheet-width": TOPBAR_SHEET_WIDTH_MOBILE,
-              ...style,
-            } as React.CSSProperties
-          }
+          id={mobileContentId}
+          data-slot="topbar-sheet"
           side={side}
+          className={cn("w-[var(--topbar-sheet-width)] p-0", className)}
           {...props}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{title}</SheetTitle>
             <SheetDescription>{description}</SheetDescription>
           </SheetHeader>
+
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>
@@ -537,11 +455,11 @@ TopbarSheet.displayName = "TopbarSheet"
 
 const TopbarNav = React.forwardRef<
   HTMLUListElement,
-  React.ComponentProps<"ul">
+  React.ComponentPropsWithoutRef<"ul">
 >(({ className, ...props }, ref) => (
   <ul
     ref={ref}
-    data-topbar="nav"
+    data-slot="topbar-nav"
     className={cn(
       "flex min-w-0 items-center gap-1 overflow-x-auto",
       "[&::-webkit-scrollbar]:hidden",
@@ -554,53 +472,68 @@ TopbarNav.displayName = "TopbarNav"
 
 const TopbarNavItem = React.forwardRef<
   HTMLLIElement,
-  React.ComponentProps<"li">
+  React.ComponentPropsWithoutRef<"li">
 >(({ className, ...props }, ref) => (
   <li
     ref={ref}
-    data-topbar="nav-item"
-    className={cn("group/nav-item relative", className)}
+    data-slot="topbar-nav-item"
+    className={cn("relative", className)}
     {...props}
   />
 ))
 TopbarNavItem.displayName = "TopbarNavItem"
 
 const topbarNavButtonVariants = cva(
-  "peer/nav-button inline-flex items-center gap-2 overflow-hidden rounded-md px-3 py-2 text-sm font-medium text-topbar-foreground/80 outline-none ring-topbar-ring transition-colors hover:bg-topbar-accent hover:text-topbar-accent-foreground focus-visible:ring-2 active:bg-topbar-accent active:text-topbar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-topbar-accent data-[active=true]:text-topbar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  cn(
+    "inline-flex items-center gap-2 rounded-md px-3",
+    "text-sm font-medium",
+    "text-muted-foreground",
+    "transition-colors",
+    "hover:bg-accent hover:text-accent-foreground",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    "disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50",
+    "data-[active=true]:bg-accent data-[active=true]:text-accent-foreground",
+    "[&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0"
+  ),
   {
     variants: {
       variant: {
         default: "",
-        outline:
-          "bg-background shadow-[0_0_0_1px_hsl(var(--topbar-border))] hover:shadow-[0_0_0_1px_hsl(var(--topbar-accent))]",
+        outline: "ring-1 ring-inset ring-border bg-background",
       },
       size: {
         default: "h-9",
-        sm: "h-8 text-xs",
-        lg: "h-11",
+        sm: "h-8 px-2 text-xs",
+        lg: "h-10 px-4",
+      },
+      iconOnly: {
+        true: "size-9 justify-center px-0 [&>span:last-child]:sr-only",
+        false: "",
       },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
+      iconOnly: false,
     },
   }
 )
 
 const TopbarNavButton = React.forwardRef<
   HTMLButtonElement,
-  React.ComponentProps<"button"> & {
+  React.ComponentPropsWithoutRef<"button"> & {
     asChild?: boolean
     isActive?: boolean
-    tooltip?: string | React.ComponentProps<typeof TooltipContent>
+    tooltip?: string | React.ComponentPropsWithoutRef<typeof TooltipContent>
   } & VariantProps<typeof topbarNavButtonVariants>
 >(
   (
     {
       asChild = false,
       isActive = false,
-      variant = "default",
-      size = "default",
+      variant,
+      size,
+      iconOnly,
       tooltip,
       className,
       ...props
@@ -608,71 +541,65 @@ const TopbarNavButton = React.forwardRef<
     ref
   ) => {
     const Comp = asChild ? Slot : "button"
-    const { isMobile, state } = useTopbar()
+    const { isMobile } = useTopbar()
 
     const button = (
       <Comp
         ref={ref}
-        data-topbar="nav-button"
-        data-size={size}
+        data-slot="topbar-nav-button"
         data-active={isActive}
-        className={cn(
-          topbarNavButtonVariants({ variant, size }),
-          // In compact mode, make buttons icon-sized and hide labels.
-          "group-data-[state=compact]/topbar:!size-9 group-data-[state=compact]/topbar:!p-2",
-          "group-data-[state=compact]/topbar:[&>span:last-child]:sr-only",
-          className
-        )}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(topbarNavButtonVariants({ variant, size, iconOnly }), className)}
         {...props}
       />
     )
 
-    if (!tooltip) return button
+    if (!tooltip || isMobile) return button
 
-    const tooltipProps =
-      typeof tooltip === "string" ? { children: tooltip } : tooltip
+    const tooltipProps = typeof tooltip === "string" ? { children: tooltip } : tooltip
 
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent
-          side="bottom"
-          align="center"
-          hidden={state !== "compact" || isMobile}
-          {...tooltipProps}
-        />
+        <TooltipContent side="bottom" align="center" {...tooltipProps} />
       </Tooltip>
     )
   }
 )
 TopbarNavButton.displayName = "TopbarNavButton"
 
+function hashStringToNumber(str: string) {
+  // Stable across SSR/CSR because it’s based on useId.
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0
+  }
+  return hash
+}
+
 const TopbarNavSkeleton = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div"> & {
+  React.ComponentPropsWithoutRef<"div"> & {
     showIcon?: boolean
   }
 >(({ className, showIcon = true, ...props }, ref) => {
-  // Random width between 40% to 80%.
+  const id = React.useId()
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 40}%`
-  }, [])
+    const n = hashStringToNumber(id)
+    return `${40 + (n % 41)}%` // 40% - 80%
+  }, [id])
 
   return (
     <div
       ref={ref}
-      data-topbar="nav-skeleton"
+      data-slot="topbar-nav-skeleton"
       className={cn("flex h-9 items-center gap-2 rounded-md px-3", className)}
       {...props}
     >
       {showIcon && <Skeleton className="size-4 rounded-md" />}
       <Skeleton
         className="h-4 max-w-[var(--skeleton-width)] flex-1"
-        style={
-          {
-            "--skeleton-width": width,
-          } as React.CSSProperties
-        }
+        style={{ "--skeleton-width": width } as React.CSSProperties}
       />
     </div>
   )
@@ -695,7 +622,6 @@ export {
   TopbarSeparator,
   TopbarSheet,
   TopbarStart,
-  TopbarToggle,
   TopbarTrigger,
   useTopbar,
 }
