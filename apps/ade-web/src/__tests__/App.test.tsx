@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
-import { appRoutes } from "../routes";
-import { normalizePathname } from "@/navigation/paths";
+import { appRoutes } from "@/app/routes";
 
 vi.mock("@/pages/Home", () => ({ default: () => <div data-testid="home-screen">home</div> }));
 vi.mock("@/pages/Login", () => ({ default: () => <div data-testid="login-screen">login</div> }));
@@ -30,15 +29,6 @@ function renderAt(path: string) {
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
   render(<RouterProvider router={router} />);
 }
-
-describe("normalizePathname", () => {
-  it("normalizes empty or trailing slash paths", () => {
-    expect(normalizePathname("")).toBe("/");
-    expect(normalizePathname("/")).toBe("/");
-    expect(normalizePathname("/workspaces/")).toBe("/workspaces");
-    expect(normalizePathname("/workspaces/abc/")).toBe("/workspaces/abc");
-  });
-});
 
 describe("App routes", () => {
   const cases: Array<{ path: string; testId: string }> = [

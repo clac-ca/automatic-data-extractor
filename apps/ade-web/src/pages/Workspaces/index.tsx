@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseAsInteger, parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
 
-import { useNavigate } from "react-router-dom";
+import { generatePath, useNavigate } from "react-router-dom";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@/hooks/workspaces";
-import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
 import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
@@ -111,7 +110,8 @@ function WorkspacesIndexContent() {
     [workspacesPage?.items],
   );
   const goToWorkspace = useCallback(
-    (workspaceId: string) => navigate(getDefaultWorkspacePath(workspaceId)),
+    (workspaceId: string) =>
+      navigate(generatePath("/workspaces/:workspaceId/documents", { workspaceId })),
     [navigate],
   );
 

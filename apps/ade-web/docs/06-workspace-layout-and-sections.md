@@ -202,7 +202,7 @@ The shell:
 - Renders a **workspace‑level error state** if the workspace cannot be loaded (e.g. 404, permission denied).
 - Then resolves the section based on the first path segment after `:workspaceId`.
 
-If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives alongside the navigation helpers (e.g. `app/navigation/workspacePaths.ts`) and is consumed by `WorkspaceScreen`.
+If a user visits `/workspaces/:workspaceId` with **no section segment**, the shell immediately redirects to the configured default section (currently **Documents**). The default lives in `pages/Workspace/components/workspaceNavigation.ts` and is consumed by `WorkspaceScreen`.
 
 ### 4.3 Layout regions (desktop)
 

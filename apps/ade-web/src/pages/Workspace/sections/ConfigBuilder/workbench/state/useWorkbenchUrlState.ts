@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 
-import { useSearchParams } from "@/navigation/urlState";
+import { useSearchParams } from "react-router-dom";
 import {
   DEFAULT_WORKBENCH_SEARCH,
   mergeWorkbenchSearchParams,
@@ -28,11 +28,9 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
       if (snapshot.fileId === fileId || (!fileId && !snapshot.present.fileId)) {
         return;
       }
-      setSearchParams((current) => mergeWorkbenchSearchParams(current, { fileId: fileId ?? undefined }), {
-        replace: true,
-      });
+      setSearchParams(mergeWorkbenchSearchParams(params, { fileId: fileId ?? undefined }), { replace: true });
     },
-    [setSearchParams, snapshot.fileId, snapshot.present.fileId],
+    [params, setSearchParams, snapshot.fileId, snapshot.present.fileId],
   );
 
   const setPane = useCallback(
@@ -40,9 +38,9 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
       if (snapshot.pane === pane) {
         return;
       }
-      setSearchParams((current) => mergeWorkbenchSearchParams(current, { pane }), { replace: true });
+      setSearchParams(mergeWorkbenchSearchParams(params, { pane }), { replace: true });
     },
-    [setSearchParams, snapshot.pane],
+    [params, setSearchParams, snapshot.pane],
   );
 
   const setConsole = useCallback(
@@ -50,9 +48,9 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
       if (snapshot.console === console) {
         return;
       }
-      setSearchParams((current) => mergeWorkbenchSearchParams(current, { console }), { replace: true });
+      setSearchParams(mergeWorkbenchSearchParams(params, { console }), { replace: true });
     },
-    [setSearchParams, snapshot.console],
+    [params, setSearchParams, snapshot.console],
   );
 
   return {

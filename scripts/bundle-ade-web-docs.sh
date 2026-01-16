@@ -12,11 +12,10 @@ mkdir -p "${generated_dir}"
 
 # Config Builder logic bundle
 ade bundle apps/ade-web/README.md \
-  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/layouts/AppShell.tsx \
   apps/ade-web/src/app/routes.tsx \
   apps/ade-web/src/app/router.tsx \
-  apps/ade-web/src/app/providers/AppProviders.tsx \
-  apps/ade-web/src/app/navigation/urlState.ts \
+  apps/ade-web/src/providers/AppProviders.tsx \
   apps/ade-web/src/main.tsx \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/defaultConfig.ts \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/seed/stubWorkbenchData.ts \
@@ -40,11 +39,10 @@ ade bundle apps/ade-web/README.md \
 
 # Config Builder UI bundle
 ade bundle apps/ade-web/README.md \
-  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/layouts/AppShell.tsx \
   apps/ade-web/src/app/routes.tsx \
   apps/ade-web/src/app/router.tsx \
-  apps/ade-web/src/app/providers/AppProviders.tsx \
-  apps/ade-web/src/app/navigation/urlState.ts \
+  apps/ade-web/src/providers/AppProviders.tsx \
   apps/ade-web/src/main.tsx \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/detail/index.tsx \
   apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/Workbench.tsx \
@@ -64,11 +62,10 @@ ade bundle apps/ade-web/README.md \
 
 # Shared data layer bundle
 ade bundle apps/ade-web/README.md \
-  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/layouts/AppShell.tsx \
   apps/ade-web/src/app/routes.tsx \
   apps/ade-web/src/app/router.tsx \
-  apps/ade-web/src/app/providers/AppProviders.tsx \
-  apps/ade-web/src/app/navigation/urlState.ts \
+  apps/ade-web/src/providers/AppProviders.tsx \
   apps/ade-web/src/main.tsx \
   apps/ade-web/src/api/client.ts \
   apps/ade-web/src/api/csrf.ts \
@@ -81,14 +78,15 @@ ade bundle apps/ade-web/README.md \
 
 # UI + editor primitives bundle
 ade bundle apps/ade-web/README.md \
-  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/layouts/AppShell.tsx \
   apps/ade-web/src/app/routes.tsx \
   apps/ade-web/src/app/router.tsx \
-  apps/ade-web/src/app/providers/AppProviders.tsx \
-  apps/ade-web/src/app/navigation/urlState.ts \
-  apps/ade-web/src/components/shell/GlobalSearchField.tsx \
-  apps/ade-web/src/components/shell/GlobalTopBar.tsx \
-  apps/ade-web/src/components/shell/ProfileDropdown.tsx \
+  apps/ade-web/src/providers/AppProviders.tsx \
+  apps/ade-web/src/components/topbar/TopbarControls.tsx \
+  apps/ade-web/src/components/topbar/TopbarSearch.tsx \
+  apps/ade-web/src/components/topbar/actions/AppearanceMenu.tsx \
+  apps/ade-web/src/components/topbar/actions/AboutVersionsModal.tsx \
+  apps/ade-web/src/components/topbar/actions/ProfileDropdown.tsx \
   apps/ade-web/src/main.tsx \
   apps/ade-web/src/components/ui/alert/Alert.tsx \
   apps/ade-web/src/components/ui/alert/index.ts \
@@ -99,11 +97,10 @@ ade bundle apps/ade-web/README.md \
 
 # Workspace sections bundle
 ade bundle apps/ade-web/README.md \
-  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/layouts/AppShell.tsx \
   apps/ade-web/src/app/routes.tsx \
   apps/ade-web/src/app/router.tsx \
-  apps/ade-web/src/app/providers/AppProviders.tsx \
-  apps/ade-web/src/app/navigation/urlState.ts \
+  apps/ade-web/src/providers/AppProviders.tsx \
   apps/ade-web/src/main.tsx \
   apps/ade-web/src/pages/Workspace/sections/Documents/components/DocumentsPreviewPane.tsx \
   apps/ade-web/src/pages/Workspace/sections/Documents/index.tsx \
@@ -125,13 +122,12 @@ ade bundle apps/ade-web/README.md \
 
 # Workspace shell bundle
 ade bundle apps/ade-web/README.md \
-  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/layouts/AppShell.tsx \
   apps/ade-web/src/app/routes.tsx \
   apps/ade-web/src/app/router.tsx \
-  apps/ade-web/src/app/providers/AppProviders.tsx \
-  apps/ade-web/src/app/navigation/urlState.ts \
+  apps/ade-web/src/providers/AppProviders.tsx \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/pages/Workspace/components/WorkspaceNav.tsx \
+  apps/ade-web/src/pages/Workspace/components/navigation/WorkspaceNav.tsx \
   apps/ade-web/src/pages/Workspace/components/workspaceNavigation.ts \
   apps/ade-web/src/pages/Workspace/index.tsx \
   apps/ade-web/src/hooks/workspaces/useCreateWorkspaceMutation.ts \

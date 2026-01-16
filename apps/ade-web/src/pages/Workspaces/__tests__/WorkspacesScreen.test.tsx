@@ -19,10 +19,6 @@ vi.mock("@/hooks/workspaces", () => ({
   DEFAULT_WORKSPACE_PAGE_SIZE: 200,
 }));
 
-vi.mock("@/navigation/workspacePaths", () => ({
-  getDefaultWorkspacePath: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
-}));
-
 vi.mock("@/lib/workspacePreferences", () => ({
   writePreferredWorkspaceId: () => undefined,
 }));

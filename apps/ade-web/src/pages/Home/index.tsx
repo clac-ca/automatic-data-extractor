@@ -2,12 +2,11 @@ import { useEffect } from "react";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { useWorkspacesQuery } from "@/hooks/workspaces";
-import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
+import { generatePath, useLocation, useNavigate } from "react-router-dom";
 import { readPreferredWorkspaceId } from "@/lib/workspacePreferences";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
 import { PageState } from "@/components/layout";
-import { useLocation, useNavigate } from "react-router-dom";
 
 export default function HomeScreen() {
   return <RootIndexContent />;
@@ -42,7 +41,9 @@ function RootIndexContent() {
       return;
     }
 
-    const targetPath = getDefaultWorkspacePath(targetWorkspace.id);
+    const targetPath = generatePath("/workspaces/:workspaceId/documents", {
+      workspaceId: targetWorkspace.id,
+    });
     if (location.pathname + location.search !== targetPath) {
       navigate(targetPath, { replace: true });
     }

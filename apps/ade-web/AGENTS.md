@@ -8,16 +8,15 @@ apps/ade-web/
 ├─ index.html
 └─ src/
    ├─ main.tsx                     # Vite entry point → renders <RouterProvider />
-   ├─ App.tsx                      # App shell + ProtectedLayout
-   ├─ routes.tsx                   # Route definitions
-   ├─ router.tsx                   # createBrowserRouter wiring
-   ├─ layouts/                     # Page-level layouts (WorkspaceLayout, DirectoryLayout, ...)
-   ├─ navigation/                  # URL helpers (authNavigation, urlState, paths)
+   ├─ app/                         # App shell, routing, and layouts
+   │  ├─ routes.tsx                # Route definitions
+   │  ├─ router.tsx                # createBrowserRouter wiring
+   │  └─ layouts/                  # App layouts (AppShell, PublicLayout, WorkspaceLayout, ...)
    ├─ providers/                   # AppProviders + auth/theme/notifications
    ├─ api/                         # HTTP client + domain API calls
    ├─ pages/                       # Route-level pages (Home, Login, Workspace, ...)
    ├─ components/                  # Shared UI + navigation + layout primitives
-   │  ├─ navigation/               # Global chrome (top bar, sidebar, profile menu)
+   │  ├─ topbar/                   # Global top bar + actions
    │  ├─ layout/                   # Reusable layout components (PageState, ...)
    │  ├─ ui/                       # Buttons, inputs, dialogs, etc. (shadcn)
    │  └─ icons.tsx                 # Icon exports
@@ -32,10 +31,9 @@ apps/ade-web/
 ### Navigation & URL helpers
 
 * The app uses **React Router v7 (data router)**.
-* Route definitions live in `src/routes.tsx`; the router is created in `src/router.tsx`.
-* URL helpers (auth redirects, URL param overrides) live in `src/navigation/`.
-* Use `react-router-dom` hooks/components:
-  * `useNavigate`, `useLocation`, `useSearchParams`, `Link`, `NavLink`.
+* Route definitions live in `src/app/routes.tsx`; the router is created in `src/app/router.tsx`.
+* Use `react-router-dom` hooks/components directly:
+  * `useNavigate`, `useLocation`, `useSearchParams`, `Link`, `NavLink`, `generatePath`, `createSearchParams`.
 
 ### Commands
 
@@ -64,7 +62,7 @@ This app is a **Vite + React + TypeScript SPA** built to be boringly predictable
 
 Think in three layers:
 
-1. **App shell** – global providers, layout, navigation wiring (`src/App.tsx`, `src/layouts/`, `src/providers/`).
+1. **App shell** – global providers, layout, navigation wiring (`src/app/layouts/`, `src/app/routes.tsx`, `src/providers/`).
 2. **Pages** – URL-addressable pages and big experiences (`src/pages`).
 3. **Shared building blocks** – reusable UI + app infrastructure (`src/components`, `src/api`, `src/hooks`, `src/lib`).
 
@@ -75,11 +73,9 @@ Screens are thin: they **compose** things, they don’t invent new infra.
 ### 2. Folder contracts
 
 - `src/`
-  - `App.tsx`, `routes.tsx`, `router.tsx` for app bootstrapping and routing.
-- `src/layouts/`
-  - Page-level layouts and app shell containers.
-- `src/navigation/`
-  - URL helpers and navigation utilities (auth redirects, URL state helpers).
+  - `app/routes.tsx`, `app/router.tsx`, and `app/layouts/` for routing + layout shells.
+- `src/app/layouts/`
+  - App-level layouts and shell containers.
 - `src/providers/`
   - AppProviders + auth/theme/notifications providers.
 - `src/pages/`
@@ -87,7 +83,7 @@ Screens are thin: they **compose** things, they don’t invent new infra.
   - Subfolders like `sections/` and `components/` are allowed, but keep them page-specific.
 - `src/components/`
   - UI primitives under `components/ui/`.
-  - Shared navigation chrome under `components/navigation/`.
+  - Shared top bar chrome under `components/topbar/`.
   - Reusable layout helpers under `components/layout/`.
 - `src/api/`
   - HTTP client + domain API calls (no React).
@@ -171,7 +167,7 @@ When you add new functionality:
    - Create `sections/SubArea/index.tsx` under the relevant page.
 3. **Reusable pieces**  
    - UI widgets → `src/components/ui/` or `src/components/layout/`.  
-   - Navigation chrome → `src/components/navigation/`.  
+   - Navigation chrome → `src/components/topbar/`.  
    - API calls → `src/api/`.  
    - Shared React hooks → `src/hooks/`.  
    - Non-React helpers → `src/lib/` (uploads, storage, etc.).  

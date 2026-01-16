@@ -12,8 +12,7 @@ import {
 } from "react";
 import clsx from "clsx";
 
-import { useNavigate } from "react-router-dom";
-import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
+import { generatePath, useNavigate } from "react-router-dom";
 import {
   GLOBAL_SEARCH_TRIGGER_LENGTH,
   type GlobalSearchScope,
@@ -33,7 +32,7 @@ type GlobalNavItem = {
   readonly icon?: ComponentType<SVGProps<SVGSVGElement>>;
 };
 
-export type GlobalNavSearchScope =
+export type TopbarSearchScope =
   | {
       readonly kind: "workspace";
       readonly workspaceId: string;
@@ -60,21 +59,21 @@ type GlobalSearchSection = {
   readonly items: readonly GlobalSearchItem[];
 };
 
-export interface GlobalNavSearchProps {
-  readonly scope: GlobalNavSearchScope;
+export interface TopbarSearchProps {
+  readonly scope: TopbarSearchScope;
   readonly className?: string;
   readonly placeholder?: string;
   readonly ariaLabel?: string;
   readonly enableShortcut?: boolean;
 }
 
-export function GlobalNavSearch({
+export function TopbarSearch({
   scope,
   className,
   placeholder,
   ariaLabel,
   enableShortcut = true,
-}: GlobalNavSearchProps) {
+}: TopbarSearchProps) {
   const navigate = useNavigate();
   const shortcutHint = useShortcutHint();
   const generatedId = useId();
@@ -205,7 +204,7 @@ export function GlobalNavSearch({
         label: workspace.name,
         description: workspace.slug ? `Slug: ${workspace.slug}` : "Workspace",
         icon: <DirectoryIcon className="h-4 w-4 text-muted-foreground" aria-hidden />,
-        href: getDefaultWorkspacePath(workspace.id),
+        href: generatePath("/workspaces/:workspaceId/documents", { workspaceId: workspace.id }),
         meta: "Workspace",
       }));
 
@@ -440,7 +439,7 @@ export function GlobalNavSearch({
     >
       <div
         className={clsx(
-          "flex h-[var(--app-shell-control-h)] items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-3 shadow-sm ring-1 ring-inset ring-border/30 backdrop-blur-sm transition",
+          "flex h-9 items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-3 shadow-sm ring-1 ring-inset ring-border/30 backdrop-blur-sm transition",
           "focus-within:border-ring focus-within:bg-background focus-within:ring-ring/40",
         )}
       >

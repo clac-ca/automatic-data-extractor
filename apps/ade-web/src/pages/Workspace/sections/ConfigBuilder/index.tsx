@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, MouseEvent as ReactMouseEvent } from "react";
 
 import { useNavigate } from "react-router-dom";
@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { PageState } from "@/components/layout";
 
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
@@ -598,9 +599,10 @@ export default function ConfigBuilderScreen() {
         </header>
         <div className="space-y-4">
           <div className="rounded-xl border border-border">
-            <div className="border-b border-border px-4 py-3">
+            <div className="px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active configuration</p>
             </div>
+            <Separator />
             {activeConfiguration ? (
               <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background">
                 <button
@@ -641,51 +643,52 @@ export default function ConfigBuilderScreen() {
           </div>
 
           <div className="rounded-xl border border-border">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Drafts ({draftConfigurations.length})</p>
               {draftConfigurations.length === 0 && activeConfiguration ? (
                 <p className="text-xs text-muted-foreground">Duplicate Active to start editing.</p>
               ) : null}
             </div>
+            <Separator />
             {draftConfigurations.length ? (
-              <div className="divide-y divide-border">
-                {draftConfigurations.map((config) => (
-                  <div
-                    key={config.id}
-                    className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background"
-                  >
-                    <button
-                      type="button"
-                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      onClick={() => handleOpenConfig(config.id)}
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
-                        <StatusPill status={config.status} />
-                        {lastOpenedConfig?.id === config.id ? (
-                          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Last opened
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Updated {formatTimestamp(config.updated_at)}</p>
-                    </button>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleOpenMakeActiveDialog(config);
-                        }}
+              <div className="flex flex-col">
+                {draftConfigurations.map((config, index) => (
+                  <Fragment key={config.id}>
+                    <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background">
+                      <button
+                        type="button"
+                        className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        onClick={() => handleOpenConfig(config.id)}
                       >
-                        Make active
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={(event) => openContextMenu(event, config.id)}>
-                        ⋯
-                      </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
+                          <StatusPill status={config.status} />
+                          {lastOpenedConfig?.id === config.id ? (
+                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Last opened
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-sm text-muted-foreground">Updated {formatTimestamp(config.updated_at)}</p>
+                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleOpenMakeActiveDialog(config);
+                          }}
+                        >
+                          Make active
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={(event) => openContextMenu(event, config.id)}>
+                          ⋯
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                    {index < draftConfigurations.length - 1 ? <Separator /> : null}
+                  </Fragment>
                 ))}
               </div>
             ) : (
@@ -694,50 +697,51 @@ export default function ConfigBuilderScreen() {
           </div>
 
           <div className="rounded-xl border border-border">
-            <div className="border-b border-border px-4 py-3">
+            <div className="px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Archived ({archivedConfigurations.length})
               </p>
             </div>
-	            {archivedConfigurations.length ? (
-	              <div className="divide-y divide-border">
-	                {archivedConfigurations.map((config) => (
-	                  <div
-	                    key={config.id}
-	                    className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background"
-	                  >
-	                    <button
-	                      type="button"
-	                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-	                      onClick={() => handleOpenConfig(config.id)}
-	                    >
-	                      <div className="flex flex-wrap items-center gap-2">
-	                        <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
-	                        <StatusPill status={config.status} />
-	                      </div>
-	                      <p className="text-sm text-muted-foreground">Updated {formatTimestamp(config.updated_at)}</p>
-	                    </button>
-	                    <div className="flex flex-wrap items-center justify-end gap-2">
-	                      <Button
-	                        size="sm"
-	                        onClick={(event) => {
-	                          event.stopPropagation();
-	                          openDuplicateDialog(config);
-	                        }}
-	                      >
-	                        Duplicate to edit
-	                      </Button>
-	                      <Button size="sm" variant="ghost" onClick={(event) => openContextMenu(event, config.id)}>
-	                        ⋯
-	                      </Button>
-	                    </div>
-	                  </div>
-	                ))}
-	              </div>
-	            ) : (
-	              <div className="p-4 text-sm text-muted-foreground">No archived configurations.</div>
-	            )}
-	          </div>
+            <Separator />
+            {archivedConfigurations.length ? (
+              <div className="flex flex-col">
+                {archivedConfigurations.map((config, index) => (
+                  <Fragment key={config.id}>
+                    <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background">
+                      <button
+                        type="button"
+                        className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        onClick={() => handleOpenConfig(config.id)}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
+                          <StatusPill status={config.status} />
+                        </div>
+                        <p className="text-sm text-muted-foreground">Updated {formatTimestamp(config.updated_at)}</p>
+                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDuplicateDialog(config);
+                          }}
+                        >
+                          Duplicate to edit
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={(event) => openContextMenu(event, config.id)}>
+                          ⋯
+                        </Button>
+                      </div>
+                    </div>
+                    {index < archivedConfigurations.length - 1 ? <Separator /> : null}
+                  </Fragment>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 text-sm text-muted-foreground">No archived configurations.</div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -765,12 +769,13 @@ export default function ConfigBuilderScreen() {
             Create from template
           </Button>
         </form>
-        <div className="border-t border-border pt-4">
+        <Separator />
+        <div className="space-y-3">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">Import configuration</h2>
             <p className="text-sm text-muted-foreground">Upload an ADE export (.zip) to create a new draft configuration.</p>
           </div>
-          <form onSubmit={handleImport} className="mt-3 space-y-4">
+          <form onSubmit={handleImport} className="space-y-4">
             <FormField label="Configuration name" required>
               <Input
                 value={importDisplayName}

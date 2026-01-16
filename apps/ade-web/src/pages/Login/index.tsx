@@ -3,13 +3,12 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { useLocation, useNavigate } from "react-router-dom";
+import { createSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "@/api";
 import { createSession, sessionKeys, type AuthProvider } from "@/api/auth/api";
 import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
 import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
-import { buildSetupRedirect, chooseDestination, resolveRedirectParam } from "@/navigation/authNavigation";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -24,6 +23,8 @@ const loginSchema = z.object({
   password: z.string().min(1, "Enter your password."),
 });
 
+const DEFAULT_RETURN_TO = "/";
+
 function buildSsoHref(startUrl: string | null | undefined, returnTo: string | null) {
   const base = (startUrl ?? "").trim();
   if (!base) {
@@ -34,6 +35,45 @@ function buildSsoHref(startUrl: string | null | undefined, returnTo: string | nu
   }
   const joiner = base.includes("?") ? "&" : "?";
   return `${base}${joiner}returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+function sanitizeReturnTo(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null;
+  }
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+function resolveReturnTo(value: string | null | undefined) {
+  return sanitizeReturnTo(value) ?? DEFAULT_RETURN_TO;
+}
+
+function pickReturnTo(sessionReturnTo: string | null | undefined, fallback: string | null | undefined) {
+  const sessionPath = sanitizeReturnTo(sessionReturnTo);
+  if (sessionPath) {
+    return sessionPath;
+  }
+  const fallbackPath = sanitizeReturnTo(fallback);
+  if (fallbackPath) {
+    return fallbackPath;
+  }
+  return DEFAULT_RETURN_TO;
+}
+
+function buildRedirectPath(basePath: string, returnTo: string | null | undefined) {
+  const safeReturnTo = sanitizeReturnTo(returnTo);
+  if (!safeReturnTo || safeReturnTo === DEFAULT_RETURN_TO) {
+    return basePath;
+  }
+  const query = createSearchParams({ returnTo: safeReturnTo }).toString();
+  return `${basePath}?${query}`;
 }
 
 export default function LoginScreen() {
@@ -63,14 +103,14 @@ export default function LoginScreen() {
 
   const returnTo = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return resolveRedirectParam(params.get("returnTo"));
+    return resolveReturnTo(params.get("returnTo"));
   }, [location.search]);
 
   useEffect(() => {
     if (!session) {
       return;
     }
-    navigate(chooseDestination(session.return_to, returnTo), { replace: true });
+    navigate(pickReturnTo(session.return_to, returnTo), { replace: true });
   }, [navigate, returnTo, session]);
 
   useEffect(() => {
@@ -81,7 +121,7 @@ export default function LoginScreen() {
       return;
     }
     if (setupQuery.data?.setup_required) {
-      navigate(buildSetupRedirect(returnTo), { replace: true });
+      navigate(buildRedirectPath("/setup", returnTo), { replace: true });
     }
   }, [navigate, returnTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending, shouldCheckSetup]);
 
@@ -190,13 +230,13 @@ export default function LoginScreen() {
 
     const { email, password } = parsed.data;
     const redirectValue = typeof raw.returnTo === "string" ? raw.returnTo : null;
-    const destination = resolveRedirectParam(redirectValue);
+    const destination = resolveReturnTo(redirectValue);
 
     setIsSubmitting(true);
     try {
       const nextSession = await createSession({ email, password });
       queryClient.setQueryData(sessionKeys.detail(), nextSession);
-      navigate(chooseDestination(nextSession.return_to, destination), { replace: true });
+      navigate(pickReturnTo(nextSession.return_to, destination), { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";

@@ -33,7 +33,7 @@ We follow a few rules:
 
 ### Canonical sources and names
 
-- Build workspace routes via helpers in `@/navigation` instead of hand‑rolled strings so the route map below and the code stay in sync.
+- Build workspace routes via React Router utilities (`generatePath`, `createSearchParams`) and keep them close to their consumers so the route map below and the code stay in sync.
 - Query parameter names for workspace sections are defined in the Documents/Runs filter helpers (`parseDocumentFilters` / `buildDocumentSearchParams`, `parseRunFilters` / `buildRunSearchParams`) described in `docs/06` and `docs/07`; add new keys there to keep deep links consistent.
 - Permission checks referenced in navigation (e.g. showing nav items) should use the keys from `@/types` and the workspace context helpers, not ad‑hoc strings.
 
@@ -53,7 +53,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 ````
 
 ```tsx
-// app/App.tsx
+// app/layouts/AppShell.tsx
 export function AppShell() {
   return (
     <NuqsAdapter>
@@ -163,7 +163,7 @@ If the workspace ID is valid but the section segment is unknown, the shell shoul
 Workspace routes are derived from:
 
 * `pages/Workspace/components/workspaceNavigation.ts` (section definitions + `getWorkspacePrimaryNavigation`)
-* `app/navigation/workspacePaths.ts` (default section path)
+* React Router utilities like `generatePath` for default workspace URLs (for example, `/workspaces/:workspaceId/documents`)
 
 Use these helpers for nav links and redirects instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
 
@@ -289,22 +289,11 @@ it should live in the URL.
 
 ### 6.2 Low‑level helpers
 
-Helpers in `app/navigation/urlState` handle raw query string operations:
+Use the platform and React Router utilities directly:
 
-* `toURLSearchParams(init)`
-
-  * Accepts strings, `URLSearchParams`, arrays, or plain objects.
-  * Produces a `URLSearchParams` instance.
-
-* `getParam(search, key)`
-
-  * Extracts a single value from a `search` string (with or without `?`).
-
-* `setParams(url, patch)`
-
-  * Patches query parameters on a `URL` object and returns the new `path + search + hash`.
-
-You rarely need these directly; they power `useSearchParams()`.
+* `new URLSearchParams(search)` for parsing.
+* `createSearchParams()` for building query strings.
+* `useSearchParams()` for read/write access tied to router state.
 
 ### 6.3 `useSearchParams()`
 
@@ -510,8 +499,8 @@ When adding new routes or URL‑encoded state, follow this checklist:
 
 3. **Define route helpers**
 
-  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.ts` and `app/navigation/workspacePaths.ts` (see §3.3).
-   * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
+  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.ts` and use `generatePath` for workspace URLs (see §3.3).
+  * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
 
 4. **Register query parameters here**
 

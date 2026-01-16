@@ -1,7 +1,8 @@
 import type { RouteObject } from "react-router-dom";
 
-import { AppShell, ProtectedLayout } from "@/App";
-import { AuthenticatedLayout } from "@/layouts/AuthenticatedLayout";
+import { AppShell, ProtectedLayout } from "@/app/layouts/AppShell";
+import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
+import { PublicLayout } from "@/app/layouts/PublicLayout";
 import HomeScreen from "@/pages/Home";
 import LoginScreen from "@/pages/Login";
 import SetupScreen from "@/pages/Setup";
@@ -15,9 +16,14 @@ export const appRoutes: RouteObject[] = [
   {
     element: <AppShell />,
     children: [
-      { path: "login", element: <LoginScreen /> },
-      { path: "logout", element: <LogoutScreen /> },
-      { path: "setup", element: <SetupScreen /> },
+      {
+        element: <PublicLayout />,
+        children: [
+          { path: "login", element: <LoginScreen /> },
+          { path: "logout", element: <LogoutScreen /> },
+          { path: "setup", element: <SetupScreen /> },
+        ],
+      },
       {
         element: <ProtectedLayout />,
         children: [

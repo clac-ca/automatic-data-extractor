@@ -511,7 +511,7 @@ const TopbarSheet = React.forwardRef<
           ref={ref}
           data-topbar="sheet"
           className={cn(
-            "w-[--topbar-sheet-width] bg-topbar p-0 text-topbar-foreground [&>button]:hidden",
+            "w-[var(--topbar-sheet-width)] bg-topbar p-0 text-topbar-foreground [&>button]:hidden",
             className
           )}
           style={
@@ -667,7 +667,7 @@ const TopbarNavSkeleton = React.forwardRef<
     >
       {showIcon && <Skeleton className="size-4 rounded-md" />}
       <Skeleton
-        className="h-4 max-w-[--skeleton-width] flex-1"
+        className="h-4 max-w-[var(--skeleton-width)] flex-1"
         style={
           {
             "--skeleton-width": width,

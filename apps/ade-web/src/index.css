@@ -5,6 +5,12 @@
 /* Tailwind v4 dark mode variant (shadcn standard) */
 @custom-variant dark (&:is(.dark, .dark *));
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 /*
   shadcn/ui theme tokens
   - Theme: document.documentElement.dataset.theme =
@@ -70,17 +76,6 @@
   --app-z-select: 100;
   --app-z-toast: 200;
 
-  /* App shell layout tokens */
-  --app-shell-header-height: 3.5rem;
-  --app-shell-control-h: 2.25rem;
-  --app-shell-sidebar-width: 13.5rem;
-  --app-shell-sidebar-collapsed-width: 3rem;
-  --app-shell-sidebar-mobile-width: 18rem;
-  --app-shell-content-max-width: 80rem;
-  --app-shell-content-padding-x: 1.5rem;
-  --app-shell-content-padding-y: 1.5rem;
-
-  /* topbar */
   --topbar: var(--card);
   --topbar-foreground: var(--foreground);
   --topbar-primary: var(--primary);

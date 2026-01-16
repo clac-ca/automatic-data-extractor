@@ -21,6 +21,7 @@ keep feature-specific UI in `src/pages/**/components/`.
 | action-bar | DiceUI | `npx shadcn@latest add "@diceui/action-bar"` | Floating action bar for row selection. |
 | stack | DiceUI | `npx shadcn@latest add "@diceui/stack"` | — |
 | mention | DiceUI | `npx shadcn@latest add "@diceui/mention"` | Mention input with suggestions. |
+| dropdown-menu | shadcn | `npx shadcn@latest add dropdown-menu` | Action menu primitive. |
 | select | shadcn | `npx shadcn@latest add select` | — |
 | checkbox | shadcn | `npx shadcn@latest add checkbox` | — |
 | scroll-area | shadcn | `npx shadcn@latest add scroll-area` | — |

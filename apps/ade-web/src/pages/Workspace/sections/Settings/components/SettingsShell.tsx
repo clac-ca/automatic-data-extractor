@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { ReactNode } from "react";
 
 import { Link } from "react-router-dom";
+import { Separator } from "@/components/ui/separator";
 import type { WorkspaceSettingsNavGroup, WorkspaceSettingsRouteId } from "../settingsNav";
 
 interface SettingsShellProps {
@@ -26,8 +27,8 @@ export function SettingsShell({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-8">
-      <div className="flex flex-col gap-8 lg:flex-row">
-        <aside className="w-full lg:sticky lg:top-6 lg:w-64 lg:shrink-0">
+      <div className="settings-shell-grid grid gap-8">
+        <aside className="w-full lg:sticky lg:top-6 lg:w-64 lg:shrink-0" style={{ gridArea: "nav" }}>
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
               Settings
@@ -94,17 +95,13 @@ export function SettingsShell({
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1">
-          <div
-            className={clsx(
-              "mb-6 border-b border-border pb-4",
-              activeTone === "danger" && "border-destructive/40",
-            )}
-          >
+        <main className="min-w-0" style={{ gridArea: "main" }}>
+          <div className="mb-6">
             <h2 className="text-xl font-semibold text-foreground">{activeSectionLabel}</h2>
             {activeSectionDescription ? (
               <p className="mt-1 text-sm text-muted-foreground">{activeSectionDescription}</p>
             ) : null}
+            <Separator className={clsx("mt-4", activeTone === "danger" && "bg-destructive/40")} />
           </div>
           {children}
         </main>

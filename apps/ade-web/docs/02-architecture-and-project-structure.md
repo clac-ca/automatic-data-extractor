@@ -20,7 +20,7 @@ Everything below exists to make those goals explicit.
 ### Instant understanding defaults
 
 - **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `pages/Workspace/sections/...`).
-- **One canonical home per concept:** navigation helpers live under `@/navigation`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
+- **One canonical home per concept:** route helpers use React Router utilities and live close to their consumers; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
 - **Reuse patterns:** new list/detail flows should copy Documents/Runs; new URL‑backed filters should reuse the existing filter helpers rather than inventing new query names; NDJSON streaming should go through the helper in `api/ndjson`.
 - **Respect the layers:** never import “upwards” (e.g. `api/` → `pages/`); linting enforces the boundaries.
 
@@ -36,7 +36,7 @@ All relevant code lives under `apps/ade-web/src`:
 apps/ade-web/
   src/
     main.tsx          # Vite entry point
-    app/              # App shell: App.tsx, providers, navigation
+    app/              # App shell: routes, router, layouts
     api/              # HTTP client + domain API calls
     pages/            # Route-level pages (aliased as "@/pages")
     components/       # Shared UI primitives, layouts, providers, shell
@@ -83,16 +83,16 @@ components api hooks lib
 Allowed dependencies:
 
 * `app/` → may import from `pages/`, `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`.
-* `pages/` → may import from `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`, and `app/navigation`.
-* `components/`, `api/`, `hooks/`, `lib/` → may import from `types/`, `types/generated/`, and `app/navigation`.
+* `pages/` → may import from `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`, and `app/layouts`.
+* `components/`, `api/`, `hooks/`, `lib/` → may import from `types/`, `types/generated/`.
 * `types/` → may import from `types/generated/` (if needed).
 * `types/generated/` → must not import from anywhere else.
 * `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@/test`.
 
 Forbidden dependencies:
 
-* `components/`, `api/`, `hooks/`, `lib/` **must not** import from `pages/` or `app/` (except `app/navigation`).
-* `pages/` **must not** import from `app/` (except `app/navigation`).
+* `components/`, `api/`, `hooks/`, `lib/` **must not** import from `pages/` or `app/`.
+* `pages/` **must not** import from `app/` (except `app/layouts`).
 
 If you ever want to import “upwards” (e.g. from `api/` to `pages/`), that’s a sign the code should be moved into a smaller module at the right layer.
 
@@ -110,23 +110,21 @@ Typical structure:
 src/
   main.tsx
   app/
-    App.tsx
+    layouts/
+      AppShell.tsx
+      AuthenticatedLayout.tsx
+      PublicLayout.tsx
+      WorkspaceLayout.tsx
     routes.tsx
     router.tsx
-    providers/
-      AppProviders.tsx
-    navigation/
-      urlState.ts
-      authNavigation.ts
-      paths.ts
 ```
 
 What belongs here:
 
-* `AppShell`/`ProtectedLayout` – app‑level layout + auth gating (in `app/App.tsx`).
+* `AppShell`/`ProtectedLayout` – app‑level layout + auth gating (in `app/layouts/AppShell.tsx`).
 * `routes.tsx` – route table (top‑level mapping of paths to pages).
 * `router.tsx` – `createBrowserRouter` wiring used by `main.tsx`.
-* `AppProviders` – React Query client and other global providers (in `app/providers/`).
+* `AppProviders` – React Query client and other global providers (in `src/providers/AppProviders.tsx`).
 
 What does **not** belong here:
 
@@ -242,11 +240,13 @@ src/components/
     auth/
     notifications/
     theme/
-  shell/
-    GlobalTopBar.tsx
-    GlobalSearchField.tsx
-    ProfileDropdown.tsx
-    AppearanceMenu.tsx
+  topbar/
+    TopbarControls.tsx
+    TopbarSearch.tsx
+    actions/
+      AppearanceMenu.tsx
+      ProfileDropdown.tsx
+      AboutVersionsModal.tsx
   icons.tsx
 ```
 
@@ -257,7 +257,7 @@ What belongs here:
 * Alerts, banners, toasts.
 * Tabs, context menus, dropdowns.
 * Avatars and profile menus.
-* Global top bar and search field components (under `components/navigation/`).
+* Global top bar and search field components (under `components/topbar/`).
 * Monaco editor wrapper (`components/ui/code-editor`).
 
 What does **not** belong here:
@@ -305,9 +305,7 @@ src/lib/
   storage.ts
   workspacePreferences.ts
 
-src/navigation/
-  authNavigation.ts
-  workspacePaths.ts
+React Router utilities (for example, `generatePath`, `createSearchParams`) are used directly in feature modules.
 ```
 
 What belongs here:
@@ -407,7 +405,7 @@ Guidelines:
   ```ts
   // Good
   import WorkspaceScreen from "@/pages/Workspace";
-  import { GlobalTopBar } from "@/components/navigation/GlobalTopBar";
+  import { TopbarControls } from "@/components/topbar/TopbarControls";
   import { createRun } from "@/api/runs/api";
   import type { RunResource } from "@/types";
 
@@ -506,10 +504,10 @@ To make the structure concrete, here’s how the **Documents** section of the wo
 ```text
 src/
   app/
-    App.tsx                       # App shell + ProtectedLayout
+    layouts/
+      AppShell.tsx                # App shell + ProtectedLayout
     routes.tsx                    # Route table
-    navigation/
-      urlState.ts                 # useSearchParams helpers
+    router.tsx                    # Router wiring
   api/
     documents/
       index.ts                    # listWorkspaceDocuments, uploadDocument, deleteDocument...
@@ -541,7 +539,7 @@ Flow:
 
    * `DocumentsScreen`:
 
-     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@/navigation/urlState`.
+     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `react-router-dom`.
      * Calls `useDocumentsQuery(workspaceId, filters)` to fetch data.
      * Renders the page layout.
      * Composes `DocumentsFilters`, `DocumentsTable`, and `RunExtractionDialog`.
@@ -566,4 +564,4 @@ The **Runs** section follows the same pattern, with:
 * `api/runs/api.ts`.
 * Domain types in `types/runs.ts`.
 
-If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/App.tsx`, use `api/`, `hooks/`, and `lib/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.
+If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/routes.tsx`, use `api/`, `hooks/`, and `lib/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.

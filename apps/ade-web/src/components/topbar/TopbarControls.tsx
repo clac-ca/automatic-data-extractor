@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-import { AppearanceMenu } from "@/components/navigation/menus/AppearanceMenu";
-import { AboutVersionsModal } from "@/components/navigation/menus/AboutVersionsModal";
-import { ProfileDropdown } from "@/components/navigation/menus/ProfileDropdown";
+import { AppearanceMenu } from "@/components/topbar/actions/AppearanceMenu";
+import { AboutVersionsModal } from "@/components/topbar/actions/AboutVersionsModal";
+import { ProfileDropdown } from "@/components/topbar/actions/ProfileDropdown";
 import { useSession } from "@/providers/auth/SessionContext";
 
-export function AppTopBarControls() {
+export function TopbarControls() {
   const session = useSession();
   const [isVersionsModalOpen, setIsVersionsModalOpen] = useState(false);
   const displayName = session.user.display_name || session.user.email || "Signed in";

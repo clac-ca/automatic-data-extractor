@@ -1,17 +1,45 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
-import { useLocation, useNavigate } from "react-router-dom";
+import { createSearchParams, type Location, useLocation, useNavigate } from "react-router-dom";
 
 import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
-import { buildLoginRedirect, buildSetupRedirect, normalizeNextFromLocation } from "@/navigation/authNavigation";
 import { Button } from "@/components/ui/button";
 
 import { SessionProvider } from "./SessionContext";
 
 interface RequireSessionProps {
   readonly children?: ReactNode;
+}
+
+const DEFAULT_RETURN_TO = "/";
+
+function sanitizeReturnTo(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null;
+  }
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+function getReturnToFromLocation(location: Location) {
+  const fullPath = `${location.pathname}${location.search}${location.hash}`;
+  return sanitizeReturnTo(fullPath) ?? DEFAULT_RETURN_TO;
+}
+
+function buildRedirectPath(basePath: string, returnTo: string) {
+  if (!returnTo || returnTo === DEFAULT_RETURN_TO) {
+    return basePath;
+  }
+  const query = createSearchParams({ returnTo }).toString();
+  return `${basePath}?${query}`;
 }
 
 export function RequireSession({ children }: RequireSessionProps) {
@@ -39,14 +67,14 @@ export function RequireSession({ children }: RequireSessionProps) {
       }
 
       if (isSetupSuccess && setupStatus?.setup_required) {
-        const next = normalizeNextFromLocation(location);
-        navigate(buildSetupRedirect(next), { replace: true });
+        const next = getReturnToFromLocation(location);
+        navigate(buildRedirectPath("/setup", next), { replace: true });
         return;
       }
     }
 
-    const next = normalizeNextFromLocation(location);
-    navigate(buildLoginRedirect(next), { replace: true });
+    const next = getReturnToFromLocation(location);
+    navigate(buildRedirectPath("/login", next), { replace: true });
   }, [
     isError,
     isLoading,

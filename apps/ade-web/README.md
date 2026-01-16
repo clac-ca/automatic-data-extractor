@@ -20,7 +20,7 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
-  Build URLs via helpers in `@/navigation`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
+  Build URLs via React Router utilities (`generatePath`, `createSearchParams`) and keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
@@ -48,7 +48,7 @@ ADE Web has two major UX layers:
 
 Both layers share:
 
-- A top bar (`GlobalTopBar`) with brand/context, search, and a profile menu.
+- A top bar with brand/context, search, and a profile menu.
 - A main content area that adapts to desktop and mobile.
 - A consistent approach to **navigation**, **URL state**, **Safe mode banners**, and **notifications**.
 
@@ -155,7 +155,8 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/config-builder`
 - `/workspaces/:workspaceId/settings`
 
-Route helpers live in `@/navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
+Route helpers now use React Router utilities (for example, `generatePath`, `createSearchParams`) and are kept close to the
+components that need them.
 
 See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)
 
@@ -180,7 +181,7 @@ Important UI state is encoded in **query parameters**, not local component state
 - Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
-Utilities for this live in `@/navigation/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
+Use React Router’s `useSearchParams` directly; workbench- and page-specific helpers live alongside their consuming modules.
 
 ---
 

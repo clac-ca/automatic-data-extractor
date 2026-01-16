@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 
-import { useNavigate } from "react-router-dom";
+import { generatePath, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +9,6 @@ import { ApiError, groupProblemDetailsErrors } from "@/api";
 import type { UserSummary } from "@/api/users/api";
 import { useSession } from "@/providers/auth/SessionContext";
 import { useCreateWorkspaceMutation } from "@/hooks/workspaces";
-import { getDefaultWorkspacePath } from "@/navigation/workspacePaths";
 import { useUsersQuery } from "@/hooks/users/useUsersQuery";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -113,7 +112,9 @@ function WorkspaceCreateContent() {
       },
       {
         onSuccess(workspace) {
-          navigate(getDefaultWorkspacePath(workspace.id));
+          navigate(
+            generatePath("/workspaces/:workspaceId/documents", { workspaceId: workspace.id }),
+          );
         },
         onError(error: unknown) {
           if (error instanceof ApiError) {

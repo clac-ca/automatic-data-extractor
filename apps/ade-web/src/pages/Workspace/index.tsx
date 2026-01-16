@@ -8,10 +8,10 @@ import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider } from "@/pages/Workspace/context/WorkbenchWindowContext";
-import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@/pages/Workspace/components/workspaceNavigation";
+import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@/pages/Workspace/components/workspace-sidebar";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@/hooks/system";
 import { PageState } from "@/components/layout";
-import { WorkspaceLayout } from "@/layouts/WorkspaceLayout";
+import { WorkspaceLayout } from "@/app/layouts/WorkspaceLayout";
 
 import DocumentsScreen from "@/pages/Workspace/sections/Documents";
 import RunsScreen from "@/pages/Workspace/sections/Runs";
