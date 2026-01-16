@@ -31,10 +31,12 @@ export function WorkspaceSidebar() {
   const isActive = (link: string) => pathname === link || pathname.startsWith(`${link}/`);
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarTrigger />
-      <SidebarHeader>
-        <div>Workspace switcher</div>
+    <Sidebar collapsible="icon" className="group-data-[collapsible=icon]:z-50">
+      <SidebarHeader className="relative">
+        <div className="pr-10">Workspace switcher</div>
+        <SidebarTrigger
+          className="absolute right-2 top-2 z-20 transition-transform duration-200 ease-linear group-data-[collapsible=icon]:translate-x-[calc(100%+theme(spacing.4))]"
+        />
       </SidebarHeader>
 
       <SidebarContent>
