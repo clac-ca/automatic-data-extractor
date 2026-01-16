@@ -8,10 +8,8 @@ import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider } from "@/pages/Workspace/context/WorkbenchWindowContext";
-import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@/pages/Workspace/components/workspace-sidebar";
-import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@/hooks/system";
 import { PageState } from "@/components/layout";
-import { WorkspaceLayout } from "@/app/layouts/WorkspaceLayout";
+import { WorkspaceLayout } from "@/pages/Workspace/WorkspaceLayout";
 
 import DocumentsScreen from "@/pages/Workspace/sections/Documents";
 import RunsScreen from "@/pages/Workspace/sections/Runs";
@@ -19,6 +17,8 @@ import ConfigBuilderScreen from "@/pages/Workspace/sections/ConfigBuilder";
 import ConfigurationDetailScreen from "@/pages/Workspace/sections/ConfigBuilder/detail";
 import ConfigBuilderWorkbenchScreen from "@/pages/Workspace/sections/ConfigBuilder/workbench";
 import WorkspaceSettingsScreen from "@/pages/Workspace/sections/Settings";
+
+const DEFAULT_WORKSPACE_SECTION_PATH = "documents";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }
@@ -64,7 +64,7 @@ function WorkspaceContent() {
 
   useEffect(() => {
     if (workspace && !identifier) {
-      navigate(`/workspaces/${workspace.id}/${defaultWorkspaceSection.path}${location.search}${location.hash}`, {
+      navigate(`/workspaces/${workspace.id}/${DEFAULT_WORKSPACE_SECTION_PATH}${location.search}${location.hash}`, {
         replace: true,
       });
     }
@@ -143,13 +143,6 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
 function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const safeMode = useSafeModeStatus();
-  const safeModeEnabled = safeMode.data?.enabled ?? false;
-  const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
-  const workspaceNavItems = useMemo(
-    () => getWorkspacePrimaryNavigation(workspace),
-    [workspace],
-  );
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
@@ -164,19 +157,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     return null;
   }
 
-  return (
-    <WorkspaceLayout
-      workspace={workspace}
-      navItems={workspaceNavItems}
-      contentKey={section.key}
-      fullHeight={section.fullHeight}
-      fullWidth={section.fullWidth}
-      safeModeEnabled={safeModeEnabled}
-      safeModeDetail={safeModeDetail}
-    >
-      {section.element}
-    </WorkspaceLayout>
-  );
+  return <WorkspaceLayout>{section.element}</WorkspaceLayout>;
 }
 
 function extractWorkspaceIdentifier(pathname: string) {
@@ -211,7 +192,7 @@ function findWorkspace(workspaces: WorkspaceProfile[], identifier: string | null
 function buildCanonicalPath(pathname: string, search: string, resolvedId: string, currentId: string) {
   const base = `/workspaces/${currentId}`;
   const trailing = pathname.startsWith(base) ? pathname.slice(base.length) : "";
-  const normalized = trailing && trailing !== "/" ? trailing : `/${defaultWorkspaceSection.path}`;
+  const normalized = trailing && trailing !== "/" ? trailing : `/${DEFAULT_WORKSPACE_SECTION_PATH}`;
   return `/workspaces/${resolvedId}${normalized}${search}`;
 }
 
@@ -226,14 +207,14 @@ export function resolveWorkspaceSection(
   if (segments.length === 0) {
     return {
       kind: "redirect",
-      to: `/workspaces/${workspaceId}/${defaultWorkspaceSection.path}${suffix}`,
+      to: `/workspaces/${workspaceId}/${DEFAULT_WORKSPACE_SECTION_PATH}${suffix}`,
     };
   }
 
   const [first, second, third] = segments;
   switch (first) {
-    case defaultWorkspaceSection.path:
-    case "documents": {
+    case DEFAULT_WORKSPACE_SECTION_PATH:
+    {
       if (second) {
         const params = new URLSearchParams(search);
         params.set("doc", decodeURIComponent(second));

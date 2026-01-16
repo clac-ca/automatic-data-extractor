@@ -121,7 +121,7 @@ export function TopbarDemo({ children }: { children: React.ReactNode }) {
 If you ship this component via a shadcn registry, you can install it with:
 
 ```bash
-pnpm dlx shadcn@latest add topbar
+npx shadcn@latest add topbar
 ```
 
 ### Manual Installation
@@ -135,7 +135,7 @@ components/ui/topbar.tsx
 2) Ensure dependencies exist:
 
 ```bash
-pnpm add @radix-ui/react-slot class-variance-authority lucide-react
+npx @radix-ui/react-slot class-variance-authority lucide-react
 ```
 
 3) Ensure you have these shadcn/ui components installed (the Topbar composes them):
@@ -150,7 +150,7 @@ pnpm add @radix-ui/react-slot class-variance-authority lucide-react
 If you’re using the shadcn CLI:
 
 ```bash
-pnpm dlx shadcn@latest add button input separator sheet skeleton tooltip
+npx shadcn@latest add button input separator sheet skeleton tooltip
 ```
 
 4) Add (or replace) the `useIsMobile` hook used by the Topbar:

@@ -59,14 +59,7 @@ export function AuthenticatedLayout() {
   );
 
   return (
-    <TopbarProvider
-      mode="expanded"
-      style={{
-        "--topbar-height": "3.5rem",
-        "--topbar-height-compact": "3rem",
-        "--topbar-height-mobile": "3.5rem",
-      }}
-    >
+    <TopbarProvider>
       <div className="flex min-h-svh w-full flex-col bg-background text-foreground">
         <TopbarFrame topbar={topbar}>
           <Outlet />
