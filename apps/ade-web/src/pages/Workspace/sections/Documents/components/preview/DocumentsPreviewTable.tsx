@@ -10,6 +10,7 @@ import {
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -193,7 +194,7 @@ export function DocumentsPreviewTable({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-3 bg-background px-6 py-3 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-3">
           <PreviewSourceToggle
             value={previewSource}
@@ -258,72 +259,77 @@ export function DocumentsPreviewTable({
           ) : null}
         </div>
       </div>
+      <Separator />
       <div className="min-h-0 flex-1">
         {showSkeleton ? (
-          <DocumentsPreviewSkeleton columnCount={Math.max(4, visibleColumns || 6)} />
+          <div className="px-6">
+            <DocumentsPreviewSkeleton columnCount={Math.max(4, visibleColumns || 6)} />
+          </div>
         ) : showError ? (
           <div className="flex h-full items-center justify-center px-6 py-8 text-sm text-muted-foreground">
             Unable to load the document preview. Try again later.
           </div>
         ) : preview ? (
           <div className="flex min-h-0 flex-1 flex-col gap-2.5">
-            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-              <ScrollArea className="h-full w-full">
-                <table
-                  className="w-full caption-bottom text-sm"
-                  style={{ width: table.getTotalSize(), minWidth: "100%" }}
-                >
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => (
-                          <TableHead
-                            key={header.id}
-                            colSpan={header.colSpan}
-                            style={{
-                              ...getCommonPinningStyles({ column: header.column }),
-                            }}
-                          >
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(header.column.columnDef.header, header.getContext())}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell
-                              key={cell.id}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6">
+              <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+                <ScrollArea className="h-full w-full">
+                  <table
+                    className="w-full caption-bottom text-sm"
+                    style={{ width: table.getTotalSize(), minWidth: "100%" }}
+                  >
+                    <TableHeader>
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <TableRow key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => (
+                            <TableHead
+                              key={header.id}
+                              colSpan={header.colSpan}
                               style={{
-                                ...getCommonPinningStyles({ column: cell.column }),
+                                ...getCommonPinningStyles({ column: header.column }),
                               }}
                             >
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </TableCell>
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(header.column.columnDef.header, header.getContext())}
+                            </TableHead>
                           ))}
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={table.getAllColumns().length}
-                          className="h-24 text-center"
-                        >
-                          No results.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </table>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+                      ))}
+                    </TableHeader>
+                    <TableBody>
+                      {table.getRowModel().rows?.length ? (
+                        table.getRowModel().rows.map((row) => (
+                          <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell
+                                key={cell.id}
+                                style={{
+                                  ...getCommonPinningStyles({ column: cell.column }),
+                                }}
+                              >
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell
+                            colSpan={table.getAllColumns().length}
+                            className="h-24 text-center"
+                          >
+                            No results.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </table>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </div>
             </div>
-            <DataTablePagination table={table} />
+            <DataTablePagination table={table} className="px-6" />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center px-6 py-8 text-sm text-muted-foreground">

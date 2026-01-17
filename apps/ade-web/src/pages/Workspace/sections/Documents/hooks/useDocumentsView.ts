@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult } from "@/api/documents";
 import type { FilterItem, FilterJoinOperator } from "@/api/listing";
-import { createScopedStorage } from "@/lib/storage";
-import { uiStorageKeys } from "@/lib/uiStorageKeys";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 import type { DocumentRow } from "../types";
@@ -103,31 +101,6 @@ export function useDocumentsView({
     return next;
   }, [rows]);
 
-  const [cursor, setCursor] = useState<string | null>(null);
-  const cursorStorage = useMemo(
-    () => (workspaceId ? createScopedStorage(uiStorageKeys.documentsCursor(workspaceId)) : null),
-    [workspaceId],
-  );
-
-  useEffect(() => {
-    if (!cursorStorage) return;
-    const stored = cursorStorage.get<string>();
-    if (stored) {
-      setCursor(stored);
-    }
-  }, [cursorStorage]);
-
-  useEffect(() => {
-    const nextCursor = documentsQuery.data?.meta.changesCursor ?? null;
-    if (!nextCursor) return;
-    setCursor(nextCursor);
-  }, [documentsQuery.data?.meta.changesCursor]);
-
-  useEffect(() => {
-    if (!cursorStorage || !cursor) return;
-    cursorStorage.set(cursor);
-  }, [cursorStorage, cursor]);
-
   const updateRow = useCallback(
     (documentId: string, updates: Partial<DocumentRow>) => {
       queryClient.setQueryData<DocumentPageResult | undefined>(queryKey, (prev) => {
@@ -206,8 +179,6 @@ export function useDocumentsView({
     upsertRow,
     removeRow,
     setUploadProgress,
-    cursor,
-    setCursor,
     queryKey,
   };
 }

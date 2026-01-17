@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { DocumentsCommentsPanel } from "./DocumentsCommentsPanel";
@@ -27,10 +28,10 @@ export function DocumentsCommentsPane({
 
   return (
     <section
-      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-border bg-background shadow-sm"
+      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-border bg-background"
       aria-label="Document comments"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-6 py-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-foreground">
             Comments
@@ -41,6 +42,7 @@ export function DocumentsCommentsPane({
           <X className="size-4" />
         </Button>
       </div>
+      <Separator />
       <div className="min-h-0 flex-1 overflow-hidden">
         {!document ? (
           isLoading ? (

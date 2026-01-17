@@ -100,7 +100,7 @@ export function DocumentsTable({
   ) : null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {isAdvanced ? (
         <DataTableAdvancedToolbar table={table}>
           <DataTableSortList table={table} align="start" />
@@ -120,7 +120,11 @@ export function DocumentsTable({
           {toolbarActions}
         </DataTableToolbar>
       )}
-      <DataTable table={table} actionBar={actionBar} />
+      <DataTable
+        table={table}
+        actionBar={actionBar}
+        className="documents-table min-h-0 min-w-0 flex-1 overflow-hidden"
+      />
     </div>
   );
 }

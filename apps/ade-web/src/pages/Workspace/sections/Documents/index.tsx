@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { useNotifications } from "@/providers/notifications";
@@ -11,6 +12,7 @@ import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext"
 import { UploadManager } from "./components/upload/UploadManager";
 import { UploadPreflightDialog } from "./components/upload/UploadPreflightDialog";
 import { DocumentsTableView } from "./components/table/DocumentsTableView";
+import "./documents.css";
 
 const XLSX_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -20,6 +22,8 @@ function isXlsxFile(file: File) {
 
 export default function DocumentsScreen() {
   const session = useSession();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { workspace } = useWorkspaceContext();
   const { notifyToast } = useNotifications();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -49,6 +53,7 @@ export default function DocumentsScreen() {
   const processingPaused = workspace.processing_paused ?? false;
 
   const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
+  const uploadIntent = (location.state as { openUpload?: boolean } | null)?.openUpload ?? false;
 
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -106,6 +111,26 @@ export default function DocumentsScreen() {
     setUploadPreflightFiles([]);
   }, []);
 
+  useEffect(() => {
+    if (!uploadIntent) return;
+    handleUploadClick();
+    navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      },
+      { replace: true, state: null },
+    );
+  }, [
+    handleUploadClick,
+    location.hash,
+    location.pathname,
+    location.search,
+    navigate,
+    uploadIntent,
+  ]);
+
   const toolbarActions = (
     <>
       <UploadManager
@@ -134,19 +159,17 @@ export default function DocumentsScreen() {
   );
 
   return (
-    <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-6 py-4">
-          <DocumentsTableView
-            workspaceId={workspace.id}
-            currentUser={currentUser}
-            configMissing={configMissing}
-            processingPaused={processingPaused}
-            toolbarActions={toolbarActions}
-            uploadItems={uploadManager.items}
-          />
-        </section>
-      </div>
+    <div className="documents flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden py-4">
+        <DocumentsTableView
+          workspaceId={workspace.id}
+          currentUser={currentUser}
+          configMissing={configMissing}
+          processingPaused={processingPaused}
+          toolbarActions={toolbarActions}
+          uploadItems={uploadManager.items}
+        />
+      </section>
       <UploadPreflightDialog
         open={uploadPreflightFiles.length > 0}
         files={uploadPreflightFiles}

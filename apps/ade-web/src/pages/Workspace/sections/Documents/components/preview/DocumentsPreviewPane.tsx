@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { Separator } from "@/components/ui/separator";
+
 import { DocumentsPreviewHeader } from "./DocumentsPreviewHeader";
 import { DocumentsPreviewTable } from "./DocumentsPreviewTable";
 import { DocumentsPreviewSkeleton } from "./DocumentsPreviewSkeleton";
@@ -49,7 +51,7 @@ export function DocumentsPreviewPane({
 
   return (
     <section
-      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-border bg-background shadow-sm"
+      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden border border-border bg-background"
       aria-label="Document preview"
     >
       <DocumentsPreviewHeader
@@ -57,6 +59,7 @@ export function DocumentsPreviewPane({
         subtitle={subtitle}
         onClose={onClose}
       />
+      <Separator />
       <div className="min-h-0 flex-1 overflow-hidden">
         {!document ? (
           isLoading ? (

@@ -6,8 +6,6 @@ import { parseAsStringEnum, useQueryState } from "nuqs";
 import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
-  DocumentChangesResyncError,
-  fetchWorkspaceDocumentChanges,
   fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
   type DocumentChangeEntry,
@@ -35,11 +33,9 @@ import type { PresenceParticipant } from "@/types/presence";
 import type { UploadManagerItem } from "@/hooks/documents/uploadManager";
 
 import { DocumentsPresenceIndicator } from "../presence/DocumentsPresenceIndicator";
-import { useDocumentsPresence } from "../../hooks/useDocumentsPresence";
 import { useDocumentsListParams } from "../../hooks/useDocumentsListParams";
 import { useDocumentsSelection } from "../../hooks/useDocumentsSelection";
 import { useDocumentsView } from "../../hooks/useDocumentsView";
-import { useDocumentsChangesStream } from "../../hooks/useDocumentsChangesStream";
 import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
@@ -49,9 +45,8 @@ import { DocumentsCommentsPane } from "../comments/DocumentsCommentsPane";
 import { DocumentsPreviewPane } from "../preview/DocumentsPreviewPane";
 import { shortId } from "../../utils";
 import type { DocumentRow, WorkspacePerson } from "../../types";
-
-const MAX_DELTA_PAGES = 25;
-const DELTA_LIMIT = 200;
+import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
+import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 
 type CurrentUser = {
   id: string;
@@ -89,7 +84,7 @@ export function DocumentsTableView({
     parseAsStringEnum(["advancedFilters"]).withOptions({ clearOnDefault: true }),
   );
   const filterMode = filterFlag === "advancedFilters" ? "advanced" : "simple";
-  const presence = useDocumentsPresence({ workspaceId, enabled: Boolean(workspaceId) });
+  const presence = useWorkspacePresence();
   const { page, perPage, sort, q, filters, joinOperator } = useDocumentsListParams({ filterMode });
   const documentsView = useDocumentsView({
     workspaceId,
@@ -113,8 +108,6 @@ export function DocumentsTableView({
     upsertRow,
     removeRow,
     setUploadProgress,
-    cursor,
-    setCursor,
   } = documentsView;
 
   const {
@@ -126,6 +119,11 @@ export function DocumentsTableView({
     closePreview,
     closeComments,
   } = useDocumentsSelection();
+  const { sendSelection } = presence;
+
+  useEffect(() => {
+    sendSelection({ documentId: docId ?? null });
+  }, [docId, sendSelection]);
 
   const onToggleFilterMode = useCallback(() => {
     setFilterFlag(filterFlag === "advancedFilters" ? null : "advancedFilters");
@@ -134,14 +132,19 @@ export function DocumentsTableView({
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
 
+  const documentsParticipants = useMemo(
+    () => filterParticipantsByPage(presence.participants, "documents"),
+    [presence.participants],
+  );
+
   const toolbarParticipants = useMemo(
-    () => dedupeParticipants(presence.participants, presence.clientId),
-    [presence.clientId, presence.participants],
+    () => dedupeParticipants(documentsParticipants, presence.clientId),
+    [documentsParticipants, presence.clientId],
   );
 
   const rowPresence = useMemo(
-    () => mapPresenceByDocument(presence.participants, presence.clientId),
-    [presence.clientId, presence.participants],
+    () => mapPresenceByDocument(documentsParticipants, presence.clientId),
+    [documentsParticipants, presence.clientId],
   );
 
   const membersQuery = useQuery({
@@ -427,8 +430,7 @@ export function DocumentsTableView({
   );
 
   const applyIncomingChanges = useCallback(
-    (entries: HydratedChange[], nextCursor?: string | null) => {
-      let appliedCursor = cursor;
+    (entries: HydratedChange[]) => {
       entries.forEach((entry) => {
         if (entry.type === "document.changed") {
           if (entry.row) {
@@ -439,90 +441,22 @@ export function DocumentsTableView({
             removeRow(entry.documentId);
           }
         }
-        if (entry.cursor) {
-          appliedCursor = entry.cursor;
-        }
       });
-      if (entries.length === 0 && nextCursor) {
-        appliedCursor = nextCursor;
-      }
-      if (appliedCursor) {
-        setCursor(appliedCursor);
-      }
     },
-    [cursor, removeRow, setCursor, upsertRow],
+    [removeRow, upsertRow],
   );
 
-  const catchUp = useCallback(async () => {
-    if (!cursor || !workspaceId) return;
-    let nextCursor = cursor;
-    try {
-      for (let pageIndex = 0; pageIndex < MAX_DELTA_PAGES; pageIndex += 1) {
-        const changes = await fetchWorkspaceDocumentChanges(workspaceId, {
-          cursor: nextCursor,
-          limit: DELTA_LIMIT,
-          includeRows: true,
-        });
-        const items = changes.items ?? [];
-        const hydrated = await Promise.all(items.map(hydrateChange));
-        applyIncomingChanges(hydrated, changes.nextCursor ?? null);
-        nextCursor = changes.nextCursor ?? nextCursor;
-        if (items.length === 0) {
-          break;
-        }
-        if (pageIndex === MAX_DELTA_PAGES - 1) {
-          void refreshSnapshot();
-        }
-      }
-    } catch (err) {
-      if (err instanceof DocumentChangesResyncError) {
-        if (err.latestCursor) {
-          setCursor(err.latestCursor);
-        }
-        void refreshSnapshot();
-      }
-    }
-  }, [applyIncomingChanges, cursor, hydrateChange, refreshSnapshot, setCursor, workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    const handleFocus = () => void catchUp();
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void catchUp();
-      }
-    };
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [catchUp, workspaceId]);
-
-  useDocumentsChangesStream({
-    workspaceId,
-    cursor,
-    enabled: Boolean(workspaceId && cursor),
-    includeRows: true,
-    onEvent: (change) => {
-      void (async () => {
-        const hydrated = await hydrateChange(change);
-        applyIncomingChanges([hydrated]);
-      })();
-    },
-    onReady: (nextCursor) => {
-      if (nextCursor) {
-        setCursor(nextCursor);
-      }
-    },
-    onResyncRequired: (latestCursor) => {
-      if (latestCursor) {
-        setCursor(latestCursor);
-      }
-      void refreshSnapshot();
-    },
-  });
+  useWorkspaceDocumentsChanges(
+    useCallback(
+      (change) => {
+        void (async () => {
+          const hydrated = await hydrateChange(change);
+          applyIncomingChanges([hydrated]);
+        })();
+      },
+      [applyIncomingChanges, hydrateChange],
+    ),
+  );
 
   const handleTogglePreview = useCallback(
     (documentId: string) => {
@@ -697,16 +631,18 @@ export function DocumentsTableView({
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
 
   const tableContent = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-      {configBanner}
-      <DocumentsTable
-        data={documents}
-        pageCount={pageCount}
-        columns={columns}
-        filterMode={filterMode}
-        onToggleFilterMode={onToggleFilterMode}
-        toolbarActions={toolbarContent}
-      />
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6">
+        {configBanner}
+        <DocumentsTable
+          data={documents}
+          pageCount={pageCount}
+          columns={columns}
+          filterMode={filterMode}
+          onToggleFilterMode={onToggleFilterMode}
+          toolbarActions={toolbarContent}
+        />
+      </div>
     </div>
   );
 
@@ -770,6 +706,17 @@ export function DocumentsTableView({
 
 function getParticipantLabel(participant: PresenceParticipant) {
   return participant.display_name || participant.email || "Workspace member";
+}
+
+function getPresencePage(participant: PresenceParticipant) {
+  const presence = participant.presence;
+  if (!presence || typeof presence !== "object") return null;
+  const page = presence["page"];
+  return typeof page === "string" ? page : null;
+}
+
+function filterParticipantsByPage(participants: PresenceParticipant[], page: string) {
+  return participants.filter((participant) => getPresencePage(participant) === page);
 }
 
 function getSelectedDocumentId(participant: PresenceParticipant) {

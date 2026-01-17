@@ -7,6 +7,8 @@ import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS } fro
 import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
+import { WorkspaceDocumentsStreamProvider } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
+import { WorkspacePresenceProvider, useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import { WorkbenchWindowProvider } from "@/pages/Workspace/context/WorkbenchWindowContext";
 import { PageState } from "@/components/layout";
 import { WorkspaceLayout } from "@/pages/Workspace/WorkspaceLayout";
@@ -123,7 +125,11 @@ function WorkspaceContent() {
 
   return (
     <WorkspaceProvider workspace={workspace} workspaces={workspaces}>
-      <WorkspaceShell workspace={workspace} />
+      <WorkspaceDocumentsStreamProvider>
+        <WorkspacePresenceProvider>
+          <WorkspaceShell workspace={workspace} />
+        </WorkspacePresenceProvider>
+      </WorkspaceDocumentsStreamProvider>
     </WorkspaceProvider>
   );
 }
@@ -143,15 +149,22 @@ function WorkspaceShell({ workspace }: WorkspaceShellProps) {
 function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { setPresence } = useWorkspacePresence();
 
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
+  const presencePage = section?.kind === "content" ? section.key.split(":")[0] : null;
 
   useEffect(() => {
     if (section?.kind === "redirect") {
       navigate(section.to, { replace: true });
     }
   }, [section, navigate]);
+
+  useEffect(() => {
+    if (!presencePage) return;
+    setPresence({ page: presencePage });
+  }, [presencePage, setPresence]);
 
   if (!section || section.kind === "redirect") {
     return null;

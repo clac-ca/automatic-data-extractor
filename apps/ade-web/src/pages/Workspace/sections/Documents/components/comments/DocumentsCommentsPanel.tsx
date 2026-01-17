@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -86,7 +87,7 @@ export function DocumentsCommentsPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto px-4 py-3">
+      <div className="flex-1 overflow-auto px-6 py-3">
         {isLoading && !hasComments ? (
           <div className="space-y-3">
             {[0, 1, 2].map((row) => (
@@ -158,7 +159,8 @@ export function DocumentsCommentsPanel({
           </div>
         ) : null}
       </div>
-      <div className="border-t border-border px-4 py-3">
+      <Separator />
+      <div className="px-6 py-3">
         <CommentComposer
           workspaceId={workspaceId}
           currentUser={currentUser}
