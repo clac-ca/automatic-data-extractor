@@ -200,7 +200,7 @@ export function WorkspaceSidebar() {
                 <PopoverContent
                   side="right"
                   align="start"
-                  className="w-(--radix-popover-trigger-width) p-0"
+                  className="min-w-64 w-(--radix-popover-trigger-width) p-0"
                 >
                   <Command>
                     <CommandInput placeholder="Search workspaces..." />
