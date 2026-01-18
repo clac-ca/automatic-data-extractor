@@ -47,14 +47,23 @@ export interface SearchDialogProps extends DialogProps {
    * Inspired by the shadcn CommandDialog “commandProps” pattern.
    */
   searchProps?: SearchProps
+  /**
+   * Local extension: allow sizing the dialog content without re-implementing SearchDialog.
+   */
+  contentClassName?: string
 }
 
-export function SearchDialog({ children, searchProps, ...props }: SearchDialogProps) {
+export function SearchDialog({
+  children,
+  searchProps,
+  contentClassName,
+  ...props
+}: SearchDialogProps) {
   const { className: searchClassName, ...restSearchProps } = searchProps ?? {}
 
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0 shadow-lg">
+      <DialogContent className={cn("overflow-hidden p-0 shadow-lg", contentClassName)}>
         <Search
           // Dialog-specific sizing like shadcn CommandDialog (easy to tweak).
           className={cn(

@@ -15,6 +15,7 @@ import { useSession } from "@/providers/auth/SessionContext";
 import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
+import { WorkspaceDocumentsSearch } from "@/pages/Workspace/components/WorkspaceDocumentsSearch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Search,
@@ -268,6 +269,7 @@ export function WorkspaceSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        <WorkspaceDocumentsSearch />
         <WorkspaceNavSection
           navItems={navItems}
           isActive={isActive}

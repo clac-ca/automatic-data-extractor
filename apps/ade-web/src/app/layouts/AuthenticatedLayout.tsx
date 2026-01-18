@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 
-import { DirectorySearch } from "@/app/layouts/components/topbar/DirectorySearch";
 import { TopbarControls } from "@/app/layouts/components/topbar/TopbarControls";
 import {
   Topbar,
-  TopbarCenter,
   TopbarContent,
   TopbarEnd,
   TopbarProvider,
@@ -48,11 +46,6 @@ export function AuthenticatedLayout() {
     <Topbar position="static">
       <SkipToContent />
       <TopbarContent className="px-4 sm:px-6 lg:px-10">
-        <TopbarCenter className="min-w-0">
-          <div className="w-full max-w-md">
-            <DirectorySearch />
-          </div>
-        </TopbarCenter>
         <TopbarEnd>
           <TopbarControls />
         </TopbarEnd>

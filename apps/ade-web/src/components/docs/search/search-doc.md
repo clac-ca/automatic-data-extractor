@@ -180,6 +180,20 @@ If you need advanced cmdk configuration (like remote search mode), pass `searchP
 </SearchDialog>
 ```
 
+### Sizing the dialog content
+
+This codebase exposes a small sizing hook on `SearchDialog`:
+
+```tsx
+<SearchDialog
+  open={open}
+  onOpenChange={setOpen}
+  contentClassName="sm:max-w-2xl md:max-w-3xl"
+>
+  ...
+</SearchDialog>
+```
+
 ---
 
 ## Remote search recipe (server filtered results)
