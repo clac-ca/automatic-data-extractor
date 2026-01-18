@@ -6,27 +6,39 @@ They intentionally live **outside** the core component so `search.tsx` stays sma
 
 ## Recipes
 
-1) **Remote Search (server-filtered)**
-- File: `remote-search.md`
-- Use when results come from an API and you want request cancellation, debouncing, and good loading/empty UX.
-- Key: `<Search shouldFilter={false} />`
+- **Remote Search (server-filtered)**
+  - File: `remote-search.md`
+  - Use when results come from an API and you want request cancellation, debouncing, and good loading/empty UX.
+  - Key: `<Search shouldFilter={false} />`
 
-2) **Omnibar / Command Palette (⌘K / Ctrl K)**
-- File: `omnibar-commandk.md`
-- Use when search is an app-wide entry point: navigation + actions + quick switching.
-- Key: `SearchDialog` + global keyboard shortcut guard.
+- **React Query (TanStack Query v5)**
+  - File: `react-query.md`
+  - Best for: caching, cancellation, dedupe, retries, and “data layer” discipline.
 
-3) **Combobox Dropdown (Popover + single input)**
-- File: `combobox-popover.md`
-- Use when search behaves like a form field: open on focus, results in a dropdown.
-- Key: keep focus in the input; close on select; click-outside behavior.
+- **React Query Infinite (Load more / Infinite scroll)**
+  - File: `react-query-infinite.md`
+  - Best for: paginated results, “Load more” UX, and bounded memory via `maxPages`.
 
-4) **Filters & Facets**
-- File: `filters-facets.md`
-- Use when search depends on additional UI state (scope, tags, archived, etc.).
-- Key: filters live outside the search component; you render filter UI wherever you want.
+- **Virtualization & Large Lists**
+  - File: `virtualization.md`
+  - Best for: large option sets (time zones, icons, logs) and “don’t melt the browser” patterns.
 
-5) **Recent Searches & Suggestions**
-- File: `recent-suggestions.md`
-- Use when you want a high-quality “empty query” state: recents, suggested actions, trending items, etc.
-- Key: store recents as minimal data; keep privacy in mind.
+- **Omnibar / Command Palette (⌘K / Ctrl K)**
+  - File: `omnibar-commandk.md`
+  - Use when search is an app-wide entry point: navigation + actions + quick switching.
+  - Key: `SearchDialog` + global keyboard shortcut guard.
+
+- **Combobox Dropdown (Popover + single input)**
+  - File: `combobox-popover.md`
+  - Use when search behaves like a form field: open on focus, results in a dropdown.
+  - Key: keep focus in the input; close on select; click-outside behavior.
+
+- **Filters & Facets**
+  - File: `filters-facets.md`
+  - Use when search depends on additional UI state (scope, tags, archived, etc.).
+  - Key: filters live outside the search component; you render filter UI wherever you want.
+
+- **Recent Searches & Suggestions**
+  - File: `recent-suggestions.md`
+  - Use when you want a high-quality “empty query” state: recents, suggested actions, trending items, etc.
+  - Key: store recents as minimal data; keep privacy in mind.

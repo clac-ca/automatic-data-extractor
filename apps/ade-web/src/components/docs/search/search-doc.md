@@ -412,10 +412,17 @@ If you want virtualization, you can wrap `SearchList` children with a virtualize
 * Ensure `SearchEmpty` is inside `SearchList`.
 * In remote mode (`shouldFilter={false}`), you may prefer your own empty UI.
 
+## Performance note
+
+> For best UX, avoid rendering huge result sets in search palettes. Prefer narrowing + caps + pagination. Virtualization is provided as an advanced pattern and can affect keyboard navigation behavior. See [Virtualization & Large Lists](./recipes/virtualization.md) for guidance.
+
 ## Recipes
 
 - [Recipes index](./recipes/README.md)
 - [Remote search](./recipes/remote-search.md)
+- [React Query (TanStack Query v5)](./recipes/react-query.md)
+- [React Query Infinite (load more / infinite scroll)](./recipes/react-query-infinite.md)
+- [Virtualization & Large Lists](./recipes/virtualization.md)
 - [Omnibar / Command-K](./recipes/omnibar-commandk.md)
 - [Combobox dropdown](./recipes/combobox-popover.md)
 - [Filters & facets](./recipes/filters-facets.md)
