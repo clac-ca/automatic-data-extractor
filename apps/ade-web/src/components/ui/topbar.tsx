@@ -8,7 +8,6 @@ import { Menu, X } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
@@ -340,23 +339,6 @@ const TopbarInset = React.forwardRef<
 })
 TopbarInset.displayName = "TopbarInset"
 
-const TopbarSearch = React.forwardRef<
-  React.ElementRef<typeof Input>,
-  React.ComponentPropsWithoutRef<typeof Input>
->(({ className, ...props }, ref) => (
-  <Input
-    ref={ref}
-    data-slot="topbar-search"
-    className={cn(
-      "h-9 w-full bg-background shadow-none",
-      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-      className
-    )}
-    {...props}
-  />
-))
-TopbarSearch.displayName = "TopbarSearch"
-
 const TopbarSeparator = React.forwardRef<
   React.ElementRef<typeof Separator>,
   React.ComponentPropsWithoutRef<typeof Separator>
@@ -618,7 +600,6 @@ export {
   TopbarNavItem,
   TopbarNavSkeleton,
   TopbarProvider,
-  TopbarSearch,
   TopbarSeparator,
   TopbarSheet,
   TopbarStart,

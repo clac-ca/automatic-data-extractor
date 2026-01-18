@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { AppearanceMenu } from "@/components/topbar/actions/AppearanceMenu";
-import { AboutVersionsModal } from "@/components/topbar/actions/AboutVersionsModal";
-import { ProfileDropdown } from "@/components/topbar/actions/ProfileDropdown";
+import { AppearanceMenu } from "@/app/layouts/components/topbar/actions/AppearanceMenu";
+import { AboutVersionsModal } from "@/app/layouts/components/topbar/actions/AboutVersionsModal";
+import { ProfileDropdown } from "@/app/layouts/components/topbar/actions/ProfileDropdown";
 import { useSession } from "@/providers/auth/SessionContext";
 
 export function TopbarControls() {

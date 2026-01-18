@@ -35,11 +35,11 @@ import {
   TopbarNavButton,
   TopbarNavItem,
   TopbarProvider,
-  TopbarSearch,
   TopbarSheet,
   TopbarStart,
   TopbarTrigger,
 } from "@/components/ui/topbar"
+import { Input } from "@/components/ui/input"
 
 export function TopbarDemo({ children }: { children: React.ReactNode }) {
   return (
@@ -76,7 +76,7 @@ export function TopbarDemo({ children }: { children: React.ReactNode }) {
 
           <TopbarCenter className="hidden md:flex">
             <div className="w-full max-w-md">
-              <TopbarSearch placeholder="Search..." />
+              <Input placeholder="Search..." />
             </div>
           </TopbarCenter>
 

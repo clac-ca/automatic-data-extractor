@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ApiError, groupProblemDetailsErrors } from "@/api";
 import type { UserSummary } from "@/api/users/api";
 import { useSession } from "@/providers/auth/SessionContext";
-import { useCreateWorkspaceMutation } from "@/hooks/workspaces";
+import { useCreateWorkspaceMutation } from "./hooks/useCreateWorkspaceMutation";
 import { useUsersQuery } from "@/hooks/users/useUsersQuery";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

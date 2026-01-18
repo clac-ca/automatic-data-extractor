@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns } from "@/api/runs/api";
-import { runsKeys } from "@/hooks/runs/keys";
+import { runsKeys } from "./keys";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 import { buildCounts, buildRunRecord } from "../utils";

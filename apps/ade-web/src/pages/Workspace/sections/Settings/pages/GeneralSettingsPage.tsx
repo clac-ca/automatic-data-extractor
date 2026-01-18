@@ -5,7 +5,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
-import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@/hooks/workspaces";
+import { useSetDefaultWorkspaceMutation } from "@/hooks/workspaces";
+import { useUpdateWorkspaceMutation } from "../hooks/useUpdateWorkspaceMutation";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
 import { MODE_OPTIONS, useTheme } from "@/providers/theme";
 import { FormField } from "@/components/ui/form-field";

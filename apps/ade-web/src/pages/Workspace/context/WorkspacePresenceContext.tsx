@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { usePresenceChannel } from "@/hooks/presence";
+import { usePresenceChannel } from "@/pages/Workspace/hooks/presence";
 import type { PresenceConnectionState, PresenceParticipant } from "@/types/presence";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 

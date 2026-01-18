@@ -20,7 +20,7 @@ import {
   useDuplicateConfigurationMutation,
   useImportConfigurationMutation,
   useMakeActiveConfigurationMutation,
-} from "@/hooks/configurations";
+} from "@/pages/Workspace/hooks/configurations";
 import type { ConfigurationRecord } from "@/types/configurations";
 import { useNotifications } from "@/providers/notifications";
 import { buildLastSelectionStorageKey, createLastSelectionStorage, persistLastSelection, type LastSelection } from "./storage";

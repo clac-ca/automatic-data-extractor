@@ -17,7 +17,7 @@ import {
   useConfigurationsQuery,
   useDuplicateConfigurationMutation,
   useMakeActiveConfigurationMutation,
-} from "@/hooks/configurations";
+} from "@/pages/Workspace/hooks/configurations";
 import { useNotifications } from "@/providers/notifications";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";
 import { StatusPill } from "../components/StatusPill";

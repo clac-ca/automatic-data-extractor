@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
 import type { DocumentUploadResponse } from "@/api/documents";
-import type { UploadManagerItem } from "@/hooks/documents/uploadManager";
+import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/hooks/uploadManager";
 
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 

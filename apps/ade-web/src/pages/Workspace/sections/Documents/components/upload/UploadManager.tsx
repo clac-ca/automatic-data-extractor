@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DocumentUploadResponse } from "@/api/documents";
-import type { UploadManagerItem, UploadManagerSummary } from "@/hooks/documents/uploadManager";
+import type { UploadManagerItem, UploadManagerSummary } from "@/pages/Workspace/sections/Documents/hooks/uploadManager";
 import { CloseIcon, RefreshIcon, UploadIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 

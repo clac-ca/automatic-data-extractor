@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 
-import { TopbarControls } from "@/components/topbar/TopbarControls";
-import { TopbarSearch } from "@/components/topbar/TopbarSearch";
+import { DirectorySearch } from "@/app/layouts/components/topbar/DirectorySearch";
+import { TopbarControls } from "@/app/layouts/components/topbar/TopbarControls";
 import {
   Topbar,
   TopbarCenter,
@@ -49,7 +49,9 @@ export function AuthenticatedLayout() {
       <SkipToContent />
       <TopbarContent className="px-4 sm:px-6 lg:px-10">
         <TopbarCenter className="min-w-0">
-          <TopbarSearch scope={{ kind: "directory" }} />
+          <div className="w-full max-w-md">
+            <DirectorySearch />
+          </div>
         </TopbarCenter>
         <TopbarEnd>
           <TopbarControls />

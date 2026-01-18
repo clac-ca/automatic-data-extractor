@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { useNotifications } from "@/providers/notifications";
 import { ApiError } from "@/api/errors";
 import type { PresenceParticipant } from "@/types/presence";
-import type { UploadManagerItem } from "@/hooks/documents/uploadManager";
+import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/hooks/uploadManager";
 
 import { DocumentsPresenceIndicator } from "../presence/DocumentsPresenceIndicator";
 import { useDocumentsListParams } from "../../hooks/useDocumentsListParams";

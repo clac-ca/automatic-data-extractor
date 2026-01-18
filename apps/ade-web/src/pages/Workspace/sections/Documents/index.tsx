@@ -5,8 +5,8 @@ import { useSession } from "@/providers/auth/SessionContext";
 import { useNotifications } from "@/providers/notifications";
 import { Button } from "@/components/ui/button";
 import { UploadIcon } from "@/components/icons";
-import { useConfigurationsQuery } from "@/hooks/configurations";
-import { useUploadManager, type UploadManagerQueueItem } from "@/hooks/documents/uploadManager";
+import { useConfigurationsQuery } from "@/pages/Workspace/hooks/configurations";
+import { useUploadManager, type UploadManagerQueueItem } from "@/pages/Workspace/sections/Documents/hooks/uploadManager";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
 import { UploadManager } from "./components/upload/UploadManager";

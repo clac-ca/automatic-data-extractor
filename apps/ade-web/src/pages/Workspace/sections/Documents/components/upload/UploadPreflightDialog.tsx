@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { UploadManagerQueueItem } from "@/hooks/documents/uploadManager";
+import type { UploadManagerQueueItem } from "@/pages/Workspace/sections/Documents/hooks/uploadManager";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {

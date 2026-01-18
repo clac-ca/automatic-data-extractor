@@ -4,7 +4,7 @@ import { PageState } from "@/components/layout";
 
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkbenchWindow } from "@/pages/Workspace/context/WorkbenchWindowContext";
-import { useConfigurationQuery } from "@/hooks/configurations";
+import { useConfigurationQuery } from "@/pages/Workspace/hooks/configurations";
 
 import { Workbench } from "./Workbench";
 

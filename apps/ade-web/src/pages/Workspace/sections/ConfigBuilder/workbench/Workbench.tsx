@@ -52,7 +52,7 @@ import {
   useMakeActiveConfigurationMutation,
   useReplaceConfigurationMutation,
   useSaveConfigurationFileMutation,
-} from "@/hooks/configurations";
+} from "@/pages/Workspace/hooks/configurations";
 import type { FileReadJson } from "@/types/configurations";
 import { createScopedStorage } from "@/lib/storage";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";

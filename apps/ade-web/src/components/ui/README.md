@@ -35,6 +35,7 @@ keep feature-specific UI in `src/pages/**/components/`.
 | sheet | shadcn | `npx shadcn@latest add sidebar` | Added as sidebar dependency. |
 | tooltip | shadcn | `npx shadcn@latest add sidebar` | Added as sidebar dependency. |
 | topbar | app | — | App shell topbar primitive (modeled after sidebar patterns). |
+| search | app | — | Search combobox primitives. Local fixes: onSelectResult/SearchResultItem aliases, cache/error tweaks, popover panel alias. |
 
 ## Maintenance / Updating
 

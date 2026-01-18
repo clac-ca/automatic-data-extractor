@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { updateWorkspace } from "@/api/workspaces/api";
-import { workspacesKeys } from "./keys";
+import { workspacesKeys } from "@/hooks/workspaces";
 import type { WorkspaceListPage, WorkspaceProfile, WorkspaceUpdatePayload } from "@/types/workspaces";
 
 export function useUpdateWorkspaceMutation(workspaceId: string) {
