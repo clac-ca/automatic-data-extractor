@@ -1,27 +1,25 @@
-import { Link } from "react-router-dom";
-
+import { WorkspaceSearch } from "@/pages/Workspace/components/WorkspaceSearch";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Topbar,
-  TopbarBrand,
+  TopbarCenter,
   TopbarContent,
   TopbarEnd,
   TopbarStart,
 } from "@/components/ui/topbar";
-import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
 export function WorkspaceTopbar() {
-  const { workspace } = useWorkspaceContext();
-
   return (
     <Topbar>
       <TopbarContent>
         <TopbarStart>
-          <TopbarBrand asChild>
-            <Link to={`/workspaces/${workspace.id}`}>
-              <span>{workspace.name || "Workspace"}</span>
-            </Link>
-          </TopbarBrand>
+          <SidebarTrigger className="md:hidden" />
         </TopbarStart>
+        <TopbarCenter>
+          <div className="w-full max-w-[480px]">
+            <WorkspaceSearch />
+          </div>
+        </TopbarCenter>
         <TopbarEnd />
       </TopbarContent>
     </Topbar>
