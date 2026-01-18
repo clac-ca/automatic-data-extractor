@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, createSearchParams, useLocation, useNavigate } from "react-router-dom";
-import { Check, ChevronsUpDown, FileText, LayoutGrid, PlayCircle, Settings, Wrench } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, FileText, LayoutGrid, PlayCircle, Plus, Settings, Wrench } from "lucide-react";
 
 import { fetchWorkspaceDocuments, type DocumentChangeEntry, type DocumentPageResult } from "@/api/documents";
-import { UploadIcon } from "@/components/icons";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +11,7 @@ import { useSession } from "@/providers/auth/SessionContext";
 import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Command,
   CommandEmpty,
@@ -26,6 +26,7 @@ import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarFooter,
@@ -257,21 +258,6 @@ export function WorkspaceSidebar() {
             className="mt-1 shrink-0 transition-transform duration-200 ease-linear group-data-[collapsible=icon]:translate-x-[calc(100%+theme(spacing.4))]"
           />
         </div>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              type="button"
-              className="bg-sidebar-accent text-sidebar-foreground border border-sidebar-border/60 shadow-xs hover:bg-sidebar-accent/80 h-8 rounded-md px-3 text-xs gap-2"
-              onClick={() => {
-                navigate(links.documents, { state: { openUpload: true } });
-              }}
-              tooltip="Upload documents"
-            >
-              <UploadIcon />
-              <span>Upload</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
@@ -332,80 +318,101 @@ export function WorkspaceSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Your Documents</SidebarGroupLabel>
-          <SidebarGroupContent>
-            {assignedDocumentsQuery.isLoading ? (
-              <SidebarMenu>
-                {ASSIGNED_DOCUMENT_SKELETONS.map((width, index) => (
-                  <SidebarMenuItem key={`assigned-documents-skeleton-${index}`}>
-                    <div className="flex h-8 items-center gap-2 rounded-md px-2">
-                      <Skeleton className="size-4 rounded-sm bg-sidebar-accent/70" />
-                      <Skeleton className={cn("h-4 bg-sidebar-accent/70", width)} />
-                    </div>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            ) : assignedDocumentsQuery.isError ? (
-              <p className="px-2 py-2 text-xs text-sidebar-foreground/70">
-                Unable to load assigned documents.
-              </p>
-            ) : assignedDocuments.length === 0 ? (
-              <p className="px-2 py-2 text-xs text-sidebar-foreground/70">
-                No assigned documents yet.
-              </p>
-            ) : (
-              <SidebarMenu>
-                {assignedDocuments.map((document) => {
-                  const documentParticipants = documentsPresenceById.get(document.id) ?? [];
-                  const documentAvatars = buildAvatarItems(documentParticipants);
-                  const documentPresenceLabel = documentAvatars
-                    .map((item) => item.label)
-                    .join(", ");
-                  return (
-                    <SidebarMenuItem key={document.id}>
-                      <SidebarMenuButton asChild isActive={document.id === activeDocId}>
-                        <NavLink
-                          to={`${links.documents}?${createSearchParams({
-                            docId: document.id,
-                            panes: "preview",
-                          })}`}
-                        >
-                          <FileText />
-                          <span className="min-w-0 flex-1 truncate">{document.name}</span>
-                          {documentAvatars.length > 0 ? (
-                            <div className="ml-auto flex items-center group-data-[collapsible=icon]:hidden">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <AvatarGroup size={18} max={2}>
-                                    {documentAvatars.map((item) => (
-                                      <Avatar key={item.id} aria-hidden="true" title={item.label}>
-                                        <AvatarFallback className="bg-sidebar-accent text-[8px] font-semibold text-sidebar-foreground">
-                                          {item.initials}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                    ))}
-                                  </AvatarGroup>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="right"
-                                  align="center"
-                                  className="max-w-[220px] whitespace-pre-line"
-                                >
-                                  {documentPresenceLabel}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          ) : null}
-                        </NavLink>
-                      </SidebarMenuButton>
+        <Collapsible defaultOpen className="group/collapsible group-data-[collapsible=icon]:hidden">
+          <SidebarGroup>
+            <SidebarGroupLabel asChild>
+              <CollapsibleTrigger
+                type="button"
+                className="w-full justify-between gap-2 pr-8"
+              >
+                <span>My Documents</span>
+                <ChevronDown className="size-3 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+              </CollapsibleTrigger>
+            </SidebarGroupLabel>
+            <SidebarGroupAction
+              title="Upload documents"
+              onClick={() => {
+                navigate(links.documents, { state: { openUpload: true } });
+              }}
+            >
+              <Plus />
+              <span className="sr-only">Upload documents</span>
+            </SidebarGroupAction>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+              {assignedDocumentsQuery.isLoading ? (
+                <SidebarMenu>
+                  {ASSIGNED_DOCUMENT_SKELETONS.map((width, index) => (
+                    <SidebarMenuItem key={`assigned-documents-skeleton-${index}`}>
+                      <div className="flex h-8 items-center gap-2 rounded-md px-2">
+                        <Skeleton className="size-4 rounded-sm bg-sidebar-accent/70" />
+                        <Skeleton className={cn("h-4 bg-sidebar-accent/70", width)} />
+                      </div>
                     </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            )}
-          </SidebarGroupContent>
-        </SidebarGroup>
+                  ))}
+                </SidebarMenu>
+              ) : assignedDocumentsQuery.isError ? (
+                <p className="px-2 py-2 text-xs text-sidebar-foreground/70">
+                  Unable to load assigned documents.
+                </p>
+              ) : assignedDocuments.length === 0 ? (
+                <p className="px-2 py-2 text-xs text-sidebar-foreground/70">
+                  No assigned documents yet.
+                </p>
+              ) : (
+                <SidebarMenu>
+                  {assignedDocuments.map((document) => {
+                    const documentParticipants = documentsPresenceById.get(document.id) ?? [];
+                    const documentAvatars = buildAvatarItems(documentParticipants);
+                    const documentPresenceLabel = documentAvatars
+                      .map((item) => item.label)
+                      .join(", ");
+                    return (
+                      <SidebarMenuItem key={document.id}>
+                        <SidebarMenuButton asChild isActive={document.id === activeDocId}>
+                          <NavLink
+                            to={`${links.documents}?${createSearchParams({
+                              docId: document.id,
+                              panes: "preview",
+                            })}`}
+                          >
+                            <FileText />
+                            <span className="min-w-0 flex-1 truncate">{document.name}</span>
+                            {documentAvatars.length > 0 ? (
+                              <div className="ml-auto flex items-center group-data-[collapsible=icon]:hidden">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AvatarGroup size={18} max={2}>
+                                      {documentAvatars.map((item) => (
+                                        <Avatar key={item.id} aria-hidden="true" title={item.label}>
+                                          <AvatarFallback className="bg-sidebar-accent text-[8px] font-semibold text-sidebar-foreground">
+                                            {item.initials}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      ))}
+                                    </AvatarGroup>
+                                  </TooltipTrigger>
+                                  <TooltipContent
+                                    side="right"
+                                    align="center"
+                                    className="max-w-[220px] whitespace-pre-line"
+                                  >
+                                    {documentPresenceLabel}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                            ) : null}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              )}
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </SidebarGroup>
+        </Collapsible>
       </SidebarContent>
       <SidebarSeparator />
       <SidebarFooter>

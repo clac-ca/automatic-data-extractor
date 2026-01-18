@@ -24,6 +24,7 @@ keep feature-specific UI in `src/pages/**/components/`.
 | dropdown-menu | shadcn | `npx shadcn@latest add dropdown-menu` | Action menu primitive. |
 | select | shadcn | `npx shadcn@latest add select` | — |
 | checkbox | shadcn | `npx shadcn@latest add checkbox` | — |
+| collapsible | shadcn | `npx shadcn@latest add collapsible` | — |
 | scroll-area | shadcn | `npx shadcn@latest add scroll-area` | — |
 | switch | shadcn | `npx shadcn@latest add switch` | — |
 | dialog | shadcn | `npx shadcn@latest add dialog` | — |
