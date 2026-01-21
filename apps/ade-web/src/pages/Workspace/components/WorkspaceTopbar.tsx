@@ -5,6 +5,7 @@ import {
   TopbarEnd,
   TopbarStart,
 } from "@/components/ui/topbar";
+import { WorkspaceTopbarControls } from "@/pages/Workspace/components/WorkspaceTopbarControls";
 
 export function WorkspaceTopbar() {
   return (
@@ -13,7 +14,9 @@ export function WorkspaceTopbar() {
         <TopbarStart>
           <SidebarTrigger className="md:hidden" />
         </TopbarStart>
-        <TopbarEnd />
+        <TopbarEnd>
+          <WorkspaceTopbarControls />
+        </TopbarEnd>
       </TopbarContent>
     </Topbar>
   );
