@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { parseAsStringEnum, useQueryState } from "nuqs";
 
@@ -31,6 +31,7 @@ import { useNotifications } from "@/providers/notifications";
 import { ApiError } from "@/api/errors";
 import type { PresenceParticipant } from "@/types/presence";
 import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/hooks/uploadManager";
+import type { components } from "@/types";
 
 import { DocumentsPresenceIndicator } from "../presence/DocumentsPresenceIndicator";
 import { useDocumentsListParams } from "../../hooks/useDocumentsListParams";
@@ -55,6 +56,7 @@ type CurrentUser = {
 };
 
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
+type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
 type RowMutation = "delete" | "assign" | "tags";
 
@@ -76,6 +78,7 @@ export function DocumentsTableView({
   uploadItems?: UploadItem[];
 }) {
   const { notifyToast } = useNotifications();
+  const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
 
@@ -367,6 +370,21 @@ export function DocumentsTableView({
           { ifMatch },
         );
         applyDocumentUpdate(documentId, updated);
+        if (!hasTag && !tagOptions.includes(tag)) {
+          queryClient.setQueryData<TagCatalogPage | undefined>(
+            ["documents-tags", workspaceId],
+            (currentCatalog) => {
+              if (!currentCatalog) return currentCatalog;
+              const exists = currentCatalog.items.some((item) => item.tag === tag);
+              if (exists) return currentCatalog;
+              return {
+                ...currentCatalog,
+                items: [...currentCatalog.items, { tag, document_count: 1 }],
+              };
+            },
+          );
+          queryClient.invalidateQueries({ queryKey: ["documents-tags", workspaceId] });
+        }
       } catch (error) {
         updateRow(documentId, { tags });
         notifyToast({
@@ -378,7 +396,17 @@ export function DocumentsTableView({
         clearRowPending(documentId, "tags");
       }
     },
-    [applyDocumentUpdate, clearRowPending, documentsById, markRowPending, notifyToast, updateRow, workspaceId],
+    [
+      applyDocumentUpdate,
+      clearRowPending,
+      documentsById,
+      markRowPending,
+      notifyToast,
+      queryClient,
+      tagOptions,
+      updateRow,
+      workspaceId,
+    ],
   );
 
   const onDeleteRequest = useCallback((document: DocumentRow) => {
