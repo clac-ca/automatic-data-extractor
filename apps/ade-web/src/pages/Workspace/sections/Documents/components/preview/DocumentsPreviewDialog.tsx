@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Separator } from "@/components/ui/separator";
 
 import { DocumentsPreviewHeader } from "./DocumentsPreviewHeader";
-import { DocumentsPreviewTable } from "./DocumentsPreviewTable";
+import { DocumentsPreviewContent } from "./DocumentsPreviewContent";
 import { DocumentsPreviewSkeleton } from "./DocumentsPreviewSkeleton";
 import type { DocumentRow } from "../../types";
 
@@ -67,7 +67,7 @@ export function DocumentsPreviewDialog({
                 </div>
               )
             ) : (
-              <DocumentsPreviewTable
+              <DocumentsPreviewContent
                 workspaceId={workspaceId}
                 document={document}
                 onDownloadOriginal={onDownloadOriginal}

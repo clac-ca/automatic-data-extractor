@@ -24,9 +24,9 @@ import { columnLabel } from "../../utils";
 import type { DocumentRow } from "../../types";
 
 const DEFAULT_PAGE_SIZE = 25;
-type PreviewSource = "output" | "original";
+type PreviewVariant = "normalized" | "original";
 
-export function DocumentsPreviewTable({
+export function DocumentsPreviewContent({
   workspaceId,
   document,
   onDownloadOriginal,
@@ -37,33 +37,33 @@ export function DocumentsPreviewTable({
   onDownloadOriginal?: (document: DocumentRow) => void;
   onDownloadOutput?: (document: DocumentRow) => void;
 }) {
-  const outputRunId = document.lastRun?.status === "succeeded" ? document.lastRun.id : null;
-  const hasOutput = Boolean(outputRunId);
-  const [previewSource, setPreviewSource] = useState<PreviewSource>(
-    hasOutput ? "output" : "original",
+  const normalizedRunId = document.lastRun?.status === "succeeded" ? document.lastRun.id : null;
+  const hasNormalizedOutput = Boolean(normalizedRunId);
+  const [previewVariant, setPreviewVariant] = useState<PreviewVariant>(
+    hasNormalizedOutput ? "normalized" : "original",
   );
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
     setSheetIndex(null);
-    setPreviewSource(hasOutput ? "output" : "original");
-  }, [document.id, hasOutput]);
+    setPreviewVariant(hasNormalizedOutput ? "normalized" : "original");
+  }, [document.id, hasNormalizedOutput]);
 
-  const inputPreview = useDocumentPreview({
+  const originalPreview = useDocumentPreview({
     workspaceId,
     documentId: document.id,
     sheetIndex,
-    enabled: previewSource === "original",
+    enabled: previewVariant === "original",
   });
 
-  const outputPreview = useRunOutputPreview({
-    runId: outputRunId,
+  const normalizedPreview = useRunOutputPreview({
+    runId: normalizedRunId,
     sheetIndex,
-    enabled: previewSource === "output",
+    enabled: previewVariant === "normalized",
   });
 
-  const previewState = previewSource === "output" ? outputPreview : inputPreview;
+  const previewState = previewVariant === "normalized" ? normalizedPreview : originalPreview;
   const {
     sheets,
     activeSheet,
@@ -85,10 +85,10 @@ export function DocumentsPreviewTable({
     setPagination((current) => ({ ...current, pageIndex: 0 }));
   }, [sheetIndex]);
 
-  const handlePreviewSourceChange = (nextSource: PreviewSource) => {
-    if (nextSource === previewSource) return;
+  const handlePreviewVariantChange = (nextVariant: PreviewVariant) => {
+    if (nextVariant === previewVariant) return;
     setSheetIndex(null);
-    setPreviewSource(nextSource);
+    setPreviewVariant(nextVariant);
   };
 
   const columns = useMemo<ColumnDef<string[]>[]>(() => {
@@ -148,7 +148,31 @@ export function DocumentsPreviewTable({
 
   const hasSheets = sheets.length > 0;
   const selectedSheetValue = sheetIndex !== null ? String(sheetIndex) : "";
-  const showOutputNotice = !hasOutput;
+  const showNormalizedNotice = !hasNormalizedOutput;
+
+  const canDownloadOriginal = Boolean(onDownloadOriginal);
+  const canDownloadNormalized = Boolean(onDownloadOutput && normalizedRunId);
+  const canDownloadAny = canDownloadOriginal || canDownloadNormalized;
+  const isNormalizedView = previewVariant === "normalized";
+  const downloadLabel = isNormalizedView ? "Download normalized" : "Download original";
+  const downloadDisabled = isNormalizedView ? !canDownloadNormalized : !canDownloadOriginal;
+  const downloadTitle = isNormalizedView
+    ? canDownloadNormalized
+      ? "Download normalized output"
+      : hasNormalizedOutput
+        ? "Download unavailable"
+        : "No normalized output available yet"
+    : canDownloadOriginal
+      ? "Download original document"
+      : "Download unavailable";
+
+  const handleDownload = () => {
+    if (isNormalizedView) {
+      onDownloadOutput?.(document);
+      return;
+    }
+    onDownloadOriginal?.(document);
+  };
 
   const runInsights = useMemo(() => {
     const insights: Array<{ label: string; value: string }> = [];
@@ -186,10 +210,10 @@ export function DocumentsPreviewTable({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-3 bg-background px-6 py-3 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-3">
-          <PreviewSourceToggle
-            value={previewSource}
-            onChange={handlePreviewSourceChange}
-            hasOutput={hasOutput}
+          <PreviewVariantToggle
+            value={previewVariant}
+            onChange={handlePreviewVariantChange}
+            hasNormalizedOutput={hasNormalizedOutput}
           />
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium text-muted-foreground">Sheet</span>
@@ -227,7 +251,7 @@ export function DocumentsPreviewTable({
               <span className="ml-1 tabular-nums">{insight.value}</span>
             </span>
           ))}
-          {showOutputNotice ? (
+          {showNormalizedNotice ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
               No normalized output yet
             </span>
@@ -237,14 +261,15 @@ export function DocumentsPreviewTable({
           ) : null}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {onDownloadOriginal ? (
-            <Button size="sm" variant="outline" onClick={() => onDownloadOriginal(document)}>
-              Download original
-            </Button>
-          ) : null}
-          {onDownloadOutput && outputRunId ? (
-            <Button size="sm" variant="outline" onClick={() => onDownloadOutput(document)}>
-              Download output
+          {canDownloadAny ? (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleDownload}
+              disabled={downloadDisabled}
+              title={downloadTitle}
+            >
+              {downloadLabel}
             </Button>
           ) : null}
         </div>
@@ -276,24 +301,31 @@ export function DocumentsPreviewTable({
   );
 }
 
-function PreviewSourceToggle({
+function PreviewVariantToggle({
   value,
   onChange,
-  hasOutput,
+  hasNormalizedOutput,
 }: {
-  value: PreviewSource;
-  onChange: (value: PreviewSource) => void;
-  hasOutput: boolean;
+  value: PreviewVariant;
+  onChange: (value: PreviewVariant) => void;
+  hasNormalizedOutput: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5">
+    <div
+      className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5"
+      role="group"
+      aria-label="Preview source"
+    >
       <Button
         size="sm"
-        variant={value === "output" ? "secondary" : "ghost"}
+        variant={value === "normalized" ? "secondary" : "ghost"}
         className="h-6 rounded-full px-2 text-[11px]"
-        onClick={() => onChange("output")}
-        disabled={!hasOutput}
-        title={hasOutput ? "Preview normalized output" : "No normalized output available yet"}
+        onClick={() => onChange("normalized")}
+        disabled={!hasNormalizedOutput}
+        aria-pressed={value === "normalized"}
+        title={
+          hasNormalizedOutput ? "Preview normalized output" : "No normalized output available yet"
+        }
       >
         Normalized
       </Button>
@@ -302,6 +334,8 @@ function PreviewSourceToggle({
         variant={value === "original" ? "secondary" : "ghost"}
         className="h-6 rounded-full px-2 text-[11px]"
         onClick={() => onChange("original")}
+        aria-pressed={value === "original"}
+        title="Preview original document"
       >
         Original
       </Button>
