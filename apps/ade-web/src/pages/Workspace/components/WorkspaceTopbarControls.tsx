@@ -86,16 +86,16 @@ function WorkspaceAppearanceMenu() {
         <button
           type="button"
           className={clsx(
-            "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition",
-            "border-border/70 bg-background/70 text-foreground shadow-sm hover:border-border/90 hover:bg-background",
+            "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition",
+            "border-border/60 bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border/90 hover:bg-background",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             open && "border-ring ring-2 ring-ring/30",
           )}
           aria-haspopup="menu"
           aria-expanded={open}
         >
-          <span className="inline-flex size-6 items-center justify-center rounded-full bg-muted">
-            <ModeIcon className="h-3.5 w-3.5 text-foreground" />
+          <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ModeIcon className="h-3.5 w-3.5" />
           </span>
           <span className="hidden lg:inline">Appearance</span>
           <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
@@ -187,15 +187,15 @@ function WorkspaceProfileMenu({
         <button
           type="button"
           className={clsx(
-            "inline-flex h-9 items-center gap-2 rounded-full border px-2.5 text-sm font-medium transition",
-            "border-border/70 bg-background/70 text-foreground shadow-sm hover:border-border/90 hover:bg-background",
+            "inline-flex h-9 items-center gap-2 rounded-full border px-2.5 text-sm font-semibold transition",
+            "border-border/60 bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border/90 hover:bg-background",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             open && "border-ring ring-2 ring-ring/30",
           )}
           aria-haspopup="menu"
           aria-expanded={open}
         >
-          <Avatar className="h-6 w-6 rounded-full shadow-sm">
+          <Avatar className="h-6 w-6 rounded-full border border-border/70 shadow-sm">
             <AvatarFallback className="rounded-full bg-primary text-[10px] font-semibold uppercase text-primary-foreground">
               {initials}
             </AvatarFallback>
