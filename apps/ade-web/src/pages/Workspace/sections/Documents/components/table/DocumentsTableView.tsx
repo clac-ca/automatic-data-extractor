@@ -41,9 +41,8 @@ import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
-import { DocumentsSplitLayout } from "../layout/DocumentsSplitLayout";
 import { DocumentsCommentsPane } from "../comments/DocumentsCommentsPane";
-import { DocumentsPreviewPane } from "../preview/DocumentsPreviewPane";
+import { DocumentsPreviewDialog } from "../preview/DocumentsPreviewDialog";
 import { shortId } from "../../utils";
 import type { DocumentRow, WorkspacePerson } from "../../types";
 import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
@@ -674,18 +673,6 @@ export function DocumentsTableView({
     </div>
   );
 
-  const previewContent = (
-    <DocumentsPreviewPane
-      workspaceId={workspaceId}
-      document={selectedDocument}
-      onClose={closePreview}
-      onDownloadOriginal={handleDownloadOriginal}
-      onDownloadOutput={handleDownloadOutput}
-      isLoading={isPreviewLoading}
-      errorMessage={previewErrorMessage}
-    />
-  );
-
   const commentsContent = (
     <DocumentsCommentsPane
       workspaceId={workspaceId}
@@ -698,12 +685,25 @@ export function DocumentsTableView({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <DocumentsSplitLayout
-        table={tableContent}
-        preview={previewContent}
-        comments={commentsContent}
-        showPreview={showPreview}
-        showComments={showComments}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        {tableContent}
+        {showComments ? (
+          <div className="min-h-0 w-[360px] min-w-[320px] flex-shrink-0 overflow-hidden">
+            {commentsContent}
+          </div>
+        ) : null}
+      </div>
+      <DocumentsPreviewDialog
+        open={showPreview}
+        onOpenChange={(open) => {
+          if (!open) closePreview();
+        }}
+        workspaceId={workspaceId}
+        document={selectedDocument}
+        onDownloadOriginal={handleDownloadOriginal}
+        onDownloadOutput={handleDownloadOutput}
+        isLoading={isPreviewLoading}
+        errorMessage={previewErrorMessage}
       />
       <Dialog
         open={Boolean(deleteTarget)}

@@ -19,31 +19,3 @@
 .documents-table [data-slot="table-head"][style*="right:"] {
   z-index: 3 !important;
 }
-
-.documents-panel-content {
-  height: 100%;
-  width: 100%;
-  min-height: 0;
-  min-width: 0;
-  transition: opacity 200ms linear, transform 200ms linear;
-  will-change: opacity, transform;
-  contain: layout paint;
-  content-visibility: auto;
-}
-
-.documents-panel-content[data-state="closed"] {
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-}
-
-.documents-panel-content[data-pane="comments"][data-state="closed"] {
-  transform: translateX(6px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .documents-panel-content {
-    transition: none;
-    transform: none;
-  }
-}

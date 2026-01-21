@@ -1,4 +1,4 @@
-import { Maximize2, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -6,14 +6,10 @@ export function DocumentsPreviewHeader({
   title,
   subtitle,
   onClose,
-  onExpand,
-  actions,
 }: {
   title: string;
   subtitle?: string | null;
   onClose: () => void;
-  onExpand?: () => void;
-  actions?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 px-6 py-3">
@@ -25,27 +21,14 @@ export function DocumentsPreviewHeader({
           <div className="text-xs text-muted-foreground">{subtitle}</div>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {actions}
-        {onExpand ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Expand preview"
-            onClick={onExpand}
-          >
-            <Maximize2 className="size-4" />
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Close preview"
-          onClick={onClose}
-        >
-          <X className="size-4" />
-        </Button>
-      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Close preview"
+        onClick={onClose}
+      >
+        <X className="size-4" />
+      </Button>
     </div>
   );
 }

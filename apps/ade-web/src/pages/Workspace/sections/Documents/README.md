@@ -3,9 +3,8 @@
 ## UX model (quick summary)
 
 - The documents list is the primary surface.
-- Clicking a document name opens a **bottom split-pane preview** immediately.
-- Comments open in a **right-side panel** and can be shown alongside the preview.
-- Panels are resizable using `react-resizable-panels`.
+- Clicking a document name opens a **full-screen preview dialog** immediately.
+- Comments open in a **right-side panel** on the list view.
 - Preview is read-only and uses DiceUI `data-table` components.
 
 ## URL query keys
