@@ -18,6 +18,8 @@ export type DocumentsColumnContext = {
   filterMode: "simple" | "advanced";
   people: WorkspacePerson[];
   tagOptions: string[];
+  onTagOptionsChange?: (nextOptions: string[]) => void;
+  onCreateTag?: (tag: string) => void | Promise<void>;
   rowPresence?: Map<string, PresenceParticipant[]>;
   selectedDocumentId?: string | null;
   isPreviewOpen: boolean;
@@ -37,6 +39,8 @@ export function useDocumentsColumns({
   filterMode,
   people,
   tagOptions,
+  onTagOptionsChange,
+  onCreateTag,
   rowPresence,
   selectedDocumentId,
   isPreviewOpen,
@@ -163,6 +167,8 @@ export function useDocumentsColumns({
             selected={row.original.tags ?? []}
             tagOptions={tagOptions}
             onToggle={(tag) => onToggleTag(row.original.id, tag)}
+            onTagOptionsChange={onTagOptionsChange}
+            onCreateTag={onCreateTag}
             disabled={isRowActionPending?.(row.original.id) ?? false}
           />
         ),
@@ -331,11 +337,13 @@ export function useDocumentsColumns({
       isPreviewOpen,
       isRowActionPending,
       memberOptions,
+      onCreateTag,
       onOpenPreview,
       onAssign,
       onDeleteRequest,
       onDownloadOriginal,
       onDownloadOutput,
+      onTagOptionsChange,
       onToggleComments,
       onTogglePreview,
       onToggleTag,

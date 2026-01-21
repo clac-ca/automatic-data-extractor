@@ -61,6 +61,43 @@ type RowMutation = "delete" | "assign" | "tags";
 
 type HydratedChange = DocumentChangeEntry & { row?: DocumentListRow | null };
 
+function tagKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function mergeTagOptions(primary: readonly string[], secondary: readonly string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  const push = (raw: string) => {
+    const normalized = raw.trim();
+    const key = normalized.toLowerCase();
+    if (!key) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  };
+
+  primary.forEach(push);
+  secondary.forEach(push);
+
+  return out;
+}
+
+function hasTagOption(options: readonly string[], tag: string) {
+  const k = tagKey(tag);
+  if (!k) return false;
+  return options.some((option) => tagKey(option) === k);
+}
+
+function isSameStringArray(a: readonly string[], b: readonly string[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export function DocumentsTableView({
   workspaceId,
   currentUser,
@@ -185,10 +222,32 @@ export function DocumentsTableView({
     staleTime: 60_000,
   });
 
-  const tagOptions = useMemo(
+  const catalogTagOptions = useMemo(
     () => tagsQuery.data?.items?.map((item) => item.tag) ?? [],
     [tagsQuery.data?.items],
   );
+
+  const tagOptionsWorkspaceRef = useRef(workspaceId);
+  const [tagOptions, setTagOptions] = useState<string[]>(catalogTagOptions);
+
+  useEffect(() => {
+    setTagOptions((current) => {
+      if (tagOptionsWorkspaceRef.current !== workspaceId) {
+        tagOptionsWorkspaceRef.current = workspaceId;
+        return mergeTagOptions(catalogTagOptions, []);
+      }
+
+      const merged = mergeTagOptions(catalogTagOptions, current);
+      return isSameStringArray(merged, current) ? current : merged;
+    });
+  }, [catalogTagOptions, workspaceId]);
+
+  const handleTagOptionsChange = useCallback((nextOptions: string[]) => {
+    setTagOptions((current) => {
+      const merged = mergeTagOptions(nextOptions, current);
+      return isSameStringArray(merged, current) ? current : merged;
+    });
+  }, []);
 
   useEffect(() => {
     if (!uploadItems?.length) return;
@@ -356,10 +415,17 @@ export function DocumentsTableView({
       const tags = current.tags ?? [];
       const hasTag = tags.includes(tag);
       const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
+      const isNewOption = !hasTag && !hasTagOption(tagOptions, tag);
 
       const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
       markRowPending(documentId, "tags");
       updateRow(documentId, { tags: nextTags });
+      if (isNewOption) {
+        setTagOptions((currentOptions) => {
+          const merged = mergeTagOptions(currentOptions, [tag]);
+          return isSameStringArray(merged, currentOptions) ? currentOptions : merged;
+        });
+      }
       try {
         const updated = await patchDocumentTags(
           workspaceId,
@@ -369,12 +435,12 @@ export function DocumentsTableView({
           { ifMatch },
         );
         applyDocumentUpdate(documentId, updated);
-        if (!hasTag && !tagOptions.includes(tag)) {
+        if (isNewOption) {
           queryClient.setQueryData<TagCatalogPage | undefined>(
             ["documents-tags", workspaceId],
             (currentCatalog) => {
               if (!currentCatalog) return currentCatalog;
-              const exists = currentCatalog.items.some((item) => item.tag === tag);
+              const exists = currentCatalog.items.some((item) => tagKey(item.tag) === tagKey(tag));
               if (exists) return currentCatalog;
               return {
                 ...currentCatalog,
@@ -520,6 +586,7 @@ export function DocumentsTableView({
     onToggleComments: handleToggleComments,
     onAssign,
     onToggleTag,
+    onTagOptionsChange: handleTagOptionsChange,
     onDeleteRequest,
     onDownloadOutput: handleDownloadOutput,
     onDownloadOriginal: handleDownloadOriginal,

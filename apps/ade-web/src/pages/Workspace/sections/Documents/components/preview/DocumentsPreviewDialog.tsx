@@ -52,12 +52,12 @@ export function DocumentsPreviewDialog({
           {subtitle ? <DialogDescription>{subtitle}</DialogDescription> : null}
         </DialogHeader>
         <section
-          className="flex h-full w-full flex-1 flex-col overflow-hidden bg-background"
+          className="flex min-h-0 min-w-0 h-full w-full flex-1 flex-col overflow-hidden bg-background"
           aria-label="Document preview"
         >
           <DocumentsPreviewHeader title={title} subtitle={subtitle} onClose={handleClose} />
           <Separator />
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {!document ? (
               isLoading ? (
                 <DocumentsPreviewSkeleton />

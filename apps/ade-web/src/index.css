@@ -29,6 +29,9 @@ body,
   /* Base tokens */
   --radius: 0.625rem;
 
+  /* Current theme hue (used for subtle tinting across surfaces like the sidebar) */
+  --theme-hue: 264.376;
+
   /* Surfaces (slight off-white bg reduces glare + lets white cards pop) */
   --background: oklch(0.99 0 0);
   --foreground: oklch(0.145 0 0);
@@ -77,7 +80,8 @@ body,
   --app-z-select: 100;
   --app-z-toast: 200;
 
-  --topbar: var(--card);
+  /* Topbar tokens: keep aligned with the Topbar component (uses bg-background) */
+  --topbar: var(--background);
   --topbar-foreground: var(--foreground);
   --topbar-primary: var(--primary);
   --topbar-primary-foreground: var(--primary-foreground);
@@ -111,7 +115,7 @@ body,
   --sidebar-accent: 240 4.8% 95.9%;
   --sidebar-accent-foreground: 240 5.9% 10%;
   --sidebar-border: 220 13% 91%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
+  --sidebar-ring: var(--ring);
   --sidebar-rail: hsl(var(--sidebar-background));
 
   /* Fonts (base variables) */
@@ -190,7 +194,7 @@ body,
   --sidebar-accent: 240 3.7% 15.9%;
   --sidebar-accent-foreground: 240 4.8% 95.9%;
   --sidebar-border: 240 3.7% 15.9%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
+  --sidebar-ring: var(--ring);
   --sidebar-rail: hsl(var(--sidebar-background));
 
   /* Dark shadows: add a subtle highlight outline for depth on dark surfaces */
@@ -213,6 +217,12 @@ body,
 
 /* CYAN */
 :root[data-theme="cyan"] {
+  --theme-hue: 210;
+  --topbar: oklch(0.945 0.03 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.015 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 14% 94%;
+  --sidebar-accent: var(--theme-hue) 18% 88%;
+  --sidebar-border: var(--theme-hue) 12% 84%;
   --primary: oklch(0.5339 0.0923 210);
   --ring: oklch(0.5339 0.0923 210);
   --chart-1: oklch(0.5339 0.0923 210);
@@ -220,6 +230,11 @@ body,
   --accent: oklch(0.97 0.02 210);
 }
 :root[data-theme="cyan"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5339 0.0923 210);
   --ring: oklch(0.5339 0.0923 210);
   --chart-1: oklch(0.5339 0.0923 210);
@@ -229,6 +244,12 @@ body,
 
 /* EMERALD */
 :root[data-theme="emerald"] {
+  --theme-hue: 155;
+  --topbar: oklch(0.945 0.03 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.015 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 14% 94%;
+  --sidebar-accent: var(--theme-hue) 18% 88%;
+  --sidebar-border: var(--theme-hue) 12% 84%;
   --primary: oklch(0.5279 0.1305 155);
   --ring: oklch(0.5279 0.1305 155);
   --chart-1: oklch(0.5279 0.1305 155);
@@ -236,6 +257,11 @@ body,
   --accent: oklch(0.97 0.02 155);
 }
 :root[data-theme="emerald"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5279 0.1305 155);
   --ring: oklch(0.5279 0.1305 155);
   --chart-1: oklch(0.5279 0.1305 155);
@@ -245,6 +271,12 @@ body,
 
 /* AMBER */
 :root[data-theme="amber"] {
+  --theme-hue: 45;
+  --topbar: oklch(0.945 0.022 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.012 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 12% 94%;
+  --sidebar-accent: var(--theme-hue) 16% 88%;
+  --sidebar-border: var(--theme-hue) 10% 84%;
   --primary: oklch(0.5585 0.1597 45);
   --ring: oklch(0.5585 0.1597 45);
   --chart-1: oklch(0.5585 0.1597 45);
@@ -252,6 +284,11 @@ body,
   --accent: oklch(0.97 0.02 45);
 }
 :root[data-theme="amber"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5585 0.1597 45);
   --ring: oklch(0.5585 0.1597 45);
   --chart-1: oklch(0.5585 0.1597 45);
@@ -261,6 +298,12 @@ body,
 
 /* CORAL */
 :root[data-theme="coral"] {
+  --theme-hue: 20;
+  --topbar: oklch(0.945 0.022 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.012 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 12% 94%;
+  --sidebar-accent: var(--theme-hue) 16% 88%;
+  --sidebar-border: var(--theme-hue) 10% 84%;
   --primary: oklch(0.5715 0.2295 20);
   --ring: oklch(0.5715 0.2295 20);
   --chart-1: oklch(0.5715 0.2295 20);
@@ -268,6 +311,11 @@ body,
   --accent: oklch(0.97 0.02 20);
 }
 :root[data-theme="coral"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5715 0.2295 20);
   --ring: oklch(0.5715 0.2295 20);
   --chart-1: oklch(0.5715 0.2295 20);
@@ -277,6 +325,12 @@ body,
 
 /* VIOLET */
 :root[data-theme="violet"] {
+  --theme-hue: 303;
+  --topbar: oklch(0.945 0.03 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.015 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 14% 94%;
+  --sidebar-accent: var(--theme-hue) 18% 88%;
+  --sidebar-border: var(--theme-hue) 12% 84%;
   --primary: oklch(0.5741 0.25 303);
   --ring: oklch(0.5741 0.25 303);
   --chart-1: oklch(0.5741 0.25 303);
@@ -284,6 +338,11 @@ body,
   --accent: oklch(0.97 0.02 303);
 }
 :root[data-theme="violet"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5741 0.25 303);
   --ring: oklch(0.5741 0.25 303);
   --chart-1: oklch(0.5741 0.25 303);
@@ -293,6 +352,12 @@ body,
 
 /* TEAL */
 :root[data-theme="teal"] {
+  --theme-hue: 185;
+  --topbar: oklch(0.945 0.03 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.015 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 14% 94%;
+  --sidebar-accent: var(--theme-hue) 18% 88%;
+  --sidebar-border: var(--theme-hue) 12% 84%;
   --primary: oklch(0.5311 0.0936 185);
   --ring: oklch(0.5311 0.0936 185);
   --chart-1: oklch(0.5311 0.0936 185);
@@ -300,6 +365,11 @@ body,
   --accent: oklch(0.97 0.02 185);
 }
 :root[data-theme="teal"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5311 0.0936 185);
   --ring: oklch(0.5311 0.0936 185);
   --chart-1: oklch(0.5311 0.0936 185);
@@ -309,6 +379,12 @@ body,
 
 /* BLUE */
 :root[data-theme="blue"] {
+  --theme-hue: 250;
+  --topbar: oklch(0.945 0.03 var(--theme-hue));
+  --topbar-border: oklch(0.885 0.015 var(--theme-hue));
+  --sidebar-background: var(--theme-hue) 14% 94%;
+  --sidebar-accent: var(--theme-hue) 18% 88%;
+  --sidebar-border: var(--theme-hue) 12% 84%;
   --primary: oklch(0.5430 0.1537 250);
   --ring: oklch(0.5430 0.1537 250);
   --chart-1: oklch(0.5430 0.1537 250);
@@ -316,6 +392,11 @@ body,
   --accent: oklch(0.97 0.02 250);
 }
 :root[data-theme="blue"].dark {
+  --topbar: var(--background);
+  --topbar-border: var(--border);
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
   --primary: oklch(0.5430 0.1537 250);
   --ring: oklch(0.5430 0.1537 250);
   --chart-1: oklch(0.5430 0.1537 250);
@@ -379,7 +460,7 @@ body,
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
 
   --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-sidebar-ring: var(--sidebar-ring);
 
   --color-topbar: var(--topbar);
   --color-topbar-foreground: var(--topbar-foreground);
@@ -414,5 +495,13 @@ body,
   body {
     @apply bg-background text-foreground;
     font-family: var(--app-font-sans);
+  }
+
+  /* Ensure Topbar uses its dedicated tokens without component changes. */
+  [data-slot="topbar"] {
+    --background: var(--topbar);
+    --foreground: var(--topbar-foreground);
+    --border: var(--topbar-border);
+    --ring: var(--topbar-ring);
   }
 }
