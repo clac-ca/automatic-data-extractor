@@ -21,7 +21,7 @@ import { WorkbenchSidebar } from "./components/WorkbenchSidebar";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
-import type { WorkbenchDataSeed, WorkbenchFileNode } from "./types";
+import type { WorkbenchDataSeed } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
 
@@ -86,6 +86,9 @@ const DEFAULT_CONSOLE_HEIGHT = 220;
 const COLLAPSED_CONSOLE_BAR_HEIGHT = 40;
 const MAX_CONSOLE_LINES = 2_000;
 const OUTPUT_HANDLE_THICKNESS = 10; // matches separator handle hit target
+const DEFAULT_WORKBENCH_SIDEBAR_WIDTH = 18 * 16;
+const MIN_WORKBENCH_SIDEBAR_WIDTH = 220;
+const MAX_WORKBENCH_SIDEBAR_WIDTH = 520;
 const CONSOLE_COLLAPSE_MESSAGE =
   "Panel closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
 
@@ -287,6 +290,7 @@ export function Workbench({
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
   const [consoleFraction, setConsoleFraction] = useState<number | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WORKBENCH_SIDEBAR_WIDTH);
   const lastConsoleFractionRef = useRef<number | null>(null);
   const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
   useEffect(() => {
@@ -1167,7 +1171,7 @@ export function Workbench({
     ? "fixed inset-0 z-[90] flex flex-col bg-background text-foreground"
     : "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground";
   const workbenchSidebarStyle: CSSProperties = {
-    "--sidebar-width": "18rem",
+    "--sidebar-width": `${sidebarWidth}px`,
     "--sidebar-width-icon": "3.5rem",
   };
   const collapsedConsoleTheme = {
@@ -1182,7 +1186,7 @@ export function Workbench({
     >
       {isMaximized ? <div className="fixed inset-0 z-40 bg-overlay-strong" /> : null}
       <div className={windowFrameClass}>
-        <SidebarProvider className="min-h-0 w-full flex-1" style={workbenchSidebarStyle}>
+        <SidebarProvider className="relative min-h-0 w-full flex-1" style={workbenchSidebarStyle}>
           <WorkbenchLayoutSync
             outputCollapsed={outputCollapsed}
             consoleFraction={consoleFraction}
@@ -1190,7 +1194,7 @@ export function Workbench({
             pane={pane}
           />
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-            <WorkbenchSidebarPanel
+            <WorkbenchSidebar
               tree={tree}
               activeFileId={files.activeTab?.id ?? ""}
               onSelectFile={(fileId) => {
@@ -1198,6 +1202,12 @@ export function Workbench({
                 setFileId(fileId);
               }}
               configDisplayName={configDisplayName}
+            />
+            <WorkbenchSidebarResizeHandle
+              width={sidebarWidth}
+              minWidth={MIN_WORKBENCH_SIDEBAR_WIDTH}
+              maxWidth={MAX_WORKBENCH_SIDEBAR_WIDTH}
+              onResize={setSidebarWidth}
             />
             <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card text-card-foreground">
             <WorkbenchChrome
@@ -1592,33 +1602,50 @@ function WorkbenchLayoutSync({
   return null;
 }
 
-interface WorkbenchSidebarPanelProps {
-  readonly tree: WorkbenchFileNode;
-  readonly activeFileId?: string;
-  readonly onSelectFile: (fileId: string) => void;
-  readonly configDisplayName: string;
+interface WorkbenchSidebarResizeHandleProps {
+  readonly width: number;
+  readonly minWidth: number;
+  readonly maxWidth: number;
+  readonly onResize: (width: number) => void;
 }
 
-function WorkbenchSidebarPanel({
-  tree,
-  activeFileId,
-  onSelectFile,
-  configDisplayName,
-}: WorkbenchSidebarPanelProps) {
-  const { state, openMobile, isMobile } = useSidebar();
-  const isVisible = isMobile ? openMobile : state === "expanded";
+function WorkbenchSidebarResizeHandle({
+  width,
+  minWidth,
+  maxWidth,
+  onResize,
+}: WorkbenchSidebarResizeHandleProps) {
+  const { isMobile } = useSidebar();
 
-  if (!isVisible) {
+  if (isMobile) {
     return null;
   }
 
   return (
-    <WorkbenchSidebar
-      tree={tree}
-      activeFileId={activeFileId}
-      onSelectFile={onSelectFile}
-      configDisplayName={configDisplayName}
-    />
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      aria-valuemin={minWidth}
+      aria-valuemax={maxWidth}
+      aria-valuenow={Math.round(width)}
+      className="group relative hidden h-full w-2 cursor-col-resize select-none md:block"
+      onPointerDown={(event) => {
+        const startX = event.clientX;
+        const startWidth = width;
+        trackPointerDrag(event, {
+          cursor: "col-resize",
+          onMove: (moveEvent) => {
+            const delta = moveEvent.clientX - startX;
+            const nextWidth = clamp(startWidth + delta, minWidth, maxWidth);
+            onResize(nextWidth);
+          },
+        });
+      }}
+    >
+      <div className="absolute inset-y-0 left-1/2 w-px bg-border transition-colors group-hover:bg-ring/40" />
+      <span className="sr-only">Resize sidebar</span>
+    </div>
   );
 }
 
