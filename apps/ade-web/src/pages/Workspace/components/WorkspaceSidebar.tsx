@@ -326,7 +326,7 @@ function WorkspaceSwitcher({
             </span>
             <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <span className="block truncate text-sm font-semibold">{workspaceLabel}</span>
-              <span className="block truncate text-xs text-sidebar-foreground/70">
+              <span className="block truncate text-xs text-topbar-foreground/70">
                 {workspace.slug}
               </span>
             </span>
