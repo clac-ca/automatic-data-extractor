@@ -1,15 +1,11 @@
-import { useMemo } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-
-import { DataGrid } from "@/components/data-grid/data-grid";
-import { DataGridFilterMenu } from "@/components/data-grid/data-grid-filter-menu";
-import { DataGridKeyboardShortcuts } from "@/components/data-grid/data-grid-keyboard-shortcuts";
-import { DataGridRowHeightMenu } from "@/components/data-grid/data-grid-row-height-menu";
-import { DataGridSortMenu } from "@/components/data-grid/data-grid-sort-menu";
-import { DataGridViewMenu } from "@/components/data-grid/data-grid-view-menu";
-import { useDataGrid } from "@/hooks/use-data-grid";
-import { useWindowSize } from "@/hooks/use-window-size";
-import { getFilterFn } from "@/lib/data-grid-filters";
+import * as React from "react";
+import {
+  DataEditor,
+  GridCellKind,
+  type GridCell,
+  type GridColumn,
+  type Item,
+} from "@glideapps/glide-data-grid";
 
 import { columnLabel } from "../../utils";
 
@@ -24,60 +20,77 @@ export function DocumentsPreviewGrid({
   headerRow,
   rows,
   columnCount,
-  resetKey,
 }: DocumentsPreviewGridProps) {
-  const windowSize = useWindowSize({ defaultHeight: 720 });
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = React.useState(() => ({
+    width: 0,
+    height: 0,
+  }));
 
-  const filterFn = useMemo(() => getFilterFn<string[]>(), []);
+  React.useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-  const columns = useMemo<ColumnDef<string[]>[]>(() => {
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setContainerSize({
+        width: Math.floor(width),
+        height: Math.floor(height),
+      });
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const columns = React.useMemo<GridColumn[]>(() => {
     if (!columnCount) return [];
 
     return Array.from({ length: columnCount }, (_, index) => {
       const header = headerRow[index] ?? "";
-      const label = header.trim() ? header : columnLabel(index);
+      const title = header.trim() ? header : columnLabel(index);
 
       return {
+        title,
         id: `col_${index}`,
-        accessorFn: (row) => row[index] ?? "",
-        header: label,
-        meta: {
-          label,
-          cell: {
-            variant: "short-text",
-          },
-        },
-        minSize: 120,
-        filterFn,
+        width: 160,
       };
     });
-  }, [columnCount, filterFn, headerRow]);
+  }, [columnCount, headerRow]);
 
-  const { table, ...dataGridProps } = useDataGrid({
-    data: rows,
-    columns,
-    readOnly: true,
-    enableSearch: true,
-    enableColumnVirtualization: true,
-    getRowId: (_row, index) => `${resetKey}-${index}`,
-  });
+  const getCellContent = React.useCallback(
+    (cell: Item): GridCell => {
+      const [col, row] = cell;
+      const value = rows[row]?.[col] ?? "";
 
-  const height = Math.max(400, windowSize.height - 150);
+      return {
+        kind: GridCellKind.Text,
+        allowOverlay: true,
+        readonly: true,
+        displayData: value,
+        data: value,
+      };
+    },
+    [rows],
+  );
+
+  const width = containerSize.width || 800;
+  const height = containerSize.height || 500;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div
-        role="toolbar"
-        aria-orientation="horizontal"
-        className="flex items-center gap-2 self-end"
-      >
-        <DataGridKeyboardShortcuts />
-        <DataGridFilterMenu table={table} align="end" />
-        <DataGridSortMenu table={table} align="end" />
-        <DataGridRowHeightMenu table={table} align="end" />
-        <DataGridViewMenu table={table} align="end" />
-      </div>
-      <DataGrid {...dataGridProps} table={table} height={height} />
+    <div
+      ref={containerRef}
+      className="min-h-0 flex-1 overflow-hidden rounded-md border"
+    >
+      <DataEditor
+        columns={columns}
+        rows={rows.length}
+        getCellContent={getCellContent}
+        width={width}
+        height={height}
+      />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -173,8 +172,8 @@ export function DocumentsPreviewContent({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-3 bg-background px-6 py-3 text-xs text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-3 border-b bg-background/95 px-4 py-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2">
           <PreviewVariantToggle
             value={previewVariant}
             onChange={handlePreviewVariantChange}
@@ -187,7 +186,7 @@ export function DocumentsPreviewContent({
               onValueChange={(value) => setSheetIndex(Number(value))}
               disabled={!hasSheets}
             >
-              <SelectTrigger className="h-7 w-[180px] bg-background text-xs">
+              <SelectTrigger className="h-6 w-[160px] bg-background text-[11px]">
                 <SelectValue placeholder={hasSheets ? "Select sheet" : "No sheets"} />
               </SelectTrigger>
               <SelectContent>
@@ -200,8 +199,8 @@ export function DocumentsPreviewContent({
             </Select>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span>{summaryLabel}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap text-[10px] text-muted-foreground">
+          <span className="text-[11px] text-muted-foreground">{summaryLabel}</span>
           {truncationLabel ? (
             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
               {truncationLabel}
@@ -225,7 +224,7 @@ export function DocumentsPreviewContent({
             <span className="text-[10px] text-muted-foreground">Refreshing…</span>
           ) : null}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           {canDownloadAny ? (
             <Button
               size="sm"
@@ -233,24 +232,24 @@ export function DocumentsPreviewContent({
               onClick={handleDownload}
               disabled={downloadDisabled}
               title={downloadTitle}
+              className="h-7 px-2 text-[11px]"
             >
               {downloadLabel}
             </Button>
           ) : null}
         </div>
       </div>
-      <Separator />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {showSkeleton ? (
-          <div className="px-6">
+          <div className="p-2">
             <DocumentsPreviewSkeleton columnCount={Math.max(4, visibleColumns || 6)} />
           </div>
         ) : showError ? (
-          <div className="flex h-full items-center justify-center px-6 py-8 text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-4 py-6 text-sm text-muted-foreground">
             Unable to load the document preview. Try again later.
           </div>
         ) : preview ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 py-4">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col p-2">
             <DocumentsPreviewGrid
               key={resetKey}
               headerRow={previewModel.headerRow}
@@ -260,7 +259,7 @@ export function DocumentsPreviewContent({
             />
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center px-6 py-8 text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-4 py-6 text-sm text-muted-foreground">
             Preview not available for this document.
           </div>
         )}

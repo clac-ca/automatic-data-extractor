@@ -17,7 +17,10 @@ export function WorkspaceLayout({ children }: { readonly children: ReactNode }) 
         <WorkspaceTopbar />
 
         {/* Row 2: the ONLY scroller */}
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto">
+        <main
+          data-slot="workspace-content"
+          className="relative min-h-0 min-w-0 flex-1 overflow-auto"
+        >
           {children}
         </main>
       </TopbarProvider>

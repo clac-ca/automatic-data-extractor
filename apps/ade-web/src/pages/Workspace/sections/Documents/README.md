@@ -5,7 +5,7 @@
 - The documents list is the primary surface.
 - Clicking a document name opens a **full-screen preview dialog** immediately.
 - Comments open in a **right-side panel** on the list view.
-- Preview is read-only and uses DiceUI `data-grid` components.
+- Preview is read-only and uses Glide Data Grid.
 
 ## URL query keys
 
