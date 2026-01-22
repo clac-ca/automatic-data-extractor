@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type HTMLAttributes } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { NavLink, createSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Check, ChevronDown, ChevronsUpDown, FileText, LayoutGrid, PlayCircle, Plus, Settings, Wrench } from "lucide-react";
 
 import {
@@ -109,7 +109,7 @@ export function WorkspaceSidebar() {
   const queryClient = useQueryClient();
   const { workspace, workspaces } = useWorkspaceContext();
   const presence = useWorkspacePresence();
-  const { pathname, search } = useLocation();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
 
   const base = `/workspaces/${workspace.id}`;
@@ -154,7 +154,13 @@ export function WorkspaceSidebar() {
   });
 
   const assignedDocuments = assignedDocumentsQuery.data?.items ?? [];
-  const activeDocId = useMemo(() => new URLSearchParams(search).get("docId"), [search]);
+  const activeDocId = useMemo(() => {
+    const prefix = `/workspaces/${workspace.id}/documents/`;
+    if (!pathname.startsWith(prefix)) return null;
+    const remainder = pathname.slice(prefix.length);
+    const segment = remainder.split("/")[0];
+    return segment ? decodeURIComponent(segment) : null;
+  }, [pathname, workspace.id]);
   const workspaceParticipants = useMemo(
     () => dedupeParticipants(presence.participants),
     [presence.participants],
@@ -317,7 +323,7 @@ function WorkspaceSwitcher({
         <SidebarMenuButton
           type="button"
           size="lg"
-          className="w-full justify-between border border-transparent bg-topbar/70 shadow-none hover:bg-topbar/90 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
+          className="w-full justify-between border border-transparent bg-topbar/70 shadow-none hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
           tooltip={workspaceLabel}
         >
           <span className="flex min-w-0 items-center gap-2">
@@ -522,10 +528,7 @@ function AssignedDocumentItem({
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <NavLink
-          to={`${documentsLink}?${createSearchParams({
-            docId: document.id,
-            panes: "preview",
-          })}`}
+          to={`${documentsLink}/${encodeURIComponent(document.id)}`}
         >
           <FileText />
           <span className="min-w-0 flex-1 truncate">{document.name}</span>

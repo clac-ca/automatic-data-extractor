@@ -70,11 +70,11 @@ export function AppearanceMenu({
             className={clsx(
               "inline-flex h-9 items-center gap-2 rounded-xl border px-2.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               isHeaderTone
-                ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
+                ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-accent hover:text-accent-foreground"
                 : "border-border/80 bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",
               open &&
                 (isHeaderTone
-                  ? "border-ring ring-2 ring-ring/30"
+                  ? "border-ring bg-accent text-accent-foreground ring-2 ring-ring/30"
                   : "border-ring ring-2 ring-ring/30 text-foreground"),
             )}
           >

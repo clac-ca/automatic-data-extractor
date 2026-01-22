@@ -49,7 +49,7 @@ export function WorkspaceTopbarControls() {
             aria-label="Toggle color mode"
             className={clsx(
               "inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground transition",
-              "hover:bg-background/80",
+              "hover:bg-accent hover:text-accent-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               "[&>svg]:h-4 [&>svg]:w-4",
             )}
@@ -96,9 +96,9 @@ function WorkspaceProfileMenu({
           type="button"
           className={clsx(
             "inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition",
-            "border-border/60 bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border/90 hover:bg-background",
+            "border-border/60 bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border/90 hover:bg-accent hover:text-accent-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            open && "border-ring ring-2 ring-ring/30",
+            open && "border-ring bg-accent text-accent-foreground ring-2 ring-ring/30",
           )}
           aria-haspopup="menu"
           aria-expanded={open}
@@ -163,12 +163,12 @@ function WorkspaceThemeMenu() {
           aria-label="Select theme"
           className={clsx(
             "inline-flex h-8 items-center gap-2 rounded-full px-2 text-xs font-semibold text-foreground transition",
-            "hover:bg-background/80",
+            "hover:bg-accent hover:text-accent-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            open && "bg-background/90",
+            open && "bg-accent text-accent-foreground",
           )}
         >
-              <Palette className="h-4 w-4 text-foreground" aria-hidden />
+          <Palette className="h-4 w-4 text-current" aria-hidden />
           <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
           <span className="sr-only">Theme</span>
         </button>

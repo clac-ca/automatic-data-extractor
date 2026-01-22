@@ -57,9 +57,12 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
             "inline-flex items-center rounded-xl border text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             isHeaderTone ? "h-9 gap-2 px-2.5" : "gap-3 px-2.5 py-1.5",
             isHeaderTone
-              ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-background/80"
+              ? "border-border/50 bg-background/60 text-foreground shadow-none hover:border-border/70 hover:bg-accent hover:text-accent-foreground"
               : "border-border bg-card text-muted-foreground shadow-sm hover:border-ring/40 hover:text-foreground",
-            open && "border-ring ring-2 ring-ring/30",
+            open &&
+              (isHeaderTone
+                ? "border-ring bg-accent text-accent-foreground ring-2 ring-ring/30"
+                : "border-ring ring-2 ring-ring/30"),
           )}
           aria-haspopup="menu"
           aria-expanded={open}
@@ -71,7 +74,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
           </Avatar>
           {isHeaderTone ? (
             <span className="hidden min-w-0 xl:block">
-              <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
+              <span className="truncate text-sm font-semibold">{displayName}</span>
             </span>
           ) : (
             <span className="hidden min-w-0 flex-col xl:flex">
@@ -81,7 +84,8 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
           )}
           <ChevronDownIcon
             className={clsx(
-              "h-4 w-4 transition-transform duration-150 text-muted-foreground",
+              "h-4 w-4 transition-transform duration-150",
+              isHeaderTone ? "text-current" : "text-muted-foreground",
               open && "rotate-180",
             )}
           />
