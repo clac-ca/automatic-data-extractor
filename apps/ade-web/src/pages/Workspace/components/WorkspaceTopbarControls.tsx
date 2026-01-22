@@ -88,23 +88,20 @@ function WorkspaceProfileMenu({
         <button
           type="button"
           className={clsx(
-            "inline-flex h-9 items-center gap-2 rounded-full border px-2.5 text-sm font-semibold transition",
+            "inline-flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition",
             "border-border/60 bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border/90 hover:bg-background",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             open && "border-ring ring-2 ring-ring/30",
           )}
           aria-haspopup="menu"
           aria-expanded={open}
+          aria-label="Open profile menu"
         >
           <Avatar className="h-6 w-6 rounded-full border border-border/70 shadow-sm">
             <AvatarFallback className="rounded-full bg-primary text-[10px] font-semibold uppercase text-primary-foreground">
               {initials}
             </AvatarFallback>
           </Avatar>
-          <span className="hidden lg:block max-w-[10rem] truncate text-sm font-semibold">
-            {displayName}
-          </span>
-          <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-2">
