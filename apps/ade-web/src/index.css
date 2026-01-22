@@ -5,12 +5,6 @@
 /* Tailwind v4 dark mode variant (shadcn standard) */
 @custom-variant dark (&:is(.dark, .dark *));
 
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
 html,
 body,
 #root {
@@ -199,6 +193,7 @@ body,
   --ring: oklch(0.5462 0.25 var(--theme-hue));
 
   --topbar: oklch(0.17 0.03 var(--theme-hue));
+  --topbar-foreground: var(--foreground);
   --topbar-border: oklch(0.26 0.02 var(--theme-hue));
 
   --overlay: oklch(0 0 0 / 0.6);
@@ -573,4 +568,3 @@ body,
     --ring: var(--topbar-ring);
   }
 }
-  --topbar-foreground: oklch(0.985 0 0);

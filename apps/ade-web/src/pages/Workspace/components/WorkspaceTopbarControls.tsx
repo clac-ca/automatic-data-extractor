@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
-import { Palette } from "lucide-react";
+import { Moon, Palette, Sun } from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { BUILTIN_THEMES, useTheme } from "@/providers/theme";
-import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,26 +28,34 @@ const ADE_WEB_VERSION =
 
 export function WorkspaceTopbarControls() {
   const session = useSession();
+  const { resolvedMode, setModePreference } = useTheme();
   const [versionsOpen, setVersionsOpen] = useState(false);
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
+  const isDark = resolvedMode === "dark";
+
+  const handleToggleTheme = () => {
+    setModePreference(isDark ? "light" : "dark");
+  };
 
   return (
     <>
       <WorkspaceVersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
         <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-0.5 shadow-sm backdrop-blur-sm">
-          <AnimatedThemeToggler
-            duration={800}
+          <button
             type="button"
+            onClick={handleToggleTheme}
+            aria-label="Toggle color mode"
             className={clsx(
               "inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground transition",
               "hover:bg-background/80",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               "[&>svg]:h-4 [&>svg]:w-4",
             )}
-            aria-label="Toggle color mode"
-          />
+          >
+            {isDark ? <Sun /> : <Moon />}
+          </button>
           <span className="h-5 w-px bg-border/70" aria-hidden />
           <WorkspaceThemeMenu />
         </div>
