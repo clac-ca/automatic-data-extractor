@@ -5,8 +5,8 @@ import type { RunStatus } from "@/types";
 
 const STATUS_BADGE_STYLES: Record<RunStatus, string> = {
   queued: "border-border/60 bg-secondary text-secondary-foreground",
-  running: "border-border/60 bg-accent text-accent-foreground",
-  succeeded: "border-primary/20 bg-primary/10 text-primary",
+  running: "border-info/30 bg-info/10 text-info dark:bg-info/20",
+  succeeded: "border-success/30 bg-success/10 text-success dark:bg-success/20",
   failed: "border-destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20",
 };
 

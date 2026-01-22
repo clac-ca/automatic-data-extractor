@@ -66,6 +66,14 @@ body,
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
 
+  /* Semantic status colors (fixed hues for clarity across themes) */
+  --success: oklch(0.58 0.17 150);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.775 0.165 80);
+  --warning-foreground: oklch(0.145 0 0);
+  --info: oklch(0.675 0.12 230);
+  --info-foreground: oklch(0.985 0 0);
+
   /* Borders: keep general borders subtle, make inputs slightly more visible */
   --border: oklch(0.9 0 0);
   --input: oklch(0.88 0 0);
@@ -178,6 +186,13 @@ body,
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.145 0 0);
 
+  --success: oklch(0.72 0.17 150);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: oklch(0.78 0.16 80);
+  --warning-foreground: oklch(0.145 0 0);
+  --info: oklch(0.72 0.12 230);
+  --info-foreground: oklch(0.145 0 0);
+
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 18%);
 
@@ -249,15 +264,15 @@ body,
   --accent: oklch(0.97 0.02 var(--theme-hue));
 }
 :root[data-theme="default"].dark {
-  --topbar: #d9292e;
+  --topbar: #400000;
   --topbar-foreground: oklch(0.985 0 0);
-  --topbar-border: #a61d22;
+  --topbar-border: #2c0000;
   --sidebar-background: 220 6% 11%;
   --sidebar-accent: 220 6% 15%;
   --sidebar-border: 220 6% 18%;
-  --primary: #d9292e;
-  --ring: #d9292e;
-  --chart-1: #d9292e;
+  --primary: #b11f24;
+  --ring: #b11f24;
+  --chart-1: #b11f24;
 
   --accent: oklch(0.28 0.04 var(--theme-hue));
 }
@@ -483,6 +498,12 @@ body,
 
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 
   --color-border: var(--border);
   --color-input: var(--input);

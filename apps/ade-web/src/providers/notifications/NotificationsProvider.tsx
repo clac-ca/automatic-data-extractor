@@ -331,13 +331,13 @@ function renderNotificationIcon(intent: NotificationIntent) {
 
 const INTENT_STYLES: Record<NotificationIntent, { icon: string }> = {
   info: {
-    icon: "bg-muted text-muted-foreground",
+    icon: "bg-info/15 text-info",
   },
   success: {
-    icon: "bg-primary/15 text-primary",
+    icon: "bg-success/15 text-success",
   },
   warning: {
-    icon: "bg-accent text-accent-foreground",
+    icon: "bg-warning/15 text-warning",
   },
   danger: {
     icon: "bg-destructive/15 text-destructive",

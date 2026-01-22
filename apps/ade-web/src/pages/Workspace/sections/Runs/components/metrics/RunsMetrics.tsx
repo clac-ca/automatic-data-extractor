@@ -59,13 +59,13 @@ function SummaryBlock({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-primary"
+      ? "text-success"
       : tone === "warning"
-        ? "text-accent-foreground"
+        ? "text-warning"
         : tone === "danger"
           ? "text-destructive"
           : tone === "info"
-            ? "text-muted-foreground"
+            ? "text-info"
             : "text-foreground";
 
   return (
