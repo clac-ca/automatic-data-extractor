@@ -164,7 +164,7 @@ function WorkspaceThemeMenu() {
             open && "bg-background/90",
           )}
         >
-          <Palette className="h-4 w-4 text-primary" aria-hidden />
+              <Palette className="h-4 w-4 text-foreground" aria-hidden />
           <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
           <span className="sr-only">Theme</span>
         </button>
