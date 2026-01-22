@@ -249,8 +249,8 @@ export function WorkspaceSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="group-data-[collapsible=icon]:z-50">
-      <SidebarHeader>
-        <div className="flex items-start gap-2">
+      <SidebarHeader className="h-14 justify-center !py-0 bg-topbar text-topbar-foreground border-b border-topbar-border">
+        <div className="flex items-center gap-2">
           <SidebarMenu className="flex-1">
             <SidebarMenuItem>
               <WorkspaceSwitcher
@@ -263,7 +263,7 @@ export function WorkspaceSidebar() {
             </SidebarMenuItem>
           </SidebarMenu>
           <SidebarTrigger
-            className="mt-1 shrink-0 transition-transform duration-200 ease-linear group-data-[collapsible=icon]:translate-x-[calc(100%+theme(spacing.4))]"
+            className="shrink-0 transition-transform duration-200 ease-linear group-data-[collapsible=icon]:translate-x-[calc(100%+theme(spacing.4))]"
           />
         </div>
       </SidebarHeader>
@@ -320,7 +320,7 @@ function WorkspaceSwitcher({
         <SidebarMenuButton
           type="button"
           size="lg"
-          className="h-auto w-full justify-between bg-sidebar-accent/40"
+          className="w-full justify-between bg-transparent"
           tooltip={workspaceLabel}
         >
           <span className="flex min-w-0 items-center gap-2">
