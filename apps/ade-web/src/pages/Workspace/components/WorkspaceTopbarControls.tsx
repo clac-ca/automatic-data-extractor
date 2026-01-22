@@ -3,24 +3,14 @@ import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
 
 import { useSession } from "@/providers/auth/SessionContext";
-import {
-  BUILTIN_THEMES,
-  MODE_OPTIONS,
-  useTheme,
-  type ModePreference,
-} from "@/providers/theme";
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,13 +18,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useSystemVersions } from "@/hooks/system";
-import { CheckIcon, ChevronDownIcon, MoonIcon, SunIcon, SystemIcon } from "@/components/icons";
-
-const MODE_ICONS: Record<ModePreference, typeof SunIcon> = {
-  system: SystemIcon,
-  light: SunIcon,
-  dark: MoonIcon,
-};
+import { ChevronDownIcon } from "@/components/icons";
 
 const ADE_WEB_VERSION =
   (typeof import.meta.env.VITE_APP_VERSION === "string" ? import.meta.env.VITE_APP_VERSION : "") ||
@@ -51,7 +35,17 @@ export function WorkspaceTopbarControls() {
     <>
       <WorkspaceVersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
-        <WorkspaceAppearanceMenu />
+        <AnimatedThemeToggler
+          duration={800}
+          type="button"
+          className={clsx(
+            "inline-flex h-9 w-9 items-center justify-center rounded-full border text-foreground shadow-sm backdrop-blur-sm transition",
+            "border-border/60 bg-background/80 hover:border-border/90 hover:bg-background",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            "[&>svg]:h-4 [&>svg]:w-4",
+          )}
+          aria-label="Toggle color mode"
+        />
         <WorkspaceProfileMenu
           displayName={displayName}
           email={email}
@@ -59,105 +53,6 @@ export function WorkspaceTopbarControls() {
         />
       </div>
     </>
-  );
-}
-
-function WorkspaceAppearanceMenu() {
-  const { modePreference, setModePreference, theme, setTheme, setPreviewTheme } = useTheme();
-  const [open, setOpen] = useState(false);
-
-  const themeLabel = useMemo(
-    () => BUILTIN_THEMES.find((entry) => entry.id === theme)?.label ?? theme,
-    [theme],
-  );
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-    if (!nextOpen) {
-      setPreviewTheme(null);
-    }
-  };
-
-  const ModeIcon = MODE_ICONS[modePreference];
-
-  return (
-    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={clsx(
-            "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition",
-            "border-border/60 bg-background/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border/90 hover:bg-background",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            open && "border-ring ring-2 ring-ring/30",
-          )}
-          aria-haspopup="menu"
-          aria-expanded={open}
-        >
-          <span className="inline-flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <ModeIcon className="h-3.5 w-3.5" />
-          </span>
-          <span className="hidden lg:inline">Appearance</span>
-          <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-72"
-        onPointerLeave={() => setPreviewTheme(null)}
-      >
-        <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">
-          Mode
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={modePreference}
-          onValueChange={(value) => setModePreference(value as ModePreference)}
-        >
-          {MODE_OPTIONS.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value} className="items-start">
-              <div className="flex min-w-0 flex-col">
-                <span className="text-sm font-medium text-foreground">{option.label}</span>
-                <span className="text-xs text-muted-foreground">{option.description}</span>
-              </div>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex-1">Theme</span>
-            <span className="text-xs text-muted-foreground">{themeLabel}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-72" onPointerLeave={() => setPreviewTheme(null)}>
-            <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">
-              Themes
-            </DropdownMenuLabel>
-            <DropdownMenuGroup>
-              {BUILTIN_THEMES.map((entry) => {
-                const isSelected = entry.id === theme;
-                return (
-                  <DropdownMenuItem
-                    key={entry.id}
-                    onSelect={() => setTheme(entry.id)}
-                    onPointerMove={() => setPreviewTheme(entry.id)}
-                    onFocus={() => setPreviewTheme(entry.id)}
-                    className="gap-2"
-                  >
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm font-medium text-foreground">{entry.label}</span>
-                      <span className="truncate text-xs text-muted-foreground">{entry.description}</span>
-                    </div>
-                    {isSelected ? <CheckIcon className="h-4 w-4 text-foreground" /> : null}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

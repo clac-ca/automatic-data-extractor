@@ -5,6 +5,12 @@
 /* Tailwind v4 dark mode variant (shadcn standard) */
 @custom-variant dark (&:is(.dark, .dark *));
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 html,
 body,
 #root {
