@@ -105,11 +105,11 @@ export function WorkspaceDocumentsTopbarSearch({ className }: { readonly classNa
         onKeyDown={handleRootKeyDown}
         onKeyDownCapture={handleRootKeyDownCapture}
         className={cn(
-          "w-full min-w-0 overflow-hidden rounded-full border bg-white text-foreground shadow-sm transition-colors",
-          "border-border/70 hover:bg-white/95",
+          "w-full min-w-0 overflow-hidden rounded-full border bg-card text-card-foreground shadow-sm transition-colors",
+          "border-border/70 hover:bg-card/95 dark:hover:bg-card/90",
           "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
           "[&_[cmdk-input-wrapper]]:border-b-0 [&_[cmdk-input-wrapper]]:h-9 [&_[cmdk-input-wrapper]]:px-3",
-          "[&_[cmdk-input]]:h-9 [&_[cmdk-input]]:py-0",
+          "[&_[cmdk-input]]:h-9 [&_[cmdk-input]]:py-0 [&_[cmdk-input]]:text-card-foreground",
           "[&_[data-slot=search-input-wrapper]_svg]:opacity-60",
           "cursor-text",
           className,
@@ -142,7 +142,7 @@ export function WorkspaceDocumentsTopbarSearch({ className }: { readonly classNa
               }}
             />
             {normalizedQuery.length === 0 ? (
-              <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground lg:inline-flex">
+              <kbd className="pointer-events-none absolute right-3 inset-y-0 my-auto hidden h-5 items-center rounded bg-muted px-1.5 text-[10px] font-semibold leading-none text-muted-foreground lg:inline-flex">
                 {shortcutHint}
               </kbd>
             ) : null}
