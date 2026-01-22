@@ -15,7 +15,6 @@ import { useSession } from "@/providers/auth/SessionContext";
 import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
-import { WorkspaceDocumentsSearch } from "@/pages/Workspace/components/WorkspaceDocumentsSearch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Search,
@@ -42,7 +41,6 @@ import {
   SidebarMenuSkeleton,
   SidebarRail,
   SidebarSeparator,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/format";
@@ -248,9 +246,12 @@ export function WorkspaceSidebar() {
   useWorkspaceDocumentsChanges(updateAssignedDocuments);
 
   return (
-    <Sidebar collapsible="icon" className="group-data-[collapsible=icon]:z-50">
-      <SidebarHeader className="h-14 justify-center !py-0 bg-topbar text-topbar-foreground border-b border-topbar-border">
-        <div className="flex items-center gap-2">
+    <Sidebar
+      collapsible="icon"
+      className="group-data-[collapsible=icon]:z-50 group-data-[side=left]:border-r-0 group-data-[side=right]:border-l-0"
+    >
+      <SidebarHeader className="relative z-30 h-14 justify-center !p-0 bg-topbar text-topbar-foreground border-b border-topbar-border shadow-sm after:absolute after:-right-4 after:top-0 after:h-full after:w-4 after:bg-topbar after:content-[''] after:pointer-events-none after:z-30">
+        <div className="flex items-center">
           <SidebarMenu className="flex-1">
             <SidebarMenuItem>
               <WorkspaceSwitcher
@@ -262,14 +263,10 @@ export function WorkspaceSidebar() {
               />
             </SidebarMenuItem>
           </SidebarMenu>
-          <SidebarTrigger
-            className="shrink-0 transition-transform duration-200 ease-linear group-data-[collapsible=icon]:translate-x-[calc(100%+theme(spacing.4))]"
-          />
         </div>
       </SidebarHeader>
 
       <SidebarContent>
-        <WorkspaceDocumentsSearch />
         <WorkspaceNavSection
           navItems={navItems}
           isActive={isActive}
@@ -320,7 +317,7 @@ function WorkspaceSwitcher({
         <SidebarMenuButton
           type="button"
           size="lg"
-          className="w-full justify-between bg-transparent"
+          className="w-full justify-between border border-transparent bg-topbar/70 shadow-none hover:bg-topbar/90 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
           tooltip={workspaceLabel}
         >
           <span className="flex min-w-0 items-center gap-2">

@@ -1,4 +1,5 @@
 const THEME_CONFIG = {
+  default: { label: "Default", description: "ADE red with bold contrast." },
   indigo: { label: "Indigo", description: "Indigo accent on clean neutrals." },
   cyan: { label: "Cyan", description: "Cyan accent — crisp and modern." },
   emerald: { label: "Emerald", description: "Emerald accent — calm and grounded." },

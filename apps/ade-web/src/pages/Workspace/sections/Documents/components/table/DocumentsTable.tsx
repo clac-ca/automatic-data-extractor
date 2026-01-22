@@ -86,6 +86,8 @@ export function DocumentsTable({
     </ActionBar>
   );
 
+  const toolbarShellClassName =
+    "rounded-xl border border-border/60 bg-card/90 px-2 py-2 shadow-sm";
   const filterToggle = onToggleFilterMode ? (
     <Button variant="outline" size="sm" onClick={onToggleFilterMode}>
       {isAdvanced ? "Simple filters" : "Advanced filters"}
@@ -93,31 +95,41 @@ export function DocumentsTable({
   ) : null;
 
   const toolbarTail = filterToggle || toolbarActions ? (
-    <div className="ml-auto flex flex-wrap items-center gap-2">
+    <>
       {filterToggle}
       {toolbarActions}
-    </div>
+    </>
   ) : null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       {isAdvanced ? (
-        <DataTableAdvancedToolbar table={table}>
-          <DataTableSortList table={table} align="start" />
-          <DataTableFilterList
-            table={table}
-            align="start"
-            debounceMs={debounceMs}
-            throttleMs={throttleMs}
-            shallow={shallow}
-          />
-          {toolbarTail}
+        <DataTableAdvancedToolbar table={table} className={toolbarShellClassName}>
+          <div className="flex w-full flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <DataTableSortList table={table} align="start" />
+              <DataTableFilterList
+                table={table}
+                align="start"
+                debounceMs={debounceMs}
+                throttleMs={throttleMs}
+                shallow={shallow}
+              />
+            </div>
+            {toolbarTail ? (
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                {toolbarTail}
+              </div>
+            ) : null}
+          </div>
         </DataTableAdvancedToolbar>
       ) : (
-        <DataTableToolbar table={table}>
+        <DataTableToolbar table={table} className={toolbarShellClassName}>
           <DataTableSortList table={table} align="start" />
-          {filterToggle}
-          {toolbarActions}
+          <div className="flex flex-wrap items-center gap-2">
+            {filterToggle}
+            {toolbarActions}
+          </div>
         </DataTableToolbar>
       )}
       <DataTable

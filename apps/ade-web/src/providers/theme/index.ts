@@ -12,7 +12,7 @@ export type ResolvedMode = "light" | "dark";
 export type { ModePreference };
 export type { ThemeId };
 
-export const DEFAULT_THEME_ID: ThemeId = "indigo";
+export const DEFAULT_THEME_ID: ThemeId = "default";
 export const BUILTIN_THEME_IDS = THEME_IDS satisfies readonly ThemeId[];
 
 export const MODE_OPTIONS: Array<{

@@ -3,13 +3,17 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: 0.75rem;
+  box-shadow: var(--app-shadow-2xs);
 }
 
 .documents-table [data-slot="table-head"] {
   position: sticky !important;
   top: 0;
   z-index: 2 !important;
-  background: var(--background);
+  background: var(--card);
 }
 
 .documents-table [data-slot="table-head"][style*="left:"] {

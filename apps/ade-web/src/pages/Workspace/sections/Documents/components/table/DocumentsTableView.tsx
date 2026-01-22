@@ -726,7 +726,7 @@ export function DocumentsTableView({
 
   const tableContent = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 pb-6 pt-2">
         {configBanner}
         <DocumentsTable
           data={documents}
