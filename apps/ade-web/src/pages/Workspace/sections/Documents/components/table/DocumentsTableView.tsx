@@ -42,7 +42,7 @@ import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
 import { DocumentsCommentsPane } from "../comments/DocumentsCommentsPane";
-import { DocumentsPreviewDialog } from "../preview/DocumentsPreviewDialog";
+import { DocumentsPreviewDialog } from "../../preview/components/DocumentsPreviewDialog";
 import { shortId } from "../../utils";
 import type { DocumentRow, WorkspacePerson } from "../../types";
 import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";

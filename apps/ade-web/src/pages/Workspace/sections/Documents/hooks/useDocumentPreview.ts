@@ -8,15 +8,14 @@ import {
   type WorkbookSheetPreview,
 } from "@/api/documents";
 
-const DEFAULT_PREVIEW_ROWS = 200;
-const DEFAULT_PREVIEW_COLUMNS = 50;
-
 export function useDocumentPreview({
   workspaceId,
   documentId,
   sheetIndex,
-  maxRows = DEFAULT_PREVIEW_ROWS,
-  maxColumns = DEFAULT_PREVIEW_COLUMNS,
+  maxRows,
+  maxColumns,
+  trimEmptyRows = false,
+  trimEmptyColumns = false,
   enabled = true,
 }: {
   workspaceId: string;
@@ -24,6 +23,8 @@ export function useDocumentPreview({
   sheetIndex: number | null;
   maxRows?: number;
   maxColumns?: number;
+  trimEmptyRows?: boolean;
+  trimEmptyColumns?: boolean;
   enabled?: boolean;
 }) {
   const sheetsQuery = useQuery<DocumentSheet[]>({
@@ -40,7 +41,16 @@ export function useDocumentPreview({
   });
 
   const previewQuery = useQuery<WorkbookSheetPreview>({
-    queryKey: ["document-preview", workspaceId, documentId, sheetIndex, maxRows, maxColumns],
+    queryKey: [
+      "document-preview",
+      workspaceId,
+      documentId,
+      sheetIndex,
+      maxRows,
+      maxColumns,
+      trimEmptyRows,
+      trimEmptyColumns,
+    ],
     queryFn: ({ signal }) => {
       if (!documentId || sheetIndex === null) {
         throw new Error("Document preview requires a document and sheet.");
@@ -51,6 +61,8 @@ export function useDocumentPreview({
         {
           maxRows,
           maxColumns,
+          trimEmptyRows,
+          trimEmptyColumns,
           sheetIndex,
         },
         signal,

@@ -8,20 +8,21 @@ import {
   type WorkbookSheetPreview,
 } from "@/api/runs/api";
 
-const DEFAULT_PREVIEW_ROWS = 200;
-const DEFAULT_PREVIEW_COLUMNS = 50;
-
 export function useRunOutputPreview({
   runId,
   sheetIndex,
-  maxRows = DEFAULT_PREVIEW_ROWS,
-  maxColumns = DEFAULT_PREVIEW_COLUMNS,
+  maxRows,
+  maxColumns,
+  trimEmptyRows = false,
+  trimEmptyColumns = false,
   enabled = true,
 }: {
   runId: string | null;
   sheetIndex: number | null;
   maxRows?: number;
   maxColumns?: number;
+  trimEmptyRows?: boolean;
+  trimEmptyColumns?: boolean;
   enabled?: boolean;
 }) {
   const sheetsQuery = useQuery<RunOutputSheet[]>({
@@ -38,7 +39,15 @@ export function useRunOutputPreview({
   });
 
   const previewQuery = useQuery<WorkbookSheetPreview>({
-    queryKey: ["run-output-preview", runId, sheetIndex, maxRows, maxColumns],
+    queryKey: [
+      "run-output-preview",
+      runId,
+      sheetIndex,
+      maxRows,
+      maxColumns,
+      trimEmptyRows,
+      trimEmptyColumns,
+    ],
     queryFn: ({ signal }) => {
       if (!runId || sheetIndex === null) {
         throw new Error("Run output preview requires a run and sheet.");
@@ -48,6 +57,8 @@ export function useRunOutputPreview({
         {
           maxRows,
           maxColumns,
+          trimEmptyRows,
+          trimEmptyColumns,
           sheetIndex,
         },
         signal,

@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
 
-import { DataTable } from "@/components/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -18,12 +11,12 @@ import {
 } from "@/components/ui/select";
 
 import { DocumentsPreviewSkeleton } from "./DocumentsPreviewSkeleton";
+import { DocumentsPreviewGrid } from "./DocumentsPreviewGrid";
+import { buildPreviewGridModel } from "../lib/previewGridModel";
 import { useDocumentPreview } from "../../hooks/useDocumentPreview";
 import { useRunOutputPreview } from "../../hooks/useRunOutputPreview";
-import { columnLabel } from "../../utils";
 import type { DocumentRow } from "../../types";
 
-const DEFAULT_PAGE_SIZE = 25;
 type PreviewVariant = "normalized" | "original";
 
 export function DocumentsPreviewContent({
@@ -43,7 +36,6 @@ export function DocumentsPreviewContent({
     hasNormalizedOutput ? "normalized" : "original",
   );
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE });
 
   useEffect(() => {
     setSheetIndex(null);
@@ -54,12 +46,16 @@ export function DocumentsPreviewContent({
     workspaceId,
     documentId: document.id,
     sheetIndex,
+    trimEmptyRows: true,
+    trimEmptyColumns: true,
     enabled: previewVariant === "original",
   });
 
   const normalizedPreview = useRunOutputPreview({
     runId: normalizedRunId,
     sheetIndex,
+    trimEmptyRows: true,
+    trimEmptyColumns: true,
     enabled: previewVariant === "normalized",
   });
 
@@ -81,54 +77,23 @@ export function DocumentsPreviewContent({
     setSheetIndex(activeSheet.index);
   }, [activeSheet, sheetIndex]);
 
-  useEffect(() => {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [sheetIndex]);
-
   const handlePreviewVariantChange = (nextVariant: PreviewVariant) => {
     if (nextVariant === previewVariant) return;
     setSheetIndex(null);
     setPreviewVariant(nextVariant);
   };
 
-  const columns = useMemo<ColumnDef<string[]>[]>(() => {
-    if (!preview?.headers?.length) return [];
-    return preview.headers.map((header: string, index: number) => ({
-      id: `col_${index}`,
-      header: () => (
-        <span className="text-xs font-semibold">
-          {header || columnLabel(index)}
-        </span>
-      ),
-      cell: ({ row }: { row: { original: string[] } }) => (
-        <div className="min-w-0 whitespace-nowrap text-xs">
-          {row.original[index] ?? ""}
-        </div>
-      ),
-      size: 160,
-      minSize: 120,
-      enableSorting: false,
-      enableHiding: false,
-    }));
-  }, [preview?.headers]);
+  const previewRows = preview?.rows ?? [];
+  const previewModel = useMemo(
+    () => buildPreviewGridModel(previewRows),
+    [previewRows],
+  );
+  const resetKey = `${document.id}:${previewVariant}:${sheetIndex ?? "none"}`;
 
-  const data = preview?.rows ?? [];
-
-  const table = useReactTable({
-    data,
-    columns,
-    state: { pagination },
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    enableRowSelection: false,
-    manualPagination: false,
-  });
-
-  const visibleRows = preview?.rows?.length ?? 0;
+  const visibleRows = previewModel.bodyRows.length;
   const totalRows = preview?.totalRows ?? 0;
   const totalColumns = preview?.totalColumns ?? 0;
-  const visibleColumns = preview?.headers?.length ?? 0;
+  const visibleColumns = previewModel.columnCount;
   const truncatedRows = preview?.truncatedRows ?? false;
   const truncatedColumns = preview?.truncatedColumns ?? false;
 
@@ -285,10 +250,13 @@ export function DocumentsPreviewContent({
             Unable to load the document preview. Try again later.
           </div>
         ) : preview ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6">
-            <DataTable
-              table={table}
-              className="documents-table min-h-0 min-w-0 flex-1 overflow-hidden"
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 py-4">
+            <DocumentsPreviewGrid
+              key={resetKey}
+              headerRow={previewModel.headerRow}
+              rows={previewModel.bodyRows}
+              columnCount={previewModel.columnCount}
+              resetKey={resetKey}
             />
           </div>
         ) : (
