@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
+import { Palette } from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
+import { BUILTIN_THEMES, useTheme } from "@/providers/theme";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import {
   DropdownMenu,
@@ -18,7 +20,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useSystemVersions } from "@/hooks/system";
-import { ChevronDownIcon } from "@/components/icons";
+import { CheckIcon, ChevronDownIcon } from "@/components/icons";
 
 const ADE_WEB_VERSION =
   (typeof import.meta.env.VITE_APP_VERSION === "string" ? import.meta.env.VITE_APP_VERSION : "") ||
@@ -35,17 +37,21 @@ export function WorkspaceTopbarControls() {
     <>
       <WorkspaceVersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
-        <AnimatedThemeToggler
-          duration={800}
-          type="button"
-          className={clsx(
-            "inline-flex h-9 w-9 items-center justify-center rounded-full border text-foreground shadow-sm backdrop-blur-sm transition",
-            "border-border/60 bg-background/80 hover:border-border/90 hover:bg-background",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            "[&>svg]:h-4 [&>svg]:w-4",
-          )}
-          aria-label="Toggle color mode"
-        />
+        <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-0.5 shadow-sm backdrop-blur-sm">
+          <AnimatedThemeToggler
+            duration={800}
+            type="button"
+            className={clsx(
+              "inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground transition",
+              "hover:bg-background/80",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              "[&>svg]:h-4 [&>svg]:w-4",
+            )}
+            aria-label="Toggle color mode"
+          />
+          <span className="h-5 w-px bg-border/70" aria-hidden />
+          <WorkspaceThemeMenu />
+        </div>
         <WorkspaceProfileMenu
           displayName={displayName}
           email={email}
@@ -127,6 +133,66 @@ function WorkspaceProfileMenu({
           <span>Sign out</span>
           {isSigningOut ? <span className="text-xs text-muted-foreground">...</span> : null}
         </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function WorkspaceThemeMenu() {
+  const { theme, setPreviewTheme, setTheme } = useTheme();
+  const [open, setOpen] = useState(false);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setPreviewTheme(null);
+    }
+  };
+
+  return (
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Select theme"
+          className={clsx(
+            "inline-flex h-8 items-center gap-2 rounded-full px-2 text-xs font-semibold text-foreground transition",
+            "hover:bg-background/80",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            open && "bg-background/90",
+          )}
+        >
+          <Palette className="h-4 w-4 text-primary" aria-hidden />
+          <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
+          <span className="sr-only">Theme</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-56"
+        onPointerLeave={() => setPreviewTheme(null)}
+      >
+        <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">
+          Theme
+        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          {BUILTIN_THEMES.map((entry) => (
+            <DropdownMenuItem
+              key={entry.id}
+              onSelect={() => setTheme(entry.id)}
+              onPointerMove={() => setPreviewTheme(entry.id)}
+              onFocus={() => setPreviewTheme(entry.id)}
+              className="gap-3"
+            >
+              <span className="flex h-4 w-4 items-center justify-center">
+                {theme === entry.id ? <CheckIcon className="h-4 w-4 text-foreground" /> : null}
+              </span>
+              <span className="flex-1">{entry.label}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
