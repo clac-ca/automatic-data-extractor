@@ -1,22 +1,29 @@
 {
-  "name": "ADE Dev (SQL Server + Azurite)",
-  "dockerComposeFile": ["../docker-compose.dev.yml"],
-  "service": "ade-devcontainer",
+  "name": "ADE Dev (Python + Node + Azure SQL Driver)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
-  "shutdownAction": "stopCompose",
-  "remoteUser": "vscode",
-  "forwardPorts": [8000, 5173, 1433, 10000, 10001, 10002],
+
+  // Start only what you want. Add/remove mssql/azurite to make them "optional".
+  "runServices": ["ade", "mssql", "azurite"],
+
+  // Forward service ports (works locally and is the recommended approach in Compose scenarios too)
+  "forwardPorts": ["mssql:1433", "azurite:10000", "azurite:10001", "azurite:10002"],
+
   "features": {
+    // Official Node feature (installs Node via nvm + yarn + pnpm)
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "lts"
+      "version": "22"
     }
   },
+
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "ms-mssql.mssql"
       ]
     }
   }

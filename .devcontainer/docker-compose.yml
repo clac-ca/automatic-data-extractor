@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  ade:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspaces/automatic-data-extractor:cached
+    command: sleep infinity
+    depends_on:
+      - mssql
+      - azurite
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      # NOTE: Use MSSQL_SA_PASSWORD (SA_PASSWORD is deprecated)
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - "${ADE_DATA_DIR:-../data}/mssql:/var/opt/mssql"
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: >
+      azurite --location /data --debug /data/debug.log
+      --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    volumes:
+      - "${ADE_DATA_DIR:-../data}/azurite:/data"
