@@ -59,6 +59,6 @@ def workspace_documents_root(settings: Settings, workspace_id: UUID) -> Path:
 
 
 def workspace_venvs_root(settings: Settings, workspace_id: UUID) -> Path:
-    """Root of all venvs for a workspace under ADE_VENVS_DIR."""
+    """Root of all venvs for a workspace under ADE_DATA_DIR/venvs."""
 
     return _workspace_base(settings.venvs_dir, workspace_id)

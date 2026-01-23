@@ -19,9 +19,9 @@ flags, and rollback considerations.
   execution and return a validation error. Disable the flag in production
   to permit engine execution. Document the toggle in your change
   management system when flipping it.
-- `ADE_VENVS_DIR` – ensure the directory exists on local storage and
+- `ADE_DATA_DIR` – ensure the venv directory exists on local storage and
   matches the path used by the worker
-  (`${ADE_VENVS_DIR}/<workspace>/<config>/<deps_digest>/<environment_id>/.venv`).
+  (`${ADE_DATA_DIR}/venvs/<workspace>/<config>/<deps_digest>/<environment_id>/.venv`).
   If the venv is missing, the worker will provision a new environment.
 
 ## 3. Release sequence
@@ -41,7 +41,7 @@ flags, and rollback considerations.
 - **Trigger new environments:** Environments are rebuilt when dependency manifests change (new `deps_digest`) or when the environment is missing on disk. There is no build API; deleting a stale environment folder is safe—the worker recreates it on demand.
 - **Diagnose environment failures:** Inspect the environment log on disk (`.../venvs/<workspace>/<config>/<deps_digest>/<environment_id>/logs/events.ndjson`) alongside the worker logs. Environment events use the `environment.*` namespace.
 - **Diagnose missing venvs:** If the environment directory is missing, the worker requeues provisioning and the run waits until it becomes `ready`. Ensure the venv root is writable/local and has free space.
-- **Local cleanup:** It is safe to delete old environment folders under `ADE_VENVS_DIR` once they are no longer referenced by queued/running runs. The worker GC can handle this automatically.
+- **Local cleanup:** It is safe to delete old environment folders under `${ADE_DATA_DIR}/venvs` once they are no longer referenced by queued/running runs. The worker GC can handle this automatically.
 
 ## 4. Rollback strategy
 

@@ -53,17 +53,10 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
 
     database_path = data_dir / "db" / "api.sqlite"
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    workspaces_dir = data_dir / "workspaces"
-
     settings = Settings(
         _env_file=None,
         database_url=f"sqlite:///{database_path.as_posix()}",
-        workspaces_dir=workspaces_dir,
-        documents_dir=workspaces_dir,
-        configs_dir=workspaces_dir,
-        runs_dir=workspaces_dir,
-        venvs_dir=data_dir / "venvs",
-        pip_cache_dir=data_dir / "cache" / "pip",
+        data_dir=data_dir,
         auth_disabled=False,
         safe_mode=False,
         jwt_secret="test-jwt-secret-for-tests-please-change",

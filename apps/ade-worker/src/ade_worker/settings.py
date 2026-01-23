@@ -95,8 +95,7 @@ class Settings(BaseSettings):
     worker_max_attempts_default: int = Field(3, ge=1)
 
     # ---- Runtime filesystem ------------------------------------------------
-    worker_data_dir: Path = Field(default=REPO_ROOT / "data")
-    venvs_dir: Path | None = None
+    data_dir: Path = Field(default=REPO_ROOT / "data")
     engine_spec: str = Field(default="apps/ade-engine", validation_alias="ADE_ENGINE_PACKAGE_PATH")
 
     # ---- Timeouts ----------------------------------------------------------
@@ -136,20 +135,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
-        if not self.worker_data_dir.is_absolute():
-            self.worker_data_dir = (REPO_ROOT / self.worker_data_dir).resolve()
+        if not self.data_dir.is_absolute():
+            self.data_dir = (REPO_ROOT / self.data_dir).resolve()
         else:
-            self.worker_data_dir = self.worker_data_dir.expanduser().resolve()
-
-        if self.venvs_dir is None:
-            self.venvs_dir = (self.worker_data_dir / "venvs").resolve()
-        elif not self.venvs_dir.is_absolute():
-            self.venvs_dir = (REPO_ROOT / self.venvs_dir).resolve()
-        else:
-            self.venvs_dir = self.venvs_dir.expanduser().resolve()
+            self.data_dir = self.data_dir.expanduser().resolve()
 
         if not self.database_url:
-            sqlite_path = (self.worker_data_dir / "db" / "ade.sqlite").resolve()
+            sqlite_path = (self.data_dir / "db" / "ade.sqlite").resolve()
             self.database_url = f"sqlite:///{sqlite_path.as_posix()}"
 
         url = make_url(self.database_url)
@@ -182,6 +174,10 @@ class Settings(BaseSettings):
             self.worker_run_timeout_seconds = None
 
         return self
+
+    @property
+    def venvs_dir(self) -> Path:
+        return (self.data_dir / "venvs").resolve()
 
     def backoff_seconds(self, attempt_count: int) -> int:
         base = max(0, int(self.worker_backoff_base_seconds))

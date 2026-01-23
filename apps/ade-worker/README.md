@@ -28,7 +28,7 @@ python -m ade_worker
 ## Important env vars
 
 - `ADE_DATABASE_URL`
-- `ADE_WORKER_DATA_DIR` (default `./data`)
+- `ADE_DATA_DIR` (default `./data`)
 - `ADE_ENGINE_PACKAGE_PATH` (default `apps/ade-engine`)
 - `ADE_WORKER_CONCURRENCY` (default: conservative auto)
 - `ADE_WORKER_LEASE_SECONDS` (default `900`)

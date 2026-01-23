@@ -1,21 +1,34 @@
-# Documents Section (Preview + Comments)
+# Documents Section (List + Detail)
 
 ## UX model (quick summary)
 
 - The documents list is the primary surface.
-- Clicking a document name opens a **full-screen preview dialog** immediately.
-- Comments open in a **right-side panel** on the list view.
-- Preview is read-only and uses Glide Data Grid.
+- Clicking a document opens a **document detail page** ("ticket view") for that document.
+- The detail page owns tabs like **Data** (preview grid), **Comments**, and **Timeline**.
+- Data preview is read-only and uses Glide Data Grid.
+
+## Routing
+
+The Documents section is split into two screens:
+
+- List: `/workspaces/:workspaceId/documents`
+- Detail: `/workspaces/:workspaceId/documents/:documentId`
 
 ## URL query keys
 
-These keys are owned by the Documents section:
+These query keys are owned by the Documents section:
 
-- `docId` — selected document id
-- `panes` — comma-separated `"preview"` / `"comments"` list of open panels
-- `filterFlag` — `"advancedFilters"` toggle for the list toolbar
+- List:
+  - `q` — search query
+  - `filterFlag` — `"advancedFilters"` toggle for the list toolbar
+- Detail:
+  - `tab` — active tab (`data` default, `comments`, `timeline`)
+
+### Legacy (deprecated)
+
+None.
 
 ## Data sources
 
-- Preview: `fetchDocumentSheets` + `fetchDocumentPreview`
-- Comments: `/documents/{documentId}/comments` (list + create)
+- Data tab (preview): `fetchDocumentSheets` + `fetchDocumentPreview`
+- Comments tab: `/documents/{documentId}/comments` (list + create)

@@ -13,7 +13,7 @@ import { WorkbenchWindowProvider } from "@/pages/Workspace/context/WorkbenchWind
 import { PageState } from "@/components/layout";
 import { WorkspaceLayout } from "@/pages/Workspace/WorkspaceLayout";
 
-import DocumentsScreen from "@/pages/Workspace/sections/Documents";
+import DocumentsListPage, { DocumentsDetailPage } from "@/pages/Workspace/sections/Documents";
 import RunsScreen from "@/pages/Workspace/sections/Runs";
 import ConfigBuilderScreen from "@/pages/Workspace/sections/ConfigBuilder";
 import ConfigurationDetailScreen from "@/pages/Workspace/sections/ConfigBuilder/detail";
@@ -229,18 +229,19 @@ export function resolveWorkspaceSection(
     case DEFAULT_WORKSPACE_SECTION_PATH:
     {
       if (second) {
-        const params = new URLSearchParams(search);
-        params.set("doc", decodeURIComponent(second));
-        const query = params.toString();
+        const documentId = decodeURIComponent(second);
         return {
-          kind: "redirect",
-          to: `/workspaces/${workspaceId}/documents${query ? `?${query}` : ""}${hash}`,
+          kind: "content",
+          key: `documents:${documentId}`,
+          element: <DocumentsDetailPage documentId={documentId} />,
+          fullWidth: true,
+          fullHeight: true,
         };
       }
       return {
         kind: "content",
         key: "documents",
-        element: <DocumentsScreen />,
+        element: <DocumentsListPage />,
         fullWidth: true,
         fullHeight: true,
       };

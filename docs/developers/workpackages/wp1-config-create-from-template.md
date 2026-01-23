@@ -12,7 +12,7 @@ A config package is a folder the engine imports (`ade_config`). To create one, w
 
 * **ID**: `config_id` is a **ULID** assigned by the server at creation.
 * **Templates (read‑only)**: `apps/ade-api/src/ade_api/templates/config_packages/<template_id>/`
-* **Destination**: `${ADE_CONFIGS_DIR}/{workspace_id}/config_packages/{config_id}/`
+* **Destination**: `${ADE_DATA_DIR}/workspaces/{workspace_id}/config_packages/{config_id}/`
 
 ---
 

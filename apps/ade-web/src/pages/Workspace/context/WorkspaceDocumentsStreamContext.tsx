@@ -18,7 +18,7 @@ import {
 } from "@/api/documents";
 import { createScopedStorage } from "@/lib/storage";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
-import { useDocumentsChangesStream } from "@/pages/Workspace/sections/Documents/hooks/useDocumentsChangesStream";
+import { useDocumentsChangesStream } from "@/pages/Workspace/sections/Documents/shared/hooks/useDocumentsChangesStream";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
 const STREAM_CURSOR_LIMIT = 1;

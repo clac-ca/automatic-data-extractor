@@ -169,11 +169,6 @@ class RunsService:
         )
         self._documents_service = DocumentsService(session=session, settings=settings)
 
-        if settings.documents_dir is None:
-            raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
-        if settings.runs_dir is None:
-            raise RuntimeError("ADE_RUNS_DIR is not configured")
-
         self._runs_dir = Path(settings.runs_dir)
         default_max = Run.__table__.c.max_attempts.default
         self._run_max_attempts = int(default_max.arg) if default_max is not None else 3

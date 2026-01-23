@@ -31,7 +31,7 @@ marks them `ready` for reuse.
 ./data/venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
 ```
 
-Override the base with `ADE_VENVS_DIR` if needed.
+Override the base with `ADE_DATA_DIR` if needed.
 
 ---
 

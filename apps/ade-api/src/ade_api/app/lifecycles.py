@@ -28,18 +28,13 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 
     resolved = settings or get_settings()
 
-    targets: set[Path] = set()
-    for attribute in (
-        "workspaces_dir",
-        "documents_dir",
-        "configs_dir",
-        "venvs_dir",
-        "runs_dir",
-        "pip_cache_dir",
-    ):
-        candidate = getattr(resolved, attribute, None)
-        if candidate is not None:
-            targets.add(Path(candidate))
+    targets: set[Path] = {
+        Path(resolved.data_dir),
+        Path(resolved.workspaces_dir),
+        Path(resolved.venvs_dir),
+        Path(resolved.pip_cache_dir),
+        Path(resolved.data_dir) / "db",
+    }
 
     for target in targets:
         target.mkdir(parents=True, exist_ok=True)
@@ -57,14 +52,14 @@ def _validate_venvs_dir(venvs_dir: Path) -> None:
         marker.write_text("ok", encoding="utf-8")
         marker.unlink(missing_ok=True)
     except OSError as exc:  # pragma: no cover - defensive guard for startup
-        raise RuntimeError(f"ADE_VENVS_DIR is not writable: {venvs_dir} ({exc})") from exc
+        raise RuntimeError(f"ADE_DATA_DIR/venvs is not writable: {venvs_dir} ({exc})") from exc
 
     if _looks_like_network_share(venvs_dir):
         logger.warning(
             "venvs_dir.network_like",
             extra={
                 "venvs_dir": str(venvs_dir),
-                "detail": "ADE_VENVS_DIR appears to be on a network/SMB mount; "
+                "detail": "ADE_DATA_DIR/venvs appears to be on a network/SMB mount; "
                 "venvs must live on local storage",
             },
         )

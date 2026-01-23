@@ -22,6 +22,7 @@ def test_settings_defaults() -> None:
     expected_root = (REPO_ROOT / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()
     expected_venvs = (expected_root / "venvs").resolve()
+    assert settings.data_dir == expected_root
     assert settings.workspaces_dir == expected_workspaces
     assert settings.documents_dir == expected_workspaces
     assert settings.configs_dir == expected_workspaces
@@ -30,19 +31,19 @@ def test_settings_defaults() -> None:
     assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
 
 
-def test_workspaces_dir_propagates_defaults(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """workspaces_dir should become the default root for workspace-owned storage."""
+def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ADE_DATA_DIR should become the root for workspace-owned storage."""
 
-    monkeypatch.setenv("ADE_WORKSPACES_DIR", "./custom/workspaces")
+    monkeypatch.setenv("ADE_DATA_DIR", "./custom/data-root")
 
     settings = Settings(_env_file=None)
 
-    expected_root = (REPO_ROOT / "custom" / "workspaces").resolve()
-    expected_venvs = (REPO_ROOT / "data" / "venvs").resolve()
-    assert settings.workspaces_dir == expected_root
-    assert settings.documents_dir == expected_root
-    assert settings.configs_dir == expected_root
+    expected_root = (REPO_ROOT / "custom" / "data-root").resolve()
+    expected_workspaces = (expected_root / "workspaces").resolve()
+    expected_venvs = (expected_root / "venvs").resolve()
+    assert settings.data_dir == expected_root
+    assert settings.workspaces_dir == expected_workspaces
+    assert settings.documents_dir == expected_workspaces
+    assert settings.configs_dir == expected_workspaces
     assert settings.venvs_dir == expected_venvs
-    assert settings.runs_dir == expected_root
+    assert settings.runs_dir == expected_workspaces

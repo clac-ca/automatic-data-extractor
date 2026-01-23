@@ -1,0 +1,23 @@
+{
+  "name": "ADE Dev (SQL Server + Azurite)",
+  "dockerComposeFile": ["../docker-compose.dev.yml"],
+  "service": "ade-devcontainer",
+  "workspaceFolder": "/workspaces/automatic-data-extractor",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "forwardPorts": [8000, 5173, 1433, 10000, 10001, 10002],
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}

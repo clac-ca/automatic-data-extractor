@@ -41,7 +41,7 @@ Base prefix:
 ## Behavior & guardrails (consistent across routes)
 
 * **Editability:** only `status='draft'` is writable. Writes in `active`/`inactive` → `409 Conflict` (`code: "configuration_not_editable"`). Reads are allowed in any state.
-* **Root:** `${ADE_CONFIGS_DIR}/{workspace_id}/config_packages/{config_id}/`
+* **Root:** `${ADE_DATA_DIR}/workspaces/{workspace_id}/config_packages/{config_id}/`
 * **Editable set (include):** `src/ade_config/**`, `manifest.toml`, `pyproject.toml` (optional), `config.env` (optional), `assets/**`
 * **Exclude:** `.git/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.venv/`, `venv/`, `env/`, `node_modules/`, `.idea/`, `.vscode/`, `dist/`, `build/`
 * **Path hygiene:** `path` is POSIX‑relative (no leading `/`), normalized, must remain under the config root **and** within the editable set. **Deny symlinks** (files or dirs).

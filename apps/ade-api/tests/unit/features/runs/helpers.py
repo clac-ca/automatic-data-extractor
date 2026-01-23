@@ -33,12 +33,7 @@ def build_runs_service(
 
     settings = Settings(
         _env_file=None,
-        workspaces_dir=data_root / "workspaces",
-        documents_dir=data_root / "workspaces",
-        configs_dir=data_root / "workspaces",
-        runs_dir=data_root / "workspaces",
-        venvs_dir=data_root / "venvs",
-        pip_cache_dir=data_root / "cache" / "pip",
+        data_dir=data_root,
         safe_mode=safe_mode,
         engine_spec=str(engine_dir),
     )

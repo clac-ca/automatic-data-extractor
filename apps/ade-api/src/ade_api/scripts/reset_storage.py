@@ -16,7 +16,6 @@ from ade_api.db import build_engine
 from ..settings import Settings
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
-DEFAULT_STORAGE_ROOT = (REPO_ROOT / "data").resolve()
 
 
 def _normalize(path: Path | str | None) -> Path | None:
@@ -29,9 +28,9 @@ def _normalize(path: Path | str | None) -> Path | None:
     return resolved
 
 
-def _within_default_root(path: Path) -> bool:
+def _within_data_root(path: Path, data_root: Path) -> bool:
     try:
-        path.relative_to(DEFAULT_STORAGE_ROOT)
+        path.relative_to(data_root)
     except ValueError:
         return False
     return True
@@ -59,21 +58,19 @@ def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]
         if normalized is not None:
             targets.add(normalized)
 
+    add(settings.data_dir)
     add(settings.workspaces_dir)
-    add(settings.documents_dir)
-    add(settings.configs_dir)
     add(settings.venvs_dir)
-    add(settings.runs_dir)
     add(settings.pip_cache_dir)
 
     pip_cache = _normalize(settings.pip_cache_dir)
-    if pip_cache and _within_default_root(pip_cache):
+    if pip_cache and _within_data_root(pip_cache, settings.data_dir):
         add(pip_cache.parent)
 
     sqlite_path = _resolve_sqlite_database_path(database_url)
     if sqlite_path:
         add(sqlite_path)
-        if _within_default_root(sqlite_path):
+        if _within_data_root(sqlite_path, settings.data_dir):
             add(sqlite_path.parent)
 
     return sorted(targets, key=lambda path: str(path))

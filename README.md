@@ -215,12 +215,7 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 
 | Variable                  | Default                  | Purpose                                    |
 | ------------------------- | ------------------------ | ------------------------------------------ |
-| `ADE_WORKSPACES_DIR`      | `./data/workspaces`      | Root for all workspace storage             |
-| `ADE_DOCUMENTS_DIR`       | `./data/workspaces`      | Base for documents (`<ws>/documents/...`)  |
-| `ADE_CONFIGS_DIR`         | `./data/workspaces`      | Base for configs (`<ws>/config_packages/`) |
-| `ADE_VENVS_DIR`           | `./data/venvs`           | Local base for environment venvs (`<ws>/<cfg>/<deps>/<env>/.venv`) |
-| `ADE_RUNS_DIR`            | `./data/workspaces`      | Base for runs (`<ws>/runs/<run_id>/...`)   |
-| `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`       | pip download/build cache                   |
+| `ADE_DATA_DIR`            | `./data`                 | Root for local ADE storage (workspaces, venvs, cache, db) |
 | `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
 | `ADE_WORKER_CONCURRENCY`  | `1`                      | Worker concurrency per process             |
 | `ADE_WORKER_POLL_INTERVAL`| `0.5`                    | Worker idle poll interval (seconds)        |

@@ -113,12 +113,7 @@ export function WorkspaceDocumentsSearch() {
 
   const handleSelect = (documentId: string, label: string) => {
     pushRecent({ id: documentId, label })
-    const params = createSearchParams({
-      docId: documentId,
-      panes: "preview",
-      ...(normalizedQuery ? { q: normalizedQuery } : {}),
-    })
-    navigate(`${documentsLink}?${params.toString()}`)
+    navigate(`${documentsLink}/${encodeURIComponent(documentId)}`)
     setOpen(false)
   }
 

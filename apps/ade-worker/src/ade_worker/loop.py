@@ -215,7 +215,7 @@ def main() -> int:
     settings = get_settings()
     _setup_logging(settings.worker_log_level)
 
-    _ensure_runtime_dirs(settings.worker_data_dir, settings.venvs_dir)
+    _ensure_runtime_dirs(settings.data_dir, settings.venvs_dir)
 
     engine = build_engine(settings)
 
@@ -223,7 +223,7 @@ def main() -> int:
 
     worker_id = settings.worker_id or _default_worker_id()
 
-    paths = PathManager(settings.worker_data_dir, settings.venvs_dir)
+    paths = PathManager(settings.data_dir, settings.venvs_dir)
     SessionLocal = build_sessionmaker(engine)
 
     repo = Repo(SessionLocal)

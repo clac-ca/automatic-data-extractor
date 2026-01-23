@@ -342,16 +342,11 @@ function useWorkspaceDocumentsSearchController({
   const handleSelect = useCallback(
     (documentId: string, label: string) => {
       pushRecent({ id: documentId, label });
-      const params = createSearchParams({
-        docId: documentId,
-        panes: "preview",
-        ...(normalizedQuery ? { q: normalizedQuery } : {}),
-      });
-      navigate(`${documentsLink}?${params.toString()}`);
+      navigate(`${documentsLink}/${encodeURIComponent(documentId)}`);
       reset();
       setOpen(false);
     },
-    [documentsLink, navigate, normalizedQuery, pushRecent, reset],
+    [documentsLink, navigate, pushRecent, reset],
   );
 
   const handleViewAllDocuments = useCallback(() => {

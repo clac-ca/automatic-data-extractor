@@ -21,8 +21,6 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 def _build_config_storage(settings: Settings):
     from ade_api.features.configs.storage import ConfigStorage
 
-    if settings.configs_dir is None:
-        raise RuntimeError("ADE_CONFIGS_DIR is not configured")
     return ConfigStorage(settings=settings)
 
 

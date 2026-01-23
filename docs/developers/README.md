@@ -30,9 +30,8 @@ Everything ADE produces is persisted under `./data/` by default.
 * Runs: `./data/workspaces/<workspace_id>/runs/<run_id>/...`
 * Environments (venvs): `./data/venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv`
 
-Set `ADE_WORKSPACES_DIR` to relocate workspace storage, or `ADE_VENVS_DIR` to
-relocate the venv root. The worker will always nest `workspace_id` beneath the
-override.
+Set `ADE_DATA_DIR` to relocate workspace storage and the venv root. The worker
+will always nest `workspace_id` beneath the derived roots.
 
 ---
 

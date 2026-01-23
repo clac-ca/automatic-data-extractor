@@ -74,19 +74,12 @@ def _detect_api_root() -> Path:
 
 
 DEFAULT_API_ROOT = _detect_api_root()
-DEFAULT_STORAGE_ROOT = REPO_ROOT / "data"
+DEFAULT_DATA_DIR = REPO_ROOT / "data"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
-DEFAULT_WORKSPACES_DIR = DEFAULT_STORAGE_ROOT / "workspaces"
 DEFAULT_DB_FILENAME = "ade.sqlite"
 DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
-DEFAULT_DOCUMENTS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_CONFIGS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_VENVS_DIR = DEFAULT_STORAGE_ROOT / "venvs"
-DEFAULT_RUNS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
-DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
 
@@ -224,12 +217,7 @@ class Settings(BaseSettings):
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
     # Storage
-    workspaces_dir: Path = Field(default=DEFAULT_WORKSPACES_DIR)
-    documents_dir: Path = Field(default=DEFAULT_DOCUMENTS_DIR)
-    configs_dir: Path = Field(default=DEFAULT_CONFIGS_DIR)
-    venvs_dir: Path = Field(default=DEFAULT_VENVS_DIR)
-    runs_dir: Path = Field(default=DEFAULT_RUNS_DIR)
-    pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
+    data_dir: Path = Field(default=DEFAULT_DATA_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
@@ -422,18 +410,7 @@ class Settings(BaseSettings):
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
         )
 
-        self.workspaces_dir = _resolve_path(self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR)
-        if "documents_dir" not in self.model_fields_set:
-            self.documents_dir = self.workspaces_dir
-        if "configs_dir" not in self.model_fields_set:
-            self.configs_dir = self.workspaces_dir
-        if "runs_dir" not in self.model_fields_set:
-            self.runs_dir = self.workspaces_dir
-        self.documents_dir = _resolve_path(self.documents_dir, default=self.workspaces_dir)
-        self.configs_dir = _resolve_path(self.configs_dir, default=self.workspaces_dir)
-        self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
-        self.runs_dir = _resolve_path(self.runs_dir, default=self.workspaces_dir)
-        self.pip_cache_dir = _resolve_path(self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR)
+        self.data_dir = _resolve_path(self.data_dir, default=DEFAULT_DATA_DIR)
 
         if self.frontend_dist_dir:
             self.frontend_dist_dir = _resolve_path(
@@ -444,7 +421,7 @@ class Settings(BaseSettings):
             self.frontend_url = self.server_public_url
 
         if not self.database_url:
-            sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)
+            sqlite = (self.data_dir / "db" / DEFAULT_DB_FILENAME).resolve()
             self.database_url = f"sqlite:///{sqlite.as_posix()}"
 
         url = make_url(self.database_url)
@@ -483,6 +460,30 @@ class Settings(BaseSettings):
             self._jwt_secret_generated = True
 
         return self
+
+    @property
+    def workspaces_dir(self) -> Path:
+        return (self.data_dir / "workspaces").resolve()
+
+    @property
+    def documents_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def configs_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def runs_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def venvs_dir(self) -> Path:
+        return (self.data_dir / "venvs").resolve()
+
+    @property
+    def pip_cache_dir(self) -> Path:
+        return (self.data_dir / "cache" / "pip").resolve()
 
     # ---- Convenience ----
 
