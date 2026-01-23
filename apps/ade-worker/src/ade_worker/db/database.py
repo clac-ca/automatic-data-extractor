@@ -6,7 +6,7 @@ SQLAlchemy engine + session helpers for the worker.
 Rules:
 - Settings are defined ONLY in ade_worker.settings.Settings (Pydantic).
 - This module does NOT read env vars directly.
-- Supports SQLite (dev) and SQL Server/Azure SQL (prod).
+- Supports SQL Server/Azure SQL (SQLite test-only).
 """
 
 from __future__ import annotations

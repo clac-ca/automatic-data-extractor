@@ -55,7 +55,7 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     settings = Settings(
         _env_file=None,
-        database_url=f"sqlite:///{database_path.as_posix()}",
+        database_url_override=f"sqlite:///{database_path.as_posix()}",
         data_dir=data_dir,
         auth_disabled=False,
         safe_mode=False,

@@ -12,32 +12,46 @@ from ade_cli.commands import common
 from ade_cli.commands.migrate import run_migrate
 
 
+def _resolve_role(role: str | None, env: dict[str, str]) -> str:
+    raw = (role or env.get("ADE_ROLE", "api")).strip().lower()
+    return raw or "api"
+
+
 def run_start(
     api_port: int | None = None,
     api_host: str | None = None,
     api_workers: int | None = None,
     web: bool = True,
-    worker: bool = True,
+    role: str | None = None,
 ) -> None:
-    """
-    Start the API (no autoreload), production frontend, and the background worker.
-    """
+    """Start ADE in a single role (api or worker)."""
     common.refresh_paths()
-    common.ensure_backend_dir()
-    common.require_python_module(
-        "ade_api",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
-    )
-    common.uvicorn_path()
-    if worker:
-        common.require_python_module(
-            "ade_worker",
-            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-worker`).",
-        )
 
     env = common.build_env()
     venv_bin = str(Path(sys.executable).parent)
     env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    resolved_role = _resolve_role(role, env)
+
+    if resolved_role == "worker":
+        common.require_python_module(
+            "ade_worker",
+            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-worker`).",
+        )
+        typer.echo("🧵 Starting ADE worker…")
+        common.run(["ade-worker"], cwd=common.REPO_ROOT, env=env)
+        return
+
+    if resolved_role != "api":
+        typer.echo("❌ Invalid ADE_ROLE. Expected 'api' or 'worker'.", err=True)
+        raise typer.Exit(code=1)
+
+    common.ensure_backend_dir()
+    common.require_python_module(
+        "ade_api",
+        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
+    )
+    common.uvicorn_path()
 
     if web:
         dist_env = env.get("ADE_FRONTEND_DIST_DIR")
@@ -64,10 +78,12 @@ def run_start(
             dist_env = str(dist_dir)
         env["ADE_FRONTEND_DIST_DIR"] = dist_env
         typer.echo(f"🧭 Frontend dist:        {dist_env}")
+    else:
+        env.pop("ADE_FRONTEND_DIST_DIR", None)
 
     from ade_api.settings import Settings
 
-    api_settings = Settings(_env_file=common.REPO_ROOT / ".env")
+    api_settings = Settings()
     if api_port is None:
         api_port = api_settings.api_port if api_settings.api_port is not None else 8000
     api_port = int(api_port)
@@ -81,9 +97,10 @@ def run_start(
     run_migrate()
 
     uvicorn_bin = common.uvicorn_path()
+    api_import = env.get("ADE_API_IMPORT", "ade_api.main:create_app")
     api_cmd = [
         uvicorn_bin,
-        "ade_api.main:create_app",
+        api_import,
         "--factory",
         "--host",
         api_host,
@@ -92,35 +109,24 @@ def run_start(
     ]
     if api_workers and api_workers > 1:
         api_cmd.extend(["--workers", str(api_workers)])
-    tasks: list[tuple[str, list[str], Path | None, dict[str, str]]] = [
-        (
-            "api",
-            api_cmd,
-            common.REPO_ROOT,
-            env,
-        )
-    ]
 
-    if worker:
-        tasks.append(
+    typer.echo(f"🚀 Starting ADE API on http://{api_host}:{api_port}")
+    common.run_parallel(
+        [
             (
-                "worker",
-                ["ade-worker"],
+                "api",
+                api_cmd,
                 common.REPO_ROOT,
                 env,
             )
-        )
-
-    typer.echo(f"🚀 Starting ADE API on http://{api_host}:{api_port}")
-    if worker:
-        typer.echo("🧵 Starting ADE worker")
-    common.run_parallel(tasks)
+        ]
+    )
 
 
 def register(app: typer.Typer) -> None:
     @app.command(
         name="start",
-        help="Serve the API + production frontend + worker (runs migrations first).",
+        help="Start ADE in a single role (api or worker). Runs migrations for api.",
     )
     def start(
         api_port: int = typer.Option(
@@ -147,10 +153,10 @@ def register(app: typer.Typer) -> None:
             "--web/--no-web",
             help="Serve the built frontend from this process.",
         ),
-        worker: bool = typer.Option(
-            True,
-            "--worker/--no-worker",
-            help="Run the background worker alongside the API.",
+        role: str = typer.Option(
+            None,
+            "--role",
+            help="Role to run (api or worker). Defaults to ADE_ROLE or 'api'.",
         ),
     ) -> None:
         run_start(
@@ -158,5 +164,5 @@ def register(app: typer.Typer) -> None:
             api_host=api_host,
             api_workers=api_workers,
             web=web,
-            worker=worker,
+            role=role,
         )

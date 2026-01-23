@@ -4,8 +4,7 @@ Minimal, reliable worker that processes **run** records and provisions reusable
 **environment** rows stored in a database.
 
 Supported databases:
-- SQLite (local dev)
-- SQL Server / Azure SQL (prod)
+- SQL Server / Azure SQL
 
 ## How it works
 
@@ -21,15 +20,20 @@ Supported databases:
 ## Run
 
 ```bash
-export ADE_DATABASE_URL="sqlite:///./data/db/ade.sqlite"
+export ADE_SQL_HOST="sql"
+export ADE_SQL_PORT="1433"
+export ADE_SQL_DATABASE="ade"
+export ADE_SQL_USER="sa"
+export ADE_SQL_PASSWORD="YourStrong!Passw0rd"
 python -m ade_worker
 ```
 
 ## Important env vars
 
-- `ADE_DATABASE_URL`
+- `ADE_SQL_HOST`, `ADE_SQL_PORT`, `ADE_SQL_DATABASE`, `ADE_SQL_USER`, `ADE_SQL_PASSWORD`
+- `ADE_DATABASE_AUTH_MODE` (optional; `managed_identity` for Azure SQL)
 - `ADE_DATA_DIR` (default `./data`)
-- `ADE_ENGINE_PACKAGE_PATH` (default `apps/ade-engine`)
+- `ADE_ENGINE_PACKAGE_PATH` (default `ade-engine @ git+https://github.com/clac-ca/ade-engine@main`; accepts local path or pip spec)
 - `ADE_WORKER_CONCURRENCY` (default: conservative auto)
 - `ADE_WORKER_LEASE_SECONDS` (default `900`)
 - `ADE_WORKER_ENABLE_GC` (default `1` for single-host)

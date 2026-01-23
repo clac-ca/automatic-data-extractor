@@ -38,8 +38,6 @@ def _find_repo_root() -> Path:
 REPO_ROOT = _find_repo_root()
 BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
 BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
-ENGINE_DIR = REPO_ROOT / "apps" / "ade-engine"
-ENGINE_SRC = ENGINE_DIR / "src" / "ade_engine"
 CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
 CLI_SRC = CLI_DIR / "src" / "ade_cli"
 FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
@@ -50,12 +48,10 @@ README_HINT = "See README: Developer Setup."
 def refresh_paths() -> None:
     """Refresh global path constants based on the current working directory."""
 
-    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, ENGINE_DIR, ENGINE_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR, VENV_DIR
+    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR, VENV_DIR
     REPO_ROOT = _find_repo_root()
     BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
     BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
-    ENGINE_DIR = REPO_ROOT / "apps" / "ade-engine"
-    ENGINE_SRC = ENGINE_DIR / "src" / "ade_engine"
     CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
     CLI_SRC = CLI_DIR / "src" / "ade_cli"
     FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
@@ -200,7 +196,7 @@ def uvicorn_path() -> str:
     return require_command(
         "uvicorn",
         friendly_name="uvicorn",
-        fix_hint="Install ADE into an active virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
+        fix_hint="Install ADE into an active virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
     )
 
 

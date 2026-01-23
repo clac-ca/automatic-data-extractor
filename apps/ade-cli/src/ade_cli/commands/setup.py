@@ -14,14 +14,14 @@ macOS / Linux:
     python3 -m venv .venv
     source .venv/bin/activate
     pip install -U pip
-    pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
+    pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker
     cd apps/ade-web && npm install && cd -
 
 Windows (PowerShell):
     python -m venv .venv
     .\\.venv\\Scripts\\Activate.ps1
     pip install -U pip
-    pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
+    pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker
     cd apps/ade-web
     npm install
     cd ..

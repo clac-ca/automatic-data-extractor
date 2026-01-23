@@ -71,12 +71,10 @@ def _resolve_versions() -> list[tuple[str, str]]:
 
     if repo_root is not None:
         api_pyproject = repo_root / "apps" / "ade-api" / "pyproject.toml"
-        engine_pyproject = repo_root / "apps" / "ade-engine" / "pyproject.toml"
         worker_pyproject = repo_root / "apps" / "ade-worker" / "pyproject.toml"
         web_package_json = repo_root / "apps" / "ade-web" / "package.json"
     else:
         api_pyproject = None
-        engine_pyproject = None
         worker_pyproject = None
         web_package_json = None
 
@@ -86,9 +84,7 @@ def _resolve_versions() -> list[tuple[str, str]]:
     if api_version:
         versions.append(("ade-api", api_version))
 
-    engine_version = (
-        (_pyproject_version(engine_pyproject) if engine_pyproject is not None else None) or _dist_version("ade-engine")
-    )
+    engine_version = _dist_version("ade-engine")
     if engine_version:
         versions.append(("ade-engine", engine_version))
 

@@ -44,14 +44,13 @@ class TestTargets:
 
 
 def _run_api_suite() -> bool:
-    """Execute python API tests (api + engine + cli + worker) via pytest."""
+    """Execute python API tests (api + cli + worker) via pytest."""
 
     worker_dir = common.REPO_ROOT / "apps" / "ade-worker"
     worker_src = worker_dir / "src" / "ade_worker"
 
     suites: list[tuple[str, str, Path, Path]] = [
         ("ade-api", "apps/ade-api", common.BACKEND_SRC, common.BACKEND_DIR),
-        ("ade-engine", "apps/ade-engine", common.ENGINE_SRC, common.ENGINE_DIR),
         ("ade-cli", "apps/ade-cli", common.CLI_SRC, common.CLI_DIR),
         ("ade-worker", "apps/ade-worker", worker_src, worker_dir),
     ]
@@ -60,7 +59,7 @@ def _run_api_suite() -> bool:
 
     common.require_python_module(
         "pytest",
-        "Install API/test dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
+        "Install API/test dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
     )
 
     for name, display_path, src_path, cwd in suites:

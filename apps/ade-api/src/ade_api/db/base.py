@@ -33,7 +33,7 @@ class UUIDPrimaryKeyMixin:
 class TimestampMixin:
     """App-managed UTC timestamps.
 
-    Keeps behavior consistent across SQLite and SQL Server without relying on DB triggers.
+    Keeps behavior consistent across SQL Server and SQLite (test-only) without relying on DB triggers.
     """
 
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=utc_now)

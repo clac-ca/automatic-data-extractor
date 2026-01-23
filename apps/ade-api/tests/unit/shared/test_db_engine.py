@@ -10,7 +10,7 @@ def test_build_engine_strips_sql_credentials_for_managed_identity() -> None:
     pytest.importorskip("pyodbc")
     settings = Settings(
         _env_file=None,
-        database_url=(
+        database_url_override=(
             "mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade"
             "?Trusted_Connection=yes"
         ),
@@ -31,7 +31,7 @@ def test_build_engine_normalizes_mssql_driver() -> None:
     pytest.importorskip("pyodbc")
     settings = Settings(
         _env_file=None,
-        database_url="mssql://user:secret@contoso.database.windows.net:1433/ade",
+        database_url_override="mssql://user:secret@contoso.database.windows.net:1433/ade",
     )
     engine = build_engine(settings)
     try:
@@ -41,7 +41,7 @@ def test_build_engine_normalizes_mssql_driver() -> None:
 
 
 def test_build_engine_sqlite_in_memory_smoke() -> None:
-    settings = Settings(_env_file=None, database_url="sqlite:///:memory:")
+    settings = Settings(_env_file=None, database_url_override="sqlite:///:memory:")
     engine = build_engine(settings)
     try:
         assert isinstance(engine.pool, StaticPool)

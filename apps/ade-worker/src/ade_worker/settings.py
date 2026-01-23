@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
 
@@ -26,13 +26,6 @@ def _detect_repo_root(start: Path) -> Path:
 REPO_ROOT = _detect_repo_root(MODULE_DIR)
 
 
-def _env_file() -> str:
-    override = os.getenv("ADE_ENV_FILE")
-    if override and override.strip():
-        return str(Path(override).expanduser().resolve())
-    return str((REPO_ROOT / ".env").resolve())
-
-
 def _default_concurrency() -> int:
     cpu = os.cpu_count() or 2
     return max(1, min(4, cpu // 2))
@@ -42,7 +35,7 @@ class Settings(BaseSettings):
     """Worker settings loaded from ADE_* env vars (and repo-root .env)."""
 
     model_config = SettingsConfigDict(
-        env_file=_env_file(),
+        env_file=".env",
         env_file_encoding="utf-8",
         env_prefix="ADE_",
         case_sensitive=False,
@@ -50,8 +43,10 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
     )
 
+    _database_url: str = PrivateAttr(default="")
+
     # ---- Database (match ade-api field names) ------------------------------
-    database_url: str | None = None
+    database_url_override: str | None = None
     database_echo: bool = False
 
     database_auth_mode: Literal["sql_password", "managed_identity"] = "sql_password"
@@ -73,6 +68,15 @@ class Settings(BaseSettings):
     database_sqlite_synchronous: Literal["OFF", "NORMAL", "FULL", "EXTRA"] = "NORMAL"
     database_sqlite_busy_timeout_ms: int = Field(30_000, ge=0)
     database_sqlite_begin_mode: Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"] | None = None
+
+    # ---- Database (derived mssql URL inputs) ------------------------------
+    sql_host: str = "sql"
+    sql_port: int = Field(default=1433, ge=1, le=65535)
+    sql_user: str = "sa"
+    sql_password: str = "YourStrong!Passw0rd"
+    sql_database: str = "ade"
+    sql_encrypt: str = "optional"
+    sql_trust_server_certificate: str = "yes"
 
     # ---- Worker identity & loop -------------------------------------------
     worker_id: str | None = None
@@ -96,7 +100,11 @@ class Settings(BaseSettings):
 
     # ---- Runtime filesystem ------------------------------------------------
     data_dir: Path = Field(default=REPO_ROOT / "data")
-    engine_spec: str = Field(default="apps/ade-engine", validation_alias="ADE_ENGINE_PACKAGE_PATH")
+    # NOTE: Using @main until ade-engine tags are published.
+    engine_spec: str = Field(
+        default="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
+        validation_alias="ADE_ENGINE_PACKAGE_PATH",
+    )
 
     # ---- Timeouts ----------------------------------------------------------
     worker_env_build_timeout_seconds: int = Field(600, ge=1)
@@ -108,6 +116,13 @@ class Settings(BaseSettings):
     @classmethod
     def _v_log_level(cls, v: Any) -> str:
         return ("" if v is None else str(v).strip()).upper() or "INFO"
+
+    @field_validator("database_url_override", mode="before")
+    @classmethod
+    def _v_database_url_override(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
 
     @field_validator("database_auth_mode", mode="before")
     @classmethod
@@ -133,6 +148,21 @@ class Settings(BaseSettings):
             return None
         return str(v).strip().upper()
 
+    @field_validator(
+        "sql_host",
+        "sql_user",
+        "sql_password",
+        "sql_database",
+        "sql_encrypt",
+        "sql_trust_server_certificate",
+        mode="before",
+    )
+    @classmethod
+    def _v_sql_str(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
+
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
         if not self.data_dir.is_absolute():
@@ -140,16 +170,76 @@ class Settings(BaseSettings):
         else:
             self.data_dir = self.data_dir.expanduser().resolve()
 
-        if not self.database_url:
-            sqlite_path = (self.data_dir / "db" / "ade.sqlite").resolve()
-            self.database_url = f"sqlite:///{sqlite_path.as_posix()}"
+        if self.database_url_override:
+            url = make_url(self.database_url_override)
+        else:
+            sql_vars = {
+                "host": self.sql_host,
+                "user": self.sql_user,
+                "password": self.sql_password,
+                "database": self.sql_database,
+            }
+            if self.database_auth_mode == "managed_identity":
+                required = ["host", "database"]
+            else:
+                required = ["host", "user", "password", "database"]
 
-        url = make_url(self.database_url)
+            missing = [key for key in required if not sql_vars[key]]
+            if missing:
+                raise ValueError(
+                    "Missing required ADE_SQL_* values: "
+                    + ", ".join(f"ADE_SQL_{name.upper()}" for name in missing)
+                )
+
+            query = {"driver": "ODBC Driver 18 for SQL Server"}
+            if self.sql_encrypt:
+                query["Encrypt"] = self.sql_encrypt
+            if self.sql_trust_server_certificate:
+                query["TrustServerCertificate"] = self.sql_trust_server_certificate
+
+            if self.database_auth_mode == "managed_identity":
+                url = URL.create(
+                    drivername="mssql+pyodbc",
+                    username=None,
+                    password=None,
+                    host=self.sql_host,
+                    port=self.sql_port,
+                    database=self.sql_database,
+                    query=query,
+                )
+            else:
+                url = URL.create(
+                    drivername="mssql+pyodbc",
+                    username=self.sql_user,
+                    password=self.sql_password,
+                    host=self.sql_host,
+                    port=self.sql_port,
+                    database=self.sql_database,
+                    query=query,
+                )
+
+        url = make_url(url.render_as_string(hide_password=False))
         query = dict(url.query or {})
-        query_ci = {k.lower() for k in query}
 
-        if url.get_backend_name() == "mssql" and "driver" not in query_ci:
-            query["driver"] = "ODBC Driver 18 for SQL Server"
+        if (
+            url.get_backend_name() == "sqlite"
+            and "database_sqlite_busy_timeout_ms" not in self.model_fields_set
+        ):
+            self.database_sqlite_busy_timeout_ms = int(self.database_pool_timeout * 1000)
+
+        if url.get_backend_name() == "mssql":
+            present = {k.lower() for k in query}
+
+            def _setdefault_ci(key: str, value: str) -> None:
+                if key.lower() not in present:
+                    query[key] = value
+                    present.add(key.lower())
+
+            _setdefault_ci("driver", "ODBC Driver 18 for SQL Server")
+            if self.sql_encrypt:
+                _setdefault_ci("Encrypt", self.sql_encrypt)
+            if self.sql_trust_server_certificate:
+                _setdefault_ci("TrustServerCertificate", self.sql_trust_server_certificate)
 
         if self.database_auth_mode == "managed_identity":
             if url.get_backend_name() != "mssql":
@@ -166,7 +256,7 @@ class Settings(BaseSettings):
         elif query != url.query:
             url = url.set(query=query)
 
-        self.database_url = url.render_as_string(hide_password=False)
+        self._database_url = url.render_as_string(hide_password=False)
 
         if self.worker_run_artifact_ttl_days is not None and self.worker_run_artifact_ttl_days <= 0:
             self.worker_run_artifact_ttl_days = None
@@ -174,6 +264,10 @@ class Settings(BaseSettings):
             self.worker_run_timeout_seconds = None
 
         return self
+
+    @property
+    def database_url(self) -> str:
+        return self._database_url
 
     @property
     def venvs_dir(self) -> Path:
@@ -187,4 +281,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings(_env_file=_env_file())
+    return Settings()

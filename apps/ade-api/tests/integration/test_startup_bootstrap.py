@@ -12,13 +12,12 @@ from ade_api.settings import Settings
 pytestmark = pytest.mark.asyncio
 
 
-async def test_app_startup_bootstraps_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
     database_path = tmp_path / "data" / "db" / "api.sqlite"
     data_dir = tmp_path / "data"
-    monkeypatch.setenv("ADE_DATABASE_URL", f"sqlite:///{database_path}")
     settings = Settings.model_validate({
         "data_dir": str(data_dir),
-        "database_url": f"sqlite:///{database_path}",
+        "database_url_override": f"sqlite:///{database_path}",
     })
 
     app = create_app(settings=settings)

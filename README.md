@@ -18,13 +18,12 @@ It:
 ```text
 automatic-data-extractor/
 ├─ Dockerfile          # Full app image (API + worker + built web assets)
-├─ .env.example        # Example environment configuration
 ├─ apps/
 │  ├─ ade-api/         # FastAPI backend (API only)
 │  ├─ ade-web/         # React (Vite) frontend SPA
 │  ├─ ade-cli/         # Python CLI (console entry: `ade`)
 │  ├─ ade-worker/      # Background worker (runs + environments)
-│  └─ ade-engine/      # Engine runtime used by the worker/CLI
+│  └─ ...              # (ade-engine now lives in its own repo)
 ├─ docs/               # Developer docs & runbooks
 ├─ examples/           # Sample input/output files
 ├─ scripts/            # Helper / legacy scripts
@@ -32,6 +31,8 @@ automatic-data-extractor/
 ````
 
 Everything ADE produces at runtime (documents, runs, venvs, caches, etc.) goes under `./data/...` by default (inside the container: `/app/data`).
+
+The engine runtime now lives in a separate repo (https://github.com/clac-ca/ade-engine) and is installed transitively via `ade-worker` (currently tracking `@main` until tags are available).
 
 ---
 
@@ -49,27 +50,40 @@ Everything ADE produces at runtime (documents, runs, venvs, caches, etc.) goes u
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
 
-# 2. Create local env file (edit as needed)
-cp .env.example .env
+# 2. (Optional) Create a .env if you need to override defaults
+#    See "Configuration" below for common variables.
 
 # 3. Build the image
-docker build -t ade:local -f Dockerfile .
+IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
 
-# 4. Run the container (API + worker + web)
+# 4. Run the API container (role: api)
 mkdir -p data
-docker run --rm -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
+docker run --rm -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
+
+# If you created a .env, add:
+#   --env-file .env
+```
+
+Note: ADE expects a SQL Server reachable via `ADE_SQL_*` (defaults target the
+devcontainer service `sql:1433`). If you run Docker manually, either run SQL on
+the same network and set `ADE_SQL_HOST`, or point to Azure SQL.
+
+To run the worker from the same image:
+
+```bash
+docker run --rm --env-file .env -e ADE_ROLE=worker ade-app:local
 ```
 
 Then open:
 
 * **[http://localhost:8000](http://localhost:8000)**
 
-The container runs `ade start`, which applies migrations on startup and serves the built frontend.
+The API container runs `ade start`, which applies migrations on startup and serves the built frontend.
 
 To run detached and stop later:
 
 ```bash
-docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
+docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
 docker rm -f ade
 ```
 
@@ -80,9 +94,12 @@ docker rm -f ade
 When you change backend or frontend code and want a fresh container image:
 
 ```bash
-docker build -t ade:local -f Dockerfile .
+IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
 docker rm -f ade 2>/dev/null || true
-docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
+docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
+
+# If you created a .env, add:
+#   --env-file .env
 ```
 
 ---
@@ -92,12 +109,20 @@ docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data"
 If you don’t want to build from source, you can run a published image from GHCR (when available).
 
 ```bash
-# From inside the repo (for .env and ./data)
-cp .env.example .env
+# From inside the repo (for ./data)
 mkdir -p data
 
 docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
-docker run --rm -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ghcr.io/clac-ca/automatic-data-extractor:latest
+docker run --rm -p 8000:8000 -v "$(pwd)/data:/app/data" ghcr.io/clac-ca/automatic-data-extractor:latest
+
+# If you created a .env, add:
+#   --env-file .env
+```
+
+To run the worker from the same image:
+
+```bash
+docker run --rm --env-file .env -e ADE_ROLE=worker ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
 Then go to **[http://localhost:8000](http://localhost:8000)**.
@@ -108,7 +133,7 @@ Then go to **[http://localhost:8000](http://localhost:8000)**.
 
 ### 5.1 Prerequisites
 
-* Python 3.11+
+* Python 3.12+
 * Node.js 20 (or latest LTS)
 * `git`
 * **Azure SQL / SQL Server only:** system ODBC driver. Install `unixodbc` + Microsoft ODBC Driver 18 for SQL Server. On Debian/Ubuntu add the Microsoft repo (`packages-microsoft-prod.deb`, `sudo dpkg -i`, `sudo apt-get update`) then `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`; on macOS: `brew install unixodbc` and install the Microsoft ODBC Driver 18 package.
@@ -120,8 +145,7 @@ Then go to **[http://localhost:8000](http://localhost:8000)**.
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
 
-# Create a local .env
-cp .env.example .env
+# (Optional) Create a local .env if you need overrides
 
 # Create and activate a virtual environment
 python3 -m venv .venv
@@ -132,7 +156,6 @@ pip install -U pip setuptools wheel
 
 # Install backend components in editable mode
 pip install -e apps/ade-cli       # ADE CLI (console: `ade`)
-pip install -e apps/ade-engine
 pip install -e apps/ade-api
 pip install -e apps/ade-worker
 
@@ -150,6 +173,9 @@ ade dev --no-worker
 ade worker
 ```
 
+Ensure SQL Server is reachable (local container or Azure SQL) and `ADE_SQL_*`
+is set before starting the services.
+
 Dev URLs:
 
 * API: **[http://localhost:8000](http://localhost:8000)**
@@ -163,7 +189,7 @@ If needed, set `VITE_API_BASE_URL=http://localhost:8000` in `apps/ade-web/.env.l
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
 
-copy .env.example .env
+# (Optional) Create a .env if you need overrides
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -171,7 +197,6 @@ python -m venv .venv
 pip install -U pip setuptools wheel
 
 pip install -e apps/ade-cli
-pip install -e apps/ade-engine
 pip install -e apps/ade-api
 pip install -e apps/ade-worker
 
@@ -184,6 +209,9 @@ ade dev --no-worker  # skip worker if you want to run it separately
 ade worker
 ```
 
+Ensure SQL Server is reachable (local container or Azure SQL) and `ADE_SQL_*`
+is set before starting the services.
+
 ---
 
 ## 6. ADE CLI basics
@@ -191,14 +219,15 @@ ade worker
 Once installed (locally or inside the container), the `ade` CLI provides useful commands:
 
 * `ade dev` — run API + web dev servers + worker (runs migrations first)
-* `ade dev --api-only` / `ade dev --web-only` — run just one surface
+* `ade dev --api` / `ade dev --web` / `ade dev --worker` — run only the services you explicitly select
+* `ade dev --api-only` / `ade dev --web-only` / `ade dev --worker-only` — shortcuts for a single service
 * `ade build` — build the web app (outputs to apps/ade-web/dist)
-* `ade start` — run the API server + worker + built frontend (runs migrations first; builds frontend if missing; use `--no-web` if serving frontend separately)
+* `ade start` — start a single role (API by default; set `ADE_ROLE=worker` for worker). Runs migrations for API; builds frontend if missing (use `--no-web` if serving frontend separately)
 * `ade worker` — run the background worker only
 * `ade ci` — run the full CI suite (lint, tests, build)
 * `ade users ...` — manage users (list/create/update, assign or remove roles)
 
-Tip: `ade dev` and `ade start` run migrations automatically; use `ade migrate` manually when needed.
+Tip: `ade dev` and `ade start` (API role) run migrations automatically; use `ade migrate` manually when needed.
 
 See `ade --help` for more options.
 
@@ -206,10 +235,8 @@ See `ade --help` for more options.
 
 ## 7. Configuration
 
-ADE is configured via environment variables; the recommended way is:
-
-1. Copy `.env.example` → `.env`
-2. Adjust values as needed
+ADE is configured via environment variables. A `.env` file is optional;
+create one only if you need overrides.
 
 Key variables (defaults assume `WORKDIR=/app` inside the container):
 
@@ -229,6 +256,12 @@ Key variables (defaults assume `WORKDIR=/app` inside the container):
 | `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a run may create |
 
 In Docker, these resolve under `/app`, so `./data/...` becomes `/app/data/...`.
+
+Database defaults:
+- ADE derives the SQL Server DSN from `ADE_SQL_*`.
+- Defaults target the local dev container (`sql:1433`, database `ade`).
+  Set `ADE_SQL_HOST`, `ADE_SQL_DATABASE`, `ADE_SQL_USER`, and `ADE_SQL_PASSWORD`
+  for Azure SQL or external SQL Server.
 
 ---
 

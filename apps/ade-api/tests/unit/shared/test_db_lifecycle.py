@@ -8,7 +8,7 @@ from ade_api.settings import Settings
 
 def test_init_shutdown_db_state() -> None:
     app = FastAPI()
-    settings = Settings(_env_file=None, database_url="sqlite:///:memory:")
+    settings = Settings(_env_file=None, database_url_override="sqlite:///:memory:")
 
     init_db(app, settings)
     assert get_engine(app) is not None

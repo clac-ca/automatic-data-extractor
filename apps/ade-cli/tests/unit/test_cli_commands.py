@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tomllib
+from importlib import metadata
 from pathlib import Path
 
 import pytest
@@ -38,9 +39,10 @@ def test_version_flag_outputs_version() -> None:
     expected_api_version = tomllib.loads(
         (repo_root / "apps" / "ade-api" / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]["version"]
-    expected_engine_version = tomllib.loads(
-        (repo_root / "apps" / "ade-engine" / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]["version"]
+    try:
+        expected_engine_version = metadata.version("ade-engine")
+    except metadata.PackageNotFoundError:
+        expected_engine_version = None
     expected_worker_version = tomllib.loads(
         (repo_root / "apps" / "ade-worker" / "pyproject.toml").read_text(encoding="utf-8")
     )["project"]["version"]
@@ -60,7 +62,10 @@ def test_version_flag_outputs_version() -> None:
 
     assert parsed["ade-cli"] == expected_cli_version
     assert parsed["ade-api"] == expected_api_version
-    assert parsed["ade-engine"] == expected_engine_version
+    if expected_engine_version is not None:
+        assert parsed["ade-engine"] == expected_engine_version
+    else:
+        assert "ade-engine" not in parsed
     assert parsed["ade-worker"] == expected_worker_version
     assert parsed["ade-web"] == expected_web_version
 

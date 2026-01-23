@@ -9,7 +9,7 @@ from ade_api.settings import Settings
 
 @pytest.fixture()
 def session() -> Session:
-    engine = build_engine(Settings(_env_file=None, database_url="sqlite:///:memory:"))
+    engine = build_engine(Settings(_env_file=None, database_url_override="sqlite:///:memory:"))
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     session = SessionLocal()

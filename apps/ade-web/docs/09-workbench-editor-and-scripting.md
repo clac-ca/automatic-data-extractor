@@ -13,7 +13,7 @@ This doc is for people working on `ade-web` internals. It explains how the workb
 > * `07-documents-and-runs.md` (canonical `RunOptions`)
 > * `08-configurations-and-config-builder.md`
 > * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` and
->   `apps/ade-engine/docs/11-ade-event-model.md` (event schemas)
+>   `https://github.com/clac-ca/ade-engine/blob/main/docs/11-ade-event-model.md` (event schemas)
 
 Workbench run actions always use the canonical **`RunOptions`** shape (camelCase:
 `dryRun`, `validateOnly`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
@@ -716,7 +716,7 @@ Error handling is intentionally explicit:
 Low‑level event schemas are documented in:
 
 * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` (see the run streaming section)
-* `apps/ade-engine/docs/11-ade-event-model.md` (canonical event model)
+* `https://github.com/clac-ca/ade-engine/blob/main/docs/11-ade-event-model.md` (canonical event model)
 
 ---
 

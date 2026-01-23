@@ -1,24 +1,24 @@
 # ADE Admin Getting Started Guide
 
 This handbook shows how to run and administer the Automatic Data Extractor (ADE)
-without assuming prior context. ADE is designed to be a small, self-contained
-service that relies on a bundled SQLite database, so you can evaluate it
-anywhere without provisioning external infrastructure.
+without assuming prior context. ADE standardizes on SQL Server/Azure SQL; for
+local development the devcontainer starts a SQL Server container and ADE uses
+that by default.
 
 ## 1. What ADE Ships With
-- **Self-contained storage** – ADE persists all metadata in
-  `data/db/ade.sqlite`. Documents and other artefacts live alongside it
-  under `data/`. No external database service is required.
+- **Storage layout** – documents and runtime artifacts live under `data/`. The
+  database itself lives in SQL Server/Azure SQL; in local dev, the SQL container
+  persists data under `data/sql`.
 - **FastAPI backend + worker** – the API in
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
   provisions environments and executes runs from the database queue.
 - **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
   in development; in production you can serve the built `apps/ade-web/dist`
-  bundle via `ade start` or behind a reverse proxy.
+  bundle via the API container (`ade start`) or behind a reverse proxy.
 
 
 ## 2. Prerequisites
-- **Python 3.11+** with `pip` available on your `PATH`. Windows installers live at
+- **Python 3.12+** with `pip` available on your `PATH`. Windows installers live at
   <https://www.python.org/downloads/>.
 - **Node.js 20 LTS** (includes `npm`). Download from
   <https://nodejs.org/en/download/>.
@@ -35,22 +35,15 @@ git --version
 ```
 
 ## 3. About `.env` Files
-ADE reads configuration from environment variables. During local development we
-keep them in a `.env` file in the project root so FastAPI and Docker
-all load the same values.
+ADE reads configuration from environment variables. During local development you
+may keep them in a `.env` file in the project root so FastAPI and Docker
+load the same values.
 
-An example file is included. Copy it and adjust the values you need:
-
-```bash
-cp .env.example .env
-# edit .env to set secrets before starting ADE
-```
-
-If you delete `.env`, ADE falls back to its defaults (SQLite in
-`data/db`, docs disabled outside `local`, etc.). Time-based settings
-accept either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or
-`30d`, so you can stay consistent whether you configure them via `.env` or
-export environment variables in your shell.
+`.env` is optional. If it is missing, ADE uses defaults that target the local
+SQL container (`sql:1433`, database `ade`, user `sa`). Time-based settings accept
+either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or `30d`, so
+you can stay consistent whether you configure them via `.env` or export
+environment variables in your shell.
 
 ## 4. Option A – Develop with the source tree (recommended)
 
@@ -59,18 +52,18 @@ export environment variables in your shell.
    ```bash
    git clone https://github.com/your-org/automatic-data-extractor.git
    cd automatic-data-extractor
-   cp .env.example .env
-
    python3 -m venv .venv
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip
-   pip install --no-cache-dir -e apps/ade-cli -e apps/ade-engine -e apps/ade-api -e apps/ade-worker
+   pip install --no-cache-dir -e apps/ade-cli -e apps/ade-api -e apps/ade-worker
 
    cd apps/ade-web
    npm install
    cd ..
    ```
+
+   Note: `ade-worker` installs `ade-engine` from the separate engine repo (currently tracking `@main`; tags will follow).
 
 2. Start the dev services (this runs migrations first):
 
@@ -78,9 +71,12 @@ export environment variables in your shell.
    ade dev
    ```
 
-   Use `ade dev` for the standard dev loop (runs migrations, then API reload + Vite hot module reload + worker). If you only want the API, run `ade dev --api --no-web --no-worker` (or `ade dev --api-only`). If you only want the web server, run `ade dev --web --no-api`. Use `--no-worker` if you want to skip background jobs.
+   Ensure SQL Server is reachable (local container or Azure SQL) and `ADE_SQL_*` is set
+   before starting the services.
+
+   Use `ade dev` for the standard dev loop (runs migrations, then API reload + Vite hot module reload + worker). If you only want one component, use `ade dev --api`, `ade dev --web`, or `ade dev --worker`. Use `--no-worker` if you want to skip background jobs while still running API + web.
    - Dev flow: `ade dev` (runs migrations, then API + worker + Vite dev server).
-   - Prod-ish flow: `ade start` (builds frontend if missing, serves frontend + API + worker; runs migrations first).
+   - Prod-ish flow: `ade start` (API role by default; set `ADE_ROLE=worker` for worker).
 
 3. Confirm the API is healthy:
 
@@ -88,23 +84,23 @@ export environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/`. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. Deleting `data/db/` after the services stop resets the SQLite database; `ade dev`/`ade start` will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/`. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local SQL dev, deleting `data/sql/` after the SQL container stops resets the database; `ade dev`/`ade start` (API role) will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run API and web manually (optional)
 If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
 
 ```bash
 # Terminal 1
-ade dev --api --no-web --no-worker
+ade dev --api
 
 # Terminal 2
-ade dev --web --no-api
+ade dev --web
 
 # Terminal 3 (optional)
-ade worker
+ade dev --worker
 ```
 
-Tip: If you frequently switch branches, re-run the editable installs (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api -e apps/ade-worker`) in your virtualenv (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
+Tip: If you frequently switch branches, re-run the editable installs (`pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`) in your virtualenv (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
@@ -118,19 +114,26 @@ Registry soon.
 ```bash
 git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
-cp .env.example .env
-docker build -t ade:local -f Dockerfile .
+IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
 ```
 
 ### 5.2 Run the container
 ```bash
 mkdir -p data
-docker run -d --name ade -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" ade:local
+docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
 ```
 
-The volume keeps the SQLite database and documents on the host so they
-survive container restarts. The API container runs migrations on startup
-via `ade start`. Check health the same way:
+To run the worker from the same image:
+
+```bash
+docker run -d --name ade-worker --env-file .env -e ADE_ROLE=worker ade-app:local
+```
+
+The volume keeps documents and runtime artifacts on the host so they
+survive container restarts. The database itself lives in your SQL Server
+instance (local container or Azure SQL), so ensure `ADE_SQL_*` is set
+before startup. The API container runs migrations on startup via `ade start`.
+Check health the same way:
 
 ```bash
 curl http://localhost:8000/health
@@ -143,7 +146,7 @@ docker rm -f ade
 ```
 
 ## 6. Where ADE Stores Data
-- `data/db/ade.sqlite` – primary metadata database (SQLite).
+- `data/sql/` – persisted SQL Server data for local dev (via the devcontainer SQL service).
 - `data/workspaces/<workspace_id>/documents/` – uploaded source files.
 - `data/logs/` *(if enabled)* – structured JSON logs.
 
@@ -162,7 +165,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
-- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:create_app --factory`).
+- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:create_app --factory`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and confirm your web server is serving `apps/ade-web/dist/` and forwarding `/api/v1` to the API.
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api/v1` prefix.

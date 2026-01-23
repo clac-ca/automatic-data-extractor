@@ -8,7 +8,7 @@ import sys
 def _print_install_help(missing: str) -> None:
     message = (
         f"❌ Missing dependency '{missing}'. Install ADE into an active virtualenv first:\n\n"
-        "    pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api\n\n"
+        "    pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker\n\n"
         "See README: Developer Setup."
     )
     sys.stderr.write(message + "\n")

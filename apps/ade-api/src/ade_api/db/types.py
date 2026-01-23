@@ -1,4 +1,4 @@
-"""SQLAlchemy custom column types (SQLite + SQL Server).
+"""SQLAlchemy custom column types (SQL Server/Azure SQL; SQLite test-only).
 
 - GUID: UUID stored as UNIQUEIDENTIFIER on SQL Server, CHAR(36) on SQLite.
 - UTCDateTime: timezone-aware datetimes normalized to UTC.

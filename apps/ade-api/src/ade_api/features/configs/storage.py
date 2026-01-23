@@ -355,11 +355,6 @@ class ConfigStorage:
             if spec.exists():
                 candidates.append(spec)
 
-        for parent in Path(__file__).resolve().parents:
-            repo_candidate = parent / "apps" / "ade-engine"
-            if repo_candidate.exists():
-                candidates.append(repo_candidate)
-
         for root in candidates:
             src_root = root / "src"
             if (src_root / "ade_engine").is_dir():

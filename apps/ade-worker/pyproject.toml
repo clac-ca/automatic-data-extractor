@@ -7,7 +7,7 @@ name = "ade-worker"
 version = "0.2.0"
 description = "ADE background worker (runs/environments)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
@@ -15,7 +15,10 @@ urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 # Runtime deps — keep minimal and independent of ade-api
 # ade-engine provides the CLI and runtime engine.
 dependencies = [
-  "ade-engine",
+  # NOTE: Using `@main` is non-deterministic. We will switch to tags after they are set up in the repo.
+  # Example: ade-engine @ git+https://github.com/clac-ca/ade-engine@v0.6.1
+  "ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
+
   "sqlalchemy==2.0.44",
   "pyodbc==5.3.0",
   "pydantic==2.12.5",

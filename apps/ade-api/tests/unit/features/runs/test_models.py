@@ -57,7 +57,7 @@ def test_run_defaults(session: Session) -> None:
         workspace_id=workspace.id,
         configuration_id=configuration.id,
         input_document_id=document.id,
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
     )
     session.add(run)

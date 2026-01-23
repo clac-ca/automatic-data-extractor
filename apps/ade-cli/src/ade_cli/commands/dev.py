@@ -36,12 +36,40 @@ def _resolve_vite_log_level(env: dict[str, str]) -> str | None:
     return mapping.get(value, "info")
 
 
+def _resolve_selection(
+    api: bool | None,
+    web: bool | None,
+    worker: bool | None,
+    api_only: bool,
+    web_only: bool,
+    worker_only: bool,
+) -> tuple[bool, bool, bool]:
+    if sum(1 for flag in (api_only, web_only, worker_only) if flag) > 1:
+        typer.echo("❌ Only one of --api-only/--web-only/--worker-only may be used.", err=True)
+        raise typer.Exit(code=1)
+
+    if api_only:
+        return True, False, False
+    if web_only:
+        return False, True, False
+    if worker_only:
+        return False, False, True
+
+    explicit_true = any(value is True for value in (api, web, worker))
+    if explicit_true:
+        return api is True, web is True, worker is True
+
+    # Default: enable all unless explicitly disabled.
+    return api is not False, web is not False, worker is not False
+
+
 def run_dev(
-    api: bool = True,
-    web: bool = True,
-    worker: bool = True,
+    api: bool | None = None,
+    web: bool | None = None,
+    worker: bool | None = None,
     api_only: bool = False,
     web_only: bool = False,
+    worker_only: bool = False,
     api_port: int | None = None,
     api_host: str | None = None,
     api_workers: int | None = None,
@@ -60,15 +88,7 @@ def run_dev(
     """
     common.refresh_paths()
 
-    # Resolve selection flags
-    if api_only and web_only:
-        typer.echo("❌ Cannot use --api-only and --web-only together.", err=True)
-        raise typer.Exit(code=1)
-
-    if api_only:
-        api, web, worker = True, False, False
-    elif web_only:
-        api, web, worker = False, True, False
+    api, web, worker = _resolve_selection(api, web, worker, api_only, web_only, worker_only)
 
     if not api and not web and not worker:
         typer.echo("⚠️ No services selected; nothing to run.", err=True)
@@ -107,12 +127,12 @@ def run_dev(
     if api:
         common.require_python_module(
             "ade_api",
-            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
+            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
         )
         common.uvicorn_path()
         from ade_api.settings import Settings
 
-        api_settings = Settings(_env_file=common.REPO_ROOT / ".env")
+        api_settings = Settings()
         if api_port is None:
             api_port = api_settings.api_port if api_settings.api_port is not None else 8000
         api_port = int(api_port)
@@ -140,7 +160,7 @@ def run_dev(
     if worker:
         common.require_python_module(
             "ade_worker",
-            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-worker`).",
+            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-worker`).",
         )
         typer.echo("🧵 Worker:               ade-worker")
 
@@ -227,21 +247,24 @@ def run_dev(
 
 def register(app: typer.Typer) -> None:
     @app.command(
-        help="Run dev services: API http://localhost:8000, Web http://localhost:5173, Worker (runs migrations first).",
+        help=(
+            "Run dev services: API http://localhost:8000, Web http://localhost:5173, Worker. "
+            "If any of --api/--web/--worker are explicitly enabled, only those run."
+        ),
     )
     def dev(
-        api: bool = typer.Option(
-            True,
+        api: bool | None = typer.Option(
+            None,
             "--api/--no-api",
             help="Run the API dev server.",
         ),
-        web: bool = typer.Option(
-            True,
+        web: bool | None = typer.Option(
+            None,
             "--web/--no-web",
             help="Run the web dev server.",
         ),
-        worker: bool = typer.Option(
-            True,
+        worker: bool | None = typer.Option(
+            None,
             "--worker/--no-worker",
             help="Run the background worker.",
         ),
@@ -254,6 +277,11 @@ def register(app: typer.Typer) -> None:
             False,
             "--web-only",
             help="Shortcut for web only (same as --web --no-api --no-worker).",
+        ),
+        worker_only: bool = typer.Option(
+            False,
+            "--worker-only",
+            help="Shortcut for worker only (same as --worker --no-api --no-web).",
         ),
         api_port: int = typer.Option(
             None,
@@ -293,6 +321,7 @@ def register(app: typer.Typer) -> None:
             worker=worker,
             api_only=api_only,
             web_only=web_only,
+            worker_only=worker_only,
             api_port=api_port,
             api_host=api_host,
             api_workers=api_workers,

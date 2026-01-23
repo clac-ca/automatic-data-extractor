@@ -1,17 +1,21 @@
 import pytest
+from sqlalchemy.engine import make_url
 
 from ade_api.settings import Settings
 
 
 def test_managed_identity_requires_mssql_url() -> None:
     with pytest.raises(ValueError):
-        Settings(_env_file=None, database_auth_mode="managed_identity")
+        Settings(_env_file=None, database_url_override="sqlite:///:memory:", database_auth_mode="managed_identity")
 
 
 def test_mssql_driver_defaults_to_odbc_18() -> None:
     settings = Settings(
         _env_file=None,
-        database_url="mssql+pyodbc://user:pass@example.database.windows.net:1433/ade",
+        sql_host="example.database.windows.net",
+        sql_user="user",
+        sql_password="pass",
+        sql_database="ade",
     )
 
     assert "driver=ODBC+Driver+18+for+SQL+Server" in settings.database_url
@@ -20,9 +24,16 @@ def test_mssql_driver_defaults_to_odbc_18() -> None:
 def test_managed_identity_strips_credentials_from_dsn() -> None:
     settings = Settings(
         _env_file=None,
-        database_url="mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade",
+        sql_host="contoso.database.windows.net",
+        sql_user="user",
+        sql_password="secret",
+        sql_database="ade",
         database_auth_mode="managed_identity",
     )
 
-    assert "user:secret" not in settings.database_url
-    assert settings.database_url.startswith("mssql+pyodbc://contoso.database.windows.net:1433/ade")
+    url = make_url(settings.database_url)
+    assert url.username is None
+    assert url.password is None
+    assert url.host == "contoso.database.windows.net"
+    assert url.port == 1433
+    assert url.database == "ade"

@@ -1,0 +1,55 @@
+# compose.prod.yaml
+#
+# Local "prod-like" run:
+# - SQL + Azurite local (dev-only)
+# - API + Worker run from the SAME built image (single artifact)
+#
+# Build:
+#   IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+#
+# Run:
+#   IMAGE_TAG=ade-app:local docker compose -f compose.prod.yaml up
+#
+
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./data/sql:/var/opt/mssql
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
+    ports:
+      - "10000:10000"
+    volumes:
+      - ./data/azurite:/data
+
+  api:
+    image: ${IMAGE_TAG:-ade-app:local}
+    env_file: .env
+    environment:
+      ADE_ROLE: api
+    depends_on:
+      - sql
+      - azurite
+    ports:
+      - "8000:8000"
+    command: ["ade", "start"]
+
+  worker:
+    image: ${IMAGE_TAG:-ade-app:local}
+    env_file: .env
+    environment:
+      ADE_ROLE: worker
+    depends_on:
+      - sql
+      - azurite
+    command: ["ade", "start"]

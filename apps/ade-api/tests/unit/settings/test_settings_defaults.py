@@ -4,6 +4,8 @@ from datetime import timedelta
 
 import pytest
 
+from sqlalchemy.engine import make_url
+
 from ade_api.settings import REPO_ROOT, Settings
 
 
@@ -17,7 +19,13 @@ def test_settings_defaults() -> None:
     assert settings.api_docs_enabled is False
     assert settings.server_public_url == "http://localhost:8000"
     assert settings.server_cors_origins == ["http://localhost:5173"]
-    assert settings.database_url.endswith("data/db/ade.sqlite")
+    url = make_url(settings.database_url)
+    assert url.drivername == "mssql+pyodbc"
+    assert url.host == "sql"
+    assert url.port == 1433
+    assert url.database == "ade"
+    assert url.username == "sa"
+    assert url.password == "YourStrong!Passw0rd"
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     expected_root = (REPO_ROOT / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()

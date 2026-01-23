@@ -1,6 +1,8 @@
 # WP11 — ADE Engine Runtime Implementation Plan
 
 > **Agent instruction:** Keep this work package plan current as you execute WP11. Update statuses on the checklist below and add new items whenever additional work emerges.
+> 
+> Note: `ade-engine` now lives in https://github.com/clac-ca/ade-engine (main branch). File references in this document refer to that repo.
 
 ## Work Package Checklist
 - [x] Runtime foundations defined and context/dataclass scaffolding in place
@@ -35,7 +37,7 @@ breaks the implementation into incremental, testable milestones.
 - Runs API specification noting the CLI entry point and streaming requirements.【F:docs/ade_runs_api_spec.md†L298-L537】
 
 ## Current State Snapshot
-- Package exposes `EngineMetadata`, `load_config_manifest`, and a CLI that prints engine metadata + config manifest.【F:apps/ade-engine/src/ade_engine/__init__.py†L1-L20】【F:apps/ade-engine/src/ade_engine/__main__.py†L1-L60】
+- Package exposes `EngineMetadata`, `load_config_manifest`, and a CLI that prints engine metadata + config manifest (see https://github.com/clac-ca/ade-engine/blob/main/src/ade_engine/__init__.py and https://github.com/clac-ca/ade-engine/blob/main/src/ade_engine/__main__.py).
 - No runtime abstractions exist for file ingestion, run orchestration, detector execution, or artifact logging.
 - Tests only cover placeholder behaviors; no integration coverage for actual spreadsheet processing.
 
@@ -157,7 +159,7 @@ breaks the implementation into incremental, testable milestones.
 Completed this iteration by introducing the `RunService` facade, isolating table processing into pure helpers, and implementing a configurable telemetry layer that unifies correlation metadata and severity thresholds across artifact and event sinks.
 
 ## Remaining Frontend & Backend Integration Work
-- [x] Update the runs service to execute the new worker entry point by supplying `--run-id`/`--runs-dir` arguments (or calling `run_run` directly) so platform runs drive actual runs instead of invoking the manifest-printing CLI. Align the subprocess environment with the run directory layout and safe-mode semantics exposed by the runtime.【F:apps/ade-api/src/ade_api/features/runs/service.py†L332-L427】【F:apps/ade-engine/src/ade_engine/__main__.py†L12-L88】
+- [x] Update the runs service to execute the new worker entry point by supplying `--run-id`/`--runs-dir` arguments (or calling `run_run` directly) so platform runs drive actual runs instead of invoking the manifest-printing CLI. Align the subprocess environment with the run directory layout and safe-mode semantics exposed by the runtime (see https://github.com/clac-ca/ade-engine/blob/main/src/ade_engine/__main__.py).
 - [x] Replace the placeholder runs router/service with an implementation that persists submissions, provisions run folders, and associates runs with run metadata/artifacts that the frontend can display.【F:apps/ade-api/src/ade_api/features/runs/router.py†L1-L120】【F:apps/ade-api/src/ade_api/features/runs/service.py†L1-L272】
 - [x] Ensure the workspace UI flows continue end-to-end once the backend endpoints exist: the documents drawer currently posts to `/runs` and expects a `RunRecord`, and validation mode streams run events over NDJSON, so both APIs must emit the shapes the SPA consumes.【F:apps/ade-web/src/pages/Workspace/sections/Documents/index.tsx†L626-L704】【F:apps/ade-web/src/api/runs/api.ts†L1-L24】
 

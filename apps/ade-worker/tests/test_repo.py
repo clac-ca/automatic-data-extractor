@@ -122,7 +122,7 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
         run_id="run-1",
         workspace_id="ws-1",
         configuration_id="cfg-1",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:aaa",
         now=now,
     )
@@ -131,7 +131,7 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
         run_id="run-2",
         workspace_id="ws-1",
         configuration_id="cfg-1",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:bbb",
         now=now,
     )
@@ -140,7 +140,7 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
         run_id="run-3",
         workspace_id="ws-1",
         configuration_id="cfg-1",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:aaa",
         now=now,
     )
@@ -168,7 +168,7 @@ def test_ensure_environment_rows_requeues_failed_env() -> None:
         run_id="run-10",
         workspace_id="ws-10",
         configuration_id="cfg-10",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:xyz",
         now=now,
     )
@@ -177,7 +177,7 @@ def test_ensure_environment_rows_requeues_failed_env() -> None:
         env_id="env-10",
         workspace_id="ws-10",
         configuration_id="cfg-10",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:xyz",
         status="failed",
         error_message="oops",
@@ -209,7 +209,7 @@ def test_replace_run_metrics_overwrites() -> None:
         run_id="run-4",
         workspace_id="ws-4",
         configuration_id="cfg-4",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:aaa",
         now=now,
     )
@@ -260,7 +260,7 @@ def test_replace_run_fields_is_idempotent() -> None:
         run_id="run-5",
         workspace_id="ws-5",
         configuration_id="cfg-5",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:bbb",
         now=now,
     )
@@ -324,7 +324,7 @@ def test_replace_run_table_columns_is_idempotent() -> None:
         run_id="run-6",
         workspace_id="ws-6",
         configuration_id="cfg-6",
-        engine_spec="apps/ade-engine",
+        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:ccc",
         now=now,
     )

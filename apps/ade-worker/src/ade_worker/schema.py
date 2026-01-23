@@ -1,8 +1,8 @@
 """SQLAlchemy Core schema for the worker.
 
 This is intentionally tiny and uses portable types so it works on:
-- SQLite (local dev)
-- SQL Server / Azure SQL (prod)
+- SQL Server / Azure SQL
+- SQLite (test-only)
 
 If your main application already owns these tables, keep their names/columns aligned.
 """

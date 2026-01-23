@@ -1,4 +1,4 @@
-"""Alembic environment configuration (SQLite + SQL Server only)."""
+"""Alembic environment configuration (SQL Server/Azure SQL; SQLite test-only)."""
 
 from __future__ import annotations
 
@@ -39,13 +39,13 @@ def _get_url_override() -> str | None:
     if override:
         return override
 
-    # 3) fall back to ADE_DATABASE_URL via Settings
+    # 3) fall back to Settings (ADE_SQL_* defaults)
     return None
 
 
 def _build_settings(url_override: str | None) -> Settings:
     if url_override:
-        return Settings(database_url=url_override)
+        return Settings(database_url_override=url_override)
     return Settings()
 
 

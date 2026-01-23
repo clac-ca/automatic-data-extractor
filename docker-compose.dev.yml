@@ -18,7 +18,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}"
+      MSSQL_SA_PASSWORD: "${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}"
     ports:
       - "1433:1433"
     volumes:
@@ -38,8 +38,11 @@ services:
       - .:/workspaces/automatic-data-extractor:cached
     environment:
       ADE_DATA_DIR: /workspaces/automatic-data-extractor/data
-      # convenient connection targets inside the devcontainer
-      ADE_MSSQL_HOST: mssql
-      ADE_MSSQL_PORT: "1433"
-      ADE_AZURITE_HOST: azurite
+      ADE_SQL_HOST: ${ADE_SQL_HOST-mssql}
+      ADE_SQL_PORT: ${ADE_SQL_PORT-1433}
+      ADE_SQL_USER: ${ADE_SQL_USER-sa}
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD-YourStrong!Passw0rd}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE-ade}
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT-optional}
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE-yes}
     command: sleep infinity

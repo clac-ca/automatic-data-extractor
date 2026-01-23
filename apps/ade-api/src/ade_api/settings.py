@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import secrets
 from datetime import timedelta
 from functools import lru_cache
@@ -30,13 +29,6 @@ def _detect_repo_root(start: Path) -> Path:
 
 
 REPO_ROOT = _detect_repo_root(MODULE_DIR)
-
-
-def _env_file() -> str:
-    override = os.getenv("ADE_ENV_FILE")
-    if override and override.strip():
-        return str(Path(override).expanduser().resolve())
-    return str((REPO_ROOT / ".env").resolve())
 
 
 def _candidate_api_roots() -> list[Path]:
@@ -77,10 +69,10 @@ DEFAULT_API_ROOT = _detect_api_root()
 DEFAULT_DATA_DIR = REPO_ROOT / "data"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
-DEFAULT_DB_FILENAME = "ade.sqlite"
 DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
-DEFAULT_ENGINE_SPEC = "apps/ade-engine"
+# NOTE: Using @main until ade-engine tags are published.
+DEFAULT_ENGINE_SPEC = "ade-engine @ git+https://github.com/clac-ca/ade-engine@main"
 DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
 
 DEFAULT_PAGE_SIZE = 25
@@ -177,7 +169,7 @@ class Settings(BaseSettings):
     """FastAPI settings loaded from ADE_* environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=_env_file(),
+        env_file=".env",
         env_file_encoding="utf-8",
         env_prefix="ADE_",
         case_sensitive=False,
@@ -186,6 +178,7 @@ class Settings(BaseSettings):
     )
 
     _jwt_secret_generated: bool = PrivateAttr(default=False)
+    _database_url: str = PrivateAttr(default="")
 
     # Core
     app_name: str = "Automatic Data Extractor API"
@@ -230,7 +223,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str | None = None
+    database_url_override: str | None = None
     database_echo: bool = False
     database_log_level: str | None = None
     database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
@@ -250,6 +243,15 @@ class Settings(BaseSettings):
     database_sqlite_synchronous: Literal["OFF", "NORMAL", "FULL", "EXTRA"] = "NORMAL"
     database_sqlite_busy_timeout_ms: int = Field(30000, ge=0)
     database_sqlite_begin_mode: Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"] | None = None
+
+    # Database (derived mssql URL inputs)
+    sql_host: str = "sql"
+    sql_port: int = Field(default=1433, ge=1, le=65535)
+    sql_user: str = "sa"
+    sql_password: str = "YourStrong!Passw0rd"
+    sql_database: str = "ade"
+    sql_encrypt: str = "optional"
+    sql_trust_server_certificate: str = "yes"
 
     # JWT
     jwt_secret: SecretStr | None = Field(
@@ -321,6 +323,13 @@ class Settings(BaseSettings):
             return None
         return cls._v_log_level(v)
 
+    @field_validator("database_url_override", mode="before")
+    @classmethod
+    def _v_database_url_override(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
+
     @field_validator("server_cors_origins", mode="before")
     @classmethod
     def _v_cors(cls, v: Any) -> list[str]:
@@ -364,6 +373,21 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return None
         return str(v).strip().upper()
+
+    @field_validator(
+        "sql_host",
+        "sql_user",
+        "sql_password",
+        "sql_database",
+        "sql_encrypt",
+        "sql_trust_server_certificate",
+        mode="before",
+    )
+    @classmethod
+    def _v_sql_str(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
 
     @field_validator("jwt_secret", mode="before")
     @classmethod
@@ -420,11 +444,55 @@ class Settings(BaseSettings):
         if not self.frontend_url:
             self.frontend_url = self.server_public_url
 
-        if not self.database_url:
-            sqlite = (self.data_dir / "db" / DEFAULT_DB_FILENAME).resolve()
-            self.database_url = f"sqlite:///{sqlite.as_posix()}"
+        if self.database_url_override:
+            url = make_url(self.database_url_override)
+        else:
+            sql_vars = {
+                "host": self.sql_host,
+                "user": self.sql_user,
+                "password": self.sql_password,
+                "database": self.sql_database,
+            }
+            if self.database_auth_mode == "managed_identity":
+                required = ["host", "database"]
+            else:
+                required = ["host", "user", "password", "database"]
 
-        url = make_url(self.database_url)
+            missing = [key for key in required if not sql_vars[key]]
+            if missing:
+                raise ValueError(
+                    "Missing required ADE_SQL_* values: "
+                    + ", ".join(f"ADE_SQL_{name.upper()}" for name in missing)
+                )
+
+            query = {"driver": "ODBC Driver 18 for SQL Server"}
+            if self.sql_encrypt:
+                query["Encrypt"] = self.sql_encrypt
+            if self.sql_trust_server_certificate:
+                query["TrustServerCertificate"] = self.sql_trust_server_certificate
+
+            if self.database_auth_mode == "managed_identity":
+                url = URL.create(
+                    drivername="mssql+pyodbc",
+                    username=None,
+                    password=None,
+                    host=self.sql_host,
+                    port=self.sql_port,
+                    database=self.sql_database,
+                    query=query,
+                )
+            else:
+                url = URL.create(
+                    drivername="mssql+pyodbc",
+                    username=self.sql_user,
+                    password=self.sql_password,
+                    host=self.sql_host,
+                    port=self.sql_port,
+                    database=self.sql_database,
+                    query=query,
+                )
+
+        url = make_url(url.render_as_string(hide_password=False))
         query = dict(url.query or {})
 
         if (
@@ -433,8 +501,19 @@ class Settings(BaseSettings):
         ):
             self.database_sqlite_busy_timeout_ms = int(self.database_pool_timeout * 1000)
 
-        if url.get_backend_name() == "mssql" and "driver" not in query:
-            query["driver"] = "ODBC Driver 18 for SQL Server"
+        if url.get_backend_name() == "mssql":
+            present = {k.lower() for k in query}
+
+            def _setdefault_ci(key: str, value: str) -> None:
+                if key.lower() not in present:
+                    query[key] = value
+                    present.add(key.lower())
+
+            _setdefault_ci("driver", "ODBC Driver 18 for SQL Server")
+            if self.sql_encrypt:
+                _setdefault_ci("Encrypt", self.sql_encrypt)
+            if self.sql_trust_server_certificate:
+                _setdefault_ci("TrustServerCertificate", self.sql_trust_server_certificate)
 
         if self.database_auth_mode == "managed_identity":
             if url.get_backend_name() != "mssql":
@@ -453,13 +532,17 @@ class Settings(BaseSettings):
         elif query != url.query:
             url = url.set(query=query)
 
-        self.database_url = url.render_as_string(hide_password=False)
+        self._database_url = url.render_as_string(hide_password=False)
 
         if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
             self.jwt_secret = SecretStr(secrets.token_urlsafe(64))
             self._jwt_secret_generated = True
 
         return self
+
+    @property
+    def database_url(self) -> str:
+        return self._database_url
 
     @property
     def workspaces_dir(self) -> Path:
@@ -498,7 +581,7 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def _build_settings() -> Settings:
-    return Settings(_env_file=_env_file())
+    return Settings()
 
 
 def get_settings() -> Settings:
@@ -512,7 +595,6 @@ def reload_settings() -> Settings:
 
 __all__ = [
     "DEFAULT_CORS_ORIGINS",
-    "DEFAULT_DB_FILENAME",
     "DEFAULT_PUBLIC_URL",
     "Settings",
     "get_settings",

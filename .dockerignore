@@ -1,6 +1,8 @@
 # Git metadata
 .git
 .github
+.devcontainer
+.vscode
 
 # Python artifacts
 __pycache__/
@@ -10,12 +12,14 @@ __pycache__/
 venv*/
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
 
 # Node / frontend artifacts
 node_modules/
 npm-debug.log*
 yarn-error.log*
 .pnpm-store/
+apps/**/node_modules
 
 # Build outputs
 dist/
@@ -28,6 +32,7 @@ artifacts/
 .workpackage/
 .workpackages/
 .old-codebase/
+*.log
 
 # Env files (avoid baking secrets into images)
 .env

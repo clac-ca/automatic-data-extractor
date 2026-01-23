@@ -62,7 +62,7 @@ def make_run(
     configuration_id: UUID,
     document_id: UUID,
     status: RunStatus,
-    engine_spec: str = "apps/ade-engine",
+    engine_spec: str = "ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
     deps_digest: str = "sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
 ) -> Run:
     return Run(

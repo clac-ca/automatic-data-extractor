@@ -13,11 +13,10 @@ def test_mssql_smoke_select_one() -> None:
     if os.getenv("RUN_MSSQL_TESTS") != "1":
         pytest.skip("RUN_MSSQL_TESTS not set")
 
-    url = os.getenv("ADE_DATABASE_URL", "")
-    if not url.lower().startswith("mssql"):
-        pytest.skip("ADE_DATABASE_URL must be mssql+pyodbc for this test")
+    if not os.getenv("ADE_SQL_HOST") or not os.getenv("ADE_SQL_PASSWORD"):
+        pytest.skip("ADE_SQL_HOST and ADE_SQL_PASSWORD must be set for this test")
 
-    settings = Settings(_env_file=None)
+    settings = Settings()
     engine = build_engine(settings)
     try:
         with engine.connect() as conn:

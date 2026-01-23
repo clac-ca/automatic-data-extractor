@@ -30,7 +30,6 @@ RUN set -eux; \
 
 COPY README.md ./
 COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
-COPY apps/ade-engine/pyproject.toml apps/ade-engine/
 COPY apps/ade-api/pyproject.toml    apps/ade-api/
 COPY apps/ade-worker/pyproject.toml apps/ade-worker/
 
@@ -40,7 +39,6 @@ COPY apps ./apps
 
 RUN python -m pip install --prefix=/install \
         ./apps/ade-cli \
-        ./apps/ade-engine \
         ./apps/ade-api \
         ./apps/ade-worker
 

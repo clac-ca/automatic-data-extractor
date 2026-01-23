@@ -7,7 +7,7 @@ name = "ade-cli"
 version = "1.6.0"
 description = "Python orchestration CLI for ADE."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 dependencies = [

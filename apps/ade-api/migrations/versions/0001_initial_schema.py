@@ -1,4 +1,4 @@
-"""Initial ADE schema (SQLite + SQL Server only).
+"""Initial ADE schema (SQL Server/Azure SQL; SQLite test-only).
 
 Notes:
 - GUID primary keys are app-generated (no server default).
@@ -507,7 +507,7 @@ def _create_runs() -> None:
             "engine_spec",
             sa.String(length=255),
             nullable=False,
-            server_default=sa.text("'apps/ade-engine'"),
+            server_default=sa.text("'ade-engine @ git+https://github.com/clac-ca/ade-engine@main'"),
         ),
         sa.Column(
             "deps_digest",

@@ -1,7 +1,7 @@
 """Queues for environments and runs stored in the ADE database.
 
 Design goals:
-- Works on SQLite and SQL Server/Azure SQL.
+- Works on SQL Server/Azure SQL (SQLite test-only).
 - Atomic claim per table.
 - Runs use leases + heartbeats for long-running work.
 """

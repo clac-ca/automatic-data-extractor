@@ -31,7 +31,8 @@ Introduce the topic in 1–3 sentences. State context and constraints briefly. I
 Open with brief background or the first task. Introduce code with a sentence and a colon:
 
 ```bash
-source setup.sh   # or ensure venv + pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
+bash scripts/dev/setup.sh
+source .venv/bin/activate
 ade dev
 ```
 

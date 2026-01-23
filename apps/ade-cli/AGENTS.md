@@ -5,14 +5,14 @@ Start by exploring the built-in help:
 ```bash
 ade --help                       # list commands
 ade <command> --help             # inspect flags for any command
-python -m ade_engine --help # engine CLI (invoked directly)
+python -m ade_engine --help # engine CLI (installed via ade-worker; invoked directly)
 ```
 
 Fast reference (run `--help` for details):
 
 - `ade setup` — one-time repo setup (env, hooks).
-- `ade dev [--api-only|--web-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
-- `ade start` — serve the API + built frontend + worker (runs migrations first; builds frontend if missing; add `--no-web` to skip). `ade worker` — run the worker only. `ade build` — build web assets.
+- `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
+- `ade start` — start a single role (API by default; set `ADE_ROLE=worker` for worker). Runs migrations for API; builds frontend if missing (add `--no-web` to skip). `ade worker` — run the worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
 - `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade clean` / `ade reset`.
@@ -29,7 +29,7 @@ Options:
 Commands:
   setup     Bootstrap repo env and hooks
   dev       Run API/web dev servers (+ worker, runs migrations first)
-  start     Serve API + built frontend + worker (runs migrations first, builds if missing)
+  start     Start a single role (API by default; use ADE_ROLE=worker for worker)
   worker    Run the background worker only
   build     Build web assets
   tests     Run Python/JS tests
@@ -76,10 +76,13 @@ Quick examples:
 ade dev
 
 # API-only dev server on a custom port
-ade dev --api-only --api-port 9000
+ade dev --api --api-port 9000
 
 # Dev without the worker
 ade dev --no-worker
+
+# Worker only
+ade dev --worker
 
 # Run the worker
 ade worker
@@ -106,5 +109,6 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 ade types
 
 # Run the engine directly (see full flags with `python -m ade_engine run --help`)
-python -m ade_engine process file --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx --output-dir data/samples-output --logs-dir data/samples-output --config-package apps/ade-engine/src/ade_engine/templates/config_packages/default
+ade-engine config init ./tmp/my-config --package-name ade_config
+python -m ade_engine process file --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx --output-dir data/samples-output --logs-dir data/samples-output --config-package ./tmp/my-config
 ```
