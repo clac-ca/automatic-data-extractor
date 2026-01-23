@@ -7,7 +7,7 @@ set -euo pipefail
 # Safe cleanup of build/test artifacts.
 #
 # By default:
-# - Removes Python caches and build outputs
+# - Removes Python caches (including __pycache__) and build outputs
 # - Does NOT delete data/ (SQL/Azurite persisted state)
 #
 # Options:
@@ -33,7 +33,10 @@ for arg in "$@"; do
 done
 
 echo "==> Cleaning Python caches/artifacts"
-rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage coverage.xml htmlcov            dist build *.egg-info            **/__pycache__ || true
+rm -rf .coverage coverage.xml htmlcov dist build *.egg-info || true
+
+# Remove cache directories safely (ignore errors)
+find . -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.mypy_cache' -o -name '.ruff_cache' \) -prune -exec rm -rf {} + 2>/dev/null || true
 
 # Remove bytecode files safely (ignore errors)
 find . -name '*.pyc' -delete 2>/dev/null || true
