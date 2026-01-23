@@ -7,8 +7,8 @@
 # - Includes mssql-tools18 (sqlcmd) for local DB troubleshooting / scripts
 #
 # Notes:
-# - We intentionally DO NOT install Node by default to keep the image lean.
-#   If you work on apps/ade-web, run: scripts/dev/setup.sh --web
+# - Node is installed via a Dev Container Feature (see devcontainer.json).
+# - To skip web deps, run: scripts/dev/setup.sh --no-web
 #
 FROM python:3.12-slim-bookworm
 
@@ -28,6 +28,7 @@ RUN apt-get update \
         sudo \
         build-essential \
         unixodbc-dev \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Add Microsoft package feed (Debian 12 / bookworm) + install ODBC driver/tools

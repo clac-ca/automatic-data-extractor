@@ -18,7 +18,7 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_SA_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
     ports:
       - "1433:1433"
     volumes:
@@ -27,6 +27,8 @@ services:
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
     command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
+    environment:
+      AZURITE_ACCOUNTS: ${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}:${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
     ports:
       - "10000:10000"
     volumes:
@@ -35,21 +37,17 @@ services:
   api:
     image: ${IMAGE_TAG:-ade-app:local}
     env_file: .env
-    environment:
-      ADE_ROLE: api
     depends_on:
       - sql
       - azurite
     ports:
       - "8000:8000"
-    command: ["ade", "start"]
+    command: ["api"]
 
   worker:
     image: ${IMAGE_TAG:-ade-app:local}
     env_file: .env
-    environment:
-      ADE_ROLE: worker
     depends_on:
       - sql
       - azurite
-    command: ["ade", "start"]
+    command: ["worker"]

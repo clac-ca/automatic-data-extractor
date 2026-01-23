@@ -12,8 +12,8 @@ set -euo pipefail
 #   ADE_SQL_HOST (default: sql)
 #   ADE_SQL_PORT (default: 1433)
 #   ADE_SQL_USER (default: sa)
-#   ADE_SQL_PASSWORD (or MSSQL_SA_PASSWORD)
-#   ADE_SQL_ENCRYPT (default: optional)  # ODBC Driver 18 encrypt default is 'yes'
+#   ADE_SQL_PASSWORD
+#   ADE_SQL_ENCRYPT (default: yes)  # ODBC Driver 18 encrypt default is 'yes'
 #
 # Note on ODBC18 encryption:
 # - sqlcmd is secure by default. Use `-No` for optional encryption when talking to local containers.
@@ -22,11 +22,11 @@ set -euo pipefail
 HOST="${ADE_SQL_HOST:-sql}"
 PORT="${ADE_SQL_PORT:-1433}"
 USER="${ADE_SQL_USER:-sa}"
-PASSWORD="${ADE_SQL_PASSWORD:-${MSSQL_SA_PASSWORD:-}}"
+PASSWORD="${ADE_SQL_PASSWORD:-}"
 ENCRYPT="${ADE_SQL_ENCRYPT:-optional}"
 
 if [[ -z "${PASSWORD}" ]]; then
-  echo "ERROR: ADE_SQL_PASSWORD (or MSSQL_SA_PASSWORD) is not set." >&2
+  echo "ERROR: ADE_SQL_PASSWORD is not set." >&2
   exit 1
 fi
 

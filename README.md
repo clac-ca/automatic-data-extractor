@@ -1,306 +1,176 @@
-# ADE — Automatic Data Extractor
+# Automatic Data Extractor (ADE)
 
-[![CI](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml)
-[![Release](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/release.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/release.yml)
+ADE is a multi-app project:
 
-ADE turns messy spreadsheets into consistent, auditable workbooks.
+- **ade-api** — HTTP API (FastAPI)
+- **ade-worker** — background worker
+- **ade-web** — React UI
+- **ade-cli** — CLI + container entrypoint
 
-It:
+This repository publishes **one Docker image** that contains **api + worker + cli + built web assets**.
 
-- Detects tables and columns in your source files
-- Applies your custom rules and validation logic
-- Produces normalized Excel workbooks with a detailed audit trail
+## Quickstart (Docker, local)
 
----
+The easiest “it just works” path is Docker Compose because ADE depends on:
+- SQL Server
+- Blob storage (Azurite locally, Azure Storage in production)
 
-## 1. Repository layout
-
-```text
-automatic-data-extractor/
-├─ Dockerfile          # Full app image (API + worker + built web assets)
-├─ apps/
-│  ├─ ade-api/         # FastAPI backend (API only)
-│  ├─ ade-web/         # React (Vite) frontend SPA
-│  ├─ ade-cli/         # Python CLI (console entry: `ade`)
-│  ├─ ade-worker/      # Background worker (runs + environments)
-│  └─ ...              # (ade-engine now lives in its own repo)
-├─ docs/               # Developer docs & runbooks
-├─ examples/           # Sample input/output files
-├─ scripts/            # Helper / legacy scripts
-└─ ...
-````
-
-Everything ADE produces at runtime (documents, runs, venvs, caches, etc.) goes under `./data/...` by default (inside the container: `/app/data`).
-
-The engine runtime now lives in a separate repo (https://github.com/clac-ca/ade-engine) and is installed transitively via `ade-worker` (currently tracking `@main` until tags are available).
-
----
-
-## 2. Quick start with Docker (recommended)
-
-### 2.1 Prerequisites
-
-* [Git](https://git-scm.com/downloads)
-* [Docker](https://docs.docker.com/get-docker/)
-
-### 2.2 Build and run the Docker image
+### One-liner
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/clac-ca/automatic-data-extractor.git
-cd automatic-data-extractor
-
-# 2. (Optional) Create a .env if you need to override defaults
-#    See "Configuration" below for common variables.
-
-# 3. Build the image
-IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
-
-# 4. Run the API container (role: api)
-mkdir -p data
-docker run --rm -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
-
-# If you created a .env, add:
-#   --env-file .env
+curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/compose.quickstart.yaml \
+  && docker compose -f compose.quickstart.yaml up
 ```
 
-Note: ADE expects a SQL Server reachable via `ADE_SQL_*` (defaults target the
-devcontainer service `sql:1433`). If you run Docker manually, either run SQL on
-the same network and set `ADE_SQL_HOST`, or point to Azure SQL.
+This starts:
+- SQL Server (local container)
+- Azurite (blob-only)
+- ADE (single container by default runs API + worker)
 
-To run the worker from the same image:
+> **Apple Silicon note:** SQL Server Linux containers are x86_64 only today.
+> The compose files set `platform: linux/amd64` so the same quickstart works on
+> both Intel Linux/Windows and Apple Silicon (via Docker Desktop emulation).
+
+> **Note:** `compose.quickstart.yaml` contains safe **development defaults** (including a default SQL password).
+> For anything beyond local evaluation, override values with environment variables or a `.env` file.
+
+### Optional: use a .env file
 
 ```bash
-docker run --rm --env-file .env -e ADE_ROLE=worker ade-app:local
+curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
+cp .env.example .env
+docker compose -f compose.quickstart.yaml up
 ```
 
-Then open:
+## Running the image directly
 
-* **[http://localhost:8000](http://localhost:8000)**
+The image is “CLI-style”:
 
-The API container runs `ade start`, which applies migrations on startup and serves the built frontend.
+- `ENTRYPOINT ["ade"]`
+- default `CMD ["start"]`
 
-To run detached and stop later:
+So running without arguments behaves like running `ade start`.
+
+### Start API + worker (default)
 
 ```bash
-docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
-docker rm -f ade
+docker run --rm -p 8000:8000 ghcr.io/clac-ca/ade:latest
 ```
 
----
-
-## 3. Rebuilding the Docker container in development
-
-When you change backend or frontend code and want a fresh container image:
+### Start only API
 
 ```bash
-IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
-docker rm -f ade 2>/dev/null || true
-docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
-
-# If you created a .env, add:
-#   --env-file .env
+docker run --rm -p 8000:8000 ghcr.io/clac-ca/ade:latest api
 ```
 
----
-
-## 4. Using the published image (no local build)
-
-If you don’t want to build from source, you can run a published image from GHCR (when available).
+### Start only worker
 
 ```bash
-# From inside the repo (for ./data)
-mkdir -p data
-
-docker pull ghcr.io/clac-ca/automatic-data-extractor:latest
-docker run --rm -p 8000:8000 -v "$(pwd)/data:/app/data" ghcr.io/clac-ca/automatic-data-extractor:latest
-
-# If you created a .env, add:
-#   --env-file .env
+docker run --rm ghcr.io/clac-ca/ade:latest worker
 ```
 
-To run the worker from the same image:
+### What `ade start` does
+
+`ade start` runs an initialization step first:
+
+- Ensures the SQL database named by `ADE_SQL_DATABASE` exists (creates it if missing and credentials allow)
+- Ensures storage defaults exist (`ADE_STORAGE_ACCOUNT_NAME`, etc.)
+- Starts API and worker together
+
+You can run init explicitly:
 
 ```bash
-docker run --rm --env-file .env -e ADE_ROLE=worker ghcr.io/clac-ca/automatic-data-extractor:latest
+docker run --rm ghcr.io/clac-ca/ade:latest init
 ```
 
-Then go to **[http://localhost:8000](http://localhost:8000)**.
+## Standard production pattern (recommended)
 
----
+Even though we publish **one image**, the most common deployment style is still:
 
-## 5. Local development (without Docker)
+- one container running the API
+- one container running the worker
+- both containers use the **same image**, but different commands
 
-### 5.1 Prerequisites
-
-* Python 3.12+
-* Node.js 20 (or latest LTS)
-* `git`
-* **Azure SQL / SQL Server only:** system ODBC driver. Install `unixodbc` + Microsoft ODBC Driver 18 for SQL Server. On Debian/Ubuntu add the Microsoft repo (`packages-microsoft-prod.deb`, `sudo dpkg -i`, `sudo apt-get update`) then `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`; on macOS: `brew install unixodbc` and install the Microsoft ODBC Driver 18 package.
-
-### 5.2 macOS / Linux
+Use `compose.split.yaml` as an example:
 
 ```bash
-# Clone the repo
-git clone https://github.com/clac-ca/automatic-data-extractor.git
-cd automatic-data-extractor
+ADE_IMAGE=ghcr.io/clac-ca/ade:latest docker compose -f compose.split.yaml up
+```
 
-# (Optional) Create a local .env if you need overrides
+## Configuration (ADE_ env vars)
 
-# Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+All ADE configuration uses `ADE_*` variables.
 
-# Upgrade packaging tools
-pip install -U pip setuptools wheel
+### SQL
 
-# Install backend components in editable mode
-pip install -e apps/ade-cli       # ADE CLI (console: `ade`)
-pip install -e apps/ade-api
-pip install -e apps/ade-worker
+- `ADE_SQL_HOST` (default: `sql`)
+- `ADE_SQL_PORT` (default: `1433`)
+- `ADE_SQL_USER` (default: `sa`)
+- `ADE_SQL_PASSWORD` (default: set in compose quickstart)
+- `ADE_SQL_DATABASE` (default: `ade`)
+- `ADE_SQL_ENCRYPT` (default: `yes`)
+- `ADE_SQL_TRUST_SERVER_CERTIFICATE` (default: `yes` for local SQL container)
 
-# Install frontend dependencies
-(cd apps/ade-web && npm install)
+### Storage (Azure Storage or Azurite)
 
-# Quick verification (shows CLI help)
-ade --help
+- `ADE_STORAGE_ACCOUNT_NAME` (default: `devstoreaccount1`)
+- `ADE_STORAGE_ACCOUNT_KEY` (default: devstoreaccount1 key for local Azurite)
+- `ADE_STORAGE_BLOB_ENDPOINT` (local default: `http://azurite:10000/<account>`)
+- `ADE_STORAGE_CONNECTION_STRING` (if set, overrides the pieces above)
 
-# Start API + web dev servers + worker (runs migrations first)
+## Development (VS Code Devcontainer)
+
+1) Copy env defaults:
+
+```bash
+cp .env.example .env
+```
+
+2) Open VS Code → **Dev Containers: Reopen in Container**
+
+The devcontainer runs:
+
+```bash
+bash scripts/dev/setup.sh
+```
+
+This installs:
+
+- Python deps for `ade-api`, `ade-worker`, and `ade-cli` (editable installs)
+- Node deps for `ade-web` (via your lockfile)
+
+3) Run everything:
+
+```bash
 ade dev
-
-# Optional: skip worker or run it separately
-ade dev --no-worker
-ade worker
 ```
 
-Ensure SQL Server is reachable (local container or Azure SQL) and `ADE_SQL_*`
-is set before starting the services.
-
-Dev URLs:
-
-* API: **[http://localhost:8000](http://localhost:8000)**
-* Web (Vite dev server): **[http://localhost:5173](http://localhost:5173)**
-
-If needed, set `VITE_API_BASE_URL=http://localhost:8000` in `apps/ade-web/.env.local`.
-
-### 5.3 Windows (PowerShell)
-
-```powershell
-git clone https://github.com/clac-ca/automatic-data-extractor.git
-cd automatic-data-extractor
-
-# (Optional) Create a .env if you need overrides
-
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-pip install -U pip setuptools wheel
-
-pip install -e apps/ade-cli
-pip install -e apps/ade-api
-pip install -e apps/ade-worker
-
-cd apps/ade-web
-npm install
-cd ../..
-
-ade dev
-ade dev --no-worker  # skip worker if you want to run it separately
-ade worker
-```
-
-Ensure SQL Server is reachable (local container or Azure SQL) and `ADE_SQL_*`
-is set before starting the services.
-
----
-
-## 6. ADE CLI basics
-
-Once installed (locally or inside the container), the `ade` CLI provides useful commands:
-
-* `ade dev` — run API + web dev servers + worker (runs migrations first)
-* `ade dev --api` / `ade dev --web` / `ade dev --worker` — run only the services you explicitly select
-* `ade dev --api-only` / `ade dev --web-only` / `ade dev --worker-only` — shortcuts for a single service
-* `ade build` — build the web app (outputs to apps/ade-web/dist)
-* `ade start` — start a single role (API by default; set `ADE_ROLE=worker` for worker). Runs migrations for API; builds frontend if missing (use `--no-web` if serving frontend separately)
-* `ade worker` — run the background worker only
-* `ade ci` — run the full CI suite (lint, tests, build)
-* `ade users ...` — manage users (list/create/update, assign or remove roles)
-
-Tip: `ade dev` and `ade start` (API role) run migrations automatically; use `ade migrate` manually when needed.
-
-See `ade --help` for more options.
-
----
-
-## 7. Configuration
-
-ADE is configured via environment variables. A `.env` file is optional;
-create one only if you need overrides.
-
-Key variables (defaults assume `WORKDIR=/app` inside the container):
-
-| Variable                  | Default                  | Purpose                                    |
-| ------------------------- | ------------------------ | ------------------------------------------ |
-| `ADE_DATA_DIR`            | `./data`                 | Root for local ADE storage (workspaces, venvs, cache, db) |
-| `ADE_SAFE_MODE`           | `false`                  | If `true`, skips engine execution          |
-| `ADE_WORKER_CONCURRENCY`  | `1`                      | Worker concurrency per process             |
-| `ADE_WORKER_POLL_INTERVAL`| `0.5`                    | Worker idle poll interval (seconds)        |
-| `ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS` | `600`       | Wall‑clock timeout per environment build   |
-| `ADE_WORKER_RUN_TIMEOUT_SECONDS` | `300`           | Wall‑clock timeout per run                 |
-| `ADE_WORKER_ENABLE_GC`    | `1`                      | Enable worker GC (single-host default)     |
-| `ADE_WORKER_ENV_TTL_DAYS` | `30`                     | Environment GC TTL (days)                  |
-| `ADE_WORKER_RUN_ARTIFACT_TTL_DAYS` | `30`           | Run artifact GC TTL (days)                 |
-| `ADE_WORKER_CPU_SECONDS`  | `60`                     | Best‑effort CPU limit per run              |
-| `ADE_WORKER_MEM_MB`       | `512`                    | Best‑effort memory limit per run (MB)      |
-| `ADE_WORKER_FSIZE_MB`     | `100`                    | Best‑effort max file size a run may create |
-
-In Docker, these resolve under `/app`, so `./data/...` becomes `/app/data/...`.
-
-Database defaults:
-- ADE derives the SQL Server DSN from `ADE_SQL_*`.
-- Defaults target the local dev container (`sql:1433`, database `ade`).
-  Set `ADE_SQL_HOST`, `ADE_SQL_DATABASE`, `ADE_SQL_USER`, and `ADE_SQL_PASSWORD`
-  for Azure SQL or external SQL Server.
-
----
-
-## 8. CI & releases
-
-* **CI (`.github/workflows/ci.yml`)**
-
-  * Installs editable packages
-  * Runs `ade ci` (OpenAPI checks, lint, tests, build)
-  * Builds the Docker image from `./Dockerfile`
-  * Pushes images to GHCR on `main` (tags: `latest`, `sha-<commit>`)
-
-* **Releases (`.github/workflows/release.yml`)**
-
-  * Reads the version from `apps/ade-api/pyproject.toml`
-  * Uses `CHANGELOG.md` to create a GitHub Release
-  * Builds and pushes versioned images:
-
-    * `ghcr.io/clac-ca/automatic-data-extractor:<version>`
-    * `ghcr.io/clac-ca/automatic-data-extractor:latest`
-
-To pull a specific image:
+If you **don't** need the React app, you can skip Node/web setup:
 
 ```bash
-docker pull ghcr.io/clac-ca/automatic-data-extractor:<tag>
+bash scripts/dev/setup.sh --no-web
+```
+
+## Build the production image locally
+
+```bash
+IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+```
+
+Then:
+
+```bash
+docker run --rm -p 8000:8000 ade-app:local
 ```
 
 ---
 
-## 9. Contributing
+## Why this design is “standard”
 
-* Open issues or PRs on GitHub
-* Before opening a PR:
+This repo follows common Docker UX patterns:
 
-  * Run `ade ci` locally if possible, or
-  * Mirror the steps in `.github/workflows/ci.yml`
+- **Command-driven roles** (pass a subcommand to run worker vs api) — used by images like Vault and Sentry.
+- **ENTRYPOINT + CMD** pattern so `docker run image` “just works” and `docker run image <cmd>` overrides behavior.
+- **Compose quickstart** published as a single file fetched by `curl`, like Airflow’s official docs.
 
----
-
-## 10. License
-
-See [LICENSE](LICENSE).
+See docs links in `docs/` (and in the work package).

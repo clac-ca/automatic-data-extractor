@@ -10,8 +10,8 @@ set -euo pipefail
 # - Optionally installs Node tooling + web deps (for apps/ade-web)
 #
 # Usage:
-#   bash scripts/dev/setup.sh           # Python only
-#   bash scripts/dev/setup.sh --web     # Python + Node + web deps
+#   bash scripts/dev/setup.sh           # Python + web deps (default)
+#   bash scripts/dev/setup.sh --no-web  # Python only
 #
 # Environment:
 #   PIP_EXTRA_ARGS="..."                # extra pip args (e.g. --index-url ...)
@@ -20,9 +20,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-WITH_WEB=0
-if [[ "${1:-}" == "--web" ]]; then
-  WITH_WEB=1
+WITH_WEB=1
+if [[ "${1:-}" == "--no-web" ]]; then
+  WITH_WEB=0
 fi
 
 echo "==> ADE setup"
@@ -51,13 +51,13 @@ python -m pip install \
   -e "apps/ade-worker[dev]" \
   ${PIP_EXTRA_ARGS:-}
 
-# --- Optional web tooling ---
 if [[ "${WITH_WEB}" -eq 1 ]]; then
-  echo "==> Installing Node.js (Debian package) + enabling Corepack"
-  # Keep this explicit and opt-in to keep the dev image lean.
-  sudo apt-get update
-  sudo apt-get install -y --no-install-recommends nodejs npm
-  sudo rm -rf /var/lib/apt/lists/*
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Node.js is required to set up apps/ade-web." >&2
+    echo "- In the devcontainer, Node is installed automatically via a Dev Container Feature." >&2
+    echo "- Outside the devcontainer, install Node 24+ (LTS) and re-run this script." >&2
+    exit 1
+  fi
 
   # Corepack manages yarn/pnpm versions without apt repos.
   if command -v corepack >/dev/null 2>&1; then
@@ -70,16 +70,12 @@ if [[ "${WITH_WEB}" -eq 1 ]]; then
 
     if [[ -f "pnpm-lock.yaml" ]]; then
       corepack pnpm install --frozen-lockfile
-      corepack pnpm run build || true
     elif [[ -f "yarn.lock" ]]; then
       corepack yarn install --frozen-lockfile
-      corepack yarn run build || true
     elif [[ -f "package-lock.json" ]]; then
       npm ci
-      npm run build || true
     else
       npm install
-      npm run build || true
     fi
 
     popd >/dev/null

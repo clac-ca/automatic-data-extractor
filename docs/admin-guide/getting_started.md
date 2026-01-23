@@ -14,7 +14,7 @@ that by default.
   provisions environments and executes runs from the database queue.
 - **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
   in development; in production you can serve the built `apps/ade-web/dist`
-  bundle via the API container (`ade start`) or behind a reverse proxy.
+  bundle via the API container (`ade api` or `ade start`) or behind a reverse proxy.
 
 
 ## 2. Prerequisites
@@ -76,7 +76,7 @@ environment variables in your shell.
 
    Use `ade dev` for the standard dev loop (runs migrations, then API reload + Vite hot module reload + worker). If you only want one component, use `ade dev --api`, `ade dev --web`, or `ade dev --worker`. Use `--no-worker` if you want to skip background jobs while still running API + web.
    - Dev flow: `ade dev` (runs migrations, then API + worker + Vite dev server).
-   - Prod-ish flow: `ade start` (API role by default; set `ADE_ROLE=worker` for worker).
+   - Prod-ish flow: `ade start` (API + worker) or `ade api` / `ade worker` for split containers.
 
 3. Confirm the API is healthy:
 
@@ -84,7 +84,7 @@ environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/`. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local SQL dev, deleting `data/sql/` after the SQL container stops resets the database; `ade dev`/`ade start` (API role) will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/`. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local SQL dev, deleting `data/sql/` after the SQL container stops resets the database; `ade dev`, `ade start`, or `ade api` will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run API and web manually (optional)
 If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
@@ -104,11 +104,8 @@ Tip: If you frequently switch branches, re-run the editable installs (`pip insta
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
-run it on a server. An official image will be published to GitHub Container
-Registry soon.
-
-> **TODO:** Replace the build step below with a `docker pull` command once the
-> image is published.
+run it on a server. A published image is available at `ghcr.io/clac-ca/ade:latest`,
+or you can build locally.
 
 ### 5.1 Build a local image
 ```bash
@@ -126,13 +123,13 @@ docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
 To run the worker from the same image:
 
 ```bash
-docker run -d --name ade-worker --env-file .env -e ADE_ROLE=worker ade-app:local
+docker run -d --name ade-worker --env-file .env ade-app:local worker
 ```
 
 The volume keeps documents and runtime artifacts on the host so they
 survive container restarts. The database itself lives in your SQL Server
 instance (local container or Azure SQL), so ensure `ADE_SQL_*` is set
-before startup. The API container runs migrations on startup via `ade start`.
+before startup. The API container runs migrations on startup via `ade start` (or `ade api`).
 Check health the same way:
 
 ```bash

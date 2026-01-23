@@ -48,7 +48,7 @@ ADE reads database settings from environment variables (prefix `ADE_`):
 
 ADE expects:
 
-* Migrations to be applied before starting the API/worker (`ade dev` and `ade start` in API role run them automatically; otherwise use `ade migrate`).
+* Migrations to be applied before starting the API/worker (`ade dev`, `ade start`, and `ade api` run them automatically; otherwise use `ade migrate`).
 * The same configuration (DSN + auth mode) for both runtime and migrations.
 
 ## 2. Using Azure SQL with SQL authentication
@@ -183,4 +183,4 @@ On startup, ADE will:
 * Start with **`sql_password`** if you need a simple bring‑up.
 * Move to **`managed_identity`** as your long‑term, secure, secretless configuration.
 
-Once the environment variables are set and the image includes the required ODBC driver (as in the provided Dockerfile), `ade start` (API role) will run migrations automatically. If you are launching the API/worker manually, run `ade migrate` to bootstrap the schema first.
+Once the environment variables are set and the image includes the required ODBC driver (as in the provided Dockerfile), `ade start` (or `ade api`) will run migrations automatically. If you are launching the API/worker manually, run `ade migrate` to bootstrap the schema first.

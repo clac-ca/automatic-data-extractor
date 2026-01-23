@@ -27,16 +27,28 @@ This runs:
 
 ## Run with docker run
 
-API (default role is api):
+API + worker (default `ade start`):
 
 ```bash
 docker run --rm -p 8000:8000 --env-file .env ade-app:local
 ```
 
-Worker:
+API only:
 
 ```bash
-docker run --rm --env-file .env -e ADE_ROLE=worker ade-app:local
+docker run --rm -p 8000:8000 --env-file .env ade-app:local api
+```
+
+Worker only:
+
+```bash
+docker run --rm --env-file .env ade-app:local worker
+```
+
+Init (optional one-time):
+
+```bash
+docker run --rm --env-file .env ade-app:local init
 ```
 
 ## CLI inside the container

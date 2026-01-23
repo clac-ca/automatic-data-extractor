@@ -1,108 +1,88 @@
-# Base versions (override at build time if needed)
-ARG PYTHON_VERSION=3.12
-# =============================================================================
-# Stage 1: Backend build (install Python packages)
-# =============================================================================
-FROM python:${PYTHON_VERSION}-slim-bookworm AS backend-build
+# syntax=docker/dockerfile:1.6
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ARG PYTHON_IMAGE=python:3.12-slim-bookworm
+# Node is only needed to build the React frontend. We keep it out of the runtime image.
+# Pin to a major LTS line for stability + security updates.
+ARG NODE_IMAGE=node:24-bookworm-slim
+
+FROM ${PYTHON_IMAGE} AS py-builder
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /src
 
+# git required for ade-engine install via git+https for now
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates build-essential unixodbc-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY apps/ade-api/ /src/apps/ade-api/
+COPY apps/ade-worker/ /src/apps/ade-worker/
+COPY apps/ade-cli/ /src/apps/ade-cli/
+
+RUN python -m pip install --upgrade pip setuptools wheel \
+  && python -m pip install --no-cache-dir \
+       /src/apps/ade-api \
+       /src/apps/ade-worker \
+       /src/apps/ade-cli
+
+FROM ${NODE_IMAGE} AS web-builder
+WORKDIR /src/apps/ade-web
+COPY apps/ade-web/ /src/apps/ade-web/
+RUN set -eux; \
+  corepack enable || true; \
+  if [ -f pnpm-lock.yaml ]; then \
+    corepack pnpm install --frozen-lockfile; \
+    corepack pnpm run build; \
+  elif [ -f yarn.lock ]; then \
+    corepack yarn install --frozen-lockfile; \
+    corepack yarn run build; \
+  elif [ -f package-lock.json ]; then \
+    npm ci; \
+    npm run build; \
+  else \
+    npm install; \
+    npm run build; \
+  fi
+
+FROM ${PYTHON_IMAGE} AS runtime
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 
-# Build deps (kept out of final image).
-# - unixodbc-dev: build pyodbc if needed
-# - libssl-dev/libffi-dev: common for azure-identity/crypto deps when wheels lag
+# ODBC Driver 18 runtime deps
 RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        build-essential \
-        cargo \
-        git \
-        rustc \
-        unixodbc-dev \
-        pkg-config \
-        libssl-dev \
-        libffi-dev \
-    ; \
-    rm -rf /var/lib/apt/lists/*
+  apt-get update; \
+  apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+  curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb; \
+  dpkg -i /tmp/packages-microsoft-prod.deb; \
+  rm /tmp/packages-microsoft-prod.deb; \
+  apt-get update; \
+  ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc; \
+  apt-get purge -y --auto-remove curl gnupg; \
+  rm -rf /var/lib/apt/lists/*
 
-COPY README.md ./
-COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
-COPY apps/ade-api/pyproject.toml    apps/ade-api/
-COPY apps/ade-worker/pyproject.toml apps/ade-worker/
+RUN useradd -m -u 10001 appuser
 
-RUN python -m pip install -U pip
+COPY --from=py-builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-COPY apps ./apps
+COPY --from=web-builder /src/apps/ade-web/dist /app/apps/ade-web/dist
+COPY apps /app/apps
 
-RUN python -m pip install --prefix=/install \
-        ./apps/ade-cli \
-        ./apps/ade-api \
-        ./apps/ade-worker
+RUN mkdir -p /app/data \
+  && chown -R appuser:appuser /app
 
-# =============================================================================
-# Stage 1b: Frontend build (Vite)
-# =============================================================================
-FROM node:20-bookworm AS web-build
+USER appuser
 
-WORKDIR /app/apps/ade-web
-
-COPY apps/ade-web/package.json apps/ade-web/package-lock.json ./
-RUN npm ci
-
-COPY apps/ade-web ./
-RUN npm run build
-
-# =============================================================================
-# Stage 2: Runtime image
-# =============================================================================
-FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    ACCEPT_EULA=Y
-
-WORKDIR /app
-
-# -----------------------------------------------------------------------------
-# SQL Server / Azure SQL ODBC driver (msodbcsql18) + unixODBC manager
-# -----------------------------------------------------------------------------
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl; \
-    curl -sSL -O https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb; \
-    dpkg -i packages-microsoft-prod.deb; \
-    rm -f packages-microsoft-prod.deb; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        unixodbc \
-        msodbcsql18 \
-        libgssapi-krb5-2 \
-    ; \
-    # Optional but robust EULA acceptance method (ODBC 18.4+)
-    mkdir -p /opt/microsoft/msodbcsql18; \
-    touch /opt/microsoft/msodbcsql18/ACCEPT_EULA; \
-    rm -rf /var/lib/apt/lists/*
-
-LABEL org.opencontainers.image.title="automatic-data-extractor" \
-      org.opencontainers.image.description="ADE — Automatic Data Extractor" \
-      org.opencontainers.image.source="https://github.com/clac-ca/automatic-data-extractor"
-
-COPY --from=backend-build /install /usr/local
-COPY apps ./apps
-COPY --from=web-build /app/apps/ade-web/dist ./apps/ade-web/dist
-
-RUN set -eux; \
-    groupadd -r ade; \
-    useradd -r -g ade ade; \
-    mkdir -p /app/data/db /app/data/documents; \
-    chown -R ade:ade /app
-
-VOLUME ["/app/data"]
 EXPOSE 8000
 
-USER ade
-
-CMD ["ade", "start"]
+# CLI-style image: "docker run image" behaves like running the `ade` binary.
+ENTRYPOINT ["ade"]
+CMD ["start"]

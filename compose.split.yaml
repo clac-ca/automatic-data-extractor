@@ -1,0 +1,79 @@
+# compose.split.yaml
+#
+# Recommended "production style" pattern:
+# - same image
+# - separate API and worker containers
+#
+# Usage:
+#   ADE_IMAGE=ghcr.io/clac-ca/ade:latest docker compose -f compose.split.yaml up
+#
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./data/sql:/var/opt/mssql
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
+    environment:
+      AZURITE_ACCOUNTS: ${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}:${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+    ports:
+      - "10000:10000"
+    volumes:
+      - ./data/azurite:/data
+
+  api:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/ade:latest}
+    depends_on:
+      - sql
+      - azurite
+    ports:
+      - "8000:8000"
+    environment:
+      ADE_SQL_HOST: ${ADE_SQL_HOST:-sql}
+      ADE_SQL_PORT: ${ADE_SQL_PORT:-1433}
+      ADE_SQL_USER: ${ADE_SQL_USER:-sa}
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE:-ade}
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT:-yes}
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE:-yes}
+
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT:-http://azurite:10000/devstoreaccount1}
+
+      ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
+      ADE_API_PORT: ${ADE_API_PORT:-8000}
+      ADE_API_IMPORT: ${ADE_API_IMPORT:-ade_api.main:app}
+
+      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
+    command: ["api"]
+
+  worker:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/ade:latest}
+    depends_on:
+      - sql
+      - azurite
+    environment:
+      ADE_SQL_HOST: ${ADE_SQL_HOST:-sql}
+      ADE_SQL_PORT: ${ADE_SQL_PORT:-1433}
+      ADE_SQL_USER: ${ADE_SQL_USER:-sa}
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE:-ade}
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT:-yes}
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE:-yes}
+
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT:-http://azurite:10000/devstoreaccount1}
+
+      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
+    command: ["worker"]

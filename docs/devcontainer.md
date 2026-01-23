@@ -32,10 +32,10 @@ cp .env.example .env
 bash scripts/dev/setup.sh
 ```
 
-> If you also work on the web UI (apps/ade-web), run once:
+> If you do not work on the web UI (apps/ade-web), you can skip web setup:
 >
 > ```bash
-> bash scripts/dev/setup.sh --web
+> bash scripts/dev/setup.sh --no-web
 > ```
 
 ## Run the stack (dev)
@@ -79,7 +79,7 @@ Inside the devcontainer network:
 - Host: `sql`
 - Port: `1433`
 - User: `sa`
-- Password: from `.env` (`ADE_SQL_PASSWORD` or `MSSQL_SA_PASSWORD`)
+- Password: from `.env` (`ADE_SQL_PASSWORD`)
 - App setting: `ADE_SQL_*` values are used to build the SQL Server DSN
 
 From your host machine (because the compose file publishes ports):
@@ -94,7 +94,7 @@ so you will usually want **optional encryption** for local dev.
 
 Default local dev values (from `.env.example`):
 
-- `ADE_SQL_ENCRYPT=optional`
+- `ADE_SQL_ENCRYPT=yes`
 - `ADE_SQL_TRUST_SERVER_CERTIFICATE=yes`
 These settings are used when ADE builds the SQL Server DSN from `ADE_SQL_*`.
 
@@ -124,7 +124,7 @@ You do not need to change code or rebuild images.
 
 - To use Azure SQL: set `ADE_SQL_HOST`, `ADE_SQL_DATABASE`, `ADE_SQL_USER`,
   and `ADE_SQL_PASSWORD` (or set `ADE_DATABASE_AUTH_MODE=managed_identity` for Entra auth).
-- To use Azure Storage: set `AZURE_STORAGE_CONNECTION_STRING` to your real Azure connection string.
+- To use Azure Storage: set `ADE_STORAGE_CONNECTION_STRING` to your real Azure connection string.
 
 Local containers may still be running, but the app will connect to Azure based on env values.
 

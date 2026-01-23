@@ -12,7 +12,8 @@ Fast reference (run `--help` for details):
 
 - `ade setup` — one-time repo setup (env, hooks).
 - `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
-- `ade start` — start a single role (API by default; set `ADE_ROLE=worker` for worker). Runs migrations for API; builds frontend if missing (add `--no-web` to skip). `ade worker` — run the worker only. `ade build` — build web assets.
+- `ade init` — provision SQL database + storage defaults (one-time init).
+- `ade start` — start API + worker together (single-container mode). `ade api` / `ade worker` — run API or worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
 - `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade clean` / `ade reset`.
@@ -29,7 +30,9 @@ Options:
 Commands:
   setup     Bootstrap repo env and hooks
   dev       Run API/web dev servers (+ worker, runs migrations first)
-  start     Start a single role (API by default; use ADE_ROLE=worker for worker)
+  init      Provision SQL database + storage defaults
+  start     Start API + worker together (single-container mode)
+  api       Start the API only
   worker    Run the background worker only
   build     Build web assets
   tests     Run Python/JS tests

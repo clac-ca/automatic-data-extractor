@@ -62,7 +62,8 @@ Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives
 
 - `ade setup` — one-time bootstrap (venv, hooks).
 - `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; disable worker if needed).
-- `ade start` — start a single role (API default; set `ADE_ROLE=worker` for worker). `ade worker` — run the worker only. `ade build` — build web assets.
+- `ade init` — provision SQL database + storage defaults (one-time init).
+- `ade start` — start API + worker together (single-container mode). `ade api` / `ade worker` — run API or worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
 - `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
 - Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
@@ -79,7 +80,9 @@ Options:
 Commands:
   setup     Bootstrap repo env and hooks
   dev       Run API/web dev servers (+ worker)
-  start     Start a single role (API default; use ADE_ROLE=worker for worker)
+  init      Provision SQL database + storage defaults
+  start     Start API + worker together (single-container mode)
+  api       Start the API only
   worker    Run the background worker only
   build     Build web assets
   tests     Run Python/JS tests
