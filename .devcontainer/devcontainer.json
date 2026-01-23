@@ -17,13 +17,20 @@
     }
   },
 
+  // Run repo installs after the workspace is mounted :contentReference[oaicite:6]{index=6}
+  "onCreateCommand": "bash scripts/dev/bootstrap.sh",
+
+  // Optional: helps for prebuild refresh / creation flows :contentReference[oaicite:7]{index=7}
+  "updateContentCommand": "bash scripts/dev/bootstrap.sh",
+
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
-        "ms-mssql.mssql"
+        "ms-mssql.mssql",
+        "openai.chatgpt"
       ]
     }
   }
