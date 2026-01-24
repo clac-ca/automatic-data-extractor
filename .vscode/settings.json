@@ -13,4 +13,5 @@
     // Quality-of-life
     "editor.formatOnSave": true,
     "python-envs.pythonProjects": [],
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
 }
