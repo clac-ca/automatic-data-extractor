@@ -63,5 +63,4 @@ services:
 
       # Worker
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
-
     # Default command is `ade start` (ENTRYPOINT is `ade`, CMD is `start`)
