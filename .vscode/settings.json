@@ -1,8 +1,4 @@
 {
-    // Always prefer the workspace venv (created by onCreateCommand / setup script)
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
-    // Auto-activate the selected interpreter env in new terminals
-    "python.terminal.activateEnvironment": true,
     // Testing
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
@@ -11,7 +7,5 @@
         "apps/ade-cli/tests"
     ],
     // Quality-of-life
-    "editor.formatOnSave": true,
-    "python-envs.pythonProjects": [],
-    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "editor.formatOnSave": true
 }
