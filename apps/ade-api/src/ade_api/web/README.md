@@ -6,7 +6,7 @@ Example (repo root):
 
 ```bash
 ade build
-ADE_FRONTEND_DIST_DIR=apps/ade-web/dist uvicorn ade_api.main:create_app --factory
+ADE_FRONTEND_DIST_DIR=apps/ade-web/dist uvicorn ade_api.main:app
 ```
 
 When running via `ade api` (or `ade start`), the CLI sets `ADE_FRONTEND_DIST_DIR` for you.

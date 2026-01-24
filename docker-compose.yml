@@ -39,7 +39,6 @@ services:
       # API
       ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
       ADE_API_PORT: ${ADE_API_PORT:-8000}
-      ADE_API_IMPORT: ${ADE_API_IMPORT:-ade_api.main:app}
 
       # Worker
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}

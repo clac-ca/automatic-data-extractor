@@ -4,8 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-source .venv/bin/activate
-
 features_dir="apps/ade-api/src/ade_api/features"
 models_dir="apps/ade-api/src/ade_api/models"
 generated_dir="apps/ade-api/.generated"

@@ -5,8 +5,7 @@ set -euo pipefail
 # scripts/dev/setup.sh
 #
 # Canonical dev bootstrap:
-# - Creates/updates a local uv-managed venv at .venv
-# - Installs Python deps (idempotent, lockfile-aware)
+# - Installs Python deps into the active environment (venv if active, system otherwise)
 # - Optionally installs Node tooling + web deps (for apps/ade-web)
 #
 # Usage:
@@ -14,7 +13,7 @@ set -euo pipefail
 #   bash scripts/dev/setup.sh --no-web  # Python only
 #
 # Environment:
-#   UV_SYNC_ARGS="..."                  # extra uv sync args (e.g. --index-url ...)
+#   UV_SYNC_ARGS="..."                  # extra uv sync args when a venv is active
 #   PIP_EXTRA_ARGS="..."                # legacy alias for UV_SYNC_ARGS
 #   UV_AUTO_INSTALL=1                   # auto-install uv if missing (default)
 #
@@ -53,16 +52,45 @@ if ! command -v uv >/dev/null 2>&1; then
   fi
 fi
 
-if [[ ! -d ".venv" ]]; then
-  echo "==> Creating uv venv (.venv)"
-  uv venv .venv
-fi
-
+UV_BIN="$(command -v uv)"
 SYNC_ARGS="${UV_SYNC_ARGS:-${PIP_EXTRA_ARGS:-}}"
 
+run_maybe_sudo() {
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo -E "$@"
+    else
+      "$@"
+    fi
+  else
+    "$@"
+  fi
+}
+
+active_env=""
+if [[ -n "${VIRTUAL_ENV:-}" ]]; then
+  active_env="${VIRTUAL_ENV}"
+elif [[ -n "${CONDA_PREFIX:-}" ]]; then
+  active_env="${CONDA_PREFIX}"
+fi
+
 echo "==> Syncing Python dependencies (uv)"
-# shellcheck disable=SC2086
-uv sync --locked ${SYNC_ARGS}
+if [[ -n "${active_env}" ]]; then
+  echo "    Using active environment: ${active_env}"
+  sync_cmd=("${UV_BIN}" sync --locked --active)
+  # shellcheck disable=SC2086
+  if [[ -n "${SYNC_ARGS}" ]]; then
+    sync_cmd+=( ${SYNC_ARGS} )
+  fi
+  "${sync_cmd[@]}"
+else
+  echo "    No active virtualenv detected; installing into system interpreter."
+  echo "    Tip: create/activate a venv first if you want isolation."
+  requirements_file="$(mktemp -t ade-requirements.XXXXXX.txt)"
+  trap 'rm -f "${requirements_file}"' EXIT
+  "${UV_BIN}" export --locked --format requirements.txt --all-packages --output-file "${requirements_file}"
+  run_maybe_sudo "${UV_BIN}" pip sync --system --break-system-packages "${requirements_file}"
+fi
 
 if [[ "${WITH_WEB}" -eq 1 ]]; then
   if ! command -v node >/dev/null 2>&1; then
@@ -99,5 +127,5 @@ fi
 
 echo
 echo "==> Done."
-echo "    Venv: .venv (uv)"
+echo "    Python deps installed"
 echo "    Tip: Use 'bash scripts/db/wait-for-sql.sh' if you need to wait for SQL to be ready."

@@ -8,26 +8,26 @@ from ade_cli.commands import common
 
 
 SETUP_INSTRUCTIONS = """
-ADE uses uv + a repo-local virtualenv. From the repo root:
+ADE uses uv for dependency installs. From the repo root:
 
 macOS / Linux:
-    uv sync --locked
-    source .venv/bin/activate
-    cd apps/ade-web && npm install && cd -
+    # Optional: create/activate a venv first if you want isolation.
+    # python -m venv .venv
+    # source .venv/bin/activate
+    bash scripts/dev/setup.sh
 
 Windows (PowerShell):
-    uv sync --locked
-    .\\.venv\\Scripts\\Activate.ps1
-    cd apps/ade-web
-    npm install
-    cd ..
+    # Optional: create/activate a venv first if you want isolation.
+    # python -m venv .venv
+    # .\\.venv\\Scripts\\Activate.ps1
+    bash scripts/dev/setup.sh
 
 Once dependencies are installed, run `ade dev` to start backend + frontend dev servers.
 """
 
 
 def run_setup() -> None:
-    """Show manual venv + editable install instructions (no automatic installs)."""
+    """Show manual install instructions (no automatic installs)."""
 
     common.refresh_paths()
     typer.echo(SETUP_INSTRUCTIONS.strip())

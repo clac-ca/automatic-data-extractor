@@ -11,7 +11,7 @@ set -euo pipefail
 # - Does NOT delete data/ (SQL/Azurite persisted state)
 #
 # Options:
-#   bash scripts/dev/clean.sh --all     Also remove .venv and node_modules (slow rebuild next time)
+#   bash scripts/dev/clean.sh --all     Also remove node_modules (slow rebuild next time)
 #   bash scripts/dev/clean.sh --data    ALSO delete data/ (DESTRUCTIVE). Requires --yes
 #
 
@@ -42,8 +42,7 @@ find . -name '*.pyc' -delete 2>/dev/null || true
 find . -name '*.pyo' -delete 2>/dev/null || true
 
 if [[ "${ALL}" -eq 1 ]]; then
-  echo "==> Removing .venv and node_modules (requested --all)"
-  rm -rf .venv || true
+  echo "==> Removing node_modules (requested --all)"
   rm -rf apps/ade-web/node_modules || true
 fi
 

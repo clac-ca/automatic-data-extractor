@@ -7,12 +7,11 @@
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
   "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "24"
     }
   },
-  "onCreateCommand": "bash -lc 'test -x .venv/bin/python || uv venv .venv'",
-  "waitFor": "onCreateCommand",
   "postCreateCommand": "bash -lc 'bash scripts/dev/setup.sh'",
   "customizations": {
     "vscode": {
@@ -24,9 +23,6 @@
         "openai.chatgpt"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
-        "python.terminal.activateEnvironment": true,
-        "python.terminal.activateEnvInCurrentTerminal": true,
         "python.testing.pytestEnabled": true,
         "python.testing.pytestArgs": [
           "apps/ade-api/tests",

@@ -136,7 +136,7 @@ Safe cleanup (no data deletion):
 bash scripts/dev/clean.sh
 ```
 
-Full cleanup (removes .venv and node_modules):
+Full cleanup (removes node_modules):
 
 ```bash
 bash scripts/dev/clean.sh --all

@@ -59,7 +59,7 @@ def _run_api_suite() -> bool:
 
     common.require_python_module(
         "pytest",
-        "Install API/test dependencies (e.g., `uv sync --locked`).",
+        "Install API/test dependencies (run `bash scripts/dev/setup.sh`).",
     )
 
     for name, display_path, src_path, cwd in suites:

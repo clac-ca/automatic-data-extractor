@@ -2,8 +2,6 @@
 
 This file is **for AI coding agents** working on the `ade` codebase. ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-Tip: Use `uv run --locked ade --help` to discover available CLI commands.
-
 ## Repo map
 
 ```
@@ -53,8 +51,7 @@ automatic-data-extractor/
 
 ```bash
 # Dev env (repo root)
-uv sync --locked
-source .venv/bin/activate
+bash scripts/dev/setup.sh
 ```
 
 ```bash

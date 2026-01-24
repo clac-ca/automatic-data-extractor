@@ -26,8 +26,7 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 1. Action — Describe the action to take. For example, install deps and start dev services:
 
    ```bash
-   uv sync --locked  # create .venv, install packages
-   source .venv/bin/activate
+   bash scripts/dev/setup.sh
    ade dev           # starts API + web + worker in watch mode
    ```
 

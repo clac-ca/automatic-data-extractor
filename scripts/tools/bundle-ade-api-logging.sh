@@ -4,9 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-# ADE tooling in this repo lives inside the root virtualenv.
-# source ensures the `ade` CLI is available.
-source .venv/bin/activate
+# ADE tooling in this repo relies on the installed `ade` CLI.
 
 generated_dir="${repo_root}/.generated"
 mkdir -p "${generated_dir}"

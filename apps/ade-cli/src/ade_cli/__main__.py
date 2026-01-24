@@ -7,8 +7,8 @@ import sys
 
 def _print_install_help(missing: str) -> None:
     message = (
-        f"❌ Missing dependency '{missing}'. Install ADE into an active uv-managed virtualenv first:\n\n"
-        "    uv sync --locked\n\n"
+        f"❌ Missing dependency '{missing}'. Install ADE dependencies first:\n\n"
+        "    bash scripts/dev/setup.sh\n\n"
         "See README: Developer Setup."
     )
     sys.stderr.write(message + "\n")

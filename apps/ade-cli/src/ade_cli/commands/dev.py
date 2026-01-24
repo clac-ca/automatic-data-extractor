@@ -127,7 +127,7 @@ def run_dev(
     if api:
         common.require_python_module(
             "ade_api",
-            "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
+            "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
         )
         common.uvicorn_path()
         from ade_api.settings import Settings
@@ -160,7 +160,7 @@ def run_dev(
     if worker:
         common.require_python_module(
             "ade_worker",
-            "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
+            "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
         )
         typer.echo("🧵 Worker:               ade-worker")
 
@@ -169,16 +169,15 @@ def run_dev(
         run_migrate()
 
     env = common.build_env()
-    venv_bin = str(Path(sys.executable).parent)
-    env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+    python_bin = str(Path(sys.executable).parent)
+    env["PATH"] = f"{python_bin}{os.pathsep}{env.get('PATH', '')}"
 
     tasks: list[tuple[str, list[str], Path | None, dict[str, str]]] = []
     if api:
         uvicorn_bin = common.uvicorn_path()
         api_cmd = [
             uvicorn_bin,
-            "ade_api.main:create_app",
-            "--factory",
+            "ade_api.main:app",
             "--host",
             api_host,
             "--port",

@@ -25,7 +25,7 @@ def run_lint(scope: str, fix: bool = False) -> None:
     if run_backend and common.BACKEND_SRC.exists():
         common.require_python_module(
             "ruff",
-            "Install backend dev dependencies (e.g., `uv sync --locked`).",
+            "Install backend dev dependencies (run `bash scripts/dev/setup.sh`).",
         )
         ruff_cmd = [sys.executable, "-m", "ruff", "check"]
         if fix:

@@ -17,13 +17,13 @@ def run_worker() -> None:
     common.refresh_paths()
     common.require_python_module(
         "ade_worker",
-        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
+        "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
     )
 
     env = common.build_env()
     ensure_storage_defaults(env)
-    venv_bin = str(Path(sys.executable).parent)
-    env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+    python_bin = str(Path(sys.executable).parent)
+    env["PATH"] = f"{python_bin}{os.pathsep}{env.get('PATH', '')}"
 
     typer.echo("🧵 Starting ADE worker…")
     common.run(["ade-worker"], cwd=common.REPO_ROOT, env=env)

@@ -35,7 +35,7 @@ def run_migrate(revision: str = "head") -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "alembic",
-        "Install backend dependencies (e.g., `uv sync --locked`).",
+        "Install backend dependencies (run `bash scripts/dev/setup.sh`).",
     )
     alembic_ini = common.BACKEND_DIR / "alembic.ini"
     env = common.build_env()

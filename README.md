@@ -53,19 +53,19 @@ The image is “CLI-style”:
 
 So running without arguments behaves like running `ade start`.
 
-### Start API + worker (default)
+### Start ade-api + ade-web + ade-worker (default)
 
 ```bash
 docker run --rm -p 8000:8000 ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
-### Start only API
+### Start only ade-api + ade-web
 
 ```bash
 docker run --rm -p 8000:8000 ghcr.io/clac-ca/automatic-data-extractor:latest api
 ```
 
-### Start only worker
+### Start only ade-worker
 
 ```bash
 docker run --rm ghcr.io/clac-ca/automatic-data-extractor:latest worker

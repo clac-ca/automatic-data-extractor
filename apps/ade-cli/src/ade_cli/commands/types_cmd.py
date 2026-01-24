@@ -17,7 +17,7 @@ def run_types() -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
+        "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
     )
     openapi_path = common.BACKEND_SRC / "openapi.json"
     output_path = common.FRONTEND_DIR / "src" / "types" / "generated" / "openapi.d.ts"

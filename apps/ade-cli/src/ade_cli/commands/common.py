@@ -41,21 +41,19 @@ BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
 CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
 CLI_SRC = CLI_DIR / "src" / "ade_cli"
 FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
-VENV_DIR = REPO_ROOT / ".venv"
 README_HINT = "See README: Developer Setup."
 
 
 def refresh_paths() -> None:
     """Refresh global path constants based on the current working directory."""
 
-    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR, VENV_DIR
+    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR
     REPO_ROOT = _find_repo_root()
     BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
     BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
     CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
     CLI_SRC = CLI_DIR / "src" / "ade_cli"
     FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
-    VENV_DIR = REPO_ROOT / ".venv"
 
 
 def run(command: Iterable[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
@@ -188,7 +186,7 @@ def uvicorn_path() -> str:
     """Return the uvicorn executable in the current environment."""
     import sys
 
-    # Prefer the uvicorn alongside the current Python (virtualenv/bin/uvicorn).
+    # Prefer the uvicorn alongside the current Python (same bin dir).
     candidate = Path(sys.executable).with_name("uvicorn")
     if candidate.exists():
         return str(candidate)
@@ -196,7 +194,7 @@ def uvicorn_path() -> str:
     return require_command(
         "uvicorn",
         friendly_name="uvicorn",
-        fix_hint="Install ADE into an active uv-managed virtualenv (e.g., `uv sync --locked`).",
+        fix_hint="Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
     )
 
 

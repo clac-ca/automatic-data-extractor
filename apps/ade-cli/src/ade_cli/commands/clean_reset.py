@@ -11,7 +11,7 @@ from ade_cli.commands import common
 
 
 def run_clean(yes: bool = False) -> None:
-    """Remove build artifacts and caches (virtualenv kept); skip prompts with --yes."""
+    """Remove build artifacts and caches (dependencies kept); skip prompts with --yes."""
 
     common.refresh_paths()
     targets = [
@@ -42,7 +42,7 @@ def run_reset(yes: bool = False) -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
+        "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
     )
     args = [sys.executable, "-m", "ade_api.scripts.reset_storage"]
     if yes:

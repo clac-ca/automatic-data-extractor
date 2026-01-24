@@ -4,8 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-# Refresh ADE web bundles. Assumes .venv is present at repo root.
-source .venv/bin/activate
+# Refresh ADE web bundles.
 
 generated_dir="apps/ade-web/.generated"
 mkdir -p "${generated_dir}"

@@ -52,12 +52,10 @@ environment variables in your shell.
    ```bash
    git clone https://github.com/clac-ca/automatic-data-extractor.git
    cd automatic-data-extractor
-   uv sync --locked
-   source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
-
-   cd apps/ade-web
-   npm install
-   cd ..
+   # Optional: create/activate a venv first if you want isolation.
+   # python -m venv .venv
+   # source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
+   bash scripts/dev/setup.sh
    ```
 
    Note: `ade-worker` installs `ade-engine` from the separate engine repo (currently tracking `@main`; tags will follow).
@@ -97,7 +95,7 @@ ade dev --web
 ade dev --worker
 ```
 
-Tip: If you frequently switch branches, re-run `uv sync --locked` in the repo root (and `npm install` in `apps/ade-web`) after pulling changes so your environment stays in sync with the code.
+Tip: If you frequently switch branches, re-run `bash scripts/dev/setup.sh` after pulling changes so your environment stays in sync with the code.
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
@@ -159,7 +157,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
-- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (`uv sync --locked`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:create_app --factory`).
+- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (run `bash scripts/dev/setup.sh`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:app`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and confirm your web server is serving `apps/ade-web/dist/` and forwarding `/api/v1` to the API.
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api/v1` prefix.
