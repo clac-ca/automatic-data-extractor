@@ -1,6 +1,13 @@
-name: Docker
+name: Docker Image (GHCR)
 
 on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "apps/**"
+      - "scripts/**"
+      - "compose*.yaml"
+      - ".github/workflows/docker.yml"
   push:
     branches: [main]
     tags:
@@ -8,29 +15,32 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: docker-${{ github.ref }}
   cancel-in-progress: true
-
-permissions:
-  contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  PYTHON_VERSION: "3.14"
-  NODE_VERSION: "20"
+  IMAGE_NAME: ${{ github.repository_owner }}/ade
 
 jobs:
-  build-and-push:
-    name: Build & push image
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    permissions:
+      contents: read
+      packages: write
 
-      - uses: docker/setup-buildx-action@v3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -43,20 +53,24 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,format=long,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
+            # Branch name (e.g. main)
+            type=ref,event=branch
+            # PR number (e.g. pr-123)
+            type=ref,event=pr
+            # Short SHA (e.g. sha-abc1234)
+            type=sha,format=short,prefix=sha-
+            # Semver tags (e.g. v1.2.3, v1.2, v1) + latest (auto)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
-      - name: Build and push
+      - name: Build (and push if not PR)
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
-          build-args: |
-            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
-            NODE_VERSION=${{ env.NODE_VERSION }}
-            FRONTEND_BUILD_SHA=${{ github.run_id }}
-          push: true
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

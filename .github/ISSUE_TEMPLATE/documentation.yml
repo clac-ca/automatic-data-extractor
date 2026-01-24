@@ -1,0 +1,28 @@
+name: Documentation improvement
+description: Report missing/incorrect docs or propose a doc enhancement
+title: "[Docs]: "
+labels: ["documentation"]
+assignees: []
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs improvement?
+      description: Describe what is wrong/missing and where.
+      placeholder: "The docs at ... say ..., but ..."
+    validations:
+      required: true
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested change
+      description: What should the docs say instead? Provide wording if you can.
+    validations:
+      required: false
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: Sanity checks
+      options:
+        - label: I checked the latest README and docs before opening this.
+          required: true

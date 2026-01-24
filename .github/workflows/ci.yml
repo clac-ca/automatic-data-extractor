@@ -1,94 +1,144 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - ".workpackages/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - ".workpackages/**"
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
-env:
-  PYTHON_VERSION: "3.14"
-  NODE_VERSION: "20"
-
 jobs:
-  backend:
-    name: Backend (ruff + pytest)
+  ci:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 30
 
-      - uses: actions/setup-python@v5
+    env:
+      PYTHON_VERSION: "3.12"
+      NODE_VERSION: "24"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: |
-            apps/ade-cli/pyproject.toml
-            apps/ade-api/pyproject.toml
-            apps/ade-engine/pyproject.toml
 
-      - name: Install Python packages (editable)
-        run: |
-          python -m pip install -U pip
-          python -m pip install -e "apps/ade-cli[dev]" -e "apps/ade-engine[dev]" -e "apps/ade-api[dev]"
-
-      - name: Ruff
-        run: python -m ruff check src/ade_api
-        working-directory: apps/ade-api
-
-      - name: Pytest (ade-cli)
-        run: python -m pytest
-        working-directory: apps/ade-cli
-
-      - name: Pytest (ade-engine)
-        run: python -m pytest
-        working-directory: apps/ade-engine
-
-      - name: Pytest (ade-api)
-        run: python -m pytest
-        working-directory: apps/ade-api
-
-  frontend:
-    name: Frontend (eslint + tsc + vitest + build)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: apps/ade-web/package-lock.json
 
-      - name: Install Node dependencies
+      - name: Install Python dependencies (editable)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install             -e "apps/ade-cli[dev]"             -e "apps/ade-api[dev]"             -e "apps/ade-worker[dev]"
+
+      - name: Install web dependencies (npm ci)
+        working-directory: apps/ade-web
         run: npm ci
-        working-directory: apps/ade-web
 
-      - name: ESLint
-        run: npm run lint
-        working-directory: apps/ade-web
+      - name: Run repo CI pipeline (types → lint → test → build)
+        run: ade ci
 
-      - name: TypeScript typecheck
-        run: npm run typecheck
-        working-directory: apps/ade-web
+  docker-build:
+    name: Docker build (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
-      - name: Vitest
-        run: npm run test
-        working-directory: apps/ade-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Build
-        run: npm run build
-        working-directory: apps/ade-web
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: ade:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  devcontainer-build:
+    name: Devcontainer image build (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build devcontainer image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: false
+          tags: ade-devcontainer:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  integration:
+    name: Integration (SQL Server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name != 'pull_request'
+
+    services:
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: "Developer"
+          MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+        ports:
+          - 1433:1433
+
+    env:
+      PYTHON_VERSION: "3.12"
+      ADE_SQL_HOST: "127.0.0.1"
+      ADE_SQL_PORT: "1433"
+      ADE_SQL_USER: "sa"
+      ADE_SQL_PASSWORD: "YourStrong!Passw0rd"
+      ADE_SQL_DATABASE: "ade"
+      ADE_SQL_ENCRYPT: "optional"
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: "yes"
+      RUN_MSSQL_TESTS: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Python dependencies (editable)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install             -e "apps/ade-cli[dev]"             -e "apps/ade-api[dev]"             -e "apps/ade-worker[dev]"
+
+      - name: Wait for SQL Server
+        run: python scripts/db/wait_for_sql.py
+
+      - name: Provision database (idempotent)
+        run: ade init
+
+      - name: Run integration tests
+        run: python -m pytest -q apps/ade-api/tests/integration

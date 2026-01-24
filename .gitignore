@@ -1,75 +1,28 @@
-# --- OS / Editors ---
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-
-# --- Python ---
+# Python
+.venv/
 __pycache__/
 *.py[cod]
-*.pyo
-*.so
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.tox/
-.venv*/
-venv*/
-ENV/
-*.egg-info/
-.eggs/
-build/
-dist/
 .coverage
-.coverage.*
-htmlcov/
-pytestdebug.log
+coverage.xml
 
-# --- Node / Frontend (Vite + React) ---
-node_modules/
-npm-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-apps/web/node_modules/
-apps/web/.vite/
-apps/web/dist/
-apps/web/build/
-apps/web/coverage/
-apps/web/.eslintcache
-apps/ade-web/.generated/
-apps/ade-api/.generated/
-apps/ade-engine/.generated/
-.generated/
+# Node / web
+apps/ade-web/node_modules/
+apps/ade-web/dist/
+apps/ade-web/.vite/
 
-# --- ADE runtime data (by default under ./data) ---
-# Persisted workspaces, jobs, logs, caches, etc. DO NOT COMMIT.
-data/
-
-# --- Docker / Compose local artifacts (if any) ---
-# Uncomment or add entries if your workflow writes here:
-# infra/docker/**/tmp/
-# infra/docker/**/build/
-
-# --- Environment / Secrets ---
+# Local env / secrets
 .env
-.env.*
-*.env
-apps/**/.env
-apps/**/.env.*
-packages/**/.env
-infra/**/.env
-infra/**/.env.*
 
-# --- SPA bundle mounted into API image (DO NOT COMMIT per repo design) ---
-apps/api/app/web/static/
+# Local data volumes
+data/**
+!data/**/.gitkeep
 
-# --- Misc / Tools ---
-# Workpackage attachments referenced by scripts
-workpackages/*
-apps/*/workpackages
-.workpackages/
-# IDE test artifacts, temp files
-*.tmp
-*.bak
-*~
+# OS
+.DS_Store
+
+# Workpackages
+workpackages/**

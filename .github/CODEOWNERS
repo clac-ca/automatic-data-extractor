@@ -1,5 +1,21 @@
-# UI vendor primitives and kits should be reviewed by frontend owners.
-# TODO: replace @ade-frontend with the correct team or individual owner.
-/apps/ade-web/src/components/ui/ @ade-frontend
-/apps/ade-web/src/components/data-table/ @ade-frontend
-/apps/ade-web/src/hooks/use-data-table.* @ade-frontend
+# CODEOWNERS
+#
+# This file defines default reviewers for paths in the repo.
+# Replace @clac-ca/ade-maintainers with your actual GitHub team or usernames.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*                           @clac-ca/ade-maintainers
+
+# App-specific ownership (optional)
+apps/ade-api/               @clac-ca/ade-maintainers
+apps/ade-worker/            @clac-ca/ade-maintainers
+apps/ade-cli/               @clac-ca/ade-maintainers
+apps/ade-web/               @clac-ca/ade-maintainers
+
+# Infra
+.devcontainer/              @clac-ca/ade-maintainers
+.github/                    @clac-ca/ade-maintainers
+Dockerfile                  @clac-ca/ade-maintainers
+compose*.yaml               @clac-ca/ade-maintainers
+scripts/                    @clac-ca/ade-maintainers

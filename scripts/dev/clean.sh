@@ -11,9 +11,8 @@ set -euo pipefail
 # - Does NOT delete data/ (SQL/Azurite persisted state)
 #
 # Options:
-#   --all     Also remove .venv and node_modules (slow rebuild next time)
-#   --data    ALSO delete data/ (DESTRUCTIVE). Requires --yes
-#   --yes     Confirm destructive operations
+#   scripts/dev/clean.sh --all     Also remove .venv and node_modules (slow rebuild next time)
+#   scripts/dev/clean.sh --data    ALSO delete data/ (DESTRUCTIVE). Requires --yes
 #
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

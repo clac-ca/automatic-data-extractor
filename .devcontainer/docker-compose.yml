@@ -1,47 +1,72 @@
-version: "3.8"
+# .devcontainer/docker-compose.yml
+#
+# VS Code Dev Containers uses this compose file to start:
+# - ade (workspace container)
+# - sql (local SQL Server)
+# - azurite (blob-only)
+#
+# Notes:
+# - Defaults are "local-dev friendly" and can be overridden via environment variables.
+# - SQL Server container is amd64-only; Docker Desktop will emulate on Apple Silicon.
+#
+# See docs/devcontainer.md for usage.
+
+version: "3.9"
 
 services:
   ade:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
-    command: sleep infinity
-    working_dir: /workspaces/automatic-data-extractor
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
-    env_file:
-      - ../.env
+    command: sleep infinity
     depends_on:
       - sql
       - azurite
+    environment:
+      # ---- SQL (dev defaults) ----
+      ADE_SQL_HOST: ${ADE_SQL_HOST:-sql}
+      ADE_SQL_PORT: ${ADE_SQL_PORT:-1433}
+      ADE_SQL_USER: ${ADE_SQL_USER:-sa}
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE:-ade}
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT:-optional}
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE:-yes}
+
+      # ---- Storage (Azurite blob-only) ----
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT:-http://azurite:10000/devstoreaccount1}
+
+      # Optional: use a full connection string instead.
+      # ADE_STORAGE_CONNECTION_STRING: ${ADE_STORAGE_CONNECTION_STRING:-}
+
+    ports:
+      # API (FastAPI)
+      - "8000:8000"
+      # Web dev server (Vite)
+      - "5173:5173"
 
   sql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    # One consistent design across platforms:
     platform: linux/amd64
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_SA_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
     ports:
       - "1433:1433"
     volumes:
       - ../data/sql:/var/opt/mssql
-    healthcheck:
-      # Simple TCP check (SQL may take longer to accept logins; use scripts/db/wait-for-sql.sh for readiness)
-      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/1433'"]
-      interval: 5s
-      timeout: 3s
-      retries: 40
 
   azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    image: mcr.microsoft.com/azure-storage/azurite:latest
     command: >
-      azurite-blob
-      --silent
-      --location /data
-      --blobHost 0.0.0.0
-      --blobPort 10000
+      azurite-blob --blobHost 0.0.0.0 --blobPort 10000
+      --location /data --debug /data/debug.log
+    environment:
+      AZURITE_ACCOUNTS: "${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}:${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}"
     ports:
       - "10000:10000"
     volumes:

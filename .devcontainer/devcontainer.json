@@ -1,39 +1,54 @@
 {
-  "name": "automatic-data-extractor",
+  "name": "ADE (Python 3.12 + ODBC + Node)",
   "dockerComposeFile": "docker-compose.yml",
   "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
   "shutdownAction": "stopCompose",
   "remoteUser": "vscode",
-  "updateRemoteUserUID": true,
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "24"
     }
   },
-  "runServices": [
-    "sql",
-    "azurite"
-  ],
-  "forwardPorts": [
-    "sql:1433",
-    "azurite:10000",
-    8000,
-    5173
-  ],
-  "postCreateCommand": "bash scripts/dev/setup.sh",
+  "postCreateCommand": "bash -lc 'bash scripts/dev/setup.sh'",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
-        "redhat.vscode-yaml"
+        "dbaeumer.vscode-eslint"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/workspaces/automatic-data-extractor/.venv/bin/python",
-        "python.terminal.activateEnvironment": true
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": [
+          "apps/ade-api/tests",
+          "apps/ade-worker/tests",
+          "apps/ade-cli/tests"
+        ],
+        "editor.formatOnSave": true
       }
+    }
+  },
+  "forwardPorts": [
+    8000,
+    5173,
+    1433,
+    10000
+  ],
+  "portsAttributes": {
+    "8000": {
+      "label": "ADE API"
+    },
+    "5173": {
+      "label": "ADE Web (Vite)"
+    },
+    "1433": {
+      "label": "SQL Server"
+    },
+    "10000": {
+      "label": "Azurite Blob"
     }
   }
 }

@@ -1,0 +1,83 @@
+# Releasing ADE (checklist)
+
+This repo publishes a Docker image to **GitHub Container Registry (GHCR)** via GitHub Actions.
+
+A “release” is a **git tag** of the form `vX.Y.Z` (Semantic Versioning).
+
+> The Docker workflow builds/pushes on:
+> - pushes to `main` (tagged as `main` + `sha-...`)
+> - version tags `v*` (tagged as `vX.Y.Z`, `vX.Y`, `vX`, and typically `latest`)
+
+---
+
+## 1) Pre-release sanity
+
+- [ ] `main` is green (CI passing).
+- [ ] No unreviewed/unfinished migrations are pending.
+- [ ] `compose.quickstart.yaml` still works from scratch (fresh clone).
+- [ ] Confirm the intended release version follows SemVer:
+  - MAJOR = breaking change
+  - MINOR = new functionality, backwards compatible
+  - PATCH = bug fix, backwards compatible
+
+## 2) Prepare release notes
+
+- [ ] Identify the PRs/issues included since last release.
+- [ ] Draft a short “What’s new” section and a “Breaking changes” section (if any).
+- [ ] Note any required config changes (env vars, compose changes).
+- [ ] If API behavior changed, ensure README/docs are updated.
+
+## 3) Versioning
+
+This repo uses git tags as the source of truth for Docker image versions.
+
+If you also version Python packages:
+- [ ] Update `version` in the relevant `pyproject.toml` files (if you publish them).
+- [ ] Ensure versions match the release tag.
+
+## 4) Local verification (recommended)
+
+From a clean working tree:
+
+- [ ] Build the production image:
+  ```bash
+  IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+  ```
+- [ ] Run quickstart stack:
+  ```bash
+  docker compose -f compose.quickstart.yaml up
+  ```
+- [ ] Verify API responds and worker starts cleanly.
+- [ ] (Optional) Run `ade init` provisioning (DB create) inside the container if applicable.
+
+## 5) Create and push the tag
+
+- [ ] Create an annotated tag:
+  ```bash
+  git tag -a vX.Y.Z -m "Release vX.Y.Z"
+  ```
+- [ ] Push the tag:
+  ```bash
+  git push origin vX.Y.Z
+  ```
+
+## 6) Watch GitHub Actions
+
+- [ ] Confirm `Docker Image (GHCR)` workflow runs on the tag and publishes images.
+- [ ] Confirm tags exist in GHCR:
+  - `vX.Y.Z`
+  - `vX.Y`
+  - `vX`
+  - `latest` (if configured)
+
+## 7) Create/verify GitHub Release
+
+- [ ] Confirm `Release` workflow created a GitHub Release (or create it manually).
+- [ ] Paste release notes (What’s new + upgrade notes).
+- [ ] Link to the images and quickstart instructions.
+
+## 8) Post-release follow-ups
+
+- [ ] Announce release (if applicable).
+- [ ] Open issues for any follow-up cleanup.
+- [ ] If a hotfix is needed, repeat as `vX.Y.(Z+1)`.

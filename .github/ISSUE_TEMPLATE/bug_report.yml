@@ -1,0 +1,79 @@
+name: Bug report
+description: Report a reproducible bug in ADE
+title: "[Bug]: "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue.
+
+        Please include enough detail that we can reproduce and fix it quickly.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - ade-api
+        - ade-worker
+        - ade-cli
+        - ade-web
+        - devcontainer / local deps
+        - CI / workflows
+        - documentation
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected to happen instead.
+      placeholder: "When I run..., I see..., but I expected..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest set of steps to reproduce the issue.
+      placeholder: |
+        1) ...
+        2) ...
+        3) ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: Paste relevant logs (redact secrets). For Docker, include container logs.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Please provide:
+        - ADE image tag or commit SHA
+        - OS (macOS/Linux/Windows)
+        - Docker version + Docker Desktop (if applicable)
+        - How you're running ADE (devcontainer / docker run / compose / Azure)
+      placeholder: |
+        ADE tag: ghcr.io/...:v1.2.3
+        OS: macOS 14.x (Apple Silicon)
+        Docker: 26.x
+        Run mode: docker compose (compose.quickstart.yaml)
+    validations:
+      required: true
+  - type: checkboxes
+    id: sanity
+    attributes:
+      label: Sanity checks
+      options:
+        - label: I searched existing issues and discussions before opening this.
+          required: true
+        - label: I removed or redacted secrets from logs and screenshots.
+          required: true

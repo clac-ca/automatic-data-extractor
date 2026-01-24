@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions / Discussions
+    url: https://github.com/clac-ca/automatic-data-extractor/discussions
+    about: Please ask usage questions here (preferred over issues).
+  - name: Security vulnerability
+    url: https://github.com/clac-ca/automatic-data-extractor/security/policy
+    about: Please report security issues via the Security tab.
