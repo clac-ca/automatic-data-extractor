@@ -47,14 +47,17 @@ class EnvironmentJob:
     runner: SubprocessRunner
     worker_id: str
 
-    def _pip_env(self) -> dict[str, str]:
+    def _install_env(self) -> dict[str, str]:
         env = dict(os.environ)
-        env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
-        env["PIP_NO_INPUT"] = "1"
-        env["PIP_PROGRESS_BAR"] = "off"
-        env["PIP_CACHE_DIR"] = str(self.paths.pip_cache_dir())
+        env["UV_CACHE_DIR"] = str(self.paths.pip_cache_dir())
         env["PYTHONUNBUFFERED"] = "1"
         return env
+
+    def _uv_bin(self) -> str:
+        uv_bin = shutil.which("uv")
+        if not uv_bin:
+            raise RuntimeError("uv not found on PATH; install ade-worker dependencies with uv available")
+        return uv_bin
 
     def _heartbeat_env(self, env: EnvironmentClaim) -> None:
         self.queue.heartbeat(
@@ -109,7 +112,8 @@ class EnvironmentJob:
         event_log.emit(event="environment.start", message="Starting environment build", context=ctx)
 
         deadline = time.monotonic() + float(self.settings.worker_env_build_timeout_seconds)
-        pip_env = self._pip_env()
+        install_env = self._install_env()
+        uv_bin = self._uv_bin()
         last_exit_code: int | None = None
 
         def remaining() -> float:
@@ -117,14 +121,14 @@ class EnvironmentJob:
 
         try:
             # 1) venv
-            create_cmd = [sys.executable, "-m", "venv", str(venv_dir)]
+            create_cmd = [uv_bin, "venv", "--python", sys.executable, str(venv_dir)]
             res = self.runner.run(
                 create_cmd,
                 event_log=event_log,
                 scope="environment.venv",
                 timeout_seconds=remaining(),
                 cwd=None,
-                env=pip_env,
+                env=install_env,
                 heartbeat=lambda: self._heartbeat_env(claim),
                 heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
@@ -138,7 +142,7 @@ class EnvironmentJob:
                 raise RuntimeError(f"venv python missing: {python_bin}")
 
             # 2) install engine
-            install_engine = [str(python_bin), "-m", "pip", "install"]
+            install_engine = [uv_bin, "pip", "install", "--python", str(python_bin)]
             if Path(str(engine_spec)).exists():
                 install_engine.extend(["-e", str(engine_spec)])
             else:
@@ -150,7 +154,7 @@ class EnvironmentJob:
                 scope="environment.engine",
                 timeout_seconds=remaining(),
                 cwd=None,
-                env=pip_env,
+                env=install_env,
                 heartbeat=lambda: self._heartbeat_env(claim),
                 heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
@@ -165,12 +169,12 @@ class EnvironmentJob:
                 raise RuntimeError(f"config package dir missing: {config_dir}")
 
             res = self.runner.run(
-                [str(python_bin), "-m", "pip", "install", "-e", str(config_dir)],
+                [uv_bin, "pip", "install", "--python", str(python_bin), "-e", str(config_dir)],
                 event_log=event_log,
                 scope="environment.config",
                 timeout_seconds=remaining(),
                 cwd=None,
-                env=pip_env,
+                env=install_env,
                 heartbeat=lambda: self._heartbeat_env(claim),
                 heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,

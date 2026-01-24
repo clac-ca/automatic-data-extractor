@@ -10,14 +10,14 @@ The production image is built from the root `Dockerfile` and contains:
 ## Build the image
 
 ```bash
-IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
 ```
 
 ## Run with Compose (prod-like locally)
 
 ```bash
 cp .env.example .env
-IMAGE_TAG=ade-app:local docker compose -f compose.prod.yaml up
+ADE_IMAGE=ade-app:local docker compose -f docker-compose.production.yml up
 ```
 
 This runs:

@@ -127,7 +127,7 @@ def run_dev(
     if api:
         common.require_python_module(
             "ade_api",
-            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
+            "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
         )
         common.uvicorn_path()
         from ade_api.settings import Settings
@@ -160,7 +160,7 @@ def run_dev(
     if worker:
         common.require_python_module(
             "ade_worker",
-            "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-worker`).",
+            "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
         )
         typer.echo("🧵 Worker:               ade-worker")
 

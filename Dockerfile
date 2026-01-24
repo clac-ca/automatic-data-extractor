@@ -17,15 +17,17 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends git ca-certificates build-essential unixodbc-dev \
   && rm -rf /var/lib/apt/lists/*
 
-RUN python -m venv /opt/venv
+RUN python -m pip install --upgrade pip \
+  && python -m pip install --no-cache-dir uv
+
+RUN uv venv /opt/venv --python python
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY apps/ade-api/ /src/apps/ade-api/
 COPY apps/ade-worker/ /src/apps/ade-worker/
 COPY apps/ade-cli/ /src/apps/ade-cli/
 
-RUN python -m pip install --upgrade pip setuptools wheel \
-  && python -m pip install --no-cache-dir \
+RUN uv pip install --python /opt/venv/bin/python \
        /src/apps/ade-api \
        /src/apps/ade-worker \
        /src/apps/ade-cli

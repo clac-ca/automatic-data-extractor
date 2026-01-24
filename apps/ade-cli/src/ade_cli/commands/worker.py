@@ -17,7 +17,7 @@ def run_worker() -> None:
     common.refresh_paths()
     common.require_python_module(
         "ade_worker",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-worker`).",
+        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
     )
 
     env = common.build_env()

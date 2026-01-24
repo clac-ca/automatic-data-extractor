@@ -25,6 +25,10 @@ RUN apt-get update \
       procps \
  && rm -rf /var/lib/apt/lists/*
 
+# Install uv for repo tooling and scripts.
+RUN python -m pip install --upgrade pip \
+ && python -m pip install --no-cache-dir uv
+
 # Install Microsoft ODBC Driver 18 for SQL Server (same approach as your production Dockerfile)
 RUN set -eux; \
   apt-get update; \

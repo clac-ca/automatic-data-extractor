@@ -5,8 +5,8 @@ set -euo pipefail
 # scripts/dev/setup.sh
 #
 # Canonical dev bootstrap:
-# - Creates/updates a local venv at .venv
-# - Installs Python deps (idempotent)
+# - Creates/updates a local uv-managed venv at .venv
+# - Installs Python deps (idempotent, lockfile-aware)
 # - Optionally installs Node tooling + web deps (for apps/ade-web)
 #
 # Usage:
@@ -14,7 +14,9 @@ set -euo pipefail
 #   bash scripts/dev/setup.sh --no-web  # Python only
 #
 # Environment:
-#   PIP_EXTRA_ARGS="..."                # extra pip args (e.g. --index-url ...)
+#   UV_SYNC_ARGS="..."                  # extra uv sync args (e.g. --index-url ...)
+#   PIP_EXTRA_ARGS="..."                # legacy alias for UV_SYNC_ARGS
+#   UV_AUTO_INSTALL=1                   # auto-install uv if missing (default)
 #
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -32,24 +34,35 @@ echo "    python: $(python --version 2>/dev/null || true)"
 # Ensure data directories exist (compose bind mounts)
 mkdir -p data/sql data/azurite
 
-# --- Python venv ---
-if [[ ! -d ".venv" ]]; then
-  echo "==> Creating venv (.venv)"
-  python -m venv .venv
+# --- uv + Python env ---
+UV_AUTO_INSTALL="${UV_AUTO_INSTALL:-1}"
+
+if ! command -v uv >/dev/null 2>&1; then
+  if [[ "${UV_AUTO_INSTALL}" -eq 1 ]]; then
+    if ! command -v curl >/dev/null 2>&1; then
+      echo "curl is required to install uv automatically." >&2
+      exit 1
+    fi
+    echo "==> Installing uv"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="${HOME}/.local/bin:${PATH}"
+  else
+    echo "uv is required but was not found on PATH." >&2
+    echo "Install uv from https://astral.sh/uv and re-run this script." >&2
+    exit 1
+  fi
 fi
 
-# shellcheck disable=SC1091
-source .venv/bin/activate
+if [[ ! -d ".venv" ]]; then
+  echo "==> Creating uv venv (.venv)"
+  uv venv .venv
+fi
 
-echo "==> Upgrading pip/setuptools/wheel"
-python -m pip install --upgrade pip setuptools wheel
+SYNC_ARGS="${UV_SYNC_ARGS:-${PIP_EXTRA_ARGS:-}}"
 
-echo "==> Installing Python dependencies (editable)"
-python -m pip install \
-  -e "apps/ade-cli[dev]" \
-  -e "apps/ade-api[dev]" \
-  -e "apps/ade-worker[dev]" \
-  ${PIP_EXTRA_ARGS:-}
+echo "==> Syncing Python dependencies (uv)"
+# shellcheck disable=SC2086
+uv sync --locked ${SYNC_ARGS}
 
 if [[ "${WITH_WEB}" -eq 1 ]]; then
   if ! command -v node >/dev/null 2>&1; then
@@ -86,5 +99,5 @@ fi
 
 echo
 echo "==> Done."
-echo "    Venv: .venv"
+echo "    Venv: .venv (uv)"
 echo "    Tip: Use 'bash scripts/db/wait-for-sql.sh' if you need to wait for SQL to be ready."

@@ -62,7 +62,7 @@ def _build_api_task(
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
+        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
     )
     common.uvicorn_path()
 
@@ -140,7 +140,7 @@ def run_start(
 
     common.require_python_module(
         "ade_worker",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-worker`).",
+        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
     )
 
     task, resolved_host, resolved_port = _build_api_task(

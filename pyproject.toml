@@ -1,0 +1,22 @@
+[project]
+name = "ade-workspace"
+version = "0.0.0"
+description = "ADE monorepo workspace"
+requires-python = ">=3.12"
+dependencies = [
+  "ade-cli[dev]",
+  "ade-api[dev]",
+  "ade-worker[dev]",
+]
+
+[tool.uv]
+package = false
+python-preference = "only-system"
+
+[tool.uv.workspace]
+members = ["apps/ade-cli", "apps/ade-api", "apps/ade-worker"]
+
+[tool.uv.sources]
+ade-cli = { workspace = true }
+ade-api = { workspace = true }
+ade-worker = { workspace = true }

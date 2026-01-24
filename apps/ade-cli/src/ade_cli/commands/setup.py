@@ -8,20 +8,16 @@ from ade_cli.commands import common
 
 
 SETUP_INSTRUCTIONS = """
-ADE uses a user-managed virtualenv. From the repo root:
+ADE uses uv + a repo-local virtualenv. From the repo root:
 
 macOS / Linux:
-    python3 -m venv .venv
+    uv sync --locked
     source .venv/bin/activate
-    pip install -U pip
-    pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker
     cd apps/ade-web && npm install && cd -
 
 Windows (PowerShell):
-    python -m venv .venv
+    uv sync --locked
     .\\.venv\\Scripts\\Activate.ps1
-    pip install -U pip
-    pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker
     cd apps/ade-web
     npm install
     cd ..

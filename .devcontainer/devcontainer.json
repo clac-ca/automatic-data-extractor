@@ -11,7 +11,7 @@
       "version": "24"
     }
   },
-  "onCreateCommand": "bash -lc 'test -x .venv/bin/python || python -m venv .venv'",
+  "onCreateCommand": "bash -lc 'test -x .venv/bin/python || uv venv .venv'",
   "waitFor": "onCreateCommand",
   "postCreateCommand": "bash -lc 'bash scripts/dev/setup.sh'",
   "customizations": {

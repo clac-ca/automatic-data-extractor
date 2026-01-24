@@ -20,8 +20,8 @@ The easiest “it just works” path is Docker Compose because ADE depends on:
 ### One-liner
 
 ```bash
-curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/compose.quickstart.yaml \
-  && docker compose -f compose.quickstart.yaml up
+curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.yml \
+  && docker compose -f docker-compose.yml up
 ```
 
 This starts:
@@ -33,7 +33,7 @@ This starts:
 > The compose files set `platform: linux/amd64` so the same quickstart works on
 > both Intel Linux/Windows and Apple Silicon (via Docker Desktop emulation).
 
-> **Note:** `compose.quickstart.yaml` contains safe **development defaults** (including a default SQL password).
+> **Note:** `docker-compose.yml` contains safe **development defaults** (including a default SQL password).
 > For anything beyond local evaluation, override values with environment variables or a `.env` file.
 
 ### Optional: use a .env file
@@ -41,7 +41,7 @@ This starts:
 ```bash
 curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
 cp .env.example .env
-docker compose -f compose.quickstart.yaml up
+docker compose -f docker-compose.yml up
 ```
 
 ## Running the image directly
@@ -93,10 +93,10 @@ Even though we publish **one image**, the most common deployment style is still:
 - one container running the worker
 - both containers use the **same image**, but different commands
 
-Use `compose.split.yaml` as an example:
+Use `docker-compose.production.yml` as an example:
 
 ```bash
-ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f compose.split.yaml up
+ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.production.yml up
 ```
 
 ## Configuration (ADE_ env vars)
@@ -138,7 +138,7 @@ bash scripts/dev/setup.sh
 
 This installs:
 
-- Python deps for `ade-api`, `ade-worker`, and `ade-cli` (editable installs)
+- Python deps for `ade-api`, `ade-worker`, and `ade-cli` via uv (workspace sync)
 - Node deps for `ade-web` (via your lockfile)
 
 3) Run everything:
@@ -156,7 +156,7 @@ bash scripts/dev/setup.sh --no-web
 ## Build the production image locally
 
 ```bash
-IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
 ```
 
 Then:

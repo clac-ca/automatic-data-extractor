@@ -25,7 +25,7 @@ def run_lint(scope: str, fix: bool = False) -> None:
     if run_backend and common.BACKEND_SRC.exists():
         common.require_python_module(
             "ruff",
-            "Install backend dev dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
+            "Install backend dev dependencies (e.g., `uv sync --locked`).",
         )
         ruff_cmd = [sys.executable, "-m", "ruff", "check"]
         if fix:

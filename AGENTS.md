@@ -2,7 +2,7 @@
 
 This file is **for AI coding agents** working on the `ade` codebase. ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-If you are operating inside a subdirectory with its own `AGENTS.md`, follow the nearest instructions in the directory tree (they override this file).
+Tip: Use `uv run --locked ade --help` to discover available CLI commands.
 
 ## Repo map
 
@@ -11,19 +11,12 @@ automatic-data-extractor/
 ├─ apps/
 │  ├─ ade-api/      # FastAPI backend (API only)
 │  ├─ ade-web/      # React/Vite SPA
-│  ├─ ade-worker/   # Background worker (builds + runs)
+│  ├─ ade-worker/   # Background worker (builds + runs).
 │  └─ ade-cli/      # Orchestration CLI (console script: ade)
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
 ```
-
-Note: `ade-engine` now lives in a separate repo (https://github.com/clac-ca/ade-engine) and is installed transitively via `ade-worker` (currently tracking `@main` until tags are available).
-
-Docs to know:
-- Top-level `docs/` (guides, admin, templates, events)
-- Engine: https://github.com/clac-ca/ade-engine/tree/main/docs (runtime, manifest, IO, mapping, normalization, telemetry, CLI)
-- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing)
 
 ## Ownership boundaries
 
@@ -58,54 +51,51 @@ Docs to know:
 
 ## ade CLI essentials
 
-Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
-
-- `ade setup` — one-time bootstrap (venv, hooks).
-- `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; disable worker if needed).
-- `ade init` — provision SQL database + storage defaults (one-time init).
-- `ade start` — start API + worker together (single-container mode). `ade api` / `ade worker` — run API or worker only. `ade build` — build web assets.
-- `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
-- `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
-- Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
-
-### Help snapshots (truncated)
-
 ```bash
-$ ade --help
-Usage: ade [OPTIONS] COMMAND [ARGS]...
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  setup     Bootstrap repo env and hooks
-  dev       Run API/web dev servers (+ worker)
-  init      Provision SQL database + storage defaults
-  start     Start API + worker together (single-container mode)
-  api       Start the API only
-  worker    Run the background worker only
-  build     Build web assets
-  tests     Run Python/JS tests
-  lint      Lint/format helpers
-  bundle    Bundle files into Markdown
-  types     Generate frontend API types
-  migrate   Run DB migrations
-  routes    List FastAPI routes
-  users     Manage users/roles
-  docker    Local Docker helpers
-  clean     Remove build artifacts/caches
-  reset     Clean + venv reset
-  ci        Full lint/test/build pipeline
+# Dev env (repo root)
+uv sync --locked
+source .venv/bin/activate
 ```
 
 ```bash
-$ python -m ade_engine --help
-Usage: python -m ade_engine [OPTIONS] COMMAND [ARGS]...
+# CLI discovery (source of truth)
+ade --help
+ade <command> --help
+ade-engine --help
+```
 
-Commands:
-  process  Process inputs with the ADE engine (file/batch)
-  config   Create and validate config packages
-  version  Show engine version
+```bash
+# Common workflows
+ade dev
+ade dev --no-worker
+ade dev --api-only
+ade dev --web-only
+ade dev --worker-only
+ade dev --api-port 9000
+
+ade start
+ade api
+ade worker
+```
+
+```bash
+# Quality checks
+ade types
+ade lint --scope backend
+ade lint --scope frontend
+ade lint --fix
+ade tests
+ade ci
+ade ci --skip-types
+ade ci --skip-tests
+```
+
+```bash
+# Utilities
+ade build
+ade bundle --ext md --out /tmp/bundle.md docs/
+ade clean --yes
+ade reset --yes
 ```
 
 ## Engine CLI quick runs (current)

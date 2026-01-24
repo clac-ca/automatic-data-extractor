@@ -8,15 +8,15 @@ set -euo pipefail
 #
 # Usage:
 #   bash scripts/docker/build.sh
-#   IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+#   ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
 #
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-IMAGE_TAG="${IMAGE_TAG:-ade-app:local}"
+ADE_IMAGE="${ADE_IMAGE:-ade-app:local}"
 
-echo "==> Building production image: ${IMAGE_TAG}"
+echo "==> Building production image: ${ADE_IMAGE}"
 DOCKER_BUILDKIT=1 docker build \
-  -t "${IMAGE_TAG}" \
+  -t "${ADE_IMAGE}" \
   .

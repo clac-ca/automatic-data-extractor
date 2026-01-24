@@ -175,7 +175,7 @@ def ensure_sql_database(env: dict[str, str]) -> None:
     except ModuleNotFoundError as exc:
         typer.echo(
             "❌ SQLAlchemy is required to initialize the database. "
-            "Install ADE into your environment (e.g., `pip install -e apps/ade-cli -e apps/ade-api`).",
+            "Install ADE into your uv-managed environment (e.g., `uv sync --locked`).",
             err=True,
         )
         raise typer.Exit(code=1) from exc

@@ -71,7 +71,7 @@ def _ensure_backend() -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
+        "Install ADE into your uv-managed virtualenv (e.g., `uv sync --locked`).",
     )
 
 

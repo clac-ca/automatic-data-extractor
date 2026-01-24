@@ -196,7 +196,7 @@ def uvicorn_path() -> str:
     return require_command(
         "uvicorn",
         friendly_name="uvicorn",
-        fix_hint="Install ADE into an active virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-api -e apps/ade-worker`).",
+        fix_hint="Install ADE into an active uv-managed virtualenv (e.g., `uv sync --locked`).",
     )
 
 

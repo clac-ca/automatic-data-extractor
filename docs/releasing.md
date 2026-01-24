@@ -14,7 +14,7 @@ A “release” is a **git tag** of the form `vX.Y.Z` (Semantic Versioning).
 
 - [ ] `main` is green (CI passing).
 - [ ] No unreviewed/unfinished migrations are pending.
-- [ ] `compose.quickstart.yaml` still works from scratch (fresh clone).
+- [ ] `docker-compose.yml` still works from scratch (fresh clone).
 - [ ] Confirm the intended release version follows SemVer:
   - MAJOR = breaking change
   - MINOR = new functionality, backwards compatible
@@ -33,11 +33,11 @@ From a clean working tree:
 
 - [ ] Build the production image:
   ```bash
-  IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
+  ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
   ```
 - [ ] Run quickstart stack:
   ```bash
-  docker compose -f compose.quickstart.yaml up
+  docker compose -f docker-compose.yml up
   ```
 - [ ] Verify API responds and worker starts cleanly.
 - [ ] (Optional) Run `ade init` provisioning (DB create) inside the container if applicable.

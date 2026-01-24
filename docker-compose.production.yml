@@ -1,0 +1,55 @@
+# docker-compose.production.yml
+#
+# Production: separates API and Worker into different containers.
+#
+# The ADE image contains ade-api, ade-web, and ade-worker.
+# By default all three run; you can choose which starts by setting `command`.
+# This file runs the worker in a separate container so you can scale it independently.
+# Expects external SQL/Storage (set ADE_SQL_* / ADE_STORAGE_*).
+#
+# Run (requires Docker + Docker Compose):
+#   curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.production.yml \
+#     && ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.production.yml up
+#
+services:
+  api:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    ports:
+      - "8000:8000"
+    environment:
+      ADE_SQL_HOST: ${ADE_SQL_HOST}
+      ADE_SQL_PORT: ${ADE_SQL_PORT}
+      ADE_SQL_USER: ${ADE_SQL_USER}
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE}
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT}
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE}
+
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME}
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY}
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT}
+
+      ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
+      ADE_API_PORT: ${ADE_API_PORT:-8000}
+      ADE_API_IMPORT: ${ADE_API_IMPORT:-ade_api.main:app}
+
+      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
+    command: [ "api" ]
+
+  worker:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    environment:
+      ADE_SQL_HOST: ${ADE_SQL_HOST}
+      ADE_SQL_PORT: ${ADE_SQL_PORT}
+      ADE_SQL_USER: ${ADE_SQL_USER}
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE}
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT}
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE}
+
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME}
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY}
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT}
+
+      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
+    command: [ "worker" ]
