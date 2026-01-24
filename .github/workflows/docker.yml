@@ -20,7 +20,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/ade
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -59,7 +59,7 @@ jobs:
             type=ref,event=pr
             # Short SHA (e.g. sha-abc1234)
             type=sha,format=short,prefix=sha-
-            # Semver tags (e.g. v1.2.3, v1.2, v1) + latest (auto)
+            # Release tags from git tag vX.Y.Z -> docker tags 1.2.3, 1.2, 1 (+ latest auto)
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}

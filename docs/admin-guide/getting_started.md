@@ -50,7 +50,7 @@ environment variables in your shell.
 1. Clone the repo and install dependencies:
 
    ```bash
-   git clone https://github.com/your-org/automatic-data-extractor.git
+   git clone https://github.com/clac-ca/automatic-data-extractor.git
    cd automatic-data-extractor
    python3 -m venv .venv
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
@@ -104,12 +104,12 @@ Tip: If you frequently switch branches, re-run the editable installs (`pip insta
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
-run it on a server. A published image is available at `ghcr.io/clac-ca/ade:latest`,
+run it on a server. A published image is available at `ghcr.io/clac-ca/automatic-data-extractor:latest`,
 or you can build locally.
 
 ### 5.1 Build a local image
 ```bash
-git clone https://github.com/your-org/automatic-data-extractor.git
+git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
 IMAGE_TAG=ade-app:local bash scripts/docker/build.sh
 ```

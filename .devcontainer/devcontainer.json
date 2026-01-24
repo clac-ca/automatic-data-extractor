@@ -18,11 +18,13 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
-        "dbaeumer.vscode-eslint"
+        "dbaeumer.vscode-eslint",
+        "openai.chatgpt"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
         "python.testing.pytestEnabled": true,
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+        "python.terminal.activateEnvironment": true,
         "python.testing.pytestArgs": [
           "apps/ade-api/tests",
           "apps/ade-worker/tests",
@@ -32,11 +34,24 @@
       }
     }
   },
-  "forwardPorts": [8000, 5173, 1433, 10000],
+  "forwardPorts": [
+    8000,
+    5173,
+    1433,
+    10000
+  ],
   "portsAttributes": {
-    "8000": { "label": "ADE API" },
-    "5173": { "label": "ADE Web (Vite)" },
-    "1433": { "label": "SQL Server" },
-    "10000": { "label": "Azurite Blob" }
+    "8000": {
+      "label": "ADE API"
+    },
+    "5173": {
+      "label": "ADE Web (Vite)"
+    },
+    "1433": {
+      "label": "SQL Server"
+    },
+    "10000": {
+      "label": "Azurite Blob"
+    }
   }
 }

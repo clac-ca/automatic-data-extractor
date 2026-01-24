@@ -1,5 +1,7 @@
 # Automatic Data Extractor (ADE)
 
+[![CI](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml)
+[![Docker Image (GHCR)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/docker.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/docker.yml)
 ADE is a multi-app project:
 
 - **ade-api** — HTTP API (FastAPI)
@@ -54,19 +56,19 @@ So running without arguments behaves like running `ade start`.
 ### Start API + worker (default)
 
 ```bash
-docker run --rm -p 8000:8000 ghcr.io/clac-ca/ade:latest
+docker run --rm -p 8000:8000 ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
 ### Start only API
 
 ```bash
-docker run --rm -p 8000:8000 ghcr.io/clac-ca/ade:latest api
+docker run --rm -p 8000:8000 ghcr.io/clac-ca/automatic-data-extractor:latest api
 ```
 
 ### Start only worker
 
 ```bash
-docker run --rm ghcr.io/clac-ca/ade:latest worker
+docker run --rm ghcr.io/clac-ca/automatic-data-extractor:latest worker
 ```
 
 ### What `ade start` does
@@ -80,7 +82,7 @@ docker run --rm ghcr.io/clac-ca/ade:latest worker
 You can run init explicitly:
 
 ```bash
-docker run --rm ghcr.io/clac-ca/ade:latest init
+docker run --rm ghcr.io/clac-ca/automatic-data-extractor:latest init
 ```
 
 ## Standard production pattern (recommended)
@@ -94,7 +96,7 @@ Even though we publish **one image**, the most common deployment style is still:
 Use `compose.split.yaml` as an example:
 
 ```bash
-ADE_IMAGE=ghcr.io/clac-ca/ade:latest docker compose -f compose.split.yaml up
+ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f compose.split.yaml up
 ```
 
 ## Configuration (ADE_ env vars)
@@ -164,6 +166,39 @@ docker run --rm -p 8000:8000 ade-app:local
 ```
 
 ---
+
+## CI, GHCR publishing, and releases
+
+This repo is set up as a “first-class” container project:
+
+- **CI** runs on every PR and on pushes to `main` (`.github/workflows/ci.yml`).
+- **Docker images** are built with BuildKit and published to **GitHub Container Registry (GHCR)** (`.github/workflows/docker.yml`).
+- **GitHub Releases** are created automatically on version tags (`.github/workflows/release.yml`).
+
+### Image name
+
+By default, images are published as:
+
+- `ghcr.io/clac-ca/automatic-data-extractor`
+
+### Tagging strategy
+
+Standard, predictable tags:
+
+- On `main` pushes:
+  - `main`
+  - `sha-<shortsha>`
+- On version tags (e.g. `v1.2.3`):
+  - `1.2.3`
+  - `1.2`
+  - `1`
+  - `latest`
+
+### Releasing
+
+Create and push a `vX.Y.Z` tag to cut a release; GitHub Actions will publish the GHCR image and create a GitHub Release.
+
+See `docs/releasing.md` for the full workflow.
 
 ## Why this design is “standard”
 

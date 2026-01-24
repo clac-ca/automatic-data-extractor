@@ -32,7 +32,7 @@ services:
       - ./data/azurite:/data
 
   ade:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/ade:latest}
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
     depends_on:
       - sql
       - azurite
