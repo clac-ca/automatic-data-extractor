@@ -1,6 +1,6 @@
 {
     // Always prefer the workspace venv (created by onCreateCommand / setup script)
-    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
     // Auto-activate the selected interpreter env in new terminals
     "python.terminal.activateEnvironment": true,
     // Testing
