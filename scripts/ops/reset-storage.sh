@@ -5,7 +5,7 @@ set -euo pipefail
 # scripts/ops/reset-storage.sh
 #
 # Destructive reset of ADE storage + database tables.
-# This wraps the Python implementation to keep the logic centralized.
+# This wraps the CLI to keep logic centralized.
 #
 # Usage:
 #   bash scripts/ops/reset-storage.sh
@@ -16,4 +16,4 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-python -m ade_api.scripts.reset_storage "$@"
+ade reset "$@"

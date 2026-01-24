@@ -43,8 +43,8 @@ Commands:
   routes    List FastAPI routes
   users     Manage users/roles
   docker    Local Docker helpers
-  clean     Remove build artifacts/caches
-  reset     Clean + venv reset
+  clean     Remove build artifacts/caches (use --all to drop node_modules)
+  reset     Drop DB tables + reset storage + clean artifacts
   ci        Full lint/test/build pipeline
 ```
 

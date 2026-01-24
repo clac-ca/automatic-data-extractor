@@ -4,41 +4,15 @@ set -euo pipefail
 #
 # scripts/ops/clean-artifacts.sh
 #
-# Safe cleanup of build/test artifacts.
+# Safe cleanup of build/test artifacts (wrapper around `ade clean`).
 #
-# By default:
-# - Removes Python caches (including __pycache__) and build outputs
-# - Does NOT delete data/ (SQL/Azurite persisted state)
-#
-# Options:
-#   bash scripts/ops/clean-artifacts.sh --all     Also remove node_modules (slow rebuild next time)
+# Usage:
+#   bash scripts/ops/clean-artifacts.sh
+#   bash scripts/ops/clean-artifacts.sh --all
+#   bash scripts/ops/clean-artifacts.sh --yes
 #
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-ALL=0
-
-for arg in "$@"; do
-  case "${arg}" in
-    --all) ALL=1 ;;
-    *) echo "Unknown arg: ${arg}" >&2; exit 1 ;;
-  esac
-done
-
-echo "==> Cleaning Python caches/artifacts"
-rm -rf .coverage coverage.xml htmlcov dist build *.egg-info || true
-
-# Remove cache directories safely (ignore errors)
-find . -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.mypy_cache' -o -name '.ruff_cache' \) -prune -exec rm -rf {} + 2>/dev/null || true
-
-# Remove bytecode files safely (ignore errors)
-find . -name '*.pyc' -delete 2>/dev/null || true
-find . -name '*.pyo' -delete 2>/dev/null || true
-
-if [[ "${ALL}" -eq 1 ]]; then
-  echo "==> Removing node_modules (requested --all)"
-  rm -rf apps/ade-web/node_modules || true
-fi
-
-echo "==> Done."
+ade clean "$@"

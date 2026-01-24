@@ -21,34 +21,35 @@ ADE_IMAGE=ade-app:local docker compose -f docker-compose.production.yml up
 ```
 
 This runs:
-- SQL + Azurite locally (dev-only)
 - API container from the single image
 - Worker container from the same single image
+
+You must provide external SQL + Storage (set `ADE_SQL_*` and `ADE_STORAGE_*` in `.env`).
 
 ## Run with docker run
 
 API + worker (default `ade start`):
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local
+docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local
 ```
 
 API only:
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local api
+docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local api
 ```
 
 Worker only:
 
 ```bash
-docker run --rm --env-file .env -v ./data:/app/data ade-app:local worker
+docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local worker
 ```
 
 Init (optional one-time):
 
 ```bash
-docker run --rm --env-file .env -v ./data:/app/data ade-app:local init
+docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local init
 ```
 
 ## CLI inside the container
@@ -56,7 +57,7 @@ docker run --rm --env-file .env -v ./data:/app/data ade-app:local init
 You can run commands in a container shell:
 
 ```bash
-docker run --rm -it --env-file .env -v ./data:/app/data ade-app:local bash
+docker run --rm -it --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local bash
 ade --help
 ```
 

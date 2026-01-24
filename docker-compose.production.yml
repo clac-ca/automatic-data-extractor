@@ -16,6 +16,8 @@ services:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data
     environment:
       ADE_SQL_HOST: ${ADE_SQL_HOST}
       ADE_SQL_PORT: ${ADE_SQL_PORT}
@@ -28,6 +30,7 @@ services:
       ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME}
       ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY}
       ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT}
+      ADE_DATA_DIR: /app/data
 
       ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
       ADE_API_PORT: ${ADE_API_PORT:-8000}
@@ -37,6 +40,8 @@ services:
 
   worker:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    volumes:
+      - ./data:/app/data
     environment:
       ADE_SQL_HOST: ${ADE_SQL_HOST}
       ADE_SQL_PORT: ${ADE_SQL_PORT}
@@ -49,6 +54,7 @@ services:
       ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME}
       ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY}
       ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT}
+      ADE_DATA_DIR: /app/data
 
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
     command: [ "worker" ]

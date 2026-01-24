@@ -111,13 +111,13 @@ bash scripts/docker/build-image.sh
 
 ### 5.2 Run the container
 ```bash
-docker run -d --name ade -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local
+docker run -d --name ade -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local
 ```
 
 To run the worker from the same image:
 
 ```bash
-docker run -d --name ade-worker --env-file .env -v ./data:/app/data ade-app:local worker
+docker run -d --name ade-worker --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local worker
 ```
 
 The bind mount keeps documents and runtime artifacts under `./data` so they
