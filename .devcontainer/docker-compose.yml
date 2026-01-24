@@ -1,30 +1,17 @@
 # .devcontainer/docker-compose.yml
-#
-# VS Code Dev Containers uses this compose file to start:
-# - ade (workspace container)
-# - sql (local SQL Server)
-# - azurite (blob-only)
-#
-# Notes:
-# - Defaults are "local-dev friendly" and can be overridden via environment variables.
-# - SQL Server container is amd64-only; Docker Desktop will emulate on Apple Silicon.
-#
-# See docs/devcontainer.md for usage.
-
-version: "3.9"
 
 services:
   ade:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
-    user: vscode
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
     command: sleep infinity
     depends_on:
       - sql
       - azurite
+    user: vscode
     environment:
       # ---- SQL (dev defaults) ----
       ADE_SQL_HOST: ${ADE_SQL_HOST:-sql}
@@ -40,13 +27,8 @@ services:
       ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
       ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT:-http://azurite:10000/devstoreaccount1}
 
-      # Optional: use a full connection string instead.
-      # ADE_STORAGE_CONNECTION_STRING: ${ADE_STORAGE_CONNECTION_STRING:-}
-
     ports:
-      # API (FastAPI)
       - "8000:8000"
-      # Web dev server (Vite)
       - "5173:5173"
 
   sql:

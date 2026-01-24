@@ -1,30 +1,46 @@
 # .devcontainer/Dockerfile
-FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
+FROM python:3.12-slim-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
 
-# The devcontainers/python image already includes a non-root `vscode` user with sudo.
-# Make sure we're root for apt installs.
-USER root
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Build deps for pyodbc + tooling needed to add the Microsoft repo key
+# Minimal dev tooling + build deps for pyodbc + git deps
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
+      bash \
+      ca-certificates \
       curl \
       gnupg \
+      git \
+      openssh-client \
+      sudo \
       build-essential \
       unixodbc-dev \
+      unixodbc \
+      procps \
  && rm -rf /var/lib/apt/lists/*
 
-# Install Microsoft ODBC Driver 18 for SQL Server (Debian 12 / bookworm)
+# Install Microsoft ODBC Driver 18 for SQL Server (same approach as your production Dockerfile)
 RUN set -eux; \
-    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft.gpg; \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/microsoft-prod.list; \
-    apt-get update; \
-    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18; \
-    rm -rf /var/lib/apt/lists/*
+  apt-get update; \
+  curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb; \
+  dpkg -i /tmp/packages-microsoft-prod.deb; \
+  rm /tmp/packages-microsoft-prod.deb; \
+  apt-get update; \
+  ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18; \
+  rm -rf /var/lib/apt/lists/*
+
+# Create a non-root dev user (VS Code devcontainer convention)
+RUN set -eux; \
+  groupadd --gid "${USER_GID}" "${USERNAME}"; \
+  useradd  --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}"; \
+  echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+  chmod 0440 "/etc/sudoers.d/${USERNAME}"
 
 WORKDIR /workspaces/automatic-data-extractor
-
-# Go back to the normal dev user
-USER vscode
+# Note: intentionally not setting USER here; Compose/devcontainer config controls runtime user.
