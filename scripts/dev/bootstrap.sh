@@ -2,15 +2,15 @@
 set -euo pipefail
 
 #
-# scripts/dev/setup.sh
+# scripts/dev/bootstrap.sh
 #
 # Canonical dev bootstrap:
 # - Installs Python deps into the active environment (venv if active, system otherwise)
 # - Optionally installs Node tooling + web deps (for apps/ade-web)
 #
 # Usage:
-#   bash scripts/dev/setup.sh           # Python + web deps (default)
-#   bash scripts/dev/setup.sh --no-web  # Python only
+#   bash scripts/dev/bootstrap.sh           # Python + web deps (default)
+#   bash scripts/dev/bootstrap.sh --no-web  # Python only
 #
 # Environment:
 #   UV_SYNC_ARGS="..."                  # extra uv sync args when a venv is active
@@ -30,8 +30,8 @@ echo "==> ADE setup"
 echo "    repo: ${ROOT_DIR}"
 echo "    python: $(python --version 2>/dev/null || true)"
 
-# Ensure data directories exist (compose bind mounts)
-mkdir -p data/sql data/azurite
+# Ensure data directories exist (Azurite bind mount)
+mkdir -p data/azurite
 
 # --- uv + Python env ---
 UV_AUTO_INSTALL="${UV_AUTO_INSTALL:-1}"

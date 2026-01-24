@@ -17,7 +17,7 @@ def run_worker() -> None:
     common.refresh_paths()
     common.require_python_module(
         "ade_worker",
-        "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
+        "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
     )
 
     env = common.build_env()

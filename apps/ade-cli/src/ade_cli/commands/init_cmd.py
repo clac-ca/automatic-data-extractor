@@ -175,7 +175,7 @@ def ensure_sql_database(env: dict[str, str]) -> None:
     except ModuleNotFoundError as exc:
         typer.echo(
             "❌ SQLAlchemy is required to initialize the database. "
-            "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
+            "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
             err=True,
         )
         raise typer.Exit(code=1) from exc

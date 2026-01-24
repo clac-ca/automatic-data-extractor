@@ -29,13 +29,13 @@ cp .env.example .env
 4) The devcontainer will automatically run:
 
 ```bash
-bash scripts/dev/setup.sh
+bash scripts/dev/bootstrap.sh
 ```
 
 > If you do not work on the web UI (apps/ade-web), you can skip web setup:
 >
 > ```bash
-> bash scripts/dev/setup.sh --no-web
+> bash scripts/dev/bootstrap.sh --no-web
 > ```
 
 ## Run the stack (dev)
@@ -133,17 +133,17 @@ Local containers may still be running, but the app will connect to Azure based o
 Safe cleanup (no data deletion):
 
 ```bash
-bash scripts/dev/clean.sh
+bash scripts/ops/clean-artifacts.sh
 ```
 
 Full cleanup (removes node_modules):
 
 ```bash
-bash scripts/dev/clean.sh --all
+bash scripts/ops/clean-artifacts.sh --all
 ```
 
-Destructive cleanup (removes persisted SQL/Azurite data):
+Destructive reset (drops DB tables + removes persisted SQL/Azurite data):
 
 ```bash
-bash scripts/dev/clean.sh --data --yes
+bash scripts/ops/reset-storage.sh --yes
 ```

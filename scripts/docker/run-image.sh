@@ -2,14 +2,14 @@
 set -euo pipefail
 
 #
-# scripts/docker/run.sh
+# scripts/docker/run-image.sh
 #
 # Runs the production image locally.
 #
 # This is intentionally minimal and may need adjustment based on how the app starts.
 #
 # Usage:
-#   ADE_IMAGE=ade-app:local bash scripts/docker/run.sh
+#   bash scripts/docker/run-image.sh
 #
 # By default it exposes port 8000. If your API uses a different port, change it here.
 #
@@ -17,17 +17,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-ADE_IMAGE="${ADE_IMAGE:-ade-app:local}"
-
-ENV_ARGS=()
-if [[ -f ".env" ]]; then
-  ENV_ARGS=(--env-file .env)
-else
-  echo "==> .env not found; running with defaults"
+if [[ ! -f ".env" ]]; then
+  echo "==> .env not found; create one from .env.example first" >&2
+  exit 1
 fi
 
-echo "==> Running ${ADE_IMAGE}"
-docker run --rm -it \
-  "${ENV_ARGS[@]}" \
-  -p 8000:8000 \
-  "${ADE_IMAGE}"
+echo "==> Running ade-app:local"
+docker run --rm -it --env-file .env -p 8000:8000 ade-app:local

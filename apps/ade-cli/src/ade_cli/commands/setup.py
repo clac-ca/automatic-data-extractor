@@ -14,13 +14,13 @@ macOS / Linux:
     # Optional: create/activate a venv first if you want isolation.
     # python -m venv .venv
     # source .venv/bin/activate
-    bash scripts/dev/setup.sh
+    bash scripts/dev/bootstrap.sh
 
 Windows (PowerShell):
     # Optional: create/activate a venv first if you want isolation.
     # python -m venv .venv
     # .\\.venv\\Scripts\\Activate.ps1
-    bash scripts/dev/setup.sh
+    bash scripts/dev/bootstrap.sh
 
 Once dependencies are installed, run `ade dev` to start backend + frontend dev servers.
 """

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { UploadManagerQueueItem } from "./uploadManager";
+import type { UploadManagerQueueItem } from "./useUploadManager";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {

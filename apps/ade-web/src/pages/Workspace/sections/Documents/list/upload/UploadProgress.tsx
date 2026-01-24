@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
 import type { DocumentUploadResponse } from "@/api/documents";
-import type { UploadManagerItem } from "./uploadManager";
+import type { UploadManagerItem } from "./useUploadManager";
 
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 

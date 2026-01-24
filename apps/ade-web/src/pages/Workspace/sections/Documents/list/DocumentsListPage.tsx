@@ -11,7 +11,7 @@ import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext"
 import {
   useUploadManager,
   type UploadManagerQueueItem,
-} from "@/pages/Workspace/sections/Documents/list/upload/uploadManager";
+} from "@/pages/Workspace/sections/Documents/list/upload/useUploadManager";
 import { UploadManager } from "@/pages/Workspace/sections/Documents/list/upload/UploadManager";
 import { UploadPreflightDialog } from "@/pages/Workspace/sections/Documents/list/upload/UploadPreflightDialog";
 import { DocumentsTableView } from "@/pages/Workspace/sections/Documents/list/table/DocumentsTableView";

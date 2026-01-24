@@ -71,7 +71,7 @@ def _ensure_backend() -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE dependencies (run `bash scripts/dev/setup.sh`).",
+        "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
     )
 
 

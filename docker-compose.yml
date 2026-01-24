@@ -54,7 +54,7 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - ./data/sql:/var/opt/mssql
+      - ade_sql_data:/var/opt/mssql
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
@@ -66,3 +66,6 @@ services:
       - "10000:10000"
     volumes:
       - ./data/azurite:/data
+
+volumes:
+  ade_sql_data:

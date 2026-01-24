@@ -133,7 +133,7 @@ cp .env.example .env
 The devcontainer runs:
 
 ```bash
-bash scripts/dev/setup.sh
+bash scripts/dev/bootstrap.sh
 ```
 
 This installs:
@@ -150,13 +150,13 @@ ade dev
 If you **don't** need the React app, you can skip Node/web setup:
 
 ```bash
-bash scripts/dev/setup.sh --no-web
+bash scripts/dev/bootstrap.sh --no-web
 ```
 
 ## Build the production image locally
 
 ```bash
-ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
+bash scripts/docker/build-image.sh
 ```
 
 Then:

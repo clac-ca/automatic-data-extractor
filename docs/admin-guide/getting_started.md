@@ -8,7 +8,7 @@ that by default.
 ## 1. What ADE Ships With
 - **Storage layout** – documents and runtime artifacts live under `data/`. The
   database itself lives in SQL Server/Azure SQL; in local dev, the SQL container
-  persists data under `data/sql`.
+  persists data in a Docker named volume (managed by Compose).
 - **FastAPI backend + worker** – the API in
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
   provisions environments and executes runs from the database queue.
@@ -55,7 +55,7 @@ environment variables in your shell.
    # Optional: create/activate a venv first if you want isolation.
    # python -m venv .venv
    # source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
-   bash scripts/dev/setup.sh
+   bash scripts/dev/bootstrap.sh
    ```
 
    Note: `ade-worker` installs `ade-engine` from the separate engine repo (currently tracking `@main`; tags will follow).
@@ -79,7 +79,7 @@ environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/`. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local SQL dev, deleting `data/sql/` after the SQL container stops resets the database; `ade dev`, `ade start`, or `ade api` will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/` except the SQL Server data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local SQL dev, remove the SQL volume after the container stops (for example: `docker volume rm <compose_project>_ade_sql_data`), then `ade dev`, `ade start`, or `ade api` will re-run migrations on the next launch (or run `ade migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run API and web manually (optional)
 If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
@@ -95,7 +95,7 @@ ade dev --web
 ade dev --worker
 ```
 
-Tip: If you frequently switch branches, re-run `bash scripts/dev/setup.sh` after pulling changes so your environment stays in sync with the code.
+Tip: If you frequently switch branches, re-run `bash scripts/dev/bootstrap.sh` after pulling changes so your environment stays in sync with the code.
 
 ## 5. Option B – Run ADE with Docker
 Docker is useful when you want ADE isolated from the host Python install or to
@@ -106,7 +106,7 @@ or you can build locally.
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
-ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
+bash scripts/docker/build-image.sh
 ```
 
 ### 5.2 Run the container
@@ -138,7 +138,7 @@ docker rm -f ade
 ```
 
 ## 6. Where ADE Stores Data
-- `data/sql/` – persisted SQL Server data for local dev (via the devcontainer SQL service).
+- SQL Server data – stored in a Docker named volume for local dev (via the SQL service).
 - `data/workspaces/<workspace_id>/documents/` – uploaded source files.
 - `data/logs/` *(if enabled)* – structured JSON logs.
 
@@ -157,7 +157,7 @@ With these basics you can run ADE on a laptop, VM, or container host and manage
 administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
-- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (run `bash scripts/dev/setup.sh`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:app`).
+- **`uvicorn` exits immediately:** ensure the Python dependencies are installed (run `bash scripts/dev/bootstrap.sh`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:app`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
 - **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and confirm your web server is serving `apps/ade-web/dist/` and forwarding `/api/v1` to the API.
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api/v1` prefix.

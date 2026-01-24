@@ -45,7 +45,9 @@ AND status = 'queued'
 RETURNING id;
 """
 
-MSSQL_CLAIM_ENVIRONMENT = """    ;WITH next_env AS (
+MSSQL_CLAIM_ENVIRONMENT = """    SET NOCOUNT ON;
+DECLARE @claimed TABLE (id uniqueidentifier);
+;WITH next_env AS (
     SELECT TOP (1) *
     FROM environments WITH (UPDLOCK, READPAST, ROWLOCK, READCOMMITTEDLOCK)
     WHERE status = 'queued'
@@ -58,7 +60,8 @@ SET
     claim_expires_at = :lease_expires_at,
     error_message = NULL,
     updated_at = :now
-OUTPUT inserted.id;
+OUTPUT inserted.id INTO @claimed;
+SELECT id FROM @claimed;
 """
 
 SQLITE_PROBE_RUN = """    SELECT runs.id
@@ -103,7 +106,13 @@ AND status = 'queued'
 RETURNING id, attempt_count, max_attempts;
 """
 
-MSSQL_CLAIM_RUN = """    ;WITH next_run AS (
+MSSQL_CLAIM_RUN = """    SET NOCOUNT ON;
+DECLARE @claimed TABLE (
+    id uniqueidentifier,
+    attempt_count int,
+    max_attempts int
+);
+;WITH next_run AS (
     SELECT TOP (1) runs.*
     FROM runs WITH (UPDLOCK, READPAST, ROWLOCK, READCOMMITTEDLOCK)
     JOIN environments WITH (READPAST)
@@ -125,7 +134,8 @@ SET
     started_at = COALESCE(started_at, :now),
     attempt_count = attempt_count + 1,
     error_message = NULL
-OUTPUT inserted.id, inserted.attempt_count, inserted.max_attempts;
+OUTPUT inserted.id, inserted.attempt_count, inserted.max_attempts INTO @claimed;
+SELECT id, attempt_count, max_attempts FROM @claimed;
 """
 
 ENVIRONMENT_ACK_SUCCESS = """    UPDATE environments

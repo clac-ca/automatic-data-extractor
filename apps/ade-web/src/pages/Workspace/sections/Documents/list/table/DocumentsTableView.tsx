@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { useNotifications } from "@/providers/notifications";
 import type { PresenceParticipant } from "@/types/presence";
 import type { components } from "@/types";
-import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/list/upload/uploadManager";
+import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/list/upload/useUploadManager";
 
 import { DocumentsPresenceIndicator } from "../../shared/presence/DocumentsPresenceIndicator";
 import { shortId } from "../../shared/utils";

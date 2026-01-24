@@ -31,7 +31,7 @@ Introduce the topic in 1–3 sentences. State context and constraints briefly. I
 Open with brief background or the first task. Introduce code with a sentence and a colon:
 
 ```bash
-bash scripts/dev/setup.sh
+bash scripts/dev/bootstrap.sh
 ade dev
 ```
 

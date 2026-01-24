@@ -3,7 +3,7 @@
 Summarize engine NDJSON logs for quick coverage checks.
 
 Usage:
-    python scripts/summarize_engine_runs.py /tmp/ade-logs --out data/samples/output/detector-pass2/coverage.json
+    python scripts/tools/summarize-engine-runs.py /tmp/ade-logs --out data/samples/output/detector-pass2/coverage.json
 """
 
 from __future__ import annotations

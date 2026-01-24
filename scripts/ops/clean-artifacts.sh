@@ -2,7 +2,7 @@
 set -euo pipefail
 
 #
-# scripts/dev/clean.sh
+# scripts/ops/clean-artifacts.sh
 #
 # Safe cleanup of build/test artifacts.
 #
@@ -11,22 +11,17 @@ set -euo pipefail
 # - Does NOT delete data/ (SQL/Azurite persisted state)
 #
 # Options:
-#   bash scripts/dev/clean.sh --all     Also remove node_modules (slow rebuild next time)
-#   bash scripts/dev/clean.sh --data    ALSO delete data/ (DESTRUCTIVE). Requires --yes
+#   bash scripts/ops/clean-artifacts.sh --all     Also remove node_modules (slow rebuild next time)
 #
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 ALL=0
-DATA=0
-YES=0
 
 for arg in "$@"; do
   case "${arg}" in
     --all) ALL=1 ;;
-    --data) DATA=1 ;;
-    --yes) YES=1 ;;
     *) echo "Unknown arg: ${arg}" >&2; exit 1 ;;
   esac
 done
@@ -44,16 +39,6 @@ find . -name '*.pyo' -delete 2>/dev/null || true
 if [[ "${ALL}" -eq 1 ]]; then
   echo "==> Removing node_modules (requested --all)"
   rm -rf apps/ade-web/node_modules || true
-fi
-
-if [[ "${DATA}" -eq 1 ]]; then
-  if [[ "${YES}" -ne 1 ]]; then
-    echo "!! Refusing to delete data/ without --yes"
-    echo "   Re-run: bash scripts/dev/clean.sh --data --yes"
-    exit 1
-  fi
-  echo "==> Deleting data/ (requested --data --yes)"
-  rm -rf data || true
 fi
 
 echo "==> Done."

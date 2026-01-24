@@ -33,7 +33,7 @@ From a clean working tree:
 
 - [ ] Build the production image:
   ```bash
-  ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
+  bash scripts/docker/build-image.sh
   ```
 - [ ] Run quickstart stack:
   ```bash

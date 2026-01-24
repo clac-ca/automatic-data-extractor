@@ -59,7 +59,7 @@ def _run_api_suite() -> bool:
 
     common.require_python_module(
         "pytest",
-        "Install API/test dependencies (run `bash scripts/dev/setup.sh`).",
+        "Install API/test dependencies (run `bash scripts/dev/bootstrap.sh`).",
     )
 
     for name, display_path, src_path, cwd in suites:

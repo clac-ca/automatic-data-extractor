@@ -12,7 +12,7 @@
       "version": "24"
     }
   },
-  "postCreateCommand": "bash -lc 'bash scripts/dev/setup.sh'",
+  "postCreateCommand": "bash -lc 'bash scripts/dev/bootstrap.sh'",
   "customizations": {
     "vscode": {
       "extensions": [

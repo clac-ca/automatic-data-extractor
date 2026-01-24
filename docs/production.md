@@ -10,7 +10,7 @@ The production image is built from the root `Dockerfile` and contains:
 ## Build the image
 
 ```bash
-ADE_IMAGE=ade-app:local bash scripts/docker/build.sh
+bash scripts/docker/build-image.sh
 ```
 
 ## Run with Compose (prod-like locally)
