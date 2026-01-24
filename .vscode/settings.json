@@ -12,4 +12,5 @@
     ],
     // Quality-of-life
     "editor.formatOnSave": true,
+    "python-envs.pythonProjects": [],
 }
