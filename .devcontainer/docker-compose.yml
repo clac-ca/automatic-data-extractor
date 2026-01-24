@@ -18,6 +18,7 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+    user: vscode
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
     command: sleep infinity

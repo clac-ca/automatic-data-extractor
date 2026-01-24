@@ -13,12 +13,16 @@
   "postCreateCommand": "bash -lc 'bash scripts/dev/setup.sh'",
   "customizations": {
     "vscode": {
-      "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker",
-        "dbaeumer.vscode-eslint"
-      ],
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+				"ms-vscode.vscode-node-azure-pack",
+				"ms-azuretools.vscode-docker",
+				"ms-mssql.mssql",
+				"github.copilot",
+				"github.codespaces"
+			],
       "settings": {
         "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
         "python.testing.pytestEnabled": true,
@@ -27,7 +31,20 @@
           "apps/ade-worker/tests",
           "apps/ade-cli/tests"
         ],
-        "editor.formatOnSave": true
+        "editor.formatOnSave": true,
+				"mssql.connections": [
+					{
+						"server": "localhost,1433",
+						"database": "master",
+						"authenticationType": "SqlLogin",
+						"user": "sa",
+						"password": "${containerEnv:ADE_SQL_PASSWORD:YourStrong!Passw0rd}",
+						"savePassword": true,
+						"profileName": "LocalDev",
+						"trustServerCertificate": true
+					}
+				],
+				"sqlDatabaseProjects.dotnetSDK Location": "/usr/share/dotnet"
       }
     }
   },
