@@ -74,6 +74,12 @@ DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 # NOTE: Using @main until ade-engine tags are published.
 DEFAULT_ENGINE_SPEC = "ade-engine @ git+https://github.com/clac-ca/ade-engine@main"
 DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
+DEFAULT_STORAGE_ACCOUNT_NAME = "devstoreaccount1"
+DEFAULT_STORAGE_ACCOUNT_KEY = (
+    "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/"
+    "K1SZFPTOtr/KBHBeksoGMGw=="
+)
+DEFAULT_STORAGE_BLOB_ENDPOINT = f"http://azurite:10000/{DEFAULT_STORAGE_ACCOUNT_NAME}"
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 2000
@@ -211,6 +217,10 @@ class Settings(BaseSettings):
 
     # Storage
     data_dir: Path = Field(default=DEFAULT_DATA_DIR)
+    storage_connection_string: str | None = None
+    storage_account_name: str = Field(default=DEFAULT_STORAGE_ACCOUNT_NAME)
+    storage_account_key: str = Field(default=DEFAULT_STORAGE_ACCOUNT_KEY)
+    storage_blob_endpoint: str = Field(default=DEFAULT_STORAGE_BLOB_ENDPOINT)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
@@ -385,6 +395,19 @@ class Settings(BaseSettings):
     )
     @classmethod
     def _v_sql_str(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
+
+    @field_validator(
+        "storage_connection_string",
+        "storage_account_name",
+        "storage_account_key",
+        "storage_blob_endpoint",
+        mode="before",
+    )
+    @classmethod
+    def _v_storage_str(cls, v: Any) -> str | None:
         if v in (None, ""):
             return None
         return str(v).strip()

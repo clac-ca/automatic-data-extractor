@@ -9,7 +9,6 @@ from pathlib import Path
 import typer
 
 from ade_cli.commands import common
-from ade_cli.commands.init_cmd import ensure_storage_defaults
 
 
 def run_worker() -> None:
@@ -21,7 +20,6 @@ def run_worker() -> None:
     )
 
     env = common.build_env()
-    ensure_storage_defaults(env)
     python_bin = str(Path(sys.executable).parent)
     env["PATH"] = f"{python_bin}{os.pathsep}{env.get('PATH', '')}"
 

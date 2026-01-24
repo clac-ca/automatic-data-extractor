@@ -8,13 +8,6 @@ import typer
 
 from ade_cli.commands import common
 
-DEFAULT_STORAGE_ACCOUNT_NAME = "devstoreaccount1"
-DEFAULT_STORAGE_ACCOUNT_KEY = (
-    "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/"
-    "K1SZFPTOtr/KBHBeksoGMGw=="
-)
-DEFAULT_STORAGE_BLOB_ENDPOINT = "http://azurite:10000/{account}"
-
 
 def _ensure_sqlite_parent_dir(url: str) -> None:
     try:
@@ -35,45 +28,6 @@ def _ensure_sqlite_parent_dir(url: str) -> None:
     if not path.is_absolute():
         path = (Path.cwd() / path).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def ensure_storage_defaults(env: dict[str, str]) -> None:
-    """Ensure ADE storage env defaults exist (dev-friendly)."""
-    if env.get("ADE_STORAGE_CONNECTION_STRING"):
-        return
-
-    updated = False
-
-    account_name = (env.get("ADE_STORAGE_ACCOUNT_NAME") or "").strip()
-    if not account_name:
-        account_name = DEFAULT_STORAGE_ACCOUNT_NAME
-        env["ADE_STORAGE_ACCOUNT_NAME"] = account_name
-        typer.echo(
-            f"ℹ️  ADE_STORAGE_ACCOUNT_NAME not set; defaulting to {DEFAULT_STORAGE_ACCOUNT_NAME}"
-        )
-        updated = True
-
-    default_account = account_name == DEFAULT_STORAGE_ACCOUNT_NAME
-
-    if not env.get("ADE_STORAGE_ACCOUNT_KEY"):
-        if default_account:
-            env["ADE_STORAGE_ACCOUNT_KEY"] = DEFAULT_STORAGE_ACCOUNT_KEY
-            typer.echo("ℹ️  ADE_STORAGE_ACCOUNT_KEY not set; defaulting to Azurite dev key")
-            updated = True
-        else:
-            typer.echo("⚠️  ADE_STORAGE_ACCOUNT_KEY not set; storage access may fail.", err=True)
-
-    if not env.get("ADE_STORAGE_BLOB_ENDPOINT"):
-        env["ADE_STORAGE_BLOB_ENDPOINT"] = DEFAULT_STORAGE_BLOB_ENDPOINT.format(
-            account=account_name
-        )
-        typer.echo(
-            "ℹ️  ADE_STORAGE_BLOB_ENDPOINT not set; defaulting to Azurite endpoint"
-        )
-        updated = True
-
-    if not updated:
-        typer.echo("✅ Storage defaults already configured.")
 
 
 def _normalize_mssql_url(url, env: dict[str, str]):
@@ -263,11 +217,9 @@ def ensure_sql_database(env: dict[str, str]) -> None:
 
 
 def run_init() -> dict[str, str]:
-    """Provision SQL database and storage defaults."""
+    """Provision SQL database."""
     common.refresh_paths()
     env = common.build_env()
-
-    ensure_storage_defaults(env)
     ensure_sql_database(env)
 
     return env

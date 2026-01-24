@@ -18,6 +18,8 @@ services:
       - azurite
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data
     environment:
       # SQL
       ADE_SQL_HOST: ${ADE_SQL_HOST:-sql}
@@ -65,7 +67,8 @@ services:
     ports:
       - "10000:10000"
     volumes:
-      - ./data/azurite:/data
+      - ade_azurite_data:/data
 
 volumes:
   ade_sql_data:
+  ade_azurite_data:

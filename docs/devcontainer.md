@@ -142,8 +142,14 @@ Full cleanup (removes node_modules):
 bash scripts/ops/clean-artifacts.sh --all
 ```
 
-Destructive reset (drops DB tables + removes persisted SQL/Azurite data):
+Destructive reset (drops DB tables + removes persisted SQL/Azurite data in `data/`):
 
 ```bash
 bash scripts/ops/reset-storage.sh --yes
+```
+
+Reset SQL + Azurite Docker volumes (devcontainer services):
+
+```bash
+bash .devcontainer/scripts/reset-volumes.sh
 ```

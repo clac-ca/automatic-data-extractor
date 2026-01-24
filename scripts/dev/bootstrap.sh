@@ -30,8 +30,7 @@ echo "==> ADE setup"
 echo "    repo: ${ROOT_DIR}"
 echo "    python: $(python --version 2>/dev/null || true)"
 
-# Ensure data directories exist (Azurite bind mount)
-mkdir -p data/azurite
+
 
 # --- uv + Python env ---
 UV_AUTO_INSTALL="${UV_AUTO_INSTALL:-1}"

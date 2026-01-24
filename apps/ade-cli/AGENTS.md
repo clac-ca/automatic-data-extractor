@@ -12,7 +12,7 @@ Fast reference (run `--help` for details):
 
 - `ade setup` — one-time repo setup (env, hooks).
 - `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
-- `ade init` — provision SQL database + storage defaults (one-time init).
+- `ade init` — provision SQL database (one-time init).
 - `ade start` — start API + worker together (single-container mode). `ade api` / `ade worker` — run API or worker only. `ade build` — build web assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
@@ -30,7 +30,7 @@ Options:
 Commands:
   setup     Bootstrap repo env and hooks
   dev       Run API/web dev servers (+ worker, runs migrations first)
-  init      Provision SQL database + storage defaults
+  init      Provision SQL database
   start     Start API + worker together (single-container mode)
   api       Start the API only
   worker    Run the background worker only

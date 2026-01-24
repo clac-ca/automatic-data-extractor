@@ -30,25 +30,25 @@ This runs:
 API + worker (default `ade start`):
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env ade-app:local
+docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local
 ```
 
 API only:
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env ade-app:local api
+docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local api
 ```
 
 Worker only:
 
 ```bash
-docker run --rm --env-file .env ade-app:local worker
+docker run --rm --env-file .env -v ./data:/app/data ade-app:local worker
 ```
 
 Init (optional one-time):
 
 ```bash
-docker run --rm --env-file .env ade-app:local init
+docker run --rm --env-file .env -v ./data:/app/data ade-app:local init
 ```
 
 ## CLI inside the container
@@ -56,7 +56,7 @@ docker run --rm --env-file .env ade-app:local init
 You can run commands in a container shell:
 
 ```bash
-docker run --rm -it --env-file .env ade-app:local bash
+docker run --rm -it --env-file .env -v ./data:/app/data ade-app:local bash
 ade --help
 ```
 

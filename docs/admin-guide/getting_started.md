@@ -111,17 +111,16 @@ bash scripts/docker/build-image.sh
 
 ### 5.2 Run the container
 ```bash
-mkdir -p data
-docker run -d --name ade -p 8000:8000 -v "$(pwd)/data:/app/data" ade-app:local
+docker run -d --name ade -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local
 ```
 
 To run the worker from the same image:
 
 ```bash
-docker run -d --name ade-worker --env-file .env ade-app:local worker
+docker run -d --name ade-worker --env-file .env -v ./data:/app/data ade-app:local worker
 ```
 
-The volume keeps documents and runtime artifacts on the host so they
+The bind mount keeps documents and runtime artifacts under `./data` so they
 survive container restarts. The database itself lives in your SQL Server
 instance (local container or Azure SQL), so ensure `ADE_SQL_*` is set
 before startup. The API container runs migrations on startup via `ade start` (or `ade api`).

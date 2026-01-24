@@ -56,19 +56,19 @@ So running without arguments behaves like running `ade start`.
 ### Start ade-api + ade-web + ade-worker (default)
 
 ```bash
-docker run --rm -p 8000:8000 ghcr.io/clac-ca/automatic-data-extractor:latest
+docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
 ### Start only ade-api + ade-web
 
 ```bash
-docker run --rm -p 8000:8000 ghcr.io/clac-ca/automatic-data-extractor:latest api
+docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest api
 ```
 
 ### Start only ade-worker
 
 ```bash
-docker run --rm ghcr.io/clac-ca/automatic-data-extractor:latest worker
+docker run --rm --env-file .env -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest worker
 ```
 
 ### What `ade start` does
@@ -76,13 +76,13 @@ docker run --rm ghcr.io/clac-ca/automatic-data-extractor:latest worker
 `ade start` runs an initialization step first:
 
 - Ensures the SQL database named by `ADE_SQL_DATABASE` exists (creates it if missing and credentials allow)
-- Ensures storage defaults exist (`ADE_STORAGE_ACCOUNT_NAME`, etc.)
+- Runs migrations
 - Starts API and worker together
 
 You can run init explicitly:
 
 ```bash
-docker run --rm ghcr.io/clac-ca/automatic-data-extractor:latest init
+docker run --rm --env-file .env -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest init
 ```
 
 ## Standard production pattern (recommended)
@@ -162,7 +162,7 @@ bash scripts/docker/build-image.sh
 Then:
 
 ```bash
-docker run --rm -p 8000:8000 ade-app:local
+docker run --rm -p 8000:8000 --env-file .env -v ./data:/app/data ade-app:local
 ```
 
 ---

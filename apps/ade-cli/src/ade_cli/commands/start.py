@@ -9,7 +9,7 @@ from pathlib import Path
 import typer
 
 from ade_cli.commands import common
-from ade_cli.commands.init_cmd import ensure_sql_database, ensure_storage_defaults
+from ade_cli.commands.init_cmd import ensure_sql_database
 from ade_cli.commands.migrate import run_migrate
 
 
@@ -107,8 +107,6 @@ def run_api(
     common.refresh_paths()
 
     env = _prepare_env()
-    ensure_storage_defaults(env)
-
     task, resolved_host, resolved_port = _build_api_task(
         env,
         api_port=api_port,
@@ -134,7 +132,6 @@ def run_start(
     common.refresh_paths()
 
     env = _prepare_env()
-    ensure_storage_defaults(env)
     ensure_sql_database(env)
 
     common.require_python_module(
