@@ -163,15 +163,29 @@ class EventLog:
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._dir_ready = False
+        self._ensure_parent()
+
+    def _ensure_parent(self) -> None:
+        if self._dir_ready:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._dir_ready = True
 
     def append(self, record: dict[str, Any]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(record, ensure_ascii=False) + "\n"
         with self._lock:
-            with self.path.open("a", encoding="utf-8") as f:
-                f.write(line)
+            try:
+                self._ensure_parent()
+                with self.path.open("a", encoding="utf-8") as f:
+                    f.write(line)
+            except FileNotFoundError:
+                # Parent directory may have been cleaned up; recreate once.
+                self._dir_ready = False
+                self._ensure_parent()
+                with self.path.open("a", encoding="utf-8") as f:
+                    f.write(line)
 
     def emit(
         self,
@@ -252,7 +266,7 @@ class SubprocessRunner:
                     if not line:
                         continue
                     try:
-                        obj = json.loads(line)
+                        obj = json.loads(line) if line.startswith("{") else None
                     except json.JSONDecodeError:
                         obj = None
 

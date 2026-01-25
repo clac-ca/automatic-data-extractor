@@ -44,6 +44,9 @@ export function normalizeThemeId(value: string | null | undefined): ThemeId {
   if (!value) {
     return DEFAULT_THEME_ID;
   }
+  if (value === "blue") {
+    return "indigo";
+  }
   if (isThemeId(value)) {
     return value;
   }

@@ -15,7 +15,7 @@ body,
 /*
   shadcn/ui theme tokens
   - Theme: document.documentElement.dataset.theme =
-      "default" | "indigo" | "cyan" | "emerald" | "amber" | "coral" | "violet" | "teal" | "blue"
+      "default" | "indigo" | "cyan" | "emerald" | "amber" | "coral" | "violet" | "teal"
   - Dark:  document.documentElement.classList.toggle("dark")
 */
 
@@ -30,7 +30,7 @@ body,
   --radius: 0.625rem;
 
   /* Current theme hue (used for subtle tinting across surfaces like the sidebar) */
-  --theme-hue: 264.376;
+  --theme-hue: 217.531;
 
   /* Surfaces (neutral, clean canvas) */
   --background: oklch(0.995 0 0);
@@ -42,8 +42,8 @@ body,
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
 
-  /* default primary (indigo) */
-  --primary: oklch(0.5462 0.25 264.376);
+  /* default primary (blue) */
+  --primary: oklch(0.5466 0.2273 217.531);
   --primary-foreground: oklch(0.985 0 0);
 
   /* Slightly more separation between secondary/muted */
@@ -72,7 +72,7 @@ body,
   --border: oklch(0.9 0 0);
   --input: oklch(0.88 0 0);
 
-  --ring: oklch(0.5462 0.25 var(--theme-hue));
+  --ring: oklch(0.5466 0.2273 var(--theme-hue));
 
   /* Overlays */
   --overlay: oklch(0 0 0 / 0.5);
@@ -89,13 +89,13 @@ body,
   --app-z-toast: 200;
 
   /* Topbar tokens: keep aligned with the Topbar component (uses bg-background) */
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-foreground: oklch(0.145 0 0);
+  --topbar: var(--primary);
+  --topbar-foreground: oklch(0.985 0 0);
   --topbar-primary: var(--primary);
   --topbar-primary-foreground: var(--primary-foreground);
   --topbar-accent: var(--accent);
   --topbar-accent-foreground: var(--accent-foreground);
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar-border: oklch(0.4766 0.2046 var(--theme-hue));
   --topbar-ring: var(--ring);
 
   /* Monaco editor tokens (derived from theme palette) */
@@ -109,7 +109,7 @@ body,
   --code-editor-gutter: var(--card);
 
   /* charts */
-  --chart-1: oklch(0.5462 0.25 264.376);
+  --chart-1: oklch(0.5466 0.2273 217.531);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
@@ -159,7 +159,7 @@ body,
   --popover: oklch(0.26 0 0);
   --popover-foreground: oklch(0.94 0 0);
 
-  --primary: oklch(0.5462 0.25 264.376);
+  --primary: oklch(0.5466 0.2273 217.531);
   --primary-foreground: oklch(0.985 0 0);
 
   --secondary: oklch(0.3 0.01 var(--theme-hue));
@@ -190,7 +190,7 @@ body,
   --border: oklch(1 0 0 / 16%);
   --input: oklch(1 0 0 / 22%);
 
-  --ring: oklch(0.5462 0.25 var(--theme-hue));
+  --ring: oklch(0.5466 0.2273 var(--theme-hue));
 
   --topbar: oklch(0.22 0.03 var(--theme-hue));
   --topbar-foreground: var(--foreground);
@@ -199,7 +199,7 @@ body,
   --overlay: oklch(0 0 0 / 0.6);
   --overlay-strong: oklch(0 0 0 / 0.75);
 
-  --chart-1: oklch(0.5462 0.25 264.376);
+  --chart-1: oklch(0.5466 0.2273 217.531);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
@@ -275,8 +275,9 @@ body,
 /* CYAN */
 :root[data-theme="cyan"] {
   --theme-hue: 210;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar: oklch(0.5339 0.0923 210);
+  --topbar-foreground: oklch(0.985 0 0);
+  --topbar-border: oklch(0.4639 0.0831 210);
   --sidebar-background: var(--theme-hue) 12% 96%;
   --sidebar-accent: var(--theme-hue) 14% 90%;
   --sidebar-border: var(--theme-hue) 10% 86%;
@@ -302,8 +303,9 @@ body,
 /* EMERALD */
 :root[data-theme="emerald"] {
   --theme-hue: 155;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar: oklch(0.5279 0.1305 155);
+  --topbar-foreground: oklch(0.985 0 0);
+  --topbar-border: oklch(0.4579 0.1175 155);
   --sidebar-background: var(--theme-hue) 12% 96%;
   --sidebar-accent: var(--theme-hue) 14% 90%;
   --sidebar-border: var(--theme-hue) 10% 86%;
@@ -329,8 +331,9 @@ body,
 /* AMBER */
 :root[data-theme="amber"] {
   --theme-hue: 45;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar: oklch(0.5585 0.1597 45);
+  --topbar-foreground: oklch(0.985 0 0);
+  --topbar-border: oklch(0.4885 0.1437 45);
   --sidebar-background: var(--theme-hue) 12% 96%;
   --sidebar-accent: var(--theme-hue) 14% 90%;
   --sidebar-border: var(--theme-hue) 10% 86%;
@@ -356,8 +359,9 @@ body,
 /* CORAL */
 :root[data-theme="coral"] {
   --theme-hue: 20;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar: oklch(0.57 0.15 25);
+  --topbar-foreground: oklch(0.985 0 0);
+  --topbar-border: oklch(0.5 0.135 25);
   --sidebar-background: var(--theme-hue) 12% 96%;
   --sidebar-accent: var(--theme-hue) 14% 90%;
   --sidebar-border: var(--theme-hue) 10% 86%;
@@ -383,8 +387,9 @@ body,
 /* VIOLET */
 :root[data-theme="violet"] {
   --theme-hue: 303;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar: oklch(0.5741 0.25 303);
+  --topbar-foreground: oklch(0.985 0 0);
+  --topbar-border: oklch(0.5041 0.225 303);
   --sidebar-background: var(--theme-hue) 12% 96%;
   --sidebar-accent: var(--theme-hue) 14% 90%;
   --sidebar-border: var(--theme-hue) 10% 86%;
@@ -410,8 +415,9 @@ body,
 /* TEAL */
 :root[data-theme="teal"] {
   --theme-hue: 185;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
+  --topbar: oklch(0.5311 0.0936 185);
+  --topbar-foreground: oklch(0.985 0 0);
+  --topbar-border: oklch(0.4611 0.0842 185);
   --sidebar-background: var(--theme-hue) 12% 96%;
   --sidebar-accent: var(--theme-hue) 14% 90%;
   --sidebar-border: var(--theme-hue) 10% 86%;
@@ -432,33 +438,6 @@ body,
   --chart-1: oklch(0.5311 0.0936 185);
 
   --accent: oklch(0.32 0.04 185);
-}
-
-/* BLUE */
-:root[data-theme="blue"] {
-  --theme-hue: 264.376;
-  --topbar: oklch(0.8 0.06 var(--theme-hue));
-  --topbar-border: oklch(0.7 0.03 var(--theme-hue));
-  --sidebar-background: var(--theme-hue) 12% 96%;
-  --sidebar-accent: var(--theme-hue) 14% 90%;
-  --sidebar-border: var(--theme-hue) 10% 86%;
-  --primary: oklch(0.5462 0.25 264.376);
-  --ring: oklch(0.5462 0.25 264.376);
-  --chart-1: oklch(0.5462 0.25 264.376);
-
-  --accent: oklch(0.97 0.02 var(--theme-hue));
-}
-:root[data-theme="blue"].dark {
-  --topbar: oklch(0.22 0.03 var(--theme-hue));
-  --topbar-border: oklch(0.3 0.02 var(--theme-hue));
-  --sidebar-background: 220 6% 14%;
-  --sidebar-accent: 220 6% 18%;
-  --sidebar-border: 220 6% 22%;
-  --primary: oklch(0.5462 0.25 264.376);
-  --ring: oklch(0.5462 0.25 264.376);
-  --chart-1: oklch(0.5462 0.25 264.376);
-
-  --accent: oklch(0.32 0.04 var(--theme-hue));
 }
 
 /* Expose tokens to Tailwind utilities (shadcn Tailwind v4 pattern) */
