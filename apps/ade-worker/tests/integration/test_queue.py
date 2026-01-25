@@ -24,8 +24,6 @@ def _insert_environment(
     deps_digest: str,
     status: str,
     now: datetime,
-    claimed_by: str | None = None,
-    claim_expires_at: datetime | None = None,
 ) -> None:
     with engine.begin() as conn:
         conn.execute(
@@ -37,8 +35,6 @@ def _insert_environment(
                 deps_digest=deps_digest,
                 status=status,
                 error_message=None,
-                claimed_by=claimed_by,
-                claim_expires_at=claim_expires_at,
                 created_at=now - timedelta(minutes=5),
                 updated_at=now - timedelta(minutes=5),
                 last_used_at=None,
@@ -207,12 +203,11 @@ def test_environment_mark_building_sets_status(engine) -> None:
 
     with engine.begin() as conn:
         row = conn.execute(
-            select(environments.c.status, environments.c.claimed_by)
+            select(environments.c.status)
             .where(environments.c.id == env_id)
         ).first()
     assert row is not None
     assert row.status == "building"
-    assert row.claimed_by is None
 
 
 def test_environment_ack_success_clears_claim(engine) -> None:
@@ -231,8 +226,6 @@ def test_environment_ack_success_clears_claim(engine) -> None:
         deps_digest="sha256:ddd",
         status="building",
         now=now,
-        claimed_by="worker-3",
-        claim_expires_at=now + timedelta(minutes=5),
     )
 
     with SessionLocal.begin() as session:
@@ -245,16 +238,10 @@ def test_environment_ack_success_clears_claim(engine) -> None:
 
     with engine.begin() as conn:
         row = conn.execute(
-            select(
-                environments.c.status,
-                environments.c.claimed_by,
-                environments.c.claim_expires_at,
-            ).where(environments.c.id == env_id)
+            select(environments.c.status).where(environments.c.id == env_id)
         ).first()
     assert row is not None
     assert row.status == "ready"
-    assert row.claimed_by is None
-    assert row.claim_expires_at is None
 
 
 def test_run_ack_failure_requeues(engine) -> None:

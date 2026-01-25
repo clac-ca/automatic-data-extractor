@@ -59,8 +59,6 @@ def _insert_environment(
                 deps_digest=deps_digest,
                 status=status,
                 error_message=None,
-                claimed_by=None,
-                claim_expires_at=None,
                 created_at=now - timedelta(days=40),
                 updated_at=now - timedelta(days=40),
                 last_used_at=last_used_at,

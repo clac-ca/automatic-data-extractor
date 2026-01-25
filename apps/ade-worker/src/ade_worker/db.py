@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Iterable
 from uuid import uuid4
 
 from sqlalchemy import create_engine, delete, insert, inspect, select, text, update, event, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Engine, URL, make_url
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from .schema import documents, environments, run_fields, run_metrics, run_table_columns, runs
@@ -104,8 +105,7 @@ SET
 WHERE status = 'running'
   AND claim_expires_at IS NOT NULL
   AND claim_expires_at < :now
-  AND attempt_count < max_attempts
-RETURNING id;
+  AND attempt_count < max_attempts;
 """
 
 RUN_EXPIRE_TERMINAL_BULK = """    UPDATE runs
@@ -118,8 +118,7 @@ SET
 WHERE status = 'running'
   AND claim_expires_at IS NOT NULL
   AND claim_expires_at < :now
-  AND attempt_count >= max_attempts
-RETURNING id;
+  AND attempt_count >= max_attempts;
 """
 
 # --- Types ---
@@ -329,11 +328,10 @@ def ack_environment_success(
             """UPDATE environments
 SET
     status = 'ready',
-    claimed_by = NULL,
-    claim_expires_at = NULL,
     error_message = NULL,
     updated_at = :now
-WHERE id = :env_id;"""
+WHERE id = :env_id
+  AND status = 'building';"""
         ),
         params,
     )
@@ -353,11 +351,10 @@ def ack_environment_failure(
             """UPDATE environments
 SET
     status = 'failed',
-    claimed_by = NULL,
-    claim_expires_at = NULL,
     error_message = :error_message,
     updated_at = :now
-WHERE id = :env_id;"""
+WHERE id = :env_id
+  AND status = 'building';"""
         ),
         params,
     )
@@ -376,20 +373,19 @@ def mark_environment_building(
         .values(
             status="building",
             error_message=None,
-            claimed_by=None,
-            claim_expires_at=None,
             updated_at=now,
         )
     )
     return bool(getattr(result, "rowcount", 0) == 1)
 
 
-def advisory_lock(conn, *, key: str) -> None:
+@contextmanager
+def advisory_lock(conn, *, key: str):
     conn.execute(text("SELECT pg_advisory_lock(hashtext(:key))"), {"key": key})
-
-
-def advisory_unlock(conn, *, key: str) -> None:
-    conn.execute(text("SELECT pg_advisory_unlock(hashtext(:key))"), {"key": key})
+    try:
+        yield
+    finally:
+        conn.execute(text("SELECT pg_advisory_unlock(hashtext(:key))"), {"key": key})
 
 
 def expire_run_leases(
@@ -400,19 +396,19 @@ def expire_run_leases(
     backoff_max_seconds: int,
 ) -> int:
     with SessionLocal.begin() as session:
-        terminal_rows = session.execute(
+        terminal_count = session.execute(
             text(RUN_EXPIRE_TERMINAL_BULK),
             {"now": now},
-        ).fetchall()
-        requeue_rows = session.execute(
+        ).rowcount or 0
+        requeue_count = session.execute(
             text(RUN_EXPIRE_REQUEUE_BULK),
             {
                 "now": now,
                 "backoff_base": max(0, int(backoff_base_seconds)),
                 "backoff_max": max(0, int(backoff_max_seconds)),
             },
-        ).fetchall()
-    return len(terminal_rows) + len(requeue_rows)
+        ).rowcount or 0
+    return int(terminal_count) + int(requeue_count)
 
 
 def next_run_due_at(
@@ -424,6 +420,7 @@ def next_run_due_at(
         row = session.execute(
             select(func.min(runs.c.available_at)).where(
                 runs.c.status == "queued",
+                runs.c.attempt_count < runs.c.max_attempts,
                 runs.c.available_at > now,
             )
         ).scalar()
@@ -473,15 +470,13 @@ def ensure_environment(
             return dict(row)
 
         env_row = {
-            "id": str(uuid4()),
+            "id": uuid4(),
             "workspace_id": run["workspace_id"],
             "configuration_id": run["configuration_id"],
             "engine_spec": run["engine_spec"],
             "deps_digest": run["deps_digest"],
             "status": "queued",
             "error_message": None,
-            "claimed_by": None,
-            "claim_expires_at": None,
             "created_at": now,
             "updated_at": now,
             "last_used_at": None,
@@ -489,11 +484,19 @@ def ensure_environment(
             "python_interpreter": None,
             "engine_version": None,
         }
-        try:
-            with session.begin_nested():
-                session.execute(insert(environments).values(**env_row))
-        except IntegrityError:
-            pass
+        stmt = (
+            pg_insert(environments)
+            .values(**env_row)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    "workspace_id",
+                    "configuration_id",
+                    "engine_spec",
+                    "deps_digest",
+                ]
+            )
+        )
+        session.execute(stmt)
 
         row = session.execute(
             select(environments).where(
@@ -520,8 +523,6 @@ def mark_environment_queued(
             .values(
                 status="queued",
                 error_message=error_message,
-                claimed_by=None,
-                claim_expires_at=None,
                 updated_at=now,
             )
         )
@@ -638,7 +639,6 @@ __all__ = [
     "ack_environment_failure",
     "mark_environment_building",
     "advisory_lock",
-    "advisory_unlock",
     "expire_run_leases",
     "next_run_due_at",
     "load_environment",

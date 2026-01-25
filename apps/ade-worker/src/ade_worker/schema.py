@@ -36,8 +36,6 @@ environments = Table(
     Column("deps_digest", String(128), nullable=False),
     Column("status", String(20), nullable=False),
     Column("error_message", Text, nullable=True),
-    Column("claimed_by", String(255), nullable=True),
-    Column("claim_expires_at", TS, nullable=True),
     Column("created_at", TS, nullable=False),
     Column("updated_at", TS, nullable=False),
     Column("last_used_at", TS, nullable=True),
@@ -52,7 +50,6 @@ environments = Table(
         name="ux_environments_key",
     ),
     Index("ix_environments_claim", "status", "created_at"),
-    Index("ix_environments_claim_expires", "status", "claim_expires_at"),
     Index("ix_environments_status_last_used", "status", "last_used_at"),
     Index("ix_environments_status_updated", "status", "updated_at"),
 )

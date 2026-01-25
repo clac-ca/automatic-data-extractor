@@ -59,7 +59,6 @@ def gc_environments(
             (e.last_used_at IS NOT NULL AND e.last_used_at < :cutoff)
             OR (e.last_used_at IS NULL AND e.updated_at < :cutoff)
           )
-          AND (e.claim_expires_at IS NULL OR e.claim_expires_at <= :now)
           AND NOT EXISTS (
             SELECT 1
             FROM runs AS r
@@ -74,7 +73,7 @@ def gc_environments(
     )
 
     with SessionLocal() as session:
-        rows = session.execute(query, {"cutoff": cutoff, "now": now}).mappings().all()
+        rows = session.execute(query, {"cutoff": cutoff}).mappings().all()
 
     result.scanned = len(rows)
     for row in rows:

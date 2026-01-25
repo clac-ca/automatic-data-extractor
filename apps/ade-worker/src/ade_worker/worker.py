@@ -1160,20 +1160,18 @@ class Worker:
 
         lock_conn = self.engine.connect()
         try:
-            db.advisory_lock(lock_conn, key=lock_key)
+            with db.advisory_lock(lock_conn, key=lock_key):
+                env = db.load_environment(self.SessionLocal, env_id)
+                if not env:
+                    return None, "Environment missing", False
+                if str(env.get("status") or "").lower() == "ready":
+                    return env, None, False
 
-            env = db.load_environment(self.SessionLocal, env_id)
-            if not env:
-                return None, "Environment missing", False
-            if str(env.get("status") or "").lower() == "ready":
-                return env, None, False
+                with self.SessionLocal.begin() as session:
+                    db.mark_environment_building(session, env_id=env_id, now=now)
 
-            with self.SessionLocal.begin() as session:
-                db.mark_environment_building(session, env_id=env_id, now=now)
-
-            build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
+                build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
         finally:
-            db.advisory_unlock(lock_conn, key=lock_key)
             lock_conn.close()
 
         if build.run_lost:

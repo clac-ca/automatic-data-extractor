@@ -41,7 +41,6 @@ class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_environments_workspace", "workspace_id"),
         Index("ix_environments_configuration", "configuration_id"),
         Index("ix_environments_claim", "status", "created_at"),
-        Index("ix_environments_claim_expires", "status", "claim_expires_at"),
         Index("ix_environments_status_last_used", "status", "last_used_at"),
         Index("ix_environments_status_updated", "status", "updated_at"),
     )
@@ -67,9 +66,6 @@ class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=EnvironmentStatus.QUEUED.value,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    claimed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    claim_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
