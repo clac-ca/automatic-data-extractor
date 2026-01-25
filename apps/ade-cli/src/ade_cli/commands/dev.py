@@ -95,7 +95,7 @@ def run_dev(
         raise typer.Exit(code=1)
 
     web_port = int(web_port if web_port is not None else os.getenv("ADE_WEB_PORT", "5173") or "5173")
-    web_host = web_host or os.getenv("ADE_WEB_HOST", "127.0.0.1")
+    web_host = web_host or os.getenv("ADE_WEB_HOST", "0.0.0.0")
 
     api_present = common.BACKEND_SRC.exists()
     web_present = common.FRONTEND_DIR.exists()
@@ -137,7 +137,7 @@ def run_dev(
             api_port = api_settings.api_port if api_settings.api_port is not None else 8000
         api_port = int(api_port)
         if api_host is None:
-            api_host = api_settings.api_host or "127.0.0.1"
+            api_host = api_settings.api_host or "0.0.0.0"
         if api_workers is None:
             api_workers = api_settings.api_workers if api_settings.api_workers is not None else 1
         api_workers = int(api_workers)
