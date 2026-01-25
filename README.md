@@ -73,17 +73,12 @@ docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data gh
 
 ### What `ade start` does
 
-`ade start` runs an initialization step first:
+`ade start` runs:
 
-- Ensures the SQL database named by `ADE_SQL_DATABASE` exists (creates it if missing and credentials allow)
-- Runs migrations
-- Starts API and worker together
+- Migrations
+- API and worker together
 
-You can run init explicitly:
-
-```bash
-docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest init
-```
+Ensure the database named by `ADE_SQL_DATABASE` already exists (for compose, this is handled by `sql-init`).
 
 ## Standard production pattern (recommended)
 

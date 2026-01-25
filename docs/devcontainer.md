@@ -101,7 +101,7 @@ These settings are used when ADE builds the SQL Server DSN from `ADE_SQL_*`.
 If you're using `sqlcmd`, the equivalent is:
 
 ```bash
-bash scripts/db/wait-for-sql.sh
+SQL Server initializes via the devcontainer compose `db-init` service.
 ```
 
 (It uses `sqlcmd -No` for optional encryption.)

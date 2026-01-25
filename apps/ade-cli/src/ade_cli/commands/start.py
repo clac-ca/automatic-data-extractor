@@ -9,7 +9,6 @@ from pathlib import Path
 import typer
 
 from ade_cli.commands import common
-from ade_cli.commands.init_cmd import ensure_sql_database
 from ade_cli.commands.migrate import run_migrate
 
 
@@ -132,7 +131,6 @@ def run_start(
     common.refresh_paths()
 
     env = _prepare_env()
-    ensure_sql_database(env)
 
     common.require_python_module(
         "ade_worker",
@@ -160,7 +158,7 @@ def run_start(
 def register(app: typer.Typer) -> None:
     @app.command(
         name="start",
-        help="Start ADE API + worker (single-container mode). Runs init + migrations.",
+        help="Start ADE API + worker (single-container mode). Runs migrations; database must exist.",
     )
     def start(
         api_port: int = typer.Option(

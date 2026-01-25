@@ -1,21 +1,35 @@
 # docker-compose.yml
 #
-# Quickstart: starts three containers — ADE, SQL Server, and Azurite (blob storage).
-# ADE runs ade-api + ade-web + ade-worker in a single container.
-# If you use external SQL/Storage (ADE_SQL_* / ADE_STORAGE_*), remove sql/azurite or use docker-compose.production.yml.
+# Quickstart: starts three containers
+# (1) ADE (api/web/worker running in a single container).
+# (2) SQL Server (`mcr.microsoft.com/mssql/server:2022-latest`).
+# (3) Azurite blob storage. (`mcr.microsoft.com/azure-storage/azurite`).
 #
-# Run (requires Docker + Docker Compose):
-#   curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.yml \
-#     && docker compose -f docker-compose.yml up
-# Override via env vars or a .env file.
+# Get Started:
+#   Step 1: Install Docker (if needed): https://docs.docker.com/get-docker/
+#   Step 2: Download this docker compose file
+#     curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.yml
+#   Step 3: Download and edit the env file (optional)
+#     curl -L -o .env https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
+#   Step 4: Start services
+#     docker compose -f docker-compose.yml up
+#   Step 5: What's running
+#     Web UI + API: http://localhost:8000 (API at /api, docs at /docs)
+#     SQL Server: localhost:1433
+#     Azurite Blob: http://localhost:10000/devstoreaccount1
 #
+# TIP: See docker-compose.production.yml for production setup (external SQL + Storage).
 services:
 
   ade:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
     depends_on:
-      - sql
-      - azurite
+      # Don’t start ADE until the database exists.
+      sql-init:
+        condition: service_completed_successfully
+      # Blob storage can start in parallel.
+      azurite:
+        condition: service_started
     ports:
       - "8000:8000"
     volumes:
@@ -57,7 +71,49 @@ services:
     ports:
       - "1433:1433"
     volumes:
+      # Persist SQL Server data between restarts
       - ade_sql_data:/var/opt/mssql
+    healthcheck:
+      # sqlcmd lives at /opt/mssql-tools18/bin/sqlcmd on modern SQL Server images.
+      # -C trusts the (dev) server certificate.
+      test: [ "CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  sql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    depends_on:
+      # Wait for SQL Server to be healthy before creating the database.
+      sql:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      # Keep init inputs explicit so it's obvious what controls DB creation.
+      MSSQL_SA_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE:-ade}
+    entrypoint: [ "/bin/bash", "-lc" ]
+    command: |
+      set -euo pipefail
+
+      echo "==> Ensuring database exists: $$ADE_SQL_DATABASE"
+
+      DB_ESCAPED="$(printf "%s" "$$ADE_SQL_DATABASE" | sed "s/'/''/g")"
+
+      /opt/mssql-tools18/bin/sqlcmd \
+        -S sql -U sa -P "$$MSSQL_SA_PASSWORD" -C -b \
+        -Q "
+          DECLARE @db sysname = N'$$DB_ESCAPED';
+          IF DB_ID(@db) IS NULL
+          BEGIN
+            DECLARE @sql nvarchar(max) = N'CREATE DATABASE ' + QUOTENAME(@db);
+            EXEC (@sql);
+          END
+        "
+
+      echo "==> Database ready: $$ADE_SQL_DATABASE"
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0

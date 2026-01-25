@@ -9,8 +9,12 @@ services:
       - ..:/workspaces/automatic-data-extractor:cached
     command: sleep infinity
     depends_on:
-      - sql
-      - azurite
+      # Don’t start ADE until the database exists.
+      sql-init:
+        condition: service_completed_successfully
+      # Blob storage can start in parallel.
+      azurite:
+        condition: service_started
     user: vscode
     environment:
       # ---- SQL (dev defaults) ----
@@ -41,7 +45,55 @@ services:
     ports:
       - "1433:1433"
     volumes:
+      # Persist SQL Server data between restarts
       - ade_sql_data:/var/opt/mssql
+    healthcheck:
+      # sqlcmd lives at /opt/mssql-tools18/bin/sqlcmd on modern SQL Server images.
+      # -C trusts the (dev) server certificate.
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  sql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    depends_on:
+      # Wait for SQL Server to be healthy before creating the database.
+      sql:
+        condition: service_healthy
+    environment:
+      # Keep init inputs explicit so it's obvious what controls DB creation.
+      MSSQL_SA_PASSWORD: ${ADE_SQL_PASSWORD:-YourStrong!Passw0rd}
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE:-ade}
+    command:
+      - /bin/bash
+      - -lc
+      - |
+          set -euo pipefail
+
+          echo "==> Ensuring database exists: $$ADE_SQL_DATABASE"
+
+          DB_ESCAPED="$(printf "%s" "$$ADE_SQL_DATABASE" | sed "s/'/''/g")"
+
+          /opt/mssql-tools18/bin/sqlcmd \
+            -S sql -U sa -P "$$MSSQL_SA_PASSWORD" -C -b \
+            -Q "
+              DECLARE @db sysname = N'$$DB_ESCAPED';
+              IF DB_ID(@db) IS NULL
+              BEGIN
+                DECLARE @sql nvarchar(max) = N'CREATE DATABASE ' + QUOTENAME(@db);
+                EXEC (@sql);
+              END
+            "
+
+          echo "==> Database ready: $$ADE_SQL_DATABASE"
+    restart: "no"
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
@@ -49,6 +101,7 @@ services:
       azurite-blob --blobHost 0.0.0.0 --blobPort 10000
       --location /data --debug /data/debug.log
     environment:
+      # Create the storage account if missing (Azurite supports custom accounts via AZURITE_ACCOUNTS)
       AZURITE_ACCOUNTS: "${ADE_STORAGE_ACCOUNT_NAME:-devstoreaccount1}:${ADE_STORAGE_ACCOUNT_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}"
     ports:
       - "10000:10000"

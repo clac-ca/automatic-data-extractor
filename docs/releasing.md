@@ -40,7 +40,6 @@ From a clean working tree:
   docker compose -f docker-compose.yml up
   ```
 - [ ] Verify API responds and worker starts cleanly.
-- [ ] (Optional) Run `ade init` provisioning (DB create) inside the container if applicable.
 
 ## 4) Create and push the tag
 

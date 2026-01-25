@@ -127,4 +127,4 @@ fi
 echo
 echo "==> Done."
 echo "    Python deps installed"
-echo "    Tip: Use 'bash scripts/db/wait-for-sql.sh' if you need to wait for SQL to be ready."
+echo "    Tip: SQL Server initializes via the devcontainer compose `db-init` service."

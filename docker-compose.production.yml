@@ -7,9 +7,17 @@
 # This file runs the worker in a separate container so you can scale it independently.
 # Expects external SQL/Storage (set ADE_SQL_* / ADE_STORAGE_*).
 #
-# Run (requires Docker + Docker Compose):
-#   curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.production.yml \
-#     && ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.production.yml up
+# Run:
+#   Step 1: Install Docker (if needed): https://docs.docker.com/get-docker/
+#   Step 2: Download this docker compose file
+#     curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.production.yml
+#   Step 3: Download and edit the env file (set ADE_SQL_* / ADE_STORAGE_*)
+#     curl -L -o .env https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
+#   Step 4: Start services
+#     docker compose -f docker-compose.production.yml up
+#   Step 5: Open the app
+#     Web UI + API: http://localhost:8000 (API at /api, docs at /docs)
+#     Worker: runs in background (no port)
 #
 services:
   api:
@@ -19,17 +27,17 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      ADE_SQL_HOST: ${ADE_SQL_HOST}
-      ADE_SQL_PORT: ${ADE_SQL_PORT}
-      ADE_SQL_USER: ${ADE_SQL_USER}
-      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD}
-      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE}
-      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT}
-      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE}
+      ADE_SQL_HOST: ${ADE_SQL_HOST} # sql.example.com
+      ADE_SQL_PORT: ${ADE_SQL_PORT} # 1433
+      ADE_SQL_USER: ${ADE_SQL_USER} # ade_user
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD} # strong_password
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE} # ade
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT} # true|false|optional
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE} # true|false
 
-      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME}
-      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY}
-      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT}
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME} # ade_storage
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY} # storage_account_key
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT} # https://<account>.blob.core.windows.net
       ADE_DATA_DIR: /app/data
 
       ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
@@ -43,17 +51,17 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      ADE_SQL_HOST: ${ADE_SQL_HOST}
-      ADE_SQL_PORT: ${ADE_SQL_PORT}
-      ADE_SQL_USER: ${ADE_SQL_USER}
-      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD}
-      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE}
-      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT}
-      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE}
+      ADE_SQL_HOST: ${ADE_SQL_HOST} # sql.example.com
+      ADE_SQL_PORT: ${ADE_SQL_PORT} # 1433
+      ADE_SQL_USER: ${ADE_SQL_USER} # ade_user
+      ADE_SQL_PASSWORD: ${ADE_SQL_PASSWORD} # strong_password
+      ADE_SQL_DATABASE: ${ADE_SQL_DATABASE} # ade
+      ADE_SQL_ENCRYPT: ${ADE_SQL_ENCRYPT} # true|false|optional
+      ADE_SQL_TRUST_SERVER_CERTIFICATE: ${ADE_SQL_TRUST_SERVER_CERTIFICATE} # true|false
 
-      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME}
-      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY}
-      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT}
+      ADE_STORAGE_ACCOUNT_NAME: ${ADE_STORAGE_ACCOUNT_NAME} # ade_storage
+      ADE_STORAGE_ACCOUNT_KEY: ${ADE_STORAGE_ACCOUNT_KEY} # storage_account_key
+      ADE_STORAGE_BLOB_ENDPOINT: ${ADE_STORAGE_BLOB_ENDPOINT} # https://<account>.blob.core.windows.net
       ADE_DATA_DIR: /app/data
 
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}

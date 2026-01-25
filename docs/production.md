@@ -25,6 +25,7 @@ This runs:
 - Worker container from the same single image
 
 You must provide external SQL + Storage (set `ADE_SQL_*` and `ADE_STORAGE_*` in `.env`).
+Ensure the database named by `ADE_SQL_DATABASE` already exists before starting the containers.
 
 ## Run with docker run
 
@@ -44,12 +45,6 @@ Worker only:
 
 ```bash
 docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local worker
-```
-
-Init (optional one-time):
-
-```bash
-docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local init
 ```
 
 ## CLI inside the container

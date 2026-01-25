@@ -10,7 +10,6 @@ from . import ci
 from . import clean_reset
 from . import dev
 from . import docker
-from . import init_cmd
 from . import lint_cmd
 from . import migrate
 from . import routes
@@ -24,7 +23,6 @@ from . import worker
 COMMAND_MODULES = (
     setup,
     dev,
-    init_cmd,
     start,
     build,
     tests,
