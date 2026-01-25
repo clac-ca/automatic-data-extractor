@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable
 from uuid import uuid4
 
-from sqlalchemy import create_engine, delete, insert, inspect, select, text, update, event
+from sqlalchemy import create_engine, delete, insert, inspect, select, text, update, event, func
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -415,6 +415,21 @@ def expire_run_leases(
     return len(terminal_rows) + len(requeue_rows)
 
 
+def next_run_due_at(
+    SessionLocal: sessionmaker[Session],
+    *,
+    now: datetime,
+) -> datetime | None:
+    with SessionLocal() as session:
+        row = session.execute(
+            select(func.min(runs.c.available_at)).where(
+                runs.c.status == "queued",
+                runs.c.available_at > now,
+            )
+        ).scalar()
+    return row
+
+
 # --- Repository helpers ---
 
 def load_environment(SessionLocal: sessionmaker[Session], env_id: str) -> dict[str, Any] | None:
@@ -625,6 +640,7 @@ __all__ = [
     "advisory_lock",
     "advisory_unlock",
     "expire_run_leases",
+    "next_run_due_at",
     "load_environment",
     "load_run",
     "load_document",

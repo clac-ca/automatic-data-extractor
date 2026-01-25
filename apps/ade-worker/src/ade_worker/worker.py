@@ -31,11 +31,16 @@ from .settings import Settings, get_settings
 
 logger = logging.getLogger("ade_worker")
 
+CHANNEL_RUN_QUEUED = "ade_run_queued"
+CLAIM_BATCH_SIZE = 5
+LISTEN_MAX_BACKOFF_SECONDS = 30.0
+NOTIFY_JITTER_MS = 200
+
 
 # --- time / paths ---
 
 def utcnow() -> datetime:
-    return datetime.utcnow().replace(tzinfo=None)
+    return datetime.now(timezone.utc)
 
 
 def _default_worker_id() -> str:
@@ -98,6 +103,53 @@ def _listen_connect(settings: Settings, *, channel: str) -> psycopg.Connection:
     with conn.cursor() as cur:
         cur.execute(f"LISTEN {channel}")
     return conn
+
+
+@dataclass(slots=True)
+class PgListener:
+    settings: Settings
+    channel: str = CHANNEL_RUN_QUEUED
+    conn: psycopg.Connection | None = None
+    backoff: float = 1.0
+
+    def close(self) -> None:
+        if self.conn is not None:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+        self.conn = None
+
+    def ensure_connected(self) -> bool:
+        if self.conn is not None and not self.conn.closed:
+            return True
+        try:
+            self.conn = _listen_connect(self.settings, channel=self.channel)
+            logger.info("run.notify.listen channel=%s", self.channel)
+            self.backoff = 1.0
+            return True
+        except Exception:
+            logger.exception("run.notify.listen_failed retry_in=%ss", self.backoff)
+            time.sleep(self.backoff + random.random())
+            self.backoff = min(LISTEN_MAX_BACKOFF_SECONDS, self.backoff * 2)
+            self.conn = None
+            return False
+
+    def wait(self, timeout: float) -> bool:
+        if timeout <= 0:
+            return False
+        if not self.ensure_connected():
+            return False
+        try:
+            for _notify in self.conn.notifies(timeout=timeout):
+                return True
+            return False
+        except Exception:
+            logger.exception("run.notify.listen_failed retry_in=%ss", self.backoff)
+            self.close()
+            time.sleep(self.backoff + random.random())
+            self.backoff = min(LISTEN_MAX_BACKOFF_SECONDS, self.backoff * 2)
+            return False
 
 
 # --- NDJSON logging + subprocess runner ---
@@ -1618,42 +1670,26 @@ class Worker:
             self.settings.worker_concurrency,
         )
 
-        cleanup_every = float(self.settings.worker_cleanup_interval)
-        next_cleanup = time.monotonic() + cleanup_every
+        max_workers = int(self.settings.worker_concurrency)
+        listen_timeout = float(self.settings.worker_listen_timeout_seconds)
+        maintenance_interval = float(self.settings.worker_cleanup_interval)
+        next_maintenance = time.monotonic() + maintenance_interval
 
-        listen_channel = "ade_run_queued"
-        listen_conn: psycopg.Connection | None = None
-        listen_backoff = 1.0
-
-        def ensure_listen() -> bool:
-            nonlocal listen_conn, listen_backoff
-            if listen_conn is not None and not listen_conn.closed:
-                return True
-            try:
-                listen_conn = _listen_connect(self.settings, channel=listen_channel)
-                logger.info("run.notify.listen channel=%s", listen_channel)
-                listen_backoff = 1.0
-                return True
-            except Exception:
-                logger.exception("run.notify.listen_failed retry_in=%ss", listen_backoff)
-                time.sleep(listen_backoff + random.random())
-                listen_backoff = min(30.0, listen_backoff * 2)
-                listen_conn = None
-                return False
+        listener = PgListener(self.settings, channel=CHANNEL_RUN_QUEUED)
 
         try:
-            with ThreadPoolExecutor(max_workers=int(self.settings.worker_concurrency)) as executor:
-                in_flight: set[Future[None]] = set()
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures: set[Future[None]] = set()
                 startup_now = utcnow()
-                self._drain(executor=executor, in_flight=in_flight, now=startup_now)
+                self._drain(executor=executor, futures=futures, now=startup_now)
 
                 while True:
-                    self._reap(in_flight=in_flight)
+                    self._reap(futures=futures)
 
                     now = utcnow()
                     mono = time.monotonic()
 
-                    if mono >= next_cleanup:
+                    if mono >= next_maintenance:
                         try:
                             expired_runs = int(
                                 db.expire_run_leases(
@@ -1667,77 +1703,56 @@ class Worker:
                                 logger.info("expired %s stuck run leases", expired_runs)
                         except Exception:
                             logger.exception("run lease expiration failed")
+                        next_maintenance = mono + maintenance_interval
 
-                        next_cleanup = mono + cleanup_every
+                    capacity = max_workers - len(futures)
+                    if capacity > 0:
+                        claimed = self._drain(executor=executor, futures=futures, now=now)
+                        if claimed:
+                            logger.info("run.queue.claimed count=%s", claimed)
+                            continue
 
-                    capacity = max(0, int(self.settings.worker_concurrency) - len(in_flight))
-                    if capacity <= 0:
-                        wait_seconds = max(
-                            0.0,
-                            min(float(self.settings.worker_listen_timeout_seconds), next_cleanup - mono),
-                        )
-                        if in_flight and wait_seconds > 0:
-                            wait(in_flight, timeout=wait_seconds, return_when=FIRST_COMPLETED)
+                    wait_seconds = max(0.0, min(listen_timeout, next_maintenance - mono))
+
+                    next_due = db.next_run_due_at(self.SessionLocal, now=now)
+                    if next_due is not None:
+                        if next_due.tzinfo is None:
+                            next_due = next_due.replace(tzinfo=timezone.utc)
+                        wait_seconds = min(wait_seconds, max(0.0, (next_due - now).total_seconds()))
+
+                    if capacity <= 0 and futures:
+                        if wait_seconds > 0:
+                            wait(futures, timeout=wait_seconds, return_when=FIRST_COMPLETED)
                         continue
 
-                    claimed = self._drain(
-                        executor=executor,
-                        in_flight=in_flight,
-                        now=now,
-                    )
-                    if claimed:
-                        logger.info("run.queue.claimed count=%s", claimed)
-                        continue
-
-                    listen_timeout = float(self.settings.worker_listen_timeout_seconds)
-                    wait_seconds = max(0.0, min(listen_timeout, next_cleanup - mono))
                     if wait_seconds <= 0:
                         continue
-                    if not ensure_listen():
-                        continue
 
-                    notified = False
-                    try:
-                        for _notify in listen_conn.notifies(timeout=wait_seconds):
-                            notified = True
-                            break
-                    except Exception:
-                        logger.exception("run.notify.listen_failed retry_in=%ss", listen_backoff)
-                        try:
-                            listen_conn.close()
-                        except Exception:
-                            pass
-                        listen_conn = None
-                        time.sleep(listen_backoff + random.random())
-                        listen_backoff = min(30.0, listen_backoff * 2)
-                        continue
-
+                    notified = listener.wait(wait_seconds)
                     if notified:
                         logger.info("run.queue.wake notify=true")
+                        if NOTIFY_JITTER_MS > 0:
+                            time.sleep(random.random() * (NOTIFY_JITTER_MS / 1000.0))
                     else:
                         logger.debug("run.queue.wake notify=false")
         finally:
-            if listen_conn is not None:
-                try:
-                    listen_conn.close()
-                except Exception:
-                    pass
+            listener.close()
 
     def _submit(
         self,
         *,
         executor: ThreadPoolExecutor,
-        in_flight: set[Future[None]],
+        futures: set[Future[None]],
         fn,
         claim: db.RunClaim,
     ) -> None:
         future = executor.submit(fn, claim)
-        in_flight.add(future)
+        futures.add(future)
 
-    def _reap(self, *, in_flight: set[Future[None]]) -> None:
-        done = {f for f in in_flight if f.done()}
+    def _reap(self, *, futures: set[Future[None]]) -> None:
+        done = {f for f in futures if f.done()}
         for f in done:
-            in_flight.remove(f)
+            futures.remove(f)
             try:
                 f.result()
             except Exception:
@@ -1747,16 +1762,16 @@ class Worker:
         self,
         *,
         executor: ThreadPoolExecutor,
-        in_flight: set[Future[None]],
+        futures: set[Future[None]],
         now: datetime,
     ) -> int:
         claimed_total = 0
-        capacity = max(0, int(self.settings.worker_concurrency) - len(in_flight))
+        capacity = max(0, int(self.settings.worker_concurrency) - len(futures))
         if capacity <= 0:
             return 0
 
         while capacity > 0:
-            batch_size = min(5, capacity)
+            batch_size = min(CLAIM_BATCH_SIZE, capacity)
             run_claims = db.claim_runs(
                 self.SessionLocal,
                 worker_id=self.worker_id,
@@ -1771,7 +1786,7 @@ class Worker:
                 capacity -= 1
                 self._submit(
                     executor=executor,
-                    in_flight=in_flight,
+                    futures=futures,
                     fn=self.process_run,
                     claim=claim,
                 )
