@@ -21,6 +21,7 @@ Fast reference (run `--help` for details):
 - `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
 - `ade clean` / `ade reset` — remove artifacts or reset local state.
+- `ade docker build|run|api|worker|shell` — local Docker image shortcuts.
 
 ### Help snapshots (truncated)
 

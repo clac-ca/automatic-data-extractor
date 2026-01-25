@@ -1,8 +1,7 @@
-"""Alembic environment configuration (SQL Server/Azure SQL)."""
+"""Alembic environment configuration (Postgres)."""
 
 from __future__ import annotations
 
-import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -26,24 +25,14 @@ _import_models()
 target_metadata = Base.metadata
 
 
-def _get_url_override() -> str | None:
-    # 1) alembic.ini sqlalchemy.url
-    url = config.get_main_option("sqlalchemy.url")
-    if url:
-        return url
-
-    # 2) explicit override
-    override = os.getenv("ALEMBIC_DATABASE_URL")
-    if override:
-        return override
-
-    # 3) fall back to Settings (ADE_SQL_* defaults)
-    return None
-
-
-def _build_settings(url_override: str | None) -> Settings:
-    if url_override:
-        return Settings(database_url_override=url_override)
+def _build_settings() -> Settings:
+    provided = config.attributes.get("settings")
+    if isinstance(provided, Settings):
+        return provided
+    override_url = config.get_main_option("sqlalchemy.url")
+    if override_url:
+        override_url = override_url.replace("%%", "%")
+        return Settings(_env_file=None, database_url=override_url)
     return Settings()
 
 
@@ -56,7 +45,7 @@ def _normalized_url(settings: Settings) -> str:
 
 
 def run_migrations_offline() -> None:
-    settings = _build_settings(_get_url_override())
+    settings = _build_settings()
     url = _normalized_url(settings)
     context.configure(
         url=url,
@@ -69,8 +58,6 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    url_override = _get_url_override()
-
     # If a connection is passed in (rare but useful), use it
     existing_connection = config.attributes.get("connection")
     if existing_connection is not None:
@@ -82,7 +69,7 @@ def run_migrations_online() -> None:
             context.run_migrations()
         return
 
-    settings = _build_settings(url_override)
+    settings = _build_settings()
     engine = build_engine(settings)
     try:
         url = engine.url.render_as_string(hide_password=False)

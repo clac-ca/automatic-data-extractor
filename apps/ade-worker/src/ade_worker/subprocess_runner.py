@@ -61,6 +61,10 @@ class SubprocessResult:
     duration_seconds: float
 
 
+class HeartbeatLostError(RuntimeError):
+    """Raised when a lease heartbeat fails and work should stop."""
+
+
 class SubprocessRunner:
     def run(
         self,
@@ -71,7 +75,7 @@ class SubprocessRunner:
         timeout_seconds: float | None,
         cwd: str | None,
         env: dict[str, str] | None,
-        heartbeat: Callable[[], None] | None = None,
+        heartbeat: Callable[[], bool] | None = None,
         heartbeat_interval: float = 15.0,
         context: dict[str, Any] | None = None,
         on_json_event: Callable[[dict[str, Any]], None] | None = None,
@@ -136,9 +140,21 @@ class SubprocessRunner:
         for t in threads:
             t.start()
 
+        def _call_heartbeat() -> None:
+            if not heartbeat:
+                return
+            try:
+                ok = heartbeat()
+            except BaseException:
+                self._terminate(proc)
+                raise
+            if ok is False:
+                self._terminate(proc)
+                raise HeartbeatLostError("Lease heartbeat failed")
+
         last_hb = 0.0
         if heartbeat:
-            heartbeat()
+            _call_heartbeat()
             last_hb = time.monotonic()
 
         while True:
@@ -148,7 +164,7 @@ class SubprocessRunner:
             now = time.monotonic()
 
             if heartbeat and (now - last_hb) >= float(heartbeat_interval):
-                heartbeat()
+                _call_heartbeat()
                 last_hb = now
 
             if deadline is not None and now >= deadline:
@@ -216,4 +232,4 @@ class SubprocessRunner:
             pass
 
 
-__all__ = ["EventLog", "SubprocessRunner", "SubprocessResult"]
+__all__ = ["EventLog", "HeartbeatLostError", "SubprocessRunner", "SubprocessResult"]

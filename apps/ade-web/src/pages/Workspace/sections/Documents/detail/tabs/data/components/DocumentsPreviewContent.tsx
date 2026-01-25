@@ -95,16 +95,37 @@ export function DocumentsPreviewContent({
     staleTime: 30_000,
   });
 
+  const previewHeaders = useMemo(
+    () => previewQuery.data?.headers ?? [],
+    [previewQuery.data],
+  );
+
+  const previewRows = useMemo(
+    () => previewQuery.data?.rows ?? [],
+    [previewQuery.data],
+  );
+
   const headerLabels = useMemo(() => {
-    if (!previewQuery.data) return [];
-    return previewQuery.data.headers.map((header, index) =>
-      header?.trim() ? header : columnLabel(index),
+    if (previewHeaders.length > 0) {
+      return previewHeaders.map((header, index) =>
+        header?.trim() ? header : columnLabel(index),
+      );
+    }
+
+    const fallbackColumnCount = previewRows.reduce((max, row) => {
+      if (!Array.isArray(row)) return max;
+      return Math.max(max, row.length);
+    }, 0);
+
+    return Array.from({ length: fallbackColumnCount }, (_, index) =>
+      columnLabel(index),
     );
-  }, [previewQuery.data]);
+  }, [previewHeaders, previewRows]);
 
   const previewMeta = useMemo(() => {
     if (!previewQuery.data) return null;
     const { totalRows, totalColumns, truncatedRows, truncatedColumns } = previewQuery.data;
+    if (typeof totalRows !== "number" || typeof totalColumns !== "number") return null;
     return {
       totalRows,
       totalColumns,
@@ -196,7 +217,7 @@ export function DocumentsPreviewContent({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {previewQuery.data.rows.length === 0 ? (
+                {previewRows.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={Math.max(headerLabels.length, 1)}
@@ -206,15 +227,18 @@ export function DocumentsPreviewContent({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  previewQuery.data.rows.map((row, rowIndex) => (
-                    <TableRow key={`row-${rowIndex}`}>
-                      {headerLabels.map((_, colIndex) => (
-                        <TableCell key={`cell-${rowIndex}-${colIndex}`}>
-                          {row[colIndex] ?? ""}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
+                  previewRows.map((row, rowIndex) => {
+                    const cells = Array.isArray(row) ? row : [];
+                    return (
+                      <TableRow key={`row-${rowIndex}`}>
+                        {headerLabels.map((_, colIndex) => (
+                          <TableCell key={`cell-${rowIndex}-${colIndex}`}>
+                            {cells[colIndex] ?? ""}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

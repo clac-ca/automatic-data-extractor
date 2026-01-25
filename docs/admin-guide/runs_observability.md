@@ -42,15 +42,16 @@ non-streaming endpoints:
 
 ## 3. Direct database inspection
 
-When the API is unavailable you can read the SQL Server / Azure SQL tables
+When the API is unavailable you can read the Postgres tables
 directly. The table layout matches the SQLAlchemy models in
 `apps/ade-api/src/ade_api/models/run.py`.
 
 ```sql
-SELECT TOP 20 id, status, exit_code, started_at, completed_at
+SELECT id, status, exit_code, started_at, completed_at
 FROM runs
 WHERE configuration_id = :configuration_id
 ORDER BY created_at DESC
+LIMIT 20
 ;
 ```
 

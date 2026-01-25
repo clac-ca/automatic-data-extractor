@@ -20,12 +20,13 @@ def test_settings_defaults() -> None:
     assert settings.server_public_url == "http://localhost:8000"
     assert settings.server_cors_origins == ["http://localhost:5173"]
     url = make_url(settings.database_url)
-    assert url.drivername == "mssql+pyodbc"
-    assert url.host == "sql"
-    assert url.port == 1433
+    assert url.drivername == "postgresql+psycopg"
+    assert url.host == "postgres"
+    assert url.port == 5432
     assert url.database == "ade"
-    assert url.username == "sa"
-    assert url.password == "YourStrong!Passw0rd"
+    assert url.username == "ade"
+    assert url.password == "ade"
+    assert url.query.get("sslmode") == "disable"
     assert settings.jwt_access_ttl == timedelta(minutes=60)
     expected_root = (REPO_ROOT / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()

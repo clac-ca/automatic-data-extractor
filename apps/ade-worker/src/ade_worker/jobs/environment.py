@@ -17,7 +17,7 @@ from ..paths import PathManager
 from ..queue import EnvironmentClaim, EnvironmentQueue
 from ..repo import Repo
 from ..settings import Settings
-from ..subprocess_runner import EventLog, SubprocessRunner
+from ..subprocess_runner import EventLog, HeartbeatLostError, SubprocessRunner
 
 logger = logging.getLogger("ade_worker")
 
@@ -59,8 +59,8 @@ class EnvironmentJob:
             raise RuntimeError("uv not found on PATH; install ade-worker dependencies with uv available")
         return uv_bin
 
-    def _heartbeat_env(self, env: EnvironmentClaim) -> None:
-        self.queue.heartbeat(
+    def _heartbeat_env(self, env: EnvironmentClaim) -> bool:
+        return self.queue.heartbeat(
             env_id=env.id,
             worker_id=self.worker_id,
             now=utcnow(),
@@ -226,6 +226,14 @@ class EnvironmentJob:
 
             event_log.emit(event="environment.complete", message="Environment ready", context=ctx)
 
+        except HeartbeatLostError:
+            event_log.emit(
+                event="environment.lost_claim",
+                level="warning",
+                message="Lease expired before environment build finished",
+                context=ctx,
+            )
+            return
         except Exception as exc:
             err = str(exc)
             logger.exception("environment build failed: %s", err)

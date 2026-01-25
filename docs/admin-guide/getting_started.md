@@ -1,13 +1,12 @@
 # ADE Admin Getting Started Guide
 
 This handbook shows how to run and administer the Automatic Data Extractor (ADE)
-without assuming prior context. ADE standardizes on SQL Server/Azure SQL; for
-local development the devcontainer starts a SQL Server container and ADE uses
-that by default.
+without assuming prior context. ADE standardizes on Postgres; for local development
+the devcontainer starts a Postgres container and ADE uses that by default.
 
 ## 1. What ADE Ships With
 - **Storage layout** – documents and runtime artifacts live under `data/`. The
-  database itself lives in SQL Server/Azure SQL; in local dev, the SQL container
+  database itself lives in Postgres; in local dev, the Postgres container
   persists data in a Docker named volume (managed by Compose).
 - **FastAPI backend + worker** – the API in
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
@@ -40,7 +39,7 @@ may keep them in a `.env` file in the project root so FastAPI and Docker
 load the same values.
 
 `.env` is optional. If it is missing, ADE uses defaults that target the local
-SQL container (`sql:1433`, database `ade`, user `sa`). Time-based settings accept
+Postgres container (`postgres:5432`, database `ade`, user `ade`). Time-based settings accept
 either plain seconds (`900`) or suffixed strings like `15m`, `1h`, or `30d`, so
 you can stay consistent whether you configure them via `.env` or export
 environment variables in your shell.
@@ -66,7 +65,7 @@ environment variables in your shell.
    ade dev
    ```
 
-   Ensure SQL Server is reachable (local container or Azure SQL) and `ADE_SQL_*` is set
+   Ensure Postgres is reachable (local container or external Postgres) and `ADE_DATABASE_URL` is set
    before starting the services.
 
    Use `ade dev` for the standard dev loop (runs migrations, then API reload + Vite hot module reload + worker). If you only want one component, use `ade dev --api`, `ade dev --web`, or `ade dev --worker`. Use `--no-worker` if you want to skip background jobs while still running API + web.
@@ -79,7 +78,7 @@ environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/` except the SQL Server data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local SQL dev, remove the SQL volume after the container stops (for example: `docker volume rm <compose_project>_ade_sql_data`), then `ade dev`, `ade start`, or `ade api start` will re-run migrations on the next launch (or run `ade api migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/` except the Postgres data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local Postgres dev, remove the Postgres volume after the container stops (for example: `docker volume rm <compose_project>_ade_pg_data`), then `ade dev`, `ade start`, or `ade api start` will re-run migrations on the next launch (or run `ade api migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run API and web manually (optional)
 If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
@@ -106,23 +105,23 @@ or you can build locally.
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor.git
 cd automatic-data-extractor
-bash scripts/docker/build-image.sh
+ade docker build
 ```
 
 ### 5.2 Run the container
 ```bash
-docker run -d --name ade -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local
+ade docker run --detach --name ade --no-rm
 ```
 
 To run the worker from the same image:
 
 ```bash
-docker run -d --name ade-worker --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local worker start
+ade docker worker --detach --name ade-worker --no-rm
 ```
 
 The bind mount keeps documents and runtime artifacts under `./data` so they
-survive container restarts. The database itself lives in your SQL Server
-instance (local container or Azure SQL), so ensure `ADE_SQL_*` is set
+survive container restarts. The database itself lives in your Postgres
+instance (local container or external Postgres), so ensure `ADE_DATABASE_URL` is set
 before startup. The API container runs migrations on startup via `ade start` (or `ade api start`).
 Check health the same way:
 
@@ -137,7 +136,7 @@ docker rm -f ade
 ```
 
 ## 6. Where ADE Stores Data
-- SQL Server data – stored in a Docker named volume for local dev (via the SQL service).
+- Postgres data – stored in a Docker named volume for local dev (via the Postgres service).
 - `data/workspaces/<workspace_id>/documents/` – uploaded source files.
 - `data/logs/` *(if enabled)* – structured JSON logs.
 

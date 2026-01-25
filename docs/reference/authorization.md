@@ -68,7 +68,7 @@ All RBAC administration lives under `/api/v1`:
   coverage exercise the same Graph-style keys the registry declares
   (`apps/ade-api/conftest.py`).
 - The baseline migration (`0001_initial_schema`) mirrors this structure and adds
-  indexes/constraints for scope lookups and system role uniqueness in SQL Server
+  indexes/constraints for scope lookups and system role uniqueness in Postgres
   (`apps/ade-api/migrations/versions/0001_initial_schema.py`).
 
 Keep this reference updated whenever the registry, service layer, or router

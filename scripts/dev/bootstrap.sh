@@ -119,4 +119,4 @@ fi
 echo
 echo "==> Done."
 echo "    Python deps installed"
-echo "    Tip: SQL Server initializes via the devcontainer compose `db-init` service."
+echo "    Tip: Postgres initializes via the devcontainer compose `postgres` service."

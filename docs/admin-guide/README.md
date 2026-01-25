@@ -11,7 +11,7 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes read from this state rather than reloading environment variables on every request.
-- Environment variables use the `ADE_` prefix (for example `ADE_SQL_HOST`, `ADE_SQL_DATABASE`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
+- Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_URL`, `ADE_STORAGE_CONNECTION_STRING`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
 - Set the externally reachable origin with `ADE_SERVER_PUBLIC_URL` and configure browser access via `ADE_SERVER_CORS_ORIGINS` (for example `["https://ade.example.com"]`). The uvicorn listener binds to the entrypoint defaults (0.0.0.0:8000 in Docker).
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
@@ -20,9 +20,9 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
   five minutes after five consecutive failures.
 
 ### Database configuration
-- ADE derives the SQL Server DSN from `ADE_SQL_*` values (local dev defaults target the devcontainer SQL service).
-- `ADE_DATABASE_AUTH_MODE` chooses authentication: `sql_password` (default) uses credentials embedded in the DSN; `managed_identity` strips username/password and injects an Entra token for Azure SQL.
-- `ADE_DATABASE_MI_CLIENT_ID` optionally pins a user-assigned managed identity; omit it to use the system-assigned identity. Alembic migrations reuse the same settings and token flow as the runtime engine.
+- `ADE_DATABASE_URL` is the canonical SQLAlchemy DSN used by the API, worker, and migrations (local dev defaults target the devcontainer Postgres service).
+- `ADE_DATABASE_AUTH_MODE` chooses authentication: `password` (default) uses credentials embedded in the DSN; `managed_identity` injects an Entra token for Azure Database for PostgreSQL.
+- `ADE_DATABASE_SSLROOTCERT` optionally supplies a CA path when using `verify-full`.
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`apps/ade-api/src/ade_api/db/database.py`](../../apps/ade-api/src/ade_api/db/database.py) with the request-scoped session dependency defined alongside it.

@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import make_url
 
 # ---- Defaults ---------------------------------------------------------------
 
@@ -74,12 +74,17 @@ DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 # NOTE: Using @main until ade-engine tags are published.
 DEFAULT_ENGINE_SPEC = "ade-engine @ git+https://github.com/clac-ca/ade-engine@main"
 DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
-DEFAULT_STORAGE_ACCOUNT_NAME = "devstoreaccount1"
-DEFAULT_STORAGE_ACCOUNT_KEY = (
-    "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/"
-    "K1SZFPTOtr/KBHBeksoGMGw=="
+DEFAULT_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
+DEFAULT_DATABASE_AUTH_MODE = "password"
+
+DEFAULT_STORAGE_CONNECTION_STRING = (
+    "DefaultEndpointsProtocol=http;"
+    "AccountName=devstoreaccount1;"
+    "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/"
+    "K1SZFPTOtr/KBHBeksoGMGw==;"
+    "BlobEndpoint=http://azurite:10000/devstoreaccount1;"
 )
-DEFAULT_STORAGE_BLOB_ENDPOINT = f"http://azurite:10000/{DEFAULT_STORAGE_ACCOUNT_NAME}"
+DEFAULT_STORAGE_AUTH_MODE = "key"
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 2000
@@ -90,6 +95,8 @@ MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+_ALLOWED_STORAGE_AUTH_MODES = {"key"}
 
 
 # ---- Helpers ----------------------------------------------------------------
@@ -168,6 +175,14 @@ def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
     return candidate.expanduser().resolve()
 
 
+def _normalize_pg_driver(drivername: str) -> str:
+    if drivername in {"postgres", "postgresql"}:
+        return "postgresql+psycopg"
+    if drivername.startswith("postgresql+") and drivername != "postgresql+psycopg":
+        return "postgresql+psycopg"
+    return drivername
+
+
 # ---- Settings ---------------------------------------------------------------
 
 
@@ -181,10 +196,10 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         env_ignore_empty=True,
+        populate_by_name=True,
     )
 
     _jwt_secret_generated: bool = PrivateAttr(default=False)
-    _database_url: str = PrivateAttr(default="")
 
     # Core
     app_name: str = "Automatic Data Extractor API"
@@ -217,10 +232,10 @@ class Settings(BaseSettings):
 
     # Storage
     data_dir: Path = Field(default=DEFAULT_DATA_DIR)
-    storage_connection_string: str | None = None
-    storage_account_name: str = Field(default=DEFAULT_STORAGE_ACCOUNT_NAME)
-    storage_account_key: str = Field(default=DEFAULT_STORAGE_ACCOUNT_KEY)
-    storage_blob_endpoint: str = Field(default=DEFAULT_STORAGE_BLOB_ENDPOINT)
+    storage_connection_string: str = Field(default=DEFAULT_STORAGE_CONNECTION_STRING)
+    storage_auth_mode: Literal["key", "managed_identity"] = Field(
+        default=DEFAULT_STORAGE_AUTH_MODE
+    )
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
@@ -233,24 +248,17 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url_override: str | None = None
+    database_url: str = Field(default=DEFAULT_DATABASE_URL)
     database_echo: bool = False
     database_log_level: str | None = None
     database_pool_size: int = Field(5, ge=1)
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
     database_pool_recycle: int = Field(1800, ge=0)
-    database_auth_mode: Literal["sql_password", "managed_identity"] = Field(default="sql_password")
-    database_mi_client_id: str | None = None
-
-    # Database (derived mssql URL inputs)
-    sql_host: str = "sql"
-    sql_port: int = Field(default=1433, ge=1, le=65535)
-    sql_user: str = "sa"
-    sql_password: str = "YourStrong!Passw0rd"
-    sql_database: str = "ade"
-    sql_encrypt: str = "optional"
-    sql_trust_server_certificate: str = "yes"
+    database_auth_mode: Literal["password", "managed_identity"] = Field(
+        default=DEFAULT_DATABASE_AUTH_MODE
+    )
+    database_sslrootcert: str | None = Field(default=None)
 
     # JWT
     jwt_secret: SecretStr | None = Field(
@@ -322,9 +330,16 @@ class Settings(BaseSettings):
             return None
         return cls._v_log_level(v)
 
-    @field_validator("database_url_override", mode="before")
+    @field_validator("database_url", mode="before")
     @classmethod
-    def _v_database_url_override(cls, v: Any) -> str | None:
+    def _v_database_url(cls, v: Any) -> str:
+        if v in (None, ""):
+            return DEFAULT_DATABASE_URL
+        return str(v).strip()
+
+    @field_validator("database_sslrootcert", mode="before")
+    @classmethod
+    def _v_database_sslrootcert(cls, v: Any) -> str | None:
         if v in (None, ""):
             return None
         return str(v).strip()
@@ -346,46 +361,32 @@ class Settings(BaseSettings):
     @classmethod
     def _v_db_auth_mode(cls, v: Any) -> str:
         if v in (None, ""):
-            return "sql_password"
+            return DEFAULT_DATABASE_AUTH_MODE
         mode = str(v).strip().lower()
-        if mode not in {"sql_password", "managed_identity"}:
-            raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
+        if mode not in {"password", "managed_identity"}:
+            raise ValueError("ADE_DATABASE_AUTH_MODE must be 'password' or 'managed_identity'")
         return mode
 
-    @field_validator("database_mi_client_id", mode="before")
+    @field_validator("storage_connection_string", mode="before")
     @classmethod
-    def _v_db_mi_client(cls, v: Any) -> str | None:
+    def _v_storage_connection_string(cls, v: Any) -> str:
         if v in (None, ""):
-            return None
-        return str(v).strip()
+            return DEFAULT_STORAGE_CONNECTION_STRING
+        cleaned = str(v).strip()
+        if not cleaned:
+            return DEFAULT_STORAGE_CONNECTION_STRING
+        return cleaned
 
-    @field_validator(
-        "sql_host",
-        "sql_user",
-        "sql_password",
-        "sql_database",
-        "sql_encrypt",
-        "sql_trust_server_certificate",
-        mode="before",
-    )
+    @field_validator("storage_auth_mode", mode="before")
     @classmethod
-    def _v_sql_str(cls, v: Any) -> str | None:
+    def _v_storage_auth_mode(cls, v: Any) -> str:
         if v in (None, ""):
-            return None
-        return str(v).strip()
+            return DEFAULT_STORAGE_AUTH_MODE
+        mode = str(v).strip().lower()
+        if mode not in _ALLOWED_STORAGE_AUTH_MODES:
+            raise ValueError("ADE_STORAGE_AUTH_MODE must be 'key'")
+        return mode
 
-    @field_validator(
-        "storage_connection_string",
-        "storage_account_name",
-        "storage_account_key",
-        "storage_blob_endpoint",
-        mode="before",
-    )
-    @classmethod
-    def _v_storage_str(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip()
 
     @field_validator("jwt_secret", mode="before")
     @classmethod
@@ -442,102 +443,46 @@ class Settings(BaseSettings):
         if not self.frontend_url:
             self.frontend_url = self.server_public_url
 
-        if self.database_url_override:
-            url = make_url(self.database_url_override)
-        else:
-            sql_vars = {
-                "host": self.sql_host,
-                "user": self.sql_user,
-                "password": self.sql_password,
-                "database": self.sql_database,
-            }
-            if self.database_auth_mode == "managed_identity":
-                required = ["host", "database"]
-            else:
-                required = ["host", "user", "password", "database"]
+        if not self.database_url:
+            raise ValueError("ADE_DATABASE_URL is required.")
 
-            missing = [key for key in required if not sql_vars[key]]
-            if missing:
-                raise ValueError(
-                    "Missing required ADE_SQL_* values: "
-                    + ", ".join(f"ADE_SQL_{name.upper()}" for name in missing)
-                )
+        url = make_url(self.database_url)
+        drivername = _normalize_pg_driver(url.drivername)
+        if not drivername.startswith("postgresql"):
+            raise ValueError("Only Postgres is supported. Use postgresql+psycopg://... for ADE_DATABASE_URL.")
+        if drivername != url.drivername:
+            url = url.set(drivername=drivername)
 
-            query = {"driver": "ODBC Driver 18 for SQL Server"}
-            if self.sql_encrypt:
-                query["Encrypt"] = self.sql_encrypt
-            if self.sql_trust_server_certificate:
-                query["TrustServerCertificate"] = self.sql_trust_server_certificate
-
-            if self.database_auth_mode == "managed_identity":
-                url = URL.create(
-                    drivername="mssql+pyodbc",
-                    username=None,
-                    password=None,
-                    host=self.sql_host,
-                    port=self.sql_port,
-                    database=self.sql_database,
-                    query=query,
-                )
-            else:
-                url = URL.create(
-                    drivername="mssql+pyodbc",
-                    username=self.sql_user,
-                    password=self.sql_password,
-                    host=self.sql_host,
-                    port=self.sql_port,
-                    database=self.sql_database,
-                    query=query,
-                )
-
-        url = make_url(url.render_as_string(hide_password=False))
-        query = dict(url.query or {})
-
-        if url.get_backend_name() != "mssql":
-            raise ValueError("Only SQL Server is supported. Use mssql+pyodbc://... for ADE_DATABASE_URL.")
-
-        if url.get_backend_name() == "mssql":
-            present = {k.lower() for k in query}
-
-            def _setdefault_ci(key: str, value: str) -> None:
-                if key.lower() not in present:
-                    query[key] = value
-                    present.add(key.lower())
-
-            _setdefault_ci("driver", "ODBC Driver 18 for SQL Server")
-            if self.sql_encrypt:
-                _setdefault_ci("Encrypt", self.sql_encrypt)
-            if self.sql_trust_server_certificate:
-                _setdefault_ci("TrustServerCertificate", self.sql_trust_server_certificate)
-
-        if self.database_auth_mode == "managed_identity":
-            if url.get_backend_name() != "mssql":
-                raise ValueError(
-                    "ADE_DATABASE_AUTH_MODE=managed_identity requires an mssql+pyodbc DSN"
-                )
-            url = URL.create(
-                drivername=url.drivername,
-                username=None,
-                password=None,
-                host=url.host,
-                port=url.port,
-                database=url.database,
-                query=query,
+        required_values = {
+            "host": url.host,
+            "user": url.username,
+            "database": url.database,
+        }
+        missing = [name for name, value in required_values.items() if not value]
+        if self.database_auth_mode == "password" and not url.password:
+            missing.append("password")
+        if missing:
+            raise ValueError(
+                "ADE_DATABASE_URL is missing required parts: " + ", ".join(missing)
             )
-        elif query != url.query:
+
+        if self.database_sslrootcert:
+            query = dict(url.query or {})
+            query["sslrootcert"] = self.database_sslrootcert
             url = url.set(query=query)
 
-        self._database_url = url.render_as_string(hide_password=False)
+        self.database_url = url.render_as_string(hide_password=False)
+
+        if not self.storage_connection_string:
+            raise ValueError("ADE_STORAGE_CONNECTION_STRING is required.")
+        if self.storage_auth_mode != "key":
+            raise ValueError("ADE_STORAGE_AUTH_MODE must be 'key' when using ADE_STORAGE_CONNECTION_STRING.")
 
         if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
             self.jwt_secret = SecretStr(secrets.token_urlsafe(64))
             self._jwt_secret_generated = True
 
         return self
-
-    @property
-    def database_url(self) -> str:
-        return self._database_url
 
     @property
     def workspaces_dir(self) -> Path:

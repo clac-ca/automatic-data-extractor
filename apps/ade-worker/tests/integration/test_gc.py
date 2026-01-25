@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
+
 from sqlalchemy import insert, select, text
 from sqlalchemy.orm import sessionmaker
 
@@ -10,14 +12,17 @@ from ade_worker.paths import PathManager
 from ade_worker.schema import environments, runs
 
 
+def _uuid() -> str:
+    return str(uuid4())
+
+
 def _create_config_table(engine) -> None:
     with engine.begin() as conn:
         conn.execute(
             text(
-                "IF OBJECT_ID('dbo.configurations', 'U') IS NULL "
-                "CREATE TABLE configurations ("
-                "id NVARCHAR(64) PRIMARY KEY, "
-                "status NVARCHAR(32) NOT NULL"
+                "CREATE TABLE IF NOT EXISTS configurations ("
+                "id UUID PRIMARY KEY, "
+                "status TEXT NOT NULL"
                 ")"
             )
         )
@@ -83,7 +88,7 @@ def _insert_run(
                 id=run_id,
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                input_document_id="doc-1",
+                input_document_id=_uuid(),
                 input_sheet_names=None,
                 run_options=None,
                 output_path=None,
@@ -104,7 +109,14 @@ def _insert_run(
         )
 
 
-def _make_env_dir(paths: PathManager, *, workspace_id: str, configuration_id: str, deps_digest: str, env_id: str) -> Path:
+def _make_env_dir(
+    paths: PathManager,
+    *,
+    workspace_id: str,
+    configuration_id: str,
+    deps_digest: str,
+    env_id: str,
+) -> Path:
     env_path = paths.environment_root(workspace_id, configuration_id, deps_digest, env_id)
     env_path.mkdir(parents=True, exist_ok=True)
     (env_path / "marker.txt").write_text("env")
@@ -117,12 +129,17 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
-    _insert_configuration(engine, config_id="cfg-1", status="draft")
+    workspace_id = _uuid()
+    configuration_id = _uuid()
+    env_id = _uuid()
+    run_id = _uuid()
+
+    _insert_configuration(engine, config_id=configuration_id, status="draft")
     _insert_environment(
         engine,
-        env_id="env-1",
-        workspace_id="ws-1",
-        configuration_id="cfg-1",
+        env_id=env_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:abc",
         status="ready",
@@ -131,9 +148,9 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     )
     _insert_run(
         engine,
-        run_id="run-1",
-        workspace_id="ws-1",
-        configuration_id="cfg-1",
+        run_id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:abc",
         status="running",
@@ -141,10 +158,10 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     )
     env_path = _make_env_dir(
         paths,
-        workspace_id="ws-1",
-        configuration_id="cfg-1",
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         deps_digest="sha256:abc",
-        env_id="env-1",
+        env_id=env_id,
     )
 
     result = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
@@ -152,7 +169,7 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     assert result.deleted == 0
     assert env_path.exists()
     with engine.begin() as conn:
-        row = conn.execute(select(environments.c.id).where(environments.c.id == "env-1")).first()
+        row = conn.execute(select(environments.c.id).where(environments.c.id == env_id)).first()
     assert row is not None
 
 
@@ -162,12 +179,16 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
-    _insert_configuration(engine, config_id="cfg-2", status="archived")
+    workspace_id = _uuid()
+    configuration_id = _uuid()
+    env_id = _uuid()
+
+    _insert_configuration(engine, config_id=configuration_id, status="archived")
     _insert_environment(
         engine,
-        env_id="env-2",
-        workspace_id="ws-2",
-        configuration_id="cfg-2",
+        env_id=env_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:def",
         status="ready",
@@ -176,10 +197,10 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
     )
     env_path = _make_env_dir(
         paths,
-        workspace_id="ws-2",
-        configuration_id="cfg-2",
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         deps_digest="sha256:def",
-        env_id="env-2",
+        env_id=env_id,
     )
 
     result = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=30)
@@ -187,7 +208,7 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
     assert result.deleted == 1
     assert not env_path.exists()
     with engine.begin() as conn:
-        row = conn.execute(select(environments.c.id).where(environments.c.id == "env-2")).first()
+        row = conn.execute(select(environments.c.id).where(environments.c.id == env_id)).first()
     assert row is None
 
 
@@ -197,12 +218,16 @@ def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
 
-    _insert_configuration(engine, config_id="cfg-3", status="draft")
+    workspace_id = _uuid()
+    configuration_id = _uuid()
+    env_id = _uuid()
+
+    _insert_configuration(engine, config_id=configuration_id, status="draft")
     _insert_environment(
         engine,
-        env_id="env-3",
-        workspace_id="ws-3",
-        configuration_id="cfg-3",
+        env_id=env_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:ghi",
         status="failed",
@@ -211,10 +236,10 @@ def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
     )
     _make_env_dir(
         paths,
-        workspace_id="ws-3",
-        configuration_id="cfg-3",
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         deps_digest="sha256:ghi",
-        env_id="env-3",
+        env_id=env_id,
     )
 
     first = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)

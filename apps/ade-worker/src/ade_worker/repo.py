@@ -24,19 +24,6 @@ class Repo:
             ).mappings().first()
         return dict(row) if row else None
 
-    def load_ready_environment_for_run(self, run: dict[str, Any]) -> dict[str, Any] | None:
-        with self._SessionLocal() as session:
-            row = session.execute(
-                select(environments).where(
-                    environments.c.workspace_id == run["workspace_id"],
-                    environments.c.configuration_id == run["configuration_id"],
-                    environments.c.engine_spec == run["engine_spec"],
-                    environments.c.deps_digest == run["deps_digest"],
-                    environments.c.status == "ready",
-                )
-            ).mappings().first()
-        return dict(row) if row else None
-
     def load_run(self, run_id: str) -> dict[str, Any] | None:
         with self._SessionLocal() as session:
             row = session.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
@@ -49,84 +36,56 @@ class Repo:
             ).mappings().first()
         return dict(row) if row else None
 
-    def has_queued_runs(self, *, now: datetime) -> bool:
-        stmt = (
-            select(runs.c.id)
-            .where(
-                runs.c.status == "queued",
-                runs.c.available_at <= now,
-                runs.c.attempt_count < runs.c.max_attempts,
+    def get_or_create_environment(
+        self,
+        *,
+        session: Session,
+        run: dict[str, Any],
+        now: datetime,
+    ) -> dict[str, Any] | None:
+        row = session.execute(
+            select(environments).where(
+                environments.c.workspace_id == run["workspace_id"],
+                environments.c.configuration_id == run["configuration_id"],
+                environments.c.engine_spec == run["engine_spec"],
+                environments.c.deps_digest == run["deps_digest"],
             )
-            .limit(1)
-        )
-        with self._SessionLocal() as session:
-            row = session.execute(stmt).first()
-        return row is not None
+        ).mappings().first()
+        if row:
+            return dict(row)
 
-    def ensure_environment_rows_for_queued_runs(self, *, now: datetime, limit: int | None = None) -> int:
-        stmt = (
-            select(
-                runs.c.workspace_id,
-                runs.c.configuration_id,
-                runs.c.engine_spec,
-                runs.c.deps_digest,
-            )
-            .where(
-                runs.c.status == "queued",
-                runs.c.available_at <= now,
-                runs.c.attempt_count < runs.c.max_attempts,
-            )
-            .distinct()
-        )
-        if limit:
-            stmt = stmt.limit(limit)
+        env_row = {
+            "id": str(uuid4()),
+            "workspace_id": run["workspace_id"],
+            "configuration_id": run["configuration_id"],
+            "engine_spec": run["engine_spec"],
+            "deps_digest": run["deps_digest"],
+            "status": "queued",
+            "error_message": None,
+            "claimed_by": None,
+            "claim_expires_at": None,
+            "created_at": now,
+            "updated_at": now,
+            "last_used_at": None,
+            "python_version": None,
+            "python_interpreter": None,
+            "engine_version": None,
+        }
+        try:
+            with session.begin_nested():
+                session.execute(insert(environments).values(**env_row))
+        except IntegrityError:
+            pass
 
-        inserted = 0
-        with self._SessionLocal.begin() as session:
-            rows = session.execute(stmt).mappings().all()
-            for row in rows:
-                env_row = {
-                    "id": str(uuid4()),
-                    "workspace_id": row["workspace_id"],
-                    "configuration_id": row["configuration_id"],
-                    "engine_spec": row["engine_spec"],
-                    "deps_digest": row["deps_digest"],
-                    "status": "queued",
-                    "error_message": None,
-                    "claimed_by": None,
-                    "claim_expires_at": None,
-                    "created_at": now,
-                    "updated_at": now,
-                    "last_used_at": None,
-                    "python_version": None,
-                    "python_interpreter": None,
-                    "engine_version": None,
-                }
-                try:
-                    with session.begin_nested():
-                        session.execute(insert(environments).values(**env_row))
-                        inserted += 1
-                except IntegrityError:
-                    # Environment already exists (unique key). Requeue failed environments.
-                    session.execute(
-                        update(environments)
-                        .where(
-                            environments.c.workspace_id == row["workspace_id"],
-                            environments.c.configuration_id == row["configuration_id"],
-                            environments.c.engine_spec == row["engine_spec"],
-                            environments.c.deps_digest == row["deps_digest"],
-                            environments.c.status == "failed",
-                        )
-                        .values(
-                            status="queued",
-                            error_message=None,
-                            claimed_by=None,
-                            claim_expires_at=None,
-                            updated_at=now,
-                        )
-                    )
-                    continue
-        return inserted
+        row = session.execute(
+            select(environments).where(
+                environments.c.workspace_id == run["workspace_id"],
+                environments.c.configuration_id == run["configuration_id"],
+                environments.c.engine_spec == run["engine_spec"],
+                environments.c.deps_digest == run["deps_digest"],
+            )
+        ).mappings().first()
+        return dict(row) if row else None
 
     def mark_environment_queued(
         self,

@@ -6,11 +6,12 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from ade_worker.db import build_engine
-from ade_worker.schema import metadata, install_document_event_triggers
-from ade_worker.settings import Settings
+from ade_worker.schema import metadata
+from ade_worker.settings import DEFAULT_DATABASE_AUTH_MODE, DEFAULT_DATABASE_URL, Settings
 
 
 def _env(name: str, default: str | None = None) -> str | None:
@@ -23,34 +24,31 @@ def _sanitize_db_name(name: str) -> str:
 
 
 def _resolve_test_database_name() -> str:
-    explicit = os.getenv("ADE_TEST_SQL_DATABASE")
+    explicit = os.getenv("ADE_TEST_DATABASE_NAME")
     if explicit:
         return _sanitize_db_name(explicit)
-    prefix = os.getenv("ADE_TEST_SQL_DATABASE_PREFIX") or "ade_worker_test"
+    prefix = os.getenv("ADE_TEST_DATABASE_NAME_PREFIX") or "ade_worker_test"
     prefix = _sanitize_db_name(prefix)
     suffix = uuid4().hex[:8]
     return f"{prefix}_{suffix}"
 
 
 def _build_test_settings() -> Settings:
-    auth_mode = (os.getenv("ADE_TEST_DATABASE_AUTH_MODE") or "sql_password").strip().lower()
+    auth_mode = (_env("DATABASE_AUTH_MODE", DEFAULT_DATABASE_AUTH_MODE) or "password").strip().lower()
+    base_url = _env("DATABASE_URL", DEFAULT_DATABASE_URL) or DEFAULT_DATABASE_URL
+    url = make_url(base_url).set(database=_resolve_test_database_name())
     return Settings(
         _env_file=None,
-        sql_host=_env("SQL_HOST", "sql"),
-        sql_port=int(_env("SQL_PORT", "1433") or "1433"),
-        sql_user=_env("SQL_USER", "sa"),
-        sql_password=_env("SQL_PASSWORD", "YourStrong!Passw0rd"),
-        sql_database=_resolve_test_database_name(),
-        sql_encrypt=_env("SQL_ENCRYPT", "optional"),
-        sql_trust_server_certificate=_env("SQL_TRUST_SERVER_CERTIFICATE", "yes"),
+        database_url=url.render_as_string(hide_password=False),
         database_auth_mode=auth_mode,
+        database_sslrootcert=_env("DATABASE_SSLROOTCERT"),
     )
 
 
 def _build_admin_settings(settings: Settings) -> Settings:
-    url = make_url(settings.database_url).set(database="master")
+    url = make_url(settings.database_url).set(database="postgres")
     payload = settings.model_dump()
-    payload["database_url_override"] = url.render_as_string(hide_password=False)
+    payload["database_url"] = url.render_as_string(hide_password=False)
     return Settings.model_validate(payload)
 
 
@@ -58,11 +56,16 @@ def _create_database(settings: Settings) -> None:
     admin_settings = _build_admin_settings(settings)
     db_name = make_url(settings.database_url).database
     if not db_name:
-        raise RuntimeError("Test database name was empty; check ADE_TEST_SQL_DATABASE settings.")
+        raise RuntimeError("Test database name was empty; check ADE_TEST_DATABASE_NAME settings.")
     engine = build_engine(admin_settings)
     try:
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            conn.exec_driver_sql(f"IF DB_ID(N'{db_name}') IS NULL CREATE DATABASE [{db_name}];")
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+                {"db_name": db_name},
+            ).scalar()
+            if not exists:
+                conn.exec_driver_sql(f'CREATE DATABASE "{db_name}";')
     finally:
         engine.dispose()
 
@@ -75,15 +78,18 @@ def _drop_database(settings: Settings) -> None:
     engine = build_engine(admin_settings)
     try:
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            conn.exec_driver_sql(
-                f"""
-                IF DB_ID(N'{db_name}') IS NOT NULL
-                BEGIN
-                    ALTER DATABASE [{db_name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-                    DROP DATABASE [{db_name}];
-                END;
-                """
+            conn.execute(
+                text(
+                    """
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = :db_name
+                      AND pid <> pg_backend_pid();
+                    """
+                ),
+                {"db_name": db_name},
             )
+            conn.exec_driver_sql(f'DROP DATABASE IF EXISTS "{db_name}";')
     finally:
         engine.dispose()
 
@@ -104,7 +110,6 @@ def _database_lifecycle(base_settings: Settings) -> Iterator[None]:
 def engine(base_settings: Settings, _database_lifecycle: None):
     engine = build_engine(base_settings)
     metadata.create_all(engine)
-    install_document_event_triggers(engine)
     try:
         yield engine
     finally:

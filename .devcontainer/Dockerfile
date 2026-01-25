@@ -9,7 +9,7 @@ ARG USER_GID=${USER_UID}
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Minimal dev tooling + build deps for pyodbc + git deps
+# Minimal dev tooling + build deps
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash \
@@ -20,24 +20,13 @@ RUN apt-get update \
       openssh-client \
       sudo \
       build-essential \
-      unixodbc-dev \
-      unixodbc \
+      libpq-dev \
       procps \
  && rm -rf /var/lib/apt/lists/*
 
 # Install uv for repo tooling and scripts.
 RUN python -m pip install --upgrade pip \
  && python -m pip install --no-cache-dir uv
-
-# Install Microsoft ODBC Driver 18 for SQL Server (same approach as your production Dockerfile)
-RUN set -eux; \
-  apt-get update; \
-  curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb; \
-  dpkg -i /tmp/packages-microsoft-prod.deb; \
-  rm /tmp/packages-microsoft-prod.deb; \
-  apt-get update; \
-  ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18; \
-  rm -rf /var/lib/apt/lists/*
 
 # Create a non-root dev user (VS Code devcontainer convention)
 RUN set -eux; \

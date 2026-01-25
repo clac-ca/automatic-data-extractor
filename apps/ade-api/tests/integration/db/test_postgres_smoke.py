@@ -5,7 +5,7 @@ from sqlalchemy import text
 from ade_api.db import build_engine
 
 
-def test_mssql_smoke_select_one(base_settings) -> None:
+def test_postgres_smoke_select_one(base_settings) -> None:
     engine = build_engine(base_settings)
     try:
         with engine.connect() as conn:

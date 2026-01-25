@@ -2,9 +2,9 @@
 
 This repo is set up to run **fully locally** in a VS Code Dev Container:
 
-- Workspace container: Python 3.12 + Microsoft ODBC Driver 18
+- Workspace container: Python 3.12
 - Local dependencies (Docker Compose):
-  - SQL Server (Linux container)
+  - Postgres 18 (Linux container)
   - Azurite (Azure Storage emulator, blob-only)
 
 ## Prerequisites
@@ -58,53 +58,42 @@ ade dev --web
 
 - API: 8000
 - Web dev server: 5173
-- SQL Server: 1433
+- Postgres: 5432
 - Azurite blob: 10000
 
 ## What starts by default?
 
 The devcontainer uses `.devcontainer/docker-compose.yml` and starts:
 
-- `sql` on port 1433
+- `postgres` on port 5432
 - `azurite` on port 10000 (blob-only)
 
 The app container is named `ade`.
 
 ## Connection details
 
-### SQL Server (local container)
+### Postgres (local container)
 
 Inside the devcontainer network:
 
-- Host: `sql`
-- Port: `1433`
-- User: `sa`
-- Password: from `.env` (`ADE_SQL_PASSWORD`)
-- App setting: `ADE_SQL_*` values are used to build the SQL Server DSN
+- Host: `postgres`
+- Port: `5432`
+- User: `ade`
+- Password: from `.env` inside `ADE_DATABASE_URL`
+- App setting: `ADE_DATABASE_URL` (canonical SQLAlchemy URL)
 
 From your host machine (because the compose file publishes ports):
 
 - Host: `localhost`
-- Port: `1433`
+- Port: `5432`
 
-#### ODBC Driver 18 encryption gotcha (important)
+#### TLS settings
 
-ODBC Driver 18 enables encryption by default. Local SQL containers typically use self-signed certs,
-so you will usually want **optional encryption** for local dev.
+Local dev defaults (from `.env.example`):
 
-Default local dev values (from `.env.example`):
+- `ADE_DATABASE_URL=postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable`
 
-- `ADE_SQL_ENCRYPT=yes`
-- `ADE_SQL_TRUST_SERVER_CERTIFICATE=yes`
-These settings are used when ADE builds the SQL Server DSN from `ADE_SQL_*`.
-
-If you're using `sqlcmd`, the equivalent is:
-
-```bash
-SQL Server initializes via the devcontainer compose `db-init` service.
-```
-
-(It uses `sqlcmd -No` for optional encryption.)
+For production, prefer `verify-full` plus `ADE_DATABASE_SSLROOTCERT`.
 
 ### Azurite (local storage emulator)
 
@@ -122,9 +111,10 @@ From your host machine:
 
 You do not need to change code or rebuild images.
 
-- To use Azure SQL: set `ADE_SQL_HOST`, `ADE_SQL_DATABASE`, `ADE_SQL_USER`,
-  and `ADE_SQL_PASSWORD` (or set `ADE_DATABASE_AUTH_MODE=managed_identity` for Entra auth).
-- To use Azure Storage: set `ADE_STORAGE_CONNECTION_STRING` to your real Azure connection string.
+- To use Azure Database for PostgreSQL: set `ADE_DATABASE_URL` to your Azure DSN and
+  `ADE_DATABASE_AUTH_MODE=managed_identity` for Entra auth (or keep `password`). Use
+  `sslmode=verify-full` in the URL and set `ADE_DATABASE_SSLROOTCERT` when required.
+- To use Azure Storage: set `ADE_STORAGE_CONNECTION_STRING` (canonical).
 
 Local containers may still be running, but the app will connect to Azure based on env values.
 
@@ -148,7 +138,7 @@ Destructive reset (drops DB tables + removes ADE storage under `data/`):
 bash scripts/ops/reset-storage.sh --yes
 ```
 
-Reset SQL + Azurite Docker volumes (devcontainer services only):
+Reset Postgres + Azurite Docker volumes (devcontainer services only):
 
 ```bash
 bash .devcontainer/scripts/reset-volumes.sh

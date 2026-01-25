@@ -7,9 +7,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import Field, PrivateAttr, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import make_url
 
 MODULE_DIR = Path(__file__).resolve().parent
 
@@ -25,10 +25,21 @@ def _detect_repo_root(start: Path) -> Path:
 
 REPO_ROOT = _detect_repo_root(MODULE_DIR)
 
+DEFAULT_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
+DEFAULT_DATABASE_AUTH_MODE = "password"
+
 
 def _default_concurrency() -> int:
     cpu = os.cpu_count() or 2
     return max(1, min(4, cpu // 2))
+
+
+def _normalize_pg_driver(drivername: str) -> str:
+    if drivername in {"postgres", "postgresql"}:
+        return "postgresql+psycopg"
+    if drivername.startswith("postgresql+") and drivername != "postgresql+psycopg":
+        return "postgresql+psycopg"
+    return drivername
 
 
 class Settings(BaseSettings):
@@ -41,36 +52,28 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         env_ignore_empty=True,
+        populate_by_name=True,
     )
 
-    _database_url: str = PrivateAttr(default="")
-
     # ---- Database (match ade-api field names) ------------------------------
-    database_url_override: str | None = None
+    database_url: str = Field(default=DEFAULT_DATABASE_URL)
     database_echo: bool = False
 
-    database_auth_mode: Literal["sql_password", "managed_identity"] = "sql_password"
-    database_mi_client_id: str | None = None
+    database_auth_mode: Literal["password", "managed_identity"] = Field(
+        default=DEFAULT_DATABASE_AUTH_MODE
+    )
+    database_sslrootcert: str | None = Field(default=None)
 
     database_pool_size: int = Field(5, ge=1)
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
     database_pool_recycle: int = Field(1800, ge=0)
 
-    # ---- Database (derived mssql URL inputs) ------------------------------
-    sql_host: str = "sql"
-    sql_port: int = Field(default=1433, ge=1, le=65535)
-    sql_user: str = "sa"
-    sql_password: str = "YourStrong!Passw0rd"
-    sql_database: str = "ade"
-    sql_encrypt: str = "optional"
-    sql_trust_server_certificate: str = "yes"
-
     # ---- Worker identity & loop -------------------------------------------
     worker_id: str | None = None
     worker_concurrency: int = Field(default_factory=_default_concurrency, ge=1)
-    worker_poll_interval: float = Field(0.5, gt=0)
-    worker_poll_interval_max: float = Field(2.0, gt=0)
+    worker_listen_timeout_seconds: float = Field(60.0, gt=0)
+    worker_notify_jitter_ms: int = Field(200, ge=0)
     worker_cleanup_interval: float = Field(30.0, gt=0)
     worker_log_level: str = "INFO"
 
@@ -105,9 +108,16 @@ class Settings(BaseSettings):
     def _v_log_level(cls, v: Any) -> str:
         return ("" if v is None else str(v).strip()).upper() or "INFO"
 
-    @field_validator("database_url_override", mode="before")
+    @field_validator("database_url", mode="before")
     @classmethod
-    def _v_database_url_override(cls, v: Any) -> str | None:
+    def _v_database_url(cls, v: Any) -> str:
+        if v in (None, ""):
+            return DEFAULT_DATABASE_URL
+        return str(v).strip()
+
+    @field_validator("database_sslrootcert", mode="before")
+    @classmethod
+    def _v_database_sslrootcert(cls, v: Any) -> str | None:
         if v in (None, ""):
             return None
         return str(v).strip()
@@ -116,26 +126,11 @@ class Settings(BaseSettings):
     @classmethod
     def _v_db_auth_mode(cls, v: Any) -> str:
         if v in (None, ""):
-            return "sql_password"
+            return DEFAULT_DATABASE_AUTH_MODE
         mode = str(v).strip().lower()
-        if mode not in {"sql_password", "managed_identity"}:
-            raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
+        if mode not in {"password", "managed_identity"}:
+            raise ValueError("ADE_DATABASE_AUTH_MODE must be 'password' or 'managed_identity'")
         return mode
-
-    @field_validator(
-        "sql_host",
-        "sql_user",
-        "sql_password",
-        "sql_database",
-        "sql_encrypt",
-        "sql_trust_server_certificate",
-        mode="before",
-    )
-    @classmethod
-    def _v_sql_str(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip()
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
@@ -144,90 +139,35 @@ class Settings(BaseSettings):
         else:
             self.data_dir = self.data_dir.expanduser().resolve()
 
-        if self.database_url_override:
-            url = make_url(self.database_url_override)
-        else:
-            sql_vars = {
-                "host": self.sql_host,
-                "user": self.sql_user,
-                "password": self.sql_password,
-                "database": self.sql_database,
-            }
-            if self.database_auth_mode == "managed_identity":
-                required = ["host", "database"]
-            else:
-                required = ["host", "user", "password", "database"]
+        if not self.database_url:
+            raise ValueError("ADE_DATABASE_URL is required.")
 
-            missing = [key for key in required if not sql_vars[key]]
-            if missing:
-                raise ValueError(
-                    "Missing required ADE_SQL_* values: "
-                    + ", ".join(f"ADE_SQL_{name.upper()}" for name in missing)
-                )
+        url = make_url(self.database_url)
+        drivername = _normalize_pg_driver(url.drivername)
+        if not drivername.startswith("postgresql"):
+            raise ValueError("Only Postgres is supported. Use postgresql+psycopg://... for ADE_DATABASE_URL.")
+        if drivername != url.drivername:
+            url = url.set(drivername=drivername)
 
-            query = {"driver": "ODBC Driver 18 for SQL Server"}
-            if self.sql_encrypt:
-                query["Encrypt"] = self.sql_encrypt
-            if self.sql_trust_server_certificate:
-                query["TrustServerCertificate"] = self.sql_trust_server_certificate
-
-            if self.database_auth_mode == "managed_identity":
-                url = URL.create(
-                    drivername="mssql+pyodbc",
-                    username=None,
-                    password=None,
-                    host=self.sql_host,
-                    port=self.sql_port,
-                    database=self.sql_database,
-                    query=query,
-                )
-            else:
-                url = URL.create(
-                    drivername="mssql+pyodbc",
-                    username=self.sql_user,
-                    password=self.sql_password,
-                    host=self.sql_host,
-                    port=self.sql_port,
-                    database=self.sql_database,
-                    query=query,
-                )
-
-        url = make_url(url.render_as_string(hide_password=False))
-        query = dict(url.query or {})
-
-        if url.get_backend_name() != "mssql":
-            raise ValueError("Only SQL Server is supported. Use mssql+pyodbc://... for ADE_DATABASE_URL.")
-
-        if url.get_backend_name() == "mssql":
-            present = {k.lower() for k in query}
-
-            def _setdefault_ci(key: str, value: str) -> None:
-                if key.lower() not in present:
-                    query[key] = value
-                    present.add(key.lower())
-
-            _setdefault_ci("driver", "ODBC Driver 18 for SQL Server")
-            if self.sql_encrypt:
-                _setdefault_ci("Encrypt", self.sql_encrypt)
-            if self.sql_trust_server_certificate:
-                _setdefault_ci("TrustServerCertificate", self.sql_trust_server_certificate)
-
-        if self.database_auth_mode == "managed_identity":
-            if url.get_backend_name() != "mssql":
-                raise ValueError("managed_identity requires an mssql+pyodbc URL")
-            url = URL.create(
-                drivername=url.drivername,
-                username=None,
-                password=None,
-                host=url.host,
-                port=url.port,
-                database=url.database,
-                query=query,
+        required_values = {
+            "host": url.host,
+            "user": url.username,
+            "database": url.database,
+        }
+        missing = [name for name, value in required_values.items() if not value]
+        if self.database_auth_mode == "password" and not url.password:
+            missing.append("password")
+        if missing:
+            raise ValueError(
+                "ADE_DATABASE_URL is missing required parts: " + ", ".join(missing)
             )
-        elif query != url.query:
+
+        if self.database_sslrootcert:
+            query = dict(url.query or {})
+            query["sslrootcert"] = self.database_sslrootcert
             url = url.set(query=query)
 
-        self._database_url = url.render_as_string(hide_password=False)
+        self.database_url = url.render_as_string(hide_password=False)
 
         if self.worker_run_artifact_ttl_days is not None and self.worker_run_artifact_ttl_days <= 0:
             self.worker_run_artifact_ttl_days = None
@@ -235,10 +175,6 @@ class Settings(BaseSettings):
             self.worker_run_timeout_seconds = None
 
         return self
-
-    @property
-    def database_url(self) -> str:
-        return self._database_url
 
     @property
     def venvs_dir(self) -> Path:

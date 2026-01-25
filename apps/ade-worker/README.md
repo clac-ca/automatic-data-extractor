@@ -4,14 +4,19 @@ Minimal, reliable worker that processes **run** records and provisions reusable
 **environment** rows stored in a database.
 
 Supported databases:
-- SQL Server / Azure SQL
+- Postgres
 
 ## How it works
 
 - The API inserts rows into `runs` with `status=queued`.
-- The worker ensures matching `environments` rows (keyed by `deps_digest`) and claims them
-  by setting `status=building`.
-- The worker only claims runs whose environment is `ready`, setting run status to `running`.
+- Postgres triggers `NOTIFY ade_run_queued` when a run is queued.
+- Each worker keeps a dedicated `LISTEN` connection and wakes immediately on notifications.
+- On wake (or periodic safety sweep), the worker claims runs using
+  `SELECT ... FOR UPDATE SKIP LOCKED`.
+- For each claimed run, the worker ensures a matching `environments` row exists
+  (keyed by `deps_digest`). If the environment is not `ready`, the worker tries
+  to claim it for build; if another worker is building, the run is requeued briefly.
+- Environment builds run inline before the engine is executed.
 - Runs use a **lease** (`claim_expires_at`) with periodic **heartbeats** and retry backoff.
 - Environments transition to `ready`/`failed`; runs transition to `succeeded`/`failed`.
 - Dependency changes create **new environments** (no in-place rebuilds).
@@ -20,22 +25,22 @@ Supported databases:
 ## Run
 
 ```bash
-export ADE_SQL_HOST="sql"
-export ADE_SQL_PORT="1433"
-export ADE_SQL_DATABASE="ade"
-export ADE_SQL_USER="sa"
-export ADE_SQL_PASSWORD="YourStrong!Passw0rd"
+export ADE_DATABASE_URL="postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
+export ADE_DATABASE_AUTH_MODE="password"
 python -m ade_worker
 ```
 
 ## Important env vars
 
-- `ADE_SQL_HOST`, `ADE_SQL_PORT`, `ADE_SQL_DATABASE`, `ADE_SQL_USER`, `ADE_SQL_PASSWORD`
-- `ADE_DATABASE_AUTH_MODE` (optional; `managed_identity` for Azure SQL)
+- `ADE_DATABASE_URL` (canonical SQLAlchemy URL)
+- `ADE_DATABASE_AUTH_MODE` (`password` or `managed_identity`)
+- `ADE_DATABASE_SSLROOTCERT` (optional CA path for `verify-full`)
 - `ADE_DATA_DIR` (default `./data`)
 - `ADE_ENGINE_PACKAGE_PATH` (default `ade-engine @ git+https://github.com/clac-ca/ade-engine@main`; accepts local path or pip spec)
 - `ADE_WORKER_CONCURRENCY` (default: conservative auto)
 - `ADE_WORKER_LEASE_SECONDS` (default `900`)
+- `ADE_WORKER_LISTEN_TIMEOUT_SECONDS` (default `60`, safety sweep interval)
+- `ADE_WORKER_NOTIFY_JITTER_MS` (default `200`, random jitter after notify)
 - `ADE_WORKER_ENABLE_GC` (default `1` for single-host)
 - `ADE_WORKER_GC_INTERVAL_SECONDS` (default `3600`)
 - `ADE_WORKER_ENV_TTL_DAYS` (default `30`)

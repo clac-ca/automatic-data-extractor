@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
-    JSON,
     BigInteger,
     ForeignKey,
     Index,
@@ -18,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -79,7 +79,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     stored_uri: Mapped[str] = mapped_column(String(512), nullable=False)
     attributes: Mapped[dict[str, object]] = mapped_column(
         "attributes",
-        MutableDict.as_mutable(JSON),
+        MutableDict.as_mutable(JSONB),
         nullable=False,
         default=dict,
     )

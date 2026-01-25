@@ -6,7 +6,7 @@ SQLAlchemy engine + session helpers for the worker.
 Rules:
 - Settings are defined ONLY in ade_worker.settings.Settings (Pydantic).
 - This module does NOT read env vars directly.
-- Supports SQL Server/Azure SQL only.
+- Postgres-only (psycopg v3).
 """
 
 from __future__ import annotations
@@ -19,38 +19,24 @@ from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from ade_worker.settings import Settings, get_settings
-from .azure_sql_auth import attach_azure_sql_managed_identity
+from .azure_postgres_auth import attach_azure_postgres_managed_identity
 
 
-def _mssql_apply_defaults(url: URL) -> URL:
+def _apply_sslrootcert(url: URL, sslrootcert: str | None) -> URL:
+    if not sslrootcert:
+        return url
     query = dict(url.query or {})
-    present = {k.lower() for k in query}
-
-    def _setdefault_ci(key: str, value: str) -> None:
-        if key.lower() not in present:
-            query[key] = value
-            present.add(key.lower())
-
-    _setdefault_ci("driver", "ODBC Driver 18 for SQL Server")
-    _setdefault_ci("Encrypt", "yes")
-    _setdefault_ci("TrustServerCertificate", "no")
+    query["sslrootcert"] = sslrootcert
     return url.set(query=query)
 
-def _create_mssql_engine(url: URL, settings: Settings) -> Engine:
-    if url.drivername == "mssql":
-        url = url.set(drivername="mssql+pyodbc")
-    if not url.drivername.startswith("mssql+pyodbc"):
-        raise ValueError("For SQL Server, use mssql+pyodbc://... (pyodbc is required).")
 
-    url = _mssql_apply_defaults(url)
+def _create_postgres_engine(url: URL, settings: Settings) -> Engine:
+    if url.drivername in {"postgresql", "postgres"}:
+        url = url.set(drivername="postgresql+psycopg")
+    if not url.drivername.startswith("postgresql+psycopg"):
+        raise ValueError("For Postgres, use postgresql+psycopg://... (psycopg is required).")
 
-    if settings.database_auth_mode == "managed_identity":
-        url = url.set(username=None, password=None)
-        query = dict(url.query or {})
-        for k in list(query.keys()):
-            if k.lower() in {"authentication", "trusted_connection"}:
-                query.pop(k, None)
-        url = url.set(query=query)
+    url = _apply_sslrootcert(url, settings.database_sslrootcert)
 
     engine = create_engine(
         url,
@@ -61,11 +47,10 @@ def _create_mssql_engine(url: URL, settings: Settings) -> Engine:
         max_overflow=settings.database_max_overflow,
         pool_timeout=settings.database_pool_timeout,
         pool_recycle=settings.database_pool_recycle,
-        fast_executemany=True,
     )
 
     if settings.database_auth_mode == "managed_identity":
-        attach_azure_sql_managed_identity(engine, client_id=settings.database_mi_client_id)
+        attach_azure_postgres_managed_identity(engine)
 
     return engine
 
@@ -77,9 +62,9 @@ def build_engine(settings: Settings | None = None) -> Engine:
     url = make_url(settings.database_url)
     backend = url.get_backend_name()
 
-    if backend == "mssql":
-        return _create_mssql_engine(url, settings)
-    raise ValueError("Unsupported database backend. Use mssql+pyodbc://.")
+    if backend == "postgresql":
+        return _create_postgres_engine(url, settings)
+    raise ValueError("Unsupported database backend. Use postgresql+psycopg://.")
 
 
 def build_sessionmaker(engine: Engine) -> sessionmaker[Session]:

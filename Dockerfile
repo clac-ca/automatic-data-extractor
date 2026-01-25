@@ -14,7 +14,7 @@ WORKDIR /src
 
 # git required for ade-engine install via git+https for now
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git ca-certificates build-essential unixodbc-dev \
+  && apt-get install -y --no-install-recommends git ca-certificates build-essential \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --upgrade pip \
@@ -58,17 +58,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 
-# ODBC Driver 18 runtime deps
-RUN set -eux; \
-  apt-get update; \
-  apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
-  curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb; \
-  dpkg -i /tmp/packages-microsoft-prod.deb; \
-  rm /tmp/packages-microsoft-prod.deb; \
-  apt-get update; \
-  ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc; \
-  apt-get purge -y --auto-remove curl gnupg; \
-  rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 10001 appuser
 

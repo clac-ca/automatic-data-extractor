@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import shutil
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,11 +15,12 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..paths import PathManager
-from ..queue import RunClaim, RunQueue
+from ..queue import EnvironmentClaim, RunClaim, RunQueue
 from ..repo import Repo
 from ..run_results import parse_run_fields, parse_run_metrics, parse_run_table_columns
 from ..settings import Settings
-from ..subprocess_runner import EventLog, SubprocessRunner
+from ..subprocess_runner import EventLog, HeartbeatLostError, SubprocessRunner
+from .environment import EnvironmentJob
 
 logger = logging.getLogger("ade_worker")
 
@@ -283,6 +285,7 @@ class RunJob:
     settings: Settings
     SessionLocal: sessionmaker[Session]
     queue: RunQueue
+    env_job: EnvironmentJob
     repo: Repo
     paths: PathManager
     runner: SubprocessRunner
@@ -297,8 +300,8 @@ class RunJob:
         env["PYTHONUNBUFFERED"] = "1"
         return env
 
-    def _heartbeat_run(self, run: RunClaim) -> None:
-        self.queue.heartbeat(
+    def _heartbeat_run(self, run: RunClaim) -> bool:
+        return self.queue.heartbeat(
             run_id=run.id,
             worker_id=self.worker_id,
             now=utcnow(),
@@ -324,6 +327,68 @@ class RunJob:
         if ok:
             logger.info("run.requeued.env_not_ready run_id=%s", run.id)
 
+    def _build_environment_for_run(self, *, run_claim: RunClaim, env_claim: EnvironmentClaim) -> bool:
+        """Build an environment while keeping the run lease alive.
+
+        Returns True if the run lease was lost during the build.
+        """
+        stop = threading.Event()
+        lost = threading.Event()
+
+        def _run_heartbeat_loop() -> None:
+            interval = max(1.0, self.settings.worker_lease_seconds / 3)
+            while not stop.wait(interval):
+                if not self._heartbeat_run(run_claim):
+                    lost.set()
+                    break
+
+        thread = threading.Thread(target=_run_heartbeat_loop, daemon=True)
+        thread.start()
+        try:
+            self.env_job.process(env_claim)
+        finally:
+            stop.set()
+            thread.join(timeout=2.0)
+
+        return lost.is_set()
+
+    def _ensure_environment_ready(
+        self,
+        *,
+        run: dict[str, Any],
+        run_claim: RunClaim,
+        now: datetime,
+    ) -> tuple[dict[str, Any] | None, str | None, bool]:
+        with self.SessionLocal.begin() as session:
+            env = self.repo.get_or_create_environment(session=session, run=run, now=now)
+
+        if not env:
+            return None, "Environment missing", False
+
+        status = str(env.get("status") or "").lower()
+        if status == "ready":
+            return env, None, False
+
+        env_id = str(env["id"])
+        env_claim = self.env_job.queue.claim_for_build(
+            env_id=env_id,
+            worker_id=self.worker_id,
+            now=now,
+            lease_seconds=int(self.settings.worker_lease_seconds),
+        )
+        if env_claim is None:
+            return None, "Environment building", False
+
+        lost_claim = self._build_environment_for_run(run_claim=run_claim, env_claim=env_claim)
+        if lost_claim:
+            return None, None, True
+
+        env = self.repo.load_environment(env_id)
+        if env and str(env.get("status") or "").lower() == "ready":
+            return env, None, False
+
+        return None, "Environment build failed", False
+
     def process(self, claim: RunClaim) -> None:
         now = utcnow()
         run_id = claim.id
@@ -339,22 +404,36 @@ class RunJob:
         configuration_id = str(run["configuration_id"])
         document_id = str(run["input_document_id"])
 
-        env = self.repo.load_ready_environment_for_run(run)
-        if not env:
-            self._release_for_env(claim, now=now, error_message="Environment not ready")
-            return
-
-        environment_id = str(env["id"])
-        deps_digest = str(env["deps_digest"])
-
         ctx = {
             "job_id": run_id,
             "workspace_id": workspace_id,
             "configuration_id": configuration_id,
-            "environment_id": environment_id,
+            "environment_id": None,
         }
 
         event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
+
+        env, env_error, lost_claim = self._ensure_environment_ready(
+            run=run,
+            run_claim=claim,
+            now=now,
+        )
+        if lost_claim:
+            event_log.emit(
+                event="run.lost_claim",
+                level="warning",
+                message="Lease expired during environment build",
+                context=ctx,
+            )
+            return
+        if not env:
+            self._release_for_env(claim, now=now, error_message=env_error or "Environment not ready")
+            return
+
+        environment_id = str(env["id"])
+        deps_digest = str(env["deps_digest"])
+        ctx["environment_id"] = environment_id
+
         event_log.emit(event="run.start", message="Starting run", context=ctx)
 
         venv_dir = self.paths.environment_venv_dir(
@@ -436,20 +515,33 @@ class RunJob:
             return
 
         if options.validate_only:
-            cmd = engine_config_validate_cmd(python_bin=python_bin, config_dir=config_dir, log_level=options.log_level)
-            res = self.runner.run(
-                cmd,
-                event_log=event_log,
-                scope="run.validate",
-                timeout_seconds=float(self.settings.worker_run_timeout_seconds)
-                if self.settings.worker_run_timeout_seconds
-                else None,
-                cwd=None,
-                env=self._pip_env(),
-                heartbeat=lambda: self._heartbeat_run(claim),
-                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
-                context=ctx,
+            cmd = engine_config_validate_cmd(
+                python_bin=python_bin,
+                config_dir=config_dir,
+                log_level=options.log_level,
             )
+            try:
+                res = self.runner.run(
+                    cmd,
+                    event_log=event_log,
+                    scope="run.validate",
+                    timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+                    if self.settings.worker_run_timeout_seconds
+                    else None,
+                    cwd=None,
+                    env=self._pip_env(),
+                    heartbeat=lambda: self._heartbeat_run(claim),
+                    heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
+                    context=ctx,
+                )
+            except HeartbeatLostError:
+                event_log.emit(
+                    event="run.lost_claim",
+                    level="warning",
+                    message="Lease expired during validation",
+                    context=ctx,
+                )
+                return
             finished_at = utcnow()
             if res.exit_code == 0:
                 with self.SessionLocal.begin() as session:
@@ -460,7 +552,12 @@ class RunJob:
                         now=finished_at,
                     )
                     if not ok:
-                        event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                        event_log.emit(
+                            event="run.lost_claim",
+                            level="warning",
+                            message="Lost run claim before ack",
+                            context=ctx,
+                        )
                         return
                     self.repo.record_run_result(
                         session=session,
@@ -553,20 +650,24 @@ class RunJob:
             sheet_names=sheet_names,
         )
 
-        res = self.runner.run(
-            cmd,
-            event_log=event_log,
-            scope="run.engine",
-            timeout_seconds=float(self.settings.worker_run_timeout_seconds)
-            if self.settings.worker_run_timeout_seconds
-            else None,
-            cwd=None,
-            env=self._pip_env(),
-            heartbeat=lambda: self._heartbeat_run(claim),
-            heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
-            context=ctx,
-            on_json_event=on_event,
-        )
+        try:
+            res = self.runner.run(
+                cmd,
+                event_log=event_log,
+                scope="run.engine",
+                timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+                if self.settings.worker_run_timeout_seconds
+                else None,
+                cwd=None,
+                env=self._pip_env(),
+                heartbeat=lambda: self._heartbeat_run(claim),
+                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
+                context=ctx,
+                on_json_event=on_event,
+            )
+        except HeartbeatLostError:
+            event_log.emit(event="run.lost_claim", level="warning", message="Lease expired during engine run", context=ctx)
+            return
 
         finished_at = utcnow()
 

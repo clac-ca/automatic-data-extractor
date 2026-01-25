@@ -5,7 +5,7 @@
 ADE is a multi-app project:
 
 - **ade-api** — HTTP API (FastAPI)
-- **ade-worker** — background worker
+- **ade-worker** — background worker (event-driven via Postgres NOTIFY/LISTEN)
 - **ade-web** — React UI
 - **ade-cli** — CLI + container entrypoint
 
@@ -14,7 +14,7 @@ This repository publishes **one Docker image** that contains **api + worker + cl
 ## Quickstart (Docker, local)
 
 The easiest “it just works” path is Docker Compose because ADE depends on:
-- SQL Server
+- Postgres
 - Blob storage (Azurite locally, Azure Storage in production)
 
 ### One-liner
@@ -25,15 +25,11 @@ curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main
 ```
 
 This starts:
-- SQL Server (local container)
+- Postgres (local container)
 - Azurite (blob-only)
 - ADE (single container by default runs API + worker)
 
-> **Apple Silicon note:** SQL Server Linux containers are x86_64 only today.
-> The compose files set `platform: linux/amd64` so the same quickstart works on
-> both Intel Linux/Windows and Apple Silicon (via Docker Desktop emulation).
-
-> **Note:** `docker-compose.yml` contains safe **development defaults** (including a default SQL password).
+> **Note:** `docker-compose.yml` contains safe **development defaults** (including a default Postgres password).
 > For anything beyond local evaluation, override values with environment variables or a `.env` file.
 
 ### Optional: use a .env file
@@ -78,7 +74,7 @@ docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data gh
 - Migrations
 - API and worker together
 
-Ensure the database named by `ADE_SQL_DATABASE` already exists (for compose, this is handled by `sql-init`).
+Ensure the database named in `ADE_DATABASE_URL` already exists (for compose, this is handled by `POSTGRES_DB`).
 
 ## Standard production pattern (recommended)
 
@@ -98,22 +94,16 @@ ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f dock
 
 All ADE configuration uses `ADE_*` variables.
 
-### SQL
+### Database (Postgres)
 
-- `ADE_SQL_HOST` (default: `sql`)
-- `ADE_SQL_PORT` (default: `1433`)
-- `ADE_SQL_USER` (default: `sa`)
-- `ADE_SQL_PASSWORD` (default: set in compose quickstart)
-- `ADE_SQL_DATABASE` (default: `ade`)
-- `ADE_SQL_ENCRYPT` (default: `yes`)
-- `ADE_SQL_TRUST_SERVER_CERTIFICATE` (default: `yes` for local SQL container)
+- `ADE_DATABASE_URL` (canonical SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host:5432/db?sslmode=disable`)
+- `ADE_DATABASE_AUTH_MODE` (`password` or `managed_identity`)
+- `ADE_DATABASE_SSLROOTCERT` (optional CA path for verify-full)
 
 ### Storage (Azure Storage or Azurite)
 
-- `ADE_STORAGE_ACCOUNT_NAME` (default: `devstoreaccount1`)
-- `ADE_STORAGE_ACCOUNT_KEY` (default: devstoreaccount1 key for local Azurite)
-- `ADE_STORAGE_BLOB_ENDPOINT` (local default: `http://azurite:10000/<account>`)
-- `ADE_STORAGE_CONNECTION_STRING` (if set, overrides the pieces above)
+- `ADE_STORAGE_CONNECTION_STRING` (canonical; simplest for local/Azurite)
+- `ADE_STORAGE_AUTH_MODE` (`key`, optional; defaults to `key`; managed identity not supported with a connection string)
 
 ## Development (VS Code Devcontainer)
 
@@ -151,13 +141,13 @@ bash scripts/dev/bootstrap.sh --no-web
 ## Build the production image locally
 
 ```bash
-bash scripts/docker/build-image.sh
+ade docker build
 ```
 
 Then:
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local
+ade docker run
 ```
 
 ---

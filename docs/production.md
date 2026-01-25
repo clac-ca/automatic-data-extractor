@@ -10,7 +10,7 @@ The production image is built from the root `Dockerfile` and contains:
 ## Build the image
 
 ```bash
-bash scripts/docker/build-image.sh
+ade docker build
 ```
 
 ## Run with Compose (prod-like locally)
@@ -24,27 +24,28 @@ This runs:
 - API container from the single image
 - Worker container from the same single image
 
-You must provide external SQL + Storage (set `ADE_SQL_*` and `ADE_STORAGE_*` in `.env`).
-Ensure the database named by `ADE_SQL_DATABASE` already exists before starting the containers.
+You must provide external Postgres + Storage (set `ADE_DATABASE_URL`, `ADE_DATABASE_AUTH_MODE`,
+`ADE_STORAGE_CONNECTION_STRING`, and optional `ADE_STORAGE_AUTH_MODE=key` in `.env`).
+Ensure the database named in `ADE_DATABASE_URL` already exists before starting the containers.
 
 ## Run with docker run
 
 API + worker (default `ade start`):
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local
+ade docker run
 ```
 
 API only:
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local api
+ade docker api
 ```
 
 Worker only:
 
 ```bash
-docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local worker
+ade docker worker
 ```
 
 ## CLI inside the container
@@ -52,7 +53,7 @@ docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ad
 You can run commands in a container shell:
 
 ```bash
-docker run --rm -it --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ade-app:local bash
+ade docker shell
 ade --help
 ```
 

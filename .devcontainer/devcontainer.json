@@ -1,5 +1,5 @@
 {
-  "name": "ADE (Python 3.12 + ODBC + Node)",
+  "name": "ADE (Python 3.12 + Postgres + Node)",
   "dockerComposeFile": "docker-compose.yml",
   "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
@@ -20,6 +20,7 @@
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
         "dbaeumer.vscode-eslint",
+        "ms-ossdata.vscode-pgsql",
         "openai.chatgpt"
       ],
       "settings": {
@@ -36,7 +37,7 @@
   "forwardPorts": [
     8000,
     5173,
-    1433,
+    5432,
     10000
   ],
   "portsAttributes": {
@@ -46,8 +47,8 @@
     "5173": {
       "label": "ADE Web (Vite)"
     },
-    "1433": {
-      "label": "SQL Server"
+    "5432": {
+      "label": "Postgres"
     },
     "10000": {
       "label": "Azurite Blob"
