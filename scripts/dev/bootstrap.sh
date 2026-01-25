@@ -13,9 +13,8 @@ set -euo pipefail
 #   bash scripts/dev/bootstrap.sh --no-web  # Python only
 #
 # Environment:
-#   UV_SYNC_ARGS="..."                  # extra uv sync args when a venv is active
-#   PIP_EXTRA_ARGS="..."                # legacy alias for UV_SYNC_ARGS
-#   UV_AUTO_INSTALL=1                   # auto-install uv if missing (default)
+#   PIP_INSTALL_ARGS="..."            # extra pip install args
+#   PIP_EXTRA_ARGS="..."              # legacy alias for PIP_INSTALL_ARGS
 #
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -32,27 +31,8 @@ echo "    python: $(python --version 2>/dev/null || true)"
 
 
 
-# --- uv + Python env ---
-UV_AUTO_INSTALL="${UV_AUTO_INSTALL:-1}"
-
-if ! command -v uv >/dev/null 2>&1; then
-  if [[ "${UV_AUTO_INSTALL}" -eq 1 ]]; then
-    if ! command -v curl >/dev/null 2>&1; then
-      echo "curl is required to install uv automatically." >&2
-      exit 1
-    fi
-    echo "==> Installing uv"
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="${HOME}/.local/bin:${PATH}"
-  else
-    echo "uv is required but was not found on PATH." >&2
-    echo "Install uv from https://astral.sh/uv and re-run this script." >&2
-    exit 1
-  fi
-fi
-
-UV_BIN="$(command -v uv)"
-SYNC_ARGS="${UV_SYNC_ARGS:-${PIP_EXTRA_ARGS:-}}"
+# --- Python env ---
+PIP_INSTALL_ARGS="${PIP_INSTALL_ARGS:-${PIP_EXTRA_ARGS:-}}"
 
 run_maybe_sudo() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -73,22 +53,34 @@ elif [[ -n "${CONDA_PREFIX:-}" ]]; then
   active_env="${CONDA_PREFIX}"
 fi
 
-echo "==> Syncing Python dependencies (uv)"
+echo "==> Installing Python dependencies (pip)"
 if [[ -n "${active_env}" ]]; then
   echo "    Using active environment: ${active_env}"
-  sync_cmd=("${UV_BIN}" sync --locked --active)
+  install_cmd=(python -m pip install)
   # shellcheck disable=SC2086
-  if [[ -n "${SYNC_ARGS}" ]]; then
-    sync_cmd+=( ${SYNC_ARGS} )
+  if [[ -n "${PIP_INSTALL_ARGS}" ]]; then
+    install_cmd+=( ${PIP_INSTALL_ARGS} )
   fi
-  "${sync_cmd[@]}"
+  install_cmd+=(
+    -e "apps/ade-cli[dev]"
+    -e "apps/ade-api[dev]"
+    -e "apps/ade-worker[dev]"
+  )
+  "${install_cmd[@]}"
 else
   echo "    No active virtualenv detected; installing into system interpreter."
   echo "    Tip: create/activate a venv first if you want isolation."
-  requirements_file="$(mktemp -t ade-requirements.XXXXXX.txt)"
-  trap 'rm -f "${requirements_file}"' EXIT
-  "${UV_BIN}" export --locked --format requirements.txt --all-packages --output-file "${requirements_file}"
-  run_maybe_sudo "${UV_BIN}" pip sync --system --break-system-packages "${requirements_file}"
+  install_cmd=(python -m pip install)
+  # shellcheck disable=SC2086
+  if [[ -n "${PIP_INSTALL_ARGS}" ]]; then
+    install_cmd+=( ${PIP_INSTALL_ARGS} )
+  fi
+  install_cmd+=(
+    -e "apps/ade-cli[dev]"
+    -e "apps/ade-api[dev]"
+    -e "apps/ade-worker[dev]"
+  )
+  run_maybe_sudo "${install_cmd[@]}"
 fi
 
 if [[ "${WITH_WEB}" -eq 1 ]]; then
