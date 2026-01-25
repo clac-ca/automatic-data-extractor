@@ -57,18 +57,6 @@ class Settings(BaseSettings):
     database_pool_timeout: int = Field(30, gt=0)
     database_pool_recycle: int = Field(1800, ge=0)
 
-    database_sqlite_journal_mode: Literal[
-        "WAL",
-        "DELETE",
-        "TRUNCATE",
-        "PERSIST",
-        "MEMORY",
-        "OFF",
-    ] = "WAL"
-    database_sqlite_synchronous: Literal["OFF", "NORMAL", "FULL", "EXTRA"] = "NORMAL"
-    database_sqlite_busy_timeout_ms: int = Field(30_000, ge=0)
-    database_sqlite_begin_mode: Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"] | None = None
-
     # ---- Database (derived mssql URL inputs) ------------------------------
     sql_host: str = "sql"
     sql_port: int = Field(default=1433, ge=1, le=65535)
@@ -133,20 +121,6 @@ class Settings(BaseSettings):
         if mode not in {"sql_password", "managed_identity"}:
             raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
         return mode
-
-    @field_validator("database_sqlite_journal_mode", "database_sqlite_synchronous", mode="before")
-    @classmethod
-    def _v_sqlite_pragma_enum(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip().upper()
-
-    @field_validator("database_sqlite_begin_mode", mode="before")
-    @classmethod
-    def _v_sqlite_begin_mode(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip().upper()
 
     @field_validator(
         "sql_host",
@@ -221,11 +195,8 @@ class Settings(BaseSettings):
         url = make_url(url.render_as_string(hide_password=False))
         query = dict(url.query or {})
 
-        if (
-            url.get_backend_name() == "sqlite"
-            and "database_sqlite_busy_timeout_ms" not in self.model_fields_set
-        ):
-            self.database_sqlite_busy_timeout_ms = int(self.database_pool_timeout * 1000)
+        if url.get_backend_name() != "mssql":
+            raise ValueError("Only SQL Server is supported. Use mssql+pyodbc://... for ADE_DATABASE_URL.")
 
         if url.get_backend_name() == "mssql":
             present = {k.lower() for k in query}

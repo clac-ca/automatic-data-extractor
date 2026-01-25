@@ -6,23 +6,19 @@ Standard SQLAlchemy engine + session setup for FastAPI.
 Rules:
 - Settings are defined ONLY in ade_api.settings.Settings (Pydantic).
 - This module does NOT read env vars directly.
-- Supports SQL Server/Azure SQL (SQLite test-only).
+- Supports SQL Server/Azure SQL only.
 """
 
 from __future__ import annotations
 
 import logging
-import sqlite3
-from datetime import datetime
-from pathlib import Path
 from typing import Generator
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy import MetaData, create_engine, event
+from sqlalchemy import MetaData, create_engine
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-from sqlalchemy.pool import NullPool, StaticPool
 
 from ade_api.common.problem_details import ApiError
 from ade_api.core.auth.errors import AuthenticationError, PermissionDeniedError
@@ -51,26 +47,6 @@ class Base(DeclarativeBase):
 # --- Internal helpers -------------------------------------------------------
 
 
-def _is_sqlite_memory(url: URL) -> bool:
-    db = (url.database or "").strip()
-    if not db or db == ":memory:":
-        return True
-    if db.startswith("file:") and (url.query or {}).get("mode") == "memory":
-        return True
-    return False
-
-
-def _ensure_sqlite_parent_dir(url: URL) -> None:
-    db = (url.database or "").strip()
-    if not db or db == ":memory:" or db.startswith("file:"):
-        return
-
-    path = Path(db)
-    if not path.is_absolute():
-        path = (Path.cwd() / path).resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
 def _mssql_apply_defaults(url: URL) -> URL:
     query = dict(url.query or {})
     present = {k.lower() for k in query}
@@ -84,41 +60,6 @@ def _mssql_apply_defaults(url: URL) -> URL:
     _setdefault_ci("Encrypt", "yes")
     _setdefault_ci("TrustServerCertificate", "no")
     return url.set(query=query)
-
-
-def _register_sqlite_datetime_adapter() -> None:
-    sqlite3.register_adapter(datetime, lambda value: value.isoformat(" "))
-
-
-def _create_sqlite_engine(url: URL, settings: Settings) -> Engine:
-    _ensure_sqlite_parent_dir(url)
-    _register_sqlite_datetime_adapter()
-    is_memory = _is_sqlite_memory(url)
-
-    connect_args: dict = {"check_same_thread": False}
-    if settings.database_sqlite_begin_mode:
-        connect_args["isolation_level"] = settings.database_sqlite_begin_mode
-
-    engine = create_engine(
-        url,
-        echo=settings.database_echo,
-        connect_args=connect_args,
-        poolclass=StaticPool if is_memory else NullPool,
-    )
-
-    @event.listens_for(engine, "connect")
-    def _sqlite_pragmas(dbapi_conn, _):
-        cur = dbapi_conn.cursor()
-        try:
-            cur.execute("PRAGMA foreign_keys=ON")
-            cur.execute(f"PRAGMA busy_timeout={int(settings.database_sqlite_busy_timeout_ms)}")
-            cur.execute(f"PRAGMA journal_mode={settings.database_sqlite_journal_mode}")
-            cur.execute(f"PRAGMA synchronous={settings.database_sqlite_synchronous}")
-        finally:
-            cur.close()
-
-    return engine
-
 
 def _create_mssql_engine(url: URL, settings: Settings) -> Engine:
     if url.drivername == "mssql":
@@ -161,12 +102,10 @@ def build_engine(settings: Settings | None = None) -> Engine:
     url = make_url(settings.database_url)
     backend = url.get_backend_name()
 
-    if backend == "sqlite":
-        return _create_sqlite_engine(url, settings)
     if backend == "mssql":
         return _create_mssql_engine(url, settings)
 
-    raise ValueError("Unsupported database backend. Use sqlite:// or mssql+pyodbc://.")
+    raise ValueError("Unsupported database backend. Use mssql+pyodbc://.")
 
 
 # --- FastAPI integration ----------------------------------------------------

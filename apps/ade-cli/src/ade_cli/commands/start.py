@@ -9,7 +9,7 @@ from pathlib import Path
 import typer
 
 from ade_cli.commands import common
-from ade_cli.commands.migrate import run_migrate
+from ade_api.commands.migrate import run_migrate
 
 
 def _prepare_env(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -148,7 +148,7 @@ def run_start(
     typer.echo("🗄️  Running migrations…")
     run_migrate()
 
-    worker_task = ("worker", ["ade-worker"], common.REPO_ROOT, env)
+    worker_task = ("worker", ["ade-worker", "start"], common.REPO_ROOT, env)
 
     typer.echo(f"🚀 Starting ADE API on http://{resolved_host}:{resolved_port}")
     typer.echo("🧵 Starting ADE worker…")
@@ -187,43 +187,6 @@ def register(app: typer.Typer) -> None:
         ),
     ) -> None:
         run_start(
-            api_port=api_port,
-            api_host=api_host,
-            api_workers=api_workers,
-            web=web,
-        )
-
-    @app.command(
-        name="api",
-        help="Start ADE API only (runs migrations; serves web if enabled).",
-    )
-    def api(
-        api_port: int = typer.Option(
-            None,
-            "--api-port",
-            help="Port for the API server.",
-            envvar="ADE_API_PORT",
-        ),
-        api_host: str = typer.Option(
-            None,
-            "--api-host",
-            help="Host/interface for the API server.",
-            envvar="ADE_API_HOST",
-        ),
-        api_workers: int = typer.Option(
-            None,
-            "--api-workers",
-            help="Number of API worker processes (uvicorn).",
-            envvar="ADE_API_WORKERS",
-            min=1,
-        ),
-        web: bool = typer.Option(
-            True,
-            "--web/--no-web",
-            help="Serve the built frontend from this process.",
-        ),
-    ) -> None:
-        run_api(
             api_port=api_port,
             api_host=api_host,
             api_workers=api_workers,

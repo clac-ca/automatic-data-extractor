@@ -262,7 +262,7 @@ class DocumentEvent(Base):
     __tablename__ = "document_events"
 
     cursor: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer(), "sqlite"),
+        BigInteger(),
         primary_key=True,
         autoincrement=True,
     )

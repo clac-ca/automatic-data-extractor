@@ -66,12 +66,13 @@ class DocumentEventsService:
         return int(value) if value is not None else None
 
     def resolve_cursor(self, *, workspace_id: UUID, cursor: int) -> ChangeCursorResolution:
+        if cursor < 0:
+            cursor = 0
         oldest = self.oldest_cursor(workspace_id=workspace_id)
         latest = self.current_cursor(workspace_id=workspace_id)
         if oldest is not None and cursor < oldest:
-            too_old = oldest > 1
             retention = self._settings.documents_change_feed_retention_period
-            if not too_old and retention and retention.total_seconds() > 0:
+            if retention and retention.total_seconds() > 0:
                 stmt = (
                     select(DocumentEvent.occurred_at)
                     .where(DocumentEvent.workspace_id == workspace_id)
@@ -80,9 +81,7 @@ class DocumentEventsService:
                 )
                 oldest_occurred_at = (self._session.execute(stmt)).scalar_one_or_none()
                 if oldest_occurred_at and utc_now() - oldest_occurred_at > retention:
-                    too_old = True
-            if too_old:
-                raise DocumentEventCursorTooOld(oldest_cursor=oldest, latest_cursor=latest)
+                    raise DocumentEventCursorTooOld(oldest_cursor=oldest, latest_cursor=latest)
         if cursor > latest:
             cursor = latest
         return ChangeCursorResolution(cursor=cursor, oldest=oldest, latest=latest)

@@ -62,13 +62,13 @@ docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data
 ### Start only ade-api + ade-web
 
 ```bash
-docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest api
+docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest api start
 ```
 
 ### Start only ade-worker
 
 ```bash
-docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest worker
+docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest worker start
 ```
 
 ### What `ade start` does

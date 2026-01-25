@@ -1,7 +1,4 @@
 import pytest
-from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
-
 from ade_api.db import build_engine
 from ade_api.settings import Settings
 
@@ -40,12 +37,6 @@ def test_build_engine_normalizes_mssql_driver() -> None:
         engine.dispose()
 
 
-def test_build_engine_sqlite_in_memory_smoke() -> None:
-    settings = Settings(_env_file=None, database_url_override="sqlite:///:memory:")
-    engine = build_engine(settings)
-    try:
-        assert isinstance(engine.pool, StaticPool)
-        with engine.connect() as conn:
-            assert conn.execute(text("SELECT 1")).scalar_one() == 1
-    finally:
-        engine.dispose()
+def test_build_engine_rejects_non_mssql_urls() -> None:
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, database_url_override="postgresql://user:pass@localhost:5432/ade")

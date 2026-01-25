@@ -1,4 +1,4 @@
-"""Alembic environment configuration (SQL Server/Azure SQL; SQLite test-only)."""
+"""Alembic environment configuration (SQL Server/Azure SQL)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.engine import make_url
-
 from ade_api.db import Base, build_engine
 from ade_api.settings import Settings
 
@@ -57,13 +55,6 @@ def _normalized_url(settings: Settings) -> str:
         engine.dispose()
 
 
-def _is_sqlite(url: str) -> bool:
-    try:
-        return make_url(url).get_backend_name() == "sqlite"
-    except Exception:
-        return url.startswith("sqlite")
-
-
 def run_migrations_offline() -> None:
     settings = _build_settings(_get_url_override())
     url = _normalized_url(settings)
@@ -72,7 +63,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=_is_sqlite(url),
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -87,9 +77,6 @@ def run_migrations_online() -> None:
         context.configure(
             connection=existing_connection,
             target_metadata=target_metadata,
-            render_as_batch=_is_sqlite(
-                existing_connection.engine.url.render_as_string(hide_password=False)
-            ),
         )
         with context.begin_transaction():
             context.run_migrations()
@@ -103,7 +90,6 @@ def run_migrations_online() -> None:
             context.configure(
                 connection=connection,
                 target_metadata=target_metadata,
-                render_as_batch=_is_sqlite(url),
             )
             with context.begin_transaction():
                 context.run_migrations()

@@ -103,6 +103,13 @@ async def build_documents_fixture(session):
 async def ensure_configuration(session, workspace_id):
     """Create minimal configuration row to satisfy run foreign keys."""
 
+    existing = session.query(Configuration).filter(
+        Configuration.workspace_id == workspace_id,
+        Configuration.status == ConfigurationStatus.ACTIVE,
+    ).first()
+    if existing is not None:
+        return existing.id
+
     configuration = Configuration(
         workspace_id=workspace_id,
         display_name="Test Config",

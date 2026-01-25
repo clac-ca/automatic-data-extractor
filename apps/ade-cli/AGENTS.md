@@ -12,10 +12,15 @@ Fast reference (run `--help` for details):
 
 - `ade setup` — one-time repo setup (env, hooks).
 - `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
-- `ade start` — start API + worker together (single-container mode; runs migrations). `ade api` / `ade worker` — run API or worker only. `ade build` — build web assets.
-- `ade tests`, `ade lint`, `ade ci` — validation pipelines.
+- `ade start` — start API + worker together (single-container mode; runs migrations).
+- `ade api dev|start|migrate|routes|users|types|test` — API-specific commands.
+- `ade web dev|build|test` — web-specific commands.
+- `ade worker dev|start|test` — worker-specific commands.
+- `ade cli test` — CLI tests.
+- `ade test [suite] [targets...]` — run unit/integration/all tests by target.
+- `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
-- `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade clean` / `ade reset`.
+- `ade clean` / `ade reset` — remove artifacts or reset local state.
 
 ### Help snapshots (truncated)
 
@@ -30,20 +35,18 @@ Commands:
   setup     Bootstrap repo env and hooks
   dev       Run API/web dev servers (+ worker, runs migrations first)
   start     Start API + worker together (single-container mode)
-  api       Start the API only
-  worker    Run the background worker only
   build     Build web assets
-  tests     Run Python/JS tests
+  test      Run test suites by target
   lint      Lint/format helpers
   bundle    Bundle files into Markdown
-  types     Generate frontend API types
-  migrate   Run DB migrations
-  routes    List FastAPI routes
-  users     Manage users/roles
   docker    Local Docker helpers
   clean     Remove build artifacts/caches (use --all to drop node_modules)
   reset     Drop DB tables + reset storage + clean artifacts
   ci        Full lint/test/build pipeline
+  api       API-specific commands
+  web       Web-specific commands
+  worker    Worker-specific commands
+  cli       CLI-specific commands
 ```
 
 ```bash
@@ -86,13 +89,16 @@ ade dev --no-worker
 ade dev --worker
 
 # Run the worker
-ade worker
+ade worker start
 
 # Build web assets
 ade build
 
-# Run all tests
-ade tests
+# Run unit tests for all targets (default)
+ade test
+
+# Run integration tests for API + worker
+ade test integration api worker
 
 # Bundle files for LLM review
 ade bundle --ext md --out /tmp/bundle.md docs/
@@ -107,7 +113,7 @@ ade bundle README.md apps/ade-api/AGENTS.md --clip
 ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 
 # Generate frontend types from OpenAPI
-ade types
+ade api types
 
 # Run the engine directly (see full flags with `python -m ade_engine run --help`)
 ade-engine config init ./tmp/my-config --package-name ade_config

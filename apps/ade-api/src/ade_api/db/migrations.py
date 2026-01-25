@@ -14,8 +14,6 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy.engine import make_url
-
 from ade_api.settings import Settings, get_settings
 
 __all__ = [
@@ -58,8 +56,9 @@ def run_migrations(settings: Settings | None = None, *, revision: str = "head") 
     resolved = settings or get_settings()
     if not resolved.database_url:
         raise ValueError("Settings.database_url is required.")
-    _ensure_sqlite_parent_dir(resolved.database_url)
-    alembic_cfg.set_main_option("sqlalchemy.url", resolved.database_url)
+    # ConfigParser treats % as interpolation; escape to preserve URL encoding.
+    safe_url = resolved.database_url.replace("%", "%%")
+    alembic_cfg.set_main_option("sqlalchemy.url", safe_url)
     command.upgrade(alembic_cfg, revision)
 
 
@@ -83,19 +82,3 @@ async def run_migrations_async(
             f"Alembic migrations exceeded {timeout:.0f}s "
             "(set ADE_DATABASE_MIGRATION_TIMEOUT_S to override)."
         ) from exc
-
-
-def _ensure_sqlite_parent_dir(url: str) -> None:
-    try:
-        parsed = make_url(url)
-    except Exception:
-        return
-    if parsed.get_backend_name() != "sqlite":
-        return
-    db = (parsed.database or "").strip()
-    if not db or db == ":memory:" or db.startswith("file:"):
-        return
-    path = Path(db)
-    if not path.is_absolute():
-        path = (Path.cwd() / path).resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)

@@ -11,16 +11,10 @@ from . import clean_reset
 from . import dev
 from . import docker
 from . import lint_cmd
-from . import migrate
-from . import routes
 from . import setup
 from . import start
 from . import tests
-from . import types_cmd
-from . import users
-from . import worker
-
-COMMAND_MODULES = (
+PROJECT_COMMAND_MODULES = (
     setup,
     dev,
     start,
@@ -28,17 +22,16 @@ COMMAND_MODULES = (
     tests,
     lint_cmd,
     bundle,
-    types_cmd,
-    migrate,
-    routes,
-    users,
-    worker,
     docker,
     clean_reset,
     ci,
 )
 
 
-def register_all(app: typer.Typer) -> None:
-    for module in COMMAND_MODULES:
+def register_project(app: typer.Typer) -> None:
+    for module in PROJECT_COMMAND_MODULES:
         module.register(app)
+
+
+def register_all(app: typer.Typer) -> None:
+    register_project(app)

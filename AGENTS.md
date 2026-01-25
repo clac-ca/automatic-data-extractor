@@ -77,11 +77,11 @@ ade worker
 
 ```bash
 # Quality checks
-ade types
+ade api types
 ade lint --scope backend
 ade lint --scope frontend
 ade lint --fix
-ade tests
+ade test
 ade ci
 ade ci --skip-types
 ade ci --skip-tests
@@ -145,10 +145,10 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 
 ## Frontend API types
 
-- Generated types: `apps/ade-web/src/types/openapi.d.ts`.
-- If missing/stale, run `ade types` before touching frontend API code.
+- Generated types: `apps/ade-web/src/types/generated/openapi.d.ts`.
+- If missing/stale, run `ade api types` before touching frontend API code.
 - Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
 ## 🤖 Agent rules
 
-1. Always run `ade tests` before committing and `ade ci` before pushing or opening a PR.
+1. Always run `ade test` before committing and `ade ci` before pushing or opening a PR.

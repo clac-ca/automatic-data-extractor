@@ -2,25 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from ade_api.main import create_app
-from ade_api.settings import Settings
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
-    database_path = tmp_path / "data" / "db" / "api.sqlite"
-    data_dir = tmp_path / "data"
-    settings = Settings.model_validate({
-        "data_dir": str(data_dir),
-        "database_url_override": f"sqlite:///{database_path}",
-    })
-
-    app = create_app(settings=settings)
+async def test_app_startup_bootstraps_database(empty_database_settings) -> None:
+    app = create_app(settings=empty_database_settings)
 
     with pytest.raises(RuntimeError, match="Database schema is not initialized"):
         async with app.router.lifespan_context(app):

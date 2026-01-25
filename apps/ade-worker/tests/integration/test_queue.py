@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from uuid import uuid4
 
-from sqlalchemy import create_engine, insert, select, update
+from sqlalchemy import insert, select, update
 from sqlalchemy.orm import sessionmaker
 
 from ade_worker.queue import EnvironmentQueue, RunQueue
-from ade_worker.schema import environments, metadata, runs
+from ade_worker.schema import environments, runs
 
 
-def _engine():
-    engine = create_engine("sqlite:///:memory:")
-    metadata.create_all(engine)
-    return engine
+def _uuid() -> str:
+    return str(uuid4())
 
 
 def _insert_environment(
@@ -64,6 +63,7 @@ def _insert_run(
     max_attempts: int = 3,
     claim_expires_at: datetime | None = None,
     claimed_by: str | None = None,
+    input_document_id: str | None = None,
 ) -> None:
     with engine.begin() as conn:
         conn.execute(
@@ -71,7 +71,7 @@ def _insert_run(
                 id=run_id,
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                input_document_id="doc-1",
+                input_document_id=input_document_id or _uuid(),
                 input_sheet_names=None,
                 run_options=None,
                 output_path=None,
@@ -92,16 +92,19 @@ def _insert_run(
         )
 
 
-def test_run_claim_requires_ready_environment() -> None:
-    engine = _engine()
+def test_run_claim_requires_ready_environment(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
+    workspace_id = _uuid()
+    configuration_id = _uuid()
+    env_id = _uuid()
+    run_id = _uuid()
 
     _insert_environment(
         engine,
-        env_id="env-1",
-        workspace_id="ws-1",
-        configuration_id="cfg-1",
+        env_id=env_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:aaa",
         status="queued",
@@ -109,9 +112,9 @@ def test_run_claim_requires_ready_environment() -> None:
     )
     _insert_run(
         engine,
-        run_id="run-1",
-        workspace_id="ws-1",
-        configuration_id="cfg-1",
+        run_id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:aaa",
         status="queued",
@@ -125,19 +128,19 @@ def test_run_claim_requires_ready_environment() -> None:
     with engine.begin() as conn:
         conn.execute(
             update(environments)
-            .where(environments.c.id == "env-1")
+            .where(environments.c.id == env_id)
             .values(status="ready")
         )
 
     claim = queue.claim_next(worker_id="worker-1", now=now, lease_seconds=60)
     assert claim is not None
-    assert claim.id == "run-1"
+    assert claim.id.lower() == run_id.lower()
     assert claim.attempt_count == 1
 
     with engine.begin() as conn:
         row = conn.execute(
             select(runs.c.status, runs.c.claimed_by, runs.c.attempt_count)
-            .where(runs.c.id == "run-1")
+            .where(runs.c.id == run_id)
         ).first()
     assert row is not None
     assert row.status == "running"
@@ -145,17 +148,19 @@ def test_run_claim_requires_ready_environment() -> None:
     assert row.attempt_count == 1
 
 
-def test_run_lease_expire_requeues() -> None:
-    engine = _engine()
+def test_run_lease_expire_requeues(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     expired_at = now - timedelta(minutes=5)
+    run_id = _uuid()
+    workspace_id = _uuid()
+    configuration_id = _uuid()
 
     _insert_run(
         engine,
-        run_id="run-expired",
-        workspace_id="ws-2",
-        configuration_id="cfg-2",
+        run_id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:bbb",
         status="running",
@@ -178,7 +183,7 @@ def test_run_lease_expire_requeues() -> None:
                 runs.c.available_at,
                 runs.c.error_message,
                 runs.c.completed_at,
-            ).where(runs.c.id == "run-expired")
+            ).where(runs.c.id == run_id)
         ).first()
     assert row is not None
     assert row.status == "queued"
@@ -189,16 +194,18 @@ def test_run_lease_expire_requeues() -> None:
     assert row.available_at is not None
 
 
-def test_environment_claim_sets_building() -> None:
-    engine = _engine()
+def test_environment_claim_sets_building(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
+    env_id = _uuid()
+    workspace_id = _uuid()
+    configuration_id = _uuid()
 
     _insert_environment(
         engine,
-        env_id="env-2",
-        workspace_id="ws-3",
-        configuration_id="cfg-3",
+        env_id=env_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:ccc",
         status="queued",
@@ -208,28 +215,30 @@ def test_environment_claim_sets_building() -> None:
     queue = EnvironmentQueue(engine, SessionLocal)
     claim = queue.claim_next(worker_id="worker-2", now=now, lease_seconds=120)
     assert claim is not None
-    assert claim.id == "env-2"
+    assert claim.id.lower() == env_id.lower()
 
     with engine.begin() as conn:
         row = conn.execute(
             select(environments.c.status, environments.c.claimed_by)
-            .where(environments.c.id == "env-2")
+            .where(environments.c.id == env_id)
         ).first()
     assert row is not None
     assert row.status == "building"
     assert row.claimed_by == "worker-2"
 
 
-def test_environment_ack_success_clears_claim() -> None:
-    engine = _engine()
+def test_environment_ack_success_clears_claim(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
+    env_id = _uuid()
+    workspace_id = _uuid()
+    configuration_id = _uuid()
 
     _insert_environment(
         engine,
-        env_id="env-ack",
-        workspace_id="ws-4",
-        configuration_id="cfg-4",
+        env_id=env_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:ddd",
         status="building",
@@ -239,7 +248,7 @@ def test_environment_ack_success_clears_claim() -> None:
     )
 
     queue = EnvironmentQueue(engine, SessionLocal)
-    ok = queue.ack_success(env_id="env-ack", worker_id="worker-3", now=now)
+    ok = queue.ack_success(env_id=env_id, worker_id="worker-3", now=now)
     assert ok is True
 
     with engine.begin() as conn:
@@ -248,7 +257,7 @@ def test_environment_ack_success_clears_claim() -> None:
                 environments.c.status,
                 environments.c.claimed_by,
                 environments.c.claim_expires_at,
-            ).where(environments.c.id == "env-ack")
+            ).where(environments.c.id == env_id)
         ).first()
     assert row is not None
     assert row.status == "ready"
@@ -256,17 +265,19 @@ def test_environment_ack_success_clears_claim() -> None:
     assert row.claim_expires_at is None
 
 
-def test_run_ack_failure_requeues() -> None:
-    engine = _engine()
+def test_run_ack_failure_requeues(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     retry_at = now + timedelta(minutes=2)
+    run_id = _uuid()
+    workspace_id = _uuid()
+    configuration_id = _uuid()
 
     _insert_run(
         engine,
-        run_id="run-fail",
-        workspace_id="ws-5",
-        configuration_id="cfg-5",
+        run_id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:eee",
         status="running",
@@ -279,7 +290,7 @@ def test_run_ack_failure_requeues() -> None:
 
     queue = RunQueue(engine, SessionLocal, backoff=lambda _attempts: 0)
     ok = queue.ack_failure(
-        run_id="run-fail",
+        run_id=run_id,
         worker_id="worker-4",
         now=now,
         error_message="boom",
@@ -296,7 +307,7 @@ def test_run_ack_failure_requeues() -> None:
                 runs.c.available_at,
                 runs.c.error_message,
                 runs.c.completed_at,
-            ).where(runs.c.id == "run-fail")
+            ).where(runs.c.id == run_id)
         ).first()
     assert row is not None
     assert row.status == "queued"
@@ -307,17 +318,19 @@ def test_run_ack_failure_requeues() -> None:
     assert row.completed_at is None
 
 
-def test_run_release_for_env_requeues() -> None:
-    engine = _engine()
+def test_run_release_for_env_requeues(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     retry_at = now + timedelta(seconds=5)
+    run_id = _uuid()
+    workspace_id = _uuid()
+    configuration_id = _uuid()
 
     _insert_run(
         engine,
-        run_id="run-env-missing",
-        workspace_id="ws-6",
-        configuration_id="cfg-6",
+        run_id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:fff",
         status="running",
@@ -330,7 +343,7 @@ def test_run_release_for_env_requeues() -> None:
 
     queue = RunQueue(engine, SessionLocal, backoff=lambda _attempts: 0)
     ok = queue.release_for_env(
-        run_id="run-env-missing",
+        run_id=run_id,
         worker_id="worker-5",
         retry_at=retry_at,
         error_message="Environment missing on disk",
@@ -347,7 +360,7 @@ def test_run_release_for_env_requeues() -> None:
                 runs.c.error_message,
                 runs.c.completed_at,
                 runs.c.attempt_count,
-            ).where(runs.c.id == "run-env-missing")
+            ).where(runs.c.id == run_id)
         ).first()
     assert row is not None
     assert row.status == "queued"

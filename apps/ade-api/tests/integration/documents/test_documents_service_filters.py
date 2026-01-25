@@ -216,7 +216,7 @@ async def test_list_documents_includes_last_run_message(db_session, settings) ->
     assert processed_record.last_run is not None
     assert processed_record.last_run.id == run.id
     assert processed_record.last_run.status == RunStatus.FAILED
-    assert processed_record.last_run.error_summary == "Request failed with status 404"
+    assert processed_record.last_run.error_message == "Request failed with status 404"
     assert processed_record.last_run.completed_at == run.completed_at
 
     uploaded_record = next(item for item in result.items if item.id == uploaded.id)

@@ -2,24 +2,26 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from sqlalchemy import create_engine, insert, select, text
+from sqlalchemy import insert, select, text
 from sqlalchemy.orm import sessionmaker
 
 from ade_worker.gc import gc_environments
 from ade_worker.paths import PathManager
-from ade_worker.schema import environments, metadata, runs
+from ade_worker.schema import environments, runs
 
 
 def _create_config_table(engine) -> None:
     with engine.begin() as conn:
         conn.execute(
             text(
+                "IF OBJECT_ID('dbo.configurations', 'U') IS NULL "
                 "CREATE TABLE configurations ("
-                "id TEXT PRIMARY KEY, "
-                "status TEXT NOT NULL"
+                "id NVARCHAR(64) PRIMARY KEY, "
+                "status NVARCHAR(32) NOT NULL"
                 ")"
             )
         )
+        conn.execute(text("DELETE FROM configurations"))
 
 
 def _insert_configuration(engine, *, config_id: str, status: str) -> None:
@@ -109,15 +111,8 @@ def _make_env_dir(paths: PathManager, *, workspace_id: str, configuration_id: st
     return env_path
 
 
-def _engine() -> object:
-    engine = create_engine("sqlite:///:memory:")
-    metadata.create_all(engine)
+def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
-    return engine
-
-
-def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
-    engine = _engine()
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
@@ -161,8 +156,8 @@ def test_gc_env_skips_when_run_active(tmp_path: Path) -> None:
     assert row is not None
 
 
-def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
-    engine = _engine()
+def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
+    _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
@@ -196,8 +191,8 @@ def test_gc_env_deletes_cold_non_active(tmp_path: Path) -> None:
     assert row is None
 
 
-def test_gc_env_idempotent(tmp_path: Path) -> None:
-    engine = _engine()
+def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
+    _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")

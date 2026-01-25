@@ -94,7 +94,6 @@ class Run(UUIDPrimaryKeyMixin, Base):
             "input_document_id",
             "configuration_id",
             unique=True,
-            sqlite_where=text("status IN ('queued','running')"),
             mssql_where=text("status IN ('queued','running')"),
         ),
         Index(

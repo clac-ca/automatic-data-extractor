@@ -1,7 +1,7 @@
 """Queues for environments and runs stored in the ADE database.
 
 Design goals:
-- Works on SQL Server/Azure SQL (SQLite test-only).
+- Works on SQL Server/Azure SQL.
 - Atomic claim per table.
 - Runs use leases + heartbeats for long-running work.
 """
@@ -17,33 +17,6 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 # --- SQL snippets ---
-
-SQLITE_BEGIN_IMMEDIATE = "BEGIN IMMEDIATE"
-
-SQLITE_PROBE_ENVIRONMENT = """    SELECT id
-FROM environments
-WHERE status = 'queued'
-ORDER BY created_at ASC
-LIMIT 1;
-"""
-
-SQLITE_CLAIM_ENVIRONMENT = """    UPDATE environments
-SET
-    status = 'building',
-    claimed_by = :worker_id,
-    claim_expires_at = :lease_expires_at,
-    error_message = NULL,
-    updated_at = :now
-WHERE id = (
-    SELECT id
-    FROM environments
-    WHERE status = 'queued'
-    ORDER BY created_at ASC
-    LIMIT 1
-)
-AND status = 'queued'
-RETURNING id;
-"""
 
 MSSQL_CLAIM_ENVIRONMENT = """    SET NOCOUNT ON;
 DECLARE @claimed TABLE (id uniqueidentifier);
@@ -62,48 +35,6 @@ SET
     updated_at = :now
 OUTPUT inserted.id INTO @claimed;
 SELECT id FROM @claimed;
-"""
-
-SQLITE_PROBE_RUN = """    SELECT runs.id
-FROM runs
-JOIN environments
-  ON environments.workspace_id = runs.workspace_id
- AND environments.configuration_id = runs.configuration_id
- AND environments.engine_spec = runs.engine_spec
- AND environments.deps_digest = runs.deps_digest
-WHERE runs.status = 'queued'
-  AND runs.available_at <= :now
-  AND runs.attempt_count < runs.max_attempts
-  AND environments.status = 'ready'
-ORDER BY runs.available_at ASC, runs.created_at ASC
-LIMIT 1;
-"""
-
-SQLITE_CLAIM_RUN = """    UPDATE runs
-SET
-    status = 'running',
-    claimed_by = :worker_id,
-    claim_expires_at = :lease_expires_at,
-    started_at = COALESCE(started_at, :now),
-    attempt_count = attempt_count + 1,
-    error_message = NULL
-WHERE id = (
-    SELECT runs.id
-    FROM runs
-    JOIN environments
-      ON environments.workspace_id = runs.workspace_id
-     AND environments.configuration_id = runs.configuration_id
-     AND environments.engine_spec = runs.engine_spec
-     AND environments.deps_digest = runs.deps_digest
-    WHERE runs.status = 'queued'
-      AND runs.available_at <= :now
-      AND runs.attempt_count < runs.max_attempts
-      AND environments.status = 'ready'
-    ORDER BY runs.available_at ASC, runs.created_at ASC
-    LIMIT 1
-)
-AND status = 'queued'
-RETURNING id, attempt_count, max_attempts;
 """
 
 MSSQL_CLAIM_RUN = """    SET NOCOUNT ON;
@@ -318,27 +249,12 @@ class EnvironmentQueue:
             "lease_expires_at": lease_expires_at,
         }
 
-        if self.dialect == "sqlite":
-            with self._SessionLocal() as session:
-                probe = session.execute(text(SQLITE_PROBE_ENVIRONMENT)).mappings().first()
-            if not probe:
-                return None
-            with self._SessionLocal() as session:
-                try:
-                    session.connection().exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
-                    row = session.execute(text(SQLITE_CLAIM_ENVIRONMENT), params).mappings().first()
-                    session.commit()
-                except Exception:
-                    session.rollback()
-                    raise
-            return EnvironmentClaim(id=str(row["id"])) if row else None
+        if self.dialect != "mssql":
+            raise ValueError(f"Unsupported dialect: {self.dialect}")
 
-        if self.dialect == "mssql":
-            with self._SessionLocal.begin() as session:
-                row = session.execute(text(MSSQL_CLAIM_ENVIRONMENT), params).mappings().first()
-            return EnvironmentClaim(id=str(row["id"])) if row else None
-
-        raise ValueError(f"Unsupported dialect: {self.dialect}")
+        with self._SessionLocal.begin() as session:
+            row = session.execute(text(MSSQL_CLAIM_ENVIRONMENT), params).mappings().first()
+        return EnvironmentClaim(id=str(row["id"])) if row else None
 
     def heartbeat(
         self,
@@ -443,27 +359,12 @@ class RunQueue:
             "lease_expires_at": lease_expires_at,
         }
 
-        if self.dialect == "sqlite":
-            with self._SessionLocal() as session:
-                probe = session.execute(text(SQLITE_PROBE_RUN), {"now": now}).mappings().first()
-            if not probe:
-                return None
-            with self._SessionLocal() as session:
-                try:
-                    session.connection().exec_driver_sql(SQLITE_BEGIN_IMMEDIATE)
-                    row = session.execute(text(SQLITE_CLAIM_RUN), params).mappings().first()
-                    session.commit()
-                except Exception:
-                    session.rollback()
-                    raise
-            return _row_to_run_claim(row) if row else None
+        if self.dialect != "mssql":
+            raise ValueError(f"Unsupported dialect: {self.dialect}")
 
-        if self.dialect == "mssql":
-            with self._SessionLocal.begin() as session:
-                row = session.execute(text(MSSQL_CLAIM_RUN), params).mappings().first()
-            return _row_to_run_claim(row) if row else None
-
-        raise ValueError(f"Unsupported dialect: {self.dialect}")
+        with self._SessionLocal.begin() as session:
+            row = session.execute(text(MSSQL_CLAIM_RUN), params).mappings().first()
+        return _row_to_run_claim(row) if row else None
 
     def heartbeat(
         self,

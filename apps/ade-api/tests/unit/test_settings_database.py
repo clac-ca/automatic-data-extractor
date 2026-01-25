@@ -4,9 +4,9 @@ from sqlalchemy.engine import make_url
 from ade_api.settings import Settings
 
 
-def test_managed_identity_requires_mssql_url() -> None:
+def test_non_mssql_url_is_rejected() -> None:
     with pytest.raises(ValueError):
-        Settings(_env_file=None, database_url_override="sqlite:///:memory:", database_auth_mode="managed_identity")
+        Settings(_env_file=None, database_url_override="postgresql://user:pass@localhost:5432/ade")
 
 
 def test_mssql_driver_defaults_to_odbc_18() -> None:

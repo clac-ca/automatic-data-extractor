@@ -13,6 +13,8 @@ license = { text = "Proprietary" }
 dependencies = [
   "pyperclip>=1.8",
   "typer>=0.12",
+  "ade-api",
+  "ade-worker",
 ]
 
 [project.optional-dependencies]
@@ -40,3 +42,7 @@ include = ["ade_cli*"]
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "unit: fast tests with no external dependencies",
+  "integration: tests requiring external services",
+]

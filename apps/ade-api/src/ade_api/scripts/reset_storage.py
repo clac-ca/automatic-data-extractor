@@ -36,20 +36,6 @@ def _within_data_root(path: Path, data_root: Path) -> bool:
     return True
 
 
-def _resolve_sqlite_database_path(database_url: URL) -> Path | None:
-    if database_url.get_backend_name() != "sqlite":
-        return None
-
-    database = (database_url.database or "").strip()
-    if not database or database == ":memory:" or database.startswith("file:"):
-        return None
-
-    db_path = Path(database)
-    if not db_path.is_absolute():
-        db_path = (REPO_ROOT / db_path).resolve()
-    return db_path
-
-
 def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]:
     targets: set[Path] = set()
 
@@ -66,12 +52,6 @@ def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]
     pip_cache = _normalize(settings.pip_cache_dir)
     if pip_cache and _within_data_root(pip_cache, settings.data_dir):
         add(pip_cache.parent)
-
-    sqlite_path = _resolve_sqlite_database_path(database_url)
-    if sqlite_path:
-        add(sqlite_path)
-        if _within_data_root(sqlite_path, settings.data_dir):
-            add(sqlite_path.parent)
 
     return sorted(targets, key=lambda path: str(path))
 
@@ -119,18 +99,11 @@ def _cleanup_targets(targets: Iterable[Path]) -> list[tuple[Path, Exception]]:
     return errors
 
 
-def _describe_database_target(database_url: URL, sqlite_path: Path | None) -> None:
+def _describe_database_target(database_url: URL) -> None:
     backend = database_url.get_backend_name()
     rendered = database_url.render_as_string(hide_password=True)
     print("Database target:")
-    if backend == "sqlite":
-        if sqlite_path:
-            status = "" if sqlite_path.exists() else " (missing)"
-            print(f"  - SQLite database file: {sqlite_path}{status}")
-        else:
-            print(f"  - SQLite database: {rendered}")
-    else:
-        print(f"  - {backend} database: {rendered}")
+    print(f"  - {backend} database: {rendered}")
 
 
 def _drop_all_tables(settings: Settings) -> int:
@@ -175,11 +148,10 @@ def main(argv: list[str] | None = None) -> int:
     if not settings.database_url:
         raise RuntimeError("Database settings are required (set ADE_SQL_*).")
     database_url = make_url(settings.database_url)
-    sqlite_path = _resolve_sqlite_database_path(database_url)
     targets = _gather_storage_targets(settings, database_url)
 
     _describe_targets(targets)
-    _describe_database_target(database_url, sqlite_path)
+    _describe_database_target(database_url)
 
     if args.dry_run:
         print("Dry run mode enabled; no database tables or paths were removed.")
@@ -196,27 +168,20 @@ def main(argv: list[str] | None = None) -> int:
             print("🛑 storage reset cancelled")
             return 2
 
-    backend = database_url.get_backend_name()
     drop_error: Exception | None = None
     dropped_tables: int | None = None
 
-    if backend == "sqlite":
-        if sqlite_path:
-            print("SQLite database file will be removed from storage paths; skipping table drop.")
-        else:
-            print("SQLite in-memory or URI database detected; no tables to drop.")
-    else:
-        print("Dropping database tables...")
-        try:
-            dropped_tables = _drop_all_tables(settings)
-        except Exception as exc:  # noqa: BLE001
-            drop_error = exc
+    print("Dropping database tables...")
+    try:
+        dropped_tables = _drop_all_tables(settings)
+    except Exception as exc:  # noqa: BLE001
+        drop_error = exc
 
-        if drop_error is None:
-            if dropped_tables:
-                print(f"🗑️  dropped {dropped_tables} table(s)")
-            else:
-                print("No tables found to drop.")
+    if drop_error is None:
+        if dropped_tables:
+            print(f"🗑️  dropped {dropped_tables} table(s)")
+        else:
+            print("No tables found to drop.")
 
     if targets:
         print("Removing storage paths...")

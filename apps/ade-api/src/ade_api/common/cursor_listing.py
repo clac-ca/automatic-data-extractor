@@ -208,6 +208,15 @@ def _normalize_order_by(ordering: ColumnElement[Any] | Sequence[ColumnElement[An
     return (ordering,)
 
 
+def _dedupe_order_by(orderings: Sequence[ColumnElement[Any]]) -> tuple[ColumnElement[Any], ...]:
+    unique: list[ColumnElement[Any]] = []
+    for ordering in orderings:
+        if any(ordering.compare(existing) for existing in unique):
+            continue
+        unique.append(ordering)
+    return tuple(unique)
+
+
 def resolve_cursor_sort(
     tokens: Iterable[str],
     *,
@@ -289,7 +298,7 @@ def resolve_cursor_sort(
         order_by.extend(resolved)
         tokens_out.append("-id" if descending else "id")
 
-    return ResolvedCursorSort(tokens=tokens_out, fields=fields, order_by=tuple(order_by))
+    return ResolvedCursorSort(tokens=tokens_out, fields=fields, order_by=_dedupe_order_by(order_by))
 
 
 def resolve_cursor_sort_sequence(

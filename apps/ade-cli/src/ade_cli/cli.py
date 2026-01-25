@@ -9,7 +9,11 @@ import tomllib
 
 import typer
 
-from ade_cli.commands import register_all
+from ade_cli.commands import register_project
+from ade_cli.commands import web_cmd
+from ade_cli.commands import cli_cmd
+from ade_api.cli import app as api_app
+from ade_worker.cli import app as worker_app
 
 app = typer.Typer(
     add_completion=False,
@@ -128,7 +132,11 @@ def _main(
         typer.echo(ctx.get_help())
 
 
-register_all(app)
+register_project(app)
+app.add_typer(api_app, name="api")
+app.add_typer(worker_app, name="worker")
+app.add_typer(web_cmd.app, name="web")
+app.add_typer(cli_cmd.app, name="cli")
 
 
 if __name__ == "__main__":

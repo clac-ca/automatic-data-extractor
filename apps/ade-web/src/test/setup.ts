@@ -7,6 +7,65 @@ if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
 }
 
 if (typeof window !== "undefined") {
+  if (typeof globalThis.fetch === "function") {
+    Object.defineProperty(window, "fetch", {
+      value: globalThis.fetch.bind(globalThis),
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, "Request", {
+      value: globalThis.Request,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, "Response", {
+      value: globalThis.Response,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, "Headers", {
+      value: globalThis.Headers,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  if (typeof globalThis.AbortController === "function") {
+    Object.defineProperty(window, "AbortController", {
+      value: globalThis.AbortController,
+      configurable: true,
+      writable: true,
+    });
+  }
+  if (typeof globalThis.AbortSignal === "function") {
+    Object.defineProperty(window, "AbortSignal", {
+      value: globalThis.AbortSignal,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  if (typeof globalThis.Request === "function") {
+    const BaseRequest = globalThis.Request;
+    class PatchedRequest extends BaseRequest {
+      constructor(input: RequestInfo | URL, init?: RequestInit) {
+        const nextInit = init?.signal ? { ...init, signal: undefined } : init;
+        super(input, nextInit);
+      }
+    }
+
+    Object.defineProperty(globalThis, "Request", {
+      value: PatchedRequest,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, "Request", {
+      value: PatchedRequest,
+      configurable: true,
+      writable: true,
+    });
+  }
+
   const missingLocalStorage =
     !window.localStorage ||
     typeof window.localStorage.clear !== "function" ||

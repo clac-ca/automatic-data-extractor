@@ -8,13 +8,11 @@ import typer
 from ade_cli.commands import tests as tests_cmd
 
 
-def test_conflicting_flags_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tests_cmd.common, "refresh_paths", lambda: None)
+def test_plan_defaults_and_accepts_target_first() -> None:
+    plan = tests_cmd.TestPlan.from_cli("api", [], default_suite=tests_cmd.TestSuite.UNIT)
 
-    with pytest.raises(typer.Exit) as excinfo:
-        tests_cmd.run_tests(api_only=True, web_only=True)
-
-    assert excinfo.value.exit_code == 1
+    assert plan.suite is tests_cmd.TestSuite.UNIT
+    assert plan.targets == [tests_cmd.TestTarget.API]
 
 
 def test_backend_suite_runs_when_selected(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -37,9 +35,9 @@ def test_backend_suite_runs_when_selected(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     monkeypatch.setattr(tests_cmd.common, "run", fake_run)
 
-    tests_cmd.run_tests(web=False)
+    tests_cmd.run_tests(suite=tests_cmd.TestSuite.UNIT, targets=[tests_cmd.TestTarget.API])
 
-    assert commands == [([sys.executable, "-m", "pytest"], backend_dir)]
+    assert commands == [([sys.executable, "-m", "pytest", "-m", "unit"], backend_dir)]
 
 
 def test_frontend_suite_runs_when_script_present(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -60,7 +58,7 @@ def test_frontend_suite_runs_when_script_present(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(tests_cmd.common, "run", fake_run)
 
-    tests_cmd.run_tests(api=False, web=True)
+    tests_cmd.run_tests(suite=tests_cmd.TestSuite.UNIT, targets=[tests_cmd.TestTarget.WEB])
 
     assert commands == [(["npm-bin", "run", "test"], frontend_dir)]
 
@@ -76,6 +74,6 @@ def test_exit_when_no_suites_run(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
     monkeypatch.setattr(tests_cmd.common, "load_frontend_package_json", lambda: {"scripts": {}})
 
     with pytest.raises(typer.Exit) as excinfo:
-        tests_cmd.run_tests(api=False, web=True)
+        tests_cmd.run_tests(suite=tests_cmd.TestSuite.UNIT, targets=[tests_cmd.TestTarget.WEB])
 
     assert excinfo.value.exit_code == 1

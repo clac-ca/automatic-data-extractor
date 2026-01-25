@@ -1273,6 +1273,28 @@ class DocumentsService:
             (lower_name.like("%.pdf"), DocumentFileType.PDF.value),
             else_=DocumentFileType.UNKNOWN.value,
         )
+        file_type_subquery = (
+            select(
+                Document.id.label("document_id"),
+                file_type_expr.label("file_type"),
+            )
+            .select_from(Document)
+            .subquery()
+        )
+        file_type_rows = self._session.execute(
+            select(
+                file_type_subquery.c.file_type.label("value"),
+                func.count().label("count"),
+            )
+            .select_from(file_type_subquery)
+            .join(filtered_ids, filtered_ids.c.id == file_type_subquery.c.document_id)
+            .group_by(file_type_subquery.c.file_type)
+        ).all()
+        file_type_buckets = [
+            {"value": coerce_value(value), "count": int(count or 0)}
+            for value, count in file_type_rows
+        ]
+        file_type_buckets.sort(key=lambda bucket: str(bucket["value"]))
 
         timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         ranked_runs = (
@@ -1311,7 +1333,7 @@ class DocumentsService:
 
         return {
             "lastRunPhase": {"buckets": status_buckets},
-            "fileType": {"buckets": build_buckets(file_type_expr)},
+            "fileType": {"buckets": file_type_buckets},
         }
 
     @staticmethod

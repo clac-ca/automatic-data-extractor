@@ -41,7 +41,7 @@ relies on older runs endpoints. Key touchpoints:
 
 ## Generated API types
 
-Once the backend endpoints are available, run `ade types` to regenerate
+Once the backend endpoints are available, run `ade api types` to regenerate
 `apps/ade-web/src/types/generated/openapi.d.ts` and add curated schema exports
 under `apps/ade-web/src/types/`. Update the React hooks to use those types
 instead of ad-hoc interfaces.

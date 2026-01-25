@@ -2,27 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import create_engine, insert, select
+from sqlalchemy import insert, select
 from sqlalchemy.orm import sessionmaker
 
 from ade_worker.repo import Repo
 from ade_worker.schema import (
     documents,
     environments,
-    install_document_event_triggers,
-    metadata,
     run_fields,
     run_metrics,
     run_table_columns,
     runs,
 )
-
-
-def _engine():
-    engine = create_engine("sqlite:///:memory:")
-    metadata.create_all(engine)
-    install_document_event_triggers(engine)
-    return engine
 
 
 def _insert_run(
@@ -111,8 +102,7 @@ def _insert_environment(
         )
 
 
-def test_ensure_environment_rows_unique_by_deps_digest() -> None:
-    engine = _engine()
+def test_ensure_environment_rows_unique_by_deps_digest(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
@@ -157,8 +147,7 @@ def test_ensure_environment_rows_unique_by_deps_digest() -> None:
     assert digests == ["sha256:aaa", "sha256:bbb"]
 
 
-def test_ensure_environment_rows_requeues_failed_env() -> None:
-    engine = _engine()
+def test_ensure_environment_rows_requeues_failed_env(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
@@ -198,8 +187,7 @@ def test_ensure_environment_rows_requeues_failed_env() -> None:
     assert row.error_message is None
 
 
-def test_replace_run_metrics_overwrites() -> None:
-    engine = _engine()
+def test_replace_run_metrics_overwrites(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
@@ -249,8 +237,7 @@ def test_replace_run_metrics_overwrites() -> None:
     assert rows[0]["evaluation_findings_total"] == 0
 
 
-def test_replace_run_fields_is_idempotent() -> None:
-    engine = _engine()
+def test_replace_run_fields_is_idempotent(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
@@ -313,8 +300,7 @@ def test_replace_run_fields_is_idempotent() -> None:
     assert second[0]["field"] == "last_name"
 
 
-def test_replace_run_table_columns_is_idempotent() -> None:
-    engine = _engine()
+def test_replace_run_table_columns_is_idempotent(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)

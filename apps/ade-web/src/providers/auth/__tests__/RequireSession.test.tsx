@@ -1,6 +1,6 @@
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { AllProviders } from "@/test/test-utils";
@@ -19,14 +19,30 @@ vi.mock("@/hooks/auth/useSetupStatusQuery", () => ({
   useSetupStatusQuery: (enabled?: boolean) => mockUseSetupStatusQuery(enabled),
 }));
 
+function LocationDisplay() {
+  const location = useLocation();
+  return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
+}
+
+function RouteShell({ children }: { readonly children: React.ReactNode }) {
+  return (
+    <AllProviders>
+      <LocationDisplay />
+      {children}
+    </AllProviders>
+  );
+}
+
 function renderWithHistory(ui: React.ReactElement, path = "/") {
-  window.history.replaceState(null, "", path);
-  const router = createBrowserRouter([
-    { path: "/login", element: <AllProviders>Login</AllProviders> },
-    { path: "/setup", element: <AllProviders>Setup</AllProviders> },
-    { path: "*", element: <AllProviders>{ui}</AllProviders> },
-  ]);
-  return rtlRender(<RouterProvider router={router} />);
+  return rtlRender(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/login" element={<RouteShell>Login</RouteShell>} />
+        <Route path="/setup" element={<RouteShell>Setup</RouteShell>} />
+        <Route path="*" element={<RouteShell>{ui}</RouteShell>} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 describe("RequireSession", () => {
@@ -87,8 +103,7 @@ describe("RequireSession", () => {
 
     renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
-    await waitFor(() => expect(window.location.pathname).toBe("/login"));
-    expect(window.location.search).toBe("?returnTo=%2Fworkspaces");
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/login?returnTo=%2Fworkspaces"));
   });
 
   it("redirects to the setup screen when initial setup is required", async () => {
@@ -114,7 +129,7 @@ describe("RequireSession", () => {
 
     renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
 
-    await waitFor(() => expect(window.location.pathname).toBe("/setup"));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/setup?returnTo=%2Fworkspaces"));
   });
 
   it("preserves the redirect path for non-default routes", async () => {
@@ -127,8 +142,9 @@ describe("RequireSession", () => {
 
     renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces/alpha");
 
-    await waitFor(() => expect(window.location.pathname).toBe("/login"));
-    expect(window.location.search).toBe("?returnTo=%2Fworkspaces%2Falpha");
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent("/login?returnTo=%2Fworkspaces%2Falpha"),
+    );
   });
 
   it("allows retrying when setup status fails to load", async () => {

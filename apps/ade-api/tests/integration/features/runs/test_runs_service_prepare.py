@@ -5,7 +5,7 @@ from sqlalchemy import select
 from ade_api.features.runs.schemas import RunCreateOptions
 from ade_api.models import Run, RunStatus
 
-from tests.unit.features.runs.helpers import build_runs_service
+from tests.integration.features.runs.helpers import build_runs_service
 
 
 def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:

@@ -56,14 +56,6 @@ SSO_PROVIDER_MANAGED_BY = sa.Enum(
 )
 
 
-def _dialect_name() -> Optional[str]:
-    try:
-        bind = op.get_bind()
-    except Exception:
-        return None
-    return bind.dialect.name if bind is not None else None
-
-
 def _column_exists(table: str, column: str) -> bool:
     bind = op.get_bind()
     if bind is None:
@@ -159,11 +151,6 @@ def _drop_document_event_legacy_columns_mssql() -> None:
             op.drop_column("document_events", name)
 
 
-def _drop_sqlite_document_event_triggers() -> None:
-    op.execute("DROP TRIGGER IF EXISTS trg_documents_events_insert;")
-    op.execute("DROP TRIGGER IF EXISTS trg_documents_events_update;")
-
-
 def _drop_mssql_document_event_triggers() -> None:
     op.execute(
         """
@@ -175,58 +162,6 @@ def _drop_mssql_document_event_triggers() -> None:
         """
         IF OBJECT_ID('dbo.trg_documents_events_update', 'TR') IS NOT NULL
             DROP TRIGGER dbo.trg_documents_events_update;
-        """
-    )
-
-
-def _create_sqlite_document_event_triggers() -> None:
-    op.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_documents_events_insert
-        AFTER INSERT ON documents
-        BEGIN
-            INSERT INTO document_events (
-                workspace_id,
-                document_id,
-                event_type,
-                document_version,
-                occurred_at
-            )
-            VALUES (
-                NEW.workspace_id,
-                NEW.id,
-                'document.changed',
-                NEW.version,
-                NEW.updated_at
-            );
-        END;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_documents_events_update
-        AFTER UPDATE ON documents
-        WHEN NEW.version != OLD.version
-        BEGIN
-            INSERT INTO document_events (
-                workspace_id,
-                document_id,
-                event_type,
-                document_version,
-                occurred_at
-            )
-            VALUES (
-                NEW.workspace_id,
-                NEW.id,
-                CASE
-                    WHEN NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL
-                        THEN 'document.deleted'
-                    ELSE 'document.changed'
-                END,
-                NEW.version,
-                NEW.updated_at
-            );
-        END;
         """
     )
 
@@ -296,12 +231,6 @@ def _create_mssql_document_event_triggers() -> None:
     )
 
 
-def _drop_sqlite_run_env_triggers() -> None:
-    op.execute("DROP TRIGGER IF EXISTS trg_runs_events_insert;")
-    op.execute("DROP TRIGGER IF EXISTS trg_runs_events_update;")
-    op.execute("DROP TRIGGER IF EXISTS trg_environments_events_update;")
-
-
 def _drop_mssql_run_env_triggers() -> None:
     op.execute(
         """
@@ -319,96 +248,6 @@ def _drop_mssql_run_env_triggers() -> None:
         """
         IF OBJECT_ID('dbo.trg_environments_events_update', 'TR') IS NOT NULL
             DROP TRIGGER dbo.trg_environments_events_update;
-        """
-    )
-
-
-def _create_run_env_triggers_sqlite() -> None:
-    op.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_runs_events_insert
-        AFTER INSERT ON runs
-        WHEN NEW.input_document_id IS NOT NULL
-        BEGIN
-            INSERT INTO document_events (
-                workspace_id,
-                document_id,
-                event_type,
-                document_version,
-                occurred_at
-            )
-            SELECT
-                NEW.workspace_id,
-                NEW.input_document_id,
-                'document.changed',
-                documents.version,
-                COALESCE(NEW.created_at, CURRENT_TIMESTAMP)
-            FROM documents
-            WHERE documents.id = NEW.input_document_id;
-        END;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_runs_events_update
-        AFTER UPDATE ON runs
-        WHEN NEW.input_document_id IS NOT NULL
-          AND (
-            NEW.status IS NOT OLD.status
-            OR NEW.started_at IS NOT OLD.started_at
-            OR NEW.completed_at IS NOT OLD.completed_at
-            OR NEW.output_path IS NOT OLD.output_path
-            OR NEW.error_message IS NOT OLD.error_message
-          )
-        BEGIN
-            INSERT INTO document_events (
-                workspace_id,
-                document_id,
-                event_type,
-                document_version,
-                occurred_at
-            )
-            SELECT
-                NEW.workspace_id,
-                NEW.input_document_id,
-                'document.changed',
-                documents.version,
-                CURRENT_TIMESTAMP
-            FROM documents
-            WHERE documents.id = NEW.input_document_id;
-        END;
-        """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER IF NOT EXISTS trg_environments_events_update
-        AFTER UPDATE ON environments
-        WHEN (
-            (OLD.status = 'ready' AND NEW.status != 'ready')
-            OR (OLD.status != 'ready' AND NEW.status = 'ready')
-        )
-        BEGIN
-            INSERT INTO document_events (
-                workspace_id,
-                document_id,
-                event_type,
-                document_version,
-                occurred_at
-            )
-            SELECT
-                documents.workspace_id,
-                documents.id,
-                'document.changed',
-                documents.version,
-                CURRENT_TIMESTAMP
-            FROM documents
-            JOIN runs ON runs.id = documents.last_run_id
-            WHERE runs.status = 'queued'
-              AND runs.workspace_id = NEW.workspace_id
-              AND runs.configuration_id = NEW.configuration_id
-              AND runs.engine_spec = NEW.engine_spec
-              AND runs.deps_digest = NEW.deps_digest;
-        END;
         """
     )
 
@@ -520,22 +359,6 @@ def _create_run_env_triggers_mssql() -> None:
               AND r.status = ''queued'';
         END;
         ');
-        """
-    )
-
-
-def _backfill_last_run_id_sqlite() -> None:
-    op.execute(
-        """
-        UPDATE documents
-        SET last_run_id = (
-            SELECT id
-            FROM runs
-            WHERE runs.input_document_id = documents.id
-            ORDER BY runs.created_at DESC, runs.id DESC
-            LIMIT 1
-        )
-        WHERE last_run_id IS NULL;
         """
     )
 
@@ -758,106 +581,6 @@ def _create_document_indexes() -> None:
     )
 
 
-def _rebuild_documents_sqlite() -> None:
-    op.execute("PRAGMA foreign_keys=OFF;")
-    op.execute("DROP TABLE IF EXISTS documents__new;")
-
-    op.create_table(
-        "documents__new",
-        sa.Column("id", GUID(), primary_key=True, nullable=False),
-        sa.Column("workspace_id", GUID(), sa.ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False),
-        sa.Column("original_filename", sa.String(length=255), nullable=False),
-        sa.Column("content_type", sa.String(length=255), nullable=True),
-        sa.Column("byte_size", sa.Integer(), nullable=False),
-        sa.Column("comment_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("sha256", sa.String(length=64), nullable=False),
-        sa.Column("stored_uri", sa.String(length=512), nullable=False),
-        sa.Column("attributes", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("uploaded_by_user_id", GUID(), sa.ForeignKey("users.id", ondelete="NO ACTION"), nullable=True),
-        sa.Column("assignee_user_id", GUID(), sa.ForeignKey("users.id", ondelete="NO ACTION"), nullable=True),
-        sa.Column("source", sa.String(length=50), nullable=False, server_default="manual_upload"),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("last_run_id", GUID(), nullable=True),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deleted_by_user_id", GUID(), sa.ForeignKey("users.id", ondelete="NO ACTION"), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.CheckConstraint(
-            "source IN ('manual_upload')",
-            name="ck_documents_document_source",
-        ),
-    )
-
-    op.execute(
-        """
-        INSERT INTO documents__new (
-            id,
-            workspace_id,
-            original_filename,
-            content_type,
-            byte_size,
-            comment_count,
-            version,
-            sha256,
-            stored_uri,
-            attributes,
-            uploaded_by_user_id,
-            assignee_user_id,
-            source,
-            expires_at,
-            last_run_id,
-            deleted_at,
-            deleted_by_user_id,
-            created_at,
-            updated_at
-        )
-        SELECT
-            id,
-            workspace_id,
-            original_filename,
-            content_type,
-            byte_size,
-            0,
-            version,
-            sha256,
-            stored_uri,
-            attributes,
-            uploaded_by_user_id,
-            assignee_user_id,
-            source,
-            expires_at,
-            NULL,
-            deleted_at,
-            deleted_by_user_id,
-            created_at,
-            updated_at
-        FROM documents;
-        """
-    )
-
-    op.execute("DROP TABLE documents;")
-    op.execute("ALTER TABLE documents__new RENAME TO documents;")
-    op.execute("PRAGMA foreign_keys=ON;")
-
-
-def _upgrade_sqlite() -> None:
-    op.execute("DROP TABLE IF EXISTS _alembic_tmp_documents;")
-    op.execute("DROP TABLE IF EXISTS documents__new;")
-    _drop_sqlite_document_event_triggers()
-    _drop_sqlite_run_env_triggers()
-
-    _rebuild_documents_sqlite()
-    _create_document_comments_tables()
-    _create_sso_tables()
-    _backfill_last_run_id_sqlite()
-    _backfill_comment_count()
-    _create_document_indexes()
-
-    _create_sqlite_document_event_triggers()
-    _create_run_env_triggers_sqlite()
-
-
 def _upgrade_mssql() -> None:
     _ensure_mssql_alembic_version_length()
     _drop_mssql_document_event_triggers()
@@ -896,14 +619,7 @@ def _upgrade_mssql() -> None:
 
 
 def upgrade() -> None:
-    dialect = _dialect_name()
-    if dialect == "sqlite":
-        _upgrade_sqlite()
-        return
-    if dialect == "mssql":
-        _upgrade_mssql()
-        return
-    raise RuntimeError(f"Unsupported dialect for collapsed migration: {dialect}")
+    _upgrade_mssql()
 
 
 def downgrade() -> None:  # pragma: no cover

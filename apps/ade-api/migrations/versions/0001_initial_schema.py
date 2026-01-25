@@ -1,9 +1,8 @@
-"""Initial ADE schema (SQL Server/Azure SQL; SQLite test-only).
+"""Initial ADE schema (SQL Server/Azure SQL).
 
 Notes:
 - GUID primary keys are app-generated (no server default).
-- SQLite: uses constraints-based enums.
-- SQL Server: uses NVARCHAR + CHECK constraints for enums (via native_enum=False).
+- Enums use NVARCHAR + CHECK constraints (native_enum=False).
 - Consolidated baseline includes environments + document events (no builds/upload sessions).
 """
 
@@ -14,7 +13,8 @@ from typing import Any, Optional
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.types import CHAR, TypeDecorator
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+from sqlalchemy.types import TypeDecorator
 
 # Revision identifiers, used by Alembic.
 revision = "0001_initial_schema"
@@ -28,16 +28,13 @@ depends_on: Optional[str] = None
 # ---------------------------------------------------------------------------
 
 class GUID(TypeDecorator):
-    """SQLite + SQL Server GUID storage."""
+    """SQL Server GUID storage."""
 
-    impl = CHAR
+    impl = UNIQUEIDENTIFIER
     cache_ok = True
 
     def load_dialect_impl(self, dialect: Any):
-        if dialect.name == "mssql":
-            from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
-            return dialect.type_descriptor(UNIQUEIDENTIFIER())
-        return dialect.type_descriptor(CHAR(36))
+        return dialect.type_descriptor(UNIQUEIDENTIFIER())
 
     def process_bind_param(self, value: Any, dialect: Any):
         if value is None:
@@ -67,14 +64,6 @@ def _timestamps() -> tuple[sa.Column, sa.Column]:
 
 def _uuid_pk(name: str = "id") -> sa.Column:
     return sa.Column(name, GUID(), primary_key=True, nullable=False)
-
-
-def _dialect_name() -> Optional[str]:
-    try:
-        bind = op.get_bind()
-    except Exception:
-        return None
-    return bind.dialect.name if bind is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -329,8 +318,6 @@ def _create_system_settings() -> None:
 
 
 def _create_configurations() -> None:
-    dialect = _dialect_name()
-
     op.create_table(
         "configurations",
         _uuid_pk(),
@@ -346,24 +333,13 @@ def _create_configurations() -> None:
 
     # One active configuration per workspace using partial/filtered unique index
     active_where = sa.text("status = 'active'")
-    if dialect == "sqlite":
-        op.create_index(
-            "ux_configurations_active_per_workspace",
-            "configurations",
-            ["workspace_id"],
-            unique=True,
-            sqlite_where=active_where,
-        )
-    elif dialect == "mssql":
-        op.create_index(
-            "ux_configurations_active_per_workspace",
-            "configurations",
-            ["workspace_id"],
-            unique=True,
-            mssql_where=active_where,
-        )
-    else:
-        op.create_index("ix_configurations_active_per_workspace", "configurations", ["workspace_id"], unique=False)
+    op.create_index(
+        "ux_configurations_active_per_workspace",
+        "configurations",
+        ["workspace_id"],
+        unique=True,
+        mssql_where=active_where,
+    )
 
 
 def _create_environments() -> None:
@@ -401,8 +377,6 @@ def _create_environments() -> None:
 
 
 def _create_documents() -> None:
-    dialect = _dialect_name()
-
     op.create_table(
         "documents",
         _uuid_pk(),
@@ -432,24 +406,15 @@ def _create_documents() -> None:
         unique=False,
     )
 
-    # Live (non-deleted) index with sqlite/mssql partial where
+    # Filtered index for live (non-deleted) documents
     live_where = sa.text("deleted_at IS NULL")
-    if dialect == "sqlite":
-        op.create_index(
-            "ix_documents_workspace_status_created_live",
-            "documents",
-            ["workspace_id", "status", "created_at"],
-            unique=False,
-            sqlite_where=live_where,
-        )
-    elif dialect == "mssql":
-        op.create_index(
-            "ix_documents_workspace_status_created_live",
-            "documents",
-            ["workspace_id", "status", "created_at"],
-            unique=False,
-            mssql_where=live_where,
-        )
+    op.create_index(
+        "ix_documents_workspace_status_created_live",
+        "documents",
+        ["workspace_id", "status", "created_at"],
+        unique=False,
+        mssql_where=live_where,
+    )
 
     op.create_index("ix_documents_workspace_created", "documents", ["workspace_id", "created_at"], unique=False)
     op.create_index("ix_documents_workspace_last_run", "documents", ["workspace_id", "last_run_at"], unique=False)
@@ -476,7 +441,7 @@ def _create_document_events() -> None:
         "document_events",
         sa.Column(
             "cursor",
-            sa.BigInteger().with_variant(sa.Integer(), "sqlite"),
+            sa.BigInteger(),
             primary_key=True,
             autoincrement=True,
             nullable=False,
@@ -493,8 +458,6 @@ def _create_document_events() -> None:
 
 
 def _create_runs() -> None:
-    dialect = _dialect_name()
-
     op.create_table(
         "runs",
         _uuid_pk(),
@@ -550,29 +513,13 @@ def _create_runs() -> None:
 
     # Unique "active job" per document/config/workspace for queued/running
     active_where = sa.text("status IN ('queued','running')")
-    if dialect == "sqlite":
-        op.create_index(
-            "uq_runs_active_job",
-            "runs",
-            ["workspace_id", "input_document_id", "configuration_id"],
-            unique=True,
-            sqlite_where=active_where,
-        )
-    elif dialect == "mssql":
-        op.create_index(
-            "uq_runs_active_job",
-            "runs",
-            ["workspace_id", "input_document_id", "configuration_id"],
-            unique=True,
-            mssql_where=active_where,
-        )
-    else:
-        op.create_index(
-            "ix_runs_active_job",
-            "runs",
-            ["workspace_id", "input_document_id", "configuration_id"],
-            unique=False,
-        )
+    op.create_index(
+        "uq_runs_active_job",
+        "runs",
+        ["workspace_id", "input_document_id", "configuration_id"],
+        unique=True,
+        mssql_where=active_where,
+    )
 
 
 def _create_run_metrics() -> None:

@@ -236,23 +236,12 @@ class Settings(BaseSettings):
     database_url_override: str | None = None
     database_echo: bool = False
     database_log_level: str | None = None
-    database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
+    database_pool_size: int = Field(5, ge=1)
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
     database_pool_recycle: int = Field(1800, ge=0)
     database_auth_mode: Literal["sql_password", "managed_identity"] = Field(default="sql_password")
     database_mi_client_id: str | None = None
-    database_sqlite_journal_mode: Literal[
-        "WAL",
-        "DELETE",
-        "TRUNCATE",
-        "PERSIST",
-        "MEMORY",
-        "OFF",
-    ] = "WAL"
-    database_sqlite_synchronous: Literal["OFF", "NORMAL", "FULL", "EXTRA"] = "NORMAL"
-    database_sqlite_busy_timeout_ms: int = Field(30000, ge=0)
-    database_sqlite_begin_mode: Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"] | None = None
 
     # Database (derived mssql URL inputs)
     sql_host: str = "sql"
@@ -369,20 +358,6 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return None
         return str(v).strip()
-
-    @field_validator("database_sqlite_journal_mode", "database_sqlite_synchronous", mode="before")
-    @classmethod
-    def _v_sqlite_pragma_enum(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip().upper()
-
-    @field_validator("database_sqlite_begin_mode", mode="before")
-    @classmethod
-    def _v_sqlite_begin_mode(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip().upper()
 
     @field_validator(
         "sql_host",
@@ -518,11 +493,8 @@ class Settings(BaseSettings):
         url = make_url(url.render_as_string(hide_password=False))
         query = dict(url.query or {})
 
-        if (
-            url.get_backend_name() == "sqlite"
-            and "database_sqlite_busy_timeout_ms" not in self.model_fields_set
-        ):
-            self.database_sqlite_busy_timeout_ms = int(self.database_pool_timeout * 1000)
+        if url.get_backend_name() != "mssql":
+            raise ValueError("Only SQL Server is supported. Use mssql+pyodbc://... for ADE_DATABASE_URL.")
 
         if url.get_backend_name() == "mssql":
             present = {k.lower() for k in query}

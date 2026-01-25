@@ -9,7 +9,7 @@ from pathlib import Path
 import typer
 
 from ade_cli.commands import common
-from ade_cli.commands.migrate import run_migrate
+from ade_api.commands.migrate import run_migrate
 
 
 def _resolve_vite_log_level(env: dict[str, str]) -> str | None:
@@ -84,7 +84,7 @@ def run_dev(
       - Web (Vite dev server)           → http://localhost:5173
       - Worker (ade-worker)
 
-    Runs `ade migrate` automatically when the API or worker is selected.
+    Runs migrations automatically when the API or worker is selected.
     """
     common.refresh_paths()
 
@@ -233,7 +233,7 @@ def run_dev(
         tasks.append(
             (
                 "worker",
-                ["ade-worker"],
+                ["ade-worker", "start"],
                 common.REPO_ROOT,
                 env,
             )

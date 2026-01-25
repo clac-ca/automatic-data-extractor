@@ -3,7 +3,10 @@ import type { ReactElement } from "react";
 
 import { resolveWorkspaceSection } from "../index";
 
-vi.mock("@/pages/Workspace/sections/Documents", () => ({ default: () => <div>documents</div> }));
+vi.mock("@/pages/Workspace/sections/Documents", () => ({
+  default: () => <div>documents</div>,
+  DocumentsDetailPage: ({ documentId }: { documentId: string }) => <div>doc {documentId}</div>,
+}));
 vi.mock("@/pages/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
 vi.mock("@/pages/Workspace/sections/ConfigBuilder", () => ({ default: () => <div>configs</div> }));
 vi.mock("@/pages/Workspace/sections/ConfigBuilder/detail", () => ({
@@ -26,11 +29,13 @@ describe("resolveWorkspaceSection", () => {
     });
   });
 
-  it("redirects document detail paths to the documents screen with a doc param", () => {
+  it("returns the document detail page when a document id is present", () => {
     const result = resolveWorkspaceSection(workspaceId, ["documents", "doc-22"], "", "");
-    expect(result).toEqual({
-      kind: "redirect",
-      to: "/workspaces/ws-1/documents?doc=doc-22",
+    expect(result).toMatchObject({
+      kind: "content",
+      key: "documents:doc-22",
+      fullWidth: true,
+      fullHeight: true,
     });
   });
 

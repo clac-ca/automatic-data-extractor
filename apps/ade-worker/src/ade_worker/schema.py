@@ -1,8 +1,4 @@
-"""SQLAlchemy Core schema for the worker.
-
-This is intentionally tiny and uses portable types so it works on:
-- SQL Server / Azure SQL
-- SQLite (test-only)
+"""SQLAlchemy Core schema for the worker (SQL Server / Azure SQL).
 
 If your main application already owns these tables, keep their names/columns aligned.
 """
@@ -107,7 +103,7 @@ documents = Table(
 document_events = Table(
     "document_events",
     metadata,
-    Column("cursor", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
+    Column("cursor", BigInteger(), primary_key=True, autoincrement=True),
     Column("workspace_id", String(36), nullable=False),
     Column("document_id", String(36), nullable=False),
     Column("event_type", String(40), nullable=False),
@@ -198,58 +194,6 @@ REQUIRED_TABLES = [
 def install_document_event_triggers(engine) -> None:
     with engine.begin() as connection:
         dialect = connection.dialect.name
-        if dialect == "sqlite":
-            connection.exec_driver_sql(
-                """
-                CREATE TRIGGER IF NOT EXISTS trg_documents_events_insert
-                AFTER INSERT ON documents
-                BEGIN
-                    INSERT INTO document_events (
-                        workspace_id,
-                        document_id,
-                        event_type,
-                        document_version,
-                        occurred_at
-                    )
-                    VALUES (
-                        NEW.workspace_id,
-                        NEW.id,
-                        'document.changed',
-                        NEW.version,
-                        NEW.updated_at
-                    );
-                END;
-                """
-            )
-            connection.exec_driver_sql(
-                """
-                CREATE TRIGGER IF NOT EXISTS trg_documents_events_update
-                AFTER UPDATE ON documents
-                WHEN NEW.version != OLD.version
-                BEGIN
-                    INSERT INTO document_events (
-                        workspace_id,
-                        document_id,
-                        event_type,
-                        document_version,
-                        occurred_at
-                    )
-                    VALUES (
-                        NEW.workspace_id,
-                        NEW.id,
-                        CASE
-                            WHEN NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL
-                                THEN 'document.deleted'
-                            ELSE 'document.changed'
-                        END,
-                        NEW.version,
-                        NEW.updated_at
-                    );
-                END;
-                """
-            )
-            return
-
         if dialect == "mssql":
             connection.execute(
                 text(

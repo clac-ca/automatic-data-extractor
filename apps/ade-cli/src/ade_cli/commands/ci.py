@@ -7,8 +7,8 @@ import typer
 from ade_cli.commands import common
 from ade_cli.commands.build import run_build
 from ade_cli.commands.lint_cmd import run_lint
-from ade_cli.commands.tests import run_tests
-from ade_cli.commands.types_cmd import run_types
+from ade_cli.commands.tests import TestSuite, run_tests
+from ade_api.commands.types import run_types
 
 
 def run_ci(skip_types: bool = False, skip_tests: bool = False) -> None:
@@ -34,7 +34,7 @@ def run_ci(skip_types: bool = False, skip_tests: bool = False) -> None:
         typer.echo("ℹ️  Skipping tests (--skip-tests).")
     else:
         typer.echo("🧪 Running tests…")
-        run_tests()
+        run_tests(suite=TestSuite.ALL)
 
     typer.echo("🏗️ Building production assets…")
     run_build()

@@ -170,8 +170,13 @@ async def test_document_changes_include_delete_event(async_client, seed_identity
     )
 
 
-async def test_document_changes_cursor_too_old(async_client, seed_identity, db_session, settings) -> None:
-    settings.documents_change_feed_retention_period = timedelta(seconds=1)
+async def test_document_changes_cursor_too_old(
+    async_client,
+    seed_identity,
+    db_session,
+    override_app_settings,
+) -> None:
+    override_app_settings(documents_change_feed_retention_period=timedelta(seconds=1))
 
     workspace_id = seed_identity.workspace_id
     user = seed_identity.member_with_manage

@@ -1,30 +1,23 @@
-"""Types generation command."""
+"""OpenAPI types generation for ADE API."""
 
 from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import typer
 
-from ade_cli.commands import common
+from ade_api.commands import common
 
 
 def run_types() -> None:
     """Generate OpenAPI JSON and TypeScript types into apps/ade-web/src/types/generated/openapi.d.ts."""
 
-    common.refresh_paths()
-    common.ensure_backend_dir()
-    common.require_python_module(
-        "ade_api",
-        "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
-    )
-    openapi_path = common.BACKEND_SRC / "openapi.json"
+    openapi_path = Path(__file__).resolve().parents[1] / "openapi.json"
     output_path = common.FRONTEND_DIR / "src" / "types" / "generated" / "openapi.d.ts"
 
-    common.run(
-        [sys.executable, "-m", "ade_api.scripts.generate_openapi", "--output", str(openapi_path)]
-    )
+    common.run([sys.executable, "-m", "ade_api.scripts.generate_openapi", "--output", str(openapi_path)])
 
     if not common.FRONTEND_DIR.exists():
         typer.echo("ℹ️  frontend missing; OpenAPI JSON generated only.")
@@ -59,5 +52,5 @@ def register(app: typer.Typer) -> None:
         def _types() -> None:
             run_types()
 
-    _register("openapi-types")
-    _register("types", hidden=True)
+    _register("types")
+    _register("openapi-types", hidden=True)

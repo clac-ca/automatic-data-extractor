@@ -12,8 +12,6 @@ from uuid import UUID
 
 import typer
 
-from ade_cli.commands import common
-
 if TYPE_CHECKING:
     from ade_api.models import Role, User, UserRoleAssignment
     from ade_api.settings import Settings
@@ -64,43 +62,16 @@ class UserCommandContext:
         return role
 
 
-def _ensure_backend() -> None:
-    """Fail fast if ADE backend dependencies are missing."""
-
-    common.refresh_paths()
-    common.ensure_backend_dir()
-    common.require_python_module(
-        "ade_api",
-        "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
-    )
-
-
 @contextmanager
 def _user_context() -> Iterator[UserCommandContext]:
     """Context manager that yields a ``UserCommandContext`` and commits on success."""
-
-    _ensure_backend()
     from sqlalchemy.orm import sessionmaker
 
-    from ade_api.db import DatabaseSettings, build_engine
+    from ade_api.db import build_engine
     from ade_api.settings import Settings
 
     settings = Settings()
-    db_settings = DatabaseSettings(
-        url=settings.database_url,
-        echo=settings.database_echo,
-        auth_mode=settings.database_auth_mode,
-        managed_identity_client_id=settings.database_mi_client_id,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_timeout=settings.database_pool_timeout,
-        pool_recycle=settings.database_pool_recycle,
-        sqlite_journal_mode=settings.database_sqlite_journal_mode,
-        sqlite_synchronous=settings.database_sqlite_synchronous,
-        sqlite_busy_timeout_ms=settings.database_sqlite_busy_timeout_ms,
-        sqlite_begin_mode=settings.database_sqlite_begin_mode,
-    )
-    engine = build_engine(db_settings)
+    engine = build_engine(settings)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     session = SessionLocal()
     ctx = UserCommandContext(session=session, settings=settings)
@@ -131,7 +102,6 @@ def _render_datetime(value: datetime | None) -> str:
 
 
 def _scope_and_workspace(scope: str, workspace_id: str | None):
-    _ensure_backend()
     from ade_api.core.rbac.types import ScopeType
 
     normalized = scope.lower().strip()

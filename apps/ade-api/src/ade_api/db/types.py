@@ -1,6 +1,6 @@
-"""SQLAlchemy custom column types (SQL Server/Azure SQL; SQLite test-only).
+"""SQLAlchemy custom column types (SQL Server/Azure SQL only).
 
-- GUID: UUID stored as UNIQUEIDENTIFIER on SQL Server, CHAR(36) on SQLite.
+- GUID: UUID stored as UNIQUEIDENTIFIER.
 - UTCDateTime: timezone-aware datetimes normalized to UTC.
 """
 
@@ -10,27 +10,20 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.types import CHAR, DateTime, TypeDecorator
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+from sqlalchemy.types import DateTime, TypeDecorator
 
 __all__ = ["GUID", "UTCDateTime"]
 
 
 class GUID(TypeDecorator):
-    """Platform-independent GUID/UUID.
+    """SQL Server GUID/UUID (UNIQUEIDENTIFIER)."""
 
-    - SQL Server: UNIQUEIDENTIFIER
-    - SQLite: CHAR(36)
-    """
-
-    impl = CHAR(36)
+    impl = UNIQUEIDENTIFIER
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "mssql":
-            from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
-
-            return dialect.type_descriptor(UNIQUEIDENTIFIER())
-        return dialect.type_descriptor(CHAR(36))
+        return dialect.type_descriptor(UNIQUEIDENTIFIER())
 
     def process_bind_param(self, value: Any, dialect):
         if value is None:
