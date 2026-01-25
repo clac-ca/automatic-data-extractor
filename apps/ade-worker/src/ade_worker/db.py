@@ -381,11 +381,23 @@ def mark_environment_building(
 
 @contextmanager
 def advisory_lock(conn, *, key: str):
-    conn.execute(text("SELECT pg_advisory_lock(hashtext(:key))"), {"key": key})
+    conn.execute(text("SELECT pg_advisory_lock(hashtextextended(:key, 0))"), {"key": key})
     try:
         yield
     finally:
-        conn.execute(text("SELECT pg_advisory_unlock(hashtext(:key))"), {"key": key})
+        conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key})
+
+
+def try_advisory_lock(conn, *, key: str) -> bool:
+    result = conn.execute(
+        text("SELECT pg_try_advisory_lock(hashtextextended(:key, 0))"),
+        {"key": key},
+    )
+    return bool(result.scalar())
+
+
+def advisory_unlock(conn, *, key: str) -> None:
+    conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key})
 
 
 def expire_run_leases(
@@ -639,6 +651,8 @@ __all__ = [
     "ack_environment_failure",
     "mark_environment_building",
     "advisory_lock",
+    "try_advisory_lock",
+    "advisory_unlock",
     "expire_run_leases",
     "next_run_due_at",
     "load_environment",

@@ -14,9 +14,8 @@ Supported databases:
 - On wake (or periodic safety sweep), the worker claims runs using
   `SELECT ... FOR UPDATE SKIP LOCKED`.
 - For each claimed run, the worker ensures a matching `environments` row exists
-  (keyed by `deps_digest`). If the environment is not `ready`, the worker tries
-  to claim it for build; if another worker is building, the run is requeued briefly.
-- Environment builds run inline before the engine is executed.
+  (keyed by `deps_digest`). If the environment is not `ready`, the worker blocks
+  on an advisory lock and builds it before running the engine.
 - Runs use a **lease** (`claim_expires_at`) with periodic **heartbeats** and retry backoff.
 - Environments transition to `ready`/`failed`; runs transition to `succeeded`/`failed`.
 - Dependency changes create **new environments** (no in-place rebuilds).

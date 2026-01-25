@@ -164,12 +164,14 @@ class EventLog:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
 
     def append(self, record: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False))
-            f.write("\n")
+        line = json.dumps(record, ensure_ascii=False) + "\n"
+        with self._lock:
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(line)
 
     def emit(
         self,
@@ -1159,19 +1161,37 @@ class Worker:
         )
 
         lock_conn = self.engine.connect()
+        got_lock = False
         try:
-            with db.advisory_lock(lock_conn, key=lock_key):
-                env = db.load_environment(self.SessionLocal, env_id)
-                if not env:
-                    return None, "Environment missing", False
-                if str(env.get("status") or "").lower() == "ready":
-                    return env, None, False
+            while True:
+                got_lock = db.try_advisory_lock(lock_conn, key=lock_key)
+                if got_lock:
+                    break
+                if run_claim:
+                    ok = db.heartbeat_run(
+                        self.SessionLocal,
+                        run_id=run_claim.id,
+                        worker_id=self.worker_id,
+                        now=utcnow(),
+                        lease_seconds=int(self.settings.worker_lease_seconds),
+                    )
+                    if not ok:
+                        return None, None, True
+                time.sleep(0.2 + random.random() * 0.8)
 
-                with self.SessionLocal.begin() as session:
-                    db.mark_environment_building(session, env_id=env_id, now=now)
+            env = db.load_environment(self.SessionLocal, env_id)
+            if not env:
+                return None, "Environment missing", False
+            if str(env.get("status") or "").lower() == "ready":
+                return env, None, False
 
-                build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
+            with self.SessionLocal.begin() as session:
+                db.mark_environment_building(session, env_id=env_id, now=now)
+
+            build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
         finally:
+            if got_lock:
+                db.advisory_unlock(lock_conn, key=lock_key)
             lock_conn.close()
 
         if build.run_lost:
