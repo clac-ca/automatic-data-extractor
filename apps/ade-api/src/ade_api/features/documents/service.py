@@ -42,8 +42,6 @@ from ade_api.models import (
     Document,
     DocumentComment,
     DocumentCommentMention,
-    DocumentEvent,
-    DocumentEventType,
     DocumentSource,
     DocumentTag,
     Run,
@@ -57,7 +55,7 @@ from ade_api.models import (
 from ade_api.settings import Settings
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 
-from .change_feed import DocumentEventsService
+from .notifications import get_document_changes_cursor
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -72,7 +70,6 @@ from .exceptions import (
 from .filters import apply_document_filters
 from .repository import DocumentsRepository
 from .schemas import (
-    DocumentChangeEntry,
     DocumentChangesPage,
     DocumentCommentOut,
     DocumentCommentPage,
@@ -137,7 +134,6 @@ class DocumentsService:
             raise RuntimeError("Document storage directory is not configured")
 
         self._repository = DocumentsRepository(session)
-        self._events = DocumentEventsService(session=session, settings=settings)
 
     @staticmethod
     def build_upload_metadata(
@@ -313,7 +309,7 @@ class DocumentsService:
         stmt = stmt.add_columns(last_run_at_expr)
 
         # Capture the cursor before listing to avoid skipping changes committed during the query.
-        changes_cursor = self._events.current_cursor(workspace_id=workspace_id)
+        changes_cursor = get_document_changes_cursor(self._session)
         facets = self._build_document_facets(stmt) if include_facets else None
         page_result = paginate_query_cursor(
             self._session,
@@ -431,67 +427,31 @@ class DocumentsService:
         include_rows: bool = False,
     ) -> DocumentChangesPage:
         try:
-            cursor = int(cursor_token)
+            int(cursor_token)
         except (TypeError, ValueError) as exc:
             raise ValueError("cursor must be an integer string") from exc
+        next_cursor = get_document_changes_cursor(self._session)
+        return DocumentChangesPage(items=[], next_cursor=str(next_cursor))
 
-        page = self._events.list_changes(
-            workspace_id=workspace_id,
-            cursor=cursor,
-            limit=limit,
-            max_cursor=max_cursor,
-        )
-        entries = self.build_change_entries(
-            workspace_id=workspace_id,
-            events=page.items,
-            include_rows=include_rows,
-        )
-        return DocumentChangesPage(items=entries, next_cursor=str(page.next_cursor))
-
-    def build_change_entries(
+    def build_list_row_for_document(
         self,
         *,
         workspace_id: UUID,
-        events: Sequence[DocumentEvent],
-        include_rows: bool,
-    ) -> list[DocumentChangeEntry]:
-        rows_by_id: dict[UUID, DocumentListRow] = {}
-        if include_rows:
-            changed_ids = {
-                change.document_id
-                for change in events
-                if change.event_type == DocumentEventType.CHANGED
-            }
-            if changed_ids:
-                stmt = (
-                    self._repository.base_query(workspace_id)
-                    .where(Document.id.in_(changed_ids))
-                    .where(Document.deleted_at.is_(None))
-                )
-                result = self._session.execute(stmt)
-                documents = list(result.scalars())
-                payloads = [DocumentOut.model_validate(item) for item in documents]
-                self._attach_last_runs(workspace_id, payloads)
-                for payload in payloads:
-                    self._apply_derived_fields(payload)
-                    rows_by_id[payload.id] = self._build_list_row(payload)
-
-        entries: list[DocumentChangeEntry] = []
-        for change in events:
-            row = None
-            if include_rows and change.event_type == DocumentEventType.CHANGED:
-                row = rows_by_id.get(change.document_id)
-            entries.append(
-                DocumentChangeEntry(
-                    cursor=str(change.cursor),
-                    type=change.event_type.value,
-                    document_id=str(change.document_id),
-                    occurred_at=change.occurred_at,
-                    document_version=change.document_version,
-                    row=row,
-                )
-            )
-        return entries
+        document_id: UUID,
+    ) -> DocumentListRow | None:
+        stmt = (
+            self._repository.base_query(workspace_id)
+            .where(Document.id == document_id)
+            .where(Document.deleted_at.is_(None))
+        )
+        result = self._session.execute(stmt)
+        document = result.scalar_one_or_none()
+        if document is None:
+            return None
+        payload = DocumentOut.model_validate(document)
+        self._attach_last_runs(workspace_id, [payload])
+        self._apply_derived_fields(payload)
+        return self._build_list_row(payload)
 
     def get_document(
         self,

@@ -40,9 +40,6 @@ python -m ade_worker
 - `ADE_WORKER_CONCURRENCY` (default: conservative auto)
 - `ADE_WORKER_LEASE_SECONDS` (default `900`)
 - `ADE_WORKER_LISTEN_TIMEOUT_SECONDS` (default `60`, safety sweep interval)
-- `ADE_WORKER_NOTIFY_JITTER_MS` (default `200`, random jitter after notify)
-- `ADE_WORKER_ENABLE_GC` (default `1` for single-host)
-- `ADE_WORKER_GC_INTERVAL_SECONDS` (default `3600`)
 - `ADE_WORKER_ENV_TTL_DAYS` (default `30`)
 - `ADE_WORKER_RUN_ARTIFACT_TTL_DAYS` (default `30`)
 
@@ -53,12 +50,9 @@ The worker never creates tables; run migrations via ade-api before starting ade-
 
 ## Garbage collection
 
-GC is optional and safe-by-default:
+GC runs as a scheduled job (cron/K8s job). Invoke it with `ade-worker gc`.
 
 - Environments are deleted only when the configuration is **not active**,
   the environment is cold (`last_used_at` / `updated_at` older than TTL),
   and no queued/running runs reference it.
 - Run artifacts are deleted only for terminal runs older than the TTL.
-
-In multi-worker deployments, enable GC on **exactly one** worker by setting
-`ADE_WORKER_ENABLE_GC=1` on that instance (set `0` elsewhere).

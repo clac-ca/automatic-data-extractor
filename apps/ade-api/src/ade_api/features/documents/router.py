@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -62,7 +61,7 @@ from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
-from .change_feed import DocumentEventCursorTooOld, DocumentEventsService
+from .notifications import get_document_changes_cursor, get_document_changes_hub
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
@@ -119,12 +118,7 @@ tags_router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
-TAILER_POLL_INTERVAL_SECONDS = 0.25
-TAILER_POLL_MAX_INTERVAL_SECONDS = 2.0
-TAILER_BATCH_LIMIT = 200
 KEEPALIVE_SECONDS = 15.0
-TAILER_POLL_CONCURRENCY = 8
-_TAILER_POLL_SEMAPHORE = asyncio.Semaphore(TAILER_POLL_CONCURRENCY)
 
 
 WorkspacePath = Annotated[
@@ -462,15 +456,6 @@ def list_document_changes(
             include_rows=include_rows,
         )
         return DocumentChangesPage(items=page.items, next_cursor=page.next_cursor)
-    except DocumentEventCursorTooOld as exc:
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            detail={
-                "error": "resync_required",
-                "oldestCursor": str(exc.oldest_cursor),
-                "latestCursor": str(exc.latest_cursor),
-            },
-        ) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -490,74 +475,66 @@ async def stream_document_changes(
 ) -> EventSourceResponse:
     start_cursor = _resolve_change_cursor(request, cursor)
     session_factory = get_sessionmaker(request)
+    changes_hub = get_document_changes_hub(request)
 
     async def event_stream():
         cursor_value = start_cursor
-        last_send = time.monotonic()
-        poll_interval = TAILER_POLL_INTERVAL_SECONDS
+        queue, unsubscribe = changes_hub.subscribe(str(workspace_id))
 
-        def _resolve_cursor() -> int:
+        def _current_cursor() -> int:
             with session_factory() as session:
-                events_service = DocumentEventsService(session=session, settings=settings)
-                resolution = events_service.resolve_cursor(
-                    workspace_id=workspace_id,
-                    cursor=cursor_value,
-                )
-                return resolution.cursor
+                return get_document_changes_cursor(session)
 
         try:
-            cursor_value = await asyncio.to_thread(_resolve_cursor)
-        except DocumentEventCursorTooOld as exc:
-            yield sse_json(
-                "error",
-                {
-                    "code": "resync_required",
-                    "oldestCursor": str(exc.oldest_cursor),
-                    "latestCursor": str(exc.latest_cursor),
-                },
-            )
-            return
+            cursor_value = await asyncio.to_thread(_current_cursor)
+        except Exception:
+            cursor_value = start_cursor
+
+        if cursor_value < start_cursor:
+            cursor_value = start_cursor
 
         yield sse_json("ready", {"cursor": str(cursor_value)})
 
-        while True:
-            if await request.is_disconnected():
-                return
+        try:
+            while True:
+                if await request.is_disconnected():
+                    return
 
-            def _fetch_changes(current_cursor: int):
-                with session_factory() as session:
-                    events_service = DocumentEventsService(session=session, settings=settings)
-                    events = events_service.fetch_changes_after(
-                        workspace_id=workspace_id,
-                        cursor=current_cursor,
-                        limit=TAILER_BATCH_LIMIT,
+                try:
+                    payload = await asyncio.wait_for(
+                        queue.get(), timeout=KEEPALIVE_SECONDS
                     )
-                    service = DocumentsService(session=session, settings=settings)
-                    return service.build_change_entries(
-                        workspace_id=workspace_id,
-                        events=events,
-                        include_rows=include_rows,
-                    )
+                except TimeoutError:
+                    yield sse_json("keepalive", {})
+                    continue
 
-            async with _TAILER_POLL_SEMAPHORE:
-                events = await asyncio.to_thread(_fetch_changes, cursor_value)
+                payload = dict(payload)
+                event_type = payload.get("type") or "document.changed"
+                document_id = payload.get("documentId")
 
-            if events:
-                poll_interval = TAILER_POLL_INTERVAL_SECONDS
-                for change in events:
-                    payload = change.model_dump(by_alias=True, exclude_none=False)
-                    yield sse_json(change.type, payload, event_id=change.cursor)
-                    cursor_value = int(change.cursor)
-                    last_send = time.monotonic()
-                continue
+                if include_rows and event_type == "document.changed" and document_id:
+                    def _fetch_row():
+                        with session_factory() as session:
+                            service = DocumentsService(
+                                session=session,
+                                settings=settings,
+                            )
+                            return service.build_list_row_for_document(
+                                workspace_id=workspace_id,
+                                document_id=UUID(str(document_id)),
+                            )
 
-            now = time.monotonic()
-            if now - last_send >= KEEPALIVE_SECONDS:
-                last_send = now
-                yield sse_json("keepalive", {})
+                    try:
+                        row = await asyncio.to_thread(_fetch_row)
+                    except Exception:
+                        row = None
+                    if row is not None:
+                        payload["row"] = row
 
-            poll_interval = min(TAILER_POLL_MAX_INTERVAL_SECONDS, poll_interval * 1.5)
-            await asyncio.sleep(poll_interval)
+                event_id = payload.get("cursor")
+                yield sse_json(event_type, payload, event_id=event_id)
+        finally:
+            unsubscribe()
 
     return EventSourceResponse(
         event_stream(),

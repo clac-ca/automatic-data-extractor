@@ -13,7 +13,6 @@ from sqlalchemy.orm import selectinload
 from ade_api.models import (
     Configuration,
     Document,
-    DocumentEvent,
     DocumentTag,
     Environment,
     Run,
@@ -204,9 +203,6 @@ class WorkspacesRepository:
 
         self._session.execute(
             delete(DocumentTag).where(DocumentTag.document_id.in_(document_ids))
-        )
-        self._session.execute(
-            delete(DocumentEvent).where(DocumentEvent.workspace_id == workspace_id)
         )
         self._session.execute(
             delete(Document).where(Document.workspace_id == workspace_id)

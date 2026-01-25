@@ -91,7 +91,7 @@ export function UploadPreflightDialog({
           </Alert>
         )}
 
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
           {localFiles.map((entry) => (
             <div
               key={entry.id}

@@ -73,13 +73,10 @@ class Settings(BaseSettings):
     worker_id: str | None = None
     worker_concurrency: int = Field(default_factory=_default_concurrency, ge=1)
     worker_listen_timeout_seconds: float = Field(60.0, gt=0)
-    worker_notify_jitter_ms: int = Field(200, ge=0)
     worker_cleanup_interval: float = Field(30.0, gt=0)
     worker_log_level: str = "INFO"
 
-    # ---- Garbage collection ------------------------------------------------
-    worker_enable_gc: bool = True
-    worker_gc_interval_seconds: float = Field(3600.0, gt=0)
+    # ---- Garbage collection (run via scheduled job) -----------------------
     worker_env_ttl_days: int = Field(30, ge=0)
     worker_run_artifact_ttl_days: int | None = Field(30, ge=0)
 

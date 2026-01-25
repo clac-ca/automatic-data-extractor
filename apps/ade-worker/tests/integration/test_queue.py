@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import insert, select
 from sqlalchemy.orm import sessionmaker
 
-from ade_worker.queue import EnvironmentQueue, RunQueue
+from ade_worker import db
 from ade_worker.schema import environments, runs
 
 
@@ -110,8 +110,14 @@ def test_run_claim_does_not_require_ready_environment(engine) -> None:
         now=now,
     )
 
-    queue = RunQueue(engine, SessionLocal, backoff_base_seconds=0, backoff_max_seconds=0)
-    claim = queue.claim_next(worker_id="worker-1", now=now, lease_seconds=60)
+    claims = db.claim_runs(
+        SessionLocal,
+        worker_id="worker-1",
+        now=now,
+        lease_seconds=60,
+        limit=1,
+    )
+    claim = claims[0] if claims else None
     assert claim is not None
     assert claim.id.lower() == run_id.lower()
     assert claim.attempt_count == 1
@@ -149,8 +155,12 @@ def test_run_lease_expire_requeues(engine) -> None:
         claim_expires_at=expired_at,
     )
 
-    queue = RunQueue(engine, SessionLocal, backoff_base_seconds=5, backoff_max_seconds=5)
-    processed = queue.expire_stuck(now=now)
+    processed = db.expire_run_leases(
+        SessionLocal,
+        now=now,
+        backoff_base_seconds=5,
+        backoff_max_seconds=5,
+    )
     assert processed == 1
 
     with engine.begin() as conn:
@@ -173,7 +183,7 @@ def test_run_lease_expire_requeues(engine) -> None:
     assert row.available_at is not None
 
 
-def test_environment_claim_sets_building(engine) -> None:
+def test_environment_mark_building_sets_status(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     env_id = _uuid()
@@ -191,10 +201,9 @@ def test_environment_claim_sets_building(engine) -> None:
         now=now,
     )
 
-    queue = EnvironmentQueue(engine, SessionLocal)
-    claim = queue.claim_for_build(env_id=env_id, worker_id="worker-2", now=now, lease_seconds=120)
-    assert claim is not None
-    assert claim.id.lower() == env_id.lower()
+    with SessionLocal.begin() as session:
+        ok = db.mark_environment_building(session, env_id=env_id, now=now)
+    assert ok is True
 
     with engine.begin() as conn:
         row = conn.execute(
@@ -203,7 +212,7 @@ def test_environment_claim_sets_building(engine) -> None:
         ).first()
     assert row is not None
     assert row.status == "building"
-    assert row.claimed_by == "worker-2"
+    assert row.claimed_by is None
 
 
 def test_environment_ack_success_clears_claim(engine) -> None:
@@ -226,8 +235,12 @@ def test_environment_ack_success_clears_claim(engine) -> None:
         claim_expires_at=now + timedelta(minutes=5),
     )
 
-    queue = EnvironmentQueue(engine, SessionLocal)
-    ok = queue.ack_success(env_id=env_id, worker_id="worker-3", now=now)
+    with SessionLocal.begin() as session:
+        ok = db.ack_environment_success(
+            session,
+            env_id=env_id,
+            now=now,
+        )
     assert ok is True
 
     with engine.begin() as conn:
@@ -267,14 +280,15 @@ def test_run_ack_failure_requeues(engine) -> None:
         claimed_by="worker-4",
     )
 
-    queue = RunQueue(engine, SessionLocal, backoff_base_seconds=0, backoff_max_seconds=0)
-    ok = queue.ack_failure(
-        run_id=run_id,
-        worker_id="worker-4",
-        now=now,
-        error_message="boom",
-        retry_at=retry_at,
-    )
+    with SessionLocal.begin() as session:
+        ok = db.ack_run_failure(
+            session,
+            run_id=run_id,
+            worker_id="worker-4",
+            now=now,
+            error_message="boom",
+            retry_at=retry_at,
+        )
     assert ok is True
 
     with engine.begin() as conn:
@@ -295,57 +309,3 @@ def test_run_ack_failure_requeues(engine) -> None:
     assert row.available_at.replace(tzinfo=None) == retry_at
     assert row.error_message == "boom"
     assert row.completed_at is None
-
-
-def test_run_release_for_env_requeues(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    now = datetime(2025, 1, 10, 12, 0, 0)
-    retry_at = now + timedelta(seconds=5)
-    run_id = _uuid()
-    workspace_id = _uuid()
-    configuration_id = _uuid()
-
-    _insert_run(
-        engine,
-        run_id=run_id,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
-        deps_digest="sha256:fff",
-        status="running",
-        now=now,
-        attempt_count=1,
-        max_attempts=3,
-        claim_expires_at=now + timedelta(minutes=5),
-        claimed_by="worker-5",
-    )
-
-    queue = RunQueue(engine, SessionLocal, backoff_base_seconds=0, backoff_max_seconds=0)
-    ok = queue.release_for_env(
-        run_id=run_id,
-        worker_id="worker-5",
-        retry_at=retry_at,
-        error_message="Environment missing on disk",
-    )
-    assert ok is True
-
-    with engine.begin() as conn:
-        row = conn.execute(
-            select(
-                runs.c.status,
-                runs.c.claimed_by,
-                runs.c.claim_expires_at,
-                runs.c.available_at,
-                runs.c.error_message,
-                runs.c.completed_at,
-                runs.c.attempt_count,
-            ).where(runs.c.id == run_id)
-        ).first()
-    assert row is not None
-    assert row.status == "queued"
-    assert row.claimed_by is None
-    assert row.claim_expires_at is None
-    assert row.available_at.replace(tzinfo=None) == retry_at
-    assert row.error_message == "Environment missing on disk"
-    assert row.completed_at is None
-    assert row.attempt_count == 0

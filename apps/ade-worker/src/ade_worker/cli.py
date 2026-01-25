@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import typer
 
-from ade_worker.commands import register_all
+from .gc import run_gc
+from .worker import main as worker_main
 
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE worker CLI (start, dev, tests, lint).",
+    help="ADE worker CLI (start, gc).",
 )
 
 
@@ -19,7 +20,19 @@ def _main(ctx: typer.Context) -> None:
         typer.echo(ctx.get_help())
 
 
-register_all(app)
+@app.command(name="start", help="Start the ADE worker process.")
+def start() -> None:
+    worker_main()
+
+
+@app.command(name="dev", help="Run the worker in dev mode (same as start).")
+def dev() -> None:
+    worker_main()
+
+
+@app.command(name="gc", help="Run garbage collection once.")
+def gc() -> None:
+    run_gc()
 
 
 if __name__ == "__main__":

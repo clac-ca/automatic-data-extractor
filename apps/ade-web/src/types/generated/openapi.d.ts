@@ -3680,15 +3680,13 @@ export type components = {
         };
         /**
          * WorkbookSheetPreview
-         * @description Table-ready preview for a single workbook sheet.
+         * @description Preview for a single workbook sheet.
          */
         WorkbookSheetPreview: {
             /** Name */
             name: string;
             /** Index */
             index: number;
-            /** Headers */
-            headers: string[];
             /** Rows */
             rows: string[][];
             /** Totalrows */

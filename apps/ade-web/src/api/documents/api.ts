@@ -1,6 +1,4 @@
 import { client } from "@/api/client";
-import { apiFetch } from "@/api/client";
-import { ApiError } from "@/api/errors";
 import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
 import type { components } from "@/types";
 
@@ -11,23 +9,10 @@ export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "
 };
 export type DocumentPageResult = DocumentListPage;
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
-export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
-
-export class DocumentChangesResyncError extends Error {
-  readonly latestCursor: string;
-  readonly oldestCursor: string | null;
-
-  constructor(latestCursor: string, oldestCursor: string | null = null) {
-    super("Document changes cursor is too old; resync required.");
-    this.name = "DocumentChangesResyncError";
-    this.latestCursor = latestCursor;
-    this.oldestCursor = oldestCursor;
-  }
-}
 
 export type ListDocumentsQuery = {
   limit: number;
@@ -149,47 +134,6 @@ export async function fetchWorkspaceDocuments(
   return data;
 }
 
-export async function fetchWorkspaceDocumentChanges(
-  workspaceId: string,
-  options: { cursor: string; limit?: number; includeRows?: boolean },
-  signal?: AbortSignal,
-): Promise<DocumentChangesPage> {
-  const query = new URLSearchParams({
-    cursor: options.cursor,
-  });
-  if (typeof options.limit === "number") {
-    query.set("limit", String(options.limit));
-  }
-  if (options.includeRows) {
-    query.set("includeRows", "true");
-  }
-
-  const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/documents/changes?${query.toString()}`,
-    { signal },
-  );
-
-  if (response.status === 410) {
-    const payload = (await response.json().catch(() => null)) as
-      | { detail?: { error?: string; latestCursor?: string; oldestCursor?: string } }
-      | null;
-    const latestCursor = payload?.detail?.latestCursor;
-    const oldestCursor = payload?.detail?.oldestCursor ?? null;
-    if (latestCursor) {
-      throw new DocumentChangesResyncError(latestCursor, oldestCursor);
-    }
-  }
-
-  if (!response.ok) {
-    throw new ApiError(`Request failed with status ${response.status}`, response.status);
-  }
-
-  const data = (await response.json().catch(() => null)) as DocumentChangesPage | null;
-  if (!data) {
-    throw new Error("Expected document changes payload.");
-  }
-  return data;
-}
 
 export async function fetchWorkspaceDocumentById(
   workspaceId: string,

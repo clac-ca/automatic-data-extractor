@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ade_worker.run_results import (
+from ade_worker.worker import (
     parse_run_fields,
     parse_run_metrics,
     parse_run_table_columns,

@@ -6,7 +6,6 @@ If your main application already owns these tables, keep their names/columns ali
 from __future__ import annotations
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -104,20 +103,6 @@ documents = Table(
     Column("deleted_at", TS, nullable=True),
 )
 
-document_events = Table(
-    "document_events",
-    metadata,
-    Column("cursor", BigInteger(), primary_key=True, autoincrement=True),
-    Column("workspace_id", UUID_TYPE, nullable=False),
-    Column("document_id", UUID_TYPE, nullable=False),
-    Column("event_type", String(40), nullable=False),
-    Column("document_version", Integer, nullable=False),
-    Column("occurred_at", TS, nullable=False),
-    Index("ix_document_events_workspace_cursor", "workspace_id", "cursor"),
-    Index("ix_document_events_workspace_document", "workspace_id", "document_id"),
-    Index("ix_document_events_workspace_occurred", "workspace_id", "occurred_at"),
-)
-
 run_metrics = Table(
     "run_metrics",
     metadata,
@@ -189,7 +174,6 @@ REQUIRED_TABLES = [
     "environments",
     "runs",
     "documents",
-    "document_events",
     "run_metrics",
     "run_fields",
     "run_table_columns",
@@ -201,7 +185,6 @@ __all__ = [
     "environments",
     "runs",
     "documents",
-    "document_events",
     "run_metrics",
     "run_fields",
     "run_table_columns",

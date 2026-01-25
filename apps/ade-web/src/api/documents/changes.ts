@@ -2,12 +2,13 @@ import { resolveApiUrl } from "@/api/client";
 
 export function documentsChangesStreamUrl(
   workspaceId: string,
-  cursor: string,
   options: { includeRows?: boolean } = {},
 ) {
-  const params = new URLSearchParams({ cursor });
+  const params = new URLSearchParams();
   if (options.includeRows) {
     params.set("includeRows", "true");
   }
-  return resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/changes/stream?${params.toString()}`);
+  const query = params.toString();
+  const suffix = query ? `?${query}` : "";
+  return resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/changes/stream${suffix}`);
 }

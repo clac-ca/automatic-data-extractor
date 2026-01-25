@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import insert, select
 from sqlalchemy.orm import sessionmaker
 
-from ade_worker.repo import Repo
+from ade_worker import db
 from ade_worker.schema import (
     documents,
     environments,
@@ -110,7 +110,6 @@ def _insert_environment(
 
 def test_get_or_create_environment_inserts_once(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     workspace_id = _uuid()
@@ -127,13 +126,11 @@ def test_get_or_create_environment_inserts_once(engine) -> None:
         now=now,
     )
 
-    run = repo.load_run(run_id)
+    run = db.load_run(SessionLocal, run_id)
     assert run is not None
 
-    with SessionLocal.begin() as session:
-        env_first = repo.get_or_create_environment(session=session, run=run, now=now)
-    with SessionLocal.begin() as session:
-        env_second = repo.get_or_create_environment(session=session, run=run, now=now)
+    env_first = db.ensure_environment(SessionLocal, run=run, now=now)
+    env_second = db.ensure_environment(SessionLocal, run=run, now=now)
 
     assert env_first is not None
     assert env_second is not None
@@ -146,7 +143,6 @@ def test_get_or_create_environment_inserts_once(engine) -> None:
 
 def test_get_or_create_environment_keeps_failed_status(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     workspace_id = _uuid()
@@ -175,11 +171,10 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
         now=now,
     )
 
-    run = repo.load_run(run_id)
+    run = db.load_run(SessionLocal, run_id)
     assert run is not None
 
-    with SessionLocal.begin() as session:
-        env = repo.get_or_create_environment(session=session, run=run, now=now)
+    env = db.ensure_environment(SessionLocal, run=run, now=now)
     assert env is not None
     assert env["id"] == env_id
     assert env["status"] == "failed"
@@ -187,7 +182,6 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
 
 def test_replace_run_metrics_overwrites(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     run_id = _uuid()
@@ -205,8 +199,8 @@ def test_replace_run_metrics_overwrites(engine) -> None:
     )
 
     with SessionLocal.begin() as session:
-        repo.replace_run_metrics(
-            session=session,
+        db.replace_run_metrics(
+            session,
             run_id=run_id,
             metrics={
                 "evaluation_outcome": "partial",
@@ -223,8 +217,8 @@ def test_replace_run_metrics_overwrites(engine) -> None:
     assert row["evaluation_findings_total"] == 2
 
     with SessionLocal.begin() as session:
-        repo.replace_run_metrics(
-            session=session,
+        db.replace_run_metrics(
+            session,
             run_id=run_id,
             metrics={
                 "evaluation_outcome": "succeeded",
@@ -241,7 +235,6 @@ def test_replace_run_metrics_overwrites(engine) -> None:
 
 def test_replace_run_fields_is_idempotent(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     run_id = _uuid()
@@ -278,15 +271,15 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
     ]
 
     with SessionLocal.begin() as session:
-        repo.replace_run_fields(session=session, run_id=run_id, rows=rows)
+        db.replace_run_fields(session, run_id=run_id, rows=rows)
 
     with engine.begin() as conn:
         first = conn.execute(select(run_fields)).mappings().all()
     assert len(first) == 2
 
     with SessionLocal.begin() as session:
-        repo.replace_run_fields(
-            session=session,
+        db.replace_run_fields(
+            session,
             run_id=run_id,
             rows=[
                 {
@@ -308,7 +301,6 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
 
 def test_replace_run_table_columns_is_idempotent(engine) -> None:
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    repo = Repo(SessionLocal)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     run_id = _uuid()
@@ -345,7 +337,7 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
     ]
 
     with SessionLocal.begin() as session:
-        repo.replace_run_table_columns(session=session, run_id=run_id, rows=columns)
+        db.replace_run_table_columns(session, run_id=run_id, rows=columns)
 
     with engine.begin() as conn:
         first = conn.execute(select(run_table_columns)).mappings().all()
@@ -353,7 +345,7 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
     assert first[0]["mapped_field"] == "email"
 
     with SessionLocal.begin() as session:
-        repo.replace_run_table_columns(session=session, run_id=run_id, rows=[])
+        db.replace_run_table_columns(session, run_id=run_id, rows=[])
 
     with engine.begin() as conn:
         second = conn.execute(select(run_table_columns)).mappings().all()

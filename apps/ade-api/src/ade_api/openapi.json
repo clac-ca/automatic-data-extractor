@@ -7249,10 +7249,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 500,
+              "maximum": 10000,
               "minimum": 1,
               "description": "Maximum rows per sheet to include in the preview.",
-              "default": 200,
+              "default": 10000,
               "title": "Maxrows"
             },
             "description": "Maximum rows per sheet to include in the preview."
@@ -7263,10 +7263,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 10000,
               "minimum": 1,
               "description": "Maximum columns per sheet to include in the preview.",
-              "default": 50,
+              "default": 10000,
               "title": "Maxcolumns"
             },
             "description": "Maximum columns per sheet to include in the preview."
@@ -11340,10 +11340,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 500,
+              "maximum": 10000,
               "minimum": 1,
               "description": "Maximum rows per sheet to include in the preview.",
-              "default": 200,
+              "default": 10000,
               "title": "Maxrows"
             },
             "description": "Maximum rows per sheet to include in the preview."
@@ -11354,10 +11354,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 10000,
               "minimum": 1,
               "description": "Maximum columns per sheet to include in the preview.",
-              "default": 50,
+              "default": 10000,
               "title": "Maxcolumns"
             },
             "description": "Maximum columns per sheet to include in the preview."
@@ -17183,13 +17183,6 @@
             "minimum": 0.0,
             "title": "Index"
           },
-          "headers": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Headers"
-          },
           "rows": {
             "items": {
               "items": {
@@ -17222,7 +17215,6 @@
         "required": [
           "name",
           "index",
-          "headers",
           "rows",
           "totalRows",
           "totalColumns",
@@ -17230,7 +17222,7 @@
           "truncatedColumns"
         ],
         "title": "WorkbookSheetPreview",
-        "description": "Table-ready preview for a single workbook sheet."
+        "description": "Preview for a single workbook sheet."
       },
       "WorkspaceCreate": {
         "properties": {
@@ -17714,7 +17706,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5173"
+      "url": "http://localhost:8000"
     }
   ],
   "security": [

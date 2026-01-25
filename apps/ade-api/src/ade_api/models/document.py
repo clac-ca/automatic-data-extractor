@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
-    BigInteger,
     ForeignKey,
     Index,
     Integer,
@@ -256,50 +255,9 @@ class DocumentCommentMention(UUIDPrimaryKeyMixin, Base):
     )
 
 
-class DocumentEvent(Base):
-    """Durable change feed entry for documents."""
-
-    __tablename__ = "document_events"
-
-    cursor: Mapped[int] = mapped_column(
-        BigInteger(),
-        primary_key=True,
-        autoincrement=True,
-    )
-    workspace_id: Mapped[UUID] = mapped_column(
-        GUID(),
-        ForeignKey("workspaces.id", ondelete="NO ACTION"),
-        nullable=False,
-    )
-    document_id: Mapped[UUID] = mapped_column(
-        GUID(),
-        ForeignKey("documents.id", ondelete="NO ACTION"),
-        nullable=False,
-    )
-    event_type: Mapped[DocumentEventType] = mapped_column(
-        SAEnum(
-            DocumentEventType,
-            name="document_event_type",
-            native_enum=False,
-            length=40,
-            values_callable=_enum_values,
-        ),
-        nullable=False,
-    )
-    document_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
-
-    __table_args__ = (
-        Index("ix_document_events_workspace_cursor", "workspace_id", "cursor"),
-        Index("ix_document_events_workspace_document", "workspace_id", "document_id"),
-        Index("ix_document_events_workspace_occurred", "workspace_id", "occurred_at"),
-    )
-
-
 __all__ = [
     "DOCUMENT_EVENT_TYPE_VALUES",
     "DOCUMENT_SOURCE_VALUES",
-    "DocumentEvent",
     "DocumentEventType",
     "Document",
     "DocumentSource",

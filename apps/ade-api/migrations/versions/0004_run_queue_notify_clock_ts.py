@@ -1,4 +1,4 @@
-"""Run queue NOTIFY trigger for event-driven workers."""
+"""Notify run queue on queued status transitions (ignore available_at)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from typing import Optional
 from alembic import op
 
 # Revision identifiers, used by Alembic.
-revision = "0003_run_queue_notify"
-down_revision: Optional[str] = "0002_collapsed_current_schema"
+revision = "0004_run_queue_notify_clock_ts"
+down_revision: Optional[str] = "0003_run_queue_notify"
 branch_labels: Optional[str] = None
 depends_on: Optional[str] = None
 
@@ -16,8 +16,6 @@ depends_on: Optional[str] = None
 def upgrade() -> None:
     op.execute(
         """
-        DROP TRIGGER IF EXISTS trg_runs_notify_queued ON runs;
-        DROP FUNCTION IF EXISTS trg_runs_notify_queued();
         CREATE OR REPLACE FUNCTION fn_runs_notify_queued()
         RETURNS trigger AS $$
         BEGIN
@@ -31,17 +29,6 @@ def upgrade() -> None:
         END;
         $$ LANGUAGE plpgsql;
         """
-    )
-    op.execute(
-        """
-        CREATE TRIGGER trg_runs_notify_queued
-        AFTER INSERT OR UPDATE OF status ON runs
-        FOR EACH ROW
-        EXECUTE FUNCTION fn_runs_notify_queued();
-        """
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_runs_status_created_at ON runs (status, created_at);"
     )
 
 
