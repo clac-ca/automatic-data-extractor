@@ -26,7 +26,6 @@ def read_info(
     return InfoResponse(
         version=settings.app_version,
         commit_sha=settings.app_commit_sha or "unknown",
-        environment=settings.app_environment or "unknown",
         started_at=started_at,
     )
 

@@ -14606,10 +14606,6 @@
             "type": "string",
             "title": "Commitsha"
           },
-          "environment": {
-            "type": "string",
-            "title": "Environment"
-          },
           "startedAt": {
             "type": "string",
             "format": "date-time",
@@ -14621,7 +14617,6 @@
         "required": [
           "version",
           "commitSha",
-          "environment",
           "startedAt"
         ],
         "title": "InfoResponse",

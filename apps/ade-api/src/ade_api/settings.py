@@ -201,7 +201,6 @@ class Settings(BaseSettings):
     # Core
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "1.6.1"
-    app_environment: str = "unknown"
     app_commit_sha: str = "unknown"
     api_docs_enabled: bool = False
     docs_url: str = "/docs"

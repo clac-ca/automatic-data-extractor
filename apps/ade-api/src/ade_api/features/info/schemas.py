@@ -14,7 +14,6 @@ class InfoResponse(BaseSchema):
 
     version: str
     commit_sha: str = Field(alias="commitSha")
-    environment: str
     started_at: datetime = Field(alias="startedAt")
 
 

@@ -2514,8 +2514,6 @@ export type components = {
             version: string;
             /** Commitsha */
             commitSha: string;
-            /** Environment */
-            environment: string;
             /**
              * Startedat
              * Format: date-time
