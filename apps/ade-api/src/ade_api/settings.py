@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     alembic_ini_path: Path = Field(default=Path("apps/ade-api/alembic.ini"))
     alembic_migrations_dir: Path = Field(default=Path("apps/ade-api/migrations"))
 
-    # Storage (Azure Blob only)
+    # Storage
     data_dir: Path = Field(default=Path("data"))
     blob_account_url: str | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
