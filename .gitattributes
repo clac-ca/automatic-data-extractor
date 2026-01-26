@@ -5,8 +5,3 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
-
-# Explicit LF for scripts/configs that must stay POSIX-friendly
-*.sh text eol=lf
-*.bash text eol=lf
-Dockerfile* text eol=lf

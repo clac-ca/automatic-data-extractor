@@ -12,6 +12,9 @@
       "version": "24"
     }
   },
+  "mounts": [
+    "type=bind,source=${localEnv:HOME}${localEnv:USERPROFILE}/.codex,target=/home/vscode/.codex,consistency=cached"
+  ],
   "postCreateCommand": "bash -lc 'bash scripts/dev/bootstrap.sh'",
   "customizations": {
     "vscode": {
