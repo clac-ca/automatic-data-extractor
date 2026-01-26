@@ -8,6 +8,7 @@ def test_build_engine_allows_managed_identity_passwordless_url() -> None:
         _env_file=None,
         database_url="postgresql://user@contoso.postgres.database.azure.com:5432/ade?sslmode=require",
         database_auth_mode="managed_identity",
+        storage_backend="filesystem",
     )
 
     engine = build_engine(settings)
@@ -23,6 +24,7 @@ def test_build_engine_normalizes_postgres_driver() -> None:
     settings = Settings(
         _env_file=None,
         database_url="postgresql://user:secret@contoso.postgres.database.azure.com:5432/ade",
+        storage_backend="filesystem",
     )
     engine = build_engine(settings)
     try:
@@ -33,4 +35,8 @@ def test_build_engine_normalizes_postgres_driver() -> None:
 
 def test_settings_rejects_non_postgres_urls() -> None:
     with pytest.raises(ValueError):
-        Settings(_env_file=None, database_url="sqlite:///tmp/test.db")
+        Settings(
+            _env_file=None,
+            database_url="sqlite:///tmp/test.db",
+            storage_backend="filesystem",
+        )

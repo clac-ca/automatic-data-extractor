@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import logging
-import mimetypes
+import tempfile
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from dataclasses import dataclass
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
+import unicodedata
 from typing import Any
 from uuid import UUID, uuid4
 
 import openpyxl
-from sqlalchemy import case, insert, select, update
+from fastapi import UploadFile
+from sqlalchemy import case, insert, select, update, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,17 +34,16 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
-from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.workspaces.repository import WorkspacesRepository
 from ade_api.features.workspaces.settings import read_processing_paused
-from ade_api.infra.storage import (
-    workspace_documents_root,
-    workspace_run_root,
-)
+from ade_api.infra.storage import build_storage_adapter
 from ade_api.models import (
     Configuration,
     ConfigurationStatus,
-    Document,
+    File,
+    FileKind,
+    FileVersion,
+    FileVersionOrigin,
     Run,
     RunField,
     RunMetrics,
@@ -91,6 +92,8 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 _DEPS_DIGEST_CACHE_SIZE = 256
+_OUTPUT_FALLBACK_FILENAME = "output"
+_MAX_FILENAME_LENGTH = 255
 
 
 @lru_cache(maxsize=_DEPS_DIGEST_CACHE_SIZE)
@@ -110,18 +113,6 @@ def _deps_digest_cache_key(configuration: Configuration) -> str:
 # --------------------------------------------------------------------------- #
 # Small helpers
 # --------------------------------------------------------------------------- #
-
-
-@dataclass(slots=True)
-class RunPathsSnapshot:
-    """Container for run-relative output paths.
-
-    This is the normalized view that higher layers use. All paths here are
-    relative to the runs root, so they are safe to surface externally.
-    """
-
-    output_path: str | None = None
-    processed_file: str | None = None
 
 
 def _run_with_timeout(func, *, timeout: float, **kwargs):
@@ -167,9 +158,9 @@ class RunsService:
         self._storage = storage or ConfigStorage(
             settings=settings,
         )
+        self._blob_storage = build_storage_adapter(settings)
         self._documents_service = DocumentsService(session=session, settings=settings)
 
-        self._runs_dir = Path(settings.runs_dir)
         default_max = Run.__table__.c.max_attempts.default
         self._run_max_attempts = int(default_max.arg) if default_max is not None else 3
 
@@ -311,7 +302,18 @@ class RunsService:
                 configuration_id=configuration.id,
                 document_ids=list(document_ids),
             )
-            existing_ids = {run.input_document_id for run in existing}
+            existing_version_ids = [
+                run.input_file_version_id
+                for run in existing
+                if run.input_file_version_id is not None
+            ]
+            if existing_version_ids:
+                rows = self._session.execute(
+                    select(FileVersion.file_id).where(FileVersion.id.in_(existing_version_ids))
+                )
+                existing_ids = {row[0] for row in rows}
+            else:
+                existing_ids = set()
             new_document_ids = [doc_id for doc_id in document_ids if doc_id not in existing_ids]
 
         if new_document_ids:
@@ -408,8 +410,10 @@ class RunsService:
 
         payload: dict[str, Any] = dict(run.run_options or {})
 
-        if "input_document_id" not in payload and run.input_document_id:
-            payload["input_document_id"] = str(run.input_document_id)
+        if "input_document_id" not in payload and run.input_file_version_id:
+            document_id = self._resolve_document_id_for_version(run.input_file_version_id)
+            if document_id is not None:
+                payload["input_document_id"] = str(document_id)
         if "input_sheet_names" not in payload and run.input_sheet_names:
             payload["input_sheet_names"] = list(run.input_sheet_names)
 
@@ -420,8 +424,18 @@ class RunsService:
                 "run.options.load.failed",
                 extra=log_context(run_id=run.id),
             )
+            fallback_document_id = (
+                self._resolve_document_id_for_version(run.input_file_version_id)
+                if run.input_file_version_id
+                else None
+            )
+            fallback_value = (
+                str(fallback_document_id)
+                if fallback_document_id is not None
+                else (str(run.input_file_version_id) if run.input_file_version_id else "")
+            )
             return RunCreateOptions(
-                input_document_id=str(run.input_document_id),
+                input_document_id=fallback_value,
                 input_sheet_names=list(run.input_sheet_names or []),
             )
 
@@ -521,27 +535,29 @@ class RunsService:
         workspace_id: UUID,
         configuration_id: UUID,
         limit: int,
-    ) -> list[Document]:
+    ) -> list[File]:
         if limit <= 0:
             return []
         pending_run_exists = (
             select(Run.id)
             .where(
-                Run.input_document_id == Document.id,
+                Run.input_file_version_id == FileVersion.id,
+                FileVersion.file_id == File.id,
                 Run.configuration_id == configuration_id,
             )
             .limit(1)
             .exists()
         )
         stmt = (
-            select(Document)
+            select(File)
             .where(
-                Document.workspace_id == workspace_id,
-                Document.last_run_id.is_(None),
-                Document.deleted_at.is_(None),
+                File.workspace_id == workspace_id,
+                File.kind == FileKind.DOCUMENT,
+                File.last_run_id.is_(None),
+                File.deleted_at.is_(None),
                 ~pending_run_exists,
             )
-            .order_by(Document.created_at.asc())
+            .order_by(File.created_at.asc())
             .limit(limit)
         )
         result = self._session.execute(stmt)
@@ -586,25 +602,37 @@ class RunsService:
         if not document_ids:
             return
 
-        base_stmt = select(Document.id).where(
-            Document.workspace_id == configuration.workspace_id,
-            Document.deleted_at.is_(None),
-            Document.id.in_(document_ids),
+        base_stmt = (
+            select(File.id, File.current_version_id)
+            .where(File.workspace_id == configuration.workspace_id)
+            .where(File.kind == FileKind.DOCUMENT)
+            .where(File.deleted_at.is_(None))
+            .where(File.id.in_(document_ids))
         )
         result = self._session.execute(base_stmt)
-        eligible_ids = [doc_id for (doc_id,) in result.all()]
+        version_by_doc: dict[UUID, UUID] = {
+            doc_id: version_id
+            for doc_id, version_id in result.all()
+            if version_id is not None
+        }
+        version_to_doc = {version_id: doc_id for doc_id, version_id in version_by_doc.items()}
+        eligible_ids = list(version_by_doc.keys())
         if not eligible_ids:
             return
 
         if existing_statuses:
-            existing_stmt = select(Run.input_document_id).where(
+            existing_stmt = select(Run.input_file_version_id).where(
                 Run.configuration_id == configuration.id,
-                Run.input_document_id.in_(eligible_ids),
+                Run.input_file_version_id.in_(list(version_by_doc.values())),
                 Run.status.in_(list(existing_statuses)),
             )
             existing_result = self._session.execute(existing_stmt)
-            existing_ids = {doc_id for (doc_id,) in existing_result.all()}
-            eligible_ids = [doc_id for doc_id in eligible_ids if doc_id not in existing_ids]
+            existing_versions = {version_id for (version_id,) in existing_result.all()}
+            eligible_ids = [
+                doc_id
+                for doc_id, version_id in version_by_doc.items()
+                if version_id not in existing_versions
+            ]
             if not eligible_ids:
                 return
 
@@ -615,7 +643,7 @@ class RunsService:
                     "id": uuid4(),
                     "configuration_id": configuration.id,
                     "workspace_id": configuration.workspace_id,
-                    "input_document_id": doc_id,
+                    "input_file_version_id": version_by_doc[doc_id],
                     "input_sheet_names": (
                         input_sheet_names_by_document_id.get(doc_id)
                         if input_sheet_names_by_document_id
@@ -639,11 +667,15 @@ class RunsService:
         def update_last_run_ids(rows: Sequence[dict[str, Any]]) -> None:
             if not rows:
                 return
-            doc_to_run = {row["input_document_id"]: row["id"] for row in rows}
+            doc_to_run = {
+                version_to_doc[row["input_file_version_id"]]: row["id"]
+                for row in rows
+                if row.get("input_file_version_id") in version_to_doc
+            }
             self._session.execute(
-                update(Document)
-                .where(Document.id.in_(list(doc_to_run.keys())))
-                .values(last_run_id=case(doc_to_run, value=Document.id))
+                update(File)
+                .where(File.id.in_(list(doc_to_run.keys())))
+                .values(last_run_id=case(doc_to_run, value=File.id))
             )
 
         rows = build_rows(eligible_ids)
@@ -657,14 +689,18 @@ class RunsService:
                 if attempt:
                     raise
                 if existing_statuses:
-                    existing_stmt = select(Run.input_document_id).where(
+                    existing_stmt = select(Run.input_file_version_id).where(
                         Run.configuration_id == configuration.id,
-                        Run.input_document_id.in_(eligible_ids),
+                        Run.input_file_version_id.in_(list(version_by_doc.values())),
                         Run.status.in_(list(existing_statuses)),
                     )
                     existing_result = self._session.execute(existing_stmt)
-                    existing_ids = {doc_id for (doc_id,) in existing_result.all()}
-                    remaining = [doc_id for doc_id in eligible_ids if doc_id not in existing_ids]
+                    existing_versions = {version_id for (version_id,) in existing_result.all()}
+                    remaining = [
+                        doc_id
+                        for doc_id, version_id in version_by_doc.items()
+                        if version_id not in existing_versions
+                    ]
                     if not remaining:
                         return
                     rows = build_rows(remaining)
@@ -809,22 +845,6 @@ class RunsService:
     def to_resource(self, run: Run, *, resolve_paths: bool = True) -> RunResource:
         """Convert ``run`` into its API representation."""
 
-        run_dir = (
-            self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
-            if resolve_paths
-            else None
-        )
-        paths = (
-            self._finalize_paths(
-                run_dir=run_dir,
-                default_paths=RunPathsSnapshot(output_path=run.output_path),
-            )
-            if resolve_paths and run_dir is not None
-            else RunPathsSnapshot(output_path=run.output_path)
-        )
-
-        processed_file = self._resolve_processed_file(paths=paths) if resolve_paths else None
-
         # Timing and failure info
         started_at = self._ensure_utc(run.started_at)
         completed_at = self._ensure_utc(run.completed_at)
@@ -843,10 +863,6 @@ class RunsService:
         )
         output_meta = self._build_output_metadata(
             run=run,
-            run_dir=run_dir,
-            paths=paths,
-            processed_file=processed_file,
-            resolve_paths=resolve_paths,
         )
         links = self._links(run.id)
 
@@ -866,17 +882,8 @@ class RunsService:
             input=input_meta,
             output=output_meta,
             links=links,
-            events_stream_url=links.events_stream,
             events_download_url=links.events_download,
         )
-
-    def _resolve_processed_file(
-        self,
-        *,
-        paths: RunPathsSnapshot,
-    ) -> str | None:
-        processed_file = paths.processed_file
-        return processed_file
 
     def _build_input_metadata(
         self,
@@ -885,22 +892,27 @@ class RunsService:
         files_counts: dict[str, Any],
         sheets_counts: dict[str, Any],
     ) -> RunInput:
-        document_id = str(run.input_document_id) if run.input_document_id else None
+        document_id = None
+        file_version_id = None
+        version_no = None
         filename: str | None = None
         content_type: str | None = None
         size_bytes: int | None = None
         download_url: str | None = None
 
-        if document_id:
+        if run.input_file_version_id:
+            file_version_id = str(run.input_file_version_id)
             download_url = f"/api/v1/runs/{run.id}/input/download"
             try:
-                document = self._require_document(
+                document, version = self._require_document_with_version(
                     workspace_id=run.workspace_id,
-                    document_id=run.input_document_id,  # type: ignore[arg-type]
+                    file_version_id=run.input_file_version_id,
                 )
-                filename = document.original_filename
-                content_type = document.content_type
-                size_bytes = document.byte_size
+                document_id = str(document.id)
+                version_no = version.version_no
+                filename = version.filename_at_upload or document.name
+                content_type = version.content_type
+                size_bytes = version.byte_size
             except RunDocumentMissingError:
                 logger.warning(
                     "run.input.metadata.missing_document",
@@ -908,12 +920,14 @@ class RunsService:
                         workspace_id=run.workspace_id,
                         configuration_id=run.configuration_id,
                         run_id=run.id,
-                        document_id=document_id,
+                        document_id=document_id or file_version_id,
                     ),
                 )
 
         return RunInput(
             document_id=document_id,
+            file_version_id=file_version_id,
+            version_no=version_no,
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
@@ -927,39 +941,29 @@ class RunsService:
         self,
         *,
         run: Run,
-        run_dir: Path | None,
-        paths: RunPathsSnapshot,
-        processed_file: str | None,
-        resolve_paths: bool = True,
     ) -> RunOutput:
-        output_path = paths.output_path
-        output_file: Path | None = None
-        if resolve_paths and run_dir is not None and output_path:
-            candidate = (run_dir / output_path).resolve()
-            try:
-                candidate.relative_to(run_dir)
-            except ValueError:
-                candidate = None
-            if candidate and candidate.is_file():
-                output_file = candidate
+        output_version_id = run.output_file_version_id
+        output_file: File | None = None
+        output_version: FileVersion | None = None
+        if output_version_id is not None:
+            output_version = self._session.get(FileVersion, output_version_id)
+            if output_version is not None:
+                output_file = self._session.get(File, output_version.file_id)
 
-        ready = run.status in {RunStatus.SUCCEEDED, RunStatus.FAILED} and (
-            bool(output_file) if resolve_paths else bool(output_path)
-        )
+        ready = output_version is not None
 
         filename: str | None = None
         size_bytes: int | None = None
         content_type: str | None = None
+        version_no: int | None = None
 
-        if output_file:
-            filename = output_file.name
-            try:
-                size_bytes = output_file.stat().st_size
-            except OSError:
-                size_bytes = None
-            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        elif output_path:
-            filename = Path(output_path).name
+        if output_version is not None:
+            version_no = output_version.version_no
+            size_bytes = output_version.byte_size
+            content_type = output_version.content_type or "application/octet-stream"
+            filename = output_version.filename_at_upload or (
+                output_file.name if output_file is not None else None
+            )
 
         return RunOutput(
             ready=ready,
@@ -967,15 +971,14 @@ class RunsService:
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
-            has_output=bool(output_file) if resolve_paths else bool(output_path),
-            output_path=output_path,
-            processed_file=str(processed_file) if processed_file else None,
+            has_output=ready,
+            file_version_id=str(output_version_id) if output_version_id else None,
+            version_no=version_no,
         )
 
     @staticmethod
     def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
-        events_stream = f"{base}/events/stream"
         events_download = f"{base}/events/download"
         output_metadata = f"{base}/output"
         output_download = f"{output_metadata}/download"
@@ -984,7 +987,6 @@ class RunsService:
 
         return RunLinks(
             self=base,
-            events_stream=events_stream,
             events_download=events_download,
             logs=events_download,
             input=input_metadata,
@@ -1011,30 +1013,20 @@ class RunsService:
         self,
         *,
         run_id: UUID,
-    ) -> tuple[Run, Document, Iterator[bytes]]:
+    ) -> tuple[Run, File, FileVersion, Iterator[bytes]]:
         run = self._require_run(run_id)
-        if not run.input_document_id:
+        if not run.input_file_version_id:
             raise RunInputMissingError("Run input is unavailable")
-        document = self._require_document(
+        document, version = self._require_document_with_version(
             workspace_id=run.workspace_id,
-            document_id=run.input_document_id,
+            file_version_id=run.input_file_version_id,
         )
-        storage = self._storage_for(run.workspace_id)
-        path = storage.path_for(document.stored_uri)
-        if not path.exists():
-            logger.warning(
-                "run.input.stream.missing_file",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    document_id=document.id,
-                    stored_uri=document.stored_uri,
-                ),
-            )
-            raise RunDocumentMissingError("Run input file is unavailable")
 
-        stream = storage.stream(document.stored_uri)
+        stream = self._blob_storage.stream(
+            document.blob_name,
+            version_id=version.blob_version_id,
+            chunk_size=self._settings.blob_download_chunk_size_bytes,
+        )
 
         def _guarded() -> Iterator[bytes]:
             try:
@@ -1048,12 +1040,12 @@ class RunsService:
                         configuration_id=run.configuration_id,
                         run_id=run.id,
                         document_id=document.id,
-                        stored_uri=document.stored_uri,
+                        stored_uri=document.blob_name,
                     ),
                 )
                 raise RunDocumentMissingError("Run input file is unavailable") from exc
 
-        return run, document, _guarded()
+        return run, document, version, _guarded()
 
     def get_run_output_metadata(
         self,
@@ -1064,11 +1056,79 @@ class RunsService:
         resource = self.to_resource(run)
         return resource.output
 
+    def upload_manual_output(
+        self,
+        *,
+        run_id: UUID,
+        upload: UploadFile,
+        actor_id: UUID | None = None,
+    ) -> RunOutput:
+        """Upload a manual output file for a completed run."""
+
+        run = self._require_run(run_id)
+        if run.status in {RunStatus.QUEUED, RunStatus.RUNNING}:
+            raise RunOutputNotReadyError("Run output cannot be uploaded until the run completes.")
+
+        document, _ = self._require_document_with_version(
+            workspace_id=run.workspace_id,
+            file_version_id=run.input_file_version_id,
+        )
+
+        upload_name = self._normalise_filename(upload.filename)
+        content_type = self._normalise_content_type(upload.content_type)
+
+        output_name = f"{document.name or upload_name} (Output)"
+        output_name_key = f"output:{document.id}"
+        output_file = self._ensure_output_file(
+            workspace_id=run.workspace_id,
+            document_id=document.id,
+            name=output_name,
+            name_key=output_name_key,
+            expires_at=document.expires_at,
+            actor_id=actor_id,
+        )
+
+        if upload.file is None:  # pragma: no cover - UploadFile always provides a file
+            raise RuntimeError("Upload stream is not available")
+
+        stored = self._blob_storage.write(
+            output_file.blob_name,
+            upload.file,
+            max_bytes=self._settings.storage_upload_max_bytes,
+        )
+
+        blob_version_id = stored.version_id or stored.sha256
+        now = datetime.now(tz=UTC)
+
+        version_no = self._next_version_no(file_id=output_file.id)
+        file_version = FileVersion(
+            file_id=output_file.id,
+            version_no=version_no,
+            origin=FileVersionOrigin.MANUAL,
+            run_id=run.id,
+            created_by_user_id=actor_id,
+            sha256=stored.sha256,
+            byte_size=stored.byte_size,
+            content_type=content_type,
+            filename_at_upload=upload_name,
+            blob_version_id=blob_version_id,
+        )
+        self._session.add(file_version)
+        self._session.flush()
+
+        output_file.current_version_id = file_version.id
+        output_file.version = version_no
+        output_file.updated_at = now
+        run.output_file_version_id = file_version.id
+        self._session.flush()
+
+        return self._build_output_metadata(run=run)
+
     def resolve_output_for_download(
         self,
         *,
         run_id: UUID,
-    ) -> tuple[Run, Path]:
+    ) -> tuple[Run, File, FileVersion]:
         run = self._require_run(run_id)
         if run.status in {
             RunStatus.QUEUED,
@@ -1076,14 +1136,44 @@ class RunsService:
         }:
             raise RunOutputNotReadyError("Run output is not available until the run completes.")
         try:
-            path = self.resolve_output_file(run_id=run_id)
+            output_file, output_version = self._require_output_version(run=run)
         except RunOutputMissingError as err:
             if run.status is RunStatus.FAILED:
                 raise RunOutputMissingError(
                     "Run failed and no output is available",
                 ) from err
             raise
-        return run, path
+        return run, output_file, output_version
+
+    def stream_run_output(
+        self,
+        *,
+        run_id: UUID,
+    ) -> tuple[Run, File, FileVersion, Iterator[bytes]]:
+        run, output_file, output_version = self.resolve_output_for_download(run_id=run_id)
+        stream = self._blob_storage.stream(
+            output_file.blob_name,
+            version_id=output_version.blob_version_id,
+            chunk_size=self._settings.blob_download_chunk_size_bytes,
+        )
+
+        def _guarded() -> Iterator[bytes]:
+            try:
+                for chunk in stream:
+                    yield chunk
+            except FileNotFoundError as exc:
+                logger.warning(
+                    "run.output.stream.missing",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        blob_name=output_file.blob_name,
+                    ),
+                )
+                raise RunOutputMissingError("Run output is unavailable") from exc
+
+        return run, output_file, output_version, _guarded()
 
     def get_run_output_preview(
         self,
@@ -1111,39 +1201,47 @@ class RunsService:
             ),
         )
 
-        run, path = self.resolve_output_for_download(run_id=run_id)
-        suffix = path.suffix.lower()
+        run, output_file, output_version = self.resolve_output_for_download(run_id=run_id)
+        output_name = output_version.filename_at_upload or output_file.name
+        suffix = Path(output_name).suffix.lower()
         timeout = self._settings.preview_timeout_seconds
 
         try:
-            if suffix == ".xlsx":
-                preview = _run_with_timeout(
-                    build_workbook_preview_from_xlsx,
-                    timeout=timeout,
-                    path=path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
-                )
-            elif suffix == ".csv":
-                preview = _run_with_timeout(
-                    build_workbook_preview_from_csv,
-                    timeout=timeout,
-                    path=path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
-                )
-            else:
-                raise RunOutputPreviewUnsupportedError(
-                    f"Preview is not supported for output file type {suffix!r}."
-                )
+            with self._download_blob_to_tempfile(
+                blob_name=output_file.blob_name,
+                version_id=output_version.blob_version_id,
+                suffix=suffix,
+            ) as path:
+                if suffix == ".xlsx":
+                    preview = _run_with_timeout(
+                        build_workbook_preview_from_xlsx,
+                        timeout=timeout,
+                        path=path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    )
+                elif suffix == ".csv":
+                    preview = _run_with_timeout(
+                        build_workbook_preview_from_csv,
+                        timeout=timeout,
+                        path=path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    )
+                else:
+                    raise RunOutputPreviewUnsupportedError(
+                        f"Preview is not supported for output file type {suffix!r}."
+                    )
+        except FileNotFoundError as exc:
+            raise RunOutputMissingError("Run output is unavailable") from exc
         except (KeyError, IndexError) as exc:
             requested = sheet_name if sheet_name is not None else str(effective_sheet_index)
             raise RunOutputPreviewSheetNotFoundError(
@@ -1184,17 +1282,25 @@ class RunsService:
             extra=log_context(run_id=run_id),
         )
 
-        run, path = self.resolve_output_for_download(run_id=run_id)
-        suffix = path.suffix.lower()
+        run, output_file, output_version = self.resolve_output_for_download(run_id=run_id)
+        output_name = output_version.filename_at_upload or output_file.name
+        suffix = Path(output_name).suffix.lower()
         timeout = self._settings.preview_timeout_seconds
 
         if suffix == ".xlsx":
             try:
-                sheets = _run_with_timeout(self._inspect_workbook, timeout=timeout, path=path)
+                with self._download_blob_to_tempfile(
+                    blob_name=output_file.blob_name,
+                    version_id=output_version.blob_version_id,
+                    suffix=suffix,
+                ) as path:
+                    sheets = _run_with_timeout(self._inspect_workbook, timeout=timeout, path=path)
             except FuturesTimeout as exc:
                 raise RunOutputSheetParseError(
                     f"Worksheet inspection timed out after {timeout:g}s for run {run_id!r} output."
                 ) from exc
+            except FileNotFoundError as exc:
+                raise RunOutputMissingError("Run output is unavailable") from exc
             except Exception as exc:  # pragma: no cover - defensive fallback
                 raise RunOutputSheetParseError(
                     f"Worksheet inspection failed for run {run_id!r} output ({type(exc).__name__})."
@@ -1212,7 +1318,7 @@ class RunsService:
             return sheets
 
         if suffix == ".csv":
-            name = self._default_sheet_name(path.name)
+            name = self._default_sheet_name(output_name)
             sheets = [RunOutputSheet(name=name, index=0, kind="file", is_active=True)]
             logger.info(
                 "run.output.sheets.list.success",
@@ -1230,226 +1336,37 @@ class RunsService:
             f"Sheets are not supported for output file type {suffix!r}."
         )
 
-    def get_logs_file_path(self, *, run_id: UUID) -> Path:
-        """Return the raw log stream path for ``run_id`` when available."""
-
-        logger.debug(
-            "run.logs.file_path.start",
-            extra=log_context(run_id=run_id),
-        )
-        run = self._require_run(run_id)
-        logs_path = self.get_event_log_path(run_id=run_id)
-        if not logs_path.is_file():
-            logger.warning(
-                "run.logs.file_path.missing",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    path=str(logs_path),
-                ),
-            )
-            raise RunLogsFileMissingError("Run log stream is unavailable")
-        logger.info(
-            "run.logs.file_path.success",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                path=str(logs_path),
-            ),
-        )
-        return logs_path
-
-    def get_event_log_path(self, *, run_id: UUID) -> Path:
-        """Return the NDJSON log path for a run (may not exist yet)."""
+    def stream_run_logs(self, *, run_id: UUID) -> Iterator[bytes]:
+        """Stream NDJSON run logs from storage."""
 
         run = self._require_run(run_id)
-        logs_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs"
-        return logs_dir / "events.ndjson"
-
-    def resolve_output_file(
-        self,
-        *,
-        run_id: UUID,
-    ) -> Path:
-        """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
-
-        logger.debug(
-            "run.outputs.resolve.start",
-            extra=log_context(run_id=run_id),
+        blob_name = self._run_log_blob_name(workspace_id=run.workspace_id, run_id=run.id)
+        stream = self._blob_storage.stream(
+            blob_name,
+            chunk_size=self._settings.blob_download_chunk_size_bytes,
         )
-        run = self._require_run(run_id)
-        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
 
-        paths_snapshot = self._finalize_paths(
-            run_dir=run_dir,
-            default_paths=RunPathsSnapshot(output_path=run.output_path),
-        )
-        output_relative = paths_snapshot.output_path
-        if not output_relative:
-            logger.warning(
-                "run.outputs.resolve.missing_root",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    path=str(run_dir / "output"),
-                ),
-            )
-            raise RunOutputMissingError("Run output is unavailable")
-
-        candidate = (run_dir / output_relative).resolve()
-        try:
-            candidate.relative_to(run_dir)
-        except ValueError:
-            logger.warning(
-                "run.outputs.resolve.outside_directory",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    path=str(candidate),
-                ),
-            )
-            raise RunOutputMissingError("Requested output is outside the run directory") from None
-
-        if not candidate.is_file():
-            logger.warning(
-                "run.outputs.resolve.not_found",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    path=str(candidate),
-                ),
-            )
-            raise RunOutputMissingError("Requested output file not found")
-
-        logger.info(
-            "run.outputs.resolve.success",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                path=str(candidate),
-            ),
-        )
-        return candidate
-
-    def run_directory(self, *, workspace_id: UUID, run_id: UUID) -> Path:
-        """Return the canonical run directory for a given ``run_id``."""
-
-        path = self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
-        logger.debug(
-            "run.directory.resolve",
-            extra=log_context(workspace_id=workspace_id, run_id=run_id, path=str(path)),
-        )
-        return path
-
-    def run_relative_path(self, path: Path, *, base_dir: Path | None = None) -> str:
-        """Return ``path`` relative to ``base_dir`` (or runs root), validating traversal."""
-
-        root = (base_dir or self._runs_dir).resolve()
-        candidate = path.resolve()
-        try:
-            value = str(candidate.relative_to(root))
-        except ValueError:  # pragma: no cover - defensive guard
-            logger.warning(
-                "run.path.escape_detected",
-                extra=log_context(path=str(candidate)),
-            )
-            raise RunOutputMissingError("Requested path escapes runs directory") from None
-        return value
-
-    # --------------------------------------------------------------------- #
-    # Internal helpers: paths, summaries, manifests
-    # --------------------------------------------------------------------- #
-
-    def _relative_if_exists(
-        self,
-        path: str | Path | None,
-        *,
-        run_dir: Path | None = None,
-    ) -> str | None:
-        if path is None:
-            return None
-
-        candidates: list[Path] = []
-        candidate = Path(path)
-        candidates.append(candidate)
-        if run_dir is not None and not candidate.is_absolute():
-            candidates.append(run_dir / candidate)
-
-        for option in candidates:
-            if not option.exists():
-                continue
+        def _guarded() -> Iterator[bytes]:
             try:
-                return self.run_relative_path(option, base_dir=run_dir)
-            except RunOutputMissingError:
-                continue
-        return None
+                for chunk in stream:
+                    yield chunk
+            except FileNotFoundError as exc:
+                logger.warning(
+                    "run.logs.missing",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        blob_name=blob_name,
+                    ),
+                )
+                raise RunLogsFileMissingError("Run log stream is unavailable") from exc
 
-    def _relative_output_path(self, output_dir: Path, run_dir: Path) -> str | None:
-        if not output_dir.exists() or not output_dir.is_dir():
-            return None
-        normalized = output_dir / "normalized.xlsx"
-        relative = self._relative_if_exists(normalized, run_dir=run_dir)
-        if relative:
-            return relative
-        for path in output_dir.rglob("*"):
-            if not path.is_file():
-                continue
-            relative = self._relative_if_exists(path, run_dir=run_dir)
-            if relative is not None:
-                return relative
-        return None
-
-    def _run_relative_hint(self, path: str | Path | None, *, run_dir: Path | None) -> str | None:
-        """Return ``path`` relative to the run directory without hitting the filesystem."""
-
-        if path is None or run_dir is None:
-            return None
-
-        candidate = Path(path)
-        if not candidate.is_absolute():
-            candidate = (run_dir / candidate).resolve()
-        try:
-            return self.run_relative_path(candidate, base_dir=run_dir)
-        except RunOutputMissingError:
-            return None
+        return _guarded()
 
     @staticmethod
-    def _document_descriptor(document: Document) -> dict[str, Any]:
-        return {
-            "document_id": str(document.id),
-            "display_name": document.original_filename,
-            "name": document.original_filename,
-            "original_filename": document.original_filename,
-            "content_type": document.content_type,
-            "byte_size": document.byte_size,
-        }
-
-    def _finalize_paths(
-        self,
-        *,
-        run_dir: Path,
-        default_paths: RunPathsSnapshot,
-    ) -> RunPathsSnapshot:
-        """Merge inferred filesystem paths for outputs."""
-
-        snapshot = RunPathsSnapshot(
-            output_path=default_paths.output_path,
-            processed_file=default_paths.processed_file,
-        )
-
-        # Output path: if not provided, infer from <run_dir>/output.
-        if snapshot.output_path:
-            snapshot.output_path = self._run_relative_hint(snapshot.output_path, run_dir=run_dir)
-        if not snapshot.output_path:
-            snapshot.output_path = self._relative_output_path(run_dir / "output", run_dir)
-
-        return snapshot
+    def _run_log_blob_name(*, workspace_id: UUID, run_id: UUID) -> str:
+        return f"{workspace_id}/runs/{run_id}/logs/events.ndjson"
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -1481,7 +1398,135 @@ class RunsService:
             raise RunNotFoundError(run_id)
         return run
 
-    def _require_document(self, *, workspace_id: UUID, document_id: UUID) -> Document:
+    def _resolve_document_id_for_version(self, file_version_id: UUID) -> UUID | None:
+        stmt = (
+            select(File.id)
+            .join(FileVersion, FileVersion.file_id == File.id)
+            .where(
+                FileVersion.id == file_version_id,
+                File.kind == FileKind.DOCUMENT,
+                File.deleted_at.is_(None),
+            )
+        )
+        result = self._session.execute(stmt).scalar_one_or_none()
+        return result if isinstance(result, UUID) else (UUID(str(result)) if result else None)
+
+    def _require_document_with_version(
+        self,
+        *,
+        workspace_id: UUID,
+        file_version_id: UUID,
+    ) -> tuple[File, FileVersion]:
+        version = self._session.get(FileVersion, file_version_id)
+        if version is None:
+            raise RunDocumentMissingError(f"Document version {file_version_id} not found")
+        document = self._session.get(File, version.file_id)
+        if (
+            document is None
+            or document.workspace_id != workspace_id
+            or document.kind != FileKind.DOCUMENT
+            or document.deleted_at is not None
+        ):
+            raise RunDocumentMissingError(f"Document {version.file_id} not found")
+        return document, version
+
+    def _require_output_version(self, *, run: Run) -> tuple[File, FileVersion]:
+        output_version_id = run.output_file_version_id
+        if not output_version_id:
+            raise RunOutputMissingError("Run output is unavailable")
+        version = self._session.get(FileVersion, output_version_id)
+        if version is None:
+            raise RunOutputMissingError("Run output is unavailable")
+        output_file = self._session.get(File, version.file_id)
+        if (
+            output_file is None
+            or output_file.workspace_id != run.workspace_id
+            or output_file.kind != FileKind.OUTPUT
+        ):
+            raise RunOutputMissingError("Run output is unavailable")
+        return output_file, version
+
+    def _ensure_output_file(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        name: str,
+        name_key: str,
+        expires_at: datetime,
+        actor_id: UUID | None,
+    ) -> File:
+        stmt = select(File).where(
+            File.workspace_id == workspace_id,
+            File.kind == FileKind.OUTPUT,
+            File.name_key == name_key,
+        )
+        existing = self._session.execute(stmt).scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        file_id = uuid4()
+        output_file = File(
+            id=file_id,
+            workspace_id=workspace_id,
+            kind=FileKind.OUTPUT,
+            doc_no=None,
+            name=name,
+            name_key=name_key,
+            blob_name=self._file_blob_name(workspace_id=workspace_id, file_id=file_id),
+            parent_file_id=document_id,
+            attributes={},
+            uploaded_by_user_id=actor_id,
+            expires_at=expires_at,
+            version=0,
+            comment_count=0,
+        )
+        self._session.add(output_file)
+        try:
+            self._session.flush()
+        except IntegrityError:
+            self._session.rollback()
+            existing = self._session.execute(stmt).scalar_one_or_none()
+            if existing is not None:
+                return existing
+            raise
+        return output_file
+
+    def _next_version_no(self, *, file_id: UUID) -> int:
+        stmt = select(func.max(FileVersion.version_no)).where(FileVersion.file_id == file_id)
+        current = self._session.execute(stmt).scalar_one()
+        return int(current or 0) + 1
+
+    @staticmethod
+    def _normalise_filename(name: str | None) -> str:
+        if name is None:
+            return _OUTPUT_FALLBACK_FILENAME
+
+        candidate = name.strip()
+        if not candidate:
+            return _OUTPUT_FALLBACK_FILENAME
+
+        filtered = "".join(ch for ch in candidate if unicodedata.category(ch)[0] != "C").strip()
+        if not filtered:
+            return _OUTPUT_FALLBACK_FILENAME
+
+        if len(filtered) > _MAX_FILENAME_LENGTH:
+            filtered = filtered[:_MAX_FILENAME_LENGTH].rstrip()
+
+        return filtered or _OUTPUT_FALLBACK_FILENAME
+
+    @staticmethod
+    def _normalise_content_type(content_type: str | None) -> str | None:
+        if content_type is None:
+            return None
+        candidate = content_type.strip()
+        return candidate or None
+
+    @staticmethod
+    def _file_blob_name(*, workspace_id: UUID, file_id: UUID) -> str:
+        return f"{workspace_id}/files/{file_id}"
+
+    def _require_document(self, *, workspace_id: UUID, document_id: UUID) -> File:
         document = self._documents.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -1502,14 +1547,15 @@ class RunsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
-    ) -> list[Document]:
+    ) -> list[File]:
         if not document_ids:
             return []
 
-        stmt = select(Document).where(
-            Document.workspace_id == workspace_id,
-            Document.deleted_at.is_(None),
-            Document.id.in_(document_ids),
+        stmt = select(File).where(
+            File.workspace_id == workspace_id,
+            File.kind == FileKind.DOCUMENT,
+            File.deleted_at.is_(None),
+            File.id.in_(document_ids),
         )
         result = self._session.execute(stmt)
         documents = list(result.scalars())
@@ -1526,10 +1572,6 @@ class RunsService:
             )
             raise RunDocumentMissingError(f"Document {missing[0]} not found")
         return documents
-
-    def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
-        base = workspace_documents_root(self._settings, workspace_id)
-        return DocumentStorage(base)
 
     def _resolve_configuration(self, configuration_id: UUID) -> Configuration:
         configuration = self._configs.get_by_id(configuration_id)
@@ -1596,19 +1638,6 @@ class RunsService:
             )
         return configuration
 
-    def _run_dir_for_run(self, *, workspace_id: UUID, run_id: UUID) -> Path:
-        root = workspace_run_root(self._settings, workspace_id).resolve()
-        candidate = (root / str(run_id)).resolve()
-        try:
-            candidate.relative_to(root)
-        except ValueError:  # pragma: no cover - defensive guard
-            logger.warning(
-                "run.directory.escape_detected",
-                extra=log_context(workspace_id=workspace_id, run_id=run_id, path=str(candidate)),
-            )
-            raise RunOutputMissingError("Requested path escapes runs directory") from None
-        return candidate
-
     @staticmethod
     def _inspect_workbook(path: Path) -> list[RunOutputSheet]:
         with path.open("rb") as raw:
@@ -1637,6 +1666,26 @@ class RunsService:
     def _default_sheet_name(name: str | None) -> str:
         stem = Path(name or "Sheet").stem.strip() or "Sheet"
         return stem
+
+    @contextmanager
+    def _download_blob_to_tempfile(
+        self,
+        *,
+        blob_name: str,
+        version_id: str | None,
+        suffix: str | None = None,
+    ) -> Iterator[Path]:
+        suffix = suffix or ""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / f"run-output{suffix}"
+            with path.open("wb") as handle:
+                for chunk in self._blob_storage.stream(
+                    blob_name,
+                    version_id=version_id,
+                    chunk_size=self._settings.blob_download_chunk_size_bytes,
+                ):
+                    handle.write(chunk)
+            yield path
 
     @staticmethod
     def _epoch_seconds(dt: datetime | None) -> int | None:

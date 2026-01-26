@@ -13,7 +13,7 @@ from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
-from ade_api.models import DocumentSource, RunStatus
+from ade_api.models import FileVersionOrigin, RunStatus
 
 
 class DocumentFileType(str, Enum):
@@ -24,6 +24,14 @@ class DocumentFileType(str, Enum):
     CSV = "csv"
     PDF = "pdf"
     UNKNOWN = "unknown"
+
+
+class DocumentConflictMode(str, Enum):
+    """Conflict handling for document uploads."""
+
+    REJECT = "reject"
+    UPLOAD_NEW_VERSION = "upload_new_version"
+    KEEP_BOTH = "keep_both"
 
 
 class UserSummary(BaseSchema):
@@ -46,20 +54,26 @@ class DocumentOut(BaseSchema):
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
     workspace_id: UUIDStr = Field(alias="workspaceId")
-    name: str = Field(
-        alias="original_filename",
-        serialization_alias="name",
-        description="Display name mapped from the original filename.",
+    doc_no: int | None = Field(
+        default=None,
+        alias="docNo",
+        description="Numeric document reference within the workspace.",
     )
+    name: str = Field(description="Display name for the document.")
     content_type: str | None = Field(default=None, alias="contentType")
     byte_size: int = Field(alias="byteSize")
+    current_version_no: int | None = Field(
+        default=None,
+        alias="currentVersionNo",
+        description="Current file version number for this document.",
+    )
     comment_count: int = Field(default=0, alias="commentCount")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         alias="attributes",
         serialization_alias="metadata",
     )
-    source: DocumentSource
+    source: FileVersionOrigin | None = Field(default=None)
     expires_at: datetime = Field(alias="expiresAt")
     activity_at: datetime | None = Field(default=None, alias="activityAt")
     created_at: datetime = Field(alias="createdAt")
@@ -286,12 +300,14 @@ class DocumentListRow(BaseSchema):
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
     workspace_id: UUIDStr = Field(alias="workspaceId")
+    doc_no: int | None = Field(default=None, alias="docNo")
     name: str = Field(description="Display name mapped from the original filename.")
     file_type: DocumentFileType = Field(alias="fileType")
     uploader: UserSummary | None = None
     assignee: UserSummary | None = None
     tags: list[str] = Field(default_factory=list)
     byte_size: int = Field(alias="byteSize")
+    current_version_no: int | None = Field(default=None, alias="currentVersionNo")
     comment_count: int = Field(default=0, alias="commentCount")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
@@ -337,7 +353,7 @@ class DocumentCommentOut(BaseSchema):
 
     id: UUIDStr
     workspace_id: UUIDStr = Field(alias="workspaceId")
-    document_id: UUIDStr = Field(alias="documentId")
+    document_id: UUIDStr = Field(alias="file_id", serialization_alias="documentId")
     body: str
     author: UserSummary | None = Field(
         default=None,
@@ -355,27 +371,6 @@ class DocumentCommentOut(BaseSchema):
 
 class DocumentCommentPage(CursorPage[DocumentCommentOut]):
     """Cursor-based envelope of document comments."""
-
-
-class DocumentChangeEntry(BaseSchema):
-    """Single entry from the documents change feed."""
-
-    cursor: str
-    type: Literal["document.changed", "document.deleted"]
-    document_id: UUIDStr = Field(alias="documentId")
-    occurred_at: datetime = Field(alias="occurredAt")
-    document_version: int = Field(alias="documentVersion")
-    row: DocumentListRow | None = Field(
-        default=None,
-        description="Optional list row snapshot for changed documents.",
-    )
-
-
-class DocumentChangesPage(BaseSchema):
-    """Envelope for cursor-based change feed results."""
-
-    items: list[DocumentChangeEntry] = Field(default_factory=list)
-    next_cursor: str = Field(alias="nextCursor")
 
 
 class DocumentUploadRunOptions(BaseSchema):
@@ -413,8 +408,7 @@ __all__ = [
     "DocumentBatchDeleteResponse",
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
-    "DocumentChangeEntry",
-    "DocumentChangesPage",
+    "DocumentConflictMode",
     "DocumentFileType",
     "DocumentListPage",
     "DocumentListRow",

@@ -8,8 +8,7 @@ import anyio
 import pytest
 from httpx import AsyncClient
 
-from ade_api.infra.storage import workspace_documents_root
-from ade_api.models import Document
+from ade_api.models import File
 from ade_api.settings import Settings
 from tests.utils import login
 
@@ -57,10 +56,8 @@ async def test_delete_document_marks_deleted(
     detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 404
 
-    row = await anyio.to_thread.run_sync(db_session.get, Document, UUID(document_id))
+    row = await anyio.to_thread.run_sync(db_session.get, File, UUID(document_id))
     assert row is not None
     assert row.deleted_at is not None
-    stored_uri = row.stored_uri
-
-    stored_path = workspace_documents_root(settings, seed_identity.workspace_id) / stored_uri
+    stored_path = settings.documents_dir / row.blob_name
     assert not stored_path.exists()

@@ -9,8 +9,10 @@ from ade_api.common.time import utc_now
 from ade_api.models import (
     Configuration,
     ConfigurationStatus,
-    Document,
-    DocumentSource,
+    File,
+    FileKind,
+    FileVersion,
+    FileVersionOrigin,
     Run,
     RunStatus,
     Workspace,
@@ -38,25 +40,43 @@ def _create_configuration(session: Session) -> tuple[Workspace, Configuration]:
 def test_run_defaults(session: Session) -> None:
     workspace, configuration = _create_configuration(session)
 
-    document = Document(
-        id=generate_uuid7(),
+    file_id = generate_uuid7()
+    version_id = generate_uuid7()
+    document = File(
+        id=file_id,
         workspace_id=workspace.id,
-        original_filename="input.csv",
-        content_type="text/csv",
-        byte_size=12,
-        sha256="deadbeef",
-        stored_uri="documents/input.csv",
+        kind=FileKind.DOCUMENT,
+        doc_no=None,
+        name="input.csv",
+        name_key="input.csv",
+        blob_name=f"{workspace.id}/files/{file_id}",
         attributes={},
-        source=DocumentSource.MANUAL_UPLOAD,
+        uploaded_by_user_id=None,
         expires_at=utc_now(),
+        comment_count=0,
+        version=1,
     )
-    session.add(document)
+    version = FileVersion(
+        id=version_id,
+        file_id=file_id,
+        version_no=1,
+        origin=FileVersionOrigin.UPLOADED,
+        created_by_user_id=None,
+        sha256="deadbeef",
+        byte_size=12,
+        content_type="text/csv",
+        filename_at_upload="input.csv",
+        blob_version_id="v1",
+    )
+    document.current_version = version
+    document.versions.append(version)
+    session.add_all([document, version])
     session.flush()
 
     run = Run(
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        input_document_id=document.id,
+        input_file_version_id=version.id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
     )
@@ -65,7 +85,7 @@ def test_run_defaults(session: Session) -> None:
     session.refresh(run)
 
     assert run.status is RunStatus.QUEUED
-    assert run.input_document_id == document.id
+    assert run.input_file_version_id == version.id
     assert run.input_sheet_names is None
     assert isinstance(run.created_at, datetime)
     assert run.available_at is not None

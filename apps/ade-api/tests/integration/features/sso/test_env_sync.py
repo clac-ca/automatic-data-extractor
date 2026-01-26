@@ -12,6 +12,8 @@ def _settings_with_env(raw: str | None) -> Settings:
         jwt_secret="test-jwt-secret-for-tests-please-change",
         sso_encryption_key="test-sso-encryption-key",
         auth_sso_providers_json=raw,
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        storage_backend="filesystem",
     )
 
 

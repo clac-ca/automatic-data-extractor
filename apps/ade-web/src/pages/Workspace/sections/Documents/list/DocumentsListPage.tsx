@@ -143,6 +143,7 @@ export default function DocumentsListPage() {
         onPause={uploadManager.pause}
         onResume={uploadManager.resume}
         onRetry={uploadManager.retry}
+        onResolveConflict={uploadManager.resolveConflict}
         onCancel={uploadManager.cancel}
         onRemove={uploadManager.remove}
         onClearCompleted={uploadManager.clearCompleted}

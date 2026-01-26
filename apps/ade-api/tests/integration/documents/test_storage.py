@@ -1,4 +1,4 @@
-"""Document storage helper tests."""
+"""Filesystem storage helper tests."""
 
 from __future__ import annotations
 
@@ -7,24 +7,23 @@ from pathlib import Path
 
 import pytest
 
-from ade_api.features.documents import DocumentStorage
-from ade_api.features.documents.exceptions import DocumentTooLargeError
+from ade_api.infra.storage import FilesystemStorage, StorageError, StorageLimitError
 
 
 def test_path_resolution_prevents_escape(tmp_path: Path) -> None:
     """Stored URIs must not allow directory traversal outside the base."""
 
-    storage = DocumentStorage(tmp_path)
-    with pytest.raises(ValueError):
+    storage = FilesystemStorage(tmp_path)
+    with pytest.raises(StorageError):
         storage.path_for("../evil.txt")
 
 
 def test_write_and_stream_roundtrip(tmp_path: Path) -> None:
     """Writing a document should persist bytes and allow streaming reads."""
 
-    storage = DocumentStorage(tmp_path)
+    storage = FilesystemStorage(tmp_path)
     payload = b"0123456789" * 5
-    stored_uri = storage.make_stored_uri("doc")
+    stored_uri = storage.make_uri("doc")
 
     result = storage.write(stored_uri, io.BytesIO(payload))
 
@@ -41,12 +40,12 @@ def test_write_and_stream_roundtrip(tmp_path: Path) -> None:
 
 
 def test_write_enforces_size_limit(tmp_path: Path) -> None:
-    """DocumentStorage should raise when payload exceeds the configured limit."""
+    """Filesystem storage should raise when payload exceeds the configured limit."""
 
-    storage = DocumentStorage(tmp_path)
-    stored_uri = storage.make_stored_uri("too-big")
+    storage = FilesystemStorage(tmp_path)
+    stored_uri = storage.make_uri("too-big")
 
-    with pytest.raises(DocumentTooLargeError):
+    with pytest.raises(StorageLimitError):
         storage.write(stored_uri, io.BytesIO(b"abcdef"), max_bytes=4)
 
     path = storage.path_for(stored_uri)
@@ -56,8 +55,8 @@ def test_write_enforces_size_limit(tmp_path: Path) -> None:
 def test_delete_removes_file(tmp_path: Path) -> None:
     """Deleting a stored URI should remove it from disk."""
 
-    storage = DocumentStorage(tmp_path)
-    stored_uri = storage.make_stored_uri("delete-me")
+    storage = FilesystemStorage(tmp_path)
+    stored_uri = storage.make_uri("delete-me")
 
     storage.write(stored_uri, io.BytesIO(b"payload"))
     path = storage.path_for(stored_uri)

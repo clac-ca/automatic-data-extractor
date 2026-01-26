@@ -8,7 +8,6 @@ export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "
   items?: DocumentListRow[] | null;
 };
 export type DocumentPageResult = DocumentListPage;
-export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";

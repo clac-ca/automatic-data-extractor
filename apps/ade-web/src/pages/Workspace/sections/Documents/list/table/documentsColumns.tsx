@@ -27,7 +27,8 @@ export type DocumentsColumnContext = {
   onToggleTag: (documentId: string, tag: string) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
-  onDownloadOriginal: (document: DocumentRow) => void;
+  onDownloadLatest: (document: DocumentRow) => void;
+  onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
   isRowActionPending?: (documentId: string) => boolean;
 };
 
@@ -44,7 +45,8 @@ export function useDocumentsColumns({
   onToggleTag,
   onDeleteRequest,
   onDownloadOutput,
-  onDownloadOriginal,
+  onDownloadLatest,
+  onDownloadVersion,
   isRowActionPending,
 }: DocumentsColumnContext) {
   const enableAdvancedOnly = filterMode === "advanced";
@@ -112,6 +114,7 @@ export function useDocumentsColumns({
         cell: ({ row }) => (
           <DocumentNameCell
             name={row.getValue<string>("name")}
+            docNo={row.original.docNo}
             viewers={rowPresence?.get(row.original.id) ?? []}
             onOpen={
               onOpenDocument ? () => onOpenDocument(row.original.id) : undefined
@@ -311,7 +314,8 @@ export function useDocumentsColumns({
             isBusy={isRowActionPending?.(row.original.id) ?? false}
             onDeleteRequest={onDeleteRequest}
             onDownloadOutput={onDownloadOutput}
-            onDownloadOriginal={onDownloadOriginal}
+            onDownloadLatest={onDownloadLatest}
+            onDownloadVersion={onDownloadVersion}
           />
         ),
         size: 140,
@@ -329,7 +333,8 @@ export function useDocumentsColumns({
       onOpenDocument,
       onAssign,
       onDeleteRequest,
-      onDownloadOriginal,
+      onDownloadLatest,
+      onDownloadVersion,
       onDownloadOutput,
       onTagOptionsChange,
       onToggleTag,

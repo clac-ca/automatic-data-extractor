@@ -4,8 +4,8 @@ This directory houses the Alembic environment and versioned migrations for the r
 Use `apps/ade-api/alembic.ini` with `alembic upgrade head` to apply schema changes against
 `ADE_DATABASE_URL` (the same URL used by the API and worker).
 
-Recent migrations add the `ade_run_queued` NOTIFY trigger used by event-driven workers, so
-ensure you run migrations before starting `ade-worker`.
+The initial schema installs the `ade_run_queued` NOTIFY trigger used by event-driven
+workers, so ensure you run migrations before starting `ade-worker`.
 
 ## Usage
 

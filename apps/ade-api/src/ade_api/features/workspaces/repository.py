@@ -12,9 +12,12 @@ from sqlalchemy.orm import selectinload
 
 from ade_api.models import (
     Configuration,
-    Document,
-    DocumentTag,
     Environment,
+    File,
+    FileComment,
+    FileCommentMention,
+    FileTag,
+    FileVersion,
     Run,
     RunField,
     RunMetrics,
@@ -188,9 +191,15 @@ class WorkspacesRepository:
     def delete_workspace(self, workspace: Workspace) -> None:
         workspace_id = workspace.id
         run_ids = select(Run.id).where(Run.workspace_id == workspace_id)
-        document_ids = select(Document.id).where(Document.workspace_id == workspace_id)
+        file_ids = select(File.id).where(File.workspace_id == workspace_id)
+        file_version_ids = select(FileVersion.id).where(FileVersion.file_id.in_(file_ids))
 
         # Delete in dependency order to satisfy FK constraints across workspace data.
+        self._session.execute(
+            update(FileVersion)
+            .where(FileVersion.id.in_(file_version_ids))
+            .values(run_id=None)
+        )
         self._session.execute(
             delete(RunTableColumn).where(RunTableColumn.run_id.in_(run_ids))
         )
@@ -202,11 +211,16 @@ class WorkspacesRepository:
         )
 
         self._session.execute(
-            delete(DocumentTag).where(DocumentTag.document_id.in_(document_ids))
+            delete(FileCommentMention).where(
+                FileCommentMention.comment_id.in_(
+                    select(FileComment.id).where(FileComment.file_id.in_(file_ids))
+                )
+            )
         )
-        self._session.execute(
-            delete(Document).where(Document.workspace_id == workspace_id)
-        )
+        self._session.execute(delete(FileComment).where(FileComment.file_id.in_(file_ids)))
+        self._session.execute(delete(FileTag).where(FileTag.file_id.in_(file_ids)))
+        self._session.execute(delete(FileVersion).where(FileVersion.file_id.in_(file_ids)))
+        self._session.execute(delete(File).where(File.workspace_id == workspace_id))
 
         self._session.execute(
             delete(Configuration).where(Configuration.workspace_id == workspace_id)

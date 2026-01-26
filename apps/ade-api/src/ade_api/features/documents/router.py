@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Annotated, Any
@@ -22,7 +21,6 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import (
     SettingsDep,
@@ -40,7 +38,6 @@ from ade_api.common.cursor_listing import (
     strict_cursor_query_guard,
 )
 from ade_api.common.logging import log_context
-from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -61,14 +58,15 @@ from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
-from .notifications import get_document_changes_cursor, get_document_changes_hub
 from .exceptions import (
     DocumentFileMissingError,
+    DocumentNameConflictError,
     DocumentNotFoundError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
     DocumentTooLargeError,
+    DocumentVersionNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentExpirationError,
@@ -79,10 +77,10 @@ from .schemas import (
     DocumentBatchDeleteResponse,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
-    DocumentChangesPage,
     DocumentCommentCreate,
     DocumentCommentOut,
     DocumentCommentPage,
+    DocumentConflictMode,
     DocumentListPage,
     DocumentListRow,
     DocumentOut,
@@ -118,9 +116,6 @@ tags_router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
-KEEPALIVE_SECONDS = 15.0
-
-
 WorkspacePath = Annotated[
     UUID,
     Path(
@@ -151,25 +146,6 @@ DocumentManager = Annotated[
         scopes=["{workspaceId}"],
     ),
 ]
-
-
-def _resolve_change_cursor(request: Request, cursor: str | None) -> int:
-    last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
-    tokens: list[str] = []
-    if cursor is not None:
-        tokens.append(cursor)
-    if last_event_id is not None:
-        tokens.append(last_event_id)
-    if not tokens:
-        return 0
-    try:
-        values = [int(token) for token in tokens]
-    except ValueError as exc:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="cursor must be an integer string",
-        ) from exc
-    return max(values)
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -273,6 +249,9 @@ def _try_enqueue_run(
         status.HTTP_413_CONTENT_TOO_LARGE: {
             "description": "Uploaded file exceeds the configured size limit.",
         },
+        status.HTTP_409_CONFLICT: {
+            "description": "Document name already exists.",
+        },
     },
 )
 def upload_document(
@@ -288,6 +267,7 @@ def upload_document(
     metadata: Annotated[str | None, Form()] = None,
     expires_at: Annotated[str | None, Form()] = None,
     run_options: Annotated[str | None, Form()] = None,
+    conflict_mode: Annotated[DocumentConflictMode | None, Form(alias="conflictMode")] = None,
 ) -> DocumentOut:
     upload_slot_acquired = False
     upload_semaphore = getattr(request.app.state, "documents_upload_semaphore", None)
@@ -307,7 +287,12 @@ def upload_document(
         workspace_id=str(workspace_id),
     )
     try:
-        staged = service.stage_upload(workspace_id=workspace_id, upload=file)
+        plan = service.plan_upload(
+            workspace_id=workspace_id,
+            filename=file.filename,
+            conflict_mode=conflict_mode,
+        )
+        staged = service.stage_upload(upload=file, plan=plan)
         request_hash = build_request_hash(
             method=request.method,
             path=request.url.path,
@@ -319,6 +304,10 @@ def upload_document(
                 "content_type": file.content_type,
                 "file_sha256": staged.stored.sha256,
                 "file_size": staged.stored.byte_size,
+                "conflict_mode": conflict_mode.value if conflict_mode else None,
+                "target_document_id": (
+                    str(plan.file_id) if plan.action.value == "new_version" else None
+                ),
             },
         )
         replay = idempotency.resolve_replay(
@@ -327,11 +316,12 @@ def upload_document(
             request_hash=request_hash,
         )
         if replay:
-            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+            service.discard_staged_upload(staged=staged)
             return replay.to_response()
         document = service.create_document(
             workspace_id=workspace_id,
             upload=file,
+            plan=plan,
             metadata=metadata_payload,
             expires_at=expires_at,
             actor=_actor,
@@ -339,13 +329,17 @@ def upload_document(
         )
     except DocumentTooLargeError as exc:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+    except DocumentNameConflictError as exc:
+        if staged is not None:
+            service.discard_staged_upload(staged=staged)
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InvalidDocumentExpirationError as exc:
         if staged is not None:
-            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+            service.discard_staged_upload(staged=staged)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception:
         if staged is not None:
-            service.discard_staged_upload(workspace_id=workspace_id, staged=staged)
+            service.discard_staged_upload(staged=staged)
         raise
     finally:
         if upload_slot_acquired:
@@ -372,6 +366,71 @@ def upload_document(
         body=document,
     )
     return document
+
+
+@router.post(
+    "/{documentId}/versions",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a new document version",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to upload document versions.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document uploads.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+        status.HTTP_413_CONTENT_TOO_LARGE: {
+            "description": "Uploaded file exceeds the configured size limit.",
+        },
+    },
+)
+def upload_document_version(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+    *,
+    file: Annotated[UploadFile, File(...)],
+    metadata: Annotated[str | None, Form()] = None,
+    expires_at: Annotated[str | None, Form()] = None,
+) -> DocumentOut:
+    payload = _parse_metadata(metadata)
+    metadata_payload = service.build_upload_metadata(payload, None)
+    staged = None
+    try:
+        plan = service.plan_upload_for_version(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+        staged = service.stage_upload(upload=file, plan=plan)
+        document = service.create_document(
+            workspace_id=workspace_id,
+            upload=file,
+            plan=plan,
+            metadata=metadata_payload,
+            expires_at=expires_at,
+            actor=_actor,
+            staged=staged,
+        )
+        return document
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentTooLargeError as exc:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+    except InvalidDocumentExpirationError as exc:
+        if staged is not None:
+            service.discard_staged_upload(staged=staged)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception:
+        if staged is not None:
+            service.discard_staged_upload(staged=staged)
+        raise
 
 
 @router.get(
@@ -424,125 +483,6 @@ def list_documents(
         include_run_fields=include_run_fields,
     )
     return page_result
-
-
-@router.get(
-    "/changes",
-    response_model=DocumentChangesPage,
-    status_code=status.HTTP_200_OK,
-    summary="List document changes",
-    response_model_exclude_none=False,
-    dependencies=[Depends(strict_cursor_query_guard(allowed_extra={"includeRows"}))],
-)
-def list_document_changes(
-    workspace_id: WorkspacePath,
-    service: DocumentsServiceDep,
-    _actor: DocumentReader,
-    *,
-    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
-    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
-    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
-) -> DocumentChangesPage:
-    if cursor is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="cursor is required",
-        )
-    try:
-        page = service.list_document_changes(
-            workspace_id=workspace_id,
-            cursor_token=cursor,
-            limit=limit,
-            include_rows=include_rows,
-        )
-        return DocumentChangesPage(items=page.items, next_cursor=page.next_cursor)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-
-@router.get(
-    "/changes/stream",
-    summary="Stream document changes",
-)
-async def stream_document_changes(
-    workspace_id: WorkspacePath,
-    request: Request,
-    settings: SettingsDep,
-    _actor: DocumentReader,
-    *,
-    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
-    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
-) -> EventSourceResponse:
-    start_cursor = _resolve_change_cursor(request, cursor)
-    session_factory = get_sessionmaker(request)
-    changes_hub = get_document_changes_hub(request)
-
-    async def event_stream():
-        cursor_value = start_cursor
-        queue, unsubscribe = changes_hub.subscribe(str(workspace_id))
-
-        def _current_cursor() -> int:
-            with session_factory() as session:
-                return get_document_changes_cursor(session)
-
-        try:
-            cursor_value = await asyncio.to_thread(_current_cursor)
-        except Exception:
-            cursor_value = start_cursor
-
-        if cursor_value < start_cursor:
-            cursor_value = start_cursor
-
-        yield sse_json("ready", {"cursor": str(cursor_value)})
-
-        try:
-            while True:
-                if await request.is_disconnected():
-                    return
-
-                try:
-                    payload = await asyncio.wait_for(
-                        queue.get(), timeout=KEEPALIVE_SECONDS
-                    )
-                except TimeoutError:
-                    yield sse_json("keepalive", {})
-                    continue
-
-                payload = dict(payload)
-                event_type = payload.get("type") or "document.changed"
-                document_id = payload.get("documentId")
-
-                if include_rows and event_type == "document.changed" and document_id:
-                    def _fetch_row():
-                        with session_factory() as session:
-                            service = DocumentsService(
-                                session=session,
-                                settings=settings,
-                            )
-                            return service.build_list_row_for_document(
-                                workspace_id=workspace_id,
-                                document_id=UUID(str(document_id)),
-                            )
-
-                    try:
-                        row = await asyncio.to_thread(_fetch_row)
-                    except Exception:
-                        row = None
-                    if row is not None:
-                        payload["row"] = row
-
-                event_id = payload.get("cursor")
-                yield sse_json(event_type, payload, event_id=event_id)
-        finally:
-            unsubscribe()
-
-    return EventSourceResponse(
-        event_stream(),
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @router.patch(
@@ -944,6 +884,57 @@ def download_document(
             media_type = record.content_type or "application/octet-stream"
             disposition = build_content_disposition(record.name)
     except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentFileMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    response = StreamingResponse(stream, media_type=media_type)
+    response.headers["Content-Disposition"] = disposition
+    return response
+
+
+@router.get(
+    "/{documentId}/versions/{versionNo}/download",
+    summary="Download a specific document version",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to download documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document downloads.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document or version not found within the workspace.",
+        },
+    },
+)
+def download_document_version(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    version_no: Annotated[int, Path(alias="versionNo", ge=1)],
+    request: Request,
+    settings: SettingsDep,
+    _actor: DocumentReader,
+) -> StreamingResponse:
+    session_factory = get_sessionmaker(request)
+    try:
+        with session_factory() as session:
+            service = DocumentsService(session=session, settings=settings)
+            record, version, stream = service.stream_document_version(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                version_no=version_no,
+            )
+            media_type = (
+                version.content_type
+                or record.content_type
+                or "application/octet-stream"
+            )
+            filename = version.filename_at_upload or record.name
+            disposition = build_content_disposition(filename)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentVersionNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentFileMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -55,7 +55,7 @@ def workspace_run_root(
 def workspace_documents_root(settings: Settings, workspace_id: UUID) -> Path:
     """Path to a workspace's documents directory."""
 
-    return _workspace_base(settings.documents_dir, workspace_id) / "documents"
+    return _workspace_base(settings.documents_dir, workspace_id) / "files"
 
 
 def workspace_venvs_root(settings: Settings, workspace_id: UUID) -> Path:

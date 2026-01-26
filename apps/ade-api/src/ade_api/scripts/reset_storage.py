@@ -1,4 +1,4 @@
-"""CLI to purge ADE storage directories and reset the database."""
+"""CLI to purge ADE storage (filesystem + blob prefix) and reset the database."""
 
 from __future__ import annotations
 
@@ -36,6 +36,11 @@ def _within_data_root(path: Path, data_root: Path) -> bool:
     return True
 
 
+def _blob_prefix(settings: Settings) -> str:
+    prefix = settings.blob_prefix.strip("/")
+    return f"{prefix}/" if prefix else ""
+
+
 def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]:
     targets: set[Path] = set()
 
@@ -65,6 +70,20 @@ def _describe_targets(targets: Iterable[Path]) -> None:
     for path in items:
         status = "" if path.exists() else " (missing)"
         print(f"  - {path}{status}")
+
+
+def _describe_blob_target(settings: Settings) -> None:
+    if settings.storage_backend != "azure_blob":
+        return
+    container = settings.blob_container or "(unset)"
+    prefix = _blob_prefix(settings) or "(root)"
+    print("Blob storage target:")
+    print(f"  - container: {container}")
+    print(f"  - prefix: {prefix}")
+    if settings.blob_connection_string:
+        print("  - auth: connection_string")
+    elif settings.blob_account_url:
+        print(f"  - auth: managed_identity ({settings.blob_account_url})")
 
 
 def _remove_path(path: Path) -> bool:
@@ -99,6 +118,124 @@ def _cleanup_targets(targets: Iterable[Path]) -> list[tuple[Path, Exception]]:
     return errors
 
 
+def _build_blob_container_client(settings: Settings):
+    try:
+        from azure.identity import DefaultAzureCredential
+        from azure.storage.blob import BlobServiceClient
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Azure Blob dependencies are not installed. Install azure-identity and "
+            "azure-storage-blob to use ADE_STORAGE_BACKEND=azure_blob."
+        ) from exc
+
+    if not settings.blob_container:
+        raise RuntimeError("ADE_BLOB_CONTAINER is required when ADE_STORAGE_BACKEND=azure_blob.")
+
+    if settings.blob_connection_string:
+        service = BlobServiceClient.from_connection_string(
+            conn_str=settings.blob_connection_string
+        )
+    else:
+        if not settings.blob_account_url:
+            raise RuntimeError(
+                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required when "
+                "ADE_STORAGE_BACKEND=azure_blob."
+            )
+        service = BlobServiceClient(
+            account_url=settings.blob_account_url,
+            credential=DefaultAzureCredential(),
+        )
+
+    return service.get_container_client(settings.blob_container)
+
+
+def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
+    if settings.storage_backend != "azure_blob":
+        return 0, []
+
+    errors: list[Exception] = []
+    deleted = 0
+
+    try:
+        from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
+    except ModuleNotFoundError:
+        return 0, [
+            RuntimeError(
+                "Azure Blob dependencies are not installed. Install azure-identity and "
+                "azure-storage-blob to use ADE_STORAGE_BACKEND=azure_blob."
+            )
+        ]
+
+    try:
+        container_client = _build_blob_container_client(settings)
+    except Exception as exc:  # noqa: BLE001
+        return 0, [exc]
+
+    try:
+        container_client.get_container_properties()
+    except ResourceNotFoundError:
+        print("Blob container not found; skipping blob cleanup.")
+        return 0, []
+    except HttpResponseError as exc:
+        return 0, [exc]
+
+    prefix = _blob_prefix(settings)
+    prefix_label = prefix or "(root)"
+    print(f"Removing blobs under prefix: {prefix_label}")
+
+    def _iter_blobs(include: list[str] | None) -> Iterable:
+        try:
+            if include:
+                return container_client.list_blobs(name_starts_with=prefix, include=include)
+            return container_client.list_blobs(name_starts_with=prefix)
+        except TypeError:
+            return container_client.list_blobs(name_starts_with=prefix)
+
+    snapshot_iter = _iter_blobs(["snapshots"])
+    try:
+        for blob in snapshot_iter:
+            snapshot = getattr(blob, "snapshot", None)
+            if not snapshot:
+                continue
+            name = getattr(blob, "name", None) or str(blob)
+            try:
+                blob_client = container_client.get_blob_client(name, snapshot=snapshot)
+                blob_client.delete_blob()
+                deleted += 1
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+    except (HttpResponseError, ResourceNotFoundError) as exc:
+        errors.append(exc)
+
+    include_versions: list[str] | None = None
+    if settings.blob_require_versioning:
+        include_versions = ["versions", "deleted"]
+
+    version_iter = _iter_blobs(include_versions)
+    try:
+        for blob in version_iter:
+            name = getattr(blob, "name", None) or str(blob)
+            version_id = getattr(blob, "version_id", None)
+            try:
+                blob_client = container_client.get_blob_client(name, version_id=version_id)
+                delete_kwargs = {}
+                if version_id is None:
+                    delete_kwargs["delete_snapshots"] = "include"
+                blob_client.delete_blob(**delete_kwargs)
+                deleted += 1
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+    except (HttpResponseError, ResourceNotFoundError) as exc:
+        errors.append(exc)
+
+    if deleted:
+        print(f"🗑️  deleted {deleted} blob item(s)")
+    else:
+        print("No blobs found to delete.")
+
+    return deleted, errors
+
+
 def _describe_database_target(database_url: URL) -> None:
     backend = database_url.get_backend_name()
     rendered = database_url.render_as_string(hide_password=True)
@@ -129,7 +266,7 @@ def _drop_all_tables(settings: Settings) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Delete configured ADE storage directories and databases.",
+        description="Delete configured ADE storage (filesystem + blob prefix) and databases.",
     )
     parser.add_argument(
         "--yes",
@@ -151,10 +288,11 @@ def main(argv: list[str] | None = None) -> int:
     targets = _gather_storage_targets(settings, database_url)
 
     _describe_targets(targets)
+    _describe_blob_target(settings)
     _describe_database_target(database_url)
 
     if args.dry_run:
-        print("Dry run mode enabled; no database tables or paths were removed.")
+        print("Dry run mode enabled; no database tables, blob data, or paths were removed.")
         return 0
 
     if not args.yes:
@@ -189,12 +327,19 @@ def main(argv: list[str] | None = None) -> int:
     else:
         errors = []
 
-    if drop_error or errors:
+    blob_errors: list[Exception] = []
+    if settings.storage_backend == "azure_blob":
+        print("Removing blob storage...")
+        _, blob_errors = _delete_blob_prefix(settings)
+
+    if drop_error or errors or blob_errors:
         print("❌ storage reset incomplete:")
         if drop_error:
             print(f"  - database reset failed: {drop_error}")
         for path, exc in errors:
             print(f"  - {path}: {exc}")
+        for exc in blob_errors:
+            print(f"  - blob cleanup failed: {exc}")
         return 1
 
     print("🧹 storage reset complete")

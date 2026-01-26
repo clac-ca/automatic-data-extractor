@@ -30,6 +30,7 @@ class StoredObject:
     uri: str
     sha256: str
     byte_size: int
+    version_id: str | None = None
 
 
 class StorageAdapter(ABC):
@@ -46,9 +47,15 @@ class StorageAdapter(ABC):
         """Persist ``stream`` to ``uri`` returning a ``StoredObject`` descriptor."""
 
     @abstractmethod
-    def stream(self, uri: str, *, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
-        """Yield the bytes stored at ``uri`` in ``chunk_size`` chunks."""
+    def stream(
+        self,
+        uri: str,
+        *,
+        version_id: str | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
+        """Yield the bytes stored at ``uri`` (optionally pinned by version_id)."""
 
     @abstractmethod
-    def delete(self, uri: str) -> None:
+    def delete(self, uri: str, *, version_id: str | None = None) -> None:
         """Remove ``uri`` from storage if it exists."""

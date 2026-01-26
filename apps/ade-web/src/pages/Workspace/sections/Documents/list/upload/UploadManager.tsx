@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DocumentUploadResponse } from "@/api/documents";
+import type { DocumentConflictMode } from "@/api/documents/uploads";
 import type { UploadManagerItem, UploadManagerSummary } from "./useUploadManager";
 import { CloseIcon, RefreshIcon, UploadIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ export function UploadManager({
   onPause,
   onResume,
   onRetry,
+  onResolveConflict,
   onCancel,
   onRemove,
   onClearCompleted,
@@ -26,6 +28,7 @@ export function UploadManager({
   onPause: (uploadId: string) => void;
   onResume: (uploadId: string) => void;
   onRetry: (uploadId: string) => void;
+  onResolveConflict: (uploadId: string, mode: DocumentConflictMode) => void;
   onCancel: (uploadId: string) => void;
   onRemove: (uploadId: string) => void;
   onClearCompleted: () => void;
@@ -157,6 +160,37 @@ export function UploadManager({
                 </div>
                 {item.error ? (
                   <p className="mt-2 text-[10px] font-semibold text-destructive">{item.error}</p>
+                ) : null}
+                {item.status === "conflict" ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => onResolveConflict(item.id, "upload_new_version")}
+                    >
+                      Upload new version
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => onResolveConflict(item.id, "keep_both")}
+                    >
+                      Keep both
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => onCancel(item.id)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             ))}

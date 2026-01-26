@@ -11,7 +11,7 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.encoding import json_dumps
-from ade_api.models import Document
+from ade_api.models import File
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -158,7 +158,7 @@ async def test_upload_document_does_not_cache_worksheets(
 
     assert upload.status_code == 201, upload.text
     document_id = UUID(upload.json()["id"])
-    record = await anyio.to_thread.run_sync(db_session.get, Document, document_id)
+    record = await anyio.to_thread.run_sync(db_session.get, File, document_id)
     assert record is not None
     assert "worksheets" not in (record.attributes or {})
 

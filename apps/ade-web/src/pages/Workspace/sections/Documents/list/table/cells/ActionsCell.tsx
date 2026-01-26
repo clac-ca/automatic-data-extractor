@@ -19,7 +19,8 @@ export function ActionsCell({
   isBusy,
   onDeleteRequest,
   onDownloadOutput,
-  onDownloadOriginal,
+  onDownloadLatest,
+  onDownloadVersion,
 }: {
   document: DocumentRow;
   onOpenDocument: () => void;
@@ -27,11 +28,16 @@ export function ActionsCell({
   isBusy: boolean;
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
-  onDownloadOriginal: (document: DocumentRow) => void;
+  onDownloadLatest: (document: DocumentRow) => void;
+  onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
 }) {
   const canDownloadOutput = document.lastRun?.status === "succeeded";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
+  const latestLabel = document.currentVersionNo
+    ? `Download latest (v${document.currentVersionNo})`
+    : "Download latest";
+  const showOriginal = typeof document.currentVersionNo === "number" && document.currentVersionNo > 1;
 
   return (
     <div className="flex items-center justify-end gap-2" data-ignore-row-click>
@@ -63,8 +69,8 @@ export function ActionsCell({
         <OutputIcon className="h-4 w-4" />
       </IconButton>
       <IconButton
-        label="Download original"
-        onClick={() => onDownloadOriginal(document)}
+        label={latestLabel}
+        onClick={() => onDownloadLatest(document)}
       >
         <DownloadIcon className="h-4 w-4" />
       </IconButton>
@@ -80,6 +86,11 @@ export function ActionsCell({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {showOriginal && onDownloadVersion ? (
+            <DropdownMenuItem onSelect={() => onDownloadVersion(document, 1)}>
+              Download original (v1)
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             onSelect={() => onDeleteRequest(document)}
             disabled={isBusy}

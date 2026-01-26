@@ -252,117 +252,35 @@ export async function* streamRunEvents(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  yield* streamRunEventsViaFetch(url, signal);
-}
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/x-ndjson" },
+    signal,
+  });
 
-async function* streamRunEventsViaFetch(
-  url: string,
-  signal?: AbortSignal,
-): AsyncGenerator<RunStreamEvent> {
-  const abortError =
-    typeof DOMException !== "undefined"
-      ? new DOMException("Aborted", "AbortError")
-      : Object.assign(new Error("Aborted"), { name: "AbortError" });
-  const controller = new AbortController();
-  const abortHandler = () => controller.abort();
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-
-  if (signal?.aborted) {
-    controller.abort();
-  } else if (signal) {
-    signal.addEventListener("abort", abortHandler);
+  if (!response.ok) {
+    throw new Error("Run events unavailable.");
   }
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "text/event-stream" },
-      signal: controller.signal,
-    });
-
-    if (!response.body || !response.ok) {
-      throw new Error("Run event stream unavailable.");
-    }
-
-    reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let shouldClose = false;
-
-    while (true) {
-      const { value, done } = await reader.read();
-      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-
-      while (true) {
-        const match = buffer.match(/\r?\n\r?\n/);
-        if (!match || match.index === undefined) break;
-        const rawEvent = buffer.slice(0, match.index);
-        buffer = buffer.slice(match.index + match[0].length);
-
-        const event = parseSseEvent(rawEvent);
-        if (!event) {
-          continue;
-        }
-        yield event;
-        if (event.event === "run.complete") {
-          shouldClose = true;
-          break;
-        }
-      }
-
-      if (done || shouldClose) {
-        const finalEvent = parseSseEvent(buffer);
-        if (finalEvent) {
-          yield finalEvent;
-        }
-        return;
-      }
-    }
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw abortError;
-    }
-    throw error;
-  } finally {
-    if (signal) {
-      signal.removeEventListener("abort", abortHandler);
-    }
-    if (reader) {
-      try {
-        await reader.cancel();
-      } catch {
-        // ignore cancellation failures
-      }
-    }
-    if (!controller.signal.aborted) {
-      controller.abort();
+  const payload = await response.text();
+  const lines = payload.split(/\r?\n/);
+  for (const line of lines) {
+    const event = parseNdjsonEvent(line);
+    if (event) {
+      yield event;
     }
   }
 }
 
-function parseSseEvent(rawEvent: string): RunStreamEvent | null {
-  const dataLines: string[] = [];
-
-  for (const line of rawEvent.split(/\r?\n/)) {
-    if (line.startsWith("data:")) {
-      const value = line.slice(5);
-      dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
-      continue;
-    }
-  }
-
-  if (!dataLines.length) {
-    return null;
-  }
-
-  const payload = dataLines.join("\n");
-  if (!payload.trim()) {
+function parseNdjsonEvent(rawLine: string): RunStreamEvent | null {
+  const trimmed = rawLine.trim();
+  if (!trimmed) {
     return null;
   }
 
   try {
-    const parsed = JSON.parse(payload) as RunStreamEvent;
+    const parsed = JSON.parse(trimmed) as RunStreamEvent;
     if (!parsed || typeof parsed !== "object") {
       return null;
     }
@@ -372,43 +290,97 @@ function parseSseEvent(rawEvent: string): RunStreamEvent | null {
     if (!("timestamp" in parsed)) {
       return null;
     }
-    (parsed as Record<string, unknown>)._raw = payload;
-
+    (parsed as Record<string, unknown>)._raw = trimmed;
     return parsed;
   } catch (error) {
-    console.warn("Skipping malformed run event", error, payload);
+    console.warn("Skipping malformed run event", error, rawLine);
     return null;
   }
 }
 
+function isTerminalStatus(status: RunStatus | null | undefined): boolean {
+  return status === "succeeded" || status === "failed";
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abortError =
+      typeof DOMException !== "undefined"
+        ? new DOMException("Aborted", "AbortError")
+        : Object.assign(new Error("Aborted"), { name: "AbortError" });
+    if (signal?.aborted) {
+      reject(abortError);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (signal) {
+        signal.removeEventListener("abort", onAbort);
+      }
+      resolve();
+    }, Math.max(0, ms));
+
+    function onAbort() {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(abortError);
+    }
+
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+  });
+}
+
 export function runEventsUrl(
   run: RunResource,
-  options?: { afterSequence?: number },
+  _options?: { afterSequence?: number },
 ): string | null {
-  const baseLink = run.events_stream_url ?? run.links?.events_stream;
+  const baseLink = run.events_download_url ?? run.links?.events_download;
   if (!baseLink) {
     return null;
   }
-  const queryParts: string[] = [];
-  if (typeof options?.afterSequence === "number" && Number.isFinite(options.afterSequence)) {
-    const normalized = Math.max(0, Math.floor(options.afterSequence));
-    queryParts.push(`after_sequence=${normalized}`);
-  }
-  const appendQuery = queryParts.length ? queryParts.join("&") : undefined;
-  return resolveRunLink(baseLink, { appendQuery });
+  return resolveRunLink(baseLink);
 }
 
 export async function* streamRunEventsForRun(
   run: RunResource | string,
   options?: { afterSequence?: number; signal?: AbortSignal },
 ): AsyncGenerator<RunStreamEvent> {
-  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
-  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence });
-  if (!eventsUrl) {
-    throw new Error("Run events link unavailable.");
+  const signal = options?.signal;
+  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
+  let current = runResource;
+  const pollIntervalMs = 2000;
+
+  while (!isTerminalStatus(current.status)) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    await delay(pollIntervalMs, signal);
+    current = await fetchRun(current.id, signal);
   }
-  for await (const event of streamRunEvents(eventsUrl, options?.signal)) {
-    yield event;
+
+  const eventsUrl = runEventsUrl(current);
+  let sawCompletion = false;
+  if (eventsUrl) {
+    for await (const event of streamRunEvents(eventsUrl, signal)) {
+      if (event.event === "run.complete") {
+        sawCompletion = true;
+      }
+      yield event;
+    }
+  }
+
+  if (!sawCompletion) {
+    yield {
+      event: "run.complete",
+      timestamp: new Date().toISOString(),
+      level: current.status === "failed" ? "error" : "info",
+      message: "Run complete",
+      data: {
+        status: current.status,
+        exit_code: current.exit_code ?? undefined,
+      },
+    } satisfies RunStreamEvent;
   }
 }
 

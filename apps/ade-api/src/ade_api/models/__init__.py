@@ -2,15 +2,16 @@
 
 from .api_key import ApiKey
 from .configuration import Configuration, ConfigurationStatus
-from .document import (
-    DOCUMENT_EVENT_TYPE_VALUES,
-    DOCUMENT_SOURCE_VALUES,
-    Document,
-    DocumentComment,
-    DocumentCommentMention,
-    DocumentEventType,
-    DocumentSource,
-    DocumentTag,
+from .file import (
+    FILE_KIND_VALUES,
+    FILE_VERSION_ORIGIN_VALUES,
+    File,
+    FileComment,
+    FileCommentMention,
+    FileKind,
+    FileTag,
+    FileVersion,
+    FileVersionOrigin,
 )
 from .environment import Environment, EnvironmentStatus
 from .idempotency import IdempotencyRecord
@@ -37,14 +38,15 @@ __all__ = [
     "AccessToken",
     "Configuration",
     "ConfigurationStatus",
-    "DOCUMENT_EVENT_TYPE_VALUES",
-    "DOCUMENT_SOURCE_VALUES",
-    "DocumentEventType",
-    "Document",
-    "DocumentComment",
-    "DocumentCommentMention",
-    "DocumentSource",
-    "DocumentTag",
+    "FILE_KIND_VALUES",
+    "FILE_VERSION_ORIGIN_VALUES",
+    "FileKind",
+    "FileVersionOrigin",
+    "File",
+    "FileVersion",
+    "FileComment",
+    "FileCommentMention",
+    "FileTag",
     "Environment",
     "EnvironmentStatus",
     "IdempotencyRecord",

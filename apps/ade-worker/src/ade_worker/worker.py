@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import os
 import random
 import shutil
@@ -28,6 +29,7 @@ from . import db
 from .paths import PathManager
 from .schema import REQUIRED_TABLES
 from .settings import Settings, get_settings
+from .storage import build_storage
 
 logger = logging.getLogger("ade_worker")
 
@@ -897,6 +899,7 @@ class Worker:
     worker_id: str
     paths: PathManager
     runner: SubprocessRunner
+    storage: Any
 
     def _pip_env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -924,6 +927,16 @@ class Worker:
             delay = self.settings.backoff_seconds(claim.attempt_count)
             return now + timedelta(seconds=int(delay))
         return None
+
+    def _upload_run_log(self, *, workspace_id: str, run_id: str) -> None:
+        log_path = self.paths.run_event_log_path(workspace_id, run_id)
+        if not log_path.exists():
+            return
+        blob_name = f"{workspace_id}/runs/{run_id}/logs/events.ndjson"
+        try:
+            self.storage.upload_path(blob_name, log_path)
+        except Exception as exc:
+            logger.warning("run.logs.upload_failed run_id=%s error=%s", run_id, exc)
 
     def _build_environment(
         self,
@@ -1230,7 +1243,8 @@ class Worker:
 
         workspace_id = str(run["workspace_id"])
         configuration_id = str(run["configuration_id"])
-        document_id = str(run["input_document_id"])
+        input_file_version_id = str(run["input_file_version_id"])
+        document_id = input_file_version_id
 
         ctx = {
             "job_id": run_id,
@@ -1348,7 +1362,7 @@ class Worker:
                     run_id=run_id,
                     completed_at=finished_at,
                     exit_code=0,
-                    output_path=None,
+                    output_file_version_id=None,
                     error_message="Dry run",
                 )
             _emit_run_complete(
@@ -1360,6 +1374,7 @@ class Worker:
                 completed_at=finished_at,
                 exit_code=0,
             )
+            self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
             return
 
         if options.validate_only:
@@ -1418,7 +1433,7 @@ class Worker:
                         run_id=run_id,
                         completed_at=finished_at,
                         exit_code=0,
-                        output_path=None,
+                        output_file_version_id=None,
                         error_message=None,
                     )
                 _emit_run_complete(
@@ -1430,6 +1445,7 @@ class Worker:
                     completed_at=finished_at,
                     exit_code=0,
                 )
+                self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
             else:
                 self._handle_run_failure(
                     claim,
@@ -1444,8 +1460,25 @@ class Worker:
                 )
             return
 
-        doc = db.load_document(self.SessionLocal, document_id)
-        if not doc:
+        file_version = db.load_file_version(self.SessionLocal, input_file_version_id)
+        if not file_version:
+            self._handle_run_failure(
+                claim,
+                run_id,
+                document_id,
+                event_log,
+                ctx,
+                now,
+                run_started_at,
+                2,
+                f"Document version not found: {input_file_version_id}",
+            )
+            return
+
+        file_id = str(file_version.get("file_id") or "")
+        document_id = file_id or document_id
+        file_row = db.load_file(self.SessionLocal, file_id)
+        if not file_row or str(file_row.get("kind") or "").lower() != "document":
             self._handle_run_failure(
                 claim,
                 run_id,
@@ -1458,12 +1491,7 @@ class Worker:
                 f"Document not found: {document_id}",
             )
             return
-
-        source_path = self.paths.document_storage_path(
-            workspace_id=workspace_id,
-            stored_uri=str(doc.get("stored_uri") or ""),
-        )
-        if not source_path.exists():
+        if file_row.get("deleted_at") is not None:
             self._handle_run_failure(
                 claim,
                 run_id,
@@ -1473,7 +1501,7 @@ class Worker:
                 now,
                 run_started_at,
                 2,
-                f"Document file missing: {source_path}",
+                f"Document deleted: {document_id}",
             )
             return
 
@@ -1483,9 +1511,42 @@ class Worker:
         _ensure_dir(output_dir)
         run_dir = self.paths.run_dir(workspace_id, run_id)
 
-        original_name = Path(str(doc.get("original_filename") or "input")).name
+        original_name = Path(
+            str(file_version.get("filename_at_upload") or file_row.get("name") or "input")
+        ).name
         staged_input = input_dir / original_name
-        shutil.copy2(source_path, staged_input)
+        try:
+            self.storage.download_to_path(
+                str(file_row.get("blob_name") or ""),
+                version_id=file_version.get("blob_version_id"),
+                destination=staged_input,
+            )
+        except FileNotFoundError:
+            self._handle_run_failure(
+                claim,
+                run_id,
+                document_id,
+                event_log,
+                ctx,
+                now,
+                run_started_at,
+                2,
+                f"Document file missing: {file_row.get('blob_name')}",
+            )
+            return
+        except Exception as exc:
+            self._handle_run_failure(
+                claim,
+                run_id,
+                document_id,
+                event_log,
+                ctx,
+                now,
+                run_started_at,
+                2,
+                f"Document download failed: {exc}",
+            )
+            return
 
         engine_payload: dict[str, Any] | None = None
 
@@ -1557,6 +1618,49 @@ class Worker:
             metrics = parse_run_metrics(results_payload) if results_payload else None
             fields = parse_run_fields(results_payload) if results_payload else []
             columns = parse_run_table_columns(results_payload) if results_payload else []
+            output_file_row: dict[str, Any] | None = None
+            output_upload: Any | None = None
+            output_filename: str | None = None
+
+            if output_path:
+                output_abs = (run_dir / output_path).resolve()
+                if output_abs.is_file():
+                    output_filename = output_abs.name
+                    output_display_name = f"{file_row.get('name') or output_filename} (Output)"
+                    output_name_key = f"output:{file_id}"
+                    expires_at = file_row.get("expires_at")
+                    if not isinstance(expires_at, datetime):
+                        expires_at = finished_at + timedelta(days=30)
+                    with self.SessionLocal.begin() as session:
+                        output_file_row = db.ensure_output_file(
+                            session,
+                            workspace_id=workspace_id,
+                            parent_file_id=file_id,
+                            name=output_display_name,
+                            name_key=output_name_key,
+                            expires_at=expires_at,
+                            now=finished_at,
+                        )
+                    try:
+                        output_upload = self.storage.upload_path(
+                            str(output_file_row.get("blob_name") or ""),
+                            output_abs,
+                        )
+                    except Exception as exc:
+                        self._handle_run_failure(
+                            claim,
+                            run_id,
+                            document_id,
+                            event_log,
+                            ctx,
+                            finished_at,
+                            run_started_at,
+                            res.exit_code or 2,
+                            f"Output upload failed: {exc}",
+                        )
+                        return
+                else:
+                    output_path = None
             with self.SessionLocal.begin() as session:
                 ok = db.ack_run_success(
                     session,
@@ -1568,12 +1672,31 @@ class Worker:
                     event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
                     return
 
+                output_file_version_id: str | None = None
+                if output_upload and output_file_row:
+                    blob_version_id = output_upload.version_id or output_upload.sha256
+                    content_type = None
+                    if output_filename:
+                        content_type = mimetypes.guess_type(output_filename)[0]
+                    version_payload = db.create_output_file_version(
+                        session,
+                        file_id=str(output_file_row["id"]),
+                        run_id=run_id,
+                        filename_at_upload=output_filename or "output",
+                        content_type=content_type,
+                        sha256=output_upload.sha256,
+                        byte_size=output_upload.byte_size,
+                        blob_version_id=blob_version_id,
+                        now=finished_at,
+                    )
+                    output_file_version_id = str(version_payload["id"])
+
                 db.record_run_result(
                     session,
                     run_id=run_id,
                     completed_at=finished_at,
                     exit_code=0,
-                    output_path=output_path,
+                    output_file_version_id=output_file_version_id,
                     error_message=None,
                 )
 
@@ -1608,8 +1731,8 @@ class Worker:
                 started_at=run_started_at,
                 completed_at=finished_at,
                 exit_code=0,
-                output_path=output_path,
             )
+            self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
             return
 
         self._handle_run_failure(
@@ -1657,7 +1780,7 @@ class Worker:
                     run_id=run_id,
                     completed_at=now,
                     exit_code=exit_code,
-                    output_path=None,
+                    output_file_version_id=None,
                     error_message=error_message,
                 )
             else:
@@ -1666,7 +1789,7 @@ class Worker:
                     run_id=run_id,
                     completed_at=None,
                     exit_code=None,
-                    output_path=None,
+                    output_file_version_id=None,
                     error_message=error_message,
                 )
 
@@ -1682,6 +1805,9 @@ class Worker:
                 },
                 context=ctx,
             )
+            workspace_id = str(ctx.get("workspace_id") or "")
+            if workspace_id:
+                self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
             return
 
         _emit_run_complete(
@@ -1694,6 +1820,9 @@ class Worker:
             exit_code=exit_code,
             error_message=error_message,
         )
+        workspace_id = str(ctx.get("workspace_id") or "")
+        if workspace_id:
+            self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
 
     def start(self) -> None:
         logger.info(
@@ -1841,6 +1970,7 @@ def main() -> int:
 
     paths = PathManager(settings.data_dir, settings.venvs_dir)
     SessionLocal = db.build_sessionmaker(engine)
+    storage = build_storage(settings, base_dir=paths.workspaces_root())
 
     runner = SubprocessRunner()
 
@@ -1851,6 +1981,7 @@ def main() -> int:
         worker_id=worker_id,
         paths=paths,
         runner=runner,
+        storage=storage,
     ).start()
     return 0
 

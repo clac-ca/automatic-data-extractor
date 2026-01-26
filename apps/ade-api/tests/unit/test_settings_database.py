@@ -6,13 +6,18 @@ from ade_api.settings import Settings
 
 def test_non_postgres_url_is_rejected() -> None:
     with pytest.raises(ValueError):
-        Settings(_env_file=None, database_url="mysql://user:pass@localhost:3306/ade")
+        Settings(
+            _env_file=None,
+            database_url="mysql://user:pass@localhost:3306/ade",
+            storage_backend="filesystem",
+        )
 
 
 def test_postgres_driver_normalizes_to_psycopg() -> None:
     settings = Settings(
         _env_file=None,
         database_url="postgresql://user:pass@localhost:5432/ade",
+        storage_backend="filesystem",
     )
     url = make_url(settings.database_url)
     assert url.drivername == "postgresql+psycopg"
@@ -26,6 +31,7 @@ def test_managed_identity_allows_passwordless_url() -> None:
             "postgresql://ade_user@contoso.postgres.database.azure.com:5432/ade?sslmode=require"
         ),
         database_auth_mode="managed_identity",
+        storage_backend="filesystem",
     )
 
     url = make_url(settings.database_url)

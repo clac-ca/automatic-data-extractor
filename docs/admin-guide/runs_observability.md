@@ -5,23 +5,23 @@ feature remains backend-only. Use these steps when troubleshooting
 production incidents or validating that new workspaces can execute the
 engine successfully.
 
-## 1. Streaming an active run
+## 1. Downloading run logs
 
-The runs API exposes newline-delimited JSON events via the run events stream.
-Create the run first, then attach to `/runs/{runId}/events/stream` for live
-updates (`run.start`, `run.engine.*`, `console.line`, `run.complete`) and all
-`engine.*` telemetry.
+The runs API exposes newline-delimited JSON events via `/runs/{runId}/events/download`.
+Create the run first, then download the log to inspect `run.start`,
+`run.engine.*`, `console.line`, and `run.complete` events alongside the
+`engine.*` telemetry payloads.
 
 ```bash
 # 1) Create the run
 http POST :8000/api/v1/configurations/$CONFIG_ID/runs \
   "options:={\"dry_run\": false}"
 
-# 2) Stream events
-http --stream GET :8000/api/v1/runs/$RUN_ID/events/stream
+# 2) Download events
+http GET :8000/api/v1/runs/$RUN_ID/events/download
 ```
 
-Key things to watch while streaming:
+Key things to watch while reviewing logs:
 
 - `run.start` arrives when the worker claims the job.
 - `console.line` events include the ADE engine stdout; store the NDJSON output

@@ -91,7 +91,7 @@ def run_clean(yes: bool = False, *, all_deps: bool = False) -> None:
 
 
 def run_reset(yes: bool = False, *, dry_run: bool = False) -> None:
-    """Drop ADE database tables, reset storage under ./data, and remove build artifacts (dependencies unchanged)."""
+    """Drop ADE database tables, reset storage (filesystem/blob), and remove build artifacts (dependencies unchanged)."""
 
     common.refresh_paths()
     common.ensure_backend_dir()

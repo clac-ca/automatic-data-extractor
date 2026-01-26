@@ -20,7 +20,7 @@ def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
     assert run.status is RunStatus.QUEUED
     assert run.engine_spec == str(_settings.engine_spec)
     assert run.deps_digest.startswith("sha256:")
-    assert run.input_document_id == document.id
+    assert run.input_file_version_id == document.current_version_id
     assert run.input_sheet_names is None
     assert run.run_options is not None
     assert run.run_options.get("input_document_id") == str(document.id)
@@ -40,7 +40,7 @@ def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
     )
     assert queued == 1
 
-    result = session.execute(select(Run).where(Run.input_document_id == document.id))
+    result = session.execute(select(Run).where(Run.input_file_version_id == document.current_version_id))
     runs = result.scalars().all()
     assert len(runs) == 1
     assert runs[0].configuration_id == configuration.id

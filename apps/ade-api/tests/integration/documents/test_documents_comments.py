@@ -9,28 +9,46 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.ids import generate_uuid7
-from ade_api.models import Document, DocumentSource
+from ade_api.models import File, FileKind, FileVersion, FileVersionOrigin
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _create_document(db_session, *, workspace_id, user_id) -> Document:
+async def _create_document(db_session, *, workspace_id, user_id) -> File:
     now = datetime.now(tz=UTC)
-    doc = Document(
-        id=generate_uuid7(),
+    file_id = generate_uuid7()
+    version_id = generate_uuid7()
+    name = "comment-doc.xlsx"
+    doc = File(
+        id=file_id,
         workspace_id=workspace_id,
-        original_filename="comment-doc.xlsx",
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        byte_size=1024,
-        sha256="f" * 64,
-        stored_uri="comment-doc",
+        kind=FileKind.DOCUMENT,
+        doc_no=None,
+        name=name,
+        name_key=name.casefold(),
+        blob_name=f"{workspace_id}/files/{file_id}",
         attributes={},
         uploaded_by_user_id=user_id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=now + timedelta(days=30),
+        comment_count=0,
+        version=1,
     )
-    db_session.add(doc)
+    version = FileVersion(
+        id=version_id,
+        file_id=file_id,
+        version_no=1,
+        origin=FileVersionOrigin.UPLOADED,
+        created_by_user_id=user_id,
+        sha256="f" * 64,
+        byte_size=1024,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename_at_upload=name,
+        blob_version_id="v1",
+    )
+    doc.current_version = version
+    doc.versions.append(version)
+    db_session.add_all([doc, version])
     await anyio.to_thread.run_sync(db_session.commit)
     return doc
 

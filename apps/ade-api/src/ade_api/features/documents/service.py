@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -37,13 +39,15 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
-from ade_api.infra.storage import workspace_documents_root
+from ade_api.infra.storage import StorageError, StorageLimitError, StoredObject, build_storage_adapter
 from ade_api.models import (
-    Document,
-    DocumentComment,
-    DocumentCommentMention,
-    DocumentSource,
-    DocumentTag,
+    File,
+    FileComment,
+    FileCommentMention,
+    FileKind,
+    FileTag,
+    FileVersion,
+    FileVersionOrigin,
     Run,
     RunField,
     RunMetrics,
@@ -55,13 +59,15 @@ from ade_api.models import (
 from ade_api.settings import Settings
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 
-from .notifications import get_document_changes_cursor
 from .exceptions import (
     DocumentFileMissingError,
+    DocumentTooLargeError,
+    DocumentNameConflictError,
     DocumentNotFoundError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
+    DocumentVersionNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
     InvalidDocumentCommentMentionsError,
@@ -70,9 +76,9 @@ from .exceptions import (
 from .filters import apply_document_filters
 from .repository import DocumentsRepository
 from .schemas import (
-    DocumentChangesPage,
     DocumentCommentOut,
     DocumentCommentPage,
+    DocumentConflictMode,
     DocumentFileType,
     DocumentListPage,
     DocumentListRow,
@@ -84,7 +90,6 @@ from .schemas import (
     TagCatalogItem,
     TagCatalogPage,
 )
-from .storage import DocumentStorage, StoredDocument
 from .tags import (
     MAX_TAGS_PER_DOCUMENT,
     TagValidationError,
@@ -109,17 +114,34 @@ def _run_with_timeout(func, *, timeout: float, **kwargs):
         return future.result(timeout=timeout)
 
 
-def _map_document_row(row: Mapping[str, Any]) -> Document:
-    document = row[Document]
+def _map_document_row(row: Mapping[str, Any]) -> File:
+    document = row[File]
     setattr(document, "_last_run_at", row.get("last_run_at"))
     return document
 
 
 @dataclass(slots=True)
 class StagedUpload:
-    document_id: UUID
-    stored_uri: str
-    stored: StoredDocument
+    file_id: UUID
+    blob_name: str
+    stored: StoredObject
+    overwrite_existing: bool = False
+
+
+class UploadAction(str, Enum):
+    NEW = "new"
+    NEW_VERSION = "new_version"
+
+
+@dataclass(slots=True)
+class UploadPlan:
+    action: UploadAction
+    file: File | None
+    file_id: UUID
+    blob_name: str
+    name: str
+    name_key: str
+    parent_file_id: UUID | None = None
 
 
 class DocumentsService:
@@ -128,11 +150,7 @@ class DocumentsService:
     def __init__(self, *, session: Session, settings: Settings) -> None:
         self._session = session
         self._settings = settings
-
-        documents_dir = settings.documents_dir
-        if documents_dir is None:
-            raise RuntimeError("Document storage directory is not configured")
-
+        self._storage = build_storage_adapter(settings)
         self._repository = DocumentsRepository(session)
 
     @staticmethod
@@ -159,11 +177,81 @@ class DocumentsService:
         except ValidationError:
             return None
 
+    def plan_upload(
+        self,
+        *,
+        workspace_id: UUID,
+        filename: str | None,
+        conflict_mode: DocumentConflictMode | None = None,
+    ) -> UploadPlan:
+        mode = conflict_mode or DocumentConflictMode.REJECT
+        normalized_name = self._normalise_filename(filename)
+        name_key = self._build_name_key(normalized_name)
+        existing = self._find_by_name_key(workspace_id=workspace_id, name_key=name_key)
+
+        if existing is not None:
+            if mode == DocumentConflictMode.REJECT:
+                raise DocumentNameConflictError(
+                    document_id=existing.id,
+                    name=existing.name,
+                )
+            if mode == DocumentConflictMode.UPLOAD_NEW_VERSION:
+                return UploadPlan(
+                    action=UploadAction.NEW_VERSION,
+                    file=existing,
+                    file_id=existing.id,
+                    blob_name=existing.blob_name,
+                    name=existing.name,
+                    name_key=existing.name_key,
+                )
+            if mode == DocumentConflictMode.KEEP_BOTH:
+                disambiguated, disambiguated_key = self._disambiguate_name(
+                    workspace_id=workspace_id,
+                    base_name=normalized_name,
+                )
+                file_id = generate_uuid7()
+                return UploadPlan(
+                    action=UploadAction.NEW,
+                    file=None,
+                    file_id=file_id,
+                    blob_name=self._file_blob_name(workspace_id, file_id),
+                    name=disambiguated,
+                    name_key=disambiguated_key,
+                    parent_file_id=existing.id,
+                )
+
+        file_id = generate_uuid7()
+        return UploadPlan(
+            action=UploadAction.NEW,
+            file=None,
+            file_id=file_id,
+            blob_name=self._file_blob_name(workspace_id, file_id),
+            name=normalized_name,
+            name_key=name_key,
+        )
+
+    def plan_upload_for_version(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+    ) -> UploadPlan:
+        document = self._get_document(workspace_id, document_id)
+        return UploadPlan(
+            action=UploadAction.NEW_VERSION,
+            file=document,
+            file_id=document.id,
+            blob_name=document.blob_name,
+            name=document.name,
+            name_key=document.name_key,
+        )
+
     def create_document(
         self,
         *,
         workspace_id: UUID,
         upload: UploadFile,
+        plan: UploadPlan,
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
         actor: User | None = None,
@@ -185,36 +273,69 @@ class DocumentsService:
 
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
-        expiration = self._resolve_expiration(expires_at, now)
+        default_expiration = self._resolve_expiration(None, now)
+        expiration = self._resolve_expiration(expires_at, now) if expires_at else None
 
         owns_stage = staged is None
-        staged_upload = staged or self.stage_upload(workspace_id=workspace_id, upload=upload)
-        document_id = staged_upload.document_id
-        stored_uri = staged_upload.stored_uri
+        staged_upload = staged or self.stage_upload(upload=upload, plan=plan)
         stored = staged_upload.stored
 
+        upload_name = self._normalise_filename(upload.filename)
+        content_type = self._normalise_content_type(upload.content_type)
+        blob_version_id = stored.version_id or stored.sha256
+
         try:
-            document = Document(
-                id=document_id,
-                workspace_id=workspace_id,
-                original_filename=self._normalise_filename(upload.filename),
-                content_type=self._normalise_content_type(upload.content_type),
-                byte_size=stored.byte_size,
+            if plan.action == UploadAction.NEW:
+                doc_no = self._next_doc_no(workspace_id=workspace_id)
+                document = File(
+                    id=plan.file_id,
+                    workspace_id=workspace_id,
+                    kind=FileKind.DOCUMENT,
+                    doc_no=doc_no,
+                    name=plan.name,
+                    name_key=plan.name_key,
+                    blob_name=plan.blob_name,
+                    parent_file_id=plan.parent_file_id,
+                    attributes=metadata_payload,
+                    uploaded_by_user_id=actor_id,
+                    expires_at=expiration or default_expiration,
+                )
+                self._session.add(document)
+                self._session.flush()
+                version_no = 1
+            else:
+                document = plan.file
+                if document is None:
+                    raise RuntimeError("Upload plan did not include a document.")
+                version_no = self._next_version_no(document_id=document.id)
+                document.version += 1
+                if metadata_payload:
+                    document.attributes = metadata_payload
+                if expiration is not None:
+                    document.expires_at = expiration
+                document = self._session.merge(document)
+
+            file_version = FileVersion(
+                file_id=document.id,
+                version_no=version_no,
+                origin=FileVersionOrigin.UPLOADED,
+                created_by_user_id=actor_id,
                 sha256=stored.sha256,
-                stored_uri=stored_uri,
-                attributes=metadata_payload,
-                uploaded_by_user_id=actor_id,
-                source=DocumentSource.MANUAL_UPLOAD,
-                expires_at=expiration,
+                byte_size=stored.byte_size,
+                content_type=content_type,
+                filename_at_upload=upload_name,
+                blob_version_id=blob_version_id,
             )
-            self._session.add(document)
+            self._session.add(file_version)
+            self._session.flush()
+            document.current_version_id = file_version.id
             self._session.flush()
         except Exception:
             if owns_stage:
-                self.discard_staged_upload(workspace_id=workspace_id, staged=staged_upload)
+                self.discard_staged_upload(staged=staged_upload)
             raise
 
-        stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
+        stmt = self._repository.base_query(workspace_id).where(File.id == document.id)
         result = self._session.execute(stmt)
         hydrated = result.scalar_one()
 
@@ -227,10 +348,10 @@ class DocumentsService:
             "document.create.success",
             extra=log_context(
                 workspace_id=workspace_id,
-                document_id=document_id,
+                document_id=document.id,
                 user_id=actor_id,
-                content_type=document.content_type,
-                byte_size=document.byte_size,
+                content_type=payload.content_type,
+                byte_size=payload.byte_size,
                 expires_at=document.expires_at.isoformat() if document.expires_at else None,
             ),
         )
@@ -240,25 +361,37 @@ class DocumentsService:
     def stage_upload(
         self,
         *,
-        workspace_id: UUID,
         upload: UploadFile,
-        document_id: UUID | None = None,
+        plan: UploadPlan,
     ) -> StagedUpload:
-        document_id = document_id or generate_uuid7()
-        storage = self._storage_for(workspace_id)
-        stored_uri = storage.make_stored_uri(str(document_id))
         if upload.file is None:  # pragma: no cover - UploadFile always supplies file
             raise RuntimeError("Upload stream is not available")
-        stored = storage.write(
-            stored_uri,
-            upload.file,
-            max_bytes=self._settings.storage_upload_max_bytes,
+        try:
+            stored = self._storage.write(
+                plan.blob_name,
+                upload.file,
+                max_bytes=self._settings.storage_upload_max_bytes,
+            )
+        except StorageLimitError as exc:
+            raise DocumentTooLargeError(limit=exc.limit, received=exc.received) from exc
+        return StagedUpload(
+            file_id=plan.file_id,
+            blob_name=plan.blob_name,
+            stored=stored,
+            overwrite_existing=plan.action == UploadAction.NEW_VERSION,
         )
-        return StagedUpload(document_id=document_id, stored_uri=stored_uri, stored=stored)
 
-    def discard_staged_upload(self, *, workspace_id: UUID, staged: StagedUpload) -> None:
-        storage = self._storage_for(workspace_id)
-        storage.delete(staged.stored_uri)
+    def discard_staged_upload(self, *, staged: StagedUpload) -> None:
+        if staged.overwrite_existing and staged.stored.version_id is None:
+            return
+        try:
+            self._storage.delete(staged.blob_name, version_id=staged.stored.version_id)
+        except StorageError:
+            logger.warning(
+                "document.upload.discard_failed",
+                extra={"blob_name": staged.blob_name},
+                exc_info=True,
+            )
 
     def list_documents(
         self,
@@ -266,7 +399,7 @@ class DocumentsService:
         workspace_id: UUID,
         limit: int,
         cursor: str | None,
-        resolved_sort: ResolvedCursorSort[Document],
+        resolved_sort: ResolvedCursorSort[File],
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
@@ -288,7 +421,7 @@ class DocumentsService:
             ),
         )
 
-        stmt = self._repository.base_query(workspace_id).where(Document.deleted_at.is_(None))
+        stmt = self._repository.base_query(workspace_id).where(File.deleted_at.is_(None))
         stmt = apply_document_filters(
             stmt,
             filters,
@@ -299,17 +432,17 @@ class DocumentsService:
             select(
                 func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
             )
+            .select_from(Run)
+            .join(FileVersion, Run.input_file_version_id == FileVersion.id)
             .where(
-                Run.input_document_id == Document.id,
-                Run.workspace_id == Document.workspace_id,
+                FileVersion.file_id == File.id,
+                Run.workspace_id == File.workspace_id,
             )
             .scalar_subquery()
             .label("last_run_at")
         )
         stmt = stmt.add_columns(last_run_at_expr)
 
-        # Capture the cursor before listing to avoid skipping changes committed during the query.
-        changes_cursor = get_document_changes_cursor(self._session)
         facets = self._build_document_facets(stmt) if include_facets else None
         page_result = paginate_query_cursor(
             self._session,
@@ -318,7 +451,7 @@ class DocumentsService:
             limit=limit,
             cursor=cursor,
             include_total=include_total,
-            changes_cursor=str(changes_cursor),
+            changes_cursor="0",
             row_mapper=lambda row: _map_document_row(row),
         )
         raw_items = list(page_result.items)
@@ -354,18 +487,20 @@ class DocumentsService:
         document_id: UUID,
         limit: int,
         cursor: str | None,
-        resolved_sort: ResolvedCursorSort[DocumentComment],
+        resolved_sort: ResolvedCursorSort[FileComment],
         include_total: bool,
     ) -> DocumentCommentPage:
         self._get_document(workspace_id, document_id)
 
         stmt = (
-            select(DocumentComment)
-            .where(DocumentComment.workspace_id == workspace_id)
-            .where(DocumentComment.document_id == document_id)
+            select(FileComment)
+            .where(FileComment.workspace_id == workspace_id)
+            .where(FileComment.file_id == document_id)
             .options(
-                selectinload(DocumentComment.author_user),
-                selectinload(DocumentComment.mentions).selectinload(DocumentCommentMention.mentioned_user),
+                selectinload(FileComment.author_user),
+                selectinload(FileComment.mentions).selectinload(
+                    FileCommentMention.mentioned_user
+                ),
             )
         )
 
@@ -398,15 +533,15 @@ class DocumentsService:
             mentions=mentions,
         )
 
-        comment = DocumentComment(
+        comment = FileComment(
             workspace_id=workspace_id,
-            document_id=document_id,
+            file_id=document_id,
             author_user_id=actor.id,
             body=body,
         )
         comment.author_user = actor
         comment.mentions = [
-            DocumentCommentMention(mentioned_user=user) for user in mention_users
+            FileCommentMention(mentioned_user=user) for user in mention_users
         ]
 
         document.comment_count = (document.comment_count or 0) + 1
@@ -417,22 +552,6 @@ class DocumentsService:
 
         return DocumentCommentOut.model_validate(comment)
 
-    def list_document_changes(
-        self,
-        *,
-        workspace_id: UUID,
-        cursor_token: str,
-        limit: int,
-        max_cursor: int | None = None,
-        include_rows: bool = False,
-    ) -> DocumentChangesPage:
-        try:
-            int(cursor_token)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("cursor must be an integer string") from exc
-        next_cursor = get_document_changes_cursor(self._session)
-        return DocumentChangesPage(items=[], next_cursor=str(next_cursor))
-
     def build_list_row_for_document(
         self,
         *,
@@ -441,8 +560,8 @@ class DocumentsService:
     ) -> DocumentListRow | None:
         stmt = (
             self._repository.base_query(workspace_id)
-            .where(Document.id == document_id)
-            .where(Document.deleted_at.is_(None))
+            .where(File.id == document_id)
+            .where(File.deleted_at.is_(None))
         )
         result = self._session.execute(stmt)
         document = result.scalar_one_or_none()
@@ -572,47 +691,55 @@ class DocumentsService:
         )
 
         document = self._get_document(workspace_id, document_id)
-        storage = self._storage_for(workspace_id)
-        path = storage.path_for(document.stored_uri)
-
-        if not path.exists():
+        current_version = document.current_version
+        if current_version is None:
             raise DocumentFileMissingError(
                 document_id=document_id,
-                stored_uri=document.stored_uri,
+                blob_name=document.blob_name,
             )
 
-        suffix = Path(document.original_filename).suffix.lower()
-        if suffix == ".xlsx":
-            try:
-                sheets = _run_with_timeout(
-                    self._inspect_workbook,
-                    timeout=self._settings.preview_timeout_seconds,
-                    path=path,
-                )
-                logger.info(
-                    "document.sheets.list.success",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        document_id=document_id,
-                        sheet_count=len(sheets),
-                        kind="workbook",
-                    ),
-                )
-                return sheets
-            except FuturesTimeout as exc:
-                raise DocumentWorksheetParseError(
-                    document_id=document_id,
-                    stored_uri=document.stored_uri,
-                    reason="timeout",
-                ) from exc
-            except Exception as exc:  # pragma: no cover - defensive fallback
-                raise DocumentWorksheetParseError(
-                    document_id=document_id,
-                    stored_uri=document.stored_uri,
-                    reason=type(exc).__name__,
-                ) from exc
+        suffix = Path(document.name).suffix.lower()
+        try:
+            with self._download_blob_to_tempfile(
+                blob_name=document.blob_name,
+                version_id=current_version.blob_version_id,
+                suffix=suffix,
+            ) as path:
+                if suffix == ".xlsx":
+                    sheets = _run_with_timeout(
+                        self._inspect_workbook,
+                        timeout=self._settings.preview_timeout_seconds,
+                        path=path,
+                    )
+                    logger.info(
+                        "document.sheets.list.success",
+                        extra=log_context(
+                            workspace_id=workspace_id,
+                            document_id=document_id,
+                            sheet_count=len(sheets),
+                            kind="workbook",
+                        ),
+                    )
+                    return sheets
+        except FuturesTimeout as exc:
+            raise DocumentWorksheetParseError(
+                document_id=document_id,
+                blob_name=document.blob_name,
+                reason="timeout",
+            ) from exc
+        except FileNotFoundError as exc:
+            raise DocumentFileMissingError(
+                document_id=document_id,
+                blob_name=document.blob_name,
+            ) from exc
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            raise DocumentWorksheetParseError(
+                document_id=document_id,
+                blob_name=document.blob_name,
+                reason=type(exc).__name__,
+            ) from exc
 
-        name = self._default_sheet_name(document.original_filename)
+        name = self._default_sheet_name(document.name)
         sheets = [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
         logger.info(
             "document.sheets.list.success",
@@ -654,46 +781,49 @@ class DocumentsService:
         )
 
         document = self._get_document(workspace_id, document_id)
-        storage = self._storage_for(workspace_id)
-        path = storage.path_for(document.stored_uri)
-
-        if not path.exists():
+        current_version = document.current_version
+        if current_version is None:
             raise DocumentFileMissingError(
                 document_id=document_id,
-                stored_uri=document.stored_uri,
+                blob_name=document.blob_name,
             )
 
-        suffix = Path(document.original_filename).suffix.lower()
+        suffix = Path(document.name).suffix.lower()
         try:
-            if suffix == ".xlsx":
-                preview = _run_with_timeout(
-                    build_workbook_preview_from_xlsx,
-                    timeout=self._settings.preview_timeout_seconds,
-                    path=path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
-                )
-            elif suffix == ".csv":
-                preview = _run_with_timeout(
-                    build_workbook_preview_from_csv,
-                    timeout=self._settings.preview_timeout_seconds,
-                    path=path,
-                    max_rows=max_rows,
-                    max_columns=max_columns,
-                    trim_empty_columns=trim_empty_columns,
-                    trim_empty_rows=trim_empty_rows,
-                    sheet_name=sheet_name,
-                    sheet_index=effective_sheet_index,
-                )
-            else:
-                raise DocumentPreviewUnsupportedError(
-                    document_id=document_id,
-                    file_type=suffix or "unknown",
-                )
+            with self._download_blob_to_tempfile(
+                blob_name=document.blob_name,
+                version_id=current_version.blob_version_id,
+                suffix=suffix,
+            ) as path:
+                if suffix == ".xlsx":
+                    preview = _run_with_timeout(
+                        build_workbook_preview_from_xlsx,
+                        timeout=self._settings.preview_timeout_seconds,
+                        path=path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    )
+                elif suffix == ".csv":
+                    preview = _run_with_timeout(
+                        build_workbook_preview_from_csv,
+                        timeout=self._settings.preview_timeout_seconds,
+                        path=path,
+                        max_rows=max_rows,
+                        max_columns=max_columns,
+                        trim_empty_columns=trim_empty_columns,
+                        trim_empty_rows=trim_empty_rows,
+                        sheet_name=sheet_name,
+                        sheet_index=effective_sheet_index,
+                    )
+                else:
+                    raise DocumentPreviewUnsupportedError(
+                        document_id=document_id,
+                        file_type=suffix or "unknown",
+                    )
         except (KeyError, IndexError) as exc:
             requested = sheet_name if sheet_name is not None else str(effective_sheet_index)
             raise DocumentPreviewSheetNotFoundError(
@@ -703,15 +833,20 @@ class DocumentsService:
         except FuturesTimeout as exc:
             raise DocumentPreviewParseError(
                 document_id=document_id,
-                stored_uri=document.stored_uri,
+                blob_name=document.blob_name,
                 reason="timeout",
+            ) from exc
+        except FileNotFoundError as exc:
+            raise DocumentFileMissingError(
+                document_id=document_id,
+                blob_name=document.blob_name,
             ) from exc
         except DocumentPreviewUnsupportedError:
             raise
         except Exception as exc:  # pragma: no cover - defensive fallback
             raise DocumentPreviewParseError(
                 document_id=document_id,
-                stored_uri=document.stored_uri,
+                blob_name=document.blob_name,
                 reason=type(exc).__name__,
             ) from exc
 
@@ -740,23 +875,40 @@ class DocumentsService:
         )
 
         document = self._get_document(workspace_id, document_id)
-        storage = self._storage_for(workspace_id)
-        path = storage.path_for(document.stored_uri)
-        if not path.exists():
+        current_version = document.current_version
+        if current_version is None:
             logger.warning(
                 "document.stream.missing_file",
                 extra=log_context(
                     workspace_id=workspace_id,
                     document_id=document_id,
-                    stored_uri=document.stored_uri,
+                    blob_name=document.blob_name,
                 ),
             )
             raise DocumentFileMissingError(
                 document_id=document_id,
-                stored_uri=document.stored_uri,
+                blob_name=document.blob_name,
             )
 
-        stream = storage.stream(document.stored_uri)
+        try:
+            stream = self._storage.stream(
+                document.blob_name,
+                version_id=current_version.blob_version_id,
+                chunk_size=self._settings.blob_download_chunk_size_bytes,
+            )
+        except FileNotFoundError as exc:
+            logger.warning(
+                "document.stream.file_missing",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                    blob_name=document.blob_name,
+                ),
+            )
+            raise DocumentFileMissingError(
+                document_id=document_id,
+                blob_name=document.blob_name,
+            ) from exc
 
         def _guarded() -> Iterator[bytes]:
             try:
@@ -768,12 +920,12 @@ class DocumentsService:
                     extra=log_context(
                         workspace_id=workspace_id,
                         document_id=document_id,
-                        stored_uri=document.stored_uri,
+                        blob_name=document.blob_name,
                     ),
                 )
                 raise DocumentFileMissingError(
                     document_id=document_id,
-                    stored_uri=document.stored_uri,
+                    blob_name=document.blob_name,
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
@@ -790,6 +942,84 @@ class DocumentsService:
             ),
         )
         return payload, _guarded()
+
+    def stream_document_version(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        version_no: int,
+    ) -> tuple[DocumentOut, FileVersion, Iterator[bytes]]:
+        """Return a document record, version metadata, and iterator for its bytes."""
+
+        logger.debug(
+            "document.stream_version.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                version_no=version_no,
+            ),
+        )
+
+        document = self._get_document(workspace_id, document_id)
+        version = self._get_document_version(document=document, version_no=version_no)
+
+        try:
+            stream = self._storage.stream(
+                document.blob_name,
+                version_id=version.blob_version_id,
+                chunk_size=self._settings.blob_download_chunk_size_bytes,
+            )
+        except FileNotFoundError as exc:
+            logger.warning(
+                "document.stream_version.file_missing",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                    version_no=version_no,
+                    stored_uri=document.blob_name,
+                ),
+            )
+            raise DocumentFileMissingError(
+                document_id=document_id,
+                blob_name=document.blob_name,
+                version_id=version.blob_version_id,
+            ) from exc
+
+        def _guarded() -> Iterator[bytes]:
+            try:
+                for chunk in stream:
+                    yield chunk
+            except FileNotFoundError as exc:
+                logger.warning(
+                    "document.stream_version.file_lost",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        document_id=document_id,
+                        version_no=version_no,
+                        stored_uri=document.blob_name,
+                    ),
+                )
+                raise DocumentFileMissingError(
+                    document_id=document_id,
+                    blob_name=document.blob_name,
+                    version_id=version.blob_version_id,
+                ) from exc
+
+        payload = DocumentOut.model_validate(document)
+        self._attach_last_runs(workspace_id, [payload])
+        self._apply_derived_fields(payload)
+
+        logger.info(
+            "document.stream_version.ready",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                version_no=version_no,
+                byte_size=version.byte_size,
+            ),
+        )
+        return payload, version, _guarded()
 
     def delete_document(
         self,
@@ -818,8 +1048,7 @@ class DocumentsService:
             document.deleted_by_user_id = actor_id
         self._session.flush()
 
-        storage = self._storage_for(workspace_id)
-        storage.delete(document.stored_uri)
+        self._storage.delete(document.blob_name)
 
         logger.info(
             "document.delete.success",
@@ -827,7 +1056,7 @@ class DocumentsService:
                 workspace_id=workspace_id,
                 document_id=document_id,
                 user_id=actor_id,
-                stored_uri=document.stored_uri,
+                blob_name=document.blob_name,
             ),
         )
 
@@ -860,12 +1089,8 @@ class DocumentsService:
 
         self._session.flush()
 
-        storage = self._storage_for(workspace_id)
         for document in documents:
-            storage.delete(document.stored_uri)
-
-        for document_id in ordered_ids:
-            document = document_by_id[document_id]
+            self._storage.delete(document.blob_name)
 
         return ordered_ids
 
@@ -884,7 +1109,7 @@ class DocumentsService:
             raise InvalidDocumentTagsError(str(exc)) from exc
 
         document = self._get_document(workspace_id, document_id)
-        document.tags = [DocumentTag(document_id=document.id, tag=tag) for tag in normalized]
+        document.tags = [FileTag(file_id=document.id, tag=tag) for tag in normalized]
         document.version += 1
         self._session.flush()
 
@@ -923,7 +1148,7 @@ class DocumentsService:
             document.tags = [tag for tag in document.tags if tag.tag not in to_remove]
         to_add = next_tags - existing
         for tag in to_add:
-            document.tags.append(DocumentTag(document_id=document.id, tag=tag))
+            document.tags.append(FileTag(file_id=document.id, tag=tag))
 
         document.version += 1
         self._session.flush()
@@ -970,7 +1195,7 @@ class DocumentsService:
                 document.tags = [tag for tag in document.tags if tag.tag not in to_remove]
             to_add = next_tags - existing
             for tag in to_add:
-                document.tags.append(DocumentTag(document_id=document.id, tag=tag))
+                document.tags.append(FileTag(file_id=document.id, tag=tag))
 
             document.version += 1
 
@@ -999,26 +1224,27 @@ class DocumentsService:
         except TagValidationError as exc:
             raise InvalidDocumentTagsError(str(exc)) from exc
 
-        count_expr = func.count(DocumentTag.document_id).label("document_count")
+        count_expr = func.count(FileTag.file_id).label("document_count")
         stmt = (
             select(
-                DocumentTag.tag.label("tag"),
+                FileTag.tag.label("tag"),
                 count_expr,
             )
-            .join(Document, DocumentTag.document_id == Document.id)
+            .join(File, FileTag.file_id == File.id)
             .where(
-                Document.workspace_id == workspace_id,
-                Document.deleted_at.is_(None),
+                File.workspace_id == workspace_id,
+                File.deleted_at.is_(None),
+                File.kind == FileKind.DOCUMENT,
             )
-            .group_by(DocumentTag.tag)
+            .group_by(FileTag.tag)
         )
 
         if normalized_q:
             pattern = f"%{normalized_q}%"
-            stmt = stmt.where(DocumentTag.tag.like(pattern))
+            stmt = stmt.where(FileTag.tag.like(pattern))
 
         sort_fields = {
-            "name": (DocumentTag.tag.asc(), DocumentTag.tag.desc()),
+            "name": (FileTag.tag.asc(), FileTag.tag.desc()),
             "count": (count_expr.asc(), count_expr.desc()),
         }
 
@@ -1032,7 +1258,7 @@ class DocumentsService:
             allowed=sort_fields,
             cursor_fields=cursor_fields,
             default=["name"],
-            id_field=(DocumentTag.tag.asc(), DocumentTag.tag.desc()),
+            id_field=(FileTag.tag.asc(), FileTag.tag.desc()),
         )
         page_result = paginate_query_cursor(
             self._session,
@@ -1050,7 +1276,7 @@ class DocumentsService:
 
         return TagCatalogPage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
 
-    def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
+    def _get_document(self, workspace_id: UUID, document_id: UUID) -> File:
         document = self._repository.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -1065,6 +1291,20 @@ class DocumentsService:
             )
             raise DocumentNotFoundError(document_id)
         return document
+
+    def _get_document_version(self, *, document: File, version_no: int) -> FileVersion:
+        stmt = select(FileVersion).where(
+            FileVersion.file_id == document.id,
+            FileVersion.version_no == version_no,
+        )
+        result = self._session.execute(stmt)
+        version = result.scalar_one_or_none()
+        if version is None:
+            raise DocumentVersionNotFoundError(
+                document_id=document.id,
+                version_no=version_no,
+            )
+        return version
 
     def _resolve_comment_mentions(
         self,
@@ -1099,14 +1339,14 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
-    ) -> list[Document]:
+    ) -> list[File]:
         if not document_ids:
             return []
 
         stmt = (
             self._repository.base_query(workspace_id)
-            .where(Document.deleted_at.is_(None))
-            .where(Document.id.in_(document_ids))
+            .where(File.deleted_at.is_(None))
+            .where(File.id.in_(document_ids))
         )
         result = self._session.execute(stmt)
         documents = list(result.scalars())
@@ -1180,12 +1420,14 @@ class DocumentsService:
         return DocumentListRow(
             id=document.id,
             workspace_id=document.workspace_id,
+            doc_no=document.doc_no,
             name=document.name,
             file_type=self._derive_file_type(document.name),
             uploader=document.uploader,
             assignee=document.assignee,
             tags=document.tags,
             byte_size=document.byte_size,
+            current_version_no=document.current_version_no,
             comment_count=document.comment_count,
             created_at=document.created_at,
             updated_at=document.updated_at,
@@ -1199,7 +1441,7 @@ class DocumentsService:
         )
 
     def _build_document_facets(self, stmt: Select) -> dict[str, Any]:
-        filtered_ids = stmt.order_by(None).with_only_columns(Document.id).distinct().subquery()
+        filtered_ids = stmt.order_by(None).with_only_columns(File.id).distinct().subquery()
 
         def coerce_value(value: Any) -> Any:
             if isinstance(value, Enum):
@@ -1214,8 +1456,8 @@ class DocumentsService:
                     expr.label("value"),
                     func.count().label("count"),
                 )
-                .select_from(Document)
-                .join(filtered_ids, filtered_ids.c.id == Document.id)
+                .select_from(File)
+                .join(filtered_ids, filtered_ids.c.id == File.id)
                 .group_by(expr)
             ).all()
             buckets = [
@@ -1225,7 +1467,7 @@ class DocumentsService:
             buckets.sort(key=lambda bucket: str(bucket["value"]))
             return buckets
 
-        lower_name = func.lower(Document.original_filename)
+        lower_name = func.lower(File.name)
         file_type_expr = case(
             (lower_name.like("%.xlsx"), DocumentFileType.XLSX.value),
             (lower_name.like("%.xls"), DocumentFileType.XLS.value),
@@ -1235,10 +1477,10 @@ class DocumentsService:
         )
         file_type_subquery = (
             select(
-                Document.id.label("document_id"),
+                File.id.label("document_id"),
                 file_type_expr.label("file_type"),
             )
-            .select_from(Document)
+            .select_from(File)
             .subquery()
         )
         file_type_rows = self._session.execute(
@@ -1259,16 +1501,18 @@ class DocumentsService:
         timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         ranked_runs = (
             select(
-                Run.input_document_id.label("document_id"),
+                FileVersion.file_id.label("document_id"),
                 Run.status.label("status"),
                 func.row_number()
                 .over(
-                    partition_by=Run.input_document_id,
+                    partition_by=FileVersion.file_id,
                     order_by=timestamp.desc(),
                 )
                 .label("rank"),
             )
-            .where(Run.input_document_id.in_(select(filtered_ids.c.id)))
+            .select_from(Run)
+            .join(FileVersion, Run.input_file_version_id == FileVersion.id)
+            .where(FileVersion.file_id.in_(select(filtered_ids.c.id)))
             .subquery()
         )
         status_rows = self._session.execute(
@@ -1276,11 +1520,11 @@ class DocumentsService:
                 ranked_runs.c.status.label("value"),
                 func.count().label("count"),
             )
-            .select_from(Document)
-            .join(filtered_ids, filtered_ids.c.id == Document.id)
+            .select_from(File)
+            .join(filtered_ids, filtered_ids.c.id == File.id)
             .outerjoin(
                 ranked_runs,
-                (ranked_runs.c.document_id == Document.id)
+                (ranked_runs.c.document_id == File.id)
                 & (ranked_runs.c.rank == 1),
             )
             .group_by(ranked_runs.c.status)
@@ -1327,7 +1571,7 @@ class DocumentsService:
         timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         ranked_runs = (
             select(
-                Run.input_document_id.label("document_id"),
+                FileVersion.file_id.label("document_id"),
                 Run.id.label("run_id"),
                 Run.status.label("status"),
                 Run.error_message.label("error_message"),
@@ -1336,15 +1580,17 @@ class DocumentsService:
                 Run.created_at.label("created_at"),
                 func.row_number()
                 .over(
-                    partition_by=Run.input_document_id,
+                    partition_by=FileVersion.file_id,
                     order_by=timestamp.desc(),
                 )
                 .label("rank"),
             )
             .where(
                 Run.workspace_id == workspace_id,
-                Run.input_document_id.in_(list(document_ids)),
+                FileVersion.file_id.in_(list(document_ids)),
             )
+            .select_from(Run)
+            .join(FileVersion, Run.input_file_version_id == FileVersion.id)
             .subquery()
         )
 
@@ -1488,9 +1734,69 @@ class DocumentsService:
         candidate = content_type.strip()
         return candidate or None
 
-    def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
-        base = workspace_documents_root(self._settings, workspace_id)
-        return DocumentStorage(base)
+    def _file_blob_name(self, workspace_id: UUID, file_id: UUID) -> str:
+        return f"{workspace_id}/files/{file_id}"
+
+    def _build_name_key(self, name: str) -> str:
+        normalized = unicodedata.normalize("NFKC", name)
+        collapsed = " ".join(normalized.split())
+        return collapsed.casefold()
+
+    def _find_by_name_key(self, *, workspace_id: UUID, name_key: str) -> File | None:
+        stmt = (
+            self._repository.base_query(workspace_id)
+            .where(File.deleted_at.is_(None))
+            .where(File.name_key == name_key)
+        )
+        result = self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def _disambiguate_name(self, *, workspace_id: UUID, base_name: str) -> tuple[str, str]:
+        stem = Path(base_name).stem.strip() or "Document"
+        suffix = Path(base_name).suffix
+        for index in range(2, 1000):
+            label = f" ({index})"
+            max_stem = max(1, _MAX_FILENAME_LENGTH - len(label) - len(suffix))
+            trimmed = stem[:max_stem].rstrip() or "Document"
+            candidate = f"{trimmed}{label}{suffix}"
+            name_key = self._build_name_key(candidate)
+            if self._find_by_name_key(workspace_id=workspace_id, name_key=name_key) is None:
+                return candidate, name_key
+        raise RuntimeError("Unable to disambiguate document name.")
+
+    def _next_doc_no(self, *, workspace_id: UUID) -> int:
+        stmt = (
+            select(func.max(File.doc_no))
+            .where(File.workspace_id == workspace_id)
+            .where(File.kind == FileKind.DOCUMENT)
+        )
+        current = self._session.execute(stmt).scalar_one()
+        return int(current or 0) + 1
+
+    def _next_version_no(self, *, document_id: UUID) -> int:
+        stmt = select(func.max(FileVersion.version_no)).where(FileVersion.file_id == document_id)
+        current = self._session.execute(stmt).scalar_one()
+        return int(current or 0) + 1
+
+    @contextmanager
+    def _download_blob_to_tempfile(
+        self,
+        *,
+        blob_name: str,
+        version_id: str | None,
+        suffix: str | None = None,
+    ) -> Iterator[Path]:
+        suffix = suffix or ""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / f"document{suffix}"
+            with path.open("wb") as handle:
+                for chunk in self._storage.stream(
+                    blob_name,
+                    version_id=version_id,
+                    chunk_size=self._settings.blob_download_chunk_size_bytes,
+                ):
+                    handle.write(chunk)
+            yield path
 
     @staticmethod
     def _inspect_workbook(path: Path) -> list[DocumentSheet]:

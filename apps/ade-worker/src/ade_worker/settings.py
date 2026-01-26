@@ -6,6 +6,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +28,13 @@ REPO_ROOT = _detect_repo_root(MODULE_DIR)
 
 DEFAULT_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
 DEFAULT_DATABASE_AUTH_MODE = "password"
+DEFAULT_BLOB_PREFIX = "workspaces"
+DEFAULT_BLOB_REQUIRE_VERSIONING = True
+DEFAULT_BLOB_CREATE_CONTAINER_ON_STARTUP = False
+DEFAULT_BLOB_REQUEST_TIMEOUT_SECONDS = 30.0
+DEFAULT_BLOB_MAX_CONCURRENCY = 4
+DEFAULT_BLOB_UPLOAD_CHUNK_SIZE_BYTES = 4 * 1024 * 1024  # 4 MiB
+DEFAULT_BLOB_DOWNLOAD_CHUNK_SIZE_BYTES = 1024 * 1024  # 1 MiB
 
 
 def _default_concurrency() -> int:
@@ -56,7 +64,7 @@ class Settings(BaseSettings):
     )
 
     # ---- Database (match ade-api field names) ------------------------------
-    database_url: str = Field(default=DEFAULT_DATABASE_URL)
+    database_url: str = Field(..., description="Postgres database URL.")
     database_echo: bool = False
 
     database_auth_mode: Literal["password", "managed_identity"] = Field(
@@ -88,6 +96,27 @@ class Settings(BaseSettings):
 
     # ---- Runtime filesystem ------------------------------------------------
     data_dir: Path = Field(default=REPO_ROOT / "data")
+    storage_backend: Literal["filesystem", "azure_blob"] = Field(
+        ..., description="Storage backend identifier (filesystem or azure_blob)."
+    )
+    blob_account_url: str | None = Field(default=None)
+    blob_connection_string: str | None = Field(default=None)
+    blob_container: str | None = Field(default=None)
+    blob_prefix: str = Field(default=DEFAULT_BLOB_PREFIX)
+    blob_require_versioning: bool = Field(default=DEFAULT_BLOB_REQUIRE_VERSIONING)
+    blob_create_container_on_startup: bool = Field(
+        default=DEFAULT_BLOB_CREATE_CONTAINER_ON_STARTUP
+    )
+    blob_request_timeout_seconds: float = Field(
+        default=DEFAULT_BLOB_REQUEST_TIMEOUT_SECONDS, gt=0
+    )
+    blob_max_concurrency: int = Field(default=DEFAULT_BLOB_MAX_CONCURRENCY, ge=1)
+    blob_upload_chunk_size_bytes: int = Field(
+        default=DEFAULT_BLOB_UPLOAD_CHUNK_SIZE_BYTES, ge=1
+    )
+    blob_download_chunk_size_bytes: int = Field(
+        default=DEFAULT_BLOB_DOWNLOAD_CHUNK_SIZE_BYTES, ge=1
+    )
     # NOTE: Using @main until ade-engine tags are published.
     engine_spec: str = Field(
         default="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
@@ -109,7 +138,7 @@ class Settings(BaseSettings):
     @classmethod
     def _v_database_url(cls, v: Any) -> str:
         if v in (None, ""):
-            return DEFAULT_DATABASE_URL
+            raise ValueError("ADE_DATABASE_URL is required.")
         return str(v).strip()
 
     @field_validator("database_sslrootcert", mode="before")
@@ -118,6 +147,69 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return None
         return str(v).strip()
+
+    @field_validator("storage_backend", mode="before")
+    @classmethod
+    def _v_storage_backend(cls, v: Any) -> str:
+        if v in (None, ""):
+            raise ValueError("ADE_STORAGE_BACKEND is required.")
+        value = str(v).strip().lower()
+        if value not in {"filesystem", "azure_blob"}:
+            raise ValueError("ADE_STORAGE_BACKEND must be 'filesystem' or 'azure_blob'")
+        return value
+
+    @field_validator("blob_account_url", mode="before")
+    @classmethod
+    def _v_blob_account_url(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        p = urlparse(s)
+        if p.scheme not in {"http", "https"} or not p.netloc:
+            raise ValueError("ADE_BLOB_ACCOUNT_URL must be an http(s) URL")
+        return s.rstrip("/")
+
+    @field_validator("blob_connection_string", mode="before")
+    @classmethod
+    def _v_blob_connection_string(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        cleaned = str(v).strip()
+        return cleaned or None
+
+    @field_validator("blob_container", mode="before")
+    @classmethod
+    def _v_blob_container(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        cleaned = str(v).strip()
+        return cleaned or None
+
+    @field_validator("blob_prefix", mode="before")
+    @classmethod
+    def _v_blob_prefix(cls, v: Any) -> str:
+        if v in (None, ""):
+            return DEFAULT_BLOB_PREFIX
+        cleaned = str(v).strip().strip("/")
+        return cleaned or DEFAULT_BLOB_PREFIX
+
+    @model_validator(mode="after")
+    def _validate_storage_backend(self) -> "Settings":
+        if self.storage_backend == "azure_blob":
+            if not self.blob_container:
+                raise ValueError("ADE_BLOB_CONTAINER is required when ADE_STORAGE_BACKEND=azure_blob.")
+            if self.blob_connection_string and self.blob_account_url:
+                raise ValueError(
+                    "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
+                )
+            if not self.blob_connection_string and not self.blob_account_url:
+                raise ValueError(
+                    "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required "
+                    "when ADE_STORAGE_BACKEND=azure_blob."
+                )
+        return self
 
     @field_validator("database_auth_mode", mode="before")
     @classmethod

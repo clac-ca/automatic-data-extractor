@@ -3,13 +3,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   uploadWorkspaceDocument,
   type DocumentUploadResponse,
+  type DocumentConflictMode,
   type DocumentUploadRunOptions,
 } from "@/api/documents/uploads";
+import { ApiError } from "@/api/errors";
+import { createIdempotencyKey } from "@/api/idempotency";
 
 export type UploadManagerStatus =
   | "queued"
   | "uploading"
   | "paused"
+  | "conflict"
   | "succeeded"
   | "failed"
   | "cancelled";
@@ -22,10 +26,13 @@ export type UploadManagerProgress = {
 
 export interface UploadManagerItem<TResponse> {
   readonly id: string;
+  readonly idempotencyKey: string;
   readonly file: File;
   readonly status: UploadManagerStatus;
   readonly progress: UploadManagerProgress;
   readonly runOptions?: DocumentUploadRunOptions;
+  readonly conflictMode?: DocumentConflictMode;
+  readonly conflict?: { message: string };
   readonly response?: TResponse;
   readonly error?: string;
 }
@@ -73,6 +80,7 @@ export function useUploadManager({
     const now = Date.now();
     const newItems = files.map((entry, index) => ({
       id: createUploadId(now, index),
+      idempotencyKey: createIdempotencyKey("document-upload"),
       file: entry.file,
       status: "queued" as const,
       runOptions: entry.runOptions,
@@ -124,6 +132,26 @@ export function useUploadManager({
           ...item,
           status: "queued",
           progress: resetProgress(item.file),
+          error: undefined,
+          conflict: undefined,
+          response: undefined,
+        };
+      }),
+    );
+  }, []);
+
+  const resolveConflict = useCallback((itemId: string, mode: DocumentConflictMode) => {
+    setItems((current) =>
+      current.map((item) => {
+        if (item.id !== itemId) return item;
+        if (item.status !== "conflict") return item;
+        return {
+          ...item,
+          status: "queued",
+          progress: resetProgress(item.file),
+          idempotencyKey: createIdempotencyKey("document-upload"),
+          conflictMode: mode,
+          conflict: undefined,
           error: undefined,
           response: undefined,
         };
@@ -264,8 +292,24 @@ export function useUploadManager({
           if (isAbort && abortReason) {
             return;
           }
-          const message =
-            error instanceof Error ? error.message : "Upload failed.";
+          if (error instanceof ApiError && error.status === 409) {
+            const message = error.problem?.detail ?? error.message ?? "Document name already exists.";
+            setItems((current) =>
+              current.map((entry) =>
+                entry.id === item.id
+                  ? {
+                      ...entry,
+                      status: "conflict",
+                      conflictMode: undefined,
+                      conflict: { message },
+                      error: message,
+                    }
+                  : entry,
+              ),
+            );
+            return;
+          }
+          const message = error instanceof Error ? error.message : "Upload failed.";
           setItems((current) =>
             current.map((entry) =>
               entry.id === item.id
@@ -316,11 +360,14 @@ export function useUploadManager({
           failedCount += 1;
           break;
         case "cancelled":
-          cancelledCount += 1;
-          break;
-        default:
-          break;
-      }
+      cancelledCount += 1;
+      break;
+      case "conflict":
+        pausedCount += 1;
+        break;
+      default:
+        break;
+    }
     }
 
     const completedCount = succeededCount + failedCount + cancelledCount;
@@ -350,6 +397,7 @@ export function useUploadManager({
     pause,
     resume,
     retry,
+    resolveConflict,
     cancel,
     remove,
     clearCompleted,
@@ -395,8 +443,9 @@ async function runSimpleUpload(
 ) {
   const handle = uploadWorkspaceDocument(options.workspaceId, item.file, {
     onProgress: options.onProgress,
-    idempotencyKey: item.id,
+    idempotencyKey: item.idempotencyKey,
     runOptions: item.runOptions,
+    conflictMode: item.conflictMode,
   });
   options.controller.signal.addEventListener("abort", () => handle.abort(), { once: true });
   const result = await handle.promise;

@@ -9,8 +9,10 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.models import (
     Configuration,
     ConfigurationStatus,
-    Document,
-    DocumentSource,
+    File,
+    FileKind,
+    FileVersion,
+    FileVersionOrigin,
     Run,
     RunStatus,
 )
@@ -40,27 +42,46 @@ def make_document(
     workspace_id: UUID,
     filename: str,
     byte_size: int = 12,
-) -> Document:
-    stored_uri = f"documents/{filename}"
-    return Document(
-        id=generate_uuid7(),
+) -> File:
+    file_id = generate_uuid7()
+    version_id = generate_uuid7()
+    name_key = filename.casefold()
+    document = File(
+        id=file_id,
         workspace_id=workspace_id,
-        original_filename=filename,
-        content_type="text/csv",
-        byte_size=byte_size,
-        sha256="deadbeef",
-        stored_uri=stored_uri,
+        kind=FileKind.DOCUMENT,
+        doc_no=None,
+        name=filename,
+        name_key=name_key,
+        blob_name=f"{workspace_id}/files/{file_id}",
         attributes={},
-        source=DocumentSource.MANUAL_UPLOAD,
+        uploaded_by_user_id=None,
         expires_at=utc_now(),
+        comment_count=0,
+        version=1,
     )
+    version = FileVersion(
+        id=version_id,
+        file_id=file_id,
+        version_no=1,
+        origin=FileVersionOrigin.UPLOADED,
+        created_by_user_id=None,
+        sha256="deadbeef",
+        byte_size=byte_size,
+        content_type="text/csv",
+        filename_at_upload=filename,
+        blob_version_id="v1",
+    )
+    document.current_version = version
+    document.versions = [version]
+    return document
 
 
 def make_run(
     *,
     workspace_id: UUID,
     configuration_id: UUID,
-    document_id: UUID,
+    file_version_id: UUID,
     status: RunStatus,
     engine_spec: str = "ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
     deps_digest: str = "sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
@@ -68,7 +89,7 @@ def make_run(
     return Run(
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        input_document_id=document_id,
+        input_file_version_id=file_version_id,
         engine_spec=engine_spec,
         deps_digest=deps_digest,
         status=status,

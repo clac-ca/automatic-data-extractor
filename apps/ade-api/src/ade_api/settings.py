@@ -76,15 +76,13 @@ DEFAULT_ENGINE_SPEC = "ade-engine @ git+https://github.com/clac-ca/ade-engine@ma
 DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
 DEFAULT_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
 DEFAULT_DATABASE_AUTH_MODE = "password"
-
-DEFAULT_STORAGE_CONNECTION_STRING = (
-    "DefaultEndpointsProtocol=http;"
-    "AccountName=devstoreaccount1;"
-    "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/"
-    "K1SZFPTOtr/KBHBeksoGMGw==;"
-    "BlobEndpoint=http://azurite:10000/devstoreaccount1;"
-)
-DEFAULT_STORAGE_AUTH_MODE = "key"
+DEFAULT_BLOB_PREFIX = "workspaces"
+DEFAULT_BLOB_REQUIRE_VERSIONING = True
+DEFAULT_BLOB_CREATE_CONTAINER_ON_STARTUP = False
+DEFAULT_BLOB_REQUEST_TIMEOUT_SECONDS = 30.0
+DEFAULT_BLOB_MAX_CONCURRENCY = 4
+DEFAULT_BLOB_UPLOAD_CHUNK_SIZE_BYTES = 4 * 1024 * 1024  # 4 MiB
+DEFAULT_BLOB_DOWNLOAD_CHUNK_SIZE_BYTES = 1024 * 1024  # 1 MiB
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 2000
@@ -96,7 +94,6 @@ COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
-_ALLOWED_STORAGE_AUTH_MODES = {"key"}
 
 
 # ---- Helpers ----------------------------------------------------------------
@@ -232,13 +229,29 @@ class Settings(BaseSettings):
 
     # Storage
     data_dir: Path = Field(default=DEFAULT_DATA_DIR)
-    storage_connection_string: str = Field(default=DEFAULT_STORAGE_CONNECTION_STRING)
-    storage_auth_mode: Literal["key", "managed_identity"] = Field(
-        default=DEFAULT_STORAGE_AUTH_MODE
+    storage_backend: Literal["filesystem", "azure_blob"] = Field(
+        ..., description="Storage backend identifier (filesystem or azure_blob)."
+    )
+    blob_account_url: str | None = Field(default=None)
+    blob_connection_string: str | None = Field(default=None)
+    blob_container: str | None = Field(default=None)
+    blob_prefix: str = Field(default=DEFAULT_BLOB_PREFIX)
+    blob_require_versioning: bool = Field(default=DEFAULT_BLOB_REQUIRE_VERSIONING)
+    blob_create_container_on_startup: bool = Field(
+        default=DEFAULT_BLOB_CREATE_CONTAINER_ON_STARTUP
+    )
+    blob_request_timeout_seconds: float = Field(
+        default=DEFAULT_BLOB_REQUEST_TIMEOUT_SECONDS, gt=0
+    )
+    blob_max_concurrency: int = Field(default=DEFAULT_BLOB_MAX_CONCURRENCY, ge=1)
+    blob_upload_chunk_size_bytes: int = Field(
+        default=DEFAULT_BLOB_UPLOAD_CHUNK_SIZE_BYTES, ge=1
+    )
+    blob_download_chunk_size_bytes: int = Field(
+        default=DEFAULT_BLOB_DOWNLOAD_CHUNK_SIZE_BYTES, ge=1
     )
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
-    documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
     documents_upload_concurrency_limit: int | None = Field(8, ge=1)
 
     # Engine
@@ -248,7 +261,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = Field(default=DEFAULT_DATABASE_URL)
+    database_url: str = Field(..., description="Postgres database URL.")
     database_echo: bool = False
     database_log_level: str | None = None
     database_pool_size: int = Field(5, ge=1)
@@ -334,7 +347,7 @@ class Settings(BaseSettings):
     @classmethod
     def _v_database_url(cls, v: Any) -> str:
         if v in (None, ""):
-            return DEFAULT_DATABASE_URL
+            raise ValueError("ADE_DATABASE_URL is required.")
         return str(v).strip()
 
     @field_validator("database_sslrootcert", mode="before")
@@ -367,25 +380,52 @@ class Settings(BaseSettings):
             raise ValueError("ADE_DATABASE_AUTH_MODE must be 'password' or 'managed_identity'")
         return mode
 
-    @field_validator("storage_connection_string", mode="before")
+    @field_validator("storage_backend", mode="before")
     @classmethod
-    def _v_storage_connection_string(cls, v: Any) -> str:
+    def _v_storage_backend(cls, v: Any) -> str:
         if v in (None, ""):
-            return DEFAULT_STORAGE_CONNECTION_STRING
-        cleaned = str(v).strip()
-        if not cleaned:
-            return DEFAULT_STORAGE_CONNECTION_STRING
-        return cleaned
+            raise ValueError("ADE_STORAGE_BACKEND is required.")
+        value = str(v).strip().lower()
+        if value not in {"filesystem", "azure_blob"}:
+            raise ValueError("ADE_STORAGE_BACKEND must be 'filesystem' or 'azure_blob'")
+        return value
 
-    @field_validator("storage_auth_mode", mode="before")
+    @field_validator("blob_account_url", mode="before")
     @classmethod
-    def _v_storage_auth_mode(cls, v: Any) -> str:
+    def _v_blob_account_url(cls, v: Any) -> str | None:
         if v in (None, ""):
-            return DEFAULT_STORAGE_AUTH_MODE
-        mode = str(v).strip().lower()
-        if mode not in _ALLOWED_STORAGE_AUTH_MODES:
-            raise ValueError("ADE_STORAGE_AUTH_MODE must be 'key'")
-        return mode
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        p = urlparse(s)
+        if p.scheme not in {"http", "https"} or not p.netloc:
+            raise ValueError("ADE_BLOB_ACCOUNT_URL must be an http(s) URL")
+        return s.rstrip("/")
+
+    @field_validator("blob_connection_string", mode="before")
+    @classmethod
+    def _v_blob_connection_string(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        cleaned = str(v).strip()
+        return cleaned or None
+
+    @field_validator("blob_container", mode="before")
+    @classmethod
+    def _v_blob_container(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        cleaned = str(v).strip()
+        return cleaned or None
+
+    @field_validator("blob_prefix", mode="before")
+    @classmethod
+    def _v_blob_prefix(cls, v: Any) -> str:
+        if v in (None, ""):
+            return DEFAULT_BLOB_PREFIX
+        cleaned = str(v).strip().strip("/")
+        return cleaned or DEFAULT_BLOB_PREFIX
 
 
     @field_validator("jwt_secret", mode="before")
@@ -408,7 +448,6 @@ class Settings(BaseSettings):
         "session_access_ttl",
         "failed_login_lock_duration",
         "storage_document_retention_period",
-        "documents_change_feed_retention_period",
         "idempotency_key_ttl",
         mode="before",
     )
@@ -473,10 +512,18 @@ class Settings(BaseSettings):
 
         self.database_url = url.render_as_string(hide_password=False)
 
-        if not self.storage_connection_string:
-            raise ValueError("ADE_STORAGE_CONNECTION_STRING is required.")
-        if self.storage_auth_mode != "key":
-            raise ValueError("ADE_STORAGE_AUTH_MODE must be 'key' when using ADE_STORAGE_CONNECTION_STRING.")
+        if self.storage_backend == "azure_blob":
+            if not self.blob_container:
+                raise ValueError("ADE_BLOB_CONTAINER is required when ADE_STORAGE_BACKEND=azure_blob.")
+            if self.blob_connection_string and self.blob_account_url:
+                raise ValueError(
+                    "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
+                )
+            if not self.blob_connection_string and not self.blob_account_url:
+                raise ValueError(
+                    "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required "
+                    "when ADE_STORAGE_BACKEND=azure_blob."
+                )
 
         if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
             self.jwt_secret = SecretStr(secrets.token_urlsafe(64))

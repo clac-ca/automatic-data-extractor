@@ -63,7 +63,7 @@ async def test_idempotency_replays_and_conflicts(
         result = db_session.execute(
             select(Run).where(
                 Run.configuration_id == configuration.id,
-                Run.input_document_id == document_one.id,
+                Run.input_file_version_id == document_one.current_version_id,
             )
         )
         return list(result.scalars())

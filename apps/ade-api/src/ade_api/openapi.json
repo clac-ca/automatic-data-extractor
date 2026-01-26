@@ -5395,6 +5395,14 @@
               }
             }
           },
+          "409": {
+            "description": "Document name already exists.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -5666,13 +5674,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/changes": {
-      "get": {
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/versions": {
+      "post": {
         "tags": [
           "documents"
         ],
-        "summary": "List document changes",
-        "operationId": "list_document_changes_api_v1_workspaces__workspaceId__documents_changes_get",
+        "summary": "Upload a new document version",
+        "operationId": "upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post",
         "parameters": [
           {
             "name": "workspaceId",
@@ -5687,8 +5695,20 @@
             "description": "Workspace identifier"
           },
           {
-            "name": "cursor",
-            "in": "query",
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -5699,139 +5719,62 @@
                   "type": "null"
                 }
               ],
-              "description": "Cursor token.",
-              "title": "Cursor"
-            },
-            "description": "Cursor token."
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 1000,
-              "minimum": 1,
-              "default": 200,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "includeRows",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Includerows"
+              "title": "X-Csrf-Token"
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentChangesPage"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post"
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspaceId}/documents/changes/stream": {
-      "get": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Stream document changes",
-        "operationId": "stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Cursor token.",
-              "title": "Cursor"
-            },
-            "description": "Cursor token."
-          },
-          {
-            "name": "includeRows",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Includerows"
-            }
-          }
-        ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
               }
             },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to upload document versions.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document uploads.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "413": {
+            "description": "Uploaded file exceeds the configured size limit.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -7173,6 +7116,119 @@
           },
           "404": {
             "description": "Document is missing or its stored file is unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Download a specific document version",
+        "operationId": "download_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions__versionNo__download_get",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "versionNo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Versionno"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to download documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document downloads.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document or version not found within the workspace.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -10915,90 +10971,6 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/events/stream": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Stream Run Events Endpoint",
-        "operationId": "stream_run_events_endpoint_api_v1_runs__runId__events_stream_get",
-        "parameters": [
-          {
-            "name": "runId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Runid"
-            },
-            "description": "Run identifier"
-          },
-          {
-            "name": "after_sequence",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "After Sequence"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/runs/{runId}/events/download": {
       "get": {
         "tags": [
@@ -11023,6 +10995,11 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -11144,6 +11121,123 @@
             "APIKeyHeader": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Upload manual run output",
+        "operationId": "upload_run_output_endpoint_api_v1_runs__runId__output_post",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Runid"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_run_output_endpoint_api_v1_runs__runId__output_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Run or input document not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Run output cannot be uploaded yet",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "413": {
+            "description": "Uploaded file exceeds the configured size limit.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/runs/{runId}/output/download": {
@@ -11170,6 +11264,11 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -12669,6 +12768,16 @@
               }
             ],
             "title": "Run Options"
+          },
+          "conflict_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentConflictMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -12676,6 +12785,56 @@
           "file"
         ],
         "title": "Body_upload_document_api_v1_workspaces__workspaceId__documents_post"
+      },
+      "Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post"
+      },
+      "Body_upload_run_output_endpoint_api_v1_runs__runId__output_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_run_output_endpoint_api_v1_runs__runId__output_post"
       },
       "ConfigSourceClone": {
         "properties": {
@@ -13113,81 +13272,6 @@
         "title": "DocumentBatchTagsResponse",
         "description": "Response envelope for batch tag updates."
       },
-      "DocumentChangeEntry": {
-        "properties": {
-          "cursor": {
-            "type": "string",
-            "title": "Cursor"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "document.changed",
-              "document.deleted"
-            ],
-            "title": "Type"
-          },
-          "documentId": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Documentid",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "occurredAt": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Occurredat"
-          },
-          "documentVersion": {
-            "type": "integer",
-            "title": "Documentversion"
-          },
-          "row": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DocumentListRow"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional list row snapshot for changed documents."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "cursor",
-          "type",
-          "documentId",
-          "occurredAt",
-          "documentVersion"
-        ],
-        "title": "DocumentChangeEntry",
-        "description": "Single entry from the documents change feed."
-      },
-      "DocumentChangesPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentChangeEntry"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "nextCursor": {
-            "type": "string",
-            "title": "Nextcursor"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "nextCursor"
-        ],
-        "title": "DocumentChangesPage",
-        "description": "Envelope for cursor-based change feed results."
-      },
       "DocumentCommentCreate": {
         "properties": {
           "body": {
@@ -13321,6 +13405,16 @@
         "title": "DocumentCommentPage",
         "description": "Cursor-based envelope of document comments."
       },
+      "DocumentConflictMode": {
+        "type": "string",
+        "enum": [
+          "reject",
+          "upload_new_version",
+          "keep_both"
+        ],
+        "title": "DocumentConflictMode",
+        "description": "Conflict handling for document uploads."
+      },
       "DocumentFileType": {
         "type": "string",
         "enum": [
@@ -13381,6 +13475,17 @@
             "title": "Workspaceid",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
+          "docNo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docno"
+          },
           "name": {
             "type": "string",
             "title": "Name",
@@ -13419,6 +13524,17 @@
           "byteSize": {
             "type": "integer",
             "title": "Bytesize"
+          },
+          "currentVersionNo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentversionno"
           },
           "commentCount": {
             "type": "integer",
@@ -13536,10 +13652,22 @@
             "title": "Workspaceid",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
+          "docNo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docno",
+            "description": "Numeric document reference within the workspace."
+          },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Display name mapped from the original filename."
+            "description": "Display name for the document."
           },
           "contentType": {
             "anyOf": [
@@ -13556,6 +13684,18 @@
             "type": "integer",
             "title": "Bytesize"
           },
+          "currentVersionNo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentversionno",
+            "description": "Current file version number for this document."
+          },
           "commentCount": {
             "type": "integer",
             "title": "Commentcount",
@@ -13567,7 +13707,14 @@
             "title": "Metadata"
           },
           "source": {
-            "$ref": "#/components/schemas/DocumentSource"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileVersionOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "expiresAt": {
             "type": "string",
@@ -13752,7 +13899,6 @@
           "workspaceId",
           "name",
           "byteSize",
-          "source",
           "expiresAt",
           "createdAt",
           "updatedAt",
@@ -13861,14 +14007,6 @@
         ],
         "title": "DocumentSheet",
         "description": "Descriptor for a worksheet or single-sheet document."
-      },
-      "DocumentSource": {
-        "type": "string",
-        "enum": [
-          "manual_upload"
-        ],
-        "title": "DocumentSource",
-        "description": "Origins for uploaded documents."
       },
       "DocumentTagsPatch": {
         "properties": {
@@ -14317,6 +14455,16 @@
           "asset_max_bytes"
         ],
         "title": "FileSizeLimits"
+      },
+      "FileVersionOrigin": {
+        "type": "string",
+        "enum": [
+          "uploaded",
+          "generated",
+          "manual"
+        ],
+        "title": "FileVersionOrigin",
+        "description": "Origins for file versions."
       },
       "FileWriteResponse": {
         "properties": {
@@ -15588,6 +15736,30 @@
             ],
             "title": "Document Id"
           },
+          "fileVersionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fileversionid"
+          },
+          "versionNo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versionno"
+          },
           "filename": {
             "anyOf": [
               {
@@ -15680,10 +15852,6 @@
             "type": "string",
             "title": "Self"
           },
-          "events_stream": {
-            "type": "string",
-            "title": "Events Stream"
-          },
           "events_download": {
             "type": "string",
             "title": "Events Download"
@@ -15717,7 +15885,6 @@
         "type": "object",
         "required": [
           "self",
-          "events_stream",
           "events_download",
           "logs",
           "input",
@@ -16057,27 +16224,29 @@
             "title": "Has Output",
             "default": false
           },
-          "output_path": {
+          "fileVersionId": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Output Path"
+            "title": "Fileversionid"
           },
-          "processed_file": {
+          "versionNo": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Processed File"
+            "title": "Versionno"
           }
         },
         "additionalProperties": false,
@@ -16275,17 +16444,6 @@
           },
           "links": {
             "$ref": "#/components/schemas/RunLinks"
-          },
-          "events_stream_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Events Stream Url"
           },
           "events_download_url": {
             "anyOf": [

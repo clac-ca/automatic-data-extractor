@@ -44,7 +44,7 @@ def normalize_idempotency_key(raw: str | None) -> str:
     if raw is None or not str(raw).strip():
         raise ApiError(
             error_type="validation_error",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Idempotency-Key header is required.",
             errors=[
                 ProblemDetailsErrorItem(
@@ -59,7 +59,7 @@ def normalize_idempotency_key(raw: str | None) -> str:
     if len(value) > MAX_IDEMPOTENCY_KEY_LENGTH:
         raise ApiError(
             error_type="validation_error",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Idempotency-Key exceeds maximum length.",
             errors=[
                 ProblemDetailsErrorItem(

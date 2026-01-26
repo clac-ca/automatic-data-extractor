@@ -15,14 +15,23 @@ class DocumentNotFoundError(Exception):
 
 
 class DocumentFileMissingError(Exception):
-    """Raised when a stored document file cannot be located on disk."""
+    """Raised when a stored document file cannot be located."""
 
-    def __init__(self, *, document_id: UUID | str, stored_uri: str) -> None:
+    def __init__(
+        self,
+        *,
+        document_id: UUID | str,
+        blob_name: str,
+        version_id: str | None = None,
+    ) -> None:
         doc_id = str(document_id)
-        message = f"Stored file for document {doc_id!r} was not found at {stored_uri!r}."
-        super().__init__(message)
+        details = f"Stored file for document {doc_id!r} was not found at {blob_name!r}."
+        if version_id:
+            details = f"{details} (version {version_id!r})"
+        super().__init__(details)
         self.document_id = doc_id
-        self.stored_uri = stored_uri
+        self.blob_name = blob_name
+        self.version_id = version_id
 
 
 class DocumentTooLargeError(Exception):
@@ -49,7 +58,7 @@ class DocumentWorksheetParseError(Exception):
     """Raised when worksheet metadata cannot be read from a workbook."""
 
     def __init__(
-        self, *, document_id: UUID | str, stored_uri: str, reason: str | None = None
+        self, *, document_id: UUID | str, blob_name: str, reason: str | None = None
     ) -> None:
         doc_id = str(document_id)
         details = " Unable to read worksheet metadata."
@@ -57,12 +66,12 @@ class DocumentWorksheetParseError(Exception):
             details = f" Parse failed ({reason})."
 
         message = (
-            f"Worksheet inspection failed for document {doc_id!r} at {stored_uri!r}.{details}"
+            f"Worksheet inspection failed for document {doc_id!r} at {blob_name!r}.{details}"
         )
 
         super().__init__(message)
         self.document_id = doc_id
-        self.stored_uri = stored_uri
+        self.blob_name = blob_name
         self.reason = reason
 
 
@@ -94,19 +103,41 @@ class DocumentPreviewParseError(Exception):
     """Raised when a document preview cannot be generated."""
 
     def __init__(
-        self, *, document_id: UUID | str, stored_uri: str, reason: str | None = None
+        self, *, document_id: UUID | str, blob_name: str, reason: str | None = None
     ) -> None:
         doc_id = str(document_id)
         details = " Unable to generate document preview."
         if reason:
             details = f" Preview generation failed ({reason})."
         message = (
-            f"Preview generation failed for document {doc_id!r} at {stored_uri!r}.{details}"
+            f"Preview generation failed for document {doc_id!r} at {blob_name!r}.{details}"
         )
         super().__init__(message)
         self.document_id = doc_id
-        self.stored_uri = stored_uri
+        self.blob_name = blob_name
         self.reason = reason
+
+
+class DocumentNameConflictError(Exception):
+    """Raised when a document upload collides with an existing name."""
+
+    def __init__(self, *, document_id: UUID | str, name: str) -> None:
+        doc_id = str(document_id)
+        message = f"Document name {name!r} is already in use (document {doc_id!r})."
+        super().__init__(message)
+        self.document_id = doc_id
+        self.name = name
+
+
+class DocumentVersionNotFoundError(Exception):
+    """Raised when a requested document version does not exist."""
+
+    def __init__(self, *, document_id: UUID | str, version_no: int) -> None:
+        doc_id = str(document_id)
+        message = f"Document {doc_id!r} has no version {version_no}."
+        super().__init__(message)
+        self.document_id = doc_id
+        self.version_no = version_no
 
 
 class InvalidDocumentTagsError(Exception):
@@ -132,6 +163,8 @@ __all__ = [
     "DocumentPreviewUnsupportedError",
     "DocumentPreviewSheetNotFoundError",
     "DocumentPreviewParseError",
+    "DocumentNameConflictError",
+    "DocumentVersionNotFoundError",
     "InvalidDocumentTagsError",
     "InvalidDocumentCommentMentionsError",
 ]

@@ -40,4 +40,4 @@ async def test_list_documents_q_matches_tokens_across_fields(db_session, setting
     )
 
     assert len(result.items) == 1
-    assert result.items[0].name == processed.original_filename
+    assert result.items[0].name == processed.name

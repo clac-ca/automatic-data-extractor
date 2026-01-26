@@ -11,7 +11,7 @@ flags, and rollback considerations.
 - Run `ade ci` locally and ensure the backend image builds with the new
   FastAPI routers mounted (`/api/v1/configurations/{configurationId}/runs`, `/api/v1/runs/...`).
 - Review `docs/ade_runs_api_spec.md#manual-qa-checklist` and run at least
-  one queued run + SSE tail scenario against staging.
+  one queued run + log download scenario against staging.
 
 ## 2. Configuration flags
 
@@ -31,8 +31,8 @@ flags, and rollback considerations.
 3. Deploy or restart the worker process/container so queued jobs can execute.
 4. Verify health probes and log output for the new router registration
    (`ade_api.features.runs.router`).
-5. Trigger a dry-run execution (`dry_run=true`) and tail
-   `/runs/{runId}/events/stream` to verify event logs and database persistence.
+5. Trigger a dry-run execution (`dry_run=true`) and download
+   `/runs/{runId}/events/download` to verify event logs and database persistence.
 6. Notify frontend teams that the API is live so they can schedule their
    UI integration.
 

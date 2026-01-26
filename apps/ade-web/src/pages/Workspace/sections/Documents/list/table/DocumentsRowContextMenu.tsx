@@ -38,7 +38,8 @@ export function DocumentsRowContextMenu({
   onAssign,
   onToggleTag,
   onDownloadOutput,
-  onDownloadOriginal,
+  onDownloadLatest,
+  onDownloadVersion,
   onDeleteRequest,
   isBusy,
   children,
@@ -51,13 +52,18 @@ export function DocumentsRowContextMenu({
   readonly onAssign: (documentId: string, assigneeId: string | null) => void;
   readonly onToggleTag: (documentId: string, tag: string) => void;
   readonly onDownloadOutput: (document: DocumentRow) => void;
-  readonly onDownloadOriginal: (document: DocumentRow) => void;
+  readonly onDownloadLatest: (document: DocumentRow) => void;
+  readonly onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
   readonly onDeleteRequest: (document: DocumentRow) => void;
   readonly isBusy: boolean;
   readonly children: ReactNode;
 }) {
   const canDownloadOutput = document.lastRun?.status === "succeeded";
   const outputLabel = canDownloadOutput ? "Download output" : "Output not ready";
+  const latestLabel = document.currentVersionNo
+    ? `Download latest (v${document.currentVersionNo})`
+    : "Download latest";
+  const showOriginal = typeof document.currentVersionNo === "number" && document.currentVersionNo > 1;
   const assigneeValue = document.assignee?.id ?? "unassigned";
   const selectedTags = new Set(document.tags ?? []);
 
@@ -82,10 +88,16 @@ export function DocumentsRowContextMenu({
           <OutputIcon className={MENU_ICON_CLASS} />
           <span className="flex-1">{outputLabel}</span>
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onDownloadOriginal(document)}>
+        <ContextMenuItem onSelect={() => onDownloadLatest(document)}>
           <DownloadIcon className={MENU_ICON_CLASS} />
-          <span className="flex-1">Download original</span>
+          <span className="flex-1">{latestLabel}</span>
         </ContextMenuItem>
+        {showOriginal && onDownloadVersion ? (
+          <ContextMenuItem onSelect={() => onDownloadVersion(document, 1)}>
+            <DownloadIcon className={MENU_ICON_CLASS} />
+            <span className="flex-1">Download original (v1)</span>
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuSeparator />
         <ContextMenuSub>
           <ContextMenuSubTrigger className="gap-2">

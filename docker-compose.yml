@@ -1,9 +1,7 @@
 # docker-compose.yml
 #
-# Quickstart: starts three containers
-# (1) ADE (api/web/worker running in a single container).
-# (2) Postgres (`postgres:18-bookworm`).
-# (3) Azurite blob storage. (`mcr.microsoft.com/azure-storage/azurite`).
+# Quickstart: starts ADE + Postgres + Azurite (Azure Blob emulator).
+# Default storage uses Azurite via connection string auth.
 #
 # Get Started:
 #   Step 1: Install Docker (if needed): https://docs.docker.com/get-docker/
@@ -16,7 +14,6 @@
 #   Step 5: What's running
 #     Web UI + API: http://localhost:8000 (API at /api, docs at /docs)
 #     Postgres: localhost:5432
-#     Azurite Blob: http://localhost:10000/devstoreaccount1
 #
 # TIP: See docker-compose.production.yml for production setup (external Postgres + Storage).
 services:
@@ -40,10 +37,22 @@ services:
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE:-password}
       # ADE_DATABASE_SSLROOTCERT: /path/to/ca.crt
 
-      # Storage
+      # Storage (Azure Blob default)
       ADE_DATA_DIR: /app/data
-      ADE_STORAGE_CONNECTION_STRING: ${ADE_STORAGE_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
-      ADE_STORAGE_AUTH_MODE: ${ADE_STORAGE_AUTH_MODE:-key}
+      ADE_STORAGE_BACKEND: ${ADE_STORAGE_BACKEND:-azure_blob}
+
+      # Azure Blob (Azurite default)
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
+      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
+      ADE_BLOB_CREATE_CONTAINER_ON_STARTUP: ${ADE_BLOB_CREATE_CONTAINER_ON_STARTUP:-true}
+
+      # Azure Blob (AAD)
+      # ADE_STORAGE_BACKEND: azure_blob
+      # ADE_BLOB_ACCOUNT_URL: https://<account>.blob.core.windows.net
+      # ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      # ADE_BLOB_CONTAINER: ade
 
       # API
       ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}

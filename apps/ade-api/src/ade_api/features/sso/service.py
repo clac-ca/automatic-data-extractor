@@ -333,7 +333,7 @@ class SsoService:
             return
         if not provider.issuer or not provider.client_id or not provider.client_secret_enc:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Provider must be fully configured to activate",
             )
 

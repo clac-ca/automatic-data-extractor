@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from ade_worker import db
 from ade_worker.schema import environments, runs
+from .helpers import seed_file_with_version
 
 
 def _uuid() -> str:
@@ -59,18 +60,24 @@ def _insert_run(
     max_attempts: int = 3,
     claim_expires_at: datetime | None = None,
     claimed_by: str | None = None,
-    input_document_id: str | None = None,
+    input_file_version_id: str | None = None,
 ) -> None:
+    if not input_file_version_id:
+        _, input_file_version_id = seed_file_with_version(
+            engine,
+            workspace_id=workspace_id,
+            now=now,
+        )
     with engine.begin() as conn:
         conn.execute(
             insert(runs).values(
                 id=run_id,
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                input_document_id=input_document_id or _uuid(),
+                input_file_version_id=input_file_version_id,
+                output_file_version_id=None,
                 input_sheet_names=None,
                 run_options=None,
-                output_path=None,
                 engine_spec=engine_spec,
                 deps_digest=deps_digest,
                 status=status,

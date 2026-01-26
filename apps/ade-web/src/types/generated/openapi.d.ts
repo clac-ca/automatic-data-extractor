@@ -684,34 +684,17 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/changes": {
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/versions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List document changes */
-        get: operations["list_document_changes_api_v1_workspaces__workspaceId__documents_changes_get"];
+        get?: never;
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/documents/changes/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream document changes */
-        get: operations["stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get"];
-        put?: never;
-        post?: never;
+        /** Upload a new document version */
+        post: operations["upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -816,6 +799,23 @@ export type paths = {
         };
         /** Download a stored document */
         get: operations["download_document_api_v1_workspaces__workspaceId__documents__documentId__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a specific document version */
+        get: operations["download_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions__versionNo__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1252,23 +1252,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{runId}/events/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream Run Events Endpoint */
-        get: operations["stream_run_events_endpoint_api_v1_runs__runId__events_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{runId}/events/download": {
         parameters: {
             query?: never;
@@ -1296,7 +1279,8 @@ export type paths = {
         /** Get run output metadata */
         get: operations["get_run_output_metadata_endpoint_api_v1_runs__runId__output_get"];
         put?: never;
-        post?: never;
+        /** Upload manual run output */
+        post: operations["upload_run_output_endpoint_api_v1_runs__runId__output_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1708,6 +1692,27 @@ export type components = {
             expires_at?: string | null;
             /** Run Options */
             run_options?: string | null;
+            conflict_mode?: components["schemas"]["DocumentConflictMode"] | null;
+        };
+        /** Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post */
+        Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /** Metadata */
+            metadata?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+        };
+        /** Body_upload_run_output_endpoint_api_v1_runs__runId__output_post */
+        Body_upload_run_output_endpoint_api_v1_runs__runId__output_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
         };
         /**
          * ConfigSourceClone
@@ -1905,44 +1910,6 @@ export type components = {
             documents?: components["schemas"]["DocumentOut"][];
         };
         /**
-         * DocumentChangeEntry
-         * @description Single entry from the documents change feed.
-         */
-        DocumentChangeEntry: {
-            /** Cursor */
-            cursor: string;
-            /**
-             * Type
-             * @enum {string}
-             */
-            type: "document.changed" | "document.deleted";
-            /**
-             * Documentid
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            documentId: string;
-            /**
-             * Occurredat
-             * Format: date-time
-             */
-            occurredAt: string;
-            /** Documentversion */
-            documentVersion: number;
-            /** @description Optional list row snapshot for changed documents. */
-            row?: components["schemas"]["DocumentListRow"] | null;
-        };
-        /**
-         * DocumentChangesPage
-         * @description Envelope for cursor-based change feed results.
-         */
-        DocumentChangesPage: {
-            /** Items */
-            items?: components["schemas"]["DocumentChangeEntry"][];
-            /** Nextcursor */
-            nextCursor: string;
-        };
-        /**
          * DocumentCommentCreate
          * @description Payload for creating a document comment.
          */
@@ -2008,6 +1975,12 @@ export type components = {
             } | null;
         };
         /**
+         * DocumentConflictMode
+         * @description Conflict handling for document uploads.
+         * @enum {string}
+         */
+        DocumentConflictMode: "reject" | "upload_new_version" | "keep_both";
+        /**
          * DocumentFileType
          * @description Normalized file types for documents.
          * @enum {string}
@@ -2043,6 +2016,8 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspaceId: string;
+            /** Docno */
+            docNo?: number | null;
             /**
              * Name
              * @description Display name mapped from the original filename.
@@ -2055,6 +2030,8 @@ export type components = {
             tags?: string[];
             /** Bytesize */
             byteSize: number;
+            /** Currentversionno */
+            currentVersionNo?: number | null;
             /**
              * Commentcount
              * @default 0
@@ -2110,14 +2087,24 @@ export type components = {
              */
             workspaceId: string;
             /**
+             * Docno
+             * @description Numeric document reference within the workspace.
+             */
+            docNo?: number | null;
+            /**
              * Name
-             * @description Display name mapped from the original filename.
+             * @description Display name for the document.
              */
             name: string;
             /** Contenttype */
             contentType?: string | null;
             /** Bytesize */
             byteSize: number;
+            /**
+             * Currentversionno
+             * @description Current file version number for this document.
+             */
+            currentVersionNo?: number | null;
             /**
              * Commentcount
              * @default 0
@@ -2127,7 +2114,7 @@ export type components = {
             metadata?: {
                 [key: string]: unknown;
             };
-            source: components["schemas"]["DocumentSource"];
+            source?: components["schemas"]["FileVersionOrigin"] | null;
             /**
              * Expiresat
              * Format: date-time
@@ -2242,12 +2229,6 @@ export type components = {
              */
             is_active: boolean;
         };
-        /**
-         * DocumentSource
-         * @description Origins for uploaded documents.
-         * @enum {string}
-         */
-        DocumentSource: "manual_upload";
         /**
          * DocumentTagsPatch
          * @description Payload for adding/removing tags on a document.
@@ -2447,6 +2428,12 @@ export type components = {
             /** Asset Max Bytes */
             asset_max_bytes: number;
         };
+        /**
+         * FileVersionOrigin
+         * @description Origins for file versions.
+         * @enum {string}
+         */
+        FileVersionOrigin: "uploaded" | "generated" | "manual";
         /** FileWriteResponse */
         FileWriteResponse: {
             /** Path */
@@ -3055,6 +3042,10 @@ export type components = {
         RunInput: {
             /** Document Id */
             document_id?: string | null;
+            /** Fileversionid */
+            fileVersionId?: string | null;
+            /** Versionno */
+            versionNo?: number | null;
             /** Filename */
             filename?: string | null;
             /** Content Type */
@@ -3077,8 +3068,6 @@ export type components = {
         RunLinks: {
             /** Self */
             self: string;
-            /** Events Stream */
-            events_stream: string;
             /** Events Download */
             events_download: string;
             /** Logs */
@@ -3171,10 +3160,10 @@ export type components = {
              * @default false
              */
             has_output: boolean;
-            /** Output Path */
-            output_path?: string | null;
-            /** Processed File */
-            processed_file?: string | null;
+            /** Fileversionid */
+            fileVersionId?: string | null;
+            /** Versionno */
+            versionNo?: number | null;
         };
         /**
          * RunOutputSheet
@@ -3262,8 +3251,6 @@ export type components = {
             input?: components["schemas"]["RunInput"];
             output?: components["schemas"]["RunOutput"];
             links: components["schemas"]["RunLinks"];
-            /** Events Stream Url */
-            events_stream_url?: string | null;
             /** Events Download Url */
             events_download_url?: string | null;
         };
@@ -6425,6 +6412,14 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Document name already exists. */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Uploaded file exceeds the configured size limit. */
             413: {
                 headers: {
@@ -6446,71 +6441,67 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    list_document_changes_api_v1_workspaces__workspaceId__documents_changes_get: {
+    upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post: {
         parameters: {
-            query?: {
-                /** @description Cursor token. */
-                cursor?: string | null;
-                limit?: number;
-                includeRows?: boolean;
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
             };
-            header?: never;
             path: {
                 /** @description Workspace identifier */
                 workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentChangesPage"];
+                    "application/json": components["schemas"]["DocumentOut"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Authentication required to upload document versions. */
+            401: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    stream_document_changes_api_v1_workspaces__workspaceId__documents_changes_stream_get: {
-        parameters: {
-            query?: {
-                /** @description Cursor token. */
-                cursor?: string | null;
-                includeRows?: boolean;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
+            /** @description Workspace permissions do not allow document uploads. */
+            403: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Uploaded file exceeds the configured size limit. */
+            413: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -7165,6 +7156,68 @@ export interface operations {
                 content?: never;
             };
             /** @description Document is missing or its stored file is unavailable. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    download_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions__versionNo__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+                versionNo: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Authentication required to download documents. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document downloads. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document or version not found within the workspace. */
             404: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -8592,43 +8645,6 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    stream_run_events_endpoint_api_v1_runs__runId__events_stream_get: {
-        parameters: {
-            query?: {
-                after_sequence?: number | null;
-            };
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                runId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
     download_run_events_file_endpoint_api_v1_runs__runId__events_download_get: {
         parameters: {
             query?: never;
@@ -8647,7 +8663,9 @@ export interface operations {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Events unavailable */
             404: {
@@ -8713,6 +8731,71 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    upload_run_output_endpoint_api_v1_runs__runId__output_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Run identifier */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_run_output_endpoint_api_v1_runs__runId__output_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutput"];
+                };
+            };
+            /** @description Run or input document not found */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Run output cannot be uploaded yet */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Uploaded file exceeds the configured size limit. */
+            413: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     download_run_output_endpoint_api_v1_runs__runId__output_download_get: {
         parameters: {
             query?: never;
@@ -8731,7 +8814,9 @@ export interface operations {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Output not found */
             404: {

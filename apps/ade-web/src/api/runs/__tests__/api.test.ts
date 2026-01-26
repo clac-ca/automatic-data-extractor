@@ -5,43 +5,13 @@ import { createRun, runEventsUrl, streamRunEvents, streamRunEventsForRun } from 
 import type { RunResource } from "@/api/runs/api";
 import type { RunStreamEvent } from "@/types/runs";
 
-const encoder = new TextEncoder();
-
-function createSseStream(lineEnding = "\n") {
-  let closed = false;
-  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
-  const stream = new ReadableStream<Uint8Array>({
-    start(ctrl) {
-      controller = ctrl;
-    },
-  });
-  return {
-    stream,
-    emit(event: RunStreamEvent) {
-      if (closed) return;
-      const payload = `event: ${event.event}${lineEnding}data: ${JSON.stringify(event)}${lineEnding}${lineEnding}`;
-      controller?.enqueue(encoder.encode(payload));
-    },
-    close() {
-      if (closed) return;
-      closed = true;
-      try {
-        controller?.close();
-      } catch {
-        // stream already closed
-      }
-    },
-  };
-}
-
-function mockSseFetch(lineEnding?: string) {
-  const sse = createSseStream(lineEnding);
-  const response = new Response(sse.stream, {
+function mockNdjsonFetch(body: string) {
+  const response = new Response(body, {
     status: 200,
-    headers: { "Content-Type": "text/event-stream" },
+    headers: { "Content-Type": "application/x-ndjson" },
   });
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(response);
-  return { sse, fetchMock };
+  return { fetchMock };
 }
 
 const sampleRunResource = {
@@ -53,15 +23,13 @@ const sampleRunResource = {
   created_at: "2025-01-01T00:00:00Z",
   links: {
     self: "/api/v1/runs/run-123",
-    events: "/api/v1/runs/run-123/events",
-    events_stream: "/api/v1/runs/run-123/events/stream",
     events_download: "/api/v1/runs/run-123/events/download",
-    logs: "/api/v1/runs/run-123/logs",
+    logs: "/api/v1/runs/run-123/events/download",
     input: "/api/v1/runs/run-123/input",
     input_download: "/api/v1/runs/run-123/input/download",
-    output: "/api/v1/runs/run-123/output",
+    output: "/api/v1/runs/run-123/output/download",
     output_download: "/api/v1/runs/run-123/output/download",
-    output_metadata: "/api/v1/runs/run-123/output/metadata",
+    output_metadata: "/api/v1/runs/run-123/output",
   },
 } satisfies RunResource;
 
@@ -74,66 +42,25 @@ afterEach(() => {
 });
 
 describe("streamRunEvents", () => {
-  it("consumes any SSE event type", async () => {
-    const { sse } = mockSseFetch();
-    const iterator = streamRunEvents("http://example.com/stream");
-
-    const pending = iterator.next();
-    await Promise.resolve();
-
+  it("parses NDJSON event streams", async () => {
     const runEvent: RunStreamEvent = { event: "engine.phase.start", timestamp: "2025-01-01T00:00:00Z" };
-    sse.emit(runEvent);
-
-    const result = await pending;
-    expect(result.done).toBe(false);
-    expect(result.value).toMatchObject(runEvent);
-
-    await iterator.return?.(undefined);
-    sse.close();
-  });
-
-  it("closes the stream after run completion", async () => {
-    const { sse } = mockSseFetch();
-    const iterator = streamRunEvents("http://example.com/stream");
-
-    const first = iterator.next();
-    await Promise.resolve();
-
-    const startEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
     const completedEvent: RunStreamEvent = {
       event: "run.complete",
       timestamp: "2025-01-01T00:05:00Z",
       data: { status: "succeeded" },
     };
-
-    sse.emit(startEvent);
-    expect((await first).value).toMatchObject(startEvent);
-
-    const second = iterator.next();
-    sse.emit(completedEvent);
-    expect((await second).value).toMatchObject(completedEvent);
-
-    sse.close();
-    const done = await iterator.next();
-    expect(done.done).toBe(true);
-  });
-
-  it("parses CRLF-delimited SSE events", async () => {
-    const { sse } = mockSseFetch("\r\n");
+    const payload = `${JSON.stringify(runEvent)}\n${JSON.stringify(completedEvent)}\n`;
+    mockNdjsonFetch(payload);
     const iterator = streamRunEvents("http://example.com/stream");
 
-    const pending = iterator.next();
-    await Promise.resolve();
+    const events = [];
+    for await (const evt of iterator) {
+      events.push(evt);
+    }
 
-    const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
-    sse.emit(runEvent);
-
-    const result = await pending;
-    expect(result.done).toBe(false);
-    expect(result.value).toMatchObject(runEvent);
-
-    await iterator.return?.(undefined);
-    sse.close();
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject(runEvent);
+    expect(events[1]).toMatchObject(completedEvent);
   });
 });
 
@@ -188,27 +115,23 @@ describe("createRun", () => {
 });
 
 describe("runEventsUrl helpers", () => {
-  it("builds streaming event URLs with sequence parameters", () => {
+  it("builds event download URLs", () => {
     const url = runEventsUrl(sampleRunResource, { afterSequence: 42 });
-    expect(url).toContain("/api/v1/runs/run-123/events/stream");
-    expect(url).toContain("after_sequence=42");
+    expect(url).toContain("/api/v1/runs/run-123/events/download");
   });
 
-  it("streams events for an existing run resource", async () => {
-    const { sse, fetchMock } = mockSseFetch();
-    const iterator = streamRunEventsForRun(sampleRunResource, { afterSequence: 3 });
-    const pending = iterator.next();
-    await Promise.resolve();
+  it("streams events for a completed run resource", async () => {
+    const completedRun = { ...sampleRunResource, status: "succeeded" } satisfies RunResource;
+    const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
+    const payload = `${JSON.stringify(runEvent)}\n`;
+    const { fetchMock } = mockNdjsonFetch(payload);
+
+    const iterator = streamRunEventsForRun(completedRun, { afterSequence: 3 });
+    const result = await iterator.next();
 
     const [url] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
-    expect(String(url)).toContain("after_sequence=3");
-
-    const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
-    sse.emit(runEvent);
-    const result = await pending;
+    expect(String(url)).toContain("/api/v1/runs/run-123/events/download");
     expect(result.value).toMatchObject(runEvent);
     await iterator.return?.(undefined);
-    sse.close();
   });
 });

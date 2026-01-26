@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import anyio
 from datetime import UTC, datetime, timedelta
+import unicodedata
 from uuid import uuid4
 
 from ade_api.core.security.hashing import hash_password
@@ -11,9 +12,11 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.models import (
     Configuration,
     ConfigurationStatus,
-    Document,
-    DocumentSource,
-    DocumentTag,
+    File,
+    FileKind,
+    FileTag,
+    FileVersion,
+    FileVersionOrigin,
     Run,
     RunStatus,
     User,
@@ -23,6 +26,69 @@ from ade_api.models import (
 
 async def _flush(session) -> None:
     await anyio.to_thread.run_sync(session.flush)
+
+
+def _build_name_key(name: str) -> str:
+    normalized = unicodedata.normalize("NFKC", name)
+    collapsed = " ".join(normalized.split())
+    return collapsed.casefold()
+
+
+async def _create_document_file(
+    session,
+    *,
+    workspace_id,
+    name: str,
+    uploader_id,
+    content_type: str,
+    byte_size: int,
+    sha256: str,
+    expires_at: datetime,
+    tags: list[str] | None = None,
+    attributes: dict | None = None,
+) -> tuple[File, FileVersion]:
+    file_id = generate_uuid7()
+    version_id = generate_uuid7()
+    name_key = _build_name_key(name)
+    blob_name = f"{workspace_id}/files/{file_id}"
+
+    document = File(
+        id=file_id,
+        workspace_id=workspace_id,
+        kind=FileKind.DOCUMENT,
+        doc_no=None,
+        name=name,
+        name_key=name_key,
+        blob_name=blob_name,
+        parent_file_id=None,
+        attributes=attributes or {},
+        uploaded_by_user_id=uploader_id,
+        expires_at=expires_at,
+        comment_count=0,
+        version=1,
+    )
+
+    version = FileVersion(
+        id=version_id,
+        file_id=file_id,
+        version_no=1,
+        origin=FileVersionOrigin.UPLOADED,
+        created_by_user_id=uploader_id,
+        sha256=sha256,
+        byte_size=byte_size,
+        content_type=content_type,
+        filename_at_upload=name,
+        blob_version_id="v1",
+    )
+
+    document.current_version = version
+    document.versions.append(version)
+    if tags:
+        document.tags.extend([FileTag(file_id=file_id, tag=tag) for tag in tags])
+
+    session.add_all([document, version])
+    await _flush(session)
+    return document, version
 
 
 async def build_documents_fixture(session):
@@ -47,37 +113,28 @@ async def build_documents_fixture(session):
     now = datetime.now(tz=UTC)
     expires = now + timedelta(days=30)
 
-    processed = Document(
-        id=generate_uuid7(),
+    processed, processed_version = await _create_document_file(
+        session,
         workspace_id=workspace.id,
-        original_filename="alpha-report.pdf",
+        name="alpha-report.pdf",
+        uploader_id=uploader.id,
         content_type="application/pdf",
         byte_size=512,
         sha256="a" * 64,
-        stored_uri="alpha-report",
-        attributes={},
-        uploaded_by_user_id=uploader.id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
+        tags=["finance"],
     )
-    processed.tags.append(DocumentTag(document_id=processed.id, tag="finance"))
 
-    uploaded = Document(
-        id=generate_uuid7(),
+    uploaded, _uploaded_version = await _create_document_file(
+        session,
         workspace_id=workspace.id,
-        original_filename="zeta-draft.docx",
+        name="zeta-draft.docx",
+        uploader_id=colleague.id,
         content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         byte_size=128,
         sha256="b" * 64,
-        stored_uri="zeta-draft",
-        attributes={},
-        uploaded_by_user_id=colleague.id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
     )
-
-    session.add_all([processed, uploaded])
-    await _flush(session)
 
     configuration_id = await ensure_configuration(session, workspace.id)
     run = Run(
@@ -86,7 +143,7 @@ async def build_documents_fixture(session):
         configuration_id=configuration_id,
         submitted_by_user_id=uploader.id,
         status=RunStatus.SUCCEEDED,
-        input_document_id=processed.id,
+        input_file_version_id=processed_version.id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
         created_at=now - timedelta(hours=2),
@@ -136,72 +193,52 @@ async def build_tag_filter_fixture(session):
     now = datetime.now(tz=UTC)
     expires = now + timedelta(days=30)
 
-    doc_all = Document(
-        id=generate_uuid7(),
+    doc_all, _ = await _create_document_file(
+        session,
         workspace_id=workspace.id,
-        original_filename="alpha.csv",
+        name="alpha.csv",
+        uploader_id=uploader.id,
         content_type="text/csv",
         byte_size=200,
         sha256="c" * 64,
-        stored_uri="alpha",
-        attributes={},
-        uploaded_by_user_id=uploader.id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
-    )
-    doc_all.tags.extend(
-        [
-            DocumentTag(document_id=doc_all.id, tag="finance"),
-            DocumentTag(document_id=doc_all.id, tag="priority"),
-        ]
+        tags=["finance", "priority"],
     )
 
-    doc_finance = Document(
-        id=generate_uuid7(),
+    doc_finance, _ = await _create_document_file(
+        session,
         workspace_id=workspace.id,
-        original_filename="bravo.csv",
+        name="bravo.csv",
+        uploader_id=uploader.id,
         content_type="text/csv",
         byte_size=201,
         sha256="d" * 64,
-        stored_uri="bravo",
-        attributes={},
-        uploaded_by_user_id=uploader.id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
+        tags=["finance"],
     )
-    doc_finance.tags.append(DocumentTag(document_id=doc_finance.id, tag="finance"))
 
-    doc_priority = Document(
-        id=generate_uuid7(),
+    doc_priority, _ = await _create_document_file(
+        session,
         workspace_id=workspace.id,
-        original_filename="charlie.csv",
+        name="charlie.csv",
+        uploader_id=uploader.id,
         content_type="text/csv",
         byte_size=202,
         sha256="e" * 64,
-        stored_uri="charlie",
-        attributes={},
-        uploaded_by_user_id=uploader.id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
+        tags=["priority"],
     )
-    doc_priority.tags.append(DocumentTag(document_id=doc_priority.id, tag="priority"))
 
-    doc_empty = Document(
-        id=generate_uuid7(),
+    doc_empty, _ = await _create_document_file(
+        session,
         workspace_id=workspace.id,
-        original_filename="delta.csv",
+        name="delta.csv",
+        uploader_id=uploader.id,
         content_type="text/csv",
         byte_size=203,
         sha256="f" * 64,
-        stored_uri="delta",
-        attributes={},
-        uploaded_by_user_id=uploader.id,
-        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
     )
-
-    session.add_all([doc_all, doc_finance, doc_priority, doc_empty])
-    await _flush(session)
 
     return workspace, uploader, doc_all, doc_finance, doc_priority, doc_empty
 
@@ -209,13 +246,16 @@ async def build_tag_filter_fixture(session):
 async def seed_failed_run(session, *, workspace_id, document_id, uploader_id):
     now = datetime.now(tz=UTC)
     configuration_id = await ensure_configuration(session, workspace_id)
+    document = session.get(File, document_id)
+    if document is None or document.current_version_id is None:
+        raise RuntimeError("Document is missing or has no current version for run seeding.")
     run = Run(
         id=generate_uuid7(),
         workspace_id=workspace_id,
         configuration_id=configuration_id,
         submitted_by_user_id=uploader_id,
         status=RunStatus.FAILED,
-        input_document_id=document_id,
+        input_file_version_id=document.current_version_id,
         engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
         deps_digest="sha256:2e1cfa82b035c26cbbbdae632cea070514eb8b773f616aaeaf668e2f0be8f10d",
         created_at=now - timedelta(minutes=10),
@@ -223,9 +263,7 @@ async def seed_failed_run(session, *, workspace_id, document_id, uploader_id):
         completed_at=now - timedelta(minutes=1),
         error_message="Request failed with status 404",
     )
-    document = session.get(Document, document_id)
-    if document is not None:
-        document.last_run_id = run.id
+    document.last_run_id = run.id
     session.add(run)
     await _flush(session)
     return run

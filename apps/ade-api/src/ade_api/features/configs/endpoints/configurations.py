@@ -231,7 +231,7 @@ def import_configuration(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
     except ConfigImportError as exc:
         status_code = (
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            status.HTTP_413_CONTENT_TOO_LARGE
             if exc.code == "archive_too_large" and exc.limit
             else status.HTTP_400_BAD_REQUEST
         )
@@ -459,7 +459,7 @@ def replace_configuration_from_archive(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     except ConfigImportError as exc:
         status_code = (
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            status.HTTP_413_CONTENT_TOO_LARGE
             if exc.code == "archive_too_large" and exc.limit
             else status.HTTP_400_BAD_REQUEST
         )

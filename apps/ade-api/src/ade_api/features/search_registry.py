@@ -8,8 +8,9 @@ from ade_api.common.search import SearchField, SearchRegistry, build_like_predic
 from ade_api.models import (
     ApiKey,
     Configuration,
-    Document,
-    DocumentTag,
+    File,
+    FileTag,
+    FileVersion,
     Permission,
     Role,
     Run,
@@ -54,16 +55,16 @@ _ASSIGNMENT_SCOPE_TYPE = case(
 SEARCH_REGISTRY = SearchRegistry(
     {
         "documents": [
-            _field("name", Document.original_filename),
-            _has_field("uploaderName", Document.uploaded_by_user, User.display_name),
-            _has_field("uploaderEmail", Document.uploaded_by_user, User.email),
-            _any_field("tags", Document.tags, DocumentTag.tag),
+            _field("name", File.name),
+            _has_field("uploaderName", File.uploaded_by_user, User.display_name),
+            _has_field("uploaderEmail", File.uploaded_by_user, User.email),
+            _any_field("tags", File.tags, FileTag.tag),
         ],
         "runs": [
             _field_cast("id", Run.id),
             _field_cast("status", Run.status),
             _field_cast("configurationId", Run.configuration_id),
-            _field("inputFilename", Document.original_filename),
+            _field("inputFilename", FileVersion.filename_at_upload),
         ],
         "configurations": [
             _field("displayName", Configuration.display_name),

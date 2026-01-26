@@ -7,10 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
-  fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
-  type DocumentChangeEntry,
-  type DocumentListRow,
   type DocumentRecord,
   type DocumentUploadResponse,
 } from "@/api/documents";
@@ -42,7 +39,6 @@ import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
-import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 
 type CurrentUser = {
@@ -55,8 +51,6 @@ type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
 type RowMutation = "delete" | "assign" | "tags";
-
-type HydratedChange = DocumentChangeEntry & { row?: DocumentListRow | null };
 
 function tagKey(value: string) {
   return value.trim().toLowerCase();
@@ -348,9 +342,19 @@ export function DocumentsTableView({
     [notifyToast, openDownload],
   );
 
-  const handleDownloadOriginal = useCallback(
+  const handleDownloadLatest = useCallback(
     (document: DocumentRow) => {
       const url = resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`);
+      openDownload(url);
+    },
+    [openDownload, workspaceId],
+  );
+
+  const handleDownloadVersion = useCallback(
+    (document: DocumentRow, versionNo: number) => {
+      const url = resolveApiUrl(
+        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/versions/${versionNo}/download`,
+      );
       openDownload(url);
     },
     [openDownload, workspaceId],
@@ -493,56 +497,6 @@ export function DocumentsTableView({
     }
   }, [clearRowPending, deleteTarget, markRowPending, notifyToast, removeRow, workspaceId]);
 
-  const hydrateChange = useCallback(
-    async (entry: DocumentChangeEntry): Promise<HydratedChange> => {
-      if (entry.type === "document.deleted") {
-        return entry;
-      }
-      if (!entry.documentId) {
-        return entry;
-      }
-      if (entry.row) {
-        return entry as HydratedChange;
-      }
-      try {
-        const row = await fetchWorkspaceDocumentRowById(workspaceId, entry.documentId);
-        return { ...entry, row };
-      } catch {
-        return entry;
-      }
-    },
-    [workspaceId],
-  );
-
-  const applyIncomingChanges = useCallback(
-    (entries: HydratedChange[]) => {
-      entries.forEach((entry) => {
-        if (entry.type === "document.changed") {
-          if (entry.row) {
-            upsertRow(entry.row);
-          }
-        } else if (entry.type === "document.deleted") {
-          if (entry.documentId) {
-            removeRow(entry.documentId);
-          }
-        }
-      });
-    },
-    [removeRow, upsertRow],
-  );
-
-  useWorkspaceDocumentsChanges(
-    useCallback(
-      (change) => {
-        void (async () => {
-          const hydrated = await hydrateChange(change);
-          applyIncomingChanges([hydrated]);
-        })();
-      },
-      [applyIncomingChanges, hydrateChange],
-    ),
-  );
-
   const columns = useDocumentsColumns({
     filterMode,
     people,
@@ -555,7 +509,8 @@ export function DocumentsTableView({
     onTagOptionsChange: handleTagOptionsChange,
     onDeleteRequest,
     onDownloadOutput: handleDownloadOutput,
-    onDownloadOriginal: handleDownloadOriginal,
+    onDownloadLatest: handleDownloadLatest,
+    onDownloadVersion: handleDownloadVersion,
     isRowActionPending: isRowMutationPending,
   });
 

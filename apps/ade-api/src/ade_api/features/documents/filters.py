@@ -17,7 +17,7 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_api.models import Document, DocumentSource, DocumentTag, Run, RunStatus
+from ade_api.models import File, FileTag, FileVersion, FileVersionOrigin, Run, RunStatus
 from ade_api.settings import MAX_SET_SIZE
 
 from .tags import TagValidationError, normalize_tag_set
@@ -25,12 +25,38 @@ from .tags import TagValidationError, normalize_tag_set
 ALLOWED_FILE_TYPES = {"xlsx", "xls", "csv", "pdf"}
 
 
+def _current_version_byte_size_expr():
+    return (
+        select(FileVersion.byte_size)
+        .where(FileVersion.id == File.current_version_id)
+        .scalar_subquery()
+    )
+
+
+def _current_version_content_type_expr():
+    return (
+        select(FileVersion.content_type)
+        .where(FileVersion.id == File.current_version_id)
+        .scalar_subquery()
+    )
+
+
+def _current_version_origin_expr():
+    return (
+        select(FileVersion.origin)
+        .where(FileVersion.id == File.current_version_id)
+        .scalar_subquery()
+    )
+
+
 def _last_run_at_expr():
     return (
         select(func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at)))
+        .select_from(Run)
+        .join(FileVersion, Run.input_file_version_id == FileVersion.id)
         .where(
-            Run.input_document_id == Document.id,
-            Run.workspace_id == Document.workspace_id,
+            FileVersion.file_id == File.id,
+            Run.workspace_id == File.workspace_id,
         )
         .scalar_subquery()
     )
@@ -39,10 +65,10 @@ def _last_run_at_expr():
 def _activity_at_expr():
     last_run_at = _last_run_at_expr()
     return case(
-        (last_run_at.is_(None), Document.updated_at),
-        (Document.updated_at.is_(None), last_run_at),
-        (last_run_at > Document.updated_at, last_run_at),
-        else_=Document.updated_at,
+        (last_run_at.is_(None), File.updated_at),
+        (File.updated_at.is_(None), last_run_at),
+        (last_run_at > File.updated_at, last_run_at),
+        else_=File.updated_at,
     )
 
 
@@ -50,7 +76,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
     [
         FilterField(
             id="name",
-            column=Document.original_filename,
+            column=File.name,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.NE,
@@ -76,7 +102,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="fileType",
-            column=Document.original_filename,
+            column=File.name,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.IN,
@@ -88,7 +114,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="tags",
-            column=DocumentTag.tag,
+            column=FileTag.tag,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.IN,
@@ -100,7 +126,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="assigneeId",
-            column=Document.assignee_user_id,
+            column=File.assignee_user_id,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.IN,
@@ -112,7 +138,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="uploaderId",
-            column=Document.uploaded_by_user_id,
+            column=File.uploaded_by_user_id,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.IN,
@@ -124,7 +150,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="createdAt",
-            column=Document.created_at,
+            column=File.created_at,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.NE,
@@ -140,7 +166,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="updatedAt",
-            column=Document.updated_at,
+            column=File.updated_at,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.NE,
@@ -172,7 +198,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="byteSize",
-            column=Document.byte_size,
+            column=_current_version_byte_size_expr(),
             operators={
                 FilterOperator.EQ,
                 FilterOperator.NE,
@@ -196,7 +222,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="source",
-            column=Document.source,
+            column=_current_version_origin_expr(),
             operators={
                 FilterOperator.EQ,
                 FilterOperator.IN,
@@ -205,7 +231,7 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry(
                 FilterOperator.IS_NOT_EMPTY,
             },
             value_type=FilterValueType.ENUM,
-            enum_type=DocumentSource,
+            enum_type=FileVersionOrigin,
         ),
     ]
 )
@@ -232,21 +258,23 @@ def apply_document_filters(
                 timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
                 last_run_subquery = (
                     select(
-                        Run.input_document_id.label("document_id"),
+                        FileVersion.file_id.label("file_id"),
                         Run.status.label("status"),
                         func.row_number()
                         .over(
-                            partition_by=Run.input_document_id,
+                            partition_by=FileVersion.file_id,
                             order_by=timestamp.desc(),
                         )
                         .label("rank"),
                     )
-                    .where(Run.input_document_id.is_not(None))
+                    .select_from(Run)
+                    .join(FileVersion, Run.input_file_version_id == FileVersion.id)
+                    .where(Run.input_file_version_id.is_not(None))
                     .subquery()
                 )
                 stmt = stmt.outerjoin(
                     last_run_subquery,
-                    (last_run_subquery.c.document_id == Document.id)
+                    (last_run_subquery.c.file_id == File.id)
                     & (last_run_subquery.c.rank == 1),
                 )
                 status_expr = last_run_subquery.c.status
@@ -317,8 +345,8 @@ def apply_document_filters(
                     status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Invalid file type value(s): {', '.join(invalid)}",
                 )
-            lower_name = func.lower(Document.original_filename)
-            lower_type = func.lower(Document.content_type)
+            lower_name = func.lower(File.name)
+            lower_type = func.lower(_current_version_content_type_expr())
             type_predicates = []
             if "xlsx" in normalized:
                 type_predicates.append(
@@ -342,10 +370,10 @@ def apply_document_filters(
 
         if filter_id == "tags":
             if parsed.operator == FilterOperator.IS_EMPTY:
-                predicates.append(~Document.tags.any())
+                predicates.append(~File.tags.any())
                 continue
             if parsed.operator == FilterOperator.IS_NOT_EMPTY:
-                predicates.append(Document.tags.any())
+                predicates.append(File.tags.any())
                 continue
 
             values = parsed.value
@@ -359,9 +387,9 @@ def apply_document_filters(
             if not normalized:
                 continue
             if parsed.operator == FilterOperator.EQ:
-                predicates.append(Document.tags.any(DocumentTag.tag == next(iter(normalized))))
+                predicates.append(File.tags.any(FileTag.tag == next(iter(normalized))))
                 continue
-            predicate = Document.tags.any(DocumentTag.tag.in_(sorted(normalized)))
+            predicate = File.tags.any(FileTag.tag.in_(sorted(normalized)))
             if parsed.operator == FilterOperator.NOT_IN:
                 predicate = ~predicate
             predicates.append(predicate)
@@ -375,10 +403,13 @@ def apply_document_filters(
                 )
             output_exists = (
                 select(Run.id)
+                .select_from(Run)
+                .join(FileVersion, Run.input_file_version_id == FileVersion.id)
                 .where(
-                    Run.workspace_id == Document.workspace_id,
-                    Run.input_document_id == Document.id,
+                    Run.workspace_id == File.workspace_id,
+                    FileVersion.file_id == File.id,
                     Run.status == RunStatus.SUCCEEDED,
+                    Run.output_file_version_id.is_not(None),
                 )
                 .exists()
             )

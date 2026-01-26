@@ -8,13 +8,13 @@ from sqlalchemy.orm import sessionmaker
 
 from ade_worker import db
 from ade_worker.schema import (
-    documents,
     environments,
     run_fields,
     run_metrics,
     run_table_columns,
     runs,
 )
+from .helpers import seed_file_with_version
 
 
 def _uuid() -> str:
@@ -30,18 +30,24 @@ def _insert_run(
     engine_spec: str,
     deps_digest: str,
     now: datetime,
-    input_document_id: str | None = None,
+    input_file_version_id: str | None = None,
 ) -> None:
+    if not input_file_version_id:
+        _, input_file_version_id = seed_file_with_version(
+            engine,
+            workspace_id=workspace_id,
+            now=now,
+        )
     with engine.begin() as conn:
         conn.execute(
             insert(runs).values(
                 id=run_id,
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                input_document_id=input_document_id or _uuid(),
+                input_file_version_id=input_file_version_id,
+                output_file_version_id=None,
                 input_sheet_names=None,
                 run_options=None,
-                output_path=None,
                 engine_spec=engine_spec,
                 deps_digest=deps_digest,
                 status="queued",
@@ -55,21 +61,6 @@ def _insert_run(
                 created_at=now - timedelta(minutes=5),
                 started_at=None,
                 completed_at=None,
-            )
-        )
-
-
-def _insert_document(engine, *, document_id: str, workspace_id: str, now: datetime) -> None:
-    with engine.begin() as conn:
-        conn.execute(
-            insert(documents).values(
-                id=document_id,
-                workspace_id=workspace_id,
-                original_filename="input.xlsx",
-                stored_uri="file:documents/input.xlsx",
-                last_run_id=None,
-                version=1,
-                updated_at=now - timedelta(minutes=1),
             )
         )
 
@@ -174,7 +165,7 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
 
     env = db.ensure_environment(SessionLocal, run=run, now=now)
     assert env is not None
-    assert env["id"] == env_id
+    assert str(env["id"]) == env_id
     assert env["status"] == "failed"
 
 

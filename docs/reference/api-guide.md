@@ -125,8 +125,8 @@ Response envelope:
 }
 ```
 
-`changesCursor` is a snapshot watermark. For resources without change feeds it
-is omitted or `null`.
+`changesCursor` is a legacy snapshot watermark. Change feeds are deprecated, so
+the value is always `null` or `"0"`.
 
 Filter operators follow the Tablecn DSL (for example `eq`, `in`, `between`,
 `iLike`, `isEmpty`). Values must match the operator shape (arrays for `in`,
@@ -153,20 +153,14 @@ two-element arrays for `between`, etc.).
 
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
-- `GET /workspaces/{workspaceId}/documents` – list documents with pagination, sorting, and filters; includes a `changesCursor`
-  watermark in the response body and `X-Ade-Changes-Cursor` header.
-- `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand).
+- `GET /workspaces/{workspaceId}/documents` – list documents with pagination, sorting, and filters.
+- `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand). Pass `conflictMode=upload_new_version` or `conflictMode=keep_both` to resolve name collisions (default is `409`).
 - `GET /workspaces/{workspaceId}/documents/{documentId}` – fetch metadata, including upload timestamps and submitter.
+- `POST /workspaces/{workspaceId}/documents/{documentId}/versions` – upload a new document version (same identity, new version number).
 - `GET /workspaces/{workspaceId}/documents/{documentId}/download` – download the stored file with a safe `Content-Disposition` header.
+- `GET /workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download` – download a specific historical version.
 - `GET /workspaces/{workspaceId}/documents/{documentId}/sheets` – enumerate worksheets for spreadsheet uploads by inspecting the stored file (falls back to a single-sheet descriptor for other file types; returns `422` when parsing fails).
 - `DELETE /workspaces/{workspaceId}/documents/{documentId}` – remove a document, if permitted.
-
-**Change feed + streaming**
-
-- `GET /workspaces/{workspaceId}/documents/changes?cursor=<int>` – cursor-based change feed (use `nextCursor` as the new cursor).
-- `GET /workspaces/{workspaceId}/documents/changes/stream?cursor=<int>` – SSE stream of the same feed; honors `Last-Event-ID` or `cursor`.
-- When a cursor is too old the API returns `410` with `{"error": "resync_required", "oldestCursor": "...", "latestCursor": "..."}`.
-- Change entries are minimal (`documentId`, `documentVersion`, `occurredAt`); clients fetch the latest row on `document.changed`.
 
 **Resumable upload sessions (large files)**
 
@@ -184,12 +178,11 @@ Trigger and monitor extraction runs. Creation is configuration-scoped; reads are
 - `POST /configurations/{configurationId}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection).
 - `GET /workspaces/{workspaceId}/runs` – list recent runs for a workspace; use the filter DSL for status or source document filters.
 - `GET /runs/{runId}` – retrieve run metadata (status, timing, configuration, input/output hints).
-- `GET /runs/{runId}/events` – fetch structured events (JSON or NDJSON).
-- `GET /runs/{runId}/events/stream` – SSE stream of the run event log.
+- `GET /runs/{runId}/events/download` – download the NDJSON event log.
 - `GET /runs/{runId}/input` – fetch input metadata; `GET /runs/{runId}/input/download` downloads the original file.
 - `GET /runs/{runId}/output` – fetch output metadata (`ready`, size, content type, download URL).
+- `POST /runs/{runId}/output` – upload a manual output version (does not enqueue a run).
 - `GET /runs/{runId}/output/download` – download the normalized output; returns `409` when not ready.
-- `GET /runs/{runId}/events/download` – download the NDJSON event log.
 
 ### Configurations
 

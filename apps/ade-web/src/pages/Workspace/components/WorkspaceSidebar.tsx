@@ -1,18 +1,15 @@
 import { useCallback, useMemo, useState, type HTMLAttributes } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Check, ChevronDown, ChevronsUpDown, FileText, LayoutGrid, PlayCircle, Plus, Settings, Wrench } from "lucide-react";
 
 import {
   fetchWorkspaceDocuments,
-  type DocumentChangeEntry,
   type DocumentListRow,
-  type DocumentPageResult,
 } from "@/api/documents";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 import { useSession } from "@/providers/auth/SessionContext";
-import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -106,7 +103,6 @@ type AssignedDocumentItemProps = {
 
 export function WorkspaceSidebar() {
   const session = useSession();
-  const queryClient = useQueryClient();
   const { workspace, workspaces } = useWorkspaceContext();
   const presence = useWorkspacePresence();
   const { pathname } = useLocation();
@@ -213,43 +209,6 @@ export function WorkspaceSidebar() {
   const handleUploadDocuments = useCallback(() => {
     navigate(links.documents, { state: { openUpload: true } });
   }, [navigate, links.documents]);
-
-  const updateAssignedDocuments = useCallback(
-    (change: DocumentChangeEntry) => {
-      const userId = session.user?.id;
-      if (!userId) return;
-      queryClient.setQueryData<DocumentPageResult | undefined>(assignedDocumentsKey, (current) => {
-        if (!current) return current;
-        const items = current.items ?? [];
-        if (change.type === "document.deleted") {
-          return {
-            ...current,
-            items: items.filter((item) => item.id !== change.documentId),
-          };
-        }
-        const row = change.row;
-        if (!row) return current;
-        const isAssignedToUser = row.assignee?.id === userId;
-        const filtered = items.filter((item) => item.id !== change.documentId);
-        if (!isAssignedToUser) {
-          return {
-            ...current,
-            items: filtered,
-          };
-        }
-        const nextItems = [...filtered, row].sort(
-          (a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0),
-        );
-        return {
-          ...current,
-          items: nextItems.slice(0, ASSIGNED_DOCUMENTS_LIMIT),
-        };
-      });
-    },
-    [assignedDocumentsKey, queryClient, session.user?.id],
-  );
-
-  useWorkspaceDocumentsChanges(updateAssignedDocuments);
 
   return (
     <Sidebar

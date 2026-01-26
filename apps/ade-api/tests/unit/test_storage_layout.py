@@ -13,7 +13,12 @@ from ade_api.settings import Settings
 
 
 def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = Settings(_env_file=None, data_dir=tmp_path / "data")
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        storage_backend="filesystem",
+    )
 
     workspace_id = "acme-ws"
     config_id = "cfg-01"
@@ -21,7 +26,7 @@ def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     base = (tmp_path / "data" / "workspaces" / workspace_id).resolve()
     assert workspace_root(settings, workspace_id) == base
-    assert workspace_documents_root(settings, workspace_id) == base / "documents"
+    assert workspace_documents_root(settings, workspace_id) == base / "files"
     assert (
         workspace_config_root(
             settings,
@@ -39,14 +44,19 @@ def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 
 def test_workspace_layout_uses_data_dir(tmp_path: Path) -> None:
-    settings = Settings(_env_file=None, data_dir=tmp_path / "data-root")
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data-root",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        storage_backend="filesystem",
+    )
 
     workspace_id = "override-ws"
     config_id = "cfg-99"
 
     assert (
         workspace_documents_root(settings, workspace_id)
-        == (tmp_path / "data-root" / "workspaces" / workspace_id / "documents").resolve()
+        == (tmp_path / "data-root" / "workspaces" / workspace_id / "files").resolve()
     )
     assert (
         workspace_config_root(settings, workspace_id, config_id)

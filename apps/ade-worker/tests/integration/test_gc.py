@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from ade_worker.gc import gc_environments
 from ade_worker.paths import PathManager
 from ade_worker.schema import environments, runs
+from .helpers import seed_file_with_version
 
 
 def _uuid() -> str:
@@ -80,16 +81,21 @@ def _insert_run(
     status: str,
     now: datetime,
 ) -> None:
+    _, input_file_version_id = seed_file_with_version(
+        engine,
+        workspace_id=workspace_id,
+        now=now,
+    )
     with engine.begin() as conn:
         conn.execute(
             insert(runs).values(
                 id=run_id,
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                input_document_id=_uuid(),
+                input_file_version_id=input_file_version_id,
+                output_file_version_id=None,
                 input_sheet_names=None,
                 run_options=None,
-                output_path=None,
                 engine_spec=engine_spec,
                 deps_digest=deps_digest,
                 status=status,

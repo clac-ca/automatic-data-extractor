@@ -58,6 +58,7 @@ async def test_create_runs_batch_creates_runs(
 
     stored = await anyio.to_thread.run_sync(_load_runs)
     assert len(stored) == 2
-    assert {run.input_document_id for run in stored} == {doc.id for doc in documents}
+    assert {run.input_file_version_id for run in stored} == {
+        doc.current_version_id for doc in documents
+    }
     assert all(run.input_sheet_names is None for run in stored)
-

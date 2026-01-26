@@ -60,11 +60,11 @@ runs = Table(
     Column("id", UUID_TYPE, primary_key=True),
     Column("workspace_id", UUID_TYPE, nullable=False),
     Column("configuration_id", UUID_TYPE, nullable=False),
-    Column("input_document_id", UUID_TYPE, nullable=False),
+    Column("input_file_version_id", UUID_TYPE, nullable=False),
+    Column("output_file_version_id", UUID_TYPE, nullable=True),
 
     Column("input_sheet_names", JSONB, nullable=True),
     Column("run_options", JSONB, nullable=True),
-    Column("output_path", String(512), nullable=True),
     Column("engine_spec", String(255), nullable=False),
     Column("deps_digest", String(128), nullable=False),
 
@@ -87,17 +87,47 @@ runs = Table(
     Index("ix_runs_status_completed", "status", "completed_at"),
 )
 
-documents = Table(
-    "documents",
+files = Table(
+    "files",
     metadata,
     Column("id", UUID_TYPE, primary_key=True),
     Column("workspace_id", UUID_TYPE, nullable=False),
-    Column("original_filename", String(255), nullable=False),
-    Column("stored_uri", String(512), nullable=False),   # typically file:<relative-path>
-    Column("last_run_id", UUID_TYPE, nullable=True),
+    Column("kind", String(50), nullable=False),
+    Column("doc_no", Integer, nullable=True),
+    Column("name", String(255), nullable=False),
+    Column("name_key", String(255), nullable=False),
+    Column("blob_name", String(512), nullable=False),
+    Column("current_version_id", UUID_TYPE, nullable=True),
+    Column("parent_file_id", UUID_TYPE, nullable=True),
+    Column("comment_count", Integer, nullable=False),
     Column("version", Integer, nullable=False),
-    Column("updated_at", TS, nullable=False),
+    Column("attributes", JSONB, nullable=False),
+    Column("uploaded_by_user_id", UUID_TYPE, nullable=True),
+    Column("assignee_user_id", UUID_TYPE, nullable=True),
+    Column("expires_at", TS, nullable=False),
+    Column("last_run_id", UUID_TYPE, nullable=True),
     Column("deleted_at", TS, nullable=True),
+    Column("deleted_by_user_id", UUID_TYPE, nullable=True),
+    Column("created_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
+)
+
+file_versions = Table(
+    "file_versions",
+    metadata,
+    Column("id", UUID_TYPE, primary_key=True),
+    Column("file_id", UUID_TYPE, nullable=False),
+    Column("version_no", Integer, nullable=False),
+    Column("origin", String(50), nullable=False),
+    Column("run_id", UUID_TYPE, nullable=True),
+    Column("created_by_user_id", UUID_TYPE, nullable=True),
+    Column("sha256", String(64), nullable=False),
+    Column("byte_size", Integer, nullable=False),
+    Column("content_type", String(255), nullable=True),
+    Column("filename_at_upload", String(255), nullable=False),
+    Column("blob_version_id", String(128), nullable=False),
+    Column("created_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
 )
 
 run_metrics = Table(
@@ -170,7 +200,8 @@ run_table_columns = Table(
 REQUIRED_TABLES = [
     "environments",
     "runs",
-    "documents",
+    "files",
+    "file_versions",
     "run_metrics",
     "run_fields",
     "run_table_columns",
@@ -181,7 +212,8 @@ __all__ = [
     "metadata",
     "environments",
     "runs",
-    "documents",
+    "files",
+    "file_versions",
     "run_metrics",
     "run_fields",
     "run_table_columns",

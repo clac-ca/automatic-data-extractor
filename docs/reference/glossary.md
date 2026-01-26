@@ -3,7 +3,7 @@
 Shared terminology used across the Automatic Data Extractor API, database, and UI.
 
 ## Document
-A file uploaded through the documents API. Metadata and lifecycle operations are handled by [`apps/ade-api/src/ade_api/features/documents`](../../apps/ade-api/src/ade_api/features/documents). Stored bytes live under `<documents_dir>/<workspace_id>/documents/...`.
+A file uploaded through the documents API. Metadata and lifecycle operations are handled by [`apps/ade-api/src/ade_api/features/documents`](../../apps/ade-api/src/ade_api/features/documents). Stored bytes live under `<documents_dir>/<workspace_id>/files/<file_id>` for the filesystem backend (or `workspaces/<workspace_id>/files/<file_id>` in blob storage). Each document also has a simple integer `doc_no` (starting at 1) for human-friendly lookup.
 
 ## Run
 An extraction request that consumes an input document and configuration revision. Run submission and monitoring routes are defined in [`apps/ade-api/src/ade_api/features/runs`](../../apps/ade-api/src/ade_api/features/runs). Execution happens inline through the pluggable processor contract exposed by [`apps/ade-api/src/ade_api/features/runs/processor.py`](../../apps/ade-api/src/ade_api/features/runs/processor.py).

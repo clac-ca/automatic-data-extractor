@@ -6,27 +6,38 @@ import { DocumentPresenceBadges } from "../../../shared/presence/DocumentPresenc
 
 export function DocumentNameCell({
   name,
+  docNo,
   viewers,
   isSelected = false,
   onOpen,
 }: {
   name: string;
+  docNo?: number | null;
   viewers: PresenceParticipant[];
   isSelected?: boolean;
   onOpen?: () => void;
 }) {
   const content = (
     <>
-      <div
-        className={cn(
-          "truncate font-medium",
-          isSelected && "text-foreground",
-        )}
-        title={name}
-      >
-        {name}
+      <div className="flex min-w-0 items-start gap-2">
+        {typeof docNo === "number" ? (
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            #{docNo}
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <div
+            className={cn(
+              "truncate font-medium",
+              isSelected && "text-foreground",
+            )}
+            title={name}
+          >
+            {name}
+          </div>
+          <DocumentPresenceBadges participants={viewers} />
+        </div>
       </div>
-      <DocumentPresenceBadges participants={viewers} />
     </>
   );
 

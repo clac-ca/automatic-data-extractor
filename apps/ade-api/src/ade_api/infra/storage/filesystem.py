@@ -84,6 +84,7 @@ class FilesystemStorage(StorageAdapter):
         self,
         uri: str,
         *,
+        version_id: str | None = None,
         chunk_size: int = _DEFAULT_CHUNK_SIZE,
     ) -> Iterator[bytes]:
         """Yield chunks for ``uri``."""
@@ -92,14 +93,17 @@ class FilesystemStorage(StorageAdapter):
         if not path.exists():
             raise FileNotFoundError(uri)
 
-        with path.open("rb") as source:
-            while True:
-                chunk = source.read(chunk_size)
-                if not chunk:
-                    break
-                yield chunk
+        def _iter() -> Iterator[bytes]:
+            with path.open("rb") as source:
+                while True:
+                    chunk = source.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
 
-    def delete(self, uri: str) -> None:
+        return _iter()
+
+    def delete(self, uri: str, *, version_id: str | None = None) -> None:
         """Delete ``uri`` if it exists."""
 
         path = self.path_for(uri)

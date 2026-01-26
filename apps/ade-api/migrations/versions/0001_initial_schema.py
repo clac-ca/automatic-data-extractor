@@ -4,6 +4,7 @@ Notes:
 - UUID primary keys use Postgres uuidv7() defaults.
 - Enums use VARCHAR + CHECK constraints (native_enum=False).
 - JSON payloads are stored as JSONB.
+- Installs the run-queue NOTIFY trigger used by ade-worker.
 """
 
 from __future__ import annotations
@@ -73,6 +74,29 @@ def upgrade() -> None:
         """
     )
     Base.metadata.create_all(bind=bind)
+
+    op.execute(
+        """
+        DROP TRIGGER IF EXISTS trg_runs_notify_queued ON runs;
+        DROP FUNCTION IF EXISTS fn_runs_notify_queued();
+        CREATE OR REPLACE FUNCTION fn_runs_notify_queued()
+        RETURNS trigger AS $$
+        BEGIN
+            IF (TG_OP = 'INSERT' AND NEW.status = 'queued')
+               OR (TG_OP = 'UPDATE'
+                   AND NEW.status = 'queued'
+                   AND NEW.status IS DISTINCT FROM OLD.status) THEN
+                PERFORM pg_notify('ade_run_queued', NEW.id::text);
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        CREATE TRIGGER trg_runs_notify_queued
+        AFTER INSERT OR UPDATE OF status ON runs
+        FOR EACH ROW
+        EXECUTE FUNCTION fn_runs_notify_queued();
+        """
+    )
 
 
 def downgrade() -> None:  # pragma: no cover

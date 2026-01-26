@@ -4,11 +4,13 @@ import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
 export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];
+export type DocumentConflictMode = components["schemas"]["DocumentConflictMode"];
 
 interface UploadDocumentOptions {
   readonly onProgress?: (progress: UploadProgress) => void;
   readonly idempotencyKey?: string;
   readonly runOptions?: DocumentUploadRunOptions;
+  readonly conflictMode?: DocumentConflictMode;
 }
 
 export function uploadWorkspaceDocument(
@@ -20,6 +22,9 @@ export function uploadWorkspaceDocument(
   formData.append("file", file);
   if (options.runOptions) {
     formData.append("run_options", JSON.stringify(options.runOptions));
+  }
+  if (options.conflictMode) {
+    formData.append("conflictMode", options.conflictMode);
   }
   return uploadWithProgressXHR<DocumentUploadResponse>(
     `/api/v1/workspaces/${workspaceId}/documents`,

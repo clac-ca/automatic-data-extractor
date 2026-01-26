@@ -5,7 +5,7 @@ been removed from the API, and the workbench now consumes **run** streams only.
 
 Current guidance:
 
-- Use `/api/v1/runs/{runId}/events/stream` for console output.
+- Use `/api/v1/runs/{runId}/events/download` to retrieve console output after run completion.
 - Environment provisioning is worker-owned and does not have a public streaming
   endpoint in v1.
 - See `apps/ade-web/docs/09-workbench-editor-and-scripting.md` for the

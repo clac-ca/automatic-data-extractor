@@ -9,7 +9,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
-from ade_api.models import Document
+from ade_api.models import File, FileKind
 
 
 class DocumentsRepository:
@@ -18,17 +18,18 @@ class DocumentsRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def base_query(self, workspace_id: UUID) -> Select[tuple[Document]]:
+    def base_query(self, workspace_id: UUID) -> Select[tuple[File]]:
         """Return the base selectable for workspace document lookups."""
 
         return (
-            select(Document)
+            select(File)
             .options(
-                selectinload(Document.uploaded_by_user),
-                selectinload(Document.assignee_user),
-                selectinload(Document.tags),
+                selectinload(File.uploaded_by_user),
+                selectinload(File.assignee_user),
+                selectinload(File.tags),
+                selectinload(File.current_version),
             )
-            .where(Document.workspace_id == workspace_id)
+            .where(File.workspace_id == workspace_id, File.kind == FileKind.DOCUMENT)
         )
 
     def get_document(
@@ -37,21 +38,21 @@ class DocumentsRepository:
         workspace_id: UUID,
         document_id: UUID,
         include_deleted: bool = False,
-    ) -> Document | None:
+    ) -> File | None:
         """Return the document matching ``document_id`` for ``workspace_id``."""
 
-        stmt = self.base_query(workspace_id).where(Document.id == document_id)
+        stmt = self.base_query(workspace_id).where(File.id == document_id)
         if not include_deleted:
-            stmt = stmt.where(Document.deleted_at.is_(None))
+            stmt = stmt.where(File.deleted_at.is_(None))
         result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     def list_documents(
         self,
         *,
-        base_query: Select[tuple[Document]],
+        base_query: Select[tuple[File]],
         order_by: Iterable,
-    ) -> list[Document]:
+    ) -> list[File]:
         """Execute ``base_query`` applying ``order_by`` and return documents."""
 
         stmt = base_query.order_by(*order_by)

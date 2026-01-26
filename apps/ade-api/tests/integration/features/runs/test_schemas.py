@@ -33,7 +33,6 @@ def _links_for(run_id: UUID) -> RunLinks:
     base = f"/api/v1/runs/{run_str}"
     return RunLinks(
         self=base,
-        events_stream=f"{base}/events/stream",
         events_download=f"{base}/events/download",
         logs=f"{base}/events/download",
         input=f"{base}/input",

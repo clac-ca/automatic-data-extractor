@@ -44,19 +44,19 @@ async def test_workspace_run_listing_filters_by_status(
     run_ok = make_run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
-        document_id=document.id,
+        file_version_id=document.current_version_id,
         status=RunStatus.SUCCEEDED,
     )
     run_failed = make_run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
-        document_id=document.id,
+        file_version_id=document.current_version_id,
         status=RunStatus.FAILED,
     )
     run_other_workspace = make_run(
         workspace_id=seed_identity.secondary_workspace_id,
         configuration_id=other_configuration.id,
-        document_id=document_other.id,
+        file_version_id=document_other.current_version_id,
         status=RunStatus.SUCCEEDED,
     )
     db_session.add_all([run_ok, run_failed, run_other_workspace])

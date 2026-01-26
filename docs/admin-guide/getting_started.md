@@ -78,7 +78,7 @@ environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/` except the Postgres data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local Postgres dev, remove the Postgres volume after the container stops (for example: `docker volume rm <compose_project>_ade_pg_data`), then `ade dev`, `ade start`, or `ade api start` will re-run migrations on the next launch (or run `ade api migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/` except the Postgres data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local Postgres dev, remove the Postgres volume after the container stops (for example: `docker volume rm <compose_project>_ade_pg_data`), then `ade dev`, `ade start`, or `ade api start` will re-run migrations on the next launch (or run `ade api migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/files/` intact unless you intend to delete uploaded sources.
 
 ### Run API and web manually (optional)
 If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
@@ -137,7 +137,7 @@ docker rm -f ade
 
 ## 6. Where ADE Stores Data
 - Postgres data – stored in a Docker named volume for local dev (via the Postgres service).
-- `data/workspaces/<workspace_id>/documents/` – uploaded source files.
+- `data/workspaces/<workspace_id>/files/` – uploaded source files.
 - `data/logs/` *(if enabled)* – structured JSON logs.
 
 Back up the `data/` directory to retain everything you need for a full

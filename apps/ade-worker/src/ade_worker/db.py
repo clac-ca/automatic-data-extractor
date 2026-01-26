@@ -13,7 +13,15 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from .schema import documents, environments, run_fields, run_metrics, run_table_columns, runs
+from .schema import (
+    environments,
+    files,
+    file_versions,
+    run_fields,
+    run_metrics,
+    run_table_columns,
+    runs,
+)
 from .settings import Settings, get_settings
 
 # Optional dependency (Managed Identity)
@@ -455,12 +463,114 @@ def load_run(SessionLocal: sessionmaker[Session], run_id: str) -> dict[str, Any]
     return dict(row) if row else None
 
 
-def load_document(SessionLocal: sessionmaker[Session], document_id: str) -> dict[str, Any] | None:
+def load_file(SessionLocal: sessionmaker[Session], file_id: str) -> dict[str, Any] | None:
+    with SessionLocal() as session:
+        row = session.execute(select(files).where(files.c.id == file_id)).mappings().first()
+    return dict(row) if row else None
+
+
+def load_file_version(
+    SessionLocal: sessionmaker[Session],
+    file_version_id: str,
+) -> dict[str, Any] | None:
     with SessionLocal() as session:
         row = session.execute(
-            select(documents).where(documents.c.id == document_id)
+            select(file_versions).where(file_versions.c.id == file_version_id)
         ).mappings().first()
     return dict(row) if row else None
+
+
+def ensure_output_file(
+    session: Session,
+    *,
+    workspace_id: str,
+    parent_file_id: str,
+    name: str,
+    name_key: str,
+    expires_at: datetime,
+    now: datetime,
+) -> dict[str, Any]:
+    stmt = select(files).where(
+        files.c.workspace_id == workspace_id,
+        files.c.kind == "output",
+        files.c.name_key == name_key,
+    )
+    row = session.execute(stmt).mappings().first()
+    if row:
+        return dict(row)
+
+    file_id = uuid4()
+    blob_name = f"{workspace_id}/files/{file_id}"
+    payload = {
+        "id": file_id,
+        "workspace_id": workspace_id,
+        "kind": "output",
+        "doc_no": None,
+        "name": name,
+        "name_key": name_key,
+        "blob_name": blob_name,
+        "current_version_id": None,
+        "parent_file_id": parent_file_id,
+        "comment_count": 0,
+        "version": 0,
+        "attributes": {},
+        "uploaded_by_user_id": None,
+        "assignee_user_id": None,
+        "expires_at": expires_at,
+        "last_run_id": None,
+        "deleted_at": None,
+        "deleted_by_user_id": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    session.execute(
+        pg_insert(files)
+        .values(**payload)
+        .on_conflict_do_nothing(index_elements=["workspace_id", "kind", "name_key"])
+    )
+    row = session.execute(stmt).mappings().first()
+    return dict(row) if row else payload
+
+
+def create_output_file_version(
+    session: Session,
+    *,
+    file_id: str,
+    run_id: str,
+    filename_at_upload: str,
+    content_type: str | None,
+    sha256: str,
+    byte_size: int,
+    blob_version_id: str,
+    now: datetime,
+) -> dict[str, Any]:
+    current = session.execute(
+        select(func.max(file_versions.c.version_no)).where(file_versions.c.file_id == file_id)
+    ).scalar_one()
+    version_no = int(current or 0) + 1
+    version_id = uuid4()
+    payload = {
+        "id": version_id,
+        "file_id": file_id,
+        "version_no": version_no,
+        "origin": "generated",
+        "run_id": run_id,
+        "created_by_user_id": None,
+        "sha256": sha256,
+        "byte_size": byte_size,
+        "content_type": content_type,
+        "filename_at_upload": filename_at_upload,
+        "blob_version_id": blob_version_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    session.execute(insert(file_versions).values(**payload))
+    session.execute(
+        update(files)
+        .where(files.c.id == file_id)
+        .values(current_version_id=version_id, version=version_no, updated_at=now)
+    )
+    return payload
 
 
 def ensure_environment(
@@ -580,7 +690,7 @@ def record_run_result(
     run_id: str,
     completed_at: datetime | None,
     exit_code: int | None,
-    output_path: str | None,
+    output_file_version_id: str | None,
     error_message: str | None,
 ) -> None:
     session.execute(
@@ -589,7 +699,7 @@ def record_run_result(
         .values(
             completed_at=completed_at,
             exit_code=exit_code,
-            output_path=output_path,
+            output_file_version_id=output_file_version_id,
             error_message=error_message,
         )
     )
@@ -657,7 +767,10 @@ __all__ = [
     "next_run_due_at",
     "load_environment",
     "load_run",
-    "load_document",
+    "load_file",
+    "load_file_version",
+    "ensure_output_file",
+    "create_output_file_version",
     "ensure_environment",
     "mark_environment_queued",
     "record_environment_metadata",
