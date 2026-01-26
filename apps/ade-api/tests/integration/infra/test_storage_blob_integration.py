@@ -11,6 +11,8 @@ def test_blob_storage_roundtrip() -> None:
     settings = Settings(
         _env_file=None,
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_require_versioning=False,
+        blob_create_container_on_startup=True,
     )
 
     storage = build_storage_adapter(settings)

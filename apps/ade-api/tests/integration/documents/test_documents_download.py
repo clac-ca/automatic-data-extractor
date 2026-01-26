@@ -8,6 +8,7 @@ import anyio
 import pytest
 from httpx import AsyncClient
 
+from ade_api.infra.storage import build_storage_adapter
 from ade_api.models import File
 from ade_api.settings import Settings
 from tests.utils import login
@@ -41,9 +42,8 @@ async def test_download_missing_file_returns_404(
 
     row = await anyio.to_thread.run_sync(db_session.get, File, UUID(document_id))
     assert row is not None
-    stored_path = settings.documents_dir / row.blob_name
-    assert stored_path.exists()
-    stored_path.unlink()
+    storage = build_storage_adapter(settings)
+    storage.delete(row.blob_name)
 
     download = await async_client.get(
         f"{workspace_base}/documents/{document_id}/download",

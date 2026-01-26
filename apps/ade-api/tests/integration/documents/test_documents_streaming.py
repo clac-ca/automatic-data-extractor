@@ -9,16 +9,17 @@ from fastapi import UploadFile
 
 from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.documents.service import DocumentsService
+from ade_api.infra.storage import build_storage_adapter
 from ade_api.models import File, User
 from ade_api.settings import Settings
 
 
-def test_stream_document_handles_missing_file_mid_stream(
+def test_stream_document_handles_missing_file(
     seed_identity,
     db_session,
     settings: Settings,
 ) -> None:
-    """Document streaming should surface a domain error when the file disappears."""
+    """Document streaming should surface a domain error when the file is missing."""
 
     service = DocumentsService(session=db_session, settings=settings)
     workspace_id = seed_identity.workspace_id
@@ -43,16 +44,15 @@ def test_stream_document_handles_missing_file_mid_stream(
         actor=member,
     )
 
-    _, stream = service.stream_document(
-        workspace_id=workspace_id,
-        document_id=record.id,
-    )
-
     stored_row = db_session.get(File, record.id)
     assert stored_row is not None
-    stored_path = settings.documents_dir / stored_row.blob_name
-    stored_path.unlink()
+    storage = build_storage_adapter(settings)
+    storage.delete(stored_row.blob_name)
 
     with pytest.raises(DocumentFileMissingError):
+        _, stream = service.stream_document(
+            workspace_id=workspace_id,
+            document_id=record.id,
+        )
         for _ in stream:
             pass

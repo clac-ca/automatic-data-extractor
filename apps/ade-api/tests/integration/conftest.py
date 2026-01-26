@@ -85,6 +85,8 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         database_url=url.render_as_string(hide_password=False),
         database_auth_mode=auth_mode,
         database_sslrootcert=_env("DATABASE_SSLROOTCERT"),
+        blob_require_versioning=False,
+        blob_create_container_on_startup=True,
     )
     ensure_runtime_dirs(settings)
     return settings
