@@ -42,7 +42,6 @@ def _build_test_settings() -> Settings:
         database_url=url.render_as_string(hide_password=False),
         database_auth_mode=auth_mode,
         database_sslrootcert=_env("DATABASE_SSLROOTCERT"),
-        storage_backend="filesystem",
     )
 
 

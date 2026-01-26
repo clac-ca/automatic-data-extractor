@@ -1970,7 +1970,7 @@ def main() -> int:
 
     paths = PathManager(settings.data_dir, settings.venvs_dir)
     SessionLocal = db.build_sessionmaker(engine)
-    storage = build_storage(settings, base_dir=paths.workspaces_root())
+    storage = build_storage(settings)
 
     runner = SubprocessRunner()
 

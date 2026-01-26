@@ -226,11 +226,8 @@ class Settings(BaseSettings):
     alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
-    # Storage
+    # Storage (Azure Blob only)
     data_dir: Path = Field(default=DEFAULT_DATA_DIR)
-    storage_backend: Literal["filesystem", "azure_blob"] = Field(
-        ..., description="Storage backend identifier (filesystem or azure_blob)."
-    )
     blob_account_url: str | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
     blob_container: str | None = Field(default=None)
@@ -379,16 +376,6 @@ class Settings(BaseSettings):
             raise ValueError("ADE_DATABASE_AUTH_MODE must be 'password' or 'managed_identity'")
         return mode
 
-    @field_validator("storage_backend", mode="before")
-    @classmethod
-    def _v_storage_backend(cls, v: Any) -> str:
-        if v in (None, ""):
-            raise ValueError("ADE_STORAGE_BACKEND is required.")
-        value = str(v).strip().lower()
-        if value not in {"filesystem", "azure_blob"}:
-            raise ValueError("ADE_STORAGE_BACKEND must be 'filesystem' or 'azure_blob'")
-        return value
-
     @field_validator("blob_account_url", mode="before")
     @classmethod
     def _v_blob_account_url(cls, v: Any) -> str | None:
@@ -511,18 +498,16 @@ class Settings(BaseSettings):
 
         self.database_url = url.render_as_string(hide_password=False)
 
-        if self.storage_backend == "azure_blob":
-            if not self.blob_container:
-                raise ValueError("ADE_BLOB_CONTAINER is required when ADE_STORAGE_BACKEND=azure_blob.")
-            if self.blob_connection_string and self.blob_account_url:
-                raise ValueError(
-                    "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
-                )
-            if not self.blob_connection_string and not self.blob_account_url:
-                raise ValueError(
-                    "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required "
-                    "when ADE_STORAGE_BACKEND=azure_blob."
-                )
+        if not self.blob_container:
+            raise ValueError("ADE_BLOB_CONTAINER is required.")
+        if self.blob_connection_string and self.blob_account_url:
+            raise ValueError(
+                "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
+            )
+        if not self.blob_connection_string and not self.blob_account_url:
+            raise ValueError(
+                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
+            )
 
         if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
             self.jwt_secret = SecretStr(secrets.token_urlsafe(64))

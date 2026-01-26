@@ -11,7 +11,8 @@ def test_init_shutdown_db_state() -> None:
     settings = Settings(
         _env_file=None,
         database_url="postgresql://user:pass@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
 
     init_db(app, settings)

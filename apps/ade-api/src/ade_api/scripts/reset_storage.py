@@ -1,4 +1,4 @@
-"""CLI to purge ADE storage (filesystem + blob prefix) and reset the database."""
+"""CLI to purge ADE storage (local paths + blob prefix) and reset the database."""
 
 from __future__ import annotations
 
@@ -73,8 +73,6 @@ def _describe_targets(targets: Iterable[Path]) -> None:
 
 
 def _describe_blob_target(settings: Settings) -> None:
-    if settings.storage_backend != "azure_blob":
-        return
     container = settings.blob_container or "(unset)"
     prefix = _blob_prefix(settings) or "(root)"
     print("Blob storage target:")
@@ -125,11 +123,11 @@ def _build_blob_container_client(settings: Settings):
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "Azure Blob dependencies are not installed. Install azure-identity and "
-            "azure-storage-blob to use ADE_STORAGE_BACKEND=azure_blob."
+            "azure-storage-blob."
         ) from exc
 
     if not settings.blob_container:
-        raise RuntimeError("ADE_BLOB_CONTAINER is required when ADE_STORAGE_BACKEND=azure_blob.")
+        raise RuntimeError("ADE_BLOB_CONTAINER is required.")
 
     if settings.blob_connection_string:
         service = BlobServiceClient.from_connection_string(
@@ -138,8 +136,7 @@ def _build_blob_container_client(settings: Settings):
     else:
         if not settings.blob_account_url:
             raise RuntimeError(
-                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required when "
-                "ADE_STORAGE_BACKEND=azure_blob."
+                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
             )
         service = BlobServiceClient(
             account_url=settings.blob_account_url,
@@ -150,9 +147,6 @@ def _build_blob_container_client(settings: Settings):
 
 
 def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
-    if settings.storage_backend != "azure_blob":
-        return 0, []
-
     errors: list[Exception] = []
     deleted = 0
 
@@ -162,7 +156,7 @@ def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
         return 0, [
             RuntimeError(
                 "Azure Blob dependencies are not installed. Install azure-identity and "
-                "azure-storage-blob to use ADE_STORAGE_BACKEND=azure_blob."
+                "azure-storage-blob."
             )
         ]
 
@@ -266,7 +260,7 @@ def _drop_all_tables(settings: Settings) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Delete configured ADE storage (filesystem + blob prefix) and databases.",
+        description="Delete configured ADE storage (local paths + blob prefix) and databases.",
     )
     parser.add_argument(
         "--yes",
@@ -327,10 +321,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         errors = []
 
-    blob_errors: list[Exception] = []
-    if settings.storage_backend == "azure_blob":
-        print("Removing blob storage...")
-        _, blob_errors = _delete_blob_prefix(settings)
+    print("Removing blob storage...")
+    _, blob_errors = _delete_blob_prefix(settings)
 
     if drop_error or errors or blob_errors:
         print("❌ storage reset incomplete:")

@@ -100,10 +100,9 @@ All ADE configuration uses `ADE_*` variables.
 - `ADE_DATABASE_AUTH_MODE` (`password` or `managed_identity`)
 - `ADE_DATABASE_SSLROOTCERT` (optional CA path for verify-full)
 
-### Storage (filesystem or Azure Blob)
+### Storage (Azure Blob)
 
-- `ADE_STORAGE_BACKEND` (`filesystem` or `azure_blob`)
-- `ADE_BLOB_CONTAINER` (required for `azure_blob`, private container)
+- `ADE_BLOB_CONTAINER` (required, private container)
 - `ADE_BLOB_ACCOUNT_URL` (managed identity / AAD, e.g. `https://<account>.blob.core.windows.net`)
 - `ADE_BLOB_CONNECTION_STRING` (connection string for Azurite or shared-key auth)
 - `ADE_BLOB_PREFIX` (optional; defaults to `workspaces`)
@@ -111,7 +110,8 @@ All ADE configuration uses `ADE_*` variables.
 Auth is inferred: if `ADE_BLOB_CONNECTION_STRING` is set, it is used; otherwise
 `ADE_BLOB_ACCOUNT_URL` is required and ADE uses `DefaultAzureCredential`.
 
-`ADE_DATABASE_URL` and `ADE_STORAGE_BACKEND` are required in all environments.
+`ADE_DATABASE_URL`, `ADE_BLOB_CONTAINER`, and one of `ADE_BLOB_ACCOUNT_URL` or
+`ADE_BLOB_CONNECTION_STRING` are required in all environments.
 
 ## Development (VS Code Devcontainer)
 

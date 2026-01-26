@@ -96,9 +96,7 @@ class Settings(BaseSettings):
 
     # ---- Runtime filesystem ------------------------------------------------
     data_dir: Path = Field(default=REPO_ROOT / "data")
-    storage_backend: Literal["filesystem", "azure_blob"] = Field(
-        ..., description="Storage backend identifier (filesystem or azure_blob)."
-    )
+    # Storage (Azure Blob only)
     blob_account_url: str | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
     blob_container: str | None = Field(default=None)
@@ -148,16 +146,6 @@ class Settings(BaseSettings):
             return None
         return str(v).strip()
 
-    @field_validator("storage_backend", mode="before")
-    @classmethod
-    def _v_storage_backend(cls, v: Any) -> str:
-        if v in (None, ""):
-            raise ValueError("ADE_STORAGE_BACKEND is required.")
-        value = str(v).strip().lower()
-        if value not in {"filesystem", "azure_blob"}:
-            raise ValueError("ADE_STORAGE_BACKEND must be 'filesystem' or 'azure_blob'")
-        return value
-
     @field_validator("blob_account_url", mode="before")
     @classmethod
     def _v_blob_account_url(cls, v: Any) -> str | None:
@@ -196,19 +184,15 @@ class Settings(BaseSettings):
         return cleaned or DEFAULT_BLOB_PREFIX
 
     @model_validator(mode="after")
-    def _validate_storage_backend(self) -> "Settings":
-        if self.storage_backend == "azure_blob":
-            if not self.blob_container:
-                raise ValueError("ADE_BLOB_CONTAINER is required when ADE_STORAGE_BACKEND=azure_blob.")
-            if self.blob_connection_string and self.blob_account_url:
-                raise ValueError(
-                    "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
-                )
-            if not self.blob_connection_string and not self.blob_account_url:
-                raise ValueError(
-                    "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required "
-                    "when ADE_STORAGE_BACKEND=azure_blob."
-                )
+    def _validate_blob_settings(self) -> "Settings":
+        if not self.blob_container:
+            raise ValueError("ADE_BLOB_CONTAINER is required.")
+        if self.blob_connection_string and self.blob_account_url:
+            raise ValueError(
+                "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
+            )
+        if not self.blob_connection_string and not self.blob_account_url:
+            raise ValueError("ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required.")
         return self
 
     @field_validator("database_auth_mode", mode="before")

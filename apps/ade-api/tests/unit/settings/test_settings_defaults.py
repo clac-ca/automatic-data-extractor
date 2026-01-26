@@ -15,7 +15,8 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Defaults should mirror the Settings model without .env overrides."""
 
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
-    monkeypatch.setenv("ADE_STORAGE_BACKEND", "filesystem")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
     settings = Settings(_env_file=None)
 
     assert isinstance(settings, Settings)
@@ -42,9 +43,8 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.venvs_dir == expected_venvs
     assert settings.runs_dir == expected_workspaces
     assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
-    assert settings.storage_backend == "filesystem"
     assert settings.blob_account_url is None
-    assert settings.blob_container is None
+    assert settings.blob_container == "ade-test"
     assert settings.blob_prefix == "workspaces"
     assert settings.blob_require_versioning is True
 
@@ -53,7 +53,8 @@ def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """ADE_DATA_DIR should become the root for workspace-owned storage."""
 
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
-    monkeypatch.setenv("ADE_STORAGE_BACKEND", "filesystem")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
     monkeypatch.setenv("ADE_DATA_DIR", "./custom/data-root")
 
     settings = Settings(_env_file=None)

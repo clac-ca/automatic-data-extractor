@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import io
+from pathlib import Path
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
@@ -39,7 +39,6 @@ def build_runs_service(
         safe_mode=safe_mode,
         engine_spec=str(engine_dir),
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
     )
 
     workspace = Workspace(name="Test Workspace", slug=f"ws-{generate_uuid7().hex[:8]}")

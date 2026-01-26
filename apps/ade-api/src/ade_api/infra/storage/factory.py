@@ -2,33 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING
-
 from ade_api.settings import Settings
 
-from .filesystem import FilesystemStorage
-
-if TYPE_CHECKING:
-    from .azure_blob import AzureBlobConfig, AzureBlobStorage
+from .azure_blob import AzureBlobConfig, AzureBlobStorage
 
 
-def _load_azure() -> tuple[type, type]:
-    try:
-        from .azure_blob import AzureBlobConfig, AzureBlobStorage
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Azure Blob dependencies are not installed. Install azure-identity and "
-            "azure-storage-blob to use ADE_STORAGE_BACKEND=azure_blob."
-        ) from exc
-    return AzureBlobConfig, AzureBlobStorage
-
-
-def build_storage_adapter(settings: Settings) -> FilesystemStorage | AzureBlobStorage:
-    if settings.storage_backend == "filesystem":
-        return FilesystemStorage(Path(settings.documents_dir))
-
-    AzureBlobConfig, AzureBlobStorage = _load_azure()
+def build_storage_adapter(settings: Settings) -> AzureBlobStorage:
     config = AzureBlobConfig(
         account_url=settings.blob_account_url,
         connection_string=settings.blob_connection_string,

@@ -13,7 +13,8 @@ def _settings_with_env(raw: str | None) -> Settings:
         sso_encryption_key="test-sso-encryption-key",
         auth_sso_providers_json=raw,
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
 
 

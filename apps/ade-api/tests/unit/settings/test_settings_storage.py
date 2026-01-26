@@ -12,7 +12,8 @@ REQUIRED_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=
 
 def _set_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
-    monkeypatch.setenv("ADE_STORAGE_BACKEND", "filesystem")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
 
 
 def test_storage_directories_resolve_relative_env_values(
@@ -70,7 +71,6 @@ def test_blob_backend_requires_container_and_auth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
-    monkeypatch.setenv("ADE_STORAGE_BACKEND", "azure_blob")
     with pytest.raises(ValueError, match="ADE_BLOB_CONTAINER"):
         Settings(_env_file=None)
 
@@ -86,14 +86,12 @@ def test_blob_backend_requires_container_and_auth(
 
 def test_blob_backend_accepts_managed_identity_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
-    monkeypatch.setenv("ADE_STORAGE_BACKEND", "azure_blob")
     monkeypatch.setenv("ADE_BLOB_ACCOUNT_URL", "https://example.blob.core.windows.net/")
     monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade")
     monkeypatch.setenv("ADE_BLOB_PREFIX", "/workspaces/")
 
     settings = Settings(_env_file=None)
 
-    assert settings.storage_backend == "azure_blob"
     assert settings.blob_account_url == "https://example.blob.core.windows.net"
     assert settings.blob_container == "ade"
     assert settings.blob_prefix == "workspaces"
@@ -101,12 +99,10 @@ def test_blob_backend_accepts_managed_identity_config(monkeypatch: pytest.Monkey
 
 def test_blob_backend_accepts_connection_string(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
-    monkeypatch.setenv("ADE_STORAGE_BACKEND", "azure_blob")
     monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
     monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade")
 
     settings = Settings(_env_file=None)
 
-    assert settings.storage_backend == "azure_blob"
     assert settings.blob_connection_string == "UseDevelopmentStorage=true"
     assert settings.blob_container == "ade"

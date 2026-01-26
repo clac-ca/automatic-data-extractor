@@ -14,7 +14,8 @@ def _make_documents_service(tmp_path: Path) -> DocumentsService:
         data_dir=tmp_path,
         jwt_secret="test-jwt-secret-for-tests-please-change",
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
     session = MagicMock()
     return DocumentsService(session=session, settings=settings)

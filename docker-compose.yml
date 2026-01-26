@@ -39,7 +39,6 @@ services:
 
       # Storage (Azure Blob default)
       ADE_DATA_DIR: /app/data
-      ADE_STORAGE_BACKEND: ${ADE_STORAGE_BACKEND:-azure_blob}
 
       # Azure Blob (Azurite default)
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
@@ -49,7 +48,6 @@ services:
       ADE_BLOB_CREATE_CONTAINER_ON_STARTUP: ${ADE_BLOB_CREATE_CONTAINER_ON_STARTUP:-true}
 
       # Azure Blob (AAD)
-      # ADE_STORAGE_BACKEND: azure_blob
       # ADE_BLOB_ACCOUNT_URL: https://<account>.blob.core.windows.net
       # ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://azurite:10000/devstoreaccount1;
       # ADE_BLOB_CONTAINER: ade

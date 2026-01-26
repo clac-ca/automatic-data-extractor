@@ -73,7 +73,8 @@ def test_authenticate_websocket_prefers_api_key() -> None:
         _env_file=None,
         jwt_secret="test-jwt-secret-for-tests-please-change",
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
     session = FakeSession(
         {
@@ -114,7 +115,8 @@ def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
         _env_file=None,
         jwt_secret="test-jwt-secret-for-tests-please-change",
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
     session = FakeSession(
         {
@@ -153,7 +155,8 @@ def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
         _env_file=None,
         jwt_secret="test-jwt-secret-for-tests-please-change",
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
     session = FakeSession(
         {
@@ -188,7 +191,8 @@ def test_authenticate_websocket_falls_back_to_query_param() -> None:
         _env_file=None,
         jwt_secret="test-jwt-secret-for-tests-please-change",
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        storage_backend="filesystem",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
     )
     session = FakeSession({query_user_id: _user(query_user_id)})
 

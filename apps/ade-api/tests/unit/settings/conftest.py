@@ -18,7 +18,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_SERVER_CORS_ORIGINS",
         "ADE_DATA_DIR",
         "ADE_ENGINE_PACKAGE_PATH",
-        "ADE_STORAGE_BACKEND",
         "ADE_BLOB_ACCOUNT_URL",
         "ADE_BLOB_CONNECTION_STRING",
         "ADE_BLOB_CONTAINER",

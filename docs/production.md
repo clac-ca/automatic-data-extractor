@@ -25,7 +25,7 @@ This runs:
 - Worker container from the same single image
 
 You must provide external Postgres + Storage (set `ADE_DATABASE_URL`, `ADE_DATABASE_AUTH_MODE`,
-`ADE_STORAGE_BACKEND=azure_blob`, `ADE_BLOB_CONTAINER`, and one of
+`ADE_BLOB_CONTAINER`, and one of
 `ADE_BLOB_ACCOUNT_URL` (managed identity) or `ADE_BLOB_CONNECTION_STRING` (connection string) in `.env`).
 Ensure the database named in `ADE_DATABASE_URL` already exists before starting the containers.
 

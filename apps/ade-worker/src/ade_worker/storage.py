@@ -6,26 +6,12 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO, Iterator
-try:
-    from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
-    from azure.identity import DefaultAzureCredential
-    from azure.storage.blob import BlobServiceClient
-except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency guard
-    _AZURE_IMPORT_ERROR: Exception | None = exc
 
-    class _AzureDependencyError(RuntimeError):
-        pass
-
-    HttpResponseError = ResourceNotFoundError = _AzureDependencyError
-    DefaultAzureCredential = None
-    BlobServiceClient = None
-else:
-    _AZURE_IMPORT_ERROR = None
+from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
 
 from .settings import Settings
-
-_DEFAULT_CHUNK_SIZE = 1024 * 1024
-
 
 @dataclass(frozen=True, slots=True)
 class AzureBlobConfig:
@@ -74,128 +60,8 @@ class _HashingReader:
         return self._digest.hexdigest()
 
 
-class LocalStorage:
-    def __init__(self, base_dir: Path) -> None:
-        self._base_dir = base_dir.expanduser().resolve()
-        self._base_dir.mkdir(parents=True, exist_ok=True)
-
-    def ensure_versioning(self) -> None:
-        return
-
-    def ensure_container(self) -> None:
-        return
-
-    def _path_for(self, blob_name: str) -> Path:
-        relative = blob_name.lstrip("/")
-        candidate = (self._base_dir / relative).resolve()
-        try:
-            candidate.relative_to(self._base_dir)
-        except ValueError as exc:
-            raise ValueError(f"Unsafe blob path: {blob_name}") from exc
-        return candidate
-
-    def upload_stream(
-        self,
-        blob_name: str,
-        stream: BinaryIO,
-        *,
-        max_bytes: int | None = None,
-    ) -> BlobWriteResult:
-        destination = self._path_for(blob_name)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        rewind = getattr(stream, "seek", None)
-        if callable(rewind):
-            try:
-                rewind(0)
-            except (OSError, ValueError):
-                pass
-
-        size = 0
-        digest = sha256()
-        with destination.open("wb") as target:
-            while True:
-                chunk = stream.read(_DEFAULT_CHUNK_SIZE)
-                if not chunk:
-                    break
-                size += len(chunk)
-                if max_bytes is not None and size > max_bytes:
-                    raise ValueError(f"Object exceeds maximum size of {max_bytes} bytes")
-                target.write(chunk)
-                digest.update(chunk)
-
-        return BlobWriteResult(
-            blob_name=blob_name,
-            sha256=digest.hexdigest(),
-            byte_size=size,
-            version_id=None,
-        )
-
-    def upload_path(self, blob_name: str, path: Path) -> BlobWriteResult:
-        destination = self._path_for(blob_name)
-        source = path.expanduser().resolve()
-        if destination == source:
-            size = 0
-            digest = sha256()
-            with source.open("rb") as stream:
-                while True:
-                    chunk = stream.read(_DEFAULT_CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    digest.update(chunk)
-            return BlobWriteResult(
-                blob_name=blob_name,
-                sha256=digest.hexdigest(),
-                byte_size=size,
-                version_id=None,
-            )
-        with path.open("rb") as stream:
-            return self.upload_stream(blob_name, stream)
-
-    def stream(
-        self,
-        blob_name: str,
-        *,
-        version_id: str | None = None,
-        chunk_size: int = _DEFAULT_CHUNK_SIZE,
-    ) -> Iterator[bytes]:
-        source = self._path_for(blob_name)
-        if not source.exists():
-            raise FileNotFoundError(blob_name)
-        with source.open("rb") as fh:
-            while True:
-                chunk = fh.read(chunk_size)
-                if not chunk:
-                    break
-                yield chunk
-
-    def download_to_path(
-        self,
-        blob_name: str,
-        *,
-        version_id: str | None,
-        destination: Path,
-    ) -> None:
-        source = self._path_for(blob_name)
-        if not source.exists():
-            raise FileNotFoundError(blob_name)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with source.open("rb") as src, destination.open("wb") as dst:
-            while True:
-                chunk = src.read(_DEFAULT_CHUNK_SIZE)
-                if not chunk:
-                    break
-                dst.write(chunk)
-
-
 class AzureBlobStorage:
     def __init__(self, config: AzureBlobConfig) -> None:
-        if BlobServiceClient is None or DefaultAzureCredential is None:
-            raise RuntimeError(
-                "Azure Blob dependencies are not installed. Install azure-identity and "
-                "azure-storage-blob to use ADE_STORAGE_BACKEND=azure_blob."
-        ) from _AZURE_IMPORT_ERROR
         self._config = config
         if config.connection_string:
             self._service = BlobServiceClient.from_connection_string(
@@ -313,32 +179,28 @@ class AzureBlobStorage:
             raise RuntimeError("Failed to download blob") from exc
 
 
-def build_storage(settings: Settings, *, base_dir: Path) -> AzureBlobStorage | LocalStorage:
-    if settings.storage_backend == "azure_blob":
-        config = AzureBlobConfig(
-            account_url=settings.blob_account_url,
-            connection_string=settings.blob_connection_string,
-            container=settings.blob_container or "",
-            prefix=settings.blob_prefix,
-            require_versioning=settings.blob_require_versioning,
-            request_timeout_seconds=float(settings.blob_request_timeout_seconds),
-            max_concurrency=int(settings.blob_max_concurrency),
-            upload_chunk_size_bytes=int(settings.blob_upload_chunk_size_bytes),
-            download_chunk_size_bytes=int(settings.blob_download_chunk_size_bytes),
-        )
-        storage = AzureBlobStorage(config)
-        if settings.blob_create_container_on_startup:
-            storage.ensure_container()
-        storage.ensure_versioning()
-        return storage
-
-    return LocalStorage(base_dir)
+def build_storage(settings: Settings) -> AzureBlobStorage:
+    config = AzureBlobConfig(
+        account_url=settings.blob_account_url,
+        connection_string=settings.blob_connection_string,
+        container=settings.blob_container or "",
+        prefix=settings.blob_prefix,
+        require_versioning=settings.blob_require_versioning,
+        request_timeout_seconds=float(settings.blob_request_timeout_seconds),
+        max_concurrency=int(settings.blob_max_concurrency),
+        upload_chunk_size_bytes=int(settings.blob_upload_chunk_size_bytes),
+        download_chunk_size_bytes=int(settings.blob_download_chunk_size_bytes),
+    )
+    storage = AzureBlobStorage(config)
+    if settings.blob_create_container_on_startup:
+        storage.ensure_container()
+    storage.ensure_versioning()
+    return storage
 
 
 __all__ = [
     "AzureBlobConfig",
     "AzureBlobStorage",
     "BlobWriteResult",
-    "LocalStorage",
     "build_storage",
 ]

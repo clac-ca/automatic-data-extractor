@@ -106,8 +106,8 @@ From your host machine:
 - Blob:  `http://127.0.0.1:10000/devstoreaccount1`
 
 **Note:** Azurite does not support Azure AD credentials. To use Azurite with ADE,
-set `ADE_STORAGE_BACKEND=azure_blob`, provide `ADE_BLOB_CONNECTION_STRING` plus
-`ADE_BLOB_CONTAINER`, and disable versioning (`ADE_BLOB_REQUIRE_VERSIONING=false`).
+provide `ADE_BLOB_CONNECTION_STRING` plus `ADE_BLOB_CONTAINER`, and disable
+versioning (`ADE_BLOB_REQUIRE_VERSIONING=false`).
 For AAD/Managed Identity auth, use a real Azure Storage account with
 `ADE_BLOB_ACCOUNT_URL`.
 
@@ -118,8 +118,7 @@ You do not need to change code or rebuild images.
 - To use Azure Database for PostgreSQL: set `ADE_DATABASE_URL` to your Azure DSN and
   `ADE_DATABASE_AUTH_MODE=managed_identity` for Entra auth (or keep `password`). Use
   `sslmode=verify-full` in the URL and set `ADE_DATABASE_SSLROOTCERT` when required.
-- To use Azure Storage: set `ADE_STORAGE_BACKEND=azure_blob` and
-  `ADE_BLOB_CONTAINER`, plus one of:
+- To use Azure Storage: set `ADE_BLOB_CONTAINER`, plus one of:
   `ADE_BLOB_ACCOUNT_URL` (managed identity) or
   `ADE_BLOB_CONNECTION_STRING` (connection string/Azurite).
 
