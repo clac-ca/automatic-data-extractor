@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings()
     if not settings.database_url:
         raise RuntimeError("Database settings are required (set ADE_DATABASE_URL).")
-    database_url = make_url(settings.database_url)
+    database_url = make_url(str(settings.database_url))
     targets = _gather_storage_targets(settings, database_url)
 
     _describe_targets(targets)

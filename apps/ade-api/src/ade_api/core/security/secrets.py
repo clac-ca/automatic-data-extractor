@@ -18,7 +18,7 @@ def _derive_key(raw: str) -> bytes:
 def _resolve_key(settings: Settings) -> str:
     if settings.sso_encryption_key is not None:
         return settings.sso_encryption_key.get_secret_value()
-    return settings.jwt_secret_value
+    return settings.secret_key_value
 
 
 def encrypt_secret(value: str, settings: Settings) -> str:

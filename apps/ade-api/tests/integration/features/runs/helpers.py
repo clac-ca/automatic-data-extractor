@@ -41,6 +41,7 @@ def build_runs_service(
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_require_versioning=False,
         blob_create_container_on_startup=True,
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     workspace = Workspace(name="Test Workspace", slug=f"ws-{generate_uuid7().hex[:8]}")

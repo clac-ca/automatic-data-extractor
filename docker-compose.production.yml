@@ -37,6 +37,8 @@ services:
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
       ADE_DATA_DIR: /app/data
 
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?set ADE_SECRET_KEY in your prod env}
+
       ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
       ADE_API_PORT: ${ADE_API_PORT:-8000}
 
@@ -57,6 +59,10 @@ services:
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
       ADE_DATA_DIR: /app/data
+
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?set ADE_SECRET_KEY in your prod env}
+      ADE_ALGORITHM: ${ADE_ALGORITHM:-HS256}
+      ADE_ACCESS_TOKEN_EXPIRE_MINUTES: ${ADE_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
 
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
     command: [ "worker", "start" ]

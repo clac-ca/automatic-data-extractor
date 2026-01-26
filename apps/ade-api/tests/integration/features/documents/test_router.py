@@ -12,7 +12,7 @@ def _make_documents_service(tmp_path: Path) -> DocumentsService:
     settings = Settings(
         _env_file=None,
         data_dir=tmp_path,
-        jwt_secret="test-jwt-secret-for-tests-please-change",
+        secret_key="test-secret-key-for-tests-please-change",
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
     )
     session = MagicMock()

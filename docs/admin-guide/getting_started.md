@@ -148,7 +148,7 @@ restore.
   reference it in this guide.
 - **TODO:** Update the onboarding section once the frontend ships the admin
   walkthrough.
-- Consider setting `ADE_JWT_SECRET` to a long random value before going
+- Consider setting `ADE_SECRET_KEY` to a long random value before going
   beyond local testing.
 
 With these basics you can run ADE on a laptop, VM, or container host and manage

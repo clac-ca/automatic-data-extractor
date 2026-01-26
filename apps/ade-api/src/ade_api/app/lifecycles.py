@@ -117,7 +117,7 @@ def create_application_lifespan(
             app.state.documents_upload_semaphore = None
         if not settings.database_url:
             raise RuntimeError("Database settings are required (set ADE_DATABASE_URL).")
-        safe_url = make_url(settings.database_url).render_as_string(hide_password=True)
+        safe_url = make_url(str(settings.database_url)).render_as_string(hide_password=True)
         logger.info("db.init.start", extra={"database_url": safe_url})
         init_db(app, settings)
         logger.info("db.init.complete", extra={"database_url": safe_url})

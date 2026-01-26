@@ -10,6 +10,7 @@ def test_build_engine_allows_managed_identity_passwordless_url() -> None:
         database_auth_mode="managed_identity",
         blob_container="ade-test",
         blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     engine = build_engine(settings)
@@ -27,6 +28,7 @@ def test_build_engine_normalizes_postgres_driver() -> None:
         database_url="postgresql://user:secret@contoso.postgres.database.azure.com:5432/ade",
         blob_container="ade-test",
         blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
     engine = build_engine(settings)
     try:
@@ -42,4 +44,5 @@ def test_settings_rejects_non_postgres_urls() -> None:
             database_url="sqlite:///tmp/test.db",
             blob_container="ade-test",
             blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
         )

@@ -98,7 +98,6 @@ class SsoService:
         status_value: SsoProviderStatus,
         domains: Iterable[str],
     ) -> SsoProvider:
-        self._warn_if_unstable_encryption_key()
         secret_enc = encrypt_secret(client_secret, self.settings)
         provider = SsoProvider(
             id=provider_id,
@@ -154,7 +153,6 @@ class SsoService:
         if client_id is not None:
             provider.client_id = client_id
         if client_secret is not None:
-            self._warn_if_unstable_encryption_key()
             provider.client_secret_enc = encrypt_secret(client_secret, self.settings)
         if status_value is not None:
             provider.status = status_value
@@ -335,13 +333,6 @@ class SsoService:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Provider must be fully configured to activate",
-            )
-
-    def _warn_if_unstable_encryption_key(self) -> None:
-        if self.settings.sso_encryption_key is None and self.settings.jwt_secret_generated:
-            logger.warning(
-                "sso.providers.encryption.generated_secret",
-                extra=log_context(),
             )
 
     def _ensure_provider_mutable(self, provider: SsoProvider) -> None:

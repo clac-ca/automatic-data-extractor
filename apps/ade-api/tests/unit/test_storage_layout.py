@@ -19,6 +19,7 @@ def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_container="ade-test",
         blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     workspace_id = "acme-ws"
@@ -51,6 +52,7 @@ def test_workspace_layout_uses_data_dir(tmp_path: Path) -> None:
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_container="ade-test",
         blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     workspace_id = "override-ws"

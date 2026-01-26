@@ -177,7 +177,7 @@ def build_engine(settings: Settings | None = None) -> Engine:
     settings = settings or get_settings()
     if not settings.database_url:
         raise ValueError("Settings.database_url is required.")
-    url = make_url(settings.database_url)
+    url = make_url(str(settings.database_url))
     backend = url.get_backend_name()
 
     if backend == "postgresql":

@@ -11,18 +11,20 @@ def test_non_postgres_url_is_rejected() -> None:
             database_url="mysql://user:pass@localhost:3306/ade",
             blob_container="ade-test",
             blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
         )
 
 
-def test_postgres_driver_normalizes_to_psycopg() -> None:
+def test_postgres_driver_is_accepted() -> None:
     settings = Settings(
         _env_file=None,
         database_url="postgresql://user:pass@localhost:5432/ade",
         blob_container="ade-test",
         blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
     url = make_url(settings.database_url)
-    assert url.drivername == "postgresql+psycopg"
+    assert url.drivername == "postgresql"
     assert url.host == "localhost"
 
 
@@ -35,6 +37,7 @@ def test_managed_identity_allows_passwordless_url() -> None:
         database_auth_mode="managed_identity",
         blob_container="ade-test",
         blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     url = make_url(settings.database_url)

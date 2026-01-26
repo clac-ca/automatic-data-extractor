@@ -40,6 +40,7 @@ def test_log_context_includes_correlation_and_fields():
             database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
             blob_container="ade-test",
             blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
         )
     )
     handler = _CaptureHandler()
@@ -74,6 +75,7 @@ def test_unhandled_exception_handler_logs_with_correlation():
             database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
             blob_container="ade-test",
             blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
         )
     )
     handler = _CaptureHandler()

@@ -29,6 +29,9 @@ services:
       ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
       ADE_BLOB_CREATE_CONTAINER_ON_STARTUP: ${ADE_BLOB_CREATE_CONTAINER_ON_STARTUP:-true}
 
+      # ---- JWT ----
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
+
     ports:
       - "8000:8000"
       - "5173:5173"

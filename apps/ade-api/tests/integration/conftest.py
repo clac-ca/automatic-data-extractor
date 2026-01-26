@@ -80,7 +80,7 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         data_dir=data_dir,
         auth_disabled=False,
         safe_mode=False,
-        jwt_secret="test-jwt-secret-for-tests-please-change",
+        secret_key="test-secret-key-for-tests-please-change",
         auth_force_sso=False,
         database_url=url.render_as_string(hide_password=False),
         database_auth_mode=auth_mode,

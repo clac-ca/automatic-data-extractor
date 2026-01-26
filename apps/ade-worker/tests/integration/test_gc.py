@@ -131,7 +131,7 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
+    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs", tmp_path / "runs")
 
     workspace_id = _uuid()
     configuration_id = _uuid()
@@ -181,7 +181,7 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
+    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs", tmp_path / "runs")
 
     workspace_id = _uuid()
     configuration_id = _uuid()
@@ -220,7 +220,7 @@ def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs")
+    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs", tmp_path / "runs")
 
     workspace_id = _uuid()
     configuration_id = _uuid()

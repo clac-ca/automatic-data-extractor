@@ -54,7 +54,7 @@ Operational settings:
 - `ADE_AUTH_FORCE_SSO=true` disables password login in favor of SSO.
 - `ADE_AUTH_SSO_AUTO_PROVISION` enables auto-provisioning for new SSO users (default: false).
 - `ADE_AUTH_SSO_PROVIDERS_JSON` syncs env-managed providers into the database at startup.
-- `ADE_SSO_ENCRYPTION_KEY` encrypts provider client secrets at rest (falls back to `ADE_JWT_SECRET` if unset).
+- `ADE_SSO_ENCRYPTION_KEY` encrypts provider client secrets at rest (falls back to `ADE_SECRET_KEY` if unset).
 
 ### Provider management
 

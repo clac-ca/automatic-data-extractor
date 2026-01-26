@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from pathlib import Path
 
 import pytest
 
 from sqlalchemy.engine import make_url
 
-from ade_api.settings import REPO_ROOT, Settings
+from ade_api.settings import Settings
 
 REQUIRED_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
 
@@ -17,6 +17,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
     monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
     monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
     settings = Settings(_env_file=None)
 
     assert isinstance(settings, Settings)
@@ -32,17 +33,17 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.username == "ade"
     assert url.password == "ade"
     assert url.query.get("sslmode") == "disable"
-    assert settings.jwt_access_ttl == timedelta(minutes=60)
-    expected_root = (REPO_ROOT / "data").resolve()
-    expected_workspaces = (expected_root / "workspaces").resolve()
-    expected_venvs = (expected_root / "venvs").resolve()
+    assert settings.access_token_expire_minutes == 30
+    expected_root = Path("data")
+    expected_workspaces = expected_root / "workspaces"
+    expected_venvs = expected_root / "venvs"
     assert settings.data_dir == expected_root
     assert settings.workspaces_dir == expected_workspaces
     assert settings.documents_dir == expected_workspaces
     assert settings.configs_dir == expected_workspaces
     assert settings.venvs_dir == expected_venvs
     assert settings.runs_dir == expected_workspaces
-    assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
+    assert settings.pip_cache_dir == expected_root / "cache" / "pip"
     assert settings.blob_account_url is None
     assert settings.blob_container == "ade-test"
     assert settings.blob_prefix == "workspaces"
@@ -55,13 +56,14 @@ def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
     monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
     monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
     monkeypatch.setenv("ADE_DATA_DIR", "./custom/data-root")
 
     settings = Settings(_env_file=None)
 
-    expected_root = (REPO_ROOT / "custom" / "data-root").resolve()
-    expected_workspaces = (expected_root / "workspaces").resolve()
-    expected_venvs = (expected_root / "venvs").resolve()
+    expected_root = Path("custom/data-root")
+    expected_workspaces = expected_root / "workspaces"
+    expected_venvs = expected_root / "venvs"
     assert settings.data_dir == expected_root
     assert settings.workspaces_dir == expected_workspaces
     assert settings.documents_dir == expected_workspaces

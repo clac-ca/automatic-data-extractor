@@ -176,7 +176,7 @@ def run_gc(settings: Settings | None = None) -> tuple[GcResult, GcResult | None]
     settings = settings or get_settings()
     engine = db.build_engine(settings)
     SessionLocal = db.build_sessionmaker(engine)
-    paths = PathManager(settings.data_dir, settings.venvs_dir)
+    paths = PathManager(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
     now = datetime.utcnow().replace(tzinfo=None)
 
     env_result = gc_environments(

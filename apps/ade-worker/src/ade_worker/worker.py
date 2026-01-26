@@ -61,10 +61,11 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _ensure_runtime_dirs(data_dir: Path, venvs_dir: Path) -> None:
+def _ensure_runtime_dirs(data_dir: Path, venvs_dir: Path, runs_root_dir: Path) -> None:
     for sub in ["db", "workspaces", "cache/pip"]:
         _ensure_dir(data_dir / sub)
     _ensure_dir(venvs_dir)
+    _ensure_dir(runs_root_dir)
 
 
 # --- LISTEN / NOTIFY ---
@@ -79,7 +80,7 @@ def _normalize_psycopg_url(url: URL) -> URL:
 
 
 def _build_listen_connect_kwargs(settings: Settings) -> dict[str, Any]:
-    url = _normalize_psycopg_url(make_url(settings.database_url))
+    url = _normalize_psycopg_url(make_url(str(settings.database_url)))
     params: dict[str, Any] = {
         "host": url.host,
         "port": url.port,
@@ -938,6 +939,28 @@ class Worker:
         except Exception as exc:
             logger.warning("run.logs.upload_failed run_id=%s error=%s", run_id, exc)
 
+    def _cleanup_run_dir(self, *, run_dir: Path, workspace_id: str, run_id: str) -> None:
+        try:
+            run_root = self.paths.runs_root_dir.resolve()
+            run_dir_resolved = run_dir.resolve()
+            run_dir_resolved.relative_to(run_root)
+        except Exception:
+            logger.warning("run.dir.cleanup_skipped run_id=%s path=%s", run_id, run_dir)
+            return
+
+        if not run_dir.exists():
+            return
+        try:
+            shutil.rmtree(run_dir)
+        except Exception as exc:
+            logger.warning(
+                "run.dir.cleanup_failed run_id=%s workspace_id=%s error=%s",
+                run_id,
+                workspace_id,
+                exc,
+            )
+
+
     def _build_environment(
         self,
         *,
@@ -1234,185 +1257,120 @@ class Worker:
         now = utcnow()
         run_id = claim.id
 
-        run = db.load_run(self.SessionLocal, run_id)
-        if not run:
-            logger.error("run not found: %s", run_id)
-            return
-
-        run_started_at = run.get("started_at") if isinstance(run.get("started_at"), datetime) else now
-
-        workspace_id = str(run["workspace_id"])
-        configuration_id = str(run["configuration_id"])
-        input_file_version_id = str(run["input_file_version_id"])
-        document_id = input_file_version_id
-
-        ctx = {
-            "job_id": run_id,
-            "workspace_id": workspace_id,
-            "configuration_id": configuration_id,
-            "environment_id": None,
-        }
-
-        event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
-
-        env, env_error, lost_claim = self._ensure_environment_ready(
-            run=run,
-            run_claim=claim,
-            now=now,
-        )
-        if lost_claim:
-            event_log.emit(
-                event="run.lost_claim",
-                level="warning",
-                message="Lease expired during environment build",
-                context=ctx,
-            )
-            return
-        if not env:
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                env_error or "Environment not ready",
-            )
-            return
-
-        environment_id = str(env["id"])
-        deps_digest = str(env["deps_digest"])
-        ctx["environment_id"] = environment_id
-
-        event_log.emit(event="run.start", message="Starting run", context=ctx)
-
-        venv_dir = self.paths.environment_venv_dir(
-            workspace_id,
-            configuration_id,
-            deps_digest,
-            environment_id,
-        )
-        python_bin = self.paths.python_in_venv(venv_dir)
-        if not python_bin.exists():
-            logger.warning("environment python missing: %s", python_bin)
-            db.mark_environment_queued(
-                self.SessionLocal,
-                env_id=environment_id,
+        workspace_id = None
+        run_dir: Path | None = None
+        try:
+    
+            run = db.load_run(self.SessionLocal, run_id)
+            if not run:
+                logger.error("run not found: %s", run_id)
+                return
+    
+            run_started_at = run.get("started_at") if isinstance(run.get("started_at"), datetime) else now
+    
+            workspace_id = str(run["workspace_id"])
+            configuration_id = str(run["configuration_id"])
+            input_file_version_id = str(run["input_file_version_id"])
+            document_id = input_file_version_id
+    
+            ctx = {
+                "job_id": run_id,
+                "workspace_id": workspace_id,
+                "configuration_id": configuration_id,
+                "environment_id": None,
+            }
+    
+            event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
+    
+            env, env_error, lost_claim = self._ensure_environment_ready(
+                run=run,
+                run_claim=claim,
                 now=now,
-                error_message="Missing venv python; requeueing environment",
             )
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                "Environment missing on disk",
-            )
-            return
-
-        config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
-        if not config_dir.exists():
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                f"Missing config package dir: {config_dir}",
-            )
-            return
-
-        with self.SessionLocal.begin() as session:
-            db.touch_environment_last_used(session, env_id=environment_id, now=now)
-
-        options = parse_run_options(
-            run.get("run_options"),
-            default_log_level=self.settings.worker_log_level,
-        )
-        sheet_names = options.input_sheet_names or _parse_input_sheet_names(run.get("input_sheet_names"))
-
-        if options.dry_run:
-            finished_at = utcnow()
-            with self.SessionLocal.begin() as session:
-                ok = db.ack_run_success(
-                    session,
-                    run_id=run_id,
-                    worker_id=self.worker_id,
-                    now=finished_at,
-                )
-                if not ok:
-                    event_log.emit(
-                        event="run.lost_claim",
-                        level="warning",
-                        message="Lost run claim before ack",
-                        context=ctx,
-                    )
-                    return
-                db.record_run_result(
-                    session,
-                    run_id=run_id,
-                    completed_at=finished_at,
-                    exit_code=0,
-                    output_file_version_id=None,
-                    error_message="Dry run",
-                )
-            _emit_run_complete(
-                event_log,
-                status="succeeded",
-                message="Dry run complete",
-                context=ctx,
-                started_at=run_started_at,
-                completed_at=finished_at,
-                exit_code=0,
-            )
-            self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
-            return
-
-        if options.validate_only:
-            cmd = engine_config_validate_cmd(
-                python_bin=python_bin,
-                config_dir=config_dir,
-                log_level=options.log_level,
-            )
-            try:
-                res = self.runner.run(
-                    cmd,
-                    event_log=event_log,
-                    scope="run.validate",
-                    timeout_seconds=float(self.settings.worker_run_timeout_seconds)
-                    if self.settings.worker_run_timeout_seconds
-                    else None,
-                    cwd=None,
-                    env=self._pip_env(),
-                    heartbeat=lambda: db.heartbeat_run(
-                        self.SessionLocal,
-                        run_id=claim.id,
-                        worker_id=self.worker_id,
-                        now=utcnow(),
-                        lease_seconds=int(self.settings.worker_lease_seconds),
-                    ),
-                    heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
-                    context=ctx,
-                )
-            except HeartbeatLostError:
+            if lost_claim:
                 event_log.emit(
                     event="run.lost_claim",
                     level="warning",
-                    message="Lease expired during validation",
+                    message="Lease expired during environment build",
                     context=ctx,
                 )
                 return
-            finished_at = utcnow()
-            if res.exit_code == 0:
+            if not env:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    env_error or "Environment not ready",
+                )
+                return
+    
+            environment_id = str(env["id"])
+            deps_digest = str(env["deps_digest"])
+            ctx["environment_id"] = environment_id
+    
+            event_log.emit(event="run.start", message="Starting run", context=ctx)
+    
+            venv_dir = self.paths.environment_venv_dir(
+                workspace_id,
+                configuration_id,
+                deps_digest,
+                environment_id,
+            )
+            python_bin = self.paths.python_in_venv(venv_dir)
+            if not python_bin.exists():
+                logger.warning("environment python missing: %s", python_bin)
+                db.mark_environment_queued(
+                    self.SessionLocal,
+                    env_id=environment_id,
+                    now=now,
+                    error_message="Missing venv python; requeueing environment",
+                )
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    "Environment missing on disk",
+                )
+                return
+    
+            config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
+            if not config_dir.exists():
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Missing config package dir: {config_dir}",
+                )
+                return
+    
+            with self.SessionLocal.begin() as session:
+                db.touch_environment_last_used(session, env_id=environment_id, now=now)
+    
+            options = parse_run_options(
+                run.get("run_options"),
+                default_log_level=self.settings.worker_log_level,
+            )
+            sheet_names = options.input_sheet_names or _parse_input_sheet_names(run.get("input_sheet_names"))
+            run_dir = self.paths.run_dir(workspace_id, run_id)
+            _ensure_dir(run_dir)
+    
+            if options.dry_run:
+                finished_at = utcnow()
                 with self.SessionLocal.begin() as session:
                     ok = db.ack_run_success(
                         session,
@@ -1434,19 +1392,241 @@ class Worker:
                         completed_at=finished_at,
                         exit_code=0,
                         output_file_version_id=None,
-                        error_message=None,
+                        error_message="Dry run",
                     )
                 _emit_run_complete(
                     event_log,
                     status="succeeded",
-                    message="Validation succeeded",
+                    message="Dry run complete",
                     context=ctx,
                     started_at=run_started_at,
                     completed_at=finished_at,
                     exit_code=0,
                 )
                 self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
-            else:
+                return
+    
+            if options.validate_only:
+                cmd = engine_config_validate_cmd(
+                    python_bin=python_bin,
+                    config_dir=config_dir,
+                    log_level=options.log_level,
+                )
+                try:
+                    res = self.runner.run(
+                        cmd,
+                        event_log=event_log,
+                        scope="run.validate",
+                        timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+                        if self.settings.worker_run_timeout_seconds
+                        else None,
+                        cwd=None,
+                        env=self._pip_env(),
+                        heartbeat=lambda: db.heartbeat_run(
+                            self.SessionLocal,
+                            run_id=claim.id,
+                            worker_id=self.worker_id,
+                            now=utcnow(),
+                            lease_seconds=int(self.settings.worker_lease_seconds),
+                        ),
+                        heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
+                        context=ctx,
+                    )
+                except HeartbeatLostError:
+                    event_log.emit(
+                        event="run.lost_claim",
+                        level="warning",
+                        message="Lease expired during validation",
+                        context=ctx,
+                    )
+                    return
+                finished_at = utcnow()
+                if res.exit_code == 0:
+                    with self.SessionLocal.begin() as session:
+                        ok = db.ack_run_success(
+                            session,
+                            run_id=run_id,
+                            worker_id=self.worker_id,
+                            now=finished_at,
+                        )
+                        if not ok:
+                            event_log.emit(
+                                event="run.lost_claim",
+                                level="warning",
+                                message="Lost run claim before ack",
+                                context=ctx,
+                            )
+                            return
+                        db.record_run_result(
+                            session,
+                            run_id=run_id,
+                            completed_at=finished_at,
+                            exit_code=0,
+                            output_file_version_id=None,
+                            error_message=None,
+                        )
+                    _emit_run_complete(
+                        event_log,
+                        status="succeeded",
+                        message="Validation succeeded",
+                        context=ctx,
+                        started_at=run_started_at,
+                        completed_at=finished_at,
+                        exit_code=0,
+                    )
+                    self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
+                else:
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id,
+                        event_log,
+                        ctx,
+                        finished_at,
+                        run_started_at,
+                        res.exit_code,
+                        f"Validation failed (exit {res.exit_code})",
+                    )
+                return
+    
+            file_version = db.load_file_version(self.SessionLocal, input_file_version_id)
+            if not file_version:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Document version not found: {input_file_version_id}",
+                )
+                return
+    
+            file_id = str(file_version.get("file_id") or "")
+            document_id = file_id or document_id
+            file_row = db.load_file(self.SessionLocal, file_id)
+            if not file_row or str(file_row.get("kind") or "").lower() != "document":
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Document not found: {document_id}",
+                )
+                return
+            if file_row.get("deleted_at") is not None:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Document deleted: {document_id}",
+                )
+                return
+    
+            input_dir = self.paths.run_input_dir(workspace_id, run_id)
+            output_dir = self.paths.run_output_dir(workspace_id, run_id)
+            _ensure_dir(input_dir)
+            _ensure_dir(output_dir)
+    
+            original_name = Path(
+                str(file_version.get("filename_at_upload") or file_row.get("name") or "input")
+            ).name
+            staged_input = input_dir / original_name
+            try:
+                self.storage.download_to_path(
+                    str(file_row.get("blob_name") or ""),
+                    version_id=file_version.get("blob_version_id"),
+                    destination=staged_input,
+                )
+            except FileNotFoundError:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Document file missing: {file_row.get('blob_name')}",
+                )
+                return
+            except Exception as exc:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Document download failed: {exc}",
+                )
+                return
+    
+            engine_payload: dict[str, Any] | None = None
+    
+            def on_event(rec: dict[str, Any]) -> None:
+                nonlocal engine_payload
+                if rec.get("event") == "engine.run.completed":
+                    data = rec.get("data")
+                    if isinstance(data, dict):
+                        engine_payload = data
+    
+            cmd = engine_process_file_cmd(
+                python_bin=python_bin,
+                input_path=staged_input,
+                output_dir=output_dir,
+                config_dir=config_dir,
+                options=options,
+                sheet_names=sheet_names,
+            )
+
+            try:
+                res = self.runner.run(
+                    cmd,
+                    event_log=event_log,
+                    scope="run.engine",
+                    timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+                    if self.settings.worker_run_timeout_seconds
+                    else None,
+                    cwd=None,
+                    env=self._pip_env(),
+                    heartbeat=lambda: db.heartbeat_run(
+                        self.SessionLocal,
+                        run_id=claim.id,
+                        worker_id=self.worker_id,
+                        now=utcnow(),
+                        lease_seconds=int(self.settings.worker_lease_seconds),
+                    ),
+                    heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
+                    context=ctx,
+                    on_json_event=on_event,
+                )
+            except HeartbeatLostError:
+                event_log.emit(
+                    event="run.lost_claim",
+                    level="warning",
+                    message="Lease expired during engine run",
+                    context=ctx,
+                )
+                return
+
+            finished_at = utcnow()
+    
+            if res.timed_out:
                 self._handle_run_failure(
                     claim,
                     run_id,
@@ -1456,144 +1636,138 @@ class Worker:
                     finished_at,
                     run_started_at,
                     res.exit_code,
-                    f"Validation failed (exit {res.exit_code})",
+                    "Run timed out",
                 )
-            return
-
-        file_version = db.load_file_version(self.SessionLocal, input_file_version_id)
-        if not file_version:
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                f"Document version not found: {input_file_version_id}",
-            )
-            return
-
-        file_id = str(file_version.get("file_id") or "")
-        document_id = file_id or document_id
-        file_row = db.load_file(self.SessionLocal, file_id)
-        if not file_row or str(file_row.get("kind") or "").lower() != "document":
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                f"Document not found: {document_id}",
-            )
-            return
-        if file_row.get("deleted_at") is not None:
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                f"Document deleted: {document_id}",
-            )
-            return
-
-        input_dir = self.paths.run_input_dir(workspace_id, run_id)
-        output_dir = self.paths.run_output_dir(workspace_id, run_id)
-        _ensure_dir(input_dir)
-        _ensure_dir(output_dir)
-        run_dir = self.paths.run_dir(workspace_id, run_id)
-
-        original_name = Path(
-            str(file_version.get("filename_at_upload") or file_row.get("name") or "input")
-        ).name
-        staged_input = input_dir / original_name
-        try:
-            self.storage.download_to_path(
-                str(file_row.get("blob_name") or ""),
-                version_id=file_version.get("blob_version_id"),
-                destination=staged_input,
-            )
-        except FileNotFoundError:
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                f"Document file missing: {file_row.get('blob_name')}",
-            )
-            return
-        except Exception as exc:
-            self._handle_run_failure(
-                claim,
-                run_id,
-                document_id,
-                event_log,
-                ctx,
-                now,
-                run_started_at,
-                2,
-                f"Document download failed: {exc}",
-            )
-            return
-
-        engine_payload: dict[str, Any] | None = None
-
-        def on_event(rec: dict[str, Any]) -> None:
-            nonlocal engine_payload
-            if rec.get("event") == "engine.run.completed":
-                data = rec.get("data")
-                if isinstance(data, dict):
-                    engine_payload = data
-
-        cmd = engine_process_file_cmd(
-            python_bin=python_bin,
-            input_path=staged_input,
-            output_dir=output_dir,
-            config_dir=config_dir,
-            options=options,
-            sheet_names=sheet_names,
-        )
-
-        try:
-            res = self.runner.run(
-                cmd,
-                event_log=event_log,
-                scope="run.engine",
-                timeout_seconds=float(self.settings.worker_run_timeout_seconds)
-                if self.settings.worker_run_timeout_seconds
-                else None,
-                cwd=None,
-                env=self._pip_env(),
-                heartbeat=lambda: db.heartbeat_run(
-                    self.SessionLocal,
-                    run_id=claim.id,
-                    worker_id=self.worker_id,
-                    now=utcnow(),
-                    lease_seconds=int(self.settings.worker_lease_seconds),
-                ),
-                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
-                context=ctx,
-                on_json_event=on_event,
-            )
-        except HeartbeatLostError:
-            event_log.emit(event="run.lost_claim", level="warning", message="Lease expired during engine run", context=ctx)
-            return
-
-        finished_at = utcnow()
-
-        if res.timed_out:
+                return
+    
+            if res.exit_code == 0:
+                output_path = _normalize_output_path(
+                    _extract_output_path(engine_payload),
+                    run_dir=run_dir,
+                )
+                if not output_path:
+                    output_path = _infer_output_path(output_dir, run_dir=run_dir)
+                results_payload = engine_payload if isinstance(engine_payload, dict) else None
+                metrics = parse_run_metrics(results_payload) if results_payload else None
+                fields = parse_run_fields(results_payload) if results_payload else []
+                columns = parse_run_table_columns(results_payload) if results_payload else []
+                output_file_row: dict[str, Any] | None = None
+                output_upload: Any | None = None
+                output_filename: str | None = None
+    
+                if output_path:
+                    output_abs = (run_dir / output_path).resolve()
+                    if output_abs.is_file():
+                        output_filename = output_abs.name
+                        output_display_name = f"{file_row.get('name') or output_filename} (Output)"
+                        output_name_key = f"output:{file_id}"
+                        expires_at = file_row.get("expires_at")
+                        if not isinstance(expires_at, datetime):
+                            expires_at = finished_at + timedelta(days=30)
+                        with self.SessionLocal.begin() as session:
+                            output_file_row = db.ensure_output_file(
+                                session,
+                                workspace_id=workspace_id,
+                                parent_file_id=file_id,
+                                name=output_display_name,
+                                name_key=output_name_key,
+                                expires_at=expires_at,
+                                now=finished_at,
+                            )
+                        try:
+                            output_upload = self.storage.upload_path(
+                                str(output_file_row.get("blob_name") or ""),
+                                output_abs,
+                            )
+                        except Exception as exc:
+                            self._handle_run_failure(
+                                claim,
+                                run_id,
+                                document_id,
+                                event_log,
+                                ctx,
+                                finished_at,
+                                run_started_at,
+                                res.exit_code or 2,
+                                f"Output upload failed: {exc}",
+                            )
+                            return
+                    else:
+                        output_path = None
+                with self.SessionLocal.begin() as session:
+                    ok = db.ack_run_success(
+                        session,
+                        run_id=run_id,
+                        worker_id=self.worker_id,
+                        now=finished_at,
+                    )
+                    if not ok:
+                        event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                        return
+    
+                    output_file_version_id: str | None = None
+                    if output_upload and output_file_row:
+                        blob_version_id = output_upload.version_id or output_upload.sha256
+                        content_type = None
+                        if output_filename:
+                            content_type = mimetypes.guess_type(output_filename)[0]
+                        version_payload = db.create_output_file_version(
+                            session,
+                            file_id=str(output_file_row["id"]),
+                            run_id=run_id,
+                            filename_at_upload=output_filename or "output",
+                            content_type=content_type,
+                            sha256=output_upload.sha256,
+                            byte_size=output_upload.byte_size,
+                            blob_version_id=blob_version_id,
+                            now=finished_at,
+                        )
+                        output_file_version_id = str(version_payload["id"])
+    
+                    db.record_run_result(
+                        session,
+                        run_id=run_id,
+                        completed_at=finished_at,
+                        exit_code=0,
+                        output_file_version_id=output_file_version_id,
+                        error_message=None,
+                    )
+    
+                    if results_payload is None:
+                        logger.warning("run.results.missing_payload run_id=%s", run_id)
+                    else:
+                        try:
+                            with session.begin_nested():
+                                db.replace_run_metrics(
+                                    session,
+                                    run_id=run_id,
+                                    metrics=metrics,
+                                )
+                                db.replace_run_fields(
+                                    session,
+                                    run_id=run_id,
+                                    rows=fields,
+                                )
+                                db.replace_run_table_columns(
+                                    session,
+                                    run_id=run_id,
+                                    rows=columns,
+                                )
+                        except Exception:
+                            logger.exception("run.results.persist_failed run_id=%s", run_id)
+    
+                _emit_run_complete(
+                    event_log,
+                    status="succeeded",
+                    message="Run succeeded",
+                    context=ctx,
+                    started_at=run_started_at,
+                    completed_at=finished_at,
+                    exit_code=0,
+                )
+                self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
+                return
+    
             self._handle_run_failure(
                 claim,
                 run_id,
@@ -1603,149 +1777,12 @@ class Worker:
                 finished_at,
                 run_started_at,
                 res.exit_code,
-                "Run timed out",
+                f"Engine failed (exit {res.exit_code})",
             )
-            return
-
-        if res.exit_code == 0:
-            output_path = _normalize_output_path(
-                _extract_output_path(engine_payload),
-                run_dir=run_dir,
-            )
-            if not output_path:
-                output_path = _infer_output_path(output_dir, run_dir=run_dir)
-            results_payload = engine_payload if isinstance(engine_payload, dict) else None
-            metrics = parse_run_metrics(results_payload) if results_payload else None
-            fields = parse_run_fields(results_payload) if results_payload else []
-            columns = parse_run_table_columns(results_payload) if results_payload else []
-            output_file_row: dict[str, Any] | None = None
-            output_upload: Any | None = None
-            output_filename: str | None = None
-
-            if output_path:
-                output_abs = (run_dir / output_path).resolve()
-                if output_abs.is_file():
-                    output_filename = output_abs.name
-                    output_display_name = f"{file_row.get('name') or output_filename} (Output)"
-                    output_name_key = f"output:{file_id}"
-                    expires_at = file_row.get("expires_at")
-                    if not isinstance(expires_at, datetime):
-                        expires_at = finished_at + timedelta(days=30)
-                    with self.SessionLocal.begin() as session:
-                        output_file_row = db.ensure_output_file(
-                            session,
-                            workspace_id=workspace_id,
-                            parent_file_id=file_id,
-                            name=output_display_name,
-                            name_key=output_name_key,
-                            expires_at=expires_at,
-                            now=finished_at,
-                        )
-                    try:
-                        output_upload = self.storage.upload_path(
-                            str(output_file_row.get("blob_name") or ""),
-                            output_abs,
-                        )
-                    except Exception as exc:
-                        self._handle_run_failure(
-                            claim,
-                            run_id,
-                            document_id,
-                            event_log,
-                            ctx,
-                            finished_at,
-                            run_started_at,
-                            res.exit_code or 2,
-                            f"Output upload failed: {exc}",
-                        )
-                        return
-                else:
-                    output_path = None
-            with self.SessionLocal.begin() as session:
-                ok = db.ack_run_success(
-                    session,
-                    run_id=run_id,
-                    worker_id=self.worker_id,
-                    now=finished_at,
-                )
-                if not ok:
-                    event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
-                    return
-
-                output_file_version_id: str | None = None
-                if output_upload and output_file_row:
-                    blob_version_id = output_upload.version_id or output_upload.sha256
-                    content_type = None
-                    if output_filename:
-                        content_type = mimetypes.guess_type(output_filename)[0]
-                    version_payload = db.create_output_file_version(
-                        session,
-                        file_id=str(output_file_row["id"]),
-                        run_id=run_id,
-                        filename_at_upload=output_filename or "output",
-                        content_type=content_type,
-                        sha256=output_upload.sha256,
-                        byte_size=output_upload.byte_size,
-                        blob_version_id=blob_version_id,
-                        now=finished_at,
-                    )
-                    output_file_version_id = str(version_payload["id"])
-
-                db.record_run_result(
-                    session,
-                    run_id=run_id,
-                    completed_at=finished_at,
-                    exit_code=0,
-                    output_file_version_id=output_file_version_id,
-                    error_message=None,
-                )
-
-                if results_payload is None:
-                    logger.warning("run.results.missing_payload run_id=%s", run_id)
-                else:
-                    try:
-                        with session.begin_nested():
-                            db.replace_run_metrics(
-                                session,
-                                run_id=run_id,
-                                metrics=metrics,
-                            )
-                            db.replace_run_fields(
-                                session,
-                                run_id=run_id,
-                                rows=fields,
-                            )
-                            db.replace_run_table_columns(
-                                session,
-                                run_id=run_id,
-                                rows=columns,
-                            )
-                    except Exception:
-                        logger.exception("run.results.persist_failed run_id=%s", run_id)
-
-            _emit_run_complete(
-                event_log,
-                status="succeeded",
-                message="Run succeeded",
-                context=ctx,
-                started_at=run_started_at,
-                completed_at=finished_at,
-                exit_code=0,
-            )
-            self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
-            return
-
-        self._handle_run_failure(
-            claim,
-            run_id,
-            document_id,
-            event_log,
-            ctx,
-            finished_at,
-            run_started_at,
-            res.exit_code,
-            f"Engine failed (exit {res.exit_code})",
-        )
+    
+        finally:
+            if run_dir and workspace_id:
+                self._cleanup_run_dir(run_dir=run_dir, workspace_id=workspace_id, run_id=run_id)
 
     def _handle_run_failure(
         self,
@@ -1961,14 +1998,14 @@ def main() -> int:
     settings = get_settings()
     _setup_logging(settings.worker_log_level)
 
-    _ensure_runtime_dirs(settings.data_dir, settings.venvs_dir)
+    _ensure_runtime_dirs(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
 
     engine = db.build_engine(settings)
     db.assert_tables_exist(engine, REQUIRED_TABLES)
 
     worker_id = settings.worker_id or _default_worker_id()
 
-    paths = PathManager(settings.data_dir, settings.venvs_dir)
+    paths = PathManager(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
     SessionLocal = db.build_sessionmaker(engine)
     storage = build_storage(settings)
 

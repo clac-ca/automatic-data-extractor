@@ -58,7 +58,7 @@ def run_migrations(settings: Settings | None = None, *, revision: str = "head") 
         raise ValueError("Settings.database_url is required.")
     alembic_cfg.attributes["settings"] = resolved
     # ConfigParser treats % as interpolation; escape to preserve URL encoding.
-    safe_url = resolved.database_url.replace("%", "%%")
+    safe_url = str(resolved.database_url).replace("%", "%%")
     alembic_cfg.set_main_option("sqlalchemy.url", safe_url)
     command.upgrade(alembic_cfg, revision)
 

@@ -13,6 +13,7 @@ def test_blob_storage_roundtrip() -> None:
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_require_versioning=False,
         blob_create_container_on_startup=True,
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     storage = build_storage_adapter(settings)
