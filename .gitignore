@@ -26,3 +26,6 @@ data/**
 
 # Workpackages
 workpackages/**
+!workpackages/**/
+!workpackages/**/*.md
+!workpackages/**/*.py

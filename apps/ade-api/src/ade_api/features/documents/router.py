@@ -164,6 +164,13 @@ def _resolve_event_cursor(request: Request, cursor: str | None) -> int:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cursor must be an integer string") from exc
 
 
+def _include_rows(include: str | None) -> bool:
+    if not include:
+        return False
+    parts = [part.strip().lower() for part in include.split(",")]
+    return "rows" in parts
+
+
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
     if metadata is None:
         return {}
@@ -512,9 +519,10 @@ async def stream_document_events(
     _actor: DocumentReader,
     *,
     cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
-    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
+    include: Annotated[str | None, Query(description="Optional inclusions (comma-separated).")] = None,
 ) -> EventSourceResponse:
     start_cursor = _resolve_event_cursor(request, cursor)
+    include_rows = _include_rows(include)
     session_factory = get_sessionmaker(request)
     events_hub = get_document_events_hub(request)
 

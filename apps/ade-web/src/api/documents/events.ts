@@ -16,7 +16,7 @@ export function documentsEventsStreamUrl(
 ) {
   const params = new URLSearchParams();
   if (options.includeRows) {
-    params.set("includeRows", "true");
+    params.set("include", "rows");
   }
   const query = params.toString();
   const suffix = query ? `?${query}` : "";

@@ -5852,14 +5852,22 @@
             "description": "Cursor token."
           },
           {
-            "name": "includeRows",
+            "name": "include",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Includerows"
-            }
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional inclusions (comma-separated).",
+              "title": "Include"
+            },
+            "description": "Optional inclusions (comma-separated)."
           }
         ],
         "responses": {

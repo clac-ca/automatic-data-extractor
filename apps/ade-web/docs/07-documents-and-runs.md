@@ -685,6 +685,9 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}`
   Retrieve document metadata.
 
+* `GET /api/v1/workspaces/{workspaceId}/documents/events/stream`
+  Stream document change events (SSE). Use `include=rows` to include a `DocumentListRow` payload for `document.changed` events.
+
 * `DELETE /api/v1/workspaces/{workspaceId}/documents/{documentId}`
   Soft delete a document.
 

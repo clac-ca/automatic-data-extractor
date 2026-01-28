@@ -7,7 +7,6 @@ import { useNavigate } from "react-router-dom";
 import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
-  fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
   type DocumentEventEntry,
   type DocumentRecord,
@@ -500,55 +499,22 @@ export function DocumentsTableView({
     }
   }, [clearRowPending, deleteTarget, markRowPending, notifyToast, removeRow, workspaceId]);
 
-  type HydratedChange = DocumentEventEntry & { row?: DocumentRow | null };
-
-  const hydrateChange = useCallback(
-    async (entry: DocumentEventEntry): Promise<HydratedChange> => {
-      if (entry.type === "document.deleted") {
-        return entry;
-      }
-      if (!entry.documentId) {
-        return entry;
-      }
-      if (entry.row) {
-        return entry as HydratedChange;
-      }
-      try {
-        const row = await fetchWorkspaceDocumentRowById(workspaceId, entry.documentId);
-        return { ...entry, row };
-      } catch {
-        return entry;
-      }
-    },
-    [workspaceId],
-  );
-
-  const applyIncomingChanges = useCallback(
-    (entries: HydratedChange[]) => {
-      entries.forEach((entry) => {
-        if (entry.type === "document.changed") {
-          if (entry.row) {
-            upsertRow(entry.row);
-          }
-        } else if (entry.type === "document.deleted") {
-          if (entry.documentId) {
-            removeRow(entry.documentId);
-          }
-        }
-      });
-    },
-    [removeRow, upsertRow],
-  );
-
   useWorkspaceDocumentsChanges(
     useCallback(
       (change) => {
-        void (async () => {
-          const hydrated = await hydrateChange(change);
-          applyIncomingChanges([hydrated]);
-        })();
+        if (change.type === "document.changed" && change.row) {
+          if (documentsById[change.row.id]) {
+            updateRow(change.row.id, change.row);
+          }
+          return;
+        }
+        if (change.type === "document.deleted" && change.documentId) {
+          if (documentsById[change.documentId]) {
+            removeRow(change.documentId);
+          }
+        }
       },
-      [applyIncomingChanges, hydrateChange],
+      [documentsById, removeRow, updateRow],
     ),
   );
 

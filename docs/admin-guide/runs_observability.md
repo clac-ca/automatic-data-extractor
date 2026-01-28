@@ -76,6 +76,6 @@ For visibility:
    `.../venvs/<workspace>/<config>/<deps_digest>/<environment_id>/logs/events.ndjson`.
 3. Use the `environments` table for status snapshots and troubleshooting.
 
-Refer to the event catalog in `.workpackages/ade-event-system-refactor/020-EVENT-TYPES-REFERENCE.md`
-for canonical payloads and the decision log in `docs/workpackages/WP12_ade_runs.md`
-for current operational policies (safe mode, deprecation schedule).
+Refer to the event catalog and decision log in the active work packages under
+`workpackages/` for canonical payloads and current operational policies (safe
+mode, deprecation schedule).

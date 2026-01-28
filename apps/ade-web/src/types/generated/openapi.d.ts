@@ -6536,7 +6536,8 @@ export interface operations {
             query?: {
                 /** @description Cursor token. */
                 cursor?: string | null;
-                includeRows?: boolean;
+                /** @description Optional inclusions (comma-separated). */
+                include?: string | null;
             };
             header?: never;
             path: {
