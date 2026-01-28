@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Annotated, Any
@@ -21,6 +22,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
+from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import (
     SettingsDep,
@@ -38,6 +40,7 @@ from ade_api.common.cursor_listing import (
     strict_cursor_query_guard,
 )
 from ade_api.common.logging import log_context
+from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -58,6 +61,7 @@ from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
+from .events import get_document_events_cursor, get_document_events_hub
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNameConflictError,
@@ -115,6 +119,7 @@ tags_router = APIRouter(
 )
 
 logger = logging.getLogger(__name__)
+KEEPALIVE_SECONDS = 15.0
 
 WorkspacePath = Annotated[
     UUID,
@@ -146,6 +151,17 @@ DocumentManager = Annotated[
         scopes=["{workspaceId}"],
     ),
 ]
+
+
+def _resolve_event_cursor(request: Request, cursor: str | None) -> int:
+    last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    token = last_event_id if last_event_id is not None else cursor
+    if token is None:
+        return 0
+    try:
+        return int(token)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cursor must be an integer string") from exc
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -483,6 +499,86 @@ def list_documents(
         include_run_fields=include_run_fields,
     )
     return page_result
+
+
+@router.get(
+    "/events/stream",
+    summary="Stream document events",
+)
+async def stream_document_events(
+    workspace_id: WorkspacePath,
+    request: Request,
+    settings: SettingsDep,
+    _actor: DocumentReader,
+    *,
+    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
+    include_rows: Annotated[bool, Query(alias="includeRows")] = False,
+) -> EventSourceResponse:
+    start_cursor = _resolve_event_cursor(request, cursor)
+    session_factory = get_sessionmaker(request)
+    events_hub = get_document_events_hub(request)
+
+    async def event_stream():
+        cursor_value = start_cursor
+        queue, unsubscribe = events_hub.subscribe(str(workspace_id))
+
+        def _current_cursor() -> int:
+            with session_factory() as session:
+                return get_document_events_cursor(session)
+
+        try:
+            cursor_value = await asyncio.to_thread(_current_cursor)
+        except Exception:
+            cursor_value = start_cursor
+
+        if cursor_value < start_cursor:
+            cursor_value = start_cursor
+
+        yield sse_json("ready", {"cursor": str(cursor_value)})
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    return
+
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
+                except asyncio.TimeoutError:
+                    yield sse_json("keepalive", {})
+                    continue
+
+                payload = dict(payload)
+                event_type = payload.get("type") or "document.changed"
+                document_id = payload.get("documentId")
+
+                if include_rows and event_type == "document.changed" and document_id:
+                    def _fetch_row() -> DocumentListRow | None:
+                        with session_factory() as session:
+                            service = DocumentsService(session=session, settings=settings)
+                            return service.build_list_row_for_document(
+                                workspace_id=workspace_id,
+                                document_id=UUID(str(document_id)),
+                            )
+
+                    try:
+                        row = await asyncio.to_thread(_fetch_row)
+                    except Exception:
+                        row = None
+                    if row is not None:
+                        payload["row"] = row
+
+                event_id = payload.get("cursor")
+                yield sse_json(event_type, payload, event_id=event_id)
+        finally:
+            unsubscribe()
+
+    return EventSourceResponse(
+        event_stream(),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.patch(

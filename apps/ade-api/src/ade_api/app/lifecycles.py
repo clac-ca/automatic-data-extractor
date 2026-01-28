@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from ade_api.db import get_engine, get_sessionmaker_from_app, init_db, shutdown_db
+from ade_api.features.documents.events import DocumentEventsHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
 from ade_api.settings import Settings, get_settings
@@ -160,7 +161,15 @@ def create_application_lifespan(
             await asyncio.to_thread(_sync_rbac_registry)
             await asyncio.to_thread(_sync_sso_env_providers)
 
-            yield
+            events_hub = DocumentEventsHub(settings=settings)
+            events_hub.start(loop=asyncio.get_running_loop())
+            app.state.document_events_hub = events_hub
+
+            try:
+                yield
+            finally:
+                events_hub.stop()
+                app.state.document_events_hub = None
         finally:
             shutdown_db(app)
 

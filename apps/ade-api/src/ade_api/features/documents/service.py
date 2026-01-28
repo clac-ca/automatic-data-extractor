@@ -59,6 +59,7 @@ from ade_api.models import (
 from ade_api.settings import Settings
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 
+from .events import get_document_events_cursor
 from .exceptions import (
     DocumentFileMissingError,
     DocumentTooLargeError,
@@ -444,6 +445,7 @@ class DocumentsService:
         stmt = stmt.add_columns(last_run_at_expr)
 
         facets = self._build_document_facets(stmt) if include_facets else None
+        changes_cursor = str(get_document_events_cursor(self._session))
         page_result = paginate_query_cursor(
             self._session,
             stmt,
@@ -451,7 +453,7 @@ class DocumentsService:
             limit=limit,
             cursor=cursor,
             include_total=include_total,
-            changes_cursor="0",
+            changes_cursor=changes_cursor,
             row_mapper=lambda row: _map_document_row(row),
         )
         raw_items = list(page_result.items)

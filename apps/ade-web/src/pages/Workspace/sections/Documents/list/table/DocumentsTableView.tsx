@@ -7,7 +7,9 @@ import { useNavigate } from "react-router-dom";
 import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
+  fetchWorkspaceDocumentRowById,
   patchWorkspaceDocument,
+  type DocumentEventEntry,
   type DocumentRecord,
   type DocumentUploadResponse,
 } from "@/api/documents";
@@ -40,6 +42,7 @@ import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
+import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 
 type CurrentUser = {
   id: string;
@@ -496,6 +499,58 @@ export function DocumentsTableView({
       clearRowPending(deleteTarget.id, "delete");
     }
   }, [clearRowPending, deleteTarget, markRowPending, notifyToast, removeRow, workspaceId]);
+
+  type HydratedChange = DocumentEventEntry & { row?: DocumentRow | null };
+
+  const hydrateChange = useCallback(
+    async (entry: DocumentEventEntry): Promise<HydratedChange> => {
+      if (entry.type === "document.deleted") {
+        return entry;
+      }
+      if (!entry.documentId) {
+        return entry;
+      }
+      if (entry.row) {
+        return entry as HydratedChange;
+      }
+      try {
+        const row = await fetchWorkspaceDocumentRowById(workspaceId, entry.documentId);
+        return { ...entry, row };
+      } catch {
+        return entry;
+      }
+    },
+    [workspaceId],
+  );
+
+  const applyIncomingChanges = useCallback(
+    (entries: HydratedChange[]) => {
+      entries.forEach((entry) => {
+        if (entry.type === "document.changed") {
+          if (entry.row) {
+            upsertRow(entry.row);
+          }
+        } else if (entry.type === "document.deleted") {
+          if (entry.documentId) {
+            removeRow(entry.documentId);
+          }
+        }
+      });
+    },
+    [removeRow, upsertRow],
+  );
+
+  useWorkspaceDocumentsChanges(
+    useCallback(
+      (change) => {
+        void (async () => {
+          const hydrated = await hydrateChange(change);
+          applyIncomingChanges([hydrated]);
+        })();
+      },
+      [applyIncomingChanges, hydrateChange],
+    ),
+  );
 
   const columns = useDocumentsColumns({
     filterMode,

@@ -330,6 +330,20 @@ class DocumentListPage(CursorPage[DocumentListRow]):
     """Cursor-based envelope of document list rows."""
 
 
+class DocumentEventEntry(BaseSchema):
+    """Single entry from the documents event stream."""
+
+    cursor: str
+    type: Literal["document.changed", "document.deleted"]
+    document_id: UUIDStr = Field(alias="documentId")
+    occurred_at: datetime = Field(alias="occurredAt")
+    document_version: int = Field(alias="documentVersion")
+    row: DocumentListRow | None = Field(
+        default=None,
+        description="Optional list row snapshot for changed documents.",
+    )
+
+
 class DocumentCommentCreate(BaseSchema):
     """Payload for creating a document comment."""
 
@@ -409,6 +423,7 @@ __all__ = [
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
     "DocumentConflictMode",
+    "DocumentEventEntry",
     "DocumentFileType",
     "DocumentListPage",
     "DocumentListRow",

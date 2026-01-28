@@ -27,6 +27,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   server: {
+    strictPort: true,
     proxy: {
       "/api": {
         target: apiTarget,
