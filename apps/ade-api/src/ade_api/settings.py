@@ -61,7 +61,6 @@ class Settings(BaseSettings):
     frontend_url: str | None = None
     frontend_dist_dir: Path | None = Field(default=None)
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
-    idempotency_key_ttl: timedelta = Field(default=timedelta(hours=24))
 
     # Paths
     api_root: Path = Field(default=Path("apps/ade-api"))

@@ -18,7 +18,7 @@ async def test_documents_delta_returns_changes_since_token(
 
     first = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**headers, "Idempotency-Key": "idem-delta-one"},
+        headers=headers,
         files={"file": ("delta-first.txt", b"first", "text/plain")},
     )
     assert first.status_code == 201, first.text
@@ -33,7 +33,7 @@ async def test_documents_delta_returns_changes_since_token(
 
     second = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**headers, "Idempotency-Key": "idem-delta-two"},
+        headers=headers,
         files={"file": ("delta-second.txt", b"second", "text/plain")},
     )
     assert second.status_code == 201, second.text
@@ -61,7 +61,7 @@ async def test_documents_delta_returns_410_for_expired_token(
 
     created = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**headers, "Idempotency-Key": "idem-delta-old"},
+        headers=headers,
         files={"file": ("delta-old.txt", b"old", "text/plain")},
     )
     assert created.status_code == 201, created.text

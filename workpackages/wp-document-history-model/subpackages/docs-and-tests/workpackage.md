@@ -28,21 +28,21 @@ Update documentation and tests to reflect the simplified, most common data model
 
 1.0 Documentation updates
   1.1 API docs
-    - [ ] Remove If-Match/ETag references from document endpoints.
-    - [ ] Remove Idempotency-Key references from uploads/runs/API keys.
-    - [ ] Update document stream + delta docs for numeric cursor contract.
+    - [x] Remove If-Match/ETag references from document endpoints.
+    - [x] Remove Idempotency-Key references from uploads/runs/API keys.
+    - [x] Update document stream + delta docs for numeric cursor contract.
   1.2 Architecture docs
-    - [ ] Add/refresh terminology section describing document_versions vs audit_log vs change feed.
-    - [ ] Document the chosen common structure and rationale.
+    - [x] Add/refresh terminology section describing document_versions vs audit_log vs change feed.
+    - [x] Document the chosen common structure and rationale.
 2.0 Tests + fixtures
   2.1 Backend tests
-    - [ ] Remove/update tests that assert ETag/If-Match or idempotency behavior.
-    - [ ] Update fixtures that rely on removed columns (doc_no, expires_at, version).
+    - [x] Remove/update tests that assert ETag/If-Match or idempotency behavior.
+    - [x] Update fixtures that rely on removed columns (doc_no, expires_at, version).
   2.2 Realtime tests
-    - [ ] Ensure SSE -> delta -> list(id filter) integration test matches the numeric cursor contract.
+    - [x] Ensure SSE -> delta -> list(id filter) integration test matches the numeric cursor contract.
   2.3 Frontend tests/types
-    - [ ] Update frontend API tests for removed headers and fields.
-    - [ ] Regenerate OpenAPI-driven types if needed.
+    - [x] Update frontend API tests for removed headers and fields.
+    - [x] Regenerate OpenAPI-driven types if needed.
 
 ### Open Questions
 

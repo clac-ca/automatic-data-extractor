@@ -114,7 +114,6 @@ export function useDocumentsColumns({
         cell: ({ row }) => (
           <DocumentNameCell
             name={row.getValue<string>("name")}
-            docNo={row.original.docNo}
             viewers={rowPresence?.get(row.original.id) ?? []}
             onOpen={
               onOpenDocument ? () => onOpenDocument(row.original.id) : undefined

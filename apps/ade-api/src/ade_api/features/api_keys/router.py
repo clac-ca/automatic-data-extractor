@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, Security, status
 
-from ade_api.api.deps import get_api_keys_service, get_idempotency_service
+from ade_api.api.deps import get_api_keys_service
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.cursor_listing import (
@@ -19,12 +19,6 @@ from ade_api.common.cursor_listing import (
 )
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf, require_global
-from ade_api.features.idempotency import (
-    IdempotencyService,
-    build_request_hash,
-    build_scope_key,
-    require_idempotency_key,
-)
 from ade_api.models import ApiKey
 
 from .schemas import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyPage, ApiKeySummary
@@ -141,26 +135,9 @@ def list_my_api_keys(
 )
 def create_my_api_key(
     payload: ApiKeyCreateRequest,
-    request: Request,
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
 ) -> ApiKeyCreateResponse:
-    scope_key = build_scope_key(principal_id=str(principal.user_id))
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
-
     try:
         result = service.create_for_user(
             user_id=principal.user_id,
@@ -173,15 +150,7 @@ def create_my_api_key(
             detail=str(exc),
         ) from exc
 
-    response_payload = _make_create_response(result)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=response_payload,
-    )
-    return response_payload
+    return _make_create_response(result)
 
 
 @router.get(
@@ -346,27 +315,9 @@ def read_user_api_key(
 def create_user_api_key(
     user_id: UserPath,
     payload: ApiKeyCreateRequest,
-    request: Request,
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
 ) -> ApiKeyCreateResponse:
-    scope_key = build_scope_key(principal_id=str(principal.user_id))
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
-
     try:
         result = service.create_for_user(
             user_id=user_id,
@@ -379,15 +330,7 @@ def create_user_api_key(
             detail=str(exc),
         ) from exc
 
-    response_payload = _make_create_response(result)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=response_payload,
-    )
-    return response_payload
+    return _make_create_response(result)
 
 
 @router.delete(

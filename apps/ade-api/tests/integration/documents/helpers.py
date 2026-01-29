@@ -43,7 +43,6 @@ async def _create_document_file(
     content_type: str,
     byte_size: int,
     sha256: str,
-    expires_at: datetime,
     tags: list[str] | None = None,
     attributes: dict | None = None,
 ) -> tuple[File, FileVersion]:
@@ -55,17 +54,14 @@ async def _create_document_file(
     document = File(
         id=file_id,
         workspace_id=workspace_id,
-        kind=FileKind.DOCUMENT,
-        doc_no=None,
+        kind=FileKind.INPUT,
         name=name,
         name_key=name_key,
         blob_name=blob_name,
-        parent_file_id=None,
+        source_file_id=None,
         attributes=attributes or {},
         uploaded_by_user_id=uploader_id,
-        expires_at=expires_at,
         comment_count=0,
-        version=1,
     )
 
     version = FileVersion(
@@ -78,7 +74,7 @@ async def _create_document_file(
         byte_size=byte_size,
         content_type=content_type,
         filename_at_upload=name,
-        blob_version_id="v1",
+        storage_version_id="v1",
     )
 
     document.current_version = version
@@ -111,7 +107,6 @@ async def build_documents_fixture(session):
     await _flush(session)
 
     now = datetime.now(tz=UTC)
-    expires = now + timedelta(days=30)
 
     processed, processed_version = await _create_document_file(
         session,
@@ -121,7 +116,6 @@ async def build_documents_fixture(session):
         content_type="application/pdf",
         byte_size=512,
         sha256="a" * 64,
-        expires_at=expires,
         tags=["finance"],
     )
 
@@ -133,7 +127,6 @@ async def build_documents_fixture(session):
         content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         byte_size=128,
         sha256="b" * 64,
-        expires_at=expires,
     )
 
     configuration_id = await ensure_configuration(session, workspace.id)
@@ -191,7 +184,6 @@ async def build_tag_filter_fixture(session):
     await _flush(session)
 
     now = datetime.now(tz=UTC)
-    expires = now + timedelta(days=30)
 
     doc_all, _ = await _create_document_file(
         session,
@@ -201,7 +193,6 @@ async def build_tag_filter_fixture(session):
         content_type="text/csv",
         byte_size=200,
         sha256="c" * 64,
-        expires_at=expires,
         tags=["finance", "priority"],
     )
 
@@ -213,7 +204,6 @@ async def build_tag_filter_fixture(session):
         content_type="text/csv",
         byte_size=201,
         sha256="d" * 64,
-        expires_at=expires,
         tags=["finance"],
     )
 
@@ -225,7 +215,6 @@ async def build_tag_filter_fixture(session):
         content_type="text/csv",
         byte_size=202,
         sha256="e" * 64,
-        expires_at=expires,
         tags=["priority"],
     )
 
@@ -237,7 +226,6 @@ async def build_tag_filter_fixture(session):
         content_type="text/csv",
         byte_size=203,
         sha256="f" * 64,
-        expires_at=expires,
     )
 
     return workspace, uploader, doc_all, doc_finance, doc_priority, doc_empty

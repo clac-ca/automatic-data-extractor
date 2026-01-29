@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import anyio
 import io
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import openpyxl
 import pytest
@@ -30,10 +30,7 @@ async def test_upload_list_download_document(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -83,10 +80,7 @@ async def test_upload_document_ignores_blank_metadata(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -109,10 +103,7 @@ async def test_list_documents_rejects_unknown_query_params(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     response = await async_client.get(
         f"{workspace_base}/documents",
@@ -133,10 +124,7 @@ async def test_upload_document_does_not_cache_worksheets(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     workbook = openpyxl.Workbook()
     workbook.active.title = "Sheet A"
@@ -173,10 +161,7 @@ async def test_upload_document_exceeds_limit_returns_413(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     override_app_settings(storage_upload_max_bytes=8)
 

@@ -41,7 +41,6 @@ def test_stream_document_handles_missing_file(
         upload=upload,
         plan=plan,
         metadata=None,
-        expires_at=None,
         actor=member,
     )
 

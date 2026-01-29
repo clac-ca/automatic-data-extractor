@@ -1022,22 +1022,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
           }
         ],
         "requestBody": {
@@ -1563,22 +1547,6 @@
                 }
               ],
               "title": "X-Csrf-Token"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
             }
           }
         ],
@@ -5319,22 +5287,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
           }
         ],
         "requestBody": {
@@ -5364,7 +5316,7 @@
             }
           },
           "400": {
-            "description": "Metadata payload or expiration timestamp is invalid.",
+            "description": "Metadata payload is invalid.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -6061,9 +6013,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "requestBody": {
@@ -6222,9 +6171,6 @@
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
-              },
-              "ETag": {
-                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -6329,9 +6275,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
@@ -9854,22 +9797,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
           }
         ],
         "requestBody": {
@@ -10166,22 +10093,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
           }
         ],
         "requestBody": {
@@ -10277,22 +10188,6 @@
                 }
               ],
               "title": "X-Csrf-Token"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
             }
           }
         ],
@@ -10589,22 +10484,6 @@
                 }
               ],
               "title": "X-Csrf-Token"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
             }
           }
         ],
@@ -12948,17 +12827,6 @@
             ],
             "title": "Metadata"
           },
-          "expires_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires At"
-          },
           "run_options": {
             "anyOf": [
               {
@@ -13004,17 +12872,6 @@
               }
             ],
             "title": "Metadata"
-          },
-          "expires_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires At"
           }
         },
         "type": "object",
@@ -13735,17 +13592,6 @@
             "title": "Workspaceid",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "docNo": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Docno"
-          },
           "name": {
             "type": "string",
             "title": "Name",
@@ -13816,23 +13662,6 @@
             "format": "date-time",
             "title": "Activityat"
           },
-          "version": {
-            "type": "integer",
-            "title": "Version",
-            "description": "Monotonic document version."
-          },
-          "etag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Etag",
-            "description": "Weak ETag for optimistic concurrency checks."
-          },
           "lastRun": {
             "anyOf": [
               {
@@ -13892,8 +13721,7 @@
           "byteSize",
           "createdAt",
           "updatedAt",
-          "activityAt",
-          "version"
+          "activityAt"
         ],
         "title": "DocumentListRow",
         "description": "Table-ready projection for document list rows."
@@ -13911,18 +13739,6 @@
             "format": "uuid",
             "title": "Workspaceid",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "docNo": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Docno",
-            "description": "Numeric document reference within the workspace."
           },
           "name": {
             "type": "string",
@@ -13976,11 +13792,6 @@
               }
             ]
           },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expiresat"
-          },
           "activityAt": {
             "anyOf": [
               {
@@ -14002,23 +13813,6 @@
             "type": "string",
             "format": "date-time",
             "title": "Updatedat"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version",
-            "description": "Monotonic document version."
-          },
-          "etag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Etag",
-            "description": "Weak ETag for optimistic concurrency checks."
           },
           "deletedAt": {
             "anyOf": [
@@ -14159,10 +13953,8 @@
           "workspaceId",
           "name",
           "byteSize",
-          "expiresAt",
           "createdAt",
-          "updatedAt",
-          "version"
+          "updatedAt"
         ],
         "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
@@ -18104,16 +17896,6 @@
           "type": "string"
         },
         "description": "ETag value required for optimistic concurrency checks."
-      },
-      "IdempotencyKey": {
-        "name": "Idempotency-Key",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "description": "Unique key for replaying POST requests safely."
       }
     }
   },

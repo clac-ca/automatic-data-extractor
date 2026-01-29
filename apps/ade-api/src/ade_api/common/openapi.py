@@ -149,21 +149,10 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                 "description": "ETag value required for optimistic concurrency checks.",
             },
         )
-        parameters.setdefault(
-            "IdempotencyKey",
-            {
-                "name": "Idempotency-Key",
-                "in": "header",
-                "required": True,
-                "schema": {"type": "string", "maxLength": 128},
-                "description": "Unique key for replaying POST requests safely.",
-            },
-        )
 
         schema["security"] = auth_security
 
         etag_routes = {
-            ("/api/v1/workspaces/{workspaceId}/documents/{documentId}", "GET"),
             ("/api/v1/workspaces/{workspaceId}/configurations/{configurationId}", "GET"),
             ("/api/v1/users/me/apikeys/{apiKeyId}", "GET"),
             ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "GET"),
@@ -171,22 +160,11 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "GET"),
         }
         if_match_routes = {
-            ("/api/v1/workspaces/{workspaceId}/documents/{documentId}", "PATCH"),
-            ("/api/v1/workspaces/{workspaceId}/documents/{documentId}", "DELETE"),
             ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "PATCH"),
             ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "DELETE"),
             ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "DELETE"),
             ("/api/v1/users/me/apikeys/{apiKeyId}", "DELETE"),
             ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "DELETE"),
-        }
-        idempotency_routes = {
-            ("/api/v1/workspaces/{workspaceId}/documents", "POST"),
-            ("/api/v1/configurations/{configurationId}/runs", "POST"),
-            ("/api/v1/configurations/{configurationId}/runs/batch", "POST"),
-            ("/api/v1/workspaces/{workspaceId}/runs", "POST"),
-            ("/api/v1/workspaces/{workspaceId}/runs/batch", "POST"),
-            ("/api/v1/users/me/apikeys", "POST"),
-            ("/api/v1/users/{userId}/apikeys", "POST"),
         }
 
         def _add_parameter(operation: dict[str, Any], ref: str, name: str | None = None) -> None:
@@ -243,13 +221,6 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
 
                 if (path, method_upper) in if_match_routes:
                     _add_parameter(operation, "#/components/parameters/IfMatch", "If-Match")
-
-                if (path, method_upper) in idempotency_routes:
-                    _add_parameter(
-                        operation,
-                        "#/components/parameters/IdempotencyKey",
-                        "Idempotency-Key",
-                    )
 
         app.openapi_schema = schema
         return schema

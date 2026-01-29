@@ -231,7 +231,7 @@ async def test_document_change_stream_round_trip(
 
     baseline = await committed_client.post(
         f"{workspace_base}/documents",
-        headers={**headers, "Idempotency-Key": "idem-stream-baseline"},
+        headers=headers,
         files={"file": ("baseline.txt", b"baseline", "text/plain")},
         timeout=request_timeout,
     )
@@ -250,7 +250,7 @@ async def test_document_change_stream_round_trip(
 
         created = await committed_client.post(
             f"{workspace_base}/documents",
-            headers={**headers, "Idempotency-Key": "idem-stream-change"},
+            headers=headers,
             files={"file": ("streamed.txt", b"streamed", "text/plain")},
             timeout=request_timeout,
         )

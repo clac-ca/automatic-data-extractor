@@ -29,22 +29,22 @@ Define the API contract changes implied by the simplified data model, including 
 
 1.0 API surface changes
   1.1 Document list/detail
-    - [ ] Remove ETag/version/docNo/expiresAt fields from document responses.
-    - [ ] Confirm list query parameters and response meta fields remain stable.
+    - [x] Remove ETag/version/docNo/expiresAt fields from document responses.
+    - [x] Confirm list query parameters and response meta fields remain stable.
   1.2 Write endpoints
-    - [ ] Remove If-Match requirement for update/delete/tag endpoints.
-    - [ ] Remove Idempotency-Key handling from document upload and run create routes.
+    - [x] Remove If-Match requirement for update/delete/tag endpoints.
+    - [x] Remove Idempotency-Key handling from document upload and run create routes.
 2.0 Change feed contracts
   2.1 SSE stream
-    - [ ] Verify event types/payloads match document.changed/document.deleted with numeric id.
-    - [ ] Ensure Last-Event-ID/cursor handling remains numeric.
+    - [x] Verify event types/payloads match document.changed/document.deleted with numeric id.
+    - [x] Ensure Last-Event-ID/cursor handling remains numeric.
   2.2 Delta endpoint
-    - [ ] Keep /documents/delta params + response aligned to numeric cursor.
-    - [ ] Confirm list(id filter) lookup behavior for client refresh.
+    - [x] Keep /documents/delta params + response aligned to numeric cursor.
+    - [x] Confirm list(id filter) lookup behavior for client refresh.
 3.0 Client guidance + types
   3.1 Frontend alignment
-    - [ ] Update frontend API calls/types for removed headers/fields.
-    - [ ] Ensure streaming + delta client flow remains consistent.
+    - [x] Update frontend API calls/types for removed headers/fields.
+    - [x] Ensure streaming + delta client flow remains consistent.
 
 ### Open Questions
 

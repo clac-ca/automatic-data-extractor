@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -204,10 +203,7 @@ async def test_deactivate_user_revokes_api_keys(
 
     create_key = await async_client.post(
         f"/api/v1/users/{target.id}/apikeys",
-        headers={
-            "Authorization": f"Bearer {admin_token}",
-            "Idempotency-Key": f"idem-{uuid4().hex}",
-        },
+        headers={"Authorization": f"Bearer {admin_token}"},
         json={"name": "Target key"},
     )
     assert create_key.status_code == 201, create_key.text

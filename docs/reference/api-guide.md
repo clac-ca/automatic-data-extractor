@@ -66,26 +66,26 @@ All non-2xx responses use `application/problem+json` with a consistent schema:
 
 ### Optimistic concurrency
 
-- `GET` item endpoints return an `ETag` header.
-- `PATCH` and `DELETE` require `If-Match` with that ETag.
+- Most mutable item endpoints (configs, roles, API keys) return an `ETag` header.
+- `PATCH` and `DELETE` for those endpoints require `If-Match` with that ETag.
   - Missing `If-Match` returns `428 precondition_required`.
   - Mismatched `If-Match` returns `412 precondition_failed`.
+- Document endpoints do **not** use `ETag`/`If-Match`; updates and deletes are unconditional.
 
 Example:
 
 ```http
-GET /api/v1/workspaces/ws_123/documents/doc_123
-ETag: W/"doc_123:1700000000"
+GET /api/v1/workspaces/ws_123/configurations/config_123
+ETag: W/"config_123:1700000000"
 
-PATCH /api/v1/workspaces/ws_123/documents/doc_123
-If-Match: W/"doc_123:1700000000"
+PATCH /api/v1/workspaces/ws_123/configurations/config_123
+If-Match: W/"config_123:1700000000"
 ```
 
 ### Idempotent POSTs
 
-- Creating documents, runs, and API keys requires `Idempotency-Key`.
-- Replaying the same key + payload returns the original response.
-- Reusing a key with a different payload returns `409 idempotency_key_conflict`.
+ADE no longer requires `Idempotency-Key` headers for documents, runs, or API keys.
+Clients should rely on standard retry semantics and backend validation errors.
 
 ## Core resources
 
@@ -157,7 +157,7 @@ Upload source files for extraction. All document routes are nested under the wor
 - `GET /workspaces/{workspaceId}/documents/stream` – Server-Sent Events (SSE) stream for document change notifications (workspace-scoped, minimal payload).
 - `GET /workspaces/{workspaceId}/documents/delta?since=<cursor>` – pull changes since a change cursor; use with the SSE stream for live updates.
 - The list endpoint accepts `filters=[{"id":"id","operator":"in","value":["..."]}]` for membership checks using the same filter semantics as the UI.
-- `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand). Pass `conflictMode=upload_new_version` or `conflictMode=keep_both` to resolve name collisions (default is `409`).
+- `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON); uploads store bytes + metadata only (worksheet inspection is on-demand). Pass `conflictMode=upload_new_version` or `conflictMode=keep_both` to resolve name collisions (default is `409`).
 - `GET /workspaces/{workspaceId}/documents/{documentId}` – fetch metadata, including upload timestamps and submitter.
 - `POST /workspaces/{workspaceId}/documents/{documentId}/versions` – upload a new document version (same identity, new version number).
 - `GET /workspaces/{workspaceId}/documents/{documentId}/download` – download the stored file with a safe `Content-Disposition` header.
@@ -170,6 +170,7 @@ Upload source files for extraction. All document routes are nested under the wor
 - The SSE stream emits minimal payloads (`documentId`, `op`, `id`) and uses the SSE `id` field so browsers can send `Last-Event-ID` on reconnect.
 - Use `/documents/delta?since=<cursor>` to pull changes; if you receive `410 Gone`, refresh the list and reset your cursor.
 - Change cursors are retained for ~14 days via periodic cleanup of the `document_changes` table.
+- Migrations that rebuild `document_changes` reset cursors; clients should refresh the list after deploys that touch the change feed.
 - Keep SSE connections open with proxy-friendly settings (HTTP/2 preferred); the stream emits keepalive events and uses small payloads to stay within Postgres NOTIFY limits.
 
 **Resumable upload sessions (large files)**

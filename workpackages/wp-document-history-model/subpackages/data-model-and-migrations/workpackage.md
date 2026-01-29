@@ -30,20 +30,20 @@ Translate the chosen common architecture into a target schema and a clean migrat
 
 1.0 Schema changes + migration
   1.1 Alembic migration
-    - [ ] Drop `idempotency_keys`.
-    - [ ] Drop `files.version`, `files.doc_no`, and `files.expires_at`.
-    - [ ] Rename `files.parent_file_id` -> `files.source_file_id`.
-    - [ ] Rename `file_versions.blob_version_id` -> `storage_version_id` (nullable).
-    - [ ] Update `files.kind` values to input/output/log/export.
-    - [ ] Normalize `files.name_key` values by kind rule.
-    - [ ] Backfill `file_versions.content_type` for generated outputs.
+    - [x] Drop `idempotency_keys`.
+    - [x] Drop `files.version`, `files.doc_no`, and `files.expires_at`.
+    - [x] Rename `files.parent_file_id` -> `files.source_file_id`.
+    - [x] Rename `file_versions.blob_version_id` -> `storage_version_id` (nullable).
+    - [x] Update `files.kind` values to input/output/log/export.
+    - [x] Normalize `files.name_key` values by kind rule.
+    - [x] Backfill `file_versions.content_type` for generated outputs.
   1.2 ORM + repository updates
-    - [ ] Update SQLAlchemy models to match the new schema.
-    - [ ] Update document/run services that reference removed/renamed fields.
+    - [x] Update SQLAlchemy models to match the new schema.
+    - [x] Update document/run services that reference removed/renamed fields.
 2.0 Data safety + ops notes
   2.1 Operational notes
-    - [ ] Document cursor reset/data loss impacts in docs or runbook.
-    - [ ] Note required refresh/rebuild steps after migration.
+    - [x] Document cursor reset/data loss impacts in docs or runbook.
+    - [x] Note required refresh/rebuild steps after migration.
 
 ### Open Questions
 

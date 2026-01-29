@@ -80,7 +80,6 @@ describe("createRun", () => {
         configuration_id: "config-123",
       },
       undefined,
-      "idem-run-1",
     );
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs", {
@@ -95,7 +94,6 @@ describe("createRun", () => {
           active_sheet_only: false,
         },
       },
-      headers: { "Idempotency-Key": "idem-run-1" },
       signal: undefined,
     });
     expect(run).toEqual(sampleRunResource);
@@ -109,7 +107,7 @@ describe("createRun", () => {
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     await expect(
-      createRun("workspace-123", { input_document_id: "doc-123" }, undefined, "idem-run-2"),
+      createRun("workspace-123", { input_document_id: "doc-123" }),
     ).rejects.toThrow("Expected run creation response.");
   });
 });

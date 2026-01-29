@@ -1,5 +1,5 @@
 import anyio
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from sqlalchemy import select
@@ -38,7 +38,7 @@ async def test_create_runs_batch_creates_runs(
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
         f"/api/v1/configurations/{configuration.id}/runs/batch",
-        headers={**headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
+        headers=headers,
         json={
             "document_ids": [str(doc.id) for doc in documents],
             "options": {"log_level": "INFO"},

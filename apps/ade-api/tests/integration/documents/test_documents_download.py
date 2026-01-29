@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import anyio
 import pytest
@@ -27,10 +27,7 @@ async def test_download_missing_file_returns_404(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",

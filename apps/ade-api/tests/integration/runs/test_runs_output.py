@@ -47,16 +47,13 @@ async def test_run_output_endpoint_serves_file(
         id=output_file_id,
         workspace_id=workspace_id,
         kind=FileKind.OUTPUT,
-        doc_no=None,
         name=f"{document.name} (Output)",
         name_key=f"output:{document.id}",
         blob_name=output_blob_name,
-        parent_file_id=document.id,
+        source_file_id=document.id,
         attributes={},
         uploaded_by_user_id=None,
-        expires_at=document.expires_at,
         comment_count=0,
-        version=1,
     )
 
     storage = build_storage_adapter(settings)
@@ -73,7 +70,7 @@ async def test_run_output_endpoint_serves_file(
         byte_size=stored.byte_size,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename_at_upload="normalized.xlsx",
-        blob_version_id=stored.version_id or stored.sha256,
+        storage_version_id=stored.version_id or stored.sha256,
     )
     output_file.current_version = output_version
     output_file.versions.append(output_version)

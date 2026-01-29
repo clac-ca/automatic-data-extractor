@@ -1,5 +1,4 @@
 import { client } from "@/api/client";
-import { createIdempotencyKey } from "@/api/idempotency";
 import { buildListQuery, type FilterItem } from "@/api/listing";
 import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@/types";
 
@@ -29,13 +28,9 @@ export async function listMyApiKeys(options: ListPageOptions = {}): Promise<ApiK
 
 export async function createMyApiKey(
   payload: CreateApiKeyRequest,
-  idempotencyKey?: string,
 ): Promise<ApiKeyCreateResponse> {
   const { data } = await client.POST("/api/v1/users/me/apikeys", {
     body: payload,
-    headers: {
-      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("api-key"),
-    },
   });
   if (!data) {
     throw new Error("Expected API key creation payload.");
@@ -65,14 +60,10 @@ export async function listUserApiKeys(userId: string, options: ListPageOptions =
 export async function createUserApiKey(
   userId: string,
   payload: CreateApiKeyRequest,
-  idempotencyKey?: string,
 ): Promise<ApiKeyCreateResponse> {
   const { data } = await client.POST("/api/v1/users/{userId}/apikeys", {
     params: { path: { userId } },
     body: payload,
-    headers: {
-      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("api-key"),
-    },
   });
   if (!data) {
     throw new Error("Expected API key creation payload.");

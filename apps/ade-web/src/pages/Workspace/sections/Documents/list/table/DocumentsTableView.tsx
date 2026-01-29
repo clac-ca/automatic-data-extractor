@@ -16,7 +16,6 @@ import {
 } from "@/api/documents";
 import { ApiError } from "@/api/errors";
 import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
-import { buildWeakEtag } from "@/api/etag";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
 import { SpinnerIcon } from "@/components/icons";
@@ -303,12 +302,9 @@ export function DocumentsTableView({
   const applyDocumentUpdate = useCallback(
     (documentId: string, updated: DocumentRecord) => {
       const activityAt = updated.activityAt ?? updated.updatedAt;
-      const etag = updated.etag ?? buildWeakEtag(updated.id, String(updated.version));
       const updates: Partial<DocumentRow> = {
         updatedAt: updated.updatedAt,
         activityAt,
-        version: updated.version,
-        etag,
         tags: updated.tags,
         assignee: updated.assignee ?? null,
         uploader: updated.uploader ?? null,
@@ -417,7 +413,6 @@ export function DocumentsTableView({
         : null;
 
       const snapshot = current.assignee ?? null;
-      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
       markRowPending(documentId, "assign");
       updateRow(documentId, { assignee: optimisticAssignee });
       try {
@@ -425,7 +420,6 @@ export function DocumentsTableView({
           workspaceId,
           documentId,
           { assigneeId },
-          { ifMatch },
         );
         applyDocumentUpdate(documentId, updated);
       } catch (error) {
@@ -451,7 +445,6 @@ export function DocumentsTableView({
       const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
       const isNewOption = !hasTag && !hasTagOption(tagOptions, tag);
 
-      const ifMatch = current.etag ?? buildWeakEtag(documentId, String(current.version));
       markRowPending(documentId, "tags");
       updateRow(documentId, { tags: nextTags });
       if (isNewOption) {
@@ -466,7 +459,6 @@ export function DocumentsTableView({
           documentId,
           hasTag ? { remove: [tag] } : { add: [tag] },
           undefined,
-          { ifMatch },
         );
         applyDocumentUpdate(documentId, updated);
         if (isNewOption) {
@@ -518,10 +510,9 @@ export function DocumentsTableView({
 
   const onDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
-    const ifMatch = deleteTarget.etag ?? buildWeakEtag(deleteTarget.id, String(deleteTarget.version));
     markRowPending(deleteTarget.id, "delete");
     try {
-      await deleteWorkspaceDocument(workspaceId, deleteTarget.id, { ifMatch });
+      await deleteWorkspaceDocument(workspaceId, deleteTarget.id);
       removeRow(deleteTarget.id);
       notifyToast({ title: "Document deleted.", intent: "success", duration: 4000 });
       setDeleteTarget(null);

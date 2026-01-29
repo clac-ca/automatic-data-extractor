@@ -250,7 +250,7 @@ def _try_enqueue_run(
     response_model_exclude_none=True,
     responses={
         status.HTTP_400_BAD_REQUEST: {
-            "description": "Metadata payload or expiration timestamp is invalid.",
+            "description": "Metadata payload is invalid.",
         },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to upload documents.",

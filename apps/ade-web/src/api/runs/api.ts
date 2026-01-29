@@ -1,5 +1,4 @@
 import { ApiError } from "@/api/errors";
-import { createIdempotencyKey } from "@/api/idempotency";
 import { client, resolveApiUrl } from "@/api/client";
 import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
 
@@ -193,13 +192,9 @@ export async function fetchRunOutputPreview(
 export async function createRunForDocument(
   configurationId: string,
   documentId: string,
-  idempotencyKey?: string,
 ): Promise<RunResource> {
   const { data } = await client.POST("/api/v1/configurations/{configurationId}/runs", {
     params: { path: { configurationId } },
-    headers: {
-      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("run"),
-    },
     body: {
       options: {
         dry_run: false,
@@ -218,7 +213,6 @@ export async function createRun(
   workspaceId: string,
   options: RunStreamOptions,
   signal?: AbortSignal,
-  idempotencyKey?: string,
 ): Promise<RunResource> {
   const pathParams: RunCreatePathParams = { workspaceId };
   const { input_document_id, configuration_id, ...optionOverrides } = options;
@@ -234,9 +228,6 @@ export async function createRun(
 
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/runs", {
     params: { path: pathParams },
-    headers: {
-      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("run"),
-    },
     body,
     signal,
   });

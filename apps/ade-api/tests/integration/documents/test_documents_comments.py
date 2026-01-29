@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-
 import anyio
 import pytest
 from httpx import AsyncClient
@@ -16,23 +14,19 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _create_document(db_session, *, workspace_id, user_id) -> File:
-    now = datetime.now(tz=UTC)
     file_id = generate_uuid7()
     version_id = generate_uuid7()
     name = "comment-doc.xlsx"
     doc = File(
         id=file_id,
         workspace_id=workspace_id,
-        kind=FileKind.DOCUMENT,
-        doc_no=None,
+        kind=FileKind.INPUT,
         name=name,
         name_key=name.casefold(),
         blob_name=f"{workspace_id}/files/{file_id}",
         attributes={},
         uploaded_by_user_id=user_id,
-        expires_at=now + timedelta(days=30),
         comment_count=0,
-        version=1,
     )
     version = FileVersion(
         id=version_id,
@@ -44,7 +38,7 @@ async def _create_document(db_session, *, workspace_id, user_id) -> File:
         byte_size=1024,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename_at_upload=name,
-        blob_version_id="v1",
+        storage_version_id="v1",
     )
     doc.current_version = version
     doc.versions.append(version)

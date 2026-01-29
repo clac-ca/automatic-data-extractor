@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
-
 import pytest
 from httpx import AsyncClient
 
@@ -74,7 +72,7 @@ async def test_list_documents_uploader_me_filters(
 
     upload_one = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**member_headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
+        headers=member_headers,
         files={"file": ("member.txt", b"member", "text/plain")},
     )
     assert upload_one.status_code == 201, upload_one.text
@@ -88,7 +86,7 @@ async def test_list_documents_uploader_me_filters(
 
     upload_two = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**owner_headers, "Idempotency-Key": f"idem-{uuid4().hex}"},
+        headers=owner_headers,
         files={"file": ("owner.txt", b"owner", "text/plain")},
     )
     assert upload_two.status_code == 201, upload_two.text
@@ -124,13 +122,13 @@ async def test_list_documents_id_in_filter(
 
     doc_one = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**headers, "Idempotency-Key": "idem-doc-1"},
+        headers=headers,
         files={"file": ("delta-one.txt", b"one", "text/plain")},
     )
     assert doc_one.status_code == 201, doc_one.text
     doc_two = await async_client.post(
         f"{workspace_base}/documents",
-        headers={**headers, "Idempotency-Key": "idem-doc-2"},
+        headers=headers,
         files={"file": ("delta-two.txt", b"two", "text/plain")},
     )
     assert doc_two.status_code == 201, doc_two.text

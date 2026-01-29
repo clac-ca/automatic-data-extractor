@@ -2,8 +2,8 @@ import { client } from "@/api/client";
 import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
 import type { components } from "@/types";
 
-export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
-export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
+export type DocumentRecord = components["schemas"]["DocumentOut"];
+export type DocumentListRow = components["schemas"]["DocumentListRow"];
 export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "items"> & {
   items?: DocumentListRow[] | null;
 };
@@ -168,7 +168,6 @@ export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
   payload: { assigneeId?: string | null; metadata?: Record<string, unknown> | null },
-  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body: {
     assigneeId?: string | null;
@@ -181,15 +180,9 @@ export async function patchWorkspaceDocument(
     body.metadata = payload.metadata ?? null;
   }
 
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-
   const { data } = await client.PATCH("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
     body,
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 
   if (!data) throw new Error("Expected updated document record.");
@@ -199,16 +192,9 @@ export async function patchWorkspaceDocument(
 export async function deleteWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  options: { ifMatch?: string | null } = {},
 ): Promise<void> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-
   await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 }
 

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import anyio
 import pytest
 from httpx import AsyncClient
 
 from ade_api.common.ids import generate_uuid7
-from ade_api.common.time import utc_now
 from ade_api.models import File, FileKind, FileVersion, FileVersionOrigin
 from tests.utils import login
 
@@ -34,8 +31,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
     document = File(
         id=file_id,
         workspace_id=seed_identity.workspace_id,
-        kind=FileKind.DOCUMENT,
-        doc_no=None,
+        kind=FileKind.INPUT,
         name=name,
         name_key=name.casefold(),
         blob_name=f"{seed_identity.workspace_id}/files/{file_id}",
@@ -44,9 +40,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
                 {"name": "Cached", "index": 0, "kind": "worksheet", "is_active": True},
             ]
         },
-        expires_at=utc_now(),
         comment_count=0,
-        version=1,
     )
     version = FileVersion(
         id=version_id,
@@ -58,7 +52,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
         byte_size=12,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename_at_upload=name,
-        blob_version_id="v1",
+        storage_version_id="v1",
     )
     document.current_version = version
     document.versions.append(version)
@@ -89,7 +83,6 @@ async def test_list_document_sheets_reports_parse_failures(
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
     }
 
     upload = await async_client.post(

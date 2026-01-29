@@ -26,10 +26,10 @@ Create a clear glossary and architecture summary that uses common industry termi
 
 1.0 Terminology alignment in code/docs
   1.1 Apply standard naming
-    - [ ] Update docs to reflect the agreed terminology (documents, document_versions, change feed).
-    - [ ] Verify API descriptions reinforce "documents" while DB tables remain files/file_versions.
+    - [x] Update docs to reflect the agreed terminology (documents, document_versions, change feed).
+    - [x] Verify API descriptions reinforce "documents" while DB tables remain files/file_versions.
   1.2 File kind naming
-    - [ ] Align `kind` values in code/docs to input/output/log/export.
+    - [x] Align `kind` values in code/docs to input/output/log/export.
 
 ### Open Questions
 

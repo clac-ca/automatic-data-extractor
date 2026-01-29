@@ -19,7 +19,7 @@ async def test_create_list_revoke_api_key(
     create = await async_client.post(
         "/api/v1/users/me/apikeys",
         json={"name": "CLI Key"},
-        headers={**auth_header, "Idempotency-Key": "test-api-key-1"},
+        headers=auth_header,
     )
     assert create.status_code == 201, create.text
     create_payload = create.json()

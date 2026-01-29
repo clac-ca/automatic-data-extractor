@@ -1722,8 +1722,6 @@ export type components = {
             file: string;
             /** Metadata */
             metadata?: string | null;
-            /** Expires At */
-            expires_at?: string | null;
             /** Run Options */
             run_options?: string | null;
             conflict_mode?: components["schemas"]["DocumentConflictMode"] | null;
@@ -1737,8 +1735,6 @@ export type components = {
             file: string;
             /** Metadata */
             metadata?: string | null;
-            /** Expires At */
-            expires_at?: string | null;
         };
         /** Body_upload_run_output_endpoint_api_v1_runs__runId__output_post */
         Body_upload_run_output_endpoint_api_v1_runs__runId__output_post: {
@@ -2081,8 +2077,6 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspaceId: string;
-            /** Docno */
-            docNo?: number | null;
             /**
              * Name
              * @description Display name mapped from the original filename.
@@ -2117,16 +2111,6 @@ export type components = {
              * Format: date-time
              */
             activityAt: string;
-            /**
-             * Version
-             * @description Monotonic document version.
-             */
-            version: number;
-            /**
-             * Etag
-             * @description Weak ETag for optimistic concurrency checks.
-             */
-            etag?: string | null;
             lastRun?: components["schemas"]["DocumentRunSummary"] | null;
             lastRunMetrics?: components["schemas"]["RunMetricsResource"] | null;
             /** Lastruntablecolumns */
@@ -2152,11 +2136,6 @@ export type components = {
              */
             workspaceId: string;
             /**
-             * Docno
-             * @description Numeric document reference within the workspace.
-             */
-            docNo?: number | null;
-            /**
              * Name
              * @description Display name for the document.
              */
@@ -2180,11 +2159,6 @@ export type components = {
                 [key: string]: unknown;
             };
             source?: components["schemas"]["FileVersionOrigin"] | null;
-            /**
-             * Expiresat
-             * Format: date-time
-             */
-            expiresAt: string;
             /** Activityat */
             activityAt?: string | null;
             /**
@@ -2197,16 +2171,6 @@ export type components = {
              * Format: date-time
              */
             updatedAt: string;
-            /**
-             * Version
-             * @description Monotonic document version.
-             */
-            version: number;
-            /**
-             * Etag
-             * @description Weak ETag for optimistic concurrency checks.
-             */
-            etag?: string | null;
             /** Deletedat */
             deletedAt?: string | null;
             /** Assigneeid */
@@ -3915,8 +3879,6 @@ export type components = {
     parameters: {
         /** @description ETag value required for optimistic concurrency checks. */
         IfMatch: string;
-        /** @description Unique key for replaying POST requests safely. */
-        IdempotencyKey: string;
     };
     requestBodies: never;
     headers: {
@@ -4471,7 +4433,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -4715,7 +4676,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path: {
                 /** @description User identifier */
@@ -6427,7 +6387,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path: {
                 /** @description Workspace identifier */
@@ -6451,7 +6410,7 @@ export interface operations {
                     "application/json": components["schemas"]["DocumentOut"];
                 };
             };
-            /** @description Metadata payload or expiration timestamp is invalid. */
+            /** @description Metadata payload is invalid. */
             400: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -6702,7 +6661,6 @@ export interface operations {
             200: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
-                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -6749,10 +6707,8 @@ export interface operations {
     delete_document_api_v1_workspaces__workspaceId__documents__documentId__delete: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 "X-CSRF-Token"?: string | null;
-                /** @description ETag value required for optimistic concurrency checks. */
-                "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
                 /** @description Workspace identifier */
@@ -6812,10 +6768,8 @@ export interface operations {
     update_document_api_v1_workspaces__workspaceId__documents__documentId__patch: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 "X-CSRF-Token"?: string | null;
-                /** @description ETag value required for optimistic concurrency checks. */
-                "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
                 /** @description Workspace identifier */
@@ -8378,7 +8332,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path: {
                 /** @description Configuration identifier */
@@ -8420,7 +8373,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path: {
                 /** @description Configuration identifier */
@@ -8514,7 +8466,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path: {
                 /** @description Workspace identifier */
@@ -8556,7 +8507,6 @@ export interface operations {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
-                "Idempotency-Key"?: string | null;
             };
             path: {
                 /** @description Workspace identifier */

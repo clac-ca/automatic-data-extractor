@@ -4,7 +4,6 @@ import io
 from pathlib import Path
 
 from ade_api.common.ids import generate_uuid7
-from ade_api.common.time import utc_now
 from ade_api.features.runs.service import RunsService
 from ade_api.infra.storage import build_storage_adapter, workspace_config_root
 from ade_api.models import (
@@ -71,16 +70,13 @@ def build_runs_service(
     document = File(
         id=document_id,
         workspace_id=workspace.id,
-        kind=FileKind.DOCUMENT,
-        doc_no=None,
+        kind=FileKind.INPUT,
         name="input.csv",
         name_key="input.csv",
         blob_name=blob_name,
         attributes={},
         uploaded_by_user_id=None,
-        expires_at=utc_now(),
         comment_count=0,
-        version=1,
     )
     version = FileVersion(
         id=generate_uuid7(),
@@ -92,7 +88,7 @@ def build_runs_service(
         byte_size=stored.byte_size,
         content_type="text/csv",
         filename_at_upload="input.csv",
-        blob_version_id=stored.version_id or stored.sha256,
+        storage_version_id=stored.version_id or stored.sha256,
     )
     document.current_version = version
     document.versions.append(version)

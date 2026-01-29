@@ -7,7 +7,6 @@ import {
   type DocumentUploadRunOptions,
 } from "@/api/documents/uploads";
 import { ApiError } from "@/api/errors";
-import { createIdempotencyKey } from "@/api/idempotency";
 
 export type UploadManagerStatus =
   | "queued"
@@ -26,7 +25,6 @@ export type UploadManagerProgress = {
 
 export interface UploadManagerItem<TResponse> {
   readonly id: string;
-  readonly idempotencyKey: string;
   readonly file: File;
   readonly status: UploadManagerStatus;
   readonly progress: UploadManagerProgress;
@@ -80,7 +78,6 @@ export function useUploadManager({
     const now = Date.now();
     const newItems = files.map((entry, index) => ({
       id: createUploadId(now, index),
-      idempotencyKey: createIdempotencyKey("document-upload"),
       file: entry.file,
       status: "queued" as const,
       runOptions: entry.runOptions,
@@ -149,7 +146,6 @@ export function useUploadManager({
           ...item,
           status: "queued",
           progress: resetProgress(item.file),
-          idempotencyKey: createIdempotencyKey("document-upload"),
           conflictMode: mode,
           conflict: undefined,
           error: undefined,
@@ -443,7 +439,6 @@ async function runSimpleUpload(
 ) {
   const handle = uploadWorkspaceDocument(options.workspaceId, item.file, {
     onProgress: options.onProgress,
-    idempotencyKey: item.idempotencyKey,
     runOptions: item.runOptions,
     conflictMode: item.conflictMode,
   });

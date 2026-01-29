@@ -5,7 +5,6 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from ade_api.common.ids import generate_uuid7
-from ade_api.common.time import utc_now
 from ade_api.models import (
     Configuration,
     ConfigurationStatus,
@@ -45,16 +44,13 @@ def test_run_defaults(session: Session) -> None:
     document = File(
         id=file_id,
         workspace_id=workspace.id,
-        kind=FileKind.DOCUMENT,
-        doc_no=None,
+        kind=FileKind.INPUT,
         name="input.csv",
         name_key="input.csv",
         blob_name=f"{workspace.id}/files/{file_id}",
         attributes={},
         uploaded_by_user_id=None,
-        expires_at=utc_now(),
         comment_count=0,
-        version=1,
     )
     version = FileVersion(
         id=version_id,
@@ -66,7 +62,7 @@ def test_run_defaults(session: Session) -> None:
         byte_size=12,
         content_type="text/csv",
         filename_at_upload="input.csv",
-        blob_version_id="v1",
+        storage_version_id="v1",
     )
     document.current_version = version
     document.versions.append(version)

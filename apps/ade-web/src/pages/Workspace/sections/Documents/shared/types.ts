@@ -3,8 +3,8 @@ import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 
 export type { DocumentPageResult, ListDocumentsQuery } from "@/api/documents";
 
-export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
-export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
+export type DocumentRecord = components["schemas"]["DocumentOut"];
+export type DocumentListRow = components["schemas"]["DocumentListRow"];
 export type DocumentRow = DocumentListRow & {
   uploadProgress?: number | null;
   commentCount?: number | null;

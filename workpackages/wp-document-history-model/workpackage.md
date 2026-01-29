@@ -30,25 +30,25 @@ Define the most common terminology and data model for document metadata history,
 
 1.0 Terminology and architecture alignment (implementation)
   1.1 Apply terminology alignment
-    - [ ] Update docs to use the standard document/document_version/change-feed terms.
-    - [ ] Ensure API/UI naming stays on "documents" while DB stays files/file_versions.
+    - [x] Update docs to use the standard document/document_version/change-feed terms.
+    - [x] Ensure API/UI naming stays on "documents" while DB stays files/file_versions.
 2.0 Data model and migrations
   2.1 Schema + migration execution
-    - [ ] Add an Alembic migration for schema changes (drops/renames/backfills).
-    - [ ] Update ORM models to match the new schema.
-    - [ ] Update ade-worker schema/helpers to match the new schema.
+    - [x] Add an Alembic migration for schema changes (drops/renames/backfills).
+    - [x] Update ORM models to match the new schema.
+    - [x] Update ade-worker schema/helpers to match the new schema.
 3.0 API and stream contracts
   3.1 API surface changes
-    - [ ] Remove ETag/If-Match handling from document endpoints.
-    - [ ] Remove Idempotency-Key handling from uploads/runs/API keys.
-    - [ ] Update document list/detail payloads to remove version/docNo/expiresAt/etag.
+    - [x] Remove ETag/If-Match handling from document endpoints.
+    - [x] Remove Idempotency-Key handling from uploads/runs/API keys.
+    - [x] Update document list/detail payloads to remove version/docNo/expiresAt/etag.
   3.2 Change feed alignment
-    - [ ] Ensure SSE + delta payloads stay aligned with numeric cursor contract.
+    - [x] Ensure SSE + delta payloads stay aligned with numeric cursor contract.
 4.0 Docs and tests
   4.1 Docs/types/tests updates
-    - [ ] Update API/docs references for removed headers/fields.
-    - [ ] Update backend/worker/frontend tests impacted by the schema and API changes.
-    - [ ] Regenerate OpenAPI + frontend API types if needed.
+    - [x] Update API/docs references for removed headers/fields.
+    - [x] Update backend/worker/frontend tests impacted by the schema and API changes.
+    - [x] Regenerate OpenAPI + frontend API types if needed.
 
 ### Open Questions
 

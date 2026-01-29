@@ -49,16 +49,13 @@ def make_document(
     document = File(
         id=file_id,
         workspace_id=workspace_id,
-        kind=FileKind.DOCUMENT,
-        doc_no=None,
+        kind=FileKind.INPUT,
         name=filename,
         name_key=name_key,
         blob_name=f"{workspace_id}/files/{file_id}",
         attributes={},
         uploaded_by_user_id=None,
-        expires_at=utc_now(),
         comment_count=0,
-        version=1,
     )
     version = FileVersion(
         id=version_id,
@@ -70,7 +67,7 @@ def make_document(
         byte_size=byte_size,
         content_type="text/csv",
         filename_at_upload=filename,
-        blob_version_id="v1",
+        storage_version_id="v1",
     )
     document.current_version = version
     document.versions = [version]
