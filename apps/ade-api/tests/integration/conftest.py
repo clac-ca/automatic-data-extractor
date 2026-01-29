@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
 import os
-import re
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -12,7 +11,6 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from asgi_lifespan import LifespanManager
-from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -64,47 +62,6 @@ def _env(name: str, default: str | None = None) -> str | None:
     )
 
 
-def _sanitize_db_name(name: str) -> str:
-    sanitized = re.sub(r"[^A-Za-z0-9_]", "_", name).strip("_")
-    return sanitized or "ade_test"
-
-
-def _resolve_test_database_name() -> str:
-    explicit = _env("DATABASE_NAME")
-    if explicit:
-        return _sanitize_db_name(explicit)
-    prefix = _env("DATABASE_NAME_PREFIX") or "ade_test"
-    prefix = _sanitize_db_name(prefix)
-    suffix = uuid4().hex[:8]
-    return f"{prefix}_{suffix}"
-
-
-def _ensure_blob_container(settings: Settings) -> None:
-    from azure.core.exceptions import HttpResponseError
-    from azure.storage.blob import BlobServiceClient
-
-    if settings.blob_connection_string:
-        service = BlobServiceClient.from_connection_string(
-            conn_str=settings.blob_connection_string
-        )
-    else:
-        if not settings.blob_account_url:
-            raise RuntimeError("Blob storage is not configured for integration tests.")
-        from azure.identity import DefaultAzureCredential
-
-        service = BlobServiceClient(
-            account_url=settings.blob_account_url,
-            credential=DefaultAzureCredential(),
-        )
-
-    container = service.get_container_client(settings.blob_container or "")
-    try:
-        container.create_container()
-    except HttpResponseError as exc:
-        if exc.status_code != 409:
-            raise
-
-
 def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     root = tmp_path_factory.mktemp("ade-api-tests")
     data_dir = root / "data"
@@ -116,7 +73,7 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
             "Integration tests require ADE_DATABASE_URL (or ADE_TEST_DATABASE_URL). "
             "Set it in .env or the environment."
         )
-    url = make_url(base_url).set(database=_resolve_test_database_name())
+    url = make_url(base_url)
     blob_container = _env("BLOB_CONTAINER") or "ade-test"
     blob_connection_string = _env("BLOB_CONNECTION_STRING")
     blob_account_url = _env("BLOB_ACCOUNT_URL")
@@ -138,57 +95,7 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         blob_require_versioning=False,
     )
     ensure_runtime_dirs(settings)
-    _ensure_blob_container(settings)
     return settings
-
-
-def _build_admin_settings(settings: Settings) -> Settings:
-    url = make_url(str(settings.database_url)).set(database="postgres")
-    payload = settings.model_dump()
-    payload["database_url"] = url.render_as_string(hide_password=False)
-    return Settings.model_validate(payload)
-
-
-def _create_database(settings: Settings) -> None:
-    admin_settings = _build_admin_settings(settings)
-    db_name = make_url(str(settings.database_url)).database
-    if not db_name:
-        raise RuntimeError("Test database name was empty; check ADE_TEST_DATABASE_NAME settings.")
-    engine = build_engine(admin_settings)
-    try:
-        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            exists = conn.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
-                {"db_name": db_name},
-            ).scalar()
-            if not exists:
-                conn.exec_driver_sql(f'CREATE DATABASE "{db_name}";')
-    finally:
-        engine.dispose()
-
-
-def _drop_database(settings: Settings) -> None:
-    admin_settings = _build_admin_settings(settings)
-    db_name = make_url(str(settings.database_url)).database
-    if not db_name:
-        return
-    engine = build_engine(admin_settings)
-    try:
-        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            conn.execute(
-                text(
-                    """
-                    SELECT pg_terminate_backend(pid)
-                    FROM pg_stat_activity
-                    WHERE datname = :db_name
-                      AND pid <> pg_backend_pid();
-                    """
-                ),
-                {"db_name": db_name},
-            )
-            conn.exec_driver_sql(f'DROP DATABASE IF EXISTS "{db_name}";')
-    finally:
-        engine.dispose()
 
 
 @pytest.fixture(scope="session")
@@ -199,12 +106,7 @@ def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
 
 @pytest.fixture()
 def empty_database_settings(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Settings]:
-    settings = _build_test_settings(tmp_path_factory)
-    _create_database(settings)
-    try:
-        yield settings
-    finally:
-        _drop_database(settings)
+    yield _build_test_settings(tmp_path_factory)
 
 
 @pytest.fixture()
@@ -225,15 +127,8 @@ def _reset_auth_caches() -> None:
     reset_auth_state()
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _database_lifecycle(base_settings: Settings) -> Iterator[None]:
-    _create_database(base_settings)
-    yield
-    _drop_database(base_settings)
-
-
 @pytest.fixture(scope="session")
-def migrated_db(base_settings: Settings, _database_lifecycle: None) -> Iterator[Engine]:
+def migrated_db(base_settings: Settings) -> Iterator[Engine]:
     run_migrations(base_settings)
     engine = build_engine(base_settings)
 

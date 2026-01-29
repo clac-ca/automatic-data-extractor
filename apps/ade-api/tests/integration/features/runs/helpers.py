@@ -3,8 +3,6 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-from azure.core.exceptions import HttpResponseError
-
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.features.runs.service import RunsService
@@ -68,11 +66,6 @@ def build_runs_service(
     document_id = generate_uuid7()
     blob_name = f"{workspace.id}/files/{document_id}"
     storage = build_storage_adapter(settings)
-    try:
-        storage._container_client.create_container()  # type: ignore[attr-defined]
-    except HttpResponseError as exc:
-        if exc.status_code != 409:
-            raise
     stored = storage.write(blob_name, io.BytesIO(b"name\nAlice\n"))
 
     document = File(
