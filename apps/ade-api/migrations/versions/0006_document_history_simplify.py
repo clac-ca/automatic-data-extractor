@@ -25,77 +25,128 @@ depends_on: Optional[str] = None
 
 
 def upgrade() -> None:
-    op.drop_table("idempotency_keys")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    table_names = set(inspector.get_table_names())
 
-    op.drop_constraint("files_workspace_doc_no_key", "files", type_="unique")
-    op.drop_constraint("ck_files_file_kind", "files", type_="check")
+    if "idempotency_keys" in table_names:
+        op.drop_table("idempotency_keys")
 
-    op.alter_column(
-        "files",
-        "parent_file_id",
-        new_column_name="source_file_id",
-        existing_type=sa.dialects.postgresql.UUID(as_uuid=True),
+    files_columns: set[str] = set()
+    files_unique_constraints: set[str] = set()
+    files_check_constraints: set[str] = set()
+    if "files" in table_names:
+        files_columns = {col["name"] for col in inspector.get_columns("files")}
+        files_unique_constraints = {
+            constraint["name"]
+            for constraint in inspector.get_unique_constraints("files")
+            if constraint.get("name")
+        }
+        files_check_constraints = {
+            constraint["name"]
+            for constraint in inspector.get_check_constraints("files")
+            if constraint.get("name")
+        }
+
+    file_versions_columns: set[str] = set()
+    if "file_versions" in table_names:
+        file_versions_columns = {
+            col["name"] for col in inspector.get_columns("file_versions")
+        }
+
+    if "files_workspace_doc_no_key" in files_unique_constraints:
+        op.drop_constraint("files_workspace_doc_no_key", "files", type_="unique")
+    if "ck_files_file_kind" in files_check_constraints:
+        op.drop_constraint("ck_files_file_kind", "files", type_="check")
+
+    if "parent_file_id" in files_columns and "source_file_id" not in files_columns:
+        op.alter_column(
+            "files",
+            "parent_file_id",
+            new_column_name="source_file_id",
+            existing_type=sa.dialects.postgresql.UUID(as_uuid=True),
+        )
+
+    if "doc_no" in files_columns:
+        op.drop_column("files", "doc_no")
+    if "version" in files_columns:
+        op.drop_column("files", "version")
+    if "expires_at" in files_columns:
+        op.drop_column("files", "expires_at")
+
+    has_kind = "kind" in files_columns
+    has_source_file_id = "source_file_id" in files_columns or "parent_file_id" in files_columns
+    has_name_key = "name_key" in files_columns
+    if has_kind:
+        op.execute("UPDATE files SET kind = 'input' WHERE kind = 'document'")
+        op.execute("UPDATE files SET kind = 'log' WHERE kind = 'run_log'")
+
+        op.alter_column(
+            "files",
+            "kind",
+            existing_type=sa.String(length=50),
+            server_default="input",
+        )
+        op.create_check_constraint(
+            "ck_files_file_kind",
+            "files",
+            "kind IN ('input', 'output', 'log', 'export')",
+        )
+
+    if "blob_version_id" in file_versions_columns and "storage_version_id" not in file_versions_columns:
+        op.alter_column(
+            "file_versions",
+            "blob_version_id",
+            new_column_name="storage_version_id",
+            existing_type=sa.String(length=128),
+            nullable=True,
+        )
+
+    has_storage_version_id = (
+        "storage_version_id" in file_versions_columns
+        or "blob_version_id" in file_versions_columns
     )
+    if has_storage_version_id and "sha256" in file_versions_columns:
+        op.execute(
+            "UPDATE file_versions SET storage_version_id = NULL "
+            "WHERE storage_version_id = sha256"
+        )
 
-    op.drop_column("files", "doc_no")
-    op.drop_column("files", "version")
-    op.drop_column("files", "expires_at")
+    if has_kind and has_name_key and has_source_file_id:
+        op.execute(
+            "UPDATE files "
+            "SET name_key = 'output:' || source_file_id "
+            "WHERE kind = 'output' AND source_file_id IS NOT NULL"
+        )
 
-    op.execute("UPDATE files SET kind = 'input' WHERE kind = 'document'")
-    op.execute("UPDATE files SET kind = 'log' WHERE kind = 'run_log'")
-
-    op.alter_column(
-        "files",
-        "kind",
-        existing_type=sa.String(length=50),
-        server_default="input",
-    )
-    op.create_check_constraint(
-        "ck_files_file_kind",
-        "files",
-        "kind IN ('input', 'output', 'log', 'export')",
-    )
-
-    op.alter_column(
-        "file_versions",
-        "blob_version_id",
-        new_column_name="storage_version_id",
-        existing_type=sa.String(length=128),
-        nullable=True,
-    )
-
-    op.execute(
-        "UPDATE file_versions SET storage_version_id = NULL "
-        "WHERE storage_version_id = sha256"
-    )
-
-    op.execute(
-        "UPDATE files "
-        "SET name_key = 'output:' || source_file_id "
-        "WHERE kind = 'output' AND source_file_id IS NOT NULL"
-    )
-
-    op.execute(
-        """
-        UPDATE file_versions AS fv
-           SET content_type = CASE
-               WHEN lower(fv.filename_at_upload) LIKE '%.xlsx'
-                 THEN 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-               WHEN lower(fv.filename_at_upload) LIKE '%.xls'
-                 THEN 'application/vnd.ms-excel'
-               WHEN lower(fv.filename_at_upload) LIKE '%.csv'
-                 THEN 'text/csv'
-               WHEN lower(fv.filename_at_upload) LIKE '%.pdf'
-                 THEN 'application/pdf'
-               ELSE 'application/octet-stream'
-             END
-          FROM files AS f
-         WHERE fv.file_id = f.id
-           AND f.kind = 'output'
-           AND fv.origin = 'generated'
-           AND fv.content_type IS NULL
-        """
-    )
+    if (
+        "content_type" in file_versions_columns
+        and "filename_at_upload" in file_versions_columns
+        and "origin" in file_versions_columns
+        and "file_id" in file_versions_columns
+        and has_kind
+    ):
+        op.execute(
+            """
+            UPDATE file_versions AS fv
+               SET content_type = CASE
+                   WHEN lower(fv.filename_at_upload) LIKE '%.xlsx'
+                     THEN 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                   WHEN lower(fv.filename_at_upload) LIKE '%.xls'
+                     THEN 'application/vnd.ms-excel'
+                   WHEN lower(fv.filename_at_upload) LIKE '%.csv'
+                     THEN 'text/csv'
+                   WHEN lower(fv.filename_at_upload) LIKE '%.pdf'
+                     THEN 'application/pdf'
+                   ELSE 'application/octet-stream'
+                 END
+              FROM files AS f
+             WHERE fv.file_id = f.id
+               AND f.kind = 'output'
+               AND fv.origin = 'generated'
+               AND fv.content_type IS NULL
+            """
+        )
 
     op.execute(
         """

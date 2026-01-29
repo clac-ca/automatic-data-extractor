@@ -40,21 +40,21 @@
   "forwardPorts": [
     8000,
     5173,
-    5432,
-    10000
+    "postgres:5432",
+    "azurite:10000"
   ],
   "portsAttributes": {
+    "5173": {
+      "label": "ADE Web"
+    },
     "8000": {
       "label": "ADE API"
     },
-    "5173": {
-      "label": "ADE Web (Vite)"
+    "postgres:5432": {
+      "label": "ADE Postgres Server"
     },
-    "5432": {
-      "label": "Postgres"
-    },
-    "10000": {
-      "label": "Azurite Blob"
+    "azurite:10000": {
+      "label": "ADE Azurite Blob Storage"
     }
   }
 }

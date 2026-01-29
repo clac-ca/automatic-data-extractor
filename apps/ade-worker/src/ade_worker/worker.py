@@ -1507,7 +1507,7 @@ class Worker:
             file_id = str(file_version.get("file_id") or "")
             document_id = file_id or document_id
             file_row = db.load_file(self.SessionLocal, file_id)
-            if not file_row or str(file_row.get("kind") or "").lower() != "document":
+            if not file_row or str(file_row.get("kind") or "").lower() != "input":
                 self._handle_run_failure(
                     claim,
                     run_id,
