@@ -3,6 +3,8 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from azure.core.exceptions import HttpResponseError
+
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.features.runs.service import RunsService
@@ -40,7 +42,6 @@ def build_runs_service(
         engine_spec=str(engine_dir),
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_require_versioning=False,
-        blob_create_container_on_startup=True,
         secret_key="test-secret-key-for-tests-please-change",
     )
 
@@ -67,6 +68,11 @@ def build_runs_service(
     document_id = generate_uuid7()
     blob_name = f"{workspace.id}/files/{document_id}"
     storage = build_storage_adapter(settings)
+    try:
+        storage._container_client.create_container()  # type: ignore[attr-defined]
+    except HttpResponseError as exc:
+        if exc.status_code != 409:
+            raise
     stored = storage.write(blob_name, io.BytesIO(b"name\nAlice\n"))
 
     document = File(
@@ -103,6 +109,7 @@ def build_runs_service(
     service = RunsService(
         session=session,
         settings=settings,
+        blob_storage=storage,
     )
 
     return service, configuration, document, settings

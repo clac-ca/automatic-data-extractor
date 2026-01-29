@@ -75,7 +75,6 @@ class Settings(BaseSettings):
     blob_container: str | None = Field(default=None)
     blob_prefix: str = Field(default="workspaces")
     blob_require_versioning: bool = Field(default=True)
-    blob_create_container_on_startup: bool = Field(default=False)
     blob_request_timeout_seconds: float = Field(default=30.0, gt=0)
     blob_max_concurrency: int = Field(default=4, ge=1)
     blob_upload_chunk_size_bytes: int = Field(default=4 * 1024 * 1024, ge=1)
@@ -97,6 +96,7 @@ class Settings(BaseSettings):
     database_pool_recycle: int = Field(1800, ge=0)
     database_auth_mode: Literal["password", "managed_identity"] = "password"
     database_sslrootcert: str | None = Field(default=None)
+    document_changes_retention_days: int = Field(default=14, ge=1)
 
     # JWT
     secret_key: SecretStr = Field(..., min_length=32)

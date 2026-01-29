@@ -46,7 +46,7 @@ from ade_api.features.idempotency import (
     build_scope_key,
     require_idempotency_key,
 )
-from ade_api.infra.storage import StorageLimitError
+from ade_api.infra.storage import StorageLimitError, get_storage_adapter
 from ade_api.models import RunStatus
 
 from .exceptions import (
@@ -522,10 +522,15 @@ def download_run_input_endpoint(
     request: Request,
     settings: SettingsDep,
 ) -> StreamingResponse:
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
+            service = RunsService(
+                session=session,
+                settings=settings,
+                blob_storage=blob_storage,
+            )
             _, document, version, stream = service.stream_run_input(run_id=run_id)
             media_type = version.content_type or "application/octet-stream"
             filename = version.filename_at_upload or document.name
@@ -549,10 +554,15 @@ def download_run_events_file_endpoint(
     request: Request,
     settings: SettingsDep,
 ):
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
+            service = RunsService(
+                session=session,
+                settings=settings,
+                blob_storage=blob_storage,
+            )
             stream = service.stream_run_logs(run_id=run_id)
     except (RunNotFoundError, RunLogsFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -640,10 +650,15 @@ def download_run_output_endpoint(
     request: Request,
     settings: SettingsDep,
 ):
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
+            service = RunsService(
+                session=session,
+                settings=settings,
+                blob_storage=blob_storage,
+            )
             try:
                 _, output_file, output_version, stream = service.stream_run_output(run_id=run_id)
             except RunOutputNotReadyError as exc:

@@ -36,7 +36,7 @@ from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.workspaces.repository import WorkspacesRepository
 from ade_api.features.workspaces.settings import read_processing_paused
-from ade_api.infra.storage import build_storage_adapter
+from ade_api.infra.storage import AzureBlobStorage
 from ade_api.models import (
     Configuration,
     ConfigurationStatus,
@@ -146,6 +146,7 @@ class RunsService:
         session: Session,
         settings: Settings,
         storage: ConfigStorage | None = None,
+        blob_storage: AzureBlobStorage,
     ) -> None:
         from ade_api.features.documents.service import DocumentsService
 
@@ -158,8 +159,12 @@ class RunsService:
         self._storage = storage or ConfigStorage(
             settings=settings,
         )
-        self._blob_storage = build_storage_adapter(settings)
-        self._documents_service = DocumentsService(session=session, settings=settings)
+        self._blob_storage = blob_storage
+        self._documents_service = DocumentsService(
+            session=session,
+            settings=settings,
+            storage=blob_storage,
+        )
 
         default_max = Run.__table__.c.max_attempts.default
         self._run_max_attempts = int(default_max.arg) if default_max is not None else 3

@@ -18,7 +18,6 @@ class AzureBlobConfig:
     container: str
     prefix: str
     require_versioning: bool
-    create_container_on_startup: bool
     request_timeout_seconds: float
     max_concurrency: int
     upload_chunk_size_bytes: int
@@ -80,16 +79,6 @@ class AzureBlobStorage(StorageAdapter):
     @property
     def config(self) -> AzureBlobConfig:
         return self._config
-
-    def ensure_container(self) -> None:
-        if not self._config.create_container_on_startup:
-            return
-        try:
-            self._container_client.create_container()
-        except HttpResponseError as exc:
-            if exc.status_code == 409:
-                return
-            raise StorageError("Failed to create blob container") from exc
 
     def ensure_versioning(self) -> None:
         return

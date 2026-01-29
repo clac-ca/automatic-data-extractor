@@ -17,6 +17,7 @@ from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
+from ade_api.commands.common import REPO_ROOT, load_dotenv
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
 from ade_api.db import build_engine, get_db, get_sessionmaker
@@ -24,7 +25,9 @@ from ade_api.db.migrations import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.models import Role, User, Workspace, WorkspaceMembership
-from ade_api.settings import DEFAULT_DATABASE_AUTH_MODE, DEFAULT_DATABASE_URL, Settings, get_settings
+from ade_api.settings import Settings, get_settings
+
+_DOTENV = load_dotenv(REPO_ROOT / ".env")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +53,15 @@ class SeededIdentity:
 
 
 def _env(name: str, default: str | None = None) -> str | None:
-    return os.getenv(f"ADE_TEST_{name}") or os.getenv(f"ADE_{name}") or default
+    key_test = f"ADE_TEST_{name}"
+    key = f"ADE_{name}"
+    return (
+        os.getenv(key_test)
+        or os.getenv(key)
+        or _DOTENV.get(key_test)
+        or _DOTENV.get(key)
+        or default
+    )
 
 
 def _sanitize_db_name(name: str) -> str:
@@ -59,22 +70,58 @@ def _sanitize_db_name(name: str) -> str:
 
 
 def _resolve_test_database_name() -> str:
-    explicit = os.getenv("ADE_TEST_DATABASE_NAME")
+    explicit = _env("DATABASE_NAME")
     if explicit:
         return _sanitize_db_name(explicit)
-    prefix = os.getenv("ADE_TEST_DATABASE_NAME_PREFIX") or "ade_test"
+    prefix = _env("DATABASE_NAME_PREFIX") or "ade_test"
     prefix = _sanitize_db_name(prefix)
     suffix = uuid4().hex[:8]
     return f"{prefix}_{suffix}"
+
+
+def _ensure_blob_container(settings: Settings) -> None:
+    from azure.core.exceptions import HttpResponseError
+    from azure.storage.blob import BlobServiceClient
+
+    if settings.blob_connection_string:
+        service = BlobServiceClient.from_connection_string(
+            conn_str=settings.blob_connection_string
+        )
+    else:
+        if not settings.blob_account_url:
+            raise RuntimeError("Blob storage is not configured for integration tests.")
+        from azure.identity import DefaultAzureCredential
+
+        service = BlobServiceClient(
+            account_url=settings.blob_account_url,
+            credential=DefaultAzureCredential(),
+        )
+
+    container = service.get_container_client(settings.blob_container or "")
+    try:
+        container.create_container()
+    except HttpResponseError as exc:
+        if exc.status_code != 409:
+            raise
 
 
 def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     root = tmp_path_factory.mktemp("ade-api-tests")
     data_dir = root / "data"
 
-    auth_mode = (_env("DATABASE_AUTH_MODE", DEFAULT_DATABASE_AUTH_MODE) or "password").strip().lower()
-    base_url = _env("DATABASE_URL", DEFAULT_DATABASE_URL) or DEFAULT_DATABASE_URL
+    auth_mode = (_env("DATABASE_AUTH_MODE") or "password").strip().lower()
+    base_url = _env("DATABASE_URL")
+    if not base_url:
+        raise RuntimeError(
+            "Integration tests require ADE_DATABASE_URL (or ADE_TEST_DATABASE_URL). "
+            "Set it in .env or the environment."
+        )
     url = make_url(base_url).set(database=_resolve_test_database_name())
+    blob_container = _env("BLOB_CONTAINER") or "ade-test"
+    blob_connection_string = _env("BLOB_CONNECTION_STRING")
+    blob_account_url = _env("BLOB_ACCOUNT_URL")
+    if not blob_connection_string and not blob_account_url:
+        blob_connection_string = "UseDevelopmentStorage=true"
     settings = Settings(
         _env_file=None,
         data_dir=data_dir,
@@ -85,15 +132,18 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         database_url=url.render_as_string(hide_password=False),
         database_auth_mode=auth_mode,
         database_sslrootcert=_env("DATABASE_SSLROOTCERT"),
+        blob_container=blob_container,
+        blob_connection_string=blob_connection_string,
+        blob_account_url=blob_account_url,
         blob_require_versioning=False,
-        blob_create_container_on_startup=True,
     )
     ensure_runtime_dirs(settings)
+    _ensure_blob_container(settings)
     return settings
 
 
 def _build_admin_settings(settings: Settings) -> Settings:
-    url = make_url(settings.database_url).set(database="postgres")
+    url = make_url(str(settings.database_url)).set(database="postgres")
     payload = settings.model_dump()
     payload["database_url"] = url.render_as_string(hide_password=False)
     return Settings.model_validate(payload)
@@ -101,7 +151,7 @@ def _build_admin_settings(settings: Settings) -> Settings:
 
 def _create_database(settings: Settings) -> None:
     admin_settings = _build_admin_settings(settings)
-    db_name = make_url(settings.database_url).database
+    db_name = make_url(str(settings.database_url)).database
     if not db_name:
         raise RuntimeError("Test database name was empty; check ADE_TEST_DATABASE_NAME settings.")
     engine = build_engine(admin_settings)
@@ -119,7 +169,7 @@ def _create_database(settings: Settings) -> None:
 
 def _drop_database(settings: Settings) -> None:
     admin_settings = _build_admin_settings(settings)
-    db_name = make_url(settings.database_url).database
+    db_name = make_url(str(settings.database_url)).database
     if not db_name:
         return
     engine = build_engine(admin_settings)

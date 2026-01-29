@@ -23,7 +23,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_BLOB_CONTAINER",
         "ADE_BLOB_PREFIX",
         "ADE_BLOB_REQUIRE_VERSIONING",
-        "ADE_BLOB_CREATE_CONTAINER_ON_STARTUP",
         "ADE_BLOB_REQUEST_TIMEOUT_SECONDS",
         "ADE_BLOB_MAX_CONCURRENCY",
         "ADE_BLOB_UPLOAD_CHUNK_SIZE_BYTES",

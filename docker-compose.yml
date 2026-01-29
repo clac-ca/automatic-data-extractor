@@ -45,7 +45,6 @@ services:
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
       ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
-      ADE_BLOB_CREATE_CONTAINER_ON_STARTUP: ${ADE_BLOB_CREATE_CONTAINER_ON_STARTUP:-true}
 
       # JWT (dev defaults)
       ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}

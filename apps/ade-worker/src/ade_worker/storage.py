@@ -84,14 +84,6 @@ class AzureBlobStorage:
             )
         self._container_client = self._service.get_container_client(config.container)
 
-    def ensure_container(self) -> None:
-        try:
-            self._container_client.create_container()
-        except HttpResponseError as exc:
-            if exc.status_code == 409:
-                return
-            raise RuntimeError("Failed to create blob container") from exc
-
     def _blob_name(self, name: str) -> str:
         trimmed = name.lstrip("/")
         if self._config.prefix:
@@ -192,8 +184,6 @@ def build_storage(settings: Settings) -> AzureBlobStorage:
         download_chunk_size_bytes=int(settings.blob_download_chunk_size_bytes),
     )
     storage = AzureBlobStorage(config)
-    if settings.blob_create_container_on_startup:
-        storage.ensure_container()
     storage.ensure_versioning()
     return storage
 

@@ -10,6 +10,7 @@ from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOp
 from ade_api.common.cursor_listing import resolve_cursor_sort
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from ade_api.infra.storage import build_storage_adapter
 from ade_api.models import RunStatus
 from tests.integration.documents.helpers import (
     build_documents_fixture,
@@ -22,7 +23,8 @@ pytestmark = pytest.mark.asyncio
 async def test_list_documents_applies_filters_and_sorting(db_session, settings) -> None:
     workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
 
     filters = [
         FilterItem(
@@ -83,7 +85,8 @@ async def test_list_documents_applies_filters_and_sorting(db_session, settings) 
 async def test_list_documents_facets_include_last_run_phase_and_file_type(db_session, settings) -> None:
     workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
     order_by_default = resolve_cursor_sort(
         [],
         allowed=SORT_FIELDS,
@@ -122,7 +125,8 @@ async def test_list_documents_facets_include_last_run_phase_and_file_type(db_ses
 async def test_activity_at_filters_within_range(db_session, settings) -> None:
     workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
 
     now = datetime.now(tz=UTC)
     filters = [
@@ -159,7 +163,8 @@ async def test_activity_at_filters_within_range(db_session, settings) -> None:
 async def test_sorting_last_run_places_nulls_last(db_session, settings) -> None:
     workspace, _, _, processed, uploaded = await build_documents_fixture(db_session)
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
 
     order_by_last_run = resolve_cursor_sort(
         ["-lastRunAt"],
@@ -192,7 +197,8 @@ async def test_list_documents_includes_last_run_message(db_session, settings) ->
         uploader_id=uploader.id,
     )
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
     order_by = resolve_cursor_sort(
         [],
         allowed=SORT_FIELDS,

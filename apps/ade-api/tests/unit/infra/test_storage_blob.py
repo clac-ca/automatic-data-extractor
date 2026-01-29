@@ -31,7 +31,6 @@ def _make_storage(prefix: str = "workspaces") -> AzureBlobStorage:
         container="ade",
         prefix=prefix,
         require_versioning=True,
-        create_container_on_startup=False,
         request_timeout_seconds=30,
         max_concurrency=4,
         upload_chunk_size_bytes=4 * 1024 * 1024,

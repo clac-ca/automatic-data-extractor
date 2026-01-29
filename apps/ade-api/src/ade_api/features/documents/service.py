@@ -39,7 +39,7 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
-from ade_api.infra.storage import StorageError, StorageLimitError, StoredObject, build_storage_adapter
+from ade_api.infra.storage import AzureBlobStorage, StorageError, StorageLimitError, StoredObject
 from ade_api.models import (
     File,
     FileComment,
@@ -59,7 +59,11 @@ from ade_api.models import (
 from ade_api.settings import Settings
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 
-from .events import get_document_events_cursor
+from .changes import (
+    DocumentChangeDelta,
+    fetch_document_change_delta,
+    get_latest_document_change_id,
+)
 from .exceptions import (
     DocumentFileMissingError,
     DocumentTooLargeError,
@@ -148,10 +152,16 @@ class UploadPlan:
 class DocumentsService:
     """Manage document metadata and backing file storage."""
 
-    def __init__(self, *, session: Session, settings: Settings) -> None:
+    def __init__(
+        self,
+        *,
+        session: Session,
+        settings: Settings,
+        storage: AzureBlobStorage,
+    ) -> None:
         self._session = session
         self._settings = settings
-        self._storage = build_storage_adapter(settings)
+        self._storage = storage
         self._repository = DocumentsRepository(session)
 
     @staticmethod
@@ -445,7 +455,7 @@ class DocumentsService:
         stmt = stmt.add_columns(last_run_at_expr)
 
         facets = self._build_document_facets(stmt) if include_facets else None
-        changes_cursor = str(get_document_events_cursor(self._session))
+        changes_cursor = get_latest_document_change_id(self._session, workspace_id)
         page_result = paginate_query_cursor(
             self._session,
             stmt,
@@ -481,6 +491,20 @@ class DocumentsService:
         rows = [self._build_list_row(item) for item in items]
 
         return DocumentListPage(items=rows, meta=page_result.meta, facets=facets)
+
+    def get_document_change_delta(
+        self,
+        *,
+        workspace_id: UUID,
+        since: int,
+        limit: int | None = None,
+    ) -> DocumentChangeDelta:
+        return fetch_document_change_delta(
+            self._session,
+            workspace_id=workspace_id,
+            since=since,
+            limit=limit,
+        )
 
     def list_document_comments(
         self,

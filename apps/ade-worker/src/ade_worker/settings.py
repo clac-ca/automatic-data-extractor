@@ -64,9 +64,6 @@ class Settings(BaseSettings):
     blob_container: str | None = Field(default=None)
     blob_prefix: str = Field(default="workspaces")
     blob_require_versioning: bool = Field(default=True)
-    blob_create_container_on_startup: bool = Field(
-        default=False
-    )
     blob_request_timeout_seconds: float = Field(
         default=30.0, gt=0
     )

@@ -12,9 +12,31 @@ def test_blob_storage_roundtrip() -> None:
         _env_file=None,
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_require_versioning=False,
-        blob_create_container_on_startup=True,
         secret_key="test-secret-key-for-tests-please-change",
     )
+
+    from azure.core.exceptions import HttpResponseError
+    from azure.storage.blob import BlobServiceClient
+
+    if settings.blob_connection_string:
+        service = BlobServiceClient.from_connection_string(
+            conn_str=settings.blob_connection_string
+        )
+    else:
+        from azure.identity import DefaultAzureCredential
+
+        if not settings.blob_account_url:
+            raise RuntimeError("Blob storage is not configured for tests.")
+        service = BlobServiceClient(
+            account_url=settings.blob_account_url,
+            credential=DefaultAzureCredential(),
+        )
+    container = service.get_container_client(settings.blob_container or "")
+    try:
+        container.create_container()
+    except HttpResponseError as exc:
+        if exc.status_code != 409:
+            raise
 
     storage = build_storage_adapter(settings)
     workspace_id = uuid4().hex

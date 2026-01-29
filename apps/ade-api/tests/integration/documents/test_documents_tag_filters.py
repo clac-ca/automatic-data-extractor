@@ -8,6 +8,7 @@ from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOp
 from ade_api.common.cursor_listing import resolve_cursor_sort
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from ade_api.infra.storage import build_storage_adapter
 from tests.integration.documents.helpers import build_tag_filter_fixture
 
 pytestmark = pytest.mark.asyncio
@@ -18,7 +19,8 @@ async def test_tag_filters_any_all_not_empty(db_session, settings) -> None:
         db_session
     )
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
     order_by = resolve_cursor_sort(
         [],
         allowed=SORT_FIELDS,

@@ -21,7 +21,8 @@ def test_stream_document_handles_missing_file(
 ) -> None:
     """Document streaming should surface a domain error when the file is missing."""
 
-    service = DocumentsService(session=db_session, settings=settings)
+    storage = build_storage_adapter(settings)
+    service = DocumentsService(session=db_session, settings=settings, storage=storage)
     workspace_id = seed_identity.workspace_id
 
     member = db_session.get(User, seed_identity.member.id)
@@ -46,7 +47,6 @@ def test_stream_document_handles_missing_file(
 
     stored_row = db_session.get(File, record.id)
     assert stored_row is not None
-    storage = build_storage_adapter(settings)
     storage.delete(stored_row.blob_name)
 
     with pytest.raises(DocumentFileMissingError):

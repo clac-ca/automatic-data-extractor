@@ -16,7 +16,8 @@ def _make_documents_service(tmp_path: Path) -> DocumentsService:
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
     )
     session = MagicMock()
-    return DocumentsService(session=session, settings=settings)
+    storage = MagicMock()
+    return DocumentsService(session=session, settings=settings, storage=storage)
 
 
 def test_build_content_disposition_strips_control_characters() -> None:

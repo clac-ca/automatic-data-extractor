@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -59,9 +60,16 @@ from ade_api.features.idempotency import (
 )
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
+from ade_api.infra.storage import get_storage_adapter
 from ade_api.models import User
 
-from .events import get_document_events_cursor, get_document_events_hub
+from .changes import (
+    DEFAULT_DELTA_LIMIT,
+    MAX_DELTA_LIMIT,
+    get_latest_document_change_id,
+    parse_document_change_cursor,
+)
+from .events import get_document_changes_hub
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNameConflictError,
@@ -81,6 +89,8 @@ from .schemas import (
     DocumentBatchDeleteResponse,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
+    DocumentChangeDeltaResponse,
+    DocumentChangeEntry,
     DocumentCommentCreate,
     DocumentCommentOut,
     DocumentCommentPage,
@@ -153,22 +163,12 @@ DocumentManager = Annotated[
 ]
 
 
-def _resolve_event_cursor(request: Request, cursor: str | None) -> int:
+def _resolve_event_token(request: Request, cursor: str | None) -> int | None:
     last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
     token = last_event_id if last_event_id is not None else cursor
     if token is None:
-        return 0
-    try:
-        return int(token)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cursor must be an integer string") from exc
-
-
-def _include_rows(include: str | None) -> bool:
-    if not include:
-        return False
-    parts = [part.strip().lower() for part in include.split(",")]
-    return "rows" in parts
+        return None
+    return parse_document_change_cursor(token)
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -509,40 +509,35 @@ def list_documents(
 
 
 @router.get(
-    "/events/stream",
-    summary="Stream document events",
+    "/stream",
+    summary="Stream document changes",
 )
-async def stream_document_events(
+async def stream_document_changes(
     workspace_id: WorkspacePath,
     request: Request,
-    settings: SettingsDep,
     _actor: DocumentReader,
     *,
-    cursor: Annotated[str | None, Query(description="Cursor token.")] = None,
-    include: Annotated[str | None, Query(description="Optional inclusions (comma-separated).")] = None,
+    cursor: Annotated[str | None, Query(description="Change cursor.")] = None,
 ) -> EventSourceResponse:
-    start_cursor = _resolve_event_cursor(request, cursor)
-    include_rows = _include_rows(include)
+    start_token = _resolve_event_token(request, cursor)
     session_factory = get_sessionmaker(request)
-    events_hub = get_document_events_hub(request)
+    events_hub = get_document_changes_hub(request)
 
     async def event_stream():
-        cursor_value = start_cursor
+        token_value = start_token
         queue, unsubscribe = events_hub.subscribe(str(workspace_id))
 
-        def _current_cursor() -> int:
+        def _current_token() -> int | None:
             with session_factory() as session:
-                return get_document_events_cursor(session)
+                return get_latest_document_change_id(session, workspace_id)
 
         try:
-            cursor_value = await asyncio.to_thread(_current_cursor)
+            token_value = await asyncio.to_thread(_current_token)
         except Exception:
-            cursor_value = start_cursor
+            token_value = start_token
 
-        if cursor_value < start_cursor:
-            cursor_value = start_cursor
-
-        yield sse_json("ready", {"cursor": str(cursor_value)})
+        ready_id = str(token_value) if token_value is not None else None
+        yield sse_json("ready", {"lastId": ready_id})
 
         try:
             while True:
@@ -556,27 +551,18 @@ async def stream_document_events(
                     continue
 
                 payload = dict(payload)
-                event_type = payload.get("type") or "document.changed"
+                op = payload.get("op")
                 document_id = payload.get("documentId")
-
-                if include_rows and event_type == "document.changed" and document_id:
-                    def _fetch_row() -> DocumentListRow | None:
-                        with session_factory() as session:
-                            service = DocumentsService(session=session, settings=settings)
-                            return service.build_list_row_for_document(
-                                workspace_id=workspace_id,
-                                document_id=UUID(str(document_id)),
-                            )
-
-                    try:
-                        row = await asyncio.to_thread(_fetch_row)
-                    except Exception:
-                        row = None
-                    if row is not None:
-                        payload["row"] = row
-
-                event_id = payload.get("cursor")
-                yield sse_json(event_type, payload, event_id=event_id)
+                change_id = payload.get("id")
+                if not op or not document_id:
+                    continue
+                event_type = "document.deleted" if op == "delete" else "document.changed"
+                event_id = change_id
+                yield sse_json(
+                    event_type,
+                    {"documentId": document_id, "op": op, "id": change_id},
+                    event_id=event_id,
+                )
         finally:
             unsubscribe()
 
@@ -587,6 +573,64 @@ async def stream_document_events(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get(
+    "/delta",
+    response_model=DocumentChangeDeltaResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List document changes since token",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to read document changes.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document access.",
+        },
+        status.HTTP_410_GONE: {
+            "description": "Change cursor expired; refresh the document list.",
+        },
+    },
+)
+def list_document_changes_delta(
+    workspace_id: WorkspacePath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+    *,
+    since: Annotated[str, Query(description="Change cursor.")],
+    limit: Annotated[int, Query(ge=1, le=MAX_DELTA_LIMIT)] = DEFAULT_DELTA_LIMIT,
+) -> DocumentChangeDeltaResponse:
+    start = time.perf_counter()
+    since_id = parse_document_change_cursor(since)
+    delta = service.get_document_change_delta(
+        workspace_id=workspace_id,
+        since=since_id,
+        limit=limit,
+    )
+    changes = [
+        DocumentChangeEntry(
+            id=str(change.id),
+            document_id=change.document_id,
+            op=change.op,
+        )
+        for change in delta.changes
+    ]
+    response = DocumentChangeDeltaResponse(
+        changes=changes,
+        next_since=str(delta.next_since),
+        has_more=delta.has_more,
+    )
+    duration_ms = (time.perf_counter() - start) * 1000.0
+    logger.info(
+        "documents.delta.success",
+        extra={
+            "workspace_id": str(workspace_id),
+            "count": len(changes),
+            "duration_ms": round(duration_ms, 2),
+            "has_more": delta.has_more,
+        },
+    )
+    return response
 
 
 @router.patch(
@@ -977,10 +1021,15 @@ def download_document(
     settings: SettingsDep,
     _actor: DocumentReader,
 ) -> StreamingResponse:
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = DocumentsService(session=session, settings=settings)
+            service = DocumentsService(
+                session=session,
+                settings=settings,
+                storage=blob_storage,
+            )
             record, stream = service.stream_document(
                 workspace_id=workspace_id,
                 document_id=document_id,
@@ -1020,10 +1069,15 @@ def download_document_version(
     settings: SettingsDep,
     _actor: DocumentReader,
 ) -> StreamingResponse:
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = DocumentsService(session=session, settings=settings)
+            service = DocumentsService(
+                session=session,
+                settings=settings,
+                storage=blob_storage,
+            )
             record, version, stream = service.stream_document_version(
                 workspace_id=workspace_id,
                 document_id=document_id,

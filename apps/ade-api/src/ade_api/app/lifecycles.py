@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import threading
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,12 +15,29 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from ade_api.db import get_engine, get_sessionmaker_from_app, init_db, shutdown_db
-from ade_api.features.documents.events import DocumentEventsHub
+from ade_api.features.documents.changes import purge_document_changes
+from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
+from ade_api.infra.storage import init_storage, shutdown_storage
 from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
+MAINTENANCE_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+async def _document_changes_maintenance_loop(maintain_fn: Callable[[], int]) -> None:
+    while True:
+        try:
+            dropped = await asyncio.to_thread(maintain_fn)
+            if dropped:
+                logger.info(
+                    "documents.changes.purged",
+                    extra={"count": dropped},
+                )
+        except Exception:
+            logger.exception("documents.changes.maintenance_failed")
+        await asyncio.sleep(MAINTENANCE_INTERVAL_SECONDS)
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:
@@ -122,6 +139,7 @@ def create_application_lifespan(
         logger.info("db.init.start", extra={"database_url": safe_url})
         init_db(app, settings)
         logger.info("db.init.complete", extra={"database_url": safe_url})
+        init_storage(app, settings)
 
         engine = get_engine(app)
         session_factory = get_sessionmaker_from_app(app)
@@ -144,6 +162,14 @@ def create_application_lifespan(
                 with session.begin():
                     sync_sso_providers_from_env(session=session, settings=settings)
 
+        def _maintain_document_changes() -> int:
+            with session_factory() as session:
+                with session.begin():
+                    return purge_document_changes(
+                        session,
+                        retention_days=settings.document_changes_retention_days,
+                    )
+
         try:
             # Fail fast if the schema hasn't been migrated.
             try:
@@ -160,17 +186,25 @@ def create_application_lifespan(
 
             await asyncio.to_thread(_sync_rbac_registry)
             await asyncio.to_thread(_sync_sso_env_providers)
+            await asyncio.to_thread(_maintain_document_changes)
 
-            events_hub = DocumentEventsHub(settings=settings)
+            events_hub = DocumentChangesHub(settings=settings)
             events_hub.start(loop=asyncio.get_running_loop())
-            app.state.document_events_hub = events_hub
+            app.state.document_changes_hub = events_hub
+            maintenance_task = asyncio.create_task(_document_changes_maintenance_loop(_maintain_document_changes))
+            app.state.document_changes_maintenance_task = maintenance_task
 
             try:
                 yield
             finally:
+                maintenance_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await maintenance_task
                 events_hub.stop()
-                app.state.document_events_hub = None
+                app.state.document_changes_hub = None
+                app.state.document_changes_maintenance_task = None
         finally:
+            shutdown_storage(app)
             shutdown_db(app)
 
     return lifespan
