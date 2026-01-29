@@ -5813,13 +5813,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/events/stream": {
+    "/api/v1/workspaces/{workspaceId}/documents/stream": {
       "get": {
         "tags": [
           "documents"
         ],
-        "summary": "Stream document events",
-        "operationId": "stream_document_events_api_v1_workspaces__workspaceId__documents_events_stream_get",
+        "summary": "Stream document changes",
+        "operationId": "stream_document_changes_api_v1_workspaces__workspaceId__documents_stream_get",
         "parameters": [
           {
             "name": "workspaceId",
@@ -5846,28 +5846,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Cursor token.",
+              "description": "Change cursor.",
               "title": "Cursor"
             },
-            "description": "Cursor token."
-          },
-          {
-            "name": "include",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional inclusions (comma-separated).",
-              "title": "Include"
-            },
-            "description": "Optional inclusions (comma-separated)."
+            "description": "Change cursor."
           }
         ],
         "responses": {
@@ -5878,6 +5860,122 @@
                 "schema": {}
               }
             },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/delta": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List document changes since token",
+        "operationId": "list_document_changes_delta_api_v1_workspaces__workspaceId__documents_delta_get",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Change cursor.",
+              "title": "Since"
+            },
+            "description": "Change cursor."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2000,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentChangeDeltaResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to read document changes.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "410": {
+            "description": "Change cursor expired; refresh the document list.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -13374,6 +13472,65 @@
         "type": "object",
         "title": "DocumentBatchTagsResponse",
         "description": "Response envelope for batch tag updates."
+      },
+      "DocumentChangeDeltaResponse": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentChangeEntry"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "nextSince": {
+            "type": "string",
+            "title": "Nextsince"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "title": "Hasmore"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "changes",
+          "nextSince",
+          "hasMore"
+        ],
+        "title": "DocumentChangeDeltaResponse",
+        "description": "Delta response for document changes."
+      },
+      "DocumentChangeEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "upsert",
+              "delete"
+            ],
+            "title": "Op"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Documentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "op",
+          "documentId"
+        ],
+        "title": "DocumentChangeEntry",
+        "description": "Single entry from the documents change feed."
       },
       "DocumentCommentCreate": {
         "properties": {

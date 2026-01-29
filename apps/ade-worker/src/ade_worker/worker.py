@@ -1546,7 +1546,7 @@ class Worker:
             try:
                 self.storage.download_to_path(
                     str(file_row.get("blob_name") or ""),
-                    version_id=file_version.get("blob_version_id"),
+                    version_id=file_version.get("storage_version_id"),
                     destination=staged_input,
                 )
             except FileNotFoundError:
@@ -1661,17 +1661,13 @@ class Worker:
                         output_filename = output_abs.name
                         output_display_name = f"{file_row.get('name') or output_filename} (Output)"
                         output_name_key = f"output:{file_id}"
-                        expires_at = file_row.get("expires_at")
-                        if not isinstance(expires_at, datetime):
-                            expires_at = finished_at + timedelta(days=30)
                         with self.SessionLocal.begin() as session:
                             output_file_row = db.ensure_output_file(
                                 session,
                                 workspace_id=workspace_id,
-                                parent_file_id=file_id,
+                                source_file_id=file_id,
                                 name=output_display_name,
                                 name_key=output_name_key,
-                                expires_at=expires_at,
                                 now=finished_at,
                             )
                         try:
@@ -1707,7 +1703,7 @@ class Worker:
     
                     output_file_version_id: str | None = None
                     if output_upload and output_file_row:
-                        blob_version_id = output_upload.version_id or output_upload.sha256
+                        storage_version_id = output_upload.version_id
                         content_type = None
                         if output_filename:
                             content_type = mimetypes.guess_type(output_filename)[0]
@@ -1719,7 +1715,7 @@ class Worker:
                             content_type=content_type,
                             sha256=output_upload.sha256,
                             byte_size=output_upload.byte_size,
-                            blob_version_id=blob_version_id,
+                            storage_version_id=storage_version_id,
                             now=finished_at,
                         )
                         output_file_version_id = str(version_payload["id"])

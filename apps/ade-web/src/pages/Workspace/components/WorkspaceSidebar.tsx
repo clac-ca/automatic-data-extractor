@@ -1,14 +1,17 @@
-import { useCallback, useMemo, useState, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Check, ChevronDown, ChevronsUpDown, FileText, LayoutGrid, PlayCircle, Plus, Settings, Wrench } from "lucide-react";
 
 import {
   fetchWorkspaceDocuments,
-  type DocumentEventEntry,
+  fetchWorkspaceDocumentRowsByIdFilter,
+  fetchWorkspaceDocumentsDelta,
+  type DocumentChangeNotification,
   type DocumentListRow,
   type DocumentPageResult,
 } from "@/api/documents";
+import { ApiError } from "@/api/errors";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 import { useSession } from "@/providers/auth/SessionContext";
@@ -153,30 +156,74 @@ export function WorkspaceSidebar() {
     staleTime: 30_000,
   });
 
-  const updateAssignedDocuments = useCallback(
-    (change: DocumentEventEntry) => {
+  const assignedChangesCursor = assignedDocumentsQuery.data?.meta?.changesCursor ?? null;
+  const deltaTokenRef = useRef<string | null>(null);
+  const deltaPullInFlightRef = useRef(false);
+  const deltaPullQueuedRef = useRef(false);
+  const pendingNotifyRef = useRef(false);
+  const debounceTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    deltaTokenRef.current = null;
+    pendingNotifyRef.current = false;
+  }, [workspace.id, session.user?.id]);
+
+  useEffect(() => {
+    if (assignedChangesCursor) {
+      deltaTokenRef.current = assignedChangesCursor;
+    }
+  }, [assignedChangesCursor]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const applyAssignedChanges = useCallback(
+    async (changes: DocumentChangeNotification[]) => {
       const userId = session.user?.id;
-      if (!userId) return;
+      if (!userId || changes.length === 0) return;
+      const opById = new Map<string, DocumentChangeNotification["op"]>();
+      changes.forEach((change) => {
+        if (change.documentId && change.op) {
+          opById.set(change.documentId, change.op);
+        }
+      });
+
+      const deleteIds: string[] = [];
+      const upsertIds: string[] = [];
+      opById.forEach((op, documentId) => {
+        if (op === "delete") {
+          deleteIds.push(documentId);
+        } else {
+          upsertIds.push(documentId);
+        }
+      });
+
+      let rows: DocumentListRow[] = [];
+      if (upsertIds.length > 0) {
+        rows = await fetchWorkspaceDocumentRowsByIdFilter(
+          workspace.id,
+          upsertIds,
+          {
+            sort: ASSIGNED_DOCUMENTS_SORT,
+            filters: [{ id: "assigneeId", operator: "eq", value: userId }],
+          },
+        );
+      }
+      const rowsById = new Map(rows.map((row) => [row.id, row]));
+
       queryClient.setQueryData<DocumentPageResult | undefined>(assignedDocumentsKey, (current) => {
         if (!current) return current;
         const items = current.items ?? [];
-        if (change.type === "document.deleted") {
-          return {
-            ...current,
-            items: items.filter((item) => item.id !== change.documentId),
-          };
-        }
-        const row = change.row;
-        if (!row) return current;
-        const isAssignedToUser = row.assignee?.id === userId;
-        const filtered = items.filter((item) => item.id !== change.documentId);
-        if (!isAssignedToUser) {
-          return {
-            ...current,
-            items: filtered,
-          };
-        }
-        const nextItems = [...filtered, row].sort(
+        const filtered = items.filter(
+          (item) => !deleteIds.includes(item.id) && !upsertIds.includes(item.id),
+        );
+        const nextItems = [...filtered, ...rowsById.values()].sort(
           (a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0),
         );
         return {
@@ -185,10 +232,85 @@ export function WorkspaceSidebar() {
         };
       });
     },
-    [assignedDocumentsKey, queryClient, session.user?.id],
+    [assignedDocumentsKey, queryClient, session.user?.id, workspace.id],
   );
 
-  useWorkspaceDocumentsChanges(updateAssignedDocuments);
+  const pullDelta = useCallback(async () => {
+    if (deltaPullInFlightRef.current) {
+      deltaPullQueuedRef.current = true;
+      return;
+    }
+    const since = deltaTokenRef.current;
+    if (!since) {
+      pendingNotifyRef.current = true;
+      return;
+    }
+    deltaPullInFlightRef.current = true;
+    deltaPullQueuedRef.current = false;
+    try {
+      let nextSince = since;
+      const collected: DocumentChangeNotification[] = [];
+      while (true) {
+        const delta = await fetchWorkspaceDocumentsDelta(workspace.id, { since: nextSince });
+        collected.push(...(delta.changes ?? []));
+        if (delta.nextSince) {
+          nextSince = delta.nextSince;
+        }
+        if (!delta.hasMore) break;
+      }
+      deltaTokenRef.current = nextSince;
+      if (collected.length > 0) {
+        await applyAssignedChanges(collected);
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 410) {
+        assignedDocumentsQuery.refetch();
+      }
+    } finally {
+      deltaPullInFlightRef.current = false;
+      if (deltaPullQueuedRef.current) {
+        deltaPullQueuedRef.current = false;
+        void pullDelta();
+      }
+    }
+  }, [applyAssignedChanges, assignedDocumentsQuery, workspace.id]);
+
+  const scheduleDeltaPull = useCallback(
+    (change?: DocumentChangeNotification) => {
+      if (!deltaTokenRef.current && change?.id) {
+        deltaTokenRef.current = change.id;
+        void applyAssignedChanges([change]);
+        return;
+      }
+      pendingNotifyRef.current = true;
+      if (debounceTimerRef.current !== null) {
+        return;
+      }
+      debounceTimerRef.current = window.setTimeout(() => {
+        debounceTimerRef.current = null;
+        if (!pendingNotifyRef.current) return;
+        pendingNotifyRef.current = false;
+        void pullDelta();
+      }, 250);
+    },
+    [applyAssignedChanges, pullDelta],
+  );
+
+  useEffect(() => {
+    if (!assignedChangesCursor) return;
+    if (!pendingNotifyRef.current) return;
+    pendingNotifyRef.current = false;
+    void pullDelta();
+  }, [assignedChangesCursor, pullDelta]);
+
+  useWorkspaceDocumentsChanges(
+    useCallback(
+      (change) => {
+        scheduleDeltaPull(change);
+      },
+      [scheduleDeltaPull],
+    ),
+  );
 
   const assignedDocuments = assignedDocumentsQuery.data?.items ?? [];
   const activeDocId = useMemo(() => {

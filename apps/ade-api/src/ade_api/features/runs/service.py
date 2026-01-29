@@ -557,7 +557,7 @@ class RunsService:
             select(File)
             .where(
                 File.workspace_id == workspace_id,
-                File.kind == FileKind.DOCUMENT,
+                File.kind == FileKind.INPUT,
                 File.last_run_id.is_(None),
                 File.deleted_at.is_(None),
                 ~pending_run_exists,
@@ -610,7 +610,7 @@ class RunsService:
         base_stmt = (
             select(File.id, File.current_version_id)
             .where(File.workspace_id == configuration.workspace_id)
-            .where(File.kind == FileKind.DOCUMENT)
+            .where(File.kind == FileKind.INPUT)
             .where(File.deleted_at.is_(None))
             .where(File.id.in_(document_ids))
         )
@@ -1029,7 +1029,7 @@ class RunsService:
 
         stream = self._blob_storage.stream(
             document.blob_name,
-            version_id=version.blob_version_id,
+            version_id=version.storage_version_id,
             chunk_size=self._settings.blob_download_chunk_size_bytes,
         )
 
@@ -1089,7 +1089,6 @@ class RunsService:
             document_id=document.id,
             name=output_name,
             name_key=output_name_key,
-            expires_at=document.expires_at,
             actor_id=actor_id,
         )
 
@@ -1102,7 +1101,7 @@ class RunsService:
             max_bytes=self._settings.storage_upload_max_bytes,
         )
 
-        blob_version_id = stored.version_id or stored.sha256
+        storage_version_id = stored.version_id
         now = datetime.now(tz=UTC)
 
         version_no = self._next_version_no(file_id=output_file.id)
@@ -1116,13 +1115,12 @@ class RunsService:
             byte_size=stored.byte_size,
             content_type=content_type,
             filename_at_upload=upload_name,
-            blob_version_id=blob_version_id,
+            storage_version_id=storage_version_id,
         )
         self._session.add(file_version)
         self._session.flush()
 
         output_file.current_version_id = file_version.id
-        output_file.version = version_no
         output_file.updated_at = now
         run.output_file_version_id = file_version.id
         self._session.flush()
@@ -1158,7 +1156,7 @@ class RunsService:
         run, output_file, output_version = self.resolve_output_for_download(run_id=run_id)
         stream = self._blob_storage.stream(
             output_file.blob_name,
-            version_id=output_version.blob_version_id,
+            version_id=output_version.storage_version_id,
             chunk_size=self._settings.blob_download_chunk_size_bytes,
         )
 
@@ -1214,7 +1212,7 @@ class RunsService:
         try:
             with self._download_blob_to_tempfile(
                 blob_name=output_file.blob_name,
-                version_id=output_version.blob_version_id,
+                version_id=output_version.storage_version_id,
                 suffix=suffix,
             ) as path:
                 if suffix == ".xlsx":
@@ -1296,7 +1294,7 @@ class RunsService:
             try:
                 with self._download_blob_to_tempfile(
                     blob_name=output_file.blob_name,
-                    version_id=output_version.blob_version_id,
+                    version_id=output_version.storage_version_id,
                     suffix=suffix,
                 ) as path:
                     sheets = _run_with_timeout(self._inspect_workbook, timeout=timeout, path=path)
@@ -1409,7 +1407,7 @@ class RunsService:
             .join(FileVersion, FileVersion.file_id == File.id)
             .where(
                 FileVersion.id == file_version_id,
-                File.kind == FileKind.DOCUMENT,
+                File.kind == FileKind.INPUT,
                 File.deleted_at.is_(None),
             )
         )
@@ -1429,7 +1427,7 @@ class RunsService:
         if (
             document is None
             or document.workspace_id != workspace_id
-            or document.kind != FileKind.DOCUMENT
+            or document.kind != FileKind.INPUT
             or document.deleted_at is not None
         ):
             raise RunDocumentMissingError(f"Document {version.file_id} not found")
@@ -1458,7 +1456,6 @@ class RunsService:
         document_id: UUID,
         name: str,
         name_key: str,
-        expires_at: datetime,
         actor_id: UUID | None,
     ) -> File:
         stmt = select(File).where(
@@ -1475,15 +1472,12 @@ class RunsService:
             id=file_id,
             workspace_id=workspace_id,
             kind=FileKind.OUTPUT,
-            doc_no=None,
             name=name,
             name_key=name_key,
             blob_name=self._file_blob_name(workspace_id=workspace_id, file_id=file_id),
-            parent_file_id=document_id,
+            source_file_id=document_id,
             attributes={},
             uploaded_by_user_id=actor_id,
-            expires_at=expires_at,
-            version=0,
             comment_count=0,
         )
         self._session.add(output_file)
@@ -1558,7 +1552,7 @@ class RunsService:
 
         stmt = select(File).where(
             File.workspace_id == workspace_id,
-            File.kind == FileKind.DOCUMENT,
+            File.kind == FileKind.INPUT,
             File.deleted_at.is_(None),
             File.id.in_(document_ids),
         )

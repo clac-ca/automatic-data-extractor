@@ -16,7 +16,6 @@ from fastapi import (
     Path,
     Query,
     Request,
-    Response,
     Security,
     UploadFile,
     status,
@@ -28,12 +27,9 @@ from sse_starlette.sse import EventSourceResponse
 from ade_api.api.deps import (
     SettingsDep,
     get_documents_service,
-    get_idempotency_service,
     get_runs_service,
 )
-from ade_api.common.concurrency import require_if_match
 from ade_api.common.downloads import build_content_disposition
-from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
     cursor_query_params,
@@ -52,12 +48,6 @@ from ade_api.common.workbook_preview import (
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.db import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.idempotency import (
-    IdempotencyService,
-    build_request_hash,
-    build_scope_key,
-    require_idempotency_key,
-)
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
 from ade_api.infra.storage import get_storage_adapter
@@ -81,7 +71,6 @@ from .exceptions import (
     DocumentVersionNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentCommentMentionsError,
-    InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
 )
 from .schemas import (
@@ -282,13 +271,10 @@ def upload_document(
     service: DocumentsServiceDep,
     runs_service: RunsServiceDep,
     request: Request,
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     _actor: DocumentManager,
     *,
     file: Annotated[UploadFile, File(...)],
     metadata: Annotated[str | None, Form()] = None,
-    expires_at: Annotated[str | None, Form()] = None,
     run_options: Annotated[str | None, Form()] = None,
     conflict_mode: Annotated[DocumentConflictMode | None, Form(alias="conflictMode")] = None,
 ) -> DocumentOut:
@@ -305,10 +291,6 @@ def upload_document(
     upload_run_options = _parse_run_options(run_options)
     metadata_payload = service.build_upload_metadata(payload, upload_run_options)
     staged = None
-    scope_key = build_scope_key(
-        principal_id=str(_actor.id),
-        workspace_id=str(workspace_id),
-    )
     try:
         plan = service.plan_upload(
             workspace_id=workspace_id,
@@ -316,37 +298,11 @@ def upload_document(
             conflict_mode=conflict_mode,
         )
         staged = service.stage_upload(upload=file, plan=plan)
-        request_hash = build_request_hash(
-            method=request.method,
-            path=request.url.path,
-            payload={
-                "metadata": metadata_payload,
-                "expires_at": expires_at,
-                "run_options": upload_run_options.model_dump() if upload_run_options else None,
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "file_sha256": staged.stored.sha256,
-                "file_size": staged.stored.byte_size,
-                "conflict_mode": conflict_mode.value if conflict_mode else None,
-                "target_document_id": (
-                    str(plan.file_id) if plan.action.value == "new_version" else None
-                ),
-            },
-        )
-        replay = idempotency.resolve_replay(
-            key=idempotency_key,
-            scope_key=scope_key,
-            request_hash=request_hash,
-        )
-        if replay:
-            service.discard_staged_upload(staged=staged)
-            return replay.to_response()
         document = service.create_document(
             workspace_id=workspace_id,
             upload=file,
             plan=plan,
             metadata=metadata_payload,
-            expires_at=expires_at,
             actor=_actor,
             staged=staged,
         )
@@ -356,10 +312,6 @@ def upload_document(
         if staged is not None:
             service.discard_staged_upload(staged=staged)
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except InvalidDocumentExpirationError as exc:
-        if staged is not None:
-            service.discard_staged_upload(staged=staged)
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception:
         if staged is not None:
             service.discard_staged_upload(staged=staged)
@@ -381,13 +333,6 @@ def upload_document(
         )
         document.list_row = service._build_list_row(document)
 
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=document,
-    )
     return document
 
 
@@ -421,7 +366,6 @@ def upload_document_version(
     *,
     file: Annotated[UploadFile, File(...)],
     metadata: Annotated[str | None, Form()] = None,
-    expires_at: Annotated[str | None, Form()] = None,
 ) -> DocumentOut:
     payload = _parse_metadata(metadata)
     metadata_payload = service.build_upload_metadata(payload, None)
@@ -437,7 +381,6 @@ def upload_document_version(
             upload=file,
             plan=plan,
             metadata=metadata_payload,
-            expires_at=expires_at,
             actor=_actor,
             staged=staged,
         )
@@ -446,10 +389,6 @@ def upload_document_version(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentTooLargeError as exc:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
-    except InvalidDocumentExpirationError as exc:
-        if staged is not None:
-            service.discard_staged_upload(staged=staged)
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception:
         if staged is not None:
             service.discard_staged_upload(staged=staged)
@@ -656,28 +595,15 @@ def update_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentUpdateRequest,
-    request: Request,
-    response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
 ) -> DocumentOut:
     try:
-        current = service.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.version),
-        )
         updated = service.update_document(
             workspace_id=workspace_id,
             document_id=document_id,
             payload=payload,
         )
-        etag = format_weak_etag(build_etag_token(updated.id, updated.version))
-        if etag:
-            response.headers["ETag"] = etag
         return updated
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -752,19 +678,10 @@ def replace_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsReplace,
-    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
 ) -> DocumentOut:
     try:
-        current = service.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.version),
-        )
         return service.replace_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -802,19 +719,10 @@ def patch_document_tags(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     payload: DocumentTagsPatch,
-    request: Request,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
 ) -> DocumentOut:
     try:
-        current = service.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.version),
-        )
         return service.patch_document_tags(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -848,13 +756,12 @@ def patch_document_tags(
 def read_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    response: Response,
     service: DocumentsServiceDep,
     _actor: DocumentReader,
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
     include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
-) -> DocumentOut:
+    ) -> DocumentOut:
     try:
         document = service.get_document(
             workspace_id=workspace_id,
@@ -863,9 +770,6 @@ def read_document(
             include_run_table_columns=include_run_table_columns,
             include_run_fields=include_run_fields,
         )
-        etag = format_weak_etag(build_etag_token(document.id, document.version))
-        if etag:
-            response.headers["ETag"] = etag
         return document
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1258,19 +1162,10 @@ def list_document_sheets_endpoint(
 def delete_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    request: Request,
     service: DocumentsServiceDep,
     actor: DocumentManager,
 ) -> None:
     try:
-        current = service.get_document(
-            workspace_id=workspace_id,
-            document_id=document_id,
-        )
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(current.id, current.version),
-        )
         service.delete_document(
             workspace_id=workspace_id,
             document_id=document_id,

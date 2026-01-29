@@ -32,7 +32,7 @@ def _parse_suite(value: str | None) -> TestSuite:
 
 
 def run_tests(suite: TestSuite) -> None:
-    api_root = Path(__file__).resolve().parents[2]
+    api_root = common.REPO_ROOT / "apps" / "ade-api"
     cmd = [sys.executable, "-m", "pytest"]
     if suite is not TestSuite.ALL:
         cmd.extend(["-m", suite.value])

@@ -101,12 +101,6 @@ def get_workspaces_service(session: SessionDep, settings: SettingsDep):
     return WorkspacesService(session=session, settings=settings)
 
 
-def get_idempotency_service(session: SessionDep, settings: SettingsDep):
-    from ade_api.features.idempotency.service import IdempotencyService
-
-    return IdempotencyService(session=session, settings=settings)
-
-
 def get_sso_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.sso.service import SsoService
 
@@ -124,6 +118,5 @@ __all__ = [
     "get_configurations_service",
     "get_runs_service",
     "get_workspaces_service",
-    "get_idempotency_service",
     "get_sso_service",
 ]

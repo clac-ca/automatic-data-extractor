@@ -54,11 +54,6 @@ class DocumentOut(BaseSchema):
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
     workspace_id: UUIDStr = Field(alias="workspaceId")
-    doc_no: int | None = Field(
-        default=None,
-        alias="docNo",
-        description="Numeric document reference within the workspace.",
-    )
     name: str = Field(description="Display name for the document.")
     content_type: str | None = Field(default=None, alias="contentType")
     byte_size: int = Field(alias="byteSize")
@@ -74,15 +69,9 @@ class DocumentOut(BaseSchema):
         serialization_alias="metadata",
     )
     source: FileVersionOrigin | None = Field(default=None)
-    expires_at: datetime = Field(alias="expiresAt")
     activity_at: datetime | None = Field(default=None, alias="activityAt")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
-    version: int = Field(description="Monotonic document version.")
-    etag: str | None = Field(
-        default=None,
-        description="Weak ETag for optimistic concurrency checks.",
-    )
     deleted_at: datetime | None = Field(default=None, alias="deletedAt")
     assignee_user_id: UUIDStr | None = Field(default=None, alias="assigneeId")
     deleted_by: UUIDStr | None = Field(
@@ -300,7 +289,6 @@ class DocumentListRow(BaseSchema):
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
     workspace_id: UUIDStr = Field(alias="workspaceId")
-    doc_no: int | None = Field(default=None, alias="docNo")
     name: str = Field(description="Display name mapped from the original filename.")
     file_type: DocumentFileType = Field(alias="fileType")
     uploader: UserSummary | None = None
@@ -312,11 +300,6 @@ class DocumentListRow(BaseSchema):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     activity_at: datetime = Field(alias="activityAt")
-    version: int = Field(description="Monotonic document version.")
-    etag: str | None = Field(
-        default=None,
-        description="Weak ETag for optimistic concurrency checks.",
-    )
     last_run: DocumentRunSummary | None = Field(default=None, alias="lastRun")
     last_run_metrics: RunMetricsResource | None = Field(default=None, alias="lastRunMetrics")
     last_run_table_columns: list[RunColumnResource] | None = Field(
@@ -330,18 +313,23 @@ class DocumentListPage(CursorPage[DocumentListRow]):
     """Cursor-based envelope of document list rows."""
 
 
-class DocumentEventEntry(BaseSchema):
-    """Single entry from the documents event stream."""
+DocumentChangeOp = Literal["upsert", "delete"]
 
-    cursor: str
-    type: Literal["document.changed", "document.deleted"]
+
+class DocumentChangeEntry(BaseSchema):
+    """Single entry from the documents change feed."""
+
+    id: str
+    op: DocumentChangeOp
     document_id: UUIDStr = Field(alias="documentId")
-    occurred_at: datetime = Field(alias="occurredAt")
-    document_version: int = Field(alias="documentVersion")
-    row: DocumentListRow | None = Field(
-        default=None,
-        description="Optional list row snapshot for changed documents.",
-    )
+
+
+class DocumentChangeDeltaResponse(BaseSchema):
+    """Delta response for document changes."""
+
+    changes: list[DocumentChangeEntry]
+    next_since: str = Field(alias="nextSince")
+    has_more: bool = Field(alias="hasMore")
 
 
 class DocumentCommentCreate(BaseSchema):
@@ -423,7 +411,9 @@ __all__ = [
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
     "DocumentConflictMode",
-    "DocumentEventEntry",
+    "DocumentChangeDeltaResponse",
+    "DocumentChangeEntry",
+    "DocumentChangeOp",
     "DocumentFileType",
     "DocumentListPage",
     "DocumentListRow",

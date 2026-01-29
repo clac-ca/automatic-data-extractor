@@ -7,11 +7,14 @@ import { useNavigate } from "react-router-dom";
 import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
+  fetchWorkspaceDocumentRowsByIdFilter,
+  fetchWorkspaceDocumentsDelta,
   patchWorkspaceDocument,
-  type DocumentEventEntry,
+  type DocumentChangeNotification,
   type DocumentRecord,
   type DocumentUploadResponse,
 } from "@/api/documents";
+import { ApiError } from "@/api/errors";
 import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
 import { buildWeakEtag } from "@/api/etag";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
@@ -119,6 +122,11 @@ export function DocumentsTableView({
   const filterMode = filterFlag === "advancedFilters" ? "advanced" : "simple";
   const presence = useWorkspacePresence();
   const { page, perPage, sort, q, filters, joinOperator } = useDocumentsListParams({ filterMode });
+  const filtersKey = useMemo(() => (filters?.length ? JSON.stringify(filters) : ""), [filters]);
+  const viewKey = useMemo(
+    () => [page, perPage, sort ?? "", q ?? "", filtersKey, joinOperator ?? ""].join("|"),
+    [filtersKey, joinOperator, page, perPage, q, sort],
+  );
   const documentsView = useDocumentsView({
     workspaceId,
     page,
@@ -132,6 +140,7 @@ export function DocumentsTableView({
   const {
     rows: documents,
     documentsById,
+    changesCursor,
     pageCount,
     isLoading,
     isFetching,
@@ -142,6 +151,12 @@ export function DocumentsTableView({
     removeRow,
     setUploadProgress,
   } = documentsView;
+  const [updatesAvailable, setUpdatesAvailable] = useState(false);
+  const deltaTokenRef = useRef<string | null>(null);
+  const deltaPullInFlightRef = useRef(false);
+  const deltaPullQueuedRef = useRef(false);
+  const pendingNotifyRef = useRef(false);
+  const debounceTimerRef = useRef<number | null>(null);
 
   const openDocument = useCallback(
     (documentId: string, tab?: "data" | "comments") => {
@@ -155,6 +170,27 @@ export function DocumentsTableView({
   const onToggleFilterMode = useCallback(() => {
     setFilterFlag(filterFlag === "advancedFilters" ? null : "advancedFilters");
   }, [filterFlag, setFilterFlag]);
+
+  useEffect(() => {
+    deltaTokenRef.current = null;
+    pendingNotifyRef.current = false;
+    setUpdatesAvailable(false);
+  }, [viewKey]);
+
+  useEffect(() => {
+    if (changesCursor) {
+      deltaTokenRef.current = changesCursor;
+    }
+  }, [changesCursor]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
@@ -499,22 +535,182 @@ export function DocumentsTableView({
     }
   }, [clearRowPending, deleteTarget, markRowPending, notifyToast, removeRow, workspaceId]);
 
-  useWorkspaceDocumentsChanges(
-    useCallback(
-      (change) => {
-        if (change.type === "document.changed" && change.row) {
-          if (documentsById[change.row.id]) {
-            updateRow(change.row.id, change.row);
+  const markStale = useCallback(() => {
+    if (page > 1) {
+      setUpdatesAvailable(true);
+    }
+  }, [page]);
+
+  const applyChangeEntries = useCallback(
+    async (changes: DocumentChangeNotification[]) => {
+      if (!changes.length) return;
+      let needsRefresh = false;
+      const opById = new Map<string, DocumentChangeNotification["op"]>();
+      changes.forEach((change) => {
+        if (change.documentId && change.op) {
+          opById.set(change.documentId, change.op);
+        }
+      });
+
+      const deleteIds: string[] = [];
+      const upsertIds: string[] = [];
+      opById.forEach((op, documentId) => {
+        if (op === "delete") {
+          deleteIds.push(documentId);
+        } else {
+          upsertIds.push(documentId);
+        }
+      });
+
+      if (deleteIds.length > 0) {
+        deleteIds.forEach((documentId) => {
+          if (documentsById[documentId]) {
+            removeRow(documentId);
+            if (page === 1) {
+              needsRefresh = true;
+            } else {
+              markStale();
+            }
+          }
+        });
+      }
+
+      if (upsertIds.length === 0) return;
+
+      const rows = await fetchWorkspaceDocumentRowsByIdFilter(
+        workspaceId,
+        upsertIds,
+        {
+          sort,
+          filters,
+          joinOperator: joinOperator ?? undefined,
+          q,
+        },
+      );
+      const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+      upsertIds.forEach((documentId) => {
+        const row = rowsById.get(documentId);
+        const isVisible = Boolean(documentsById[documentId]);
+        if (row) {
+          if (isVisible) {
+            updateRow(documentId, row);
+          } else {
+            if (page === 1) {
+              needsRefresh = true;
+            } else {
+              markStale();
+            }
           }
           return;
         }
-        if (change.type === "document.deleted" && change.documentId) {
-          if (documentsById[change.documentId]) {
-            removeRow(change.documentId);
+        if (isVisible) {
+          removeRow(documentId);
+          if (page === 1) {
+            needsRefresh = true;
+          } else {
+            markStale();
           }
         }
+      });
+
+      if (needsRefresh && page === 1) {
+        await refreshSnapshot();
+      }
+    },
+    [
+      documentsById,
+      filters,
+      joinOperator,
+      markStale,
+      page,
+      q,
+      refreshSnapshot,
+      removeRow,
+      sort,
+      updateRow,
+      workspaceId,
+    ],
+  );
+
+  const pullDelta = useCallback(async () => {
+    if (deltaPullInFlightRef.current) {
+      deltaPullQueuedRef.current = true;
+      return;
+    }
+    const since = deltaTokenRef.current;
+    if (!since) {
+      pendingNotifyRef.current = true;
+      return;
+    }
+    deltaPullInFlightRef.current = true;
+    deltaPullQueuedRef.current = false;
+    try {
+      let nextSince = since;
+      const collected: DocumentChangeNotification[] = [];
+      while (true) {
+        const delta = await fetchWorkspaceDocumentsDelta(workspaceId, {
+          since: nextSince,
+        });
+        collected.push(...(delta.changes ?? []));
+        if (delta.nextSince) {
+          nextSince = delta.nextSince;
+        }
+        if (!delta.hasMore) {
+          break;
+        }
+      }
+      deltaTokenRef.current = nextSince;
+      if (collected.length > 0) {
+        await applyChangeEntries(collected);
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 410) {
+        refreshSnapshot();
+      }
+    } finally {
+      deltaPullInFlightRef.current = false;
+      if (deltaPullQueuedRef.current) {
+        deltaPullQueuedRef.current = false;
+        void pullDelta();
+      }
+    }
+  }, [applyChangeEntries, refreshSnapshot, workspaceId]);
+
+  const scheduleDeltaPull = useCallback(
+    (change?: DocumentChangeNotification) => {
+      if (!deltaTokenRef.current && change?.id) {
+        deltaTokenRef.current = change.id;
+        void applyChangeEntries([change]);
+        return;
+      }
+      pendingNotifyRef.current = true;
+      if (debounceTimerRef.current !== null) {
+        return;
+      }
+      debounceTimerRef.current = window.setTimeout(() => {
+        debounceTimerRef.current = null;
+        if (!pendingNotifyRef.current) return;
+        pendingNotifyRef.current = false;
+        void pullDelta();
+      }, 250);
+    },
+    [applyChangeEntries, pullDelta],
+  );
+
+  useEffect(() => {
+    if (!changesCursor) return;
+    if (!pendingNotifyRef.current) return;
+    pendingNotifyRef.current = false;
+    void pullDelta();
+  }, [changesCursor, pullDelta]);
+
+  useWorkspaceDocumentsChanges(
+    useCallback(
+      (change) => {
+        scheduleDeltaPull(change);
       },
-      [documentsById, removeRow, updateRow],
+      [scheduleDeltaPull],
     ),
   );
 
@@ -538,6 +734,10 @@ export function DocumentsTableView({
   const hasDocuments = documents.length > 0;
   const showInitialLoading = isLoading && !hasDocuments;
   const showInitialError = Boolean(error) && !hasDocuments;
+  const handleUpdatesRefresh = useCallback(() => {
+    setUpdatesAvailable(false);
+    refreshSnapshot();
+  }, [refreshSnapshot]);
 
   const toolbarStatus = (
     <div className="flex h-4 w-4 items-center justify-center">
@@ -603,6 +803,15 @@ export function DocumentsTableView({
   }
 
   const configBanner = configMissing ? <DocumentsConfigBanner workspaceId={workspaceId} /> : null;
+  const showUpdatesBanner = updatesAvailable && page > 1;
+  const updatesBanner = showUpdatesBanner ? (
+    <div className="mb-3 flex items-center justify-between rounded-lg border border-muted bg-muted/40 px-3 py-2 text-sm">
+      <span>Updates are available for this view.</span>
+      <Button variant="ghost" size="sm" onClick={handleUpdatesRefresh}>
+        Refresh
+      </Button>
+    </div>
+  ) : null;
 
   const deletePending =
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
@@ -611,6 +820,7 @@ export function DocumentsTableView({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 pb-6 pt-2">
         {configBanner}
+        {updatesBanner}
         <DocumentsTable
           data={documents}
           pageCount={pageCount}

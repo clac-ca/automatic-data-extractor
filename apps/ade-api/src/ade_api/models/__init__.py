@@ -14,7 +14,6 @@ from .file import (
     FileVersionOrigin,
 )
 from .environment import Environment, EnvironmentStatus
-from .idempotency import IdempotencyRecord
 from .rbac import Permission, Role, RolePermission, ScopeType, UserRoleAssignment
 from .run import Run, RunStatus
 from .run_field import RunField
@@ -49,7 +48,6 @@ __all__ = [
     "FileTag",
     "Environment",
     "EnvironmentStatus",
-    "IdempotencyRecord",
     "Permission",
     "Role",
     "RolePermission",

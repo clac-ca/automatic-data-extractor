@@ -701,15 +701,32 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/events/stream": {
+    "/api/v1/workspaces/{workspaceId}/documents/stream": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Stream document events */
-        get: operations["stream_document_events_api_v1_workspaces__workspaceId__documents_events_stream_get"];
+        /** Stream document changes */
+        get: operations["stream_document_changes_api_v1_workspaces__workspaceId__documents_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/delta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document changes since token */
+        get: operations["list_document_changes_delta_api_v1_workspaces__workspaceId__documents_delta_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1925,6 +1942,37 @@ export type components = {
         DocumentBatchTagsResponse: {
             /** Documents */
             documents?: components["schemas"]["DocumentOut"][];
+        };
+        /**
+         * DocumentChangeDeltaResponse
+         * @description Delta response for document changes.
+         */
+        DocumentChangeDeltaResponse: {
+            /** Changes */
+            changes: components["schemas"]["DocumentChangeEntry"][];
+            /** Nextsince */
+            nextSince: string;
+            /** Hasmore */
+            hasMore: boolean;
+        };
+        /**
+         * DocumentChangeEntry
+         * @description Single entry from the documents change feed.
+         */
+        DocumentChangeEntry: {
+            /** Id */
+            id: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "upsert" | "delete";
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            documentId: string;
         };
         /**
          * DocumentCommentCreate
@@ -6531,13 +6579,11 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    stream_document_events_api_v1_workspaces__workspaceId__documents_events_stream_get: {
+    stream_document_changes_api_v1_workspaces__workspaceId__documents_stream_get: {
         parameters: {
             query?: {
-                /** @description Cursor token. */
+                /** @description Change cursor. */
                 cursor?: string | null;
-                /** @description Optional inclusions (comma-separated). */
-                include?: string | null;
             };
             header?: never;
             path: {
@@ -6557,6 +6603,69 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_document_changes_delta_api_v1_workspaces__workspaceId__documents_delta_get: {
+        parameters: {
+            query: {
+                /** @description Change cursor. */
+                since: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentChangeDeltaResponse"];
+                };
+            };
+            /** @description Authentication required to read document changes. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Change cursor expired; refresh the document list. */
+            410: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

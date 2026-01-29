@@ -163,6 +163,7 @@ export function useDocumentsView({
   return {
     rows,
     documentsById,
+    changesCursor: documentsQuery.data?.meta?.changesCursor ?? null,
     pageCount:
       typeof documentsQuery.data?.meta.totalCount === "number"
         ? Math.max(1, Math.ceil(documentsQuery.data.meta.totalCount / perPage))

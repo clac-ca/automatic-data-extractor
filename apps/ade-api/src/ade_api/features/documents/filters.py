@@ -75,6 +75,12 @@ def _activity_at_expr():
 DOCUMENT_FILTER_REGISTRY = FilterRegistry(
     [
         FilterField(
+            id="id",
+            column=File.id,
+            operators={FilterOperator.EQ, FilterOperator.IN},
+            value_type=FilterValueType.UUID,
+        ),
+        FilterField(
             id="name",
             column=File.name,
             operators={

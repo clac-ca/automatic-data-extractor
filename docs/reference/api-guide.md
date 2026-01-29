@@ -125,8 +125,8 @@ Response envelope:
 }
 ```
 
-`changesCursor` is a legacy snapshot watermark. Change feeds are deprecated, so
-the value is always `null` or `"0"`.
+`changesCursor` is the latest document change cursor at the time of the list
+response. Use it as the starting `since` value for `/documents/delta`.
 
 Filter operators follow the Tablecn DSL (for example `eq`, `in`, `between`,
 `iLike`, `isEmpty`). Values must match the operator shape (arrays for `in`,
@@ -154,6 +154,9 @@ two-element arrays for `between`, etc.).
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
 - `GET /workspaces/{workspaceId}/documents` – list documents with pagination, sorting, and filters.
+- `GET /workspaces/{workspaceId}/documents/stream` – Server-Sent Events (SSE) stream for document change notifications (workspace-scoped, minimal payload).
+- `GET /workspaces/{workspaceId}/documents/delta?since=<cursor>` – pull changes since a change cursor; use with the SSE stream for live updates.
+- The list endpoint accepts `filters=[{"id":"id","operator":"in","value":["..."]}]` for membership checks using the same filter semantics as the UI.
 - `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand). Pass `conflictMode=upload_new_version` or `conflictMode=keep_both` to resolve name collisions (default is `409`).
 - `GET /workspaces/{workspaceId}/documents/{documentId}` – fetch metadata, including upload timestamps and submitter.
 - `POST /workspaces/{workspaceId}/documents/{documentId}/versions` – upload a new document version (same identity, new version number).
@@ -161,6 +164,13 @@ Upload source files for extraction. All document routes are nested under the wor
 - `GET /workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download` – download a specific historical version.
 - `GET /workspaces/{workspaceId}/documents/{documentId}/sheets` – enumerate worksheets for spreadsheet uploads by inspecting the stored file (falls back to a single-sheet descriptor for other file types; returns `422` when parsing fails).
 - `DELETE /workspaces/{workspaceId}/documents/{documentId}` – remove a document, if permitted.
+
+**Realtime document changes**
+
+- The SSE stream emits minimal payloads (`documentId`, `op`, `id`) and uses the SSE `id` field so browsers can send `Last-Event-ID` on reconnect.
+- Use `/documents/delta?since=<cursor>` to pull changes; if you receive `410 Gone`, refresh the list and reset your cursor.
+- Change cursors are retained for ~14 days via periodic cleanup of the `document_changes` table.
+- Keep SSE connections open with proxy-friendly settings (HTTP/2 preferred); the stream emits keepalive events and uses small payloads to stay within Postgres NOTIFY limits.
 
 **Resumable upload sessions (large files)**
 

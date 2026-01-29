@@ -9,14 +9,14 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { type DocumentEventEntry } from "@/api/documents";
+import { type DocumentChangeNotification } from "@/api/documents";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useDocumentsEventsStream } from "@/pages/Workspace/sections/Documents/shared/hooks/useDocumentsEventsStream";
 
 type ConnectionState = "idle" | "connecting" | "open" | "closed";
 
 type WorkspaceDocumentsStreamContextValue = {
-  subscribe: (handler: (change: DocumentEventEntry) => void) => () => void;
+  subscribe: (handler: (change: DocumentChangeNotification) => void) => () => void;
   connectionState: ConnectionState;
 };
 
@@ -25,17 +25,17 @@ const WorkspaceDocumentsStreamContext = createContext<WorkspaceDocumentsStreamCo
 export function WorkspaceDocumentsStreamProvider({ children }: { readonly children: ReactNode }) {
   const { workspace } = useWorkspaceContext();
   const queryClient = useQueryClient();
-  const listenersRef = useRef(new Set<(change: DocumentEventEntry) => void>());
+  const listenersRef = useRef(new Set<(change: DocumentChangeNotification) => void>());
   const reconnectPendingRef = useRef(false);
 
-  const subscribe = useCallback((handler: (change: DocumentEventEntry) => void) => {
+  const subscribe = useCallback((handler: (change: DocumentChangeNotification) => void) => {
     listenersRef.current.add(handler);
     return () => {
       listenersRef.current.delete(handler);
     };
   }, []);
 
-  const dispatchChange = useCallback((change: DocumentEventEntry) => {
+  const dispatchChange = useCallback((change: DocumentChangeNotification) => {
     listenersRef.current.forEach((handler) => {
       handler(change);
     });
@@ -68,7 +68,6 @@ export function WorkspaceDocumentsStreamProvider({ children }: { readonly childr
   const { connectionState } = useDocumentsEventsStream({
     workspaceId: workspace.id,
     enabled: Boolean(workspace.id),
-    includeRows: true,
     onEvent: dispatchChange,
     onDisconnect: () => {
       reconnectPendingRef.current = true;
@@ -96,7 +95,7 @@ export function WorkspaceDocumentsStreamProvider({ children }: { readonly childr
   );
 }
 
-export function useWorkspaceDocumentsChanges(handler: (change: DocumentEventEntry) => void) {
+export function useWorkspaceDocumentsChanges(handler: (change: DocumentChangeNotification) => void) {
   const context = useContext(WorkspaceDocumentsStreamContext);
   if (!context) {
     throw new Error("useWorkspaceDocumentsChanges must be used within a WorkspaceDocumentsStreamProvider.");

@@ -29,7 +29,7 @@ class DocumentsRepository:
                 selectinload(File.tags),
                 selectinload(File.current_version),
             )
-            .where(File.workspace_id == workspace_id, File.kind == FileKind.DOCUMENT)
+            .where(File.workspace_id == workspace_id, File.kind == FileKind.INPUT)
         )
 
     def get_document(

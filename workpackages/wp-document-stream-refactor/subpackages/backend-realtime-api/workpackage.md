@@ -28,55 +28,55 @@ Expose a standard realtime surface for documents: SSE stream for notifications, 
 ### Work Breakdown Structure (WBS)
 
 0.1 Research review
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 168-239 (stream, delta, list id filter)
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 469-683 (backend implementation code examples)
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 865-882 (SSE vs WebSocket tradeoffs/backpressure)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 168-239 (stream, delta, list id filter)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 469-683 (backend implementation code examples)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 865-882 (SSE vs WebSocket tradeoffs/backpressure)
 1.0 Token and delta helpers
   1.1 Token helpers
-    - [ ] Implement token encode/decode (ts + seq) (Research: lines 274-292; code example lines 488-509)
-    - [ ] Validate token parsing and error handling (Research: lines 218-221)
+    - [x] Implement token encode/decode (ts + seq) (Research: lines 274-292; code example lines 488-509)
+    - [x] Validate token parsing and error handling (Research: lines 218-221)
   1.2 Delta query
-    - [ ] Implement delta query against change feed (Research: lines 201-215; code example lines 635-669)
-    - [ ] Return 410 when token is too old (Research: lines 218-221, 374-381)
-    - [ ] Support `limit` + `hasMore` pagination (Research: lines 201-215)
+    - [x] Implement delta query against change feed (Research: lines 201-215; code example lines 635-669)
+    - [x] Return 410 when token is too old (Research: lines 218-221, 374-381)
+    - [x] Support `limit` + `hasMore` pagination (Research: lines 201-215)
 2.0 SSE stream
   2.1 Stream endpoint
-    - [ ] Rename route to `/workspaces/{id}/documents/stream` (drop `/events/stream`) (Design decision)
-    - [ ] Add `/workspaces/{id}/documents/stream` SSE route (Research: lines 187-197; code example lines 576-633)
-    - [ ] Send keepalive comments and set no-buffer headers (Research: lines 194-197; code example lines 576-633)
-    - [ ] Use SSE id field for token to support Last-Event-ID (Research: lines 196-197; code example lines 611-615)
-    - [ ] Emit payload containing `documentId`, `op`, and `token` only (Design decision)
-    - [ ] Remove include=rows handling and server-side row fetch from stream (Design decision)
-    - [ ] Remove DocumentEventEntry.row from schema and update event model accordingly (Design decision)
-    - [ ] Emit `ready` event with latest **change feed token** (not sequence cursor) (Design decision)
-    - [ ] If a `cursor`/token query param is retained, validate it uses the new token format (Design decision)
+    - [x] Rename route to `/workspaces/{id}/documents/stream` (drop `/events/stream`) (Design decision)
+    - [x] Add `/workspaces/{id}/documents/stream` SSE route (Research: lines 187-197; code example lines 576-633)
+    - [x] Send keepalive comments and set no-buffer headers (Research: lines 194-197; code example lines 576-633)
+    - [x] Use SSE id field for token to support Last-Event-ID (Research: lines 196-197; code example lines 611-615)
+    - [x] Emit payload containing `documentId`, `op`, and `token` only (Design decision)
+    - [x] Remove include=rows handling and server-side row fetch from stream (Design decision)
+    - [x] Remove DocumentEventEntry.row from schema and update event model accordingly (Design decision)
+    - [x] Emit `ready` event with latest **change feed token** (not sequence cursor) (Design decision)
+    - [x] If a `cursor`/token query param is retained, validate it uses the new token format (Design decision)
   2.2 LISTEN/NOTIFY
-    - [ ] Add async listener for document change channel (Research: lines 552-573; code example lines 552-573)
-    - [ ] Broadcast workspace-scoped notifications (Research: lines 123-129; code example lines 564-569)
-    - [ ] Drop or disconnect slow consumers (bounded queues) (Research: lines 511-549, 881-882; code example lines 511-549)
-    - [ ] Ensure NOTIFY payload includes `{documentId, op, token}` fields (Design decision)
+    - [x] Add async listener for document change channel (Research: lines 552-573; code example lines 552-573)
+    - [x] Broadcast workspace-scoped notifications (Research: lines 123-129; code example lines 564-569)
+    - [x] Drop or disconnect slow consumers (bounded queues) (Research: lines 511-549, 881-882; code example lines 511-549)
+    - [x] Ensure NOTIFY payload includes `{documentId, op, changedAt, seq}`; hub encodes token (Design decision)
 3.0 List endpoint id filter support
   3.1 Filter registry updates
-    - [ ] Add `id` filter (eq/in) to document filter registry (Research: lines 223-239; code example lines 671-683)
-    - [ ] Validate list endpoint uses server-side filters for membership checks (Research: lines 223-239)
+    - [x] Add `id` filter (eq/in) to document filter registry (Research: lines 223-239; code example lines 671-683)
+    - [x] Validate list endpoint uses server-side filters for membership checks (Research: lines 223-239)
   3.2 List response shape
-    - [ ] Confirm list row shape is reused for membership fetches (Research: lines 223-239)
+    - [x] Confirm list row shape is reused for membership fetches (Research: lines 223-239)
 4.0 Auth and docs
   4.1 Auth guards
-    - [ ] Ensure permissions required for stream, delta, list endpoint access
+    - [x] Ensure permissions required for stream, delta, list endpoint access
   4.2 OpenAPI
-    - [ ] Update schema docs for new endpoints and params
-    - [ ] Update stream response schema to match minimal payload (Design decision)
-    - [ ] Remove `include=rows` parameter from stream docs/types (Design decision)
+    - [x] Update schema docs for new endpoints and params
+    - [x] Update stream response schema to match minimal payload (Design decision)
+    - [x] Remove `include=rows` parameter from stream docs/types (Design decision)
 5.0 Tests
   5.1 API tests
-    - [ ] Unit test token encode/decode
-    - [ ] Delta behavior tests (ordering, 410)
-    - [ ] List endpoint with `id` filter returns list-row shape
+    - [x] Unit test token encode/decode
+    - [x] Delta behavior tests (ordering, 410)
+    - [x] List endpoint with `id` filter returns list-row shape
 
 ### Open Questions
 
-- Do we need per-user filtering for stream events in addition to workspace scope? (Research: lines 123-129, 187-197)
+- None. Stream is workspace-scoped.
 
 ---
 

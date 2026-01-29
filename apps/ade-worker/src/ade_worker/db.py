@@ -484,10 +484,9 @@ def ensure_output_file(
     session: Session,
     *,
     workspace_id: str,
-    parent_file_id: str,
+    source_file_id: str,
     name: str,
     name_key: str,
-    expires_at: datetime,
     now: datetime,
 ) -> dict[str, Any]:
     stmt = select(files).where(
@@ -505,18 +504,15 @@ def ensure_output_file(
         "id": file_id,
         "workspace_id": workspace_id,
         "kind": "output",
-        "doc_no": None,
         "name": name,
         "name_key": name_key,
         "blob_name": blob_name,
         "current_version_id": None,
-        "parent_file_id": parent_file_id,
+        "source_file_id": source_file_id,
         "comment_count": 0,
-        "version": 0,
         "attributes": {},
         "uploaded_by_user_id": None,
         "assignee_user_id": None,
-        "expires_at": expires_at,
         "last_run_id": None,
         "deleted_at": None,
         "deleted_by_user_id": None,
@@ -541,7 +537,7 @@ def create_output_file_version(
     content_type: str | None,
     sha256: str,
     byte_size: int,
-    blob_version_id: str,
+    storage_version_id: str | None,
     now: datetime,
 ) -> dict[str, Any]:
     current = session.execute(
@@ -560,7 +556,7 @@ def create_output_file_version(
         "byte_size": byte_size,
         "content_type": content_type,
         "filename_at_upload": filename_at_upload,
-        "blob_version_id": blob_version_id,
+        "storage_version_id": storage_version_id,
         "created_at": now,
         "updated_at": now,
     }
@@ -568,7 +564,7 @@ def create_output_file_version(
     session.execute(
         update(files)
         .where(files.c.id == file_id)
-        .values(current_version_id=version_id, version=version_no, updated_at=now)
+        .values(current_version_id=version_id, updated_at=now)
     )
     return payload
 

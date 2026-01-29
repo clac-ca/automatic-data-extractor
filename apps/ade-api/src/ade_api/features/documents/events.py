@@ -1,4 +1,4 @@
-"""Best-effort document event notifications via Postgres LISTEN/NOTIFY."""
+"""Best-effort document change notifications via Postgres LISTEN/NOTIFY."""
 
 from __future__ import annotations
 
@@ -12,11 +12,10 @@ from typing import Any, Callable
 
 import psycopg
 from fastapi import FastAPI, Request
-from sqlalchemy import text
 from sqlalchemy.engine import URL, make_url
-from sqlalchemy.orm import Session
-
 from ade_api.settings import Settings
+
+from .changes import DOCUMENT_CHANGES_CHANNEL
 
 # Optional dependency (Managed Identity)
 try:  # pragma: no cover - optional dependency
@@ -25,9 +24,6 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     DefaultAzureCredential = None  # type: ignore[assignment]
 
 DEFAULT_AZURE_PG_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
-
-DOCUMENT_EVENTS_CHANNEL = "ade_document_events"
-DOCUMENT_EVENTS_CURSOR_SEQUENCE = "document_events_cursor_seq"
 DEFAULT_POLL_SECONDS = 1.0
 DEFAULT_QUEUE_SIZE = 200
 MAX_BACKOFF_SECONDS = 30.0
@@ -74,40 +70,18 @@ def _build_listen_connect_kwargs(settings: Settings) -> dict[str, Any]:
     return params
 
 
-def get_document_events_cursor(session: Session) -> int:
-    """Return the latest cursor from the document events sequence."""
-
-    try:
-        row = session.execute(
-            text(
-                "SELECT last_value, is_called FROM "
-                f"{DOCUMENT_EVENTS_CURSOR_SEQUENCE}"
-            )
-        ).one_or_none()
-    except Exception:  # pragma: no cover - defensive guard for legacy schema
-        return 0
-
-    if row is None:
-        return 0
-    last_value, is_called = row
-    last_value = int(last_value or 0)
-    if not is_called:
-        return max(0, last_value - 1)
-    return last_value
-
-
 EventPayload = dict[str, Any]
 EventQueue = asyncio.Queue[EventPayload]
 
 
-class DocumentEventsHub:
-    """Background LISTEN loop that fans out document event notifications."""
+class DocumentChangesHub:
+    """Background LISTEN loop that fans out document change notifications."""
 
     def __init__(
         self,
         *,
         settings: Settings,
-        channel: str = DOCUMENT_EVENTS_CHANNEL,
+        channel: str = DOCUMENT_CHANGES_CHANNEL,
         poll_seconds: float = DEFAULT_POLL_SECONDS,
         queue_size: int = DEFAULT_QUEUE_SIZE,
     ) -> None:
@@ -133,6 +107,11 @@ class DocumentEventsHub:
         queue: EventQueue = asyncio.Queue(maxsize=self._queue_size)
         with self._lock:
             self._subscribers.setdefault(workspace_id, set()).add(queue)
+            subscriber_count = len(self._subscribers.get(workspace_id, set()))
+        logger.info(
+            "documents.changes.subscribed",
+            extra={"workspace_id": workspace_id, "subscribers": subscriber_count},
+        )
 
         def _unsubscribe() -> None:
             with self._lock:
@@ -142,6 +121,11 @@ class DocumentEventsHub:
                 queues.discard(queue)
                 if not queues:
                     self._subscribers.pop(workspace_id, None)
+                subscriber_count = len(queues) if queues else 0
+            logger.info(
+                "documents.changes.unsubscribed",
+                extra={"workspace_id": workspace_id, "subscribers": subscriber_count},
+            )
 
         return queue, _unsubscribe
 
@@ -149,8 +133,8 @@ class DocumentEventsHub:
         try:
             queue.put_nowait(payload)
         except asyncio.QueueFull:
-            logger.debug(
-                "documents.events.queue_full",
+            logger.warning(
+                "documents.changes.queue_full",
                 extra={"workspace_id": payload.get("workspaceId")},
             )
 
@@ -174,9 +158,24 @@ class DocumentEventsHub:
         if not isinstance(data, dict):
             return None
         workspace_id = data.get("workspaceId")
-        if not workspace_id:
+        document_id = data.get("documentId")
+        op = data.get("op")
+        change_id = data.get("id")
+        if not workspace_id or not document_id or not op or change_id is None:
             return None
-        return str(workspace_id), data
+        try:
+            change_id = int(change_id)
+            if change_id < 0:
+                return None
+        except (ValueError, TypeError):
+            return None
+
+        return str(workspace_id), {
+            "workspaceId": str(workspace_id),
+            "documentId": str(document_id),
+            "op": str(op),
+            "id": str(change_id),
+        }
 
     def _run(self) -> None:
         backoff = 1.0
@@ -187,7 +186,7 @@ class DocumentEventsHub:
                 connection = psycopg.connect(**connect_kwargs, autocommit=True)
                 with connection.cursor() as cursor:
                     cursor.execute(f"LISTEN {self._channel}")
-                logger.info("documents.events.listen channel=%s", self._channel)
+                logger.info("documents.changes.listen channel=%s", self._channel)
                 backoff = 1.0
 
                 while not self._stop_event.is_set():
@@ -197,7 +196,7 @@ class DocumentEventsHub:
                             workspace_id, payload = parsed
                             self._publish(workspace_id, payload)
             except Exception:
-                logger.exception("documents.events.listen_failed retry_in=%ss", backoff)
+                logger.exception("documents.changes.listen_failed retry_in=%ss", backoff)
                 time.sleep(backoff + random.random())
                 backoff = min(MAX_BACKOFF_SECONDS, backoff * 2)
             finally:
@@ -214,18 +213,15 @@ def _resolve_app(app_or_request: FastAPI | Request) -> FastAPI:
     return app_or_request.app
 
 
-def get_document_events_hub(app_or_request: FastAPI | Request) -> DocumentEventsHub:
+def get_document_changes_hub(app_or_request: FastAPI | Request) -> DocumentChangesHub:
     app = _resolve_app(app_or_request)
-    hub = getattr(app.state, "document_events_hub", None)
+    hub = getattr(app.state, "document_changes_hub", None)
     if hub is None:
-        raise RuntimeError("Document events hub is not initialized.")
+        raise RuntimeError("Document changes hub is not initialized.")
     return hub
 
 
 __all__ = [
-    "DOCUMENT_EVENTS_CHANNEL",
-    "DOCUMENT_EVENTS_CURSOR_SEQUENCE",
-    "DocumentEventsHub",
-    "get_document_events_cursor",
-    "get_document_events_hub",
+    "DocumentChangesHub",
+    "get_document_changes_hub",
 ]

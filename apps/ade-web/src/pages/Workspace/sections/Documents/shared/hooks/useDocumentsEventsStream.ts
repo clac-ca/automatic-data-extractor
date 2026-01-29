@@ -1,27 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 
-import { documentsEventsStreamUrl, type DocumentEventEntry } from "@/api/documents";
+import { documentsStreamUrl, type DocumentChangeNotification } from "@/api/documents";
 
 type ConnectionState = "idle" | "connecting" | "open" | "closed";
 
 type ReadyPayload = {
-  cursor?: string | number | null;
+  lastId?: string | null;
 };
 
 export function useDocumentsEventsStream({
   workspaceId,
   enabled = true,
-  includeRows = false,
   onEvent,
   onDisconnect,
   onReady,
 }: {
   workspaceId?: string | null;
   enabled?: boolean;
-  includeRows?: boolean;
-  onEvent: (change: DocumentEventEntry) => void;
+  onEvent: (change: DocumentChangeNotification) => void;
   onDisconnect?: () => void;
-  onReady?: (cursor: string | null) => void;
+  onReady?: (lastId: string | null) => void;
 }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const sourceRef = useRef<EventSource | null>(null);
@@ -35,7 +33,7 @@ export function useDocumentsEventsStream({
   const shouldConnect = Boolean(enabled && workspaceId);
 
   useEffect(() => {
-    const connectionKey = workspaceId ? `${workspaceId}:${includeRows}` : null;
+    const connectionKey = workspaceId ?? null;
     if (!shouldConnect || !workspaceId) {
       sourceRef.current?.close();
       sourceRef.current = null;
@@ -55,7 +53,7 @@ export function useDocumentsEventsStream({
     let active = true;
     setConnectionState("connecting");
 
-    const source = new EventSource(documentsEventsStreamUrl(workspaceId, { includeRows }), {
+    const source = new EventSource(documentsStreamUrl(workspaceId), {
       withCredentials: true,
     });
     sourceRef.current = source;
@@ -68,10 +66,14 @@ export function useDocumentsEventsStream({
     const handleEvent = (event: MessageEvent) => {
       if (typeof event.data !== "string") return;
       try {
-        const parsed = JSON.parse(event.data) as DocumentEventEntry;
-        if (!parsed.cursor && event.lastEventId) {
-          parsed.cursor = event.lastEventId;
+        const parsed = JSON.parse(event.data) as DocumentChangeNotification;
+        if (!parsed.op) {
+          parsed.op = event.type === "document.deleted" ? "delete" : "upsert";
         }
+        if (!parsed.id && event.lastEventId) {
+          parsed.id = event.lastEventId;
+        }
+        if (!parsed.documentId) return;
         handlersRef.current.onEvent(parsed);
       } catch {
         return;
@@ -82,9 +84,7 @@ export function useDocumentsEventsStream({
       if (typeof event.data !== "string") return;
       try {
         const payload = JSON.parse(event.data) as ReadyPayload;
-        const nextCursor =
-          typeof payload.cursor === "number" ? String(payload.cursor) : payload.cursor ?? null;
-        handlersRef.current.onReady?.(nextCursor);
+        handlersRef.current.onReady?.(payload.lastId ?? null);
       } catch {
         return;
       }
@@ -108,7 +108,7 @@ export function useDocumentsEventsStream({
       sourceRef.current = null;
       setConnectionState("idle");
     };
-  }, [includeRows, shouldConnect, workspaceId]);
+  }, [shouldConnect, workspaceId]);
 
   return { connectionState };
 }

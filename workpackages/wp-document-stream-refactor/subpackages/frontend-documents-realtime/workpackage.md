@@ -33,53 +33,52 @@ Integrate the document change stream into the Documents screen by listening to S
 ### Work Breakdown Structure (WBS)
 
 0.1 Research review
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 687-786 (frontend code examples: SSE + delta + list(id) fetch)
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 788-839 (pagination UX rules + reconciliation)
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 923-929 (load/burst batching guidance)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 687-786 (frontend code examples: SSE + delta + list(id) fetch)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 788-839 (pagination UX rules + reconciliation)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 923-929 (load/burst batching guidance)
 1.0 Client state and plumbing
   1.1 Token management
-    - [ ] Track delta token in memory (and optional sessionStorage) (Research: lines 274-292, 691-693)
-    - [ ] Reset token when filters/sort/query change (Research: lines 691-693)
+    - [x] Track delta token in memory (and optional sessionStorage) (Research: lines 274-292, 691-693)
+    - [x] Reset token when filters/sort/query change (Research: lines 691-693)
   1.2 SSE subscription
-    - [ ] Update stream URL to `/documents/stream` (Design decision)
-    - [ ] Add EventSource for `/documents/stream` (Research: lines 187-197; code example lines 706-715)
-    - [ ] Debounce delta pulls on notifications (Research: lines 717-731; code example lines 721-731)
-    - [ ] Confirm auth approach for SSE (cookie-based EventSource) (Research: lines 697-702)
-    - [ ] Update event parsing to minimal payload `{documentId, op, token}` (Design decision)
-    - [ ] Remove includeRows/include param handling from stream URL builder (Design decision)
-    - [ ] Remove row-based update handling from stream consumers (Design decision)
-    - [ ] Prefer `event.lastEventId` when payload lacks token (Design decision)
+    - [x] Update stream URL to `/documents/stream` (Design decision)
+    - [x] Add EventSource for `/documents/stream` (Research: lines 187-197; code example lines 706-715)
+    - [x] Debounce delta pulls on notifications (Research: lines 717-731; code example lines 721-731)
+    - [x] Confirm auth approach for SSE (cookie-based EventSource) (Research: lines 697-702)
+    - [x] Update event parsing to minimal payload `{documentId, op, token}` (Design decision)
+    - [x] Remove includeRows/include param handling from stream URL builder (Design decision)
+    - [x] Remove row-based update handling from stream consumers (Design decision)
+    - [x] Prefer `event.lastEventId` when payload lacks token (Design decision)
 2.0 Delta + list membership integration
   2.1 Delta fetch
-    - [ ] Call `/documents/delta` and update token (Research: lines 201-215; code example lines 738-750)
-    - [ ] Handle 410 by forcing page refresh (Research: lines 218-221; code example lines 743-746)
-    - [ ] Loop while `hasMore` to exhaust delta pages (Research: lines 201-215)
-    - [ ] Wire delta polling into WorkspaceDocumentsStreamContext (Design decision)
+    - [x] Call `/documents/delta` and update token (Research: lines 201-215; code example lines 738-750)
+    - [x] Handle 410 by forcing page refresh (Research: lines 218-221; code example lines 743-746)
+    - [x] Loop while `hasMore` to exhaust delta pages (Research: lines 201-215)
+    - [x] Wire delta polling into Documents table + sidebar (stream context is notification only) (Design decision)
   2.2 Membership fetch via list endpoint
-    - [ ] Call `/documents` with current filters plus `id in [...]` (Research: lines 223-239; code example lines 762-780)
-    - [ ] Apply deletes and patch rows by id (Research: lines 760-780, 792-800)
-    - [ ] Deduplicate IDs and batch requests on bursty updates (Research: lines 717-786, 923-929)
-    - [ ] Add inline comment explaining we reuse the list endpoint for authoritative filter semantics (Design decision)
+    - [x] Call `/documents` with current filters plus `id in [...]` (Research: lines 223-239; code example lines 762-780)
+    - [x] Apply deletes and patch rows by id (Research: lines 760-780, 792-800)
+    - [x] Deduplicate IDs and batch requests on bursty updates (Research: lines 717-786, 923-929)
+    - [x] Add inline comment explaining we reuse the list endpoint for authoritative filter semantics (Design decision)
 3.0 Pagination UX rules
   3.1 Page 1 live updates
-    - [ ] Insert/replace visible rows when in window (Research: lines 792-795, 816-817)
-    - [ ] Evict to maintain page size (Research: lines 795-795)
+    - [x] Insert/replace visible rows when in window (Research: lines 792-795, 816-817)
+    - [x] Evict to maintain page size (Research: lines 795-795)
   3.2 Page N updates
-    - [ ] Avoid shifting membership (Research: lines 810-817)
-    - [ ] Show "updates available" indicator and allow refresh (Research: lines 799-800, 816-817) (Design decision: page N uses stale indicator)
-    - [ ] Use list(id filter) only to confirm membership; do not infer exact position without full page refresh (Design decision)
+    - [x] Avoid shifting membership (Research: lines 810-817)
+    - [x] Show "updates available" indicator and allow refresh (Research: lines 799-800, 816-817) (Design decision: page N uses stale indicator)
+    - [x] Use list(id filter) only to confirm membership; do not infer exact position without full page refresh (Design decision)
   3.3 Sort edge cases
-    - [ ] Handle mutable sort keys (activityAt) without reshuffling page N (Research: lines 819-827)
+    - [x] Handle mutable sort keys (activityAt) without reshuffling page N (Research: lines 819-827)
 4.0 Side bar and secondary views
   4.1 Sidebar updates
-    - [ ] Decide whether sidebar uses same stream or separate view logic
-    - [ ] Apply changes using list(id filter) membership checks
-    - [ ] Remove direct row payload usage in sidebar updates (Design decision)
+    - [x] Decide whether sidebar uses same stream or separate view logic
+    - [x] Apply changes using list(id filter) membership checks
+    - [x] Remove direct row payload usage in sidebar updates (Design decision)
 
 ### Open Questions
 
-- Should the sidebar consume the same stream or an isolated stream instance? (Research: lines 123-129, 687-693)
-- What is the preferred stale indicator UI (banner, badge, or toast)? (Research: lines 799-800, 816-817)
+- None. Sidebar uses the same stream; page N uses a banner-style stale indicator.
 
 ---
 

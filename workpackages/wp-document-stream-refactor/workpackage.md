@@ -35,28 +35,28 @@ Break the document stream refactor into focused workstreams (DB change feed, bac
 ### Work Breakdown Structure (WBS)
 
 0.1 Research review
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 35-292 (context, constraints, API, event model)
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 295-465 (DB design + emit strategy + DDL examples)
-  - [ ] Read `workpackages/wp-document-stream-refactor/research.md` lines 469-988 (backend, frontend, UX, performance, testing, observability + code examples)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 35-292 (context, constraints, API, event model)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 295-465 (DB design + emit strategy + DDL examples)
+  - [x] Read `workpackages/wp-document-stream-refactor/research.md` lines 469-988 (backend, frontend, UX, performance, testing, observability + code examples)
 1.0 Architecture decisions
   1.1 Change feed decision
-    - [ ] Decide between append-only partitioned log vs coalesced state table (Research: lines 295-426)
-    - [ ] Decide retention window and maintenance mechanism (Research: lines 347-381)
+    - [x] Decide between append-only partitioned log vs coalesced state table (Research: lines 295-426)
+    - [x] Decide retention window and maintenance mechanism (Research: lines 347-381)
   1.2 Realtime contract
-    - [ ] Confirm push-notify plus pull-delta semantics (token/seq driven) (Research: lines 89-129, 168-221, 254-292)
-    - [ ] Confirm event ops (upsert/delete) and list(id filter) membership strategy (Research: lines 254-265, 223-239)
-    - [ ] Lock stream route to `/documents/stream` (Design decision)
-    - [ ] Lock stream payload to `{documentId, op, token}` and remove row payloads (Design decision)
-    - [ ] Lock change emission to DB-level triggers (Design decision)
+    - [x] Confirm push-notify plus pull-delta semantics (token/seq driven) (Research: lines 89-129, 168-221, 254-292)
+    - [x] Confirm event ops (upsert/delete) and list(id filter) membership strategy (Research: lines 254-265, 223-239)
+    - [x] Lock stream route to `/documents/stream` (Design decision)
+    - [x] Lock stream payload to `{documentId, op, token}` and remove row payloads (Design decision)
+    - [x] Lock change emission to DB-level triggers (Design decision)
 2.0 DB change feed implementation (subpackage)
   2.1 DB change feed workpackage
-    - [ ] Complete `workpackages/wp-document-stream-refactor/subpackages/db-change-feed/workpackage.md`
+    - [x] Complete `workpackages/wp-document-stream-refactor/subpackages/db-change-feed/workpackage.md`
 3.0 Backend realtime API (subpackage)
   3.1 Backend API workpackage
-    - [ ] Complete `workpackages/wp-document-stream-refactor/subpackages/backend-realtime-api/workpackage.md`
+    - [x] Complete `workpackages/wp-document-stream-refactor/subpackages/backend-realtime-api/workpackage.md`
 4.0 Frontend realtime integration (subpackage)
   4.1 Frontend integration workpackage
-    - [ ] Complete `workpackages/wp-document-stream-refactor/subpackages/frontend-documents-realtime/workpackage.md`
+    - [x] Complete `workpackages/wp-document-stream-refactor/subpackages/frontend-documents-realtime/workpackage.md`
 5.0 Ops, observability, and testing (subpackage)
   5.1 Ops/testing workpackage
     - [ ] Complete `workpackages/wp-document-stream-refactor/subpackages/ops-observability-testing/workpackage.md`
@@ -66,9 +66,7 @@ Break the document stream refactor into focused workstreams (DB change feed, bac
 
 ### Open Questions
 
-- Which change feed model should we adopt (append-only log vs coalesced state)? (Research: lines 295-426)
-- What retention window and maintenance approach do we want (app cron vs pg_cron)? (Research: lines 347-367)
-- Should the SSE stream use only workspace scope, or add user-scoped filtering? (Research: lines 123-129, 187-197)
+- None. Decisions locked: append-only partitioned change log, 14-day retention with API-managed maintenance, workspace-scoped SSE.
 
 ---
 

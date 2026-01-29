@@ -22,7 +22,6 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
-from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.cursor_listing import (
@@ -74,7 +73,6 @@ from .exceptions import (
     DocumentPreviewUnsupportedError,
     DocumentVersionNotFoundError,
     DocumentWorksheetParseError,
-    InvalidDocumentExpirationError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentTagsError,
 )
@@ -146,7 +144,7 @@ class UploadPlan:
     blob_name: str
     name: str
     name_key: str
-    parent_file_id: UUID | None = None
+    source_file_id: UUID | None = None
 
 
 class DocumentsService:
@@ -228,7 +226,7 @@ class DocumentsService:
                     blob_name=self._file_blob_name(workspace_id, file_id),
                     name=disambiguated,
                     name_key=disambiguated_key,
-                    parent_file_id=existing.id,
+                    source_file_id=existing.id,
                 )
 
         file_id = generate_uuid7()
@@ -264,7 +262,6 @@ class DocumentsService:
         upload: UploadFile,
         plan: UploadPlan,
         metadata: Mapping[str, Any] | None = None,
-        expires_at: str | None = None,
         actor: User | None = None,
         staged: StagedUpload | None = None,
     ) -> DocumentOut:
@@ -278,14 +275,11 @@ class DocumentsService:
                 user_id=actor_id,
                 upload_filename=upload.filename,
                 content_type=upload.content_type,
-                expires_at=expires_at,
             ),
         )
 
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
-        default_expiration = self._resolve_expiration(None, now)
-        expiration = self._resolve_expiration(expires_at, now) if expires_at else None
 
         owns_stage = staged is None
         staged_upload = staged or self.stage_upload(upload=upload, plan=plan)
@@ -293,23 +287,20 @@ class DocumentsService:
 
         upload_name = self._normalise_filename(upload.filename)
         content_type = self._normalise_content_type(upload.content_type)
-        blob_version_id = stored.version_id or stored.sha256
+        storage_version_id = stored.version_id
 
         try:
             if plan.action == UploadAction.NEW:
-                doc_no = self._next_doc_no(workspace_id=workspace_id)
                 document = File(
                     id=plan.file_id,
                     workspace_id=workspace_id,
-                    kind=FileKind.DOCUMENT,
-                    doc_no=doc_no,
+                    kind=FileKind.INPUT,
                     name=plan.name,
                     name_key=plan.name_key,
                     blob_name=plan.blob_name,
-                    parent_file_id=plan.parent_file_id,
+                    source_file_id=plan.source_file_id,
                     attributes=metadata_payload,
                     uploaded_by_user_id=actor_id,
-                    expires_at=expiration or default_expiration,
                 )
                 self._session.add(document)
                 self._session.flush()
@@ -319,11 +310,8 @@ class DocumentsService:
                 if document is None:
                     raise RuntimeError("Upload plan did not include a document.")
                 version_no = self._next_version_no(document_id=document.id)
-                document.version += 1
                 if metadata_payload:
                     document.attributes = metadata_payload
-                if expiration is not None:
-                    document.expires_at = expiration
                 document = self._session.merge(document)
 
             file_version = FileVersion(
@@ -335,7 +323,7 @@ class DocumentsService:
                 byte_size=stored.byte_size,
                 content_type=content_type,
                 filename_at_upload=upload_name,
-                blob_version_id=blob_version_id,
+                storage_version_id=storage_version_id,
             )
             self._session.add(file_version)
             self._session.flush()
@@ -363,7 +351,6 @@ class DocumentsService:
                 user_id=actor_id,
                 content_type=payload.content_type,
                 byte_size=payload.byte_size,
-                expires_at=document.expires_at.isoformat() if document.expires_at else None,
             ),
         )
 
@@ -571,7 +558,6 @@ class DocumentsService:
         ]
 
         document.comment_count = (document.comment_count or 0) + 1
-        document.version += 1
 
         self._session.add(comment)
         self._session.flush()
@@ -692,9 +678,6 @@ class DocumentsService:
                 changed = True
 
         if changed:
-            document.version += 1
-
-        if changed:
             self._session.flush()
             self._session.refresh(document, attribute_names=["assignee_user"])
 
@@ -728,7 +711,7 @@ class DocumentsService:
         try:
             with self._download_blob_to_tempfile(
                 blob_name=document.blob_name,
-                version_id=current_version.blob_version_id,
+                version_id=current_version.storage_version_id,
                 suffix=suffix,
             ) as path:
                 if suffix == ".xlsx":
@@ -818,7 +801,7 @@ class DocumentsService:
         try:
             with self._download_blob_to_tempfile(
                 blob_name=document.blob_name,
-                version_id=current_version.blob_version_id,
+                version_id=current_version.storage_version_id,
                 suffix=suffix,
             ) as path:
                 if suffix == ".xlsx":
@@ -919,7 +902,7 @@ class DocumentsService:
         try:
             stream = self._storage.stream(
                 document.blob_name,
-                version_id=current_version.blob_version_id,
+                version_id=current_version.storage_version_id,
                 chunk_size=self._settings.blob_download_chunk_size_bytes,
             )
         except FileNotFoundError as exc:
@@ -993,7 +976,7 @@ class DocumentsService:
         try:
             stream = self._storage.stream(
                 document.blob_name,
-                version_id=version.blob_version_id,
+                version_id=version.storage_version_id,
                 chunk_size=self._settings.blob_download_chunk_size_bytes,
             )
         except FileNotFoundError as exc:
@@ -1009,7 +992,7 @@ class DocumentsService:
             raise DocumentFileMissingError(
                 document_id=document_id,
                 blob_name=document.blob_name,
-                version_id=version.blob_version_id,
+                version_id=version.storage_version_id,
             ) from exc
 
         def _guarded() -> Iterator[bytes]:
@@ -1029,7 +1012,7 @@ class DocumentsService:
                 raise DocumentFileMissingError(
                     document_id=document_id,
                     blob_name=document.blob_name,
-                    version_id=version.blob_version_id,
+                    version_id=version.storage_version_id,
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
@@ -1069,7 +1052,6 @@ class DocumentsService:
         document = self._get_document(workspace_id, document_id)
         now = datetime.now(tz=UTC)
         document.deleted_at = now
-        document.version += 1
         if actor is not None:
             document.deleted_by_user_id = actor_id
         self._session.flush()
@@ -1109,7 +1091,6 @@ class DocumentsService:
         now = datetime.now(tz=UTC)
         for document in documents:
             document.deleted_at = now
-            document.version += 1
             if actor is not None:
                 document.deleted_by_user_id = actor_id
 
@@ -1136,7 +1117,6 @@ class DocumentsService:
 
         document = self._get_document(workspace_id, document_id)
         document.tags = [FileTag(file_id=document.id, tag=tag) for tag in normalized]
-        document.version += 1
         self._session.flush()
 
         payload = DocumentOut.model_validate(document)
@@ -1176,7 +1156,6 @@ class DocumentsService:
         for tag in to_add:
             document.tags.append(FileTag(file_id=document.id, tag=tag))
 
-        document.version += 1
         self._session.flush()
 
         payload = DocumentOut.model_validate(document)
@@ -1223,8 +1202,6 @@ class DocumentsService:
             for tag in to_add:
                 document.tags.append(FileTag(file_id=document.id, tag=tag))
 
-            document.version += 1
-
         self._session.flush()
 
         payloads = [DocumentOut.model_validate(document_by_id[doc_id]) for doc_id in ordered_ids]
@@ -1260,7 +1237,7 @@ class DocumentsService:
             .where(
                 File.workspace_id == workspace_id,
                 File.deleted_at.is_(None),
-                File.kind == FileKind.DOCUMENT,
+                File.kind == FileKind.INPUT,
             )
             .group_by(FileTag.tag)
         )
@@ -1439,14 +1416,12 @@ class DocumentsService:
         updated_at = document.updated_at
         latest_at = self._last_run_at(document.last_run)
         document.activity_at = latest_at if latest_at and latest_at > updated_at else updated_at
-        document.etag = format_weak_etag(build_etag_token(document.id, document.version))
 
     def _build_list_row(self, document: DocumentOut) -> DocumentListRow:
         activity_at = document.activity_at or document.updated_at
         return DocumentListRow(
             id=document.id,
             workspace_id=document.workspace_id,
-            doc_no=document.doc_no,
             name=document.name,
             file_type=self._derive_file_type(document.name),
             uploader=document.uploader,
@@ -1458,8 +1433,6 @@ class DocumentsService:
             created_at=document.created_at,
             updated_at=document.updated_at,
             activity_at=activity_at,
-            version=document.version,
-            etag=document.etag,
             last_run=document.last_run,
             last_run_metrics=document.last_run_metrics,
             last_run_table_columns=document.last_run_table_columns,
@@ -1703,35 +1676,6 @@ class DocumentsService:
             return dt.replace(tzinfo=UTC)
         return dt
 
-    def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
-        if override is None:
-            expires = now + self._settings.storage_document_retention_period
-            return expires
-
-        candidate = override.strip()
-        if not candidate:
-            raise InvalidDocumentExpirationError("expires_at must not be blank")
-
-        if candidate.endswith(("z", "Z")):
-            candidate = f"{candidate[:-1]}+00:00"
-
-        try:
-            parsed = datetime.fromisoformat(candidate)
-        except ValueError as exc:
-            raise InvalidDocumentExpirationError(
-                "expires_at must be a valid ISO 8601 timestamp"
-            ) from exc
-
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=UTC)
-        else:
-            parsed = parsed.astimezone(UTC)
-
-        if parsed <= now:
-            raise InvalidDocumentExpirationError("expires_at must be in the future")
-
-        return parsed
-
     def _normalise_filename(self, name: str | None) -> str:
         """Return a safe, display-friendly filename for stored documents."""
 
@@ -1789,15 +1733,6 @@ class DocumentsService:
             if self._find_by_name_key(workspace_id=workspace_id, name_key=name_key) is None:
                 return candidate, name_key
         raise RuntimeError("Unable to disambiguate document name.")
-
-    def _next_doc_no(self, *, workspace_id: UUID) -> int:
-        stmt = (
-            select(func.max(File.doc_no))
-            .where(File.workspace_id == workspace_id)
-            .where(File.kind == FileKind.DOCUMENT)
-        )
-        current = self._session.execute(stmt).scalar_one()
-        return int(current or 0) + 1
 
     def _next_version_no(self, *, document_id: UUID) -> int:
         stmt = select(func.max(FileVersion.version_no)).where(FileVersion.file_id == document_id)

@@ -47,12 +47,6 @@ class DocumentTooLargeError(Exception):
         self.received = received
 
 
-class InvalidDocumentExpirationError(Exception):
-    """Raised when an ``expires_at`` override cannot be parsed or is invalid."""
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-
 
 class DocumentWorksheetParseError(Exception):
     """Raised when worksheet metadata cannot be read from a workbook."""
@@ -158,7 +152,6 @@ __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
     "DocumentTooLargeError",
-    "InvalidDocumentExpirationError",
     "DocumentWorksheetParseError",
     "DocumentPreviewUnsupportedError",
     "DocumentPreviewSheetNotFoundError",

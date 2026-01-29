@@ -1,12 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import os
-
-os.environ.setdefault(
-    "ADE_DATABASE_URL",
-    "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable",
-)
 
 import pytest
 

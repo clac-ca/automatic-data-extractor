@@ -224,3 +224,54 @@ export async function deleteWorkspaceDocumentsBatch(
   if (!data) throw new Error("Expected delete response.");
   return data.documentIds ?? [];
 }
+
+const DEFAULT_ID_FILTER_BATCH = 50;
+
+export async function fetchWorkspaceDocumentRowsByIdFilter(
+  workspaceId: string,
+  documentIds: string[],
+  options: {
+    sort: string | null;
+    filters?: FilterItem[] | null;
+    joinOperator?: FilterJoinOperator;
+    q?: string | null;
+    includeRunMetrics?: boolean;
+    includeRunTableColumns?: boolean;
+    includeRunFields?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<DocumentListRow[]> {
+  const uniqueIds = Array.from(new Set(documentIds)).filter((id) => id);
+  if (uniqueIds.length === 0) return [];
+
+  const filtersBase = options.filters ?? [];
+  const batches: string[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += DEFAULT_ID_FILTER_BATCH) {
+    batches.push(uniqueIds.slice(i, i + DEFAULT_ID_FILTER_BATCH));
+  }
+
+  const byId = new Map<string, DocumentListRow>();
+  for (const batch of batches) {
+    // Use the list endpoint with `id in [...]` so membership respects the same server-side filters.
+    const filters = [...filtersBase, { id: "id", operator: "in", value: batch }];
+    const page = await fetchWorkspaceDocuments(
+      workspaceId,
+      {
+        limit: batch.length,
+        sort: options.sort,
+        filters,
+        joinOperator: options.joinOperator,
+        q: options.q,
+        includeRunMetrics: options.includeRunMetrics,
+        includeRunTableColumns: options.includeRunTableColumns,
+        includeRunFields: options.includeRunFields,
+      },
+      signal,
+    );
+    (page.items ?? []).forEach((row) => {
+      byId.set(row.id, row);
+    });
+  }
+
+  return Array.from(byId.values());
+}

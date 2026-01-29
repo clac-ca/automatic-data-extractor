@@ -35,9 +35,9 @@ def _enum_values(enum_cls: type[Enum]) -> list[str]:
 class FileKind(str, Enum):
     """Kinds of files stored in ADE."""
 
-    DOCUMENT = "document"
+    INPUT = "input"
     OUTPUT = "output"
-    RUN_LOG = "run_log"
+    LOG = "log"
     EXPORT = "export"
 
 
@@ -74,11 +74,10 @@ class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             values_callable=_enum_values,
         ),
         nullable=False,
-        default=FileKind.DOCUMENT,
-        server_default=FileKind.DOCUMENT.value,
+        default=FileKind.INPUT,
+        server_default=FileKind.INPUT.value,
     )
 
-    doc_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     name_key: Mapped[str] = mapped_column(String(255), nullable=False)
     blob_name: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -92,7 +91,7 @@ class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
     )
 
-    parent_file_id: Mapped[UUID | None] = mapped_column(
+    source_file_id: Mapped[UUID | None] = mapped_column(
         GUID(), ForeignKey("files.id", ondelete="NO ACTION"), nullable=True
     )
 
@@ -102,13 +101,6 @@ class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=0,
         server_default="0",
     )
-    version: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-        server_default="1",
-    )
-
     attributes: Mapped[dict[str, object]] = mapped_column(
         "attributes",
         MutableDict.as_mutable(JSONB),
@@ -134,7 +126,6 @@ class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         foreign_keys=[assignee_user_id],
     )
 
-    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     last_run_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_by_user_id: Mapped[UUID | None] = mapped_column(
@@ -155,7 +146,6 @@ class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("workspace_id", "doc_no", name="files_workspace_doc_no_key"),
         UniqueConstraint(
             "workspace_id",
             "kind",
@@ -254,7 +244,7 @@ class FileVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     filename_at_upload: Mapped[str] = mapped_column(String(255), nullable=False)
-    blob_version_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    storage_version_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("file_id", "version_no", name="file_versions_file_id_version_no_key"),
