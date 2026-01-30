@@ -5,6 +5,41 @@ ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 # Pin to a major LTS line for stability + security updates.
 ARG NODE_IMAGE=node:24-bookworm-slim
 
+FROM ${PYTHON_IMAGE} AS dev
+ARG DEBIAN_FRONTEND=noninteractive
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    gnupg \
+    openssh-client \
+    procps \
+    sudo \
+    build-essential \
+    libpq-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN python -m pip install --upgrade pip \
+  && python -m pip install --no-cache-dir uv
+
+RUN set -eux; \
+  groupadd --gid "${USER_GID}" "${USERNAME}"; \
+  useradd  --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}"; \
+  echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+  chmod 0440 "/etc/sudoers.d/${USERNAME}"
+
+WORKDIR /workspaces/automatic-data-extractor
+
 FROM ${PYTHON_IMAGE} AS py-builder
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \

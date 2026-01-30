@@ -1,0 +1,21 @@
+# Devcontainer override: binds workspace + builds dev image target.
+services:
+  ade:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: dev
+    entrypoint: ["/bin/sh", "-c"]
+    command: "sleep infinity"
+    user: vscode
+    working_dir: /workspaces/automatic-data-extractor
+    volumes:
+      - ..:/workspaces/automatic-data-extractor:cached
+    ports:
+      - "5173:5173"
+
+  blob_init:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: py-builder

@@ -12,7 +12,7 @@ State what this guide helps the reader do and any assumptions. Keep it short.
 
 Prerequisites (optional):
 
-- Dependencies installed (run `bash scripts/dev/bootstrap.sh`)
+- Dependencies installed (run `./setup.sh`)
 - Access to a local API (`ade dev`)
 
 ---

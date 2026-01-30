@@ -127,7 +127,7 @@ cp .env.example .env
 The devcontainer runs:
 
 ```bash
-bash scripts/dev/bootstrap.sh
+./setup.sh
 ```
 
 This installs:
@@ -139,12 +139,6 @@ This installs:
 
 ```bash
 ade dev
-```
-
-If you **don't** need the React app, you can skip Node/web setup:
-
-```bash
-bash scripts/dev/bootstrap.sh --no-web
 ```
 
 ## Build the production image locally

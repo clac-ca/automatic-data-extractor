@@ -127,7 +127,7 @@ def run_dev(
     if api:
         common.require_python_module(
             "ade_api",
-            "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
+            "Install ADE dependencies (run `./setup.sh`).",
         )
         common.uvicorn_path()
         from ade_api.settings import Settings
@@ -160,7 +160,7 @@ def run_dev(
     if worker:
         common.require_python_module(
             "ade_worker",
-            "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
+            "Install ADE dependencies (run `./setup.sh`).",
         )
         typer.echo("🧵 Worker:               ade-worker")
 

@@ -8,7 +8,7 @@ import sys
 def _print_install_help(missing: str) -> None:
     message = (
         f"❌ Missing dependency '{missing}'. Install ADE dependencies first:\n\n"
-        "    bash scripts/dev/bootstrap.sh\n\n"
+        "    ./setup.sh\n\n"
         "See README: Developer Setup."
     )
     sys.stderr.write(message + "\n")

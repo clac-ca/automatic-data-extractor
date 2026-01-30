@@ -51,7 +51,7 @@ automatic-data-extractor/
 
 ```bash
 # Dev env (repo root)
-bash scripts/dev/bootstrap.sh
+./setup.sh
 ```
 
 ```bash

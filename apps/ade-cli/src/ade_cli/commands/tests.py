@@ -226,7 +226,7 @@ def run_tests(
     if any(target in python_targets for target in resolved_targets):
         common.require_python_module(
             "pytest",
-            "Install API/test dependencies (run `bash scripts/dev/bootstrap.sh`).",
+            "Install API/test dependencies (run `./setup.sh`).",
         )
 
     ran_any = False

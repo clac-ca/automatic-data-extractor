@@ -59,7 +59,7 @@ def uvicorn_path() -> str:
     return require_command(
         "uvicorn",
         friendly_name="uvicorn",
-        fix_hint="Install ADE API dependencies (run `bash scripts/dev/bootstrap.sh`).",
+        fix_hint="Install ADE API dependencies (run `./setup.sh`).",
     )
 
 

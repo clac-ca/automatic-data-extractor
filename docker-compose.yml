@@ -27,6 +27,8 @@ services:
       # Blob storage can start in parallel.
       azurite:
         condition: service_started
+      blob_init:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     volumes:
@@ -84,6 +86,18 @@ services:
       - "10000:10000"
     volumes:
       - ade_azurite_data:/data
+
+  blob_init:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    depends_on:
+      azurite:
+        condition: service_started
+    entrypoint: ["python", "-c"]
+    command: "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); cc=s.get_container_client(c); cc.exists() or s.create_container(c); print('blob container ready:', c)"
+    environment:
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
+    restart: on-failure
 
 volumes:
   ade_pg_data:

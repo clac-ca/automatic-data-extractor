@@ -29,14 +29,8 @@ cp .env.example .env
 4) The devcontainer will automatically run:
 
 ```bash
-bash scripts/dev/bootstrap.sh
+./setup.sh
 ```
-
-> If you do not work on the web UI (apps/ade-web), you can skip web setup:
->
-> ```bash
-> bash scripts/dev/bootstrap.sh --no-web
-> ```
 
 ## Run the stack (dev)
 
@@ -63,12 +57,15 @@ ade dev --web
 
 ## What starts by default?
 
-The devcontainer uses `.devcontainer/docker-compose.yml` and starts:
+The devcontainer uses the root `docker-compose.yml` plus the
+`.devcontainer/docker-compose.devcontainer.override.yml` override and starts:
 
 - `postgres` on port 5432
 - `azurite` on port 10000 (blob-only)
 
 The app container is named `ade`.
+The devcontainer override swaps the `ade` service to a local dev image target
+and bind-mounts the repo for editable installs.
 
 ## Connection details
 
@@ -145,7 +142,5 @@ bash scripts/ops/reset-storage.sh --yes
 ```
 
 Reset Postgres + Azurite Docker volumes (devcontainer services only):
-
-```bash
-bash .devcontainer/scripts/reset-volumes.sh
-```
+Use `docker volume ls` and remove the devcontainer volumes manually, or remove the
+containers and volumes with `docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.override.yml down -v`.

@@ -97,7 +97,7 @@ def run_reset(yes: bool = False, *, dry_run: bool = False) -> None:
     common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
-        "Install ADE dependencies (run `bash scripts/dev/bootstrap.sh`).",
+        "Install ADE dependencies (run `./setup.sh`).",
     )
     args = [sys.executable, "-m", "ade_api.scripts.reset_storage"]
     if yes:

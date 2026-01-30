@@ -15,7 +15,7 @@ from ade_cli.commands import common
 def _run_ruff(path: str, *, cwd: Path, fix: bool) -> None:
     common.require_python_module(
         "ruff",
-        "Install backend dev dependencies (run `bash scripts/dev/bootstrap.sh`).",
+        "Install backend dev dependencies (run `./setup.sh`).",
     )
     ruff_cmd = [sys.executable, "-m", "ruff", "check"]
     if fix:
