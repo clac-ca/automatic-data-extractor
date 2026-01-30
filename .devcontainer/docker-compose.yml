@@ -1,13 +1,11 @@
 # .devcontainer/docker-compose.yml
-
-# .devcontainer/docker-compose.yml
 services:
   ade:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
     volumes:
-      - ..:/workspaces/automatic-data-extractor:cached
+      - ..:/workspaces/automatic-data-extractor
     command: sleep infinity
     depends_on:
       # Don’t start ADE until Postgres is healthy.
@@ -16,7 +14,7 @@ services:
       # Blob storage can start in parallel.
       azurite:
         condition: service_started
-    # Uncomment the next line to use a non-root user for all processes - See https://aka.ms/vscode-remote/containers/non-root for details.
+    # Uncomment the next line to run all processes as the non-root dev user.
     # user: vscode
     environment:
       # ---- Database (Postgres) ----
@@ -46,7 +44,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ade_pg_data:/var/lib/postgresql
+      - ade_pg_data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 5s
