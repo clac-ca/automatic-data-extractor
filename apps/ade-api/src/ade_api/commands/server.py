@@ -90,7 +90,7 @@ def run_start(
     settings = Settings()
     port = int(port if port is not None else (settings.api_port or 8000))
     host = host or (settings.api_host or "0.0.0.0")
-    workers = int(workers if workers is not None else (settings.api_workers or 3))
+    workers = int(workers if workers is not None else (settings.api_workers or 1))
 
     env = _prepare_env()
     _ensure_frontend_dist(env, web=web)

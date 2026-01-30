@@ -24,8 +24,9 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.app_name == "Automatic Data Extractor API"
     assert settings.api_docs_enabled is False
     assert settings.server_public_url == "http://localhost:8000"
-    assert settings.server_cors_origins == ["http://localhost:5173"]
-    url = make_url(settings.database_url)
+    assert settings.server_cors_origins == []
+    assert settings.server_cors_origin_regex is None
+    url = make_url(str(settings.database_url))
     assert url.drivername == "postgresql+psycopg"
     assert url.host == "postgres"
     assert url.port == 5432

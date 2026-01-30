@@ -14,12 +14,14 @@ from fastapi.routing import Lifespan
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
+from ade_api.common.logging import log_context
+from ade_api.common.time import utc_now
 from ade_api.db import get_engine, get_sessionmaker_from_app, init_db, shutdown_db
 from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
-from ade_api.infra.storage import init_storage, shutdown_storage
+from ade_api.infra.storage import StorageError, get_storage_adapter, init_storage, shutdown_storage
 from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -127,12 +129,35 @@ def create_application_lifespan(
         ensure_runtime_dirs(settings)
         app.state.settings = settings
         app.state.safe_mode = bool(settings.safe_mode)
+        app.state.started_at = utc_now()
         if settings.documents_upload_concurrency_limit:
             app.state.documents_upload_semaphore = threading.BoundedSemaphore(
                 settings.documents_upload_concurrency_limit
             )
         else:
             app.state.documents_upload_semaphore = None
+
+        logger.info(
+            "ade_api.startup",
+            extra=log_context(
+                logging_level=settings.log_level,
+                safe_mode=bool(settings.safe_mode),
+                auth_disabled=bool(settings.auth_disabled),
+                version=settings.app_version,
+            ),
+        )
+        if settings.safe_mode:
+            logger.warning(
+                "safe_mode.enabled",
+                extra=log_context(safe_mode=True),
+            )
+
+        if settings.auth_disabled:
+            logger.warning(
+                "auth.disabled",
+                extra=log_context(auth_disabled=True),
+            )
+
         if not settings.database_url:
             raise RuntimeError("Database settings are required (set ADE_DATABASE_URL).")
         safe_url = make_url(str(settings.database_url)).render_as_string(hide_password=True)
@@ -143,10 +168,18 @@ def create_application_lifespan(
 
         engine = get_engine(app)
         session_factory = get_sessionmaker_from_app(app)
+        storage = get_storage_adapter(app)
+
+        def _check_db_connection() -> None:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
 
         def _check_schema() -> None:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1 FROM alembic_version"))
+
+        def _check_storage_connection() -> None:
+            storage.check_connection()
 
         def _sync_rbac_registry() -> None:
             with session_factory() as session:
@@ -172,6 +205,31 @@ def create_application_lifespan(
 
         try:
             # Fail fast if the schema hasn't been migrated.
+            try:
+                await asyncio.to_thread(_check_db_connection)
+            except Exception as exc:
+                logger.error(
+                    "db.connection.failed",
+                    extra={"database_url": safe_url},
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    "Database is not reachable. Verify ADE_DATABASE_URL and credentials."
+                ) from exc
+
+            try:
+                await asyncio.to_thread(_check_storage_connection)
+            except StorageError as exc:
+                logger.error(
+                    "storage.connection.failed",
+                    extra={"container": settings.blob_container},
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    "Blob storage is not reachable. Verify the container exists and "
+                    "credentials are valid."
+                ) from exc
+
             try:
                 await asyncio.to_thread(_check_schema)
             except Exception as exc:

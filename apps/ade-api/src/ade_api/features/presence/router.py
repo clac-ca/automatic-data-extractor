@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 from typing import Annotated, Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
@@ -61,8 +62,6 @@ def _normalize_origin(origin: str) -> str:
 def _origin_allowed(origin: str | None, settings: Settings) -> bool:
     if not origin:
         return False
-    if "*" in settings.server_cors_origins:
-        return True
 
     allowed: set[str] = set()
     for candidate in settings.server_cors_origins:
@@ -80,6 +79,11 @@ def _origin_allowed(origin: str | None, settings: Settings) -> bool:
     normalized_origin = _normalize_origin(origin)
     if not normalized_origin:
         return False
+    if "*" in settings.server_cors_origins:
+        return True
+    if settings.server_cors_origin_regex:
+        if re.match(settings.server_cors_origin_regex, normalized_origin):
+            return True
     return normalized_origin in allowed
 
 

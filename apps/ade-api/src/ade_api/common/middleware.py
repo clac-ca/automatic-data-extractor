@@ -76,10 +76,12 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
     """Register ADE default middleware on the FastAPI application."""
 
     origins = list(settings.server_cors_origins)
-    if origins:
+    origin_regex = settings.server_cors_origin_regex
+    if origins or origin_regex:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=origins,
+            allow_origin_regex=origin_regex,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],

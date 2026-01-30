@@ -199,8 +199,8 @@ def run_dev(
     if web:
         npm_bin = common.npm_path()
         web_env = env.copy()
-        if api and "VITE_API_BASE_URL" not in web_env:
-            web_env["VITE_API_BASE_URL"] = f"http://localhost:{api_port}"
+        if api and "ADE_API_PROXY_TARGET" not in web_env:
+            web_env["ADE_API_PROXY_TARGET"] = f"http://localhost:{api_port}"
         web_log_level = _resolve_vite_log_level(web_env)
         if web_log_level and "VITE_LOG_LEVEL" not in web_env:
             web_env["VITE_LOG_LEVEL"] = web_log_level

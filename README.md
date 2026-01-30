@@ -73,6 +73,7 @@ docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data gh
 
 - Migrations
 - API and worker together
+- Serves the built frontend when `apps/ade-web/dist` is present (run `ade build` if you're starting from source)
 
 Ensure the database named in `ADE_DATABASE_URL` already exists (for compose, this is handled by `POSTGRES_DB`).
 

@@ -4,16 +4,18 @@ from __future__ import annotations
 
 from datetime import timedelta
 from functools import lru_cache
+import json
 from pathlib import Path
+import re
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, SecretStr, model_validator
+from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---- Defaults ---------------------------------------------------------------
 
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
-DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
+DEFAULT_CORS_ORIGINS: list[str] = []
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 2000
@@ -37,8 +39,8 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         env_ignore_empty=True,
+        enable_decoding=False,
         populate_by_name=True,
-        env_parse_delimiter=",",
         str_strip_whitespace=True,
     )
 
@@ -61,6 +63,7 @@ class Settings(BaseSettings):
     frontend_url: str | None = None
     frontend_dist_dir: Path | None = Field(default=None)
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
+    server_cors_origin_regex: str | None = Field(default=None)
 
     # Paths
     api_root: Path = Field(default=Path("apps/ade-api"))
@@ -128,8 +131,30 @@ class Settings(BaseSettings):
 
     # ---- Validators ----
 
+    @field_validator("server_cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return parsed
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        if isinstance(value, tuple):
+            return list(value)
+        return value
+
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
+        self.log_level = self.log_level.upper()
         if self.algorithm != "HS256":
             raise ValueError("ADE_ALGORITHM must be HS256.")
         if len(self.secret_key.get_secret_value().encode("utf-8")) < 32:
@@ -144,6 +169,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
             )
+        if self.blob_account_url:
+            self.blob_account_url = self.blob_account_url.rstrip("/")
+        if self.blob_prefix:
+            self.blob_prefix = self.blob_prefix.strip("/")
+        if self.server_cors_origin_regex:
+            re.compile(self.server_cors_origin_regex)
 
         return self
 
