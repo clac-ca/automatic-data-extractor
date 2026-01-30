@@ -23,7 +23,7 @@ def test_postgres_driver_is_accepted() -> None:
         blob_connection_string="UseDevelopmentStorage=true",
         secret_key="test-secret-key-for-tests-please-change",
     )
-    url = make_url(settings.database_url)
+    url = make_url(str(settings.database_url))
     assert url.drivername == "postgresql"
     assert url.host == "localhost"
 
@@ -40,7 +40,7 @@ def test_managed_identity_allows_passwordless_url() -> None:
         secret_key="test-secret-key-for-tests-please-change",
     )
 
-    url = make_url(settings.database_url)
+    url = make_url(str(settings.database_url))
     assert url.username == "ade_user"
     assert url.password is None
     assert url.host == "contoso.postgres.database.azure.com"

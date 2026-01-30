@@ -1,26 +1,73 @@
 # .devcontainer/docker-compose.yml
 
 services:
+  # --- Infra ---------------------------------------------------------------
+
+  postgres:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
+      POSTGRES_DB: ${POSTGRES_DB:-ade}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ade_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: >
+      azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --debug /data/debug.log
+    environment:
+      AZURITE_ACCOUNTS: "${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}"
+    ports:
+      - "10000:10000"
+    volumes:
+      - ade_azurite_data:/data
+
+  # --- Create Azurite blob container (if not exists) -----------------------------------------
+
+  blob_init:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    user: vscode
+    depends_on:
+      azurite:
+        condition: service_started
+    environment:
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
+    command:
+      - python
+      - -c
+      - "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); cc=s.get_container_client(c); cc.exists() or s.create_container(c); print('blob container ready:', c)"
+    restart: on-failure
+
+  # --- Devcontainer workspace container -----------------------------------
+
   ade:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+    user: vscode
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
     command: sleep infinity
     depends_on:
-      # Don’t start ADE until Postgres is healthy.
       postgres:
         condition: service_healthy
-      # Blob storage can start in parallel.
-      azurite:
-        condition: service_started
-    user: vscode
+      blob_init:
+        condition: service_completed_successfully
     environment:
       # ---- Database (Postgres) ----
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE:-password}
-      # ADE_DATABASE_SSLROOTCERT: /path/to/ca.crt
 
       # ---- Storage (Azurite blob-only) ----
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
@@ -34,34 +81,6 @@ services:
     ports:
       - "8000:8000"
       - "5173:5173"
-
-  postgres:
-    image: postgres:18-bookworm
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ade}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
-      POSTGRES_DB: ${POSTGRES_DB:-ade}
-    ports:
-      - "5432:5432"
-    volumes:
-      - ade_pg_data:/var/lib/postgresql
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-
-  azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
-    command: >
-      azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --debug /data/debug.log
-    environment:
-      # Create the storage account if missing (Azurite supports custom accounts via AZURITE_ACCOUNTS)
-      AZURITE_ACCOUNTS: "${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}"
-    ports:
-      - "10000:10000"
-    volumes:
-      - ade_azurite_data:/data
 
 volumes:
   ade_pg_data:

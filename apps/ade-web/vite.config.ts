@@ -13,8 +13,8 @@ const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url)
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
 const appVersion = packageJson.version ?? "unknown";
 
-const apiBaseUrl = (process.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/+$/, "");
-const apiTarget = apiBaseUrl.replace(/\/api\/v1\/?$/, "").replace(/\/api\/?$/, "");
+const proxyTarget = (process.env.ADE_API_PROXY_TARGET ?? "http://localhost:8000").replace(/\/+$/, "");
+const apiTarget = proxyTarget.replace(/\/api\/v1\/?$/, "").replace(/\/api\/?$/, "");
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), tsconfigPaths()],
@@ -27,6 +27,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   server: {
+    host: true,
+    port: 5173,
     strictPort: true,
     proxy: {
       "/api": {

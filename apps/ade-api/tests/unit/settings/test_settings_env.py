@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ ADE_APP_NAME=ADE Test
 ADE_API_DOCS_ENABLED=true
 ADE_SERVER_PUBLIC_URL=https://api.dev.local
 ADE_SERVER_CORS_ORIGINS=http://localhost:3000,http://example.dev:4000
+ADE_SERVER_CORS_ORIGIN_REGEX=^https://.*\\.dev\\.local$
 ADE_SECRET_KEY=test-secret-key-for-tests-please-change
 ADE_ACCESS_TOKEN_EXPIRE_MINUTES=5
 ADE_DATABASE_URL=postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable
@@ -34,6 +36,7 @@ ADE_BLOB_CONNECTION_STRING=UseDevelopmentStorage=true
         "http://localhost:3000",
         "http://example.dev:4000",
     ]
+    assert settings.server_cors_origin_regex == r"^https://.*\.dev\.local$"
     assert settings.access_token_expire_minutes == 5
 
 
@@ -44,6 +47,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ADE_API_DOCS_ENABLED", "true")
     monkeypatch.setenv("ADE_SERVER_PUBLIC_URL", "https://api.local")
     monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", "http://example.com")
+    monkeypatch.setenv("ADE_SERVER_CORS_ORIGIN_REGEX", "^https://.*\\.example\\.com$")
     monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
     monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
     monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
@@ -54,6 +58,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.api_docs_enabled is True
     assert settings.server_public_url == "https://api.local"
     assert settings.server_cors_origins == ["http://example.com"]
+    assert settings.server_cors_origin_regex == r"^https://.*\.example\.com$"
 
 
 def test_cors_accepts_comma_separated_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -103,7 +108,8 @@ def test_server_public_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> Non
     settings = Settings(_env_file=None)
 
     assert settings.server_public_url == "https://secure.example.com"
-    assert settings.server_cors_origins == ["http://localhost:5173"]
+    assert settings.server_cors_origins == []
+    assert settings.server_cors_origin_regex is None
 
 
 def test_logging_level_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,3 +122,16 @@ def test_logging_level_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> 
     settings = Settings(_env_file=None)
 
     assert settings.log_level == "WARNING"
+
+
+def test_cors_origin_regex_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Invalid CORS origin regex should raise a settings error."""
+
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_SERVER_CORS_ORIGIN_REGEX", "(")
+
+    with pytest.raises(re.error):
+        Settings(_env_file=None)

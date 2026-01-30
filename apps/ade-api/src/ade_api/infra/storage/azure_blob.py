@@ -83,6 +83,14 @@ class AzureBlobStorage(StorageAdapter):
     def ensure_versioning(self) -> None:
         return
 
+    def check_connection(self) -> None:
+        try:
+            self._container_client.get_container_properties()
+        except ResourceNotFoundError as exc:
+            raise StorageError("Blob container does not exist or is not accessible.") from exc
+        except HttpResponseError as exc:
+            raise StorageError("Failed to access blob container.") from exc
+
     def _blob_name(self, uri: str) -> str:
         name = uri.lstrip("/")
         if self._config.prefix:

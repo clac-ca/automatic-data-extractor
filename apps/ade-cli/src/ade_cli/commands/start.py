@@ -38,12 +38,11 @@ def _ensure_frontend_dist(env: dict[str, str], *, web: bool) -> None:
         common.ensure_frontend_dir()
         dist_dir = common.FRONTEND_DIR / "dist"
         if not dist_dir.exists():
-            typer.echo("ℹ️  frontend build missing; running `ade build`…")
-            from ade_cli.commands.build import run_build
-
-            run_build()
-        if not dist_dir.exists():
-            typer.echo("❌ frontend build output missing; expected apps/ade-web/dist", err=True)
+            typer.echo(
+                "❌ frontend build output missing; expected apps/ade-web/dist. "
+                "Run `ade build` first or set ADE_FRONTEND_DIST_DIR.",
+                err=True,
+            )
             raise typer.Exit(code=1)
         dist_env = str(dist_dir)
     env["ADE_FRONTEND_DIST_DIR"] = dist_env
@@ -76,7 +75,7 @@ def _build_api_task(
     if api_host is None:
         api_host = api_settings.api_host or "0.0.0.0"
     if api_workers is None:
-        api_workers = api_settings.api_workers if api_settings.api_workers is not None else 3
+        api_workers = api_settings.api_workers if api_settings.api_workers is not None else 1
     api_workers = int(api_workers)
 
     uvicorn_bin = common.uvicorn_path()
@@ -102,7 +101,7 @@ def run_api(
     api_workers: int | None = None,
     web: bool = True,
 ) -> None:
-    """Start ADE API (runs migrations, serves web if enabled)."""
+    """Start ADE API (runs migrations; serves built web if enabled)."""
     common.refresh_paths()
 
     env = _prepare_env()
@@ -127,7 +126,7 @@ def run_start(
     api_workers: int | None = None,
     web: bool = True,
 ) -> None:
-    """Start ADE API + worker (single-container mode)."""
+    """Start ADE API + worker (single-container mode; serves built web if enabled)."""
     common.refresh_paths()
 
     env = _prepare_env()
@@ -158,7 +157,7 @@ def run_start(
 def register(app: typer.Typer) -> None:
     @app.command(
         name="start",
-        help="Start ADE API + worker (single-container mode). Runs migrations; database must exist.",
+        help="Start ADE API + worker (single-container mode). Runs migrations; expects built web assets if --web is on.",
     )
     def start(
         api_port: int = typer.Option(

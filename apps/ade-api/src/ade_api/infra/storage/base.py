@@ -37,6 +37,10 @@ class StorageAdapter(ABC):
     """Protocol implemented by storage adapters."""
 
     @abstractmethod
+    def check_connection(self) -> None:
+        """Raise StorageError if the storage backend is not accessible."""
+
+    @abstractmethod
     def write(
         self,
         uri: str,

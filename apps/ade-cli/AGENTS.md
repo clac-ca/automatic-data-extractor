@@ -12,7 +12,7 @@ Fast reference (run `--help` for details):
 
 - `ade setup` — one-time repo setup (env, hooks).
 - `ade dev [--api-only|--web-only|--worker-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; runs migrations first).
-- `ade start` — start API + worker together (single-container mode; runs migrations).
+- `ade start` — start API + worker together (single-container mode; runs migrations; expects built web assets).
 - `ade api dev|start|migrate|routes|users|types|test` — API-specific commands.
 - `ade web dev|build|test` — web-specific commands.
 - `ade worker dev|start|test` — worker-specific commands.

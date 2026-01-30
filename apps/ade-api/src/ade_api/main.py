@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -16,17 +14,14 @@ from .common.exceptions import (
     request_validation_exception_handler,
     unhandled_exception_handler,
 )
-from .common.logging import log_context, setup_logging
+from .common.logging import setup_logging
 from .common.middleware import register_middleware
 from .common.openapi import configure_openapi
 from .common.problem_details import ApiError
-from .common.time import utc_now
 from .core.http.errors import register_auth_exception_handlers
 from .features.health.ops import router as ops_router
 from .settings import Settings, get_settings
 from .web.spa import mount_spa
-
-logger = logging.getLogger(__name__)
 
 API_PREFIX = "/api"
 
@@ -60,32 +55,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
     register_auth_exception_handlers(app)
-
-    # Application state and startup metadata.
-    app.state.settings = settings
-    app.state.safe_mode = bool(settings.safe_mode)
-    app.state.started_at = utc_now()
-
-    logger.info(
-        "ade_api.startup",
-        extra=log_context(
-            logging_level=settings.log_level,
-            safe_mode=bool(settings.safe_mode),
-            auth_disabled=bool(settings.auth_disabled),
-            version=settings.app_version,
-        ),
-    )
-    if settings.safe_mode:
-        logger.warning(
-            "safe_mode.enabled",
-            extra=log_context(safe_mode=True),
-        )
-
-    if settings.auth_disabled:
-        logger.warning(
-            "auth.disabled",
-            extra=log_context(auth_disabled=True),
-        )
 
     # Middleware, routers, and OpenAPI configuration.
     register_middleware(app, settings=settings)

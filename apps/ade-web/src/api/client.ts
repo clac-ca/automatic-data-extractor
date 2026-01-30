@@ -6,14 +6,11 @@ import type { paths } from "@/types";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
-const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
-const baseUrl = rawBaseUrl.endsWith("/api/v1") ? rawBaseUrl.slice(0, -"/api/v1".length) : rawBaseUrl;
-
 export function resolveApiUrl(path: string) {
   if (!path.startsWith("/")) {
     throw new Error("API paths must begin with '/' relative to the server root");
   }
-  return baseUrl.length > 0 ? `${baseUrl}${path}` : path;
+  return path;
 }
 
 export function buildApiHeaders(method: string, init?: HeadersInit) {
@@ -42,7 +39,6 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
 }
 
 export const client = createClient<paths>({
-  baseUrl: baseUrl.length > 0 ? baseUrl : undefined,
   credentials: "include",
   headers: {
     "X-Requested-With": "fetch",

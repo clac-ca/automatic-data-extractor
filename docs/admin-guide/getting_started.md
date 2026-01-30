@@ -70,7 +70,7 @@ environment variables in your shell.
 
    Use `ade dev` for the standard dev loop (runs migrations, then API reload + Vite hot module reload + worker). If you only want one component, use `ade dev --api`, `ade dev --web`, or `ade dev --worker`. Use `--no-worker` if you want to skip background jobs while still running API + web.
    - Dev flow: `ade dev` (runs migrations, then API + worker + Vite dev server).
-   - Prod-ish flow: `ade start` (API + worker) or `ade api start` / `ade worker start` for split containers.
+   - Prod-ish flow: `ade build` then `ade start` (API + worker, serves built web) or `ade api start` / `ade worker start` for split containers.
 
 3. Confirm the API is healthy:
 
