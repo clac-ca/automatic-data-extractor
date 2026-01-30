@@ -7,13 +7,16 @@
 # - External Postgres database
 # - External Azure Storage account (Blob)
 #
+# Build / Run:
+#   docker compose -f docker-compose.prod.yml up --build
+#
 # Diagram of services:
 #
 #   Host
 #    │  http://localhost:8000
 #    ▼
 # [8000]  ┌──────────────┐
-#         │ ade          │  api + worker
+#         │ ade          │  api + worker + web
 #         └──────┬───────┘
 #                ├───────────────> external Postgres
 #                └───────────────> external Azure Storage
@@ -23,11 +26,14 @@ services:
     ports:
       - 8000:8000
     volumes:
-      - ./data:/app/data
+      - ade_data:/app/data
+      # - ./data:/app/data
     environment:
       ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
       ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
+
+      ADE_DATA_DIR: /app/data
 
       ADE_BLOB_ACCOUNT_URL: ${ADE_BLOB_ACCOUNT_URL} # https://<account>.blob.core.windows.net
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
@@ -36,4 +42,5 @@ services:
 
       ADE_SECRET_KEY: ${ADE_SECRET_KEY}
 
-
+volumes:
+  ade_data:

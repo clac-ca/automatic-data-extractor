@@ -108,6 +108,12 @@ versioning (`ADE_BLOB_REQUIRE_VERSIONING=false`).
 For AAD/Managed Identity auth, use a real Azure Storage account with
 `ADE_BLOB_ACCOUNT_URL`.
 
+Create the blob container once (Azurite):
+
+```bash
+docker compose run --rm ade python -c "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); s.get_container_client(c).exists() or s.create_container(c); print('blob container ready:', c)"
+```
+
 ## Switching to Azure (env-only)
 
 You do not need to change code or rebuild images.

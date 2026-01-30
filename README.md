@@ -13,29 +13,37 @@ This repository publishes **one Docker image** that contains **api + worker + cl
 
 ## Quickstart (Docker, local)
 
-The easiest “it just works” path is Docker Compose because ADE depends on:
+The easiest local path is Docker Compose because ADE depends on:
 - Postgres
 - Blob storage (Azurite locally, Azure Storage in production)
 
-### One-liner
+### Clone + run (local build)
 
 ```bash
-curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.yml \
-  && docker compose -f docker-compose.yml up
+git clone https://github.com/clac-ca/automatic-data-extractor.git \
+  && cd automatic-data-extractor \
+  && docker compose up -d postgres azurite
+
+# Create the blob container once (Azurite)
+docker compose run --rm ade python -c "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); s.get_container_client(c).exists() or s.create_container(c); print('blob container ready:', c)"
+
+# Start ADE (builds the image if needed)
+docker compose up -d ade
 ```
 
-This starts:
+After the last step you have:
 - Postgres (local container)
 - Azurite (blob-only)
 - ADE (single container by default runs API + worker)
 
 > **Note:** `docker-compose.yml` contains safe **development defaults** (including a default Postgres password).
+> Data is stored in a named Docker volume (`ade_data`) unless you override the volume mapping.
+> To keep data on the host, replace the volume with `./data:/app/data` (bind mounts may need matching UID/GID permissions).
 > For anything beyond local evaluation, override values with environment variables or a `.env` file.
 
 ### Optional: use a .env file
 
 ```bash
-curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
 cp .env.example .env
 docker compose -f docker-compose.yml up
 ```
@@ -73,7 +81,7 @@ docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data gh
 
 - Migrations
 - API and worker together
-- Serves the built frontend when `apps/ade-web/dist` is present (run `ade build` if you're starting from source)
+- Serves the built frontend when `ADE_FRONTEND_DIST_DIR` is set (the production image sets `/app/web/dist`; from source, run `ade build` and set `ADE_FRONTEND_DIST_DIR=apps/ade-web/dist`)
 
 Ensure the database named in `ADE_DATABASE_URL` already exists (for compose, this is handled by `POSTGRES_DB`).
 

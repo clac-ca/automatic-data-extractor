@@ -65,11 +65,6 @@ class Settings(BaseSettings):
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
     server_cors_origin_regex: str | None = Field(default=None)
 
-    # Paths
-    api_root: Path = Field(default=Path("apps/ade-api"))
-    alembic_ini_path: Path = Field(default=Path("apps/ade-api/alembic.ini"))
-    alembic_migrations_dir: Path = Field(default=Path("apps/ade-api/migrations"))
-
     # Storage
     data_dir: Path = Field(default=Path("data"))
     blob_account_url: str | None = Field(default=None)

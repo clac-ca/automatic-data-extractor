@@ -92,11 +92,8 @@ COPY --from=python-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy built web assets.
-COPY --from=web-builder /src/apps/ade-web/dist /app/apps/ade-web/dist
-
-# Copy Alembic config + migrations.
-COPY apps/ade-api/alembic.ini /app/apps/ade-api/alembic.ini
-COPY apps/ade-api/migrations /app/apps/ade-api/migrations
+COPY --from=web-builder /src/apps/ade-web/dist /app/web/dist
+ENV ADE_FRONTEND_DIST_DIR="/app/web/dist"
 
 # Ensure runtime data dir exists and is owned by appuser.
 RUN mkdir -p /app/data && chown -R appuser:appuser /app

@@ -12,8 +12,9 @@ the devcontainer starts a Postgres container and ADE uses that by default.
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
   provisions environments and executes runs from the database queue.
 - **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
-  in development; in production you can serve the built `apps/ade-web/dist`
-  bundle via the API container (`ade api start` or `ade start`) or behind a reverse proxy.
+  in development; in production the image ships with the built bundle in
+  `/app/web/dist` and sets `ADE_FRONTEND_DIST_DIR` so the API can serve it
+  (`ade api start` or `ade start`) or you can serve it behind a reverse proxy.
 
 
 ## 2. Prerequisites
@@ -157,5 +158,5 @@ administrators through the API while the frontend experience is completed.
 ## 8. Troubleshooting
 - **`uvicorn` exits immediately:** ensure the Python dependencies are installed (run `./setup.sh`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:app`).
 - **Port conflicts on 8000:** choose another port with `uvicorn ... --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and confirm your web server is serving `apps/ade-web/dist/` and forwarding `/api/v1` to the API.
+- **Frontend shows a blank page:** rebuild assets with `ade build` (or `npm run build` in `apps/ade-web/`) and confirm `ADE_FRONTEND_DIST_DIR` points to the built assets (in the container image this is `/app/web/dist`) and that `/api/v1` is routed to the API.
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api/v1` prefix.

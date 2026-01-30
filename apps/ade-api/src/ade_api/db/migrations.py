@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -19,16 +20,17 @@ from ade_api.settings import Settings, get_settings
 __all__ = [
     "run_migrations",
     "run_migrations_async",
-    "default_alembic_ini_path",
     "migration_timeout_seconds",
 ]
 
 DEFAULT_MIGRATION_TIMEOUT_S = 15.0
 
 
-def default_alembic_ini_path() -> Path:
-    # apps/ade-api/src/ade_api/db/migrations.py -> parents[3] == apps/ade-api
-    return Path(__file__).resolve().parents[3] / "alembic.ini"
+def _alembic_resource_paths() -> tuple[Path, Path]:
+    package = resources.files("ade_api")
+    alembic_ini = package / "alembic.ini"
+    migrations_dir = package / "migrations"
+    return alembic_ini, migrations_dir
 
 
 def migration_timeout_seconds(value: Any | None = None) -> float | None:
@@ -47,20 +49,25 @@ def migration_timeout_seconds(value: Any | None = None) -> float | None:
 
 
 def run_migrations(settings: Settings | None = None, *, revision: str = "head") -> None:
-    alembic_ini = default_alembic_ini_path()
-    if not alembic_ini.exists():
-        raise FileNotFoundError(f"Alembic config not found at {alembic_ini}")
+    alembic_ini_ref, migrations_ref = _alembic_resource_paths()
+    with resources.as_file(alembic_ini_ref) as alembic_ini, resources.as_file(
+        migrations_ref
+    ) as migrations_dir:
+        if not alembic_ini.exists():
+            raise FileNotFoundError(f"Alembic config not found at {alembic_ini}")
+        if not migrations_dir.exists():
+            raise FileNotFoundError(f"Alembic migrations not found at {migrations_dir}")
 
-    alembic_cfg = Config(str(alembic_ini))
-    alembic_cfg.set_main_option("script_location", str(alembic_ini.parent / "migrations"))
-    resolved = settings or get_settings()
-    if not resolved.database_url:
-        raise ValueError("Settings.database_url is required.")
-    alembic_cfg.attributes["settings"] = resolved
-    # ConfigParser treats % as interpolation; escape to preserve URL encoding.
-    safe_url = str(resolved.database_url).replace("%", "%%")
-    alembic_cfg.set_main_option("sqlalchemy.url", safe_url)
-    command.upgrade(alembic_cfg, revision)
+        alembic_cfg = Config(str(alembic_ini))
+        alembic_cfg.set_main_option("script_location", str(migrations_dir))
+        resolved = settings or get_settings()
+        if not resolved.database_url:
+            raise ValueError("Settings.database_url is required.")
+        alembic_cfg.attributes["settings"] = resolved
+        # ConfigParser treats % as interpolation; escape to preserve URL encoding.
+        safe_url = str(resolved.database_url).replace("%", "%%")
+        alembic_cfg.set_main_option("sqlalchemy.url", safe_url)
+        command.upgrade(alembic_cfg, revision)
 
 
 async def run_migrations_async(

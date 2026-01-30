@@ -67,6 +67,8 @@ include = ["ade_api*"]
 "ade_api" = [
   "py.typed",
   "openapi.json",
+  "alembic.ini",
+  "migrations/**/*",
   "web/**/*",
 ]
 

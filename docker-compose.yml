@@ -1,9 +1,16 @@
 # docker-compose.yml
 #
-# Quickstart (default): starts ADE with local Postgres and Azurite so the app works out-of-box with no external dependencies.
+# Quickstart: starts ADE (api+web+worker) with local Postgres & Azurite.
+# Create the blob container once before first use.
+# This compose file builds the ADE image locally from the Dockerfile unless ADE_IMAGE points to a prebuilt tag.
 #
 # Requirements:
 # - Docker and Docker Compose
+#
+# Note: Create the blob container once before first use (see README for the one-liner).
+#
+# Build / Run:
+#   docker compose up --build
 #
 # Diagram of services:
 #
@@ -21,49 +28,36 @@
 #
 services:
   ade:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    image: ${ADE_IMAGE:-automatic-data-extractor:local}
+    build:
+      context: .
+      target: production
     depends_on:
       postgres:
         condition: service_healthy
       azurite:
         condition: service_started
-      blob_init:
-        condition: service_completed_successfully
     ports:
       - 8000:8000
     volumes:
-      - ./data:/app/data
+      - ade_data:/app/data
+      # - ./data:/app/data
     environment:
-      # Database
-      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
-      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE:-password}
-      # ADE_DATABASE_SSLROOTCERT: /path/to/ca.crt
-
-      # Storage (Azure Blob default)
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces} # Default local prefix
+      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false} # disable versioning requirement for local Azurite
       ADE_DATA_DIR: /app/data
 
-      # Azure Blob (Azurite default)
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
-      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
-
-      # JWT (dev defaults)
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
-
-      # API
-      ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
-      ADE_API_PORT: ${ADE_API_PORT:-8000}
-
-      # Worker
-      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000} # change me!
 
   postgres:
     image: postgres:18-bookworm
     ports:
       - 5432:5432
     volumes:
-      - ade_pg_data:/var/lib/postgresql/data
+      - ade_pg_data:/var/lib/postgresql
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ade}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
@@ -84,17 +78,7 @@ services:
     environment:
       AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
 
-  blob_init:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    depends_on:
-      azurite:
-        condition: service_started
-    command: ["python", "-c", "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); cc=s.get_container_client(c); cc.exists() or s.create_container(c); print('blob container ready:', c)"]
-    environment:
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
-    restart: on-failure
-
 volumes:
+  ade_data:
   ade_pg_data:
   ade_azurite_data:

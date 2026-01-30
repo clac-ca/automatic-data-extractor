@@ -25,26 +25,20 @@ def _ensure_frontend_dist(env: dict[str, str], *, web: bool) -> None:
         return
 
     dist_env = env.get("ADE_FRONTEND_DIST_DIR")
-    if dist_env:
-        dist_path = Path(dist_env)
-        if not dist_path.exists():
-            typer.echo(
-                f"❌ frontend dist dir not found: {dist_path}. "
-                "Set ADE_FRONTEND_DIST_DIR or run `ade build`.",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-    else:
-        common.ensure_frontend_dir()
-        dist_dir = common.FRONTEND_DIR / "dist"
-        if not dist_dir.exists():
-            typer.echo(
-                "❌ frontend build output missing; expected apps/ade-web/dist. "
-                "Run `ade build` first or set ADE_FRONTEND_DIST_DIR.",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-        dist_env = str(dist_dir)
+    if not dist_env:
+        typer.echo(
+            "❌ ADE_FRONTEND_DIST_DIR is required when --web is enabled.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    dist_path = Path(dist_env)
+    if not dist_path.exists():
+        typer.echo(
+            f"❌ frontend dist dir not found: {dist_path}. "
+            "Set ADE_FRONTEND_DIST_DIR to a valid path.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     env["ADE_FRONTEND_DIST_DIR"] = dist_env
     typer.echo(f"🧭 Frontend dist:        {dist_env}")
 
@@ -57,7 +51,6 @@ def _build_api_task(
     api_workers: int | None,
     web: bool,
 ) -> tuple[tuple[str, list[str], Path | None, dict[str, str]], str, int]:
-    common.ensure_backend_dir()
     common.require_python_module(
         "ade_api",
         "Install ADE dependencies (run `./setup.sh`).",

@@ -7,7 +7,7 @@ flags, and rollback considerations.
 ## 1. Pre-deploy validation
 
 - Confirm the target environment includes the Alembic migration
-  `apps/ade-api/migrations/versions/0004_environments_runs_no_builds.py`.
+  `apps/ade-api/src/ade_api/migrations/versions/0004_environments_runs_no_builds.py`.
 - Run `ade ci` locally and ensure the backend image builds with the new
   FastAPI routers mounted (`/api/v1/configurations/{configurationId}/runs`, `/api/v1/runs/...`).
 - Review `docs/ade_runs_api_spec.md#manual-qa-checklist` and run at least

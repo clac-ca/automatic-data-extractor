@@ -26,21 +26,20 @@ def _ensure_frontend_dist(env: dict[str, str], *, web: bool) -> None:
         return
 
     dist_env = env.get("ADE_FRONTEND_DIST_DIR")
-    if dist_env:
-        dist_path = Path(dist_env)
-        if not dist_path.exists():
-            typer.echo(
-                f"❌ frontend dist dir not found: {dist_path}. "
-                "Set ADE_FRONTEND_DIST_DIR or run `ade web build`.",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-    else:
-        dist_dir = common.FRONTEND_DIR / "dist"
-        if not dist_dir.exists():
-            typer.echo("ℹ️  frontend build missing; run `ade web build` or `npm run build`.", err=True)
-            raise typer.Exit(code=1)
-        dist_env = str(dist_dir)
+    if not dist_env:
+        typer.echo(
+            "❌ ADE_FRONTEND_DIST_DIR is required when --web is enabled.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    dist_path = Path(dist_env)
+    if not dist_path.exists():
+        typer.echo(
+            f"❌ frontend dist dir not found: {dist_path}. "
+            "Set ADE_FRONTEND_DIST_DIR to a valid path.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     env["ADE_FRONTEND_DIST_DIR"] = dist_env
     typer.echo(f"🧭 Frontend dist:        {dist_env}")
 

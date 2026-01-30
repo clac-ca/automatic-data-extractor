@@ -5,7 +5,7 @@ The production image is built from the root `Dockerfile` and contains:
 - `ade-api` package (API)
 - `ade-worker` package (worker)
 - `ade-cli` package (provides `ade` command)
-- built web assets copied to: `/app/apps/ade-web/dist`
+- built web assets copied to: `/app/web/dist`
 
 ## Build the image
 
@@ -29,7 +29,8 @@ This runs:
 You must provide external Postgres + Storage (set `ADE_DATABASE_URL`, `ADE_DATABASE_AUTH_MODE`,
 `ADE_BLOB_CONTAINER`, and one of
 `ADE_BLOB_ACCOUNT_URL` (managed identity) or `ADE_BLOB_CONNECTION_STRING` (connection string) in `.env`).
-Ensure the database named in `ADE_DATABASE_URL` already exists before starting the containers.
+Ensure the database named in `ADE_DATABASE_URL` already exists before starting the containers,
+and that the blob container is provisioned.
 
 ## Run with docker run
 
@@ -62,8 +63,9 @@ ade --help
 
 ## Serving the React frontend in production
 
-This image includes the built `ade-web` output in `/app/apps/ade-web/dist`.
-The most “single-image” approach is to have the API serve it as static files.
+This image includes the built `ade-web` output in `/app/web/dist` and sets
+`ADE_FRONTEND_DIST_DIR=/app/web/dist` by default. The most “single-image” approach
+is to have the API serve it as static files.
 
 Example FastAPI snippet:
 
@@ -72,5 +74,5 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
-app.mount("/", StaticFiles(directory="apps/ade-web/dist", html=True), name="web")
+app.mount("/", StaticFiles(directory="/app/web/dist", html=True), name="web")
 ```

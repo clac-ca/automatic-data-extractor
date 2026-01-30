@@ -1,15 +1,10 @@
 {
-  "name": "ADE Dev",
-  "dockerComposeFile": [
-    "../docker-compose.yml",
-    "docker-compose.devcontainer.override.yml"
-  ],
+  "name": "ADE Dev (Postgres + Azurite)",
+  "dockerComposeFile": "docker-compose.yml",
   "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
-  "postCreateCommand": "./setup.sh",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {"version": "24"}
-  },
+  "shutdownAction": "stopCompose",
   "remoteUser": "vscode",
-  "updateRemoteUserUID": true
+  "updateRemoteUserUID": true,
+  "postCreateCommand": "bash -lc './setup.sh'"
 }
