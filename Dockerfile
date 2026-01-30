@@ -1,117 +1,107 @@
-# syntax=docker/dockerfile:1.6
-
 ARG PYTHON_IMAGE=python:3.12-slim-bookworm
-# Node is only needed to build the React frontend. We keep it out of the runtime image.
-# Pin to a major LTS line for stability + security updates.
 ARG NODE_IMAGE=node:24-bookworm-slim
 
-FROM ${PYTHON_IMAGE} AS dev
-ARG DEBIAN_FRONTEND=noninteractive
-ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=${USER_UID}
+# Dev image:
+#   docker build --target development -t <image>:dev .
+# Prod image (final stage by default):
+#   docker build -t <image>:latest .
 
+# ============================================================
+# BASE (shared env defaults for all stages)
+# ============================================================
+FROM ${PYTHON_IMAGE} AS python-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
+# ============================================================
+# DEVELOPMENT (devcontainer only; source is bind-mounted)
+# ============================================================
+FROM python-base AS development
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
-    ca-certificates \
-    curl \
-    git \
-    gnupg \
-    openssh-client \
-    procps \
-    sudo \
     build-essential \
+    ca-certificates \
+    git \
     libpq-dev \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN python -m pip install --upgrade pip \
-  && python -m pip install --no-cache-dir uv
-
-RUN set -eux; \
-  groupadd --gid "${USER_GID}" "${USERNAME}"; \
-  useradd  --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}"; \
-  echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
-  chmod 0440 "/etc/sudoers.d/${USERNAME}"
+    sudo \
+  && rm -rf /var/lib/apt/lists/* \
+  && python -m pip install --upgrade pip \
+  && groupadd --gid "${USER_GID}" "${USERNAME}" \
+  && useradd  --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" \
+  && echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}" \
+  && chmod 0440 "/etc/sudoers.d/${USERNAME}"
 
 WORKDIR /workspaces/automatic-data-extractor
+USER ${USERNAME}
 
-FROM ${PYTHON_IMAGE} AS py-builder
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+# ============================================================
+# BUILD ARTIFACTS (production only)
+# ============================================================
+# python-builder outputs /opt/venv
+FROM python-base AS python-builder
 WORKDIR /src
 
-# git required for ade-engine install via git+https for now
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends git ca-certificates build-essential \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    git \
+    libpq-dev \
+  && rm -rf /var/lib/apt/lists/* \
+  && python -m venv /opt/venv \
+  && /opt/venv/bin/pip install --upgrade pip
 
-RUN python -m pip install --upgrade pip \
-  && python -m pip install --no-cache-dir uv
-
-RUN uv venv /opt/venv --python python
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY apps/ade-api/ /src/apps/ade-api/
 COPY apps/ade-worker/ /src/apps/ade-worker/
 COPY apps/ade-cli/ /src/apps/ade-cli/
+RUN pip install /src/apps/ade-api /src/apps/ade-worker /src/apps/ade-cli
 
-RUN uv pip install --python /opt/venv/bin/python \
-       /src/apps/ade-api \
-       /src/apps/ade-worker \
-       /src/apps/ade-cli
-
+# web-builder outputs dist/
 FROM ${NODE_IMAGE} AS web-builder
 WORKDIR /src/apps/ade-web
-COPY apps/ade-web/ /src/apps/ade-web/
-RUN set -eux; \
-  corepack enable || true; \
-  if [ -f pnpm-lock.yaml ]; then \
-    corepack pnpm install --frozen-lockfile; \
-    corepack pnpm run build; \
-  elif [ -f yarn.lock ]; then \
-    corepack yarn install --frozen-lockfile; \
-    corepack yarn run build; \
-  elif [ -f package-lock.json ]; then \
-    npm ci; \
-    npm run build; \
-  else \
-    npm install; \
-    npm run build; \
-  fi
 
-FROM ${PYTHON_IMAGE} AS runtime
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+COPY apps/ade-web/package.json apps/ade-web/package-lock.json ./
+RUN npm ci
+
+COPY apps/ade-web/ ./
+RUN npm run build
+
+# ============================================================
+# PRODUCTION (copies venv + dist)
+# ============================================================
+FROM python-base AS production
 WORKDIR /app
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+# Runtime deps only.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libpq5 \
   && rm -rf /var/lib/apt/lists/*
 
+# Create non-root runtime user.
 RUN useradd -m -u 10001 appuser
 
-COPY --from=py-builder /opt/venv /opt/venv
+# Copy Python deps and set PATH.
+COPY --from=python-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Copy built web assets.
 COPY --from=web-builder /src/apps/ade-web/dist /app/apps/ade-web/dist
-COPY apps /app/apps
 
-RUN mkdir -p /app/data \
-  && chown -R appuser:appuser /app
+# Copy Alembic config + migrations.
+COPY apps/ade-api/alembic.ini /app/apps/ade-api/alembic.ini
+COPY apps/ade-api/migrations /app/apps/ade-api/migrations
 
+# Ensure runtime data dir exists and is owned by appuser.
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
-
-# CLI-style image: "docker run image" behaves like running the `ade` binary.
-ENTRYPOINT ["ade"]
-CMD ["start"]
+# Run `ade start` by default.
+CMD ["ade", "start"]

@@ -4,7 +4,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-      target: dev
+      target: development
     entrypoint: ["/bin/sh", "-c"]
     command: "sleep infinity"
     user: vscode
@@ -18,4 +18,4 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-      target: py-builder
+      target: python-builder

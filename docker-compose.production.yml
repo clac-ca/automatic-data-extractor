@@ -43,7 +43,7 @@ services:
       ADE_API_PORT: ${ADE_API_PORT:-8000}
 
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
-    command: [ "api", "start" ]
+    command: [ "ade", "api", "start" ]
 
   worker:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
@@ -65,4 +65,4 @@ services:
       ADE_ACCESS_TOKEN_EXPIRE_MINUTES: ${ADE_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
 
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
-    command: [ "worker", "start" ]
+    command: [ "ade", "worker", "start" ]
