@@ -5,6 +5,7 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+      # [Optional] You can use build args to set options. e.g. 'VARIANT' below affects the image in the Dockerfile
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
     command: sleep infinity
@@ -15,7 +16,8 @@ services:
       # Blob storage can start in parallel.
       azurite:
         condition: service_started
-    user: vscode
+    # Uncomment the next line to use a non-root user for all processes - See https://aka.ms/vscode-remote/containers/non-root for details.
+    # user: vscode
     environment:
       # ---- Database (Postgres) ----
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
