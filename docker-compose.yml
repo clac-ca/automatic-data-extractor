@@ -1,36 +1,36 @@
 # docker-compose.yml
 #
-# Quickstart: starts ADE + Postgres + Azurite (Azure Blob emulator).
-# Default storage uses Azurite via connection string auth.
+# Quickstart (default): starts ADE with local Postgres and Azurite so the app works out-of-box with no external dependencies.
 #
-# Get Started:
-#   Step 1: Install Docker (if needed): https://docs.docker.com/get-docker/
-#   Step 2: Download this docker compose file
-#     curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.yml
-#   Step 3: Download and edit the env file (optional)
-#     curl -L -o .env https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
-#   Step 4: Start services
-#     docker compose -f docker-compose.yml up
-#   Step 5: What's running
-#     Web UI + API: http://localhost:8000 (API at /api, docs at /docs)
-#     Postgres: localhost:5432
+# Requirements:
+# - Docker and Docker Compose
 #
-# TIP: See docker-compose.production.yml for production setup (external Postgres + Storage).
+# Diagram of services:
+#
+#   Host
+#    │  http://localhost:8000
+#    ▼
+# [8000]  ┌──────────────┐        [5432]  ┌──────────────┐
+#         │ ade          │ ───────>       │ postgres     │
+#         │ api + worker │                └──────────────┘
+#         └──────┬───────┘
+#                │
+#                │                [10000] ┌──────────────┐
+#                └───────────────>        │ azurite      │
+#                                         └──────────────┘
+#
 services:
-
   ade:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
     depends_on:
-      # Don’t start ADE until Postgres is healthy.
       postgres:
         condition: service_healthy
-      # Blob storage can start in parallel.
       azurite:
         condition: service_started
       blob_init:
         condition: service_completed_successfully
     ports:
-      - "8000:8000"
+      - 8000:8000
     volumes:
       - ./data:/app/data
     environment:
@@ -57,21 +57,19 @@ services:
 
       # Worker
       ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
-    # Default command is `ade start` (ENTRYPOINT is `ade`, CMD is `start`)
 
   postgres:
     image: postgres:18-bookworm
+    ports:
+      - 5432:5432
+    volumes:
+      - ade_pg_data:/var/lib/postgresql/data
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ade}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
       POSTGRES_DB: ${POSTGRES_DB:-ade}
-    ports:
-      - "5432:5432"
-    volumes:
-      # Persist Postgres data between restarts
-      - ade_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -79,21 +77,19 @@ services:
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
     command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
-    environment:
-      # Create the storage account if missing (Azurite supports custom accounts via AZURITE_ACCOUNTS)
-      AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
     ports:
-      - "10000:10000"
+      - 10000:10000
     volumes:
       - ade_azurite_data:/data
+    environment:
+      AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
 
   blob_init:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
     depends_on:
       azurite:
         condition: service_started
-    entrypoint: ["python", "-c"]
-    command: "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); cc=s.get_container_client(c); cc.exists() or s.create_container(c); print('blob container ready:', c)"
+    command: ["python", "-c", "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); cc=s.get_container_client(c); cc.exists() or s.create_container(c); print('blob container ready:', c)"]
     environment:
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}

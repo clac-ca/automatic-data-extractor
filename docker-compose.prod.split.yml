@@ -1,29 +1,35 @@
-# docker-compose.production.yml
+# docker-compose.prod.split.yml
 #
-# Production: separates API and Worker into different containers.
+# Production (split containers): runs the API and worker separately so they can be scaled independently.
 #
-# The ADE image contains ade-api, ade-web, and ade-worker.
-# By default all three run; you can choose which starts by setting `command`.
-# This file runs the worker in a separate container so you can scale it independently.
-# Expects external Postgres/Storage (set ADE_DATABASE_* + ADE_BLOB_*).
+# Requirements:
+# - Docker and Docker Compose
+# - External Postgres database
+# - External Azure Storage account (Blob)
 #
-# Run:
-#   Step 1: Install Docker (if needed): https://docs.docker.com/get-docker/
-#   Step 2: Download this docker compose file
-#     curl -LO https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/docker-compose.production.yml
-#   Step 3: Download and edit the env file (set ADE_DATABASE_* + ADE_BLOB_*)
-#     curl -L -o .env https://raw.githubusercontent.com/clac-ca/automatic-data-extractor/main/.env.example
-#   Step 4: Start services
-#     docker compose -f docker-compose.production.yml up
-#   Step 5: Open the app
-#     Web UI + API: http://localhost:8000 (API at /api, docs at /docs)
-#     Worker: runs in background (no port)
+# Diagram of services:
 #
+#   Host
+#    │  http://localhost:8000
+#    ▼
+# [8000]  ┌──────────────┐
+#         │ api          │
+#         └──────┬───────┘
+#                ├───────────────> external Postgres
+#                └───────────────> external Azure Storage
+#
+#         ┌──────────────┐
+#         │ worker       │
+#         └──────┬───────┘
+#                ├───────────────> external Postgres
+#                └───────────────> external Azure Storage
+
 services:
   api:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    command: ["ade", "api", "start"]
     ports:
-      - "8000:8000"
+      - 8000:8000
     volumes:
       - ./data:/app/data
     environment:
@@ -35,18 +41,14 @@ services:
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-      ADE_DATA_DIR: /app/data
 
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?set ADE_SECRET_KEY in your prod env}
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
 
-      ADE_API_HOST: ${ADE_API_HOST:-0.0.0.0}
-      ADE_API_PORT: ${ADE_API_PORT:-8000}
 
-      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
-    command: [ "ade", "api", "start" ]
 
   worker:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    command: ["ade", "worker", "start"]
     volumes:
       - ./data:/app/data
     environment:
@@ -58,11 +60,8 @@ services:
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-      ADE_DATA_DIR: /app/data
 
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?set ADE_SECRET_KEY in your prod env}
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
       ADE_ALGORITHM: ${ADE_ALGORITHM:-HS256}
       ADE_ACCESS_TOKEN_EXPIRE_MINUTES: ${ADE_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
 
-      ADE_WORKER_MODULE: ${ADE_WORKER_MODULE:-ade_worker}
-    command: [ "ade", "worker", "start" ]

@@ -17,7 +17,9 @@ ade docker build
 
 ```bash
 cp .env.example .env
-ADE_IMAGE=ade-app:local docker compose -f docker-compose.production.yml up
+ADE_IMAGE=ade-app:local docker compose -f docker-compose.prod.yml up
+# or
+ADE_IMAGE=ade-app:local docker compose -f docker-compose.prod.split.yml up
 ```
 
 This runs:

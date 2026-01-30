@@ -6,7 +6,7 @@
   ],
   "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
-  "postCreateCommand": "bash -lc './setup.sh'",
+  "postCreateCommand": "./setup.sh",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {"version": "24"}
   },

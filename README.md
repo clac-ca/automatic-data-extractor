@@ -85,10 +85,12 @@ Even though we publish **one image**, the most common deployment style is still:
 - one container running the worker
 - both containers use the **same image**, but different commands
 
-Use `docker-compose.production.yml` as an example:
+Use `docker-compose.prod.yml` for single-container BYO services, or `docker-compose.prod.split.yml` for split API + worker:
 
 ```bash
-ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.production.yml up
+ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.prod.yml up
+# or
+ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.prod.split.yml up
 ```
 
 ## Configuration (ADE_ env vars)

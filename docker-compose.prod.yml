@@ -1,0 +1,39 @@
+# docker-compose.prod.yml
+#
+# Production (single container): runs ADE (API + Web + worker) and connects to existing Postgres and Azure Storage services.
+#
+# Requirements:
+# - Docker and Docker Compose
+# - External Postgres database
+# - External Azure Storage account (Blob)
+#
+# Diagram of services:
+#
+#   Host
+#    │  http://localhost:8000
+#    ▼
+# [8000]  ┌──────────────┐
+#         │ ade          │  api + worker
+#         └──────┬───────┘
+#                ├───────────────> external Postgres
+#                └───────────────> external Azure Storage
+services:
+  ade:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    ports:
+      - 8000:8000
+    volumes:
+      - ./data:/app/data
+    environment:
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
+
+      ADE_BLOB_ACCOUNT_URL: ${ADE_BLOB_ACCOUNT_URL} # https://<account>.blob.core.windows.net
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
+
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
+
+
