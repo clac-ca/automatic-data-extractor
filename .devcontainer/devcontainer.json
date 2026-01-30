@@ -2,20 +2,30 @@
   "name": "ADE (Python 3.12 + Postgres + Node)",
   "dockerComposeFile": "docker-compose.yml",
   "service": "ade",
-  "workspaceFolder": "/workspaces/automatic-data-extractor",
-  "shutdownAction": "stopCompose",
-  "remoteUser": "vscode",
-  "updateRemoteUserUID": true,
+	// The optional 'workspaceFolder' property is the path VS Code should open by default when
+	// connected. This is typically a file mount in .devcontainer/docker-compose.yml
+	"workspaceFolder": "/workspaces/automatic-data-extractor",
+  
+	// Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "24"
-    }
+    "ghcr.io/devcontainers/features/node:1": {"version": "24"}
   },
-  "mounts": [
-    "type=bind,source=${localEnv:HOME}${localEnv:USERPROFILE}/.codex,target=/home/vscode/.codex,consistency=cached"
-  ],
-  "postCreateCommand": "bash -lc 'bash scripts/dev/bootstrap.sh'",
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [8000,5173,"postgres:5432","azurite:10000"],
+  "portsAttributes": {"5173": {"label": "ADE Web"},"8000": {"label": "ADE API"},"postgres:5432": {"label": "ADE Postgres Server"},"azurite:10000": {"label": "ADE Azurite Blob Storage"}},
+
+	// Uncomment the next line if you want start specific services in your Docker Compose config.
+	// "runServices": [],
+
+	// Uncomment the next line if you want to keep your containers running after VS Code shuts down.
+	"shutdownAction": "stopCompose",
+
+	// Uncomment the next line to run commands after the container is created.
+	"postCreateCommand": "bash -lc 'bash scripts/dev/bootstrap.sh'",
+
+	// Configure tool-specific properties.
   "customizations": {
     "vscode": {
       "extensions": [
@@ -37,24 +47,8 @@
       }
     }
   },
-  "forwardPorts": [
-    8000,
-    5173,
-    "postgres:5432",
-    "azurite:10000"
-  ],
-  "portsAttributes": {
-    "5173": {
-      "label": "ADE Web"
-    },
-    "8000": {
-      "label": "ADE API"
-    },
-    "postgres:5432": {
-      "label": "ADE Postgres Server"
-    },
-    "azurite:10000": {
-      "label": "ADE Azurite Blob Storage"
-    }
-  }
+
+	// Run as the non-root dev user created in the Dockerfile.
+	"remoteUser": "vscode",
+  "updateRemoteUserUID": true
 }

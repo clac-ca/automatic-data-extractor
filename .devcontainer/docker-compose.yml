@@ -1,5 +1,4 @@
 # .devcontainer/docker-compose.yml
-
 services:
   # --- Infra ---------------------------------------------------------------
 
@@ -57,13 +56,16 @@ services:
       dockerfile: .devcontainer/Dockerfile
     user: vscode
     volumes:
-      - ..:/workspaces/automatic-data-extractor:cached
+      - ..:/workspaces/automatic-data-extractor
     command: sleep infinity
     depends_on:
       postgres:
         condition: service_healthy
-      blob_init:
-        condition: service_completed_successfully
+      # Blob storage can start in parallel.
+      azurite:
+        condition: service_started
+    # Uncomment the next line to run all processes as the non-root dev user.
+    # user: vscode
     environment:
       # ---- Database (Postgres) ----
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
@@ -81,6 +83,34 @@ services:
     ports:
       - "8000:8000"
       - "5173:5173"
+
+  postgres:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
+      POSTGRES_DB: ${POSTGRES_DB:-ade}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ade_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: >
+      azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --debug /data/debug.log
+    environment:
+      # Create the storage account if missing (Azurite supports custom accounts via AZURITE_ACCOUNTS)
+      AZURITE_ACCOUNTS: "${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}"
+    ports:
+      - "10000:10000"
+    volumes:
+      - ade_azurite_data:/data
 
 volumes:
   ade_pg_data:

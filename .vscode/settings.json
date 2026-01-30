@@ -7,7 +7,6 @@
         "apps/ade-cli/tests"
     ],
     // Quality-of-life
-    "editor.formatOnSave": true,
     "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.pythonProjects": [],
     "remote.autoForwardPortsFallback": 0
