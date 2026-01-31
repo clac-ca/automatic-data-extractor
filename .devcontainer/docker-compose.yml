@@ -22,8 +22,7 @@ services:
   ade:
     build:
       context: ..
-      dockerfile: Dockerfile # Dockerfile in repo root
-      target: development # use development target for devcontainer
+      dockerfile: .devcontainer/Dockerfile
     command: sleep infinity
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached

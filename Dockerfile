@@ -1,8 +1,6 @@
 ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 ARG NODE_IMAGE=node:24-bookworm-slim
 
-# Dev image:
-#   docker build --target development -t <image>:dev .
 # Prod image (final stage by default):
 #   docker build -t <image>:latest .
 
@@ -15,33 +13,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # ============================================================
-# DEVELOPMENT (devcontainer only; source is bind-mounted)
-# ============================================================
-FROM python-base AS development
-ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=${USER_UID}
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
-    build-essential \
-    ca-certificates \
-    git \
-    libpq-dev \
-    nodejs \
-    npm \
-    sudo \
-  && rm -rf /var/lib/apt/lists/* \
-  && python -m pip install --upgrade pip \
-  && groupadd --gid "${USER_GID}" "${USERNAME}" \
-  && useradd  --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" \
-  && echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}" \
-  && chmod 0440 "/etc/sudoers.d/${USERNAME}"
-
-WORKDIR /workspaces/automatic-data-extractor
-USER ${USERNAME}
-
-# ============================================================
 # BUILD ARTIFACTS (production only)
 # ============================================================
 # python-builder outputs /opt/venv
@@ -51,11 +22,15 @@ WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
-    git \
     libpq-dev \
   && rm -rf /var/lib/apt/lists/* \
   && python -m venv /opt/venv \
   && /opt/venv/bin/pip install --upgrade pip
+
+# git is required to install ade-engine from GitHub until it is published.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+  && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/venv/bin:$PATH"
 
