@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
     libpq-dev \
+    nodejs \
+    npm \
     sudo \
   && rm -rf /var/lib/apt/lists/* \
   && python -m pip install --upgrade pip \
