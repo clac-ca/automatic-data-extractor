@@ -6,11 +6,21 @@
   "shutdownAction": "stopCompose",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
-  "postCreateCommand": "bash -lc './setup.sh'",
+  "postStartCommand": "bash -lc './setup.sh'",
+  "remoteEnv": {
+    "PATH": "/workspaces/automatic-data-extractor/.venv/bin:${containerEnv:PATH}"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/workspaces/automatic-data-extractor/.venv/bin/python",
+        "python.terminal.activateEnvironment": true
+      }
+    }
+  },
   "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
-    },
+    "ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
     "ghcr.io/devcontainers/features/git:1": {}
   }
 }
