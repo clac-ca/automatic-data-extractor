@@ -17,8 +17,11 @@ We use **Conventional Commits**:
 - Avoid bundling unrelated changes
 
 ## Testing
+- All services (default unit): `ade test`
 - Backend (unit): `ade api test`
 - Backend (integration/all): `ade api test integration` or `ade api test all`
+- Worker (unit): `ade worker test`
+- Worker (integration/all): `ade worker test integration` or `ade worker test all`
 - Frontend: `npm run test --prefix apps/ade-web`
 - Lint (backend): `ade api lint`
 - Lint (frontend): `npm run lint --prefix apps/ade-web`
