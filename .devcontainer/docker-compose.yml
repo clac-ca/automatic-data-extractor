@@ -55,7 +55,7 @@ services:
     image: postgres:18-bookworm
     restart: unless-stopped
     volumes:
-      - ade_pg_data:/var/lib/postgresql/data
+      - ade_pg_data:/var/lib/postgresql
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ade}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}

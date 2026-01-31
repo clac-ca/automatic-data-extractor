@@ -1,13 +1,10 @@
 # docker-compose.yml
 #
 # Quickstart: starts ADE (api+web+worker) with local Postgres & Azurite.
-# Create the blob container once before first use.
 # This compose file builds the ADE image locally from the Dockerfile unless ADE_IMAGE points to a prebuilt tag.
 #
 # Requirements:
 # - Docker and Docker Compose
-#
-# Note: Create the blob container once before first use (see README for the one-liner).
 #
 # Build / Run:
 #   docker compose up --build
