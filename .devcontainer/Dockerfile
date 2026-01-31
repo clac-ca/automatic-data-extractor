@@ -4,7 +4,8 @@ FROM ${PYTHON_IMAGE}
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Prefer the workspace venv for python/pip once it exists.
+# Prefer the workspace venv for all container processes (including VS Code server/extensions).
+# Docker-Compose can't reliably prepend to PATH using the existing value, so we do it here.
 ENV VIRTUAL_ENV=/workspaces/automatic-data-extractor/.venv \
     PATH="/workspaces/automatic-data-extractor/.venv/bin:${PATH}"
 
