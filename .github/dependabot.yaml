@@ -2,18 +2,6 @@ version: 2
 
 updates:
   # -----------------------------
-  # GitHub Actions workflow deps
-  # -----------------------------
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    target-branch: "development"
-    schedule:
-      interval: "monthly"
-    groups:
-      actions-minor-patch:
-        update-types: ["minor", "patch"]
-
-  # -----------------------------
   # Web (npm) dependencies
   # -----------------------------
   - package-ecosystem: "npm"

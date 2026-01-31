@@ -41,8 +41,8 @@ def _uuid7_randbits(bits: int) -> int:
 def generate_uuid7() -> uuid.UUID:
     """Return a sortable UUIDv7 for ADE identifiers (RFC 9562).
 
-    We implement UUIDv7 directly to avoid pinning ADE to Python 3.14+
-    (where :func:`uuid.uuid7` is available).
+    We implement UUIDv7 directly to keep runtime behavior consistent across
+    environments, even though :func:`uuid.uuid7` is available in Python 3.14+.
     """
 
     global _UUID7_LAST_TS_MS, _UUID7_LAST_RAND

@@ -7,32 +7,32 @@ name = "ade-api"
 version = "1.6.5"
 description = "Internal ADE FastAPI service."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14.2"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 
 # Runtime deps — pinned for reproducible builds
 dependencies = [
-  "fastapi==0.123.0",
-  "uvicorn[standard]==0.38.0",
-  "sqlalchemy==2.0.44",
-  "alembic==1.17.2",
-  "azure-core==1.36.0",
+  "fastapi==0.128.0",
+  "uvicorn[standard]==0.40.0",
+  "sqlalchemy==2.0.46",
+  "alembic==1.18.3",
+  "azure-core==1.38.0",
   "azure-identity==1.25.1",
-  "azure-storage-blob==12.26.0",
+  "azure-storage-blob==12.28.0",
   "psycopg[binary]==3.3.2",
   "pydantic==2.12.5",
   "pydantic-settings==2.12.0",
-  "python-multipart==0.0.21",
+  "python-multipart==0.0.22",
   "httpx==0.28.1",
-  "pyjwt[crypto]==2.10.1",
+  "pyjwt[crypto]==2.11.0",
   "email-validator==2.3.0",
   "openpyxl==3.1.5",
-  "greenlet==3.2.4",
+  "greenlet==3.3.1",
   "fastapi-users[sqlalchemy]==15.0.3",
   "authlib==1.6.6",
-  "sse-starlette==3.1.1",
+  "sse-starlette==3.2.0",
   "pwdlib[argon2]==0.3.0",
   "typer>=0.12"
 ]
@@ -43,12 +43,12 @@ ade = "ade_api.cli_root:app"
 
 [project.optional-dependencies]
 dev = [
-  "pytest==9.0.1",
+  "pytest==9.0.2",
   "pytest-asyncio==1.3.0",
   "pytest-cov==7.0.0",
   "asgi-lifespan==2.1.0",
-  "mypy==1.19.0",
-  "ruff==0.14.7",
+  "mypy==1.19.1",
+  "ruff==0.14.14",
   "openapi-spec-validator==0.7.2",
 ]
 
@@ -90,7 +90,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -99,7 +99,7 @@ select = ["E", "F", "I", "B", "UP"]
 preview = true
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 disallow_untyped_defs = true
