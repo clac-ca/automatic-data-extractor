@@ -1,6 +1,6 @@
 {
-    ".": "1.6.5",
-    "apps/ade-api": "1.6.5",
-    "apps/ade-web": "1.6.4",
-    "apps/ade-worker": "0.2.0"
+    ".": "1.7.0",
+    "apps/ade-api": "1.7.0",
+    "apps/ade-web": "1.7.0",
+    "apps/ade-worker": "0.3.0"
 }
