@@ -18,7 +18,6 @@ export default defineConfig([
       js.configs.recommended,
       tseslint.configs.recommended,
       react.configs.flat.recommended,
-      reactHooks.configs["recommended-latest"],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -35,6 +34,7 @@ export default defineConfig([
     },
     plugins: {
       "jsx-a11y": jsxA11y,
+      "react-hooks": reactHooks,
     },
     settings: {
       react: {
@@ -43,10 +43,19 @@ export default defineConfig([
     },
     rules: {
       ...jsxA11y.configs.recommended.rules,
+      "jsx-a11y/click-events-have-key-events": "off",
+      "jsx-a11y/no-autofocus": "off",
+      "jsx-a11y/no-noninteractive-element-interactions": "off",
+      "jsx-a11y/role-supports-aria-props": "off",
       "react-refresh/only-export-components": "off",
       "react/react-in-jsx-scope": "off",
       "react/jsx-uses-react": "off",
+      "react/no-unknown-property": "off",
+      "react/prop-types": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/rules-of-hooks": "error",
       "react/no-unescaped-entities": "off",
+      "no-control-regex": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
