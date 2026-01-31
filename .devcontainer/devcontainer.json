@@ -4,24 +4,44 @@
   "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
   "shutdownAction": "stopCompose",
+
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
+
+  "mounts": [
+    "source=${localEnv:HOME}/.codex,target=/home/vscode/.codex,type=bind,consistency=cached"
+  ],
+
   "postCreateCommand": "bash -lc './setup.sh'",
+  "waitFor": "postCreateCommand", // Ensure venv is setup with ade installed before opening
+  
+  "forwardPorts": [
+    "postgres:5432",
+    "azurite:10000"
+  ],
+  "portsAttributes": {
+    "postgres:5432": { "label": "Postgres" },
+    "azurite:10000": { "label": "Azurite (Blob)" }
+  },
+
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "openai.chatgpt"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-        "python.terminal.activateEnvironment": true
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python"
       }
     }
   },
+
   "features": {
     "ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
-    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
     "ghcr.io/devcontainers/features/git:1": {}
   }
 }

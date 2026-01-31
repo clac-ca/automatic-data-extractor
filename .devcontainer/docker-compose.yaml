@@ -18,17 +18,24 @@
 #                          │ :10000       │
 #                          └──────────────┘
 #
+# .devcontainer/docker-compose.yaml
+#
+# Devcontainer stack: a long-running "ade" dev shell + local Postgres + local Azurite.
+# You develop inside the "ade" container; Postgres/Azurite are dependencies.
+#
 services:
   ade:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
+
+    # IMPORTANT: For Docker Compose-based devcontainers, 'remoteUser' only affects VS Code.
+    # To ensure ALL container processes run as the non-root user, set 'user:' here.
+    user: vscode
+
     command: sleep infinity
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
-      # ADE runtime data lives at /app/data, and is mounted into the workspace for visibility.
-      - ade_data:/app/data
-      - ade_data:/workspaces/automatic-data-extractor/data
     environment:
       # ---- Database (local Postgres) ----
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
@@ -39,7 +46,8 @@ services:
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
       ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
 
-      ADE_DATA_DIR: /app/data
+      # ---- App data (IN WORKSPACE) ----
+      ADE_DATA_DIR: /workspaces/automatic-data-extractor/data
 
       ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
 
@@ -90,4 +98,3 @@ services:
 volumes:
   ade_pg_data:
   ade_azurite_data:
-  ade_data:
