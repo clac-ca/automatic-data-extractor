@@ -37,19 +37,11 @@ services:
     volumes:
       - ..:/workspaces/automatic-data-extractor:cached
     environment:
-      # ---- Database (local Postgres) ----
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
-
-      # ---- Blob (local Azurite) ----
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
-      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
-
-      # ---- App data (IN WORKSPACE) ----
+      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false} # azurite does not support blob versioning
       ADE_DATA_DIR: /workspaces/automatic-data-extractor/data
-
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-secret-key-change-me-if-in-prod-0000000000000000} # safe for local dev
 
     depends_on:
       postgres:
