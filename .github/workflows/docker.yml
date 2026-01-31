@@ -6,7 +6,8 @@ on:
       - "Dockerfile"
       - "apps/**"
       - "scripts/**"
-      - "compose*.yaml"
+      - "docker-compose*.yml"
+      - "docker-compose*.yaml"
       - ".github/workflows/docker.yml"
   push:
     branches: [main]
