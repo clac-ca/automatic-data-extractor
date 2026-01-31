@@ -20,7 +20,7 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
-  Build URLs via helpers in `@app/navigation`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
+  Build URLs via React Router utilities (`generatePath`, `createSearchParams`) and keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
@@ -28,7 +28,7 @@ Use these as your “don’t break the mental model” guardrails:
   See: [`docs/02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)
 
 - **Reuse existing patterns**  
-  New list/detail flows should copy Documents/Runs; NDJSON streaming should use `api/ndjson` and the `ade.event/v1` model; permissions should go through `@schema` and the workspace context helpers.  
+  New list/detail flows should copy Documents/Runs; NDJSON streaming should use `api/ndjson` and the `ade.event/v1` model; permissions should go through `@/types` and the workspace context helpers.  
   See: [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Check RBAC & Safe mode rules**  
@@ -48,7 +48,7 @@ ADE Web has two major UX layers:
 
 Both layers share:
 
-- A top bar (`GlobalTopBar`) with brand/context, search, and a profile menu.
+- A top bar with brand/context, search, and a profile menu.
 - A main content area that adapts to desktop and mobile.
 - A consistent approach to **navigation**, **URL state**, **Safe mode banners**, and **notifications**.
 
@@ -101,7 +101,7 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#32-workspace)
 
 - **Document**  
-  Immutable input file (Excel, CSV, PDF, etc.) uploaded into a workspace. Tracks status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and the last run status. Multi-sheet spreadsheets expose worksheet metadata via a document-sheets endpoint.  
+  Immutable input file (Excel, CSV, PDF, etc.) uploaded into a workspace. Tracks `lastRun` (latest run summary with `phase` and optional `phaseReason`) and `lastSuccessfulRun` (latest good output) instead of a top-level status. Multi-sheet spreadsheets expose worksheet metadata via a document-sheets endpoint.  
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#2-documents)
 
 - **Run**  
@@ -136,14 +136,14 @@ For a complete domain index and naming contract (IDs, routes, folder layout), st
 
 ## 3. Routing, navigation, and URL state
 
-ADE Web is a single-page React app with a small custom navigation layer built on `window.history`.
+ADE Web is a single-page React app using **React Router v7 (data router)**.
 
 ### Top-level routes
 
-Handled by `App` + `ScreenSwitch`:
+Defined in `src/routes.tsx` (root shell + protected branch):
 
 - `/` – entry strategy (decide login vs setup vs app).
-- `/login`, `/auth/callback`, `/logout`, `/setup` – auth and first-run setup.
+- `/login`, `/logout`, `/setup` – auth and first-run setup.
 - `/workspaces`, `/workspaces/new` – workspace directory & creation.
 - `/workspaces/:workspaceId/...` – workspace shell.
 - Anything else – global “Not found” screen.
@@ -155,23 +155,24 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/config-builder`
 - `/workspaces/:workspaceId/settings`
 
-Route helpers live in `@app/navigation` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
+Route helpers now use React Router utilities (for example, `generatePath`, `createSearchParams`) and are kept close to the
+components that need them.
 
 See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)
 
 ### Navigation primitives
 
-- `NavProvider` – owns `location`, listens to `popstate`, coordinates blockers.
+- `RouterProvider` + `createBrowserRouter` – app entry and route wiring.
 - `useLocation()` – read current `{ pathname, search, hash }`.
 - `useNavigate()` – programmatic SPA navigation (`push`/`replace`).
-- `useNavigationBlocker()` – opt-in blockers (e.g. workbench unsaved changes).
+- `useBlocker()` – opt‑in blockers (e.g. workbench unsaved changes).
 - `Link` / `NavLink` – SPA links that preserve normal browser behaviours (right-click, modifier-click, etc.).
 
 ### URL-encoded state
 
 Important UI state is encoded in **query parameters**, not local component state, so views are shareable and refresh-safe. Examples:
 
-- Documents filters: `q`, `status`, `sort`, `view`  
+- Documents filters: `q`, `lastRunPhase`, `sort`, `view`  
   (See [`docs/07`](./docs/07-documents-and-runs.md#31-documents-screen-architecture))
 - Runs filters: `status`, `configurationId`, `initiator`, `from`, `to`  
   (See [`docs/07`](./docs/07-documents-and-runs.md#6-runs-ledger-screen))
@@ -180,7 +181,7 @@ Important UI state is encoded in **query parameters**, not local component state
 - Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
-Utilities for this live in `@app/navigation/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
+Use React Router’s `useSearchParams` directly; workbench- and page-specific helpers live alongside their consuming modules.
 
 ---
 
@@ -196,7 +197,7 @@ Responsibilities:
 
 - List and filter documents in the workspace.
 - Upload new documents (`⌘U` / `Ctrl+U`).
-- Show status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and the last run status.
+- Show last run phase (`queued`, `building`, `running`, `succeeded`, `failed`) and the latest successful output.
 - Trigger runs for a selected configuration, optionally per-document run preferences (preferred configuration and sheet selection).
 
 See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-documents-screen-architecture)
@@ -285,7 +286,7 @@ High-level layout (under `apps/ade-web/src`):
 - `main.tsx` – Vite entry point.
 - `app/` – application shell (App.tsx, providers, navigation).
 - `api/` – HTTP client + domain API calls.
-- `pages/` (aliased as `@pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
+- `pages/` (aliased as `@/pages`) – route-level pages (auth, workspace directory, workspace shell, sections).
 - `components/` – shared UI primitives, layouts, providers, and shell chrome.
 - `hooks/` – shared React hooks (React Query + app hooks).
 - `lib/` – cross-cutting helpers (storage, uploads, local preferences).
@@ -342,7 +343,7 @@ The numbered docs under `apps/ade-web/docs` are the **source of truth** for ADE 
    On-disk layout, layers, and dependency rules.
 
 3. [`03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)  
-   Routes, `NavProvider`, SPA links, and URL query conventions.
+   Routes, React Router usage, SPA links, and URL query conventions.
 
 4. [`04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md)  
    HTTP client, API modules, React Query, and backend `/api/v1/...` expectations (including NDJSON streams).

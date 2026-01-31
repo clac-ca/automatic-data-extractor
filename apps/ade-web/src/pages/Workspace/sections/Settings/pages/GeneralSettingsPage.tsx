@@ -4,16 +4,18 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@hooks/workspaces";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
+import { useSetDefaultWorkspaceMutation } from "@/hooks/workspaces";
+import { useUpdateWorkspaceMutation } from "../hooks/useUpdateWorkspaceMutation";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
-import { MODE_OPTIONS, useTheme } from "@components/providers/theme";
+import { MODE_OPTIONS, useTheme } from "@/providers/theme";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { SettingsSection } from "../components/SettingsSection";
-import { CheckIcon } from "@components/icons";
+import { CheckIcon } from "@/components/icons";
 import { ThemeSelect } from "../components/ThemeSelect";
 
 const generalSchema = z.object({
@@ -118,23 +120,26 @@ export function GeneralSettingsPage() {
           ) : null}
 
           {isDirty && canManageWorkspace ? (
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  reset();
-                  setFeedback(null);
-                }}
-                disabled={updateWorkspace.isPending}
-              >
-                Discard
-              </Button>
-              <Button type="submit" size="sm" disabled={updateWorkspace.isPending}>
-                {updateWorkspace.isPending ? "Saving..." : "Save changes"}
-              </Button>
-            </div>
+            <>
+              <Separator />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    reset();
+                    setFeedback(null);
+                  }}
+                  disabled={updateWorkspace.isPending}
+                >
+                  Discard
+                </Button>
+                <Button type="submit" size="sm" disabled={updateWorkspace.isPending}>
+                  {updateWorkspace.isPending ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            </>
           ) : null}
         </SettingsSection>
       </form>

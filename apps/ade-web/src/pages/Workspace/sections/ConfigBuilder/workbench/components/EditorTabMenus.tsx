@@ -1,4 +1,4 @@
-import type { ContextMenuItem } from "@/components/ui/context-menu";
+import type { ContextMenuItem } from "@/components/ui/context-menu-simple";
 
 import type { WorkbenchFileTab } from "../types";
 import {

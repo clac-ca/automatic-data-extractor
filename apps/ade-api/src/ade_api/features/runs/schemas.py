@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import RunStatus
 
@@ -149,7 +149,6 @@ class RunLinks(BaseSchema):
     """Hypermedia links for run-related resources."""
 
     self: str
-    events_stream: str
     events_download: str
     logs: str
     input: str
@@ -163,6 +162,8 @@ class RunInput(BaseSchema):
     """Input metadata captured for a run."""
 
     document_id: UUIDStr | None = None
+    file_version_id: UUIDStr | None = Field(default=None, alias="fileVersionId")
+    version_no: int | None = Field(default=None, alias="versionNo")
     filename: str | None = None
     content_type: str | None = None
     size_bytes: int | None = None
@@ -181,8 +182,8 @@ class RunOutput(BaseSchema):
     content_type: str | None = None
     size_bytes: int | None = None
     has_output: bool = False
-    output_path: str | None = None
-    processed_file: str | None = None
+    file_version_id: UUIDStr | None = Field(default=None, alias="fileVersionId")
+    version_no: int | None = Field(default=None, alias="versionNo")
 
 
 class RunOutputSheet(BaseSchema):
@@ -281,11 +282,10 @@ class RunResource(BaseSchema):
     input: RunInput = Field(default_factory=RunInput)
     output: RunOutput = Field(default_factory=RunOutput)
     links: RunLinks
-    events_stream_url: str | None = None
     events_download_url: str | None = None
 
 
-class RunPage(ListPage[RunResource]):
-    """Paginated collection of ``RunResource`` items."""
+class RunPage(CursorPage[RunResource]):
+    """Cursor-based collection of ``RunResource`` items."""
 
     items: list[RunResource]

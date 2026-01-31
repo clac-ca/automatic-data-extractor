@@ -1,5 +1,6 @@
 {
   "include": ["src/**/*"],
+  "exclude": ["src/components/legacy/**"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["node", "vite/client", "react", "react-dom"],
@@ -9,19 +10,7 @@
     "jsx": "react-jsx",
     "baseUrl": "src",
     "paths": {
-      "@/*": ["*"],
-      "@pages/*": ["pages/*"],
-      "@app/*": ["app/*"],
-      "@components/*": ["components/*"],
-      "@api": ["api/index.ts"],
-      "@api/*": ["api/*"],
-      "@hooks/*": ["hooks/*"],
-      "@lib/*": ["lib/*"],
-      "@schema": ["types"],
-      "@schema/*": ["types/*"],
-      "@schema/generated": ["types/generated"],
-      "@schema/generated/*": ["types/generated/*"],
-      "@test/*": ["test/*"]
+      "@/*": ["*"]
     },
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,

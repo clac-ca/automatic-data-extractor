@@ -2,19 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import clsx from "clsx";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
+import { useLocation, useNavigate } from "react-router-dom";
 
-import { Workbench } from "@pages/Workspace/sections/ConfigBuilder/workbench/Workbench";
-import type { WorkbenchDataSeed } from "@pages/Workspace/sections/ConfigBuilder/workbench/types";
-import { getWorkbenchReturnPathStorageKey } from "@pages/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
+import { Workbench } from "@/pages/Workspace/sections/ConfigBuilder/workbench/Workbench";
+import type { WorkbenchDataSeed } from "@/pages/Workspace/sections/ConfigBuilder/workbench/types";
+import { getWorkbenchReturnPathStorageKey } from "@/pages/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState";
 
-import { createScopedStorage } from "@lib/storage";
-import {
-  SearchParamsOverrideProvider,
-  toURLSearchParams,
-  type SetSearchParamsInit,
-} from "@app/navigation/urlState";
-import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@components/icons";
+import { createScopedStorage } from "@/lib/storage";
+import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@/components/icons";
 
 type WorkbenchWindowState = "restored" | "maximized" | "minimized";
 
@@ -149,25 +144,6 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     return returnPathStorage.get<string>() ?? defaultReturnPath;
   }, [returnPathStorage, defaultReturnPath]);
 
-  const setOverrideSearchParams = useCallback(
-    (init: SetSearchParamsInit) => {
-      setSession((current) => {
-        if (!current) {
-          return current;
-        }
-        const base = new URLSearchParams(current.editorSearch);
-        const nextInit = typeof init === "function" ? init(new URLSearchParams(base)) : init;
-        const nextParams = toURLSearchParams(nextInit);
-        const nextSearch = nextParams.toString();
-        if (nextSearch === current.editorSearch) {
-          return current;
-        }
-        return { ...current, editorSearch: nextSearch };
-      });
-    },
-    [],
-  );
-
   const openSession = useCallback(
     (payload: WorkbenchSessionPayload) => {
       const normalizedSearch = normalizeSearchString(payload.editorSearch ?? location.search);
@@ -243,8 +219,12 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     if (!session) {
       return;
     }
+    const target = buildEditorTarget(session.workspaceId, session.configId, session.editorSearch);
+    if (`${location.pathname}${location.search}` !== target) {
+      navigate(target);
+    }
     setWindowState("maximized");
-  }, [session]);
+  }, [session, navigate, location.pathname, location.search]);
 
   const consumeGuardBypass = useCallback(() => {
     const bypass = guardBypassRef.current;
@@ -275,33 +255,18 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
     ],
   );
 
-  const shouldOverrideSearch =
-    Boolean(session) && (!onEditorRoute || editorRouteConfigId !== session?.configId);
-  const searchParamsOverride = useMemo(
-    () =>
-      shouldOverrideSearch && session
-        ? {
-            params: new URLSearchParams(session.editorSearch),
-            setSearchParams: setOverrideSearchParams,
-          }
-        : null,
-    [shouldOverrideSearch, session, setOverrideSearchParams],
-  );
-
   return (
     <WorkbenchWindowContext.Provider value={contextValue}>
       {children}
-      <SearchParamsOverrideProvider value={searchParamsOverride}>
-        <WorkbenchWindowLayer
-          session={session}
-          windowState={windowState}
-          onClose={closeSession}
-          onMinimize={minimizeWindow}
-          onMaximize={maximizeWindow}
-          onRestore={restoreWindow}
-          shouldBypassUnsavedGuard={consumeGuardBypass}
-        />
-      </SearchParamsOverrideProvider>
+      <WorkbenchWindowLayer
+        session={session}
+        windowState={windowState}
+        onClose={closeSession}
+        onMinimize={minimizeWindow}
+        onMaximize={maximizeWindow}
+        onRestore={restoreWindow}
+        shouldBypassUnsavedGuard={consumeGuardBypass}
+      />
       {session && windowState === "minimized" ? (
         <WorkbenchDock
           configName={session.configName}

@@ -1,29 +1,23 @@
-import { client } from "@api/client";
-import type { ListQueryParams } from "@api/listing";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import { buildListQuery, type ListQueryParams } from "@/api/listing";
+import type { components } from "@/types";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
-type TagCatalogQuery = Pick<ListQueryParams, "page" | "perPage" | "sort" | "q">;
+type TagCatalogQuery = Pick<ListQueryParams, "limit" | "cursor" | "sort" | "q" | "includeTotal">;
 
 export async function replaceDocumentTags(
   workspaceId: string,
   documentId: string,
   tags: readonly string[],
   signal?: AbortSignal,
-  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
   const { data } = await client.PUT(
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags",
     {
       params: { path: { workspaceId, documentId } },
       body: { tags: [...tags] },
       signal,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
     },
   );
 
@@ -39,23 +33,17 @@ export async function patchDocumentTags(
   documentId: string,
   payload: { add?: readonly string[] | null; remove?: readonly string[] | null },
   signal?: AbortSignal,
-  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body = {
     add: payload.add ? [...payload.add] : payload.add,
     remove: payload.remove ? [...payload.remove] : payload.remove,
   };
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
   const { data } = await client.PATCH(
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags",
     {
       params: { path: { workspaceId, documentId } },
       body,
       signal,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
     },
   );
 
@@ -95,10 +83,17 @@ export async function fetchTagCatalog(
   query: TagCatalogQuery = {},
   signal?: AbortSignal,
 ): Promise<TagCatalogPage> {
+  const requestQuery = buildListQuery({
+    limit: query.limit,
+    cursor: query.cursor ?? null,
+    sort: query.sort ?? null,
+    q: query.q ?? null,
+    includeTotal: query.includeTotal,
+  });
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/tags", {
     params: {
       path: { workspaceId },
-      query,
+      query: requestQuery,
     },
     signal,
   });

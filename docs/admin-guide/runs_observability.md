@@ -5,23 +5,23 @@ feature remains backend-only. Use these steps when troubleshooting
 production incidents or validating that new workspaces can execute the
 engine successfully.
 
-## 1. Streaming an active run
+## 1. Downloading run logs
 
-The runs API exposes newline-delimited JSON events via the run events stream.
-Create the run first, then attach to `/runs/{runId}/events/stream` for live
-updates (`run.start`, `run.engine.*`, `console.line`, `run.complete`) and all
-`engine.*` telemetry.
+The runs API exposes newline-delimited JSON events via `/runs/{runId}/events/download`.
+Create the run first, then download the log to inspect `run.start`,
+`run.engine.*`, `console.line`, and `run.complete` events alongside the
+`engine.*` telemetry payloads.
 
 ```bash
 # 1) Create the run
 http POST :8000/api/v1/configurations/$CONFIG_ID/runs \
   "options:={\"dry_run\": false}"
 
-# 2) Stream events
-http --stream GET :8000/api/v1/runs/$RUN_ID/events/stream
+# 2) Download events
+http GET :8000/api/v1/runs/$RUN_ID/events/download
 ```
 
-Key things to watch while streaming:
+Key things to watch while reviewing logs:
 
 - `run.start` arrives when the worker claims the job.
 - `console.line` events include the ADE engine stdout; store the NDJSON output
@@ -42,7 +42,7 @@ non-streaming endpoints:
 
 ## 3. Direct database inspection
 
-When the API is unavailable you can read the SQLite/PostgreSQL tables
+When the API is unavailable you can read the Postgres tables
 directly. The table layout matches the SQLAlchemy models in
 `apps/ade-api/src/ade_api/models/run.py`.
 
@@ -51,7 +51,8 @@ SELECT id, status, exit_code, started_at, completed_at
 FROM runs
 WHERE configuration_id = :configuration_id
 ORDER BY created_at DESC
-LIMIT 20;
+LIMIT 20
+;
 ```
 
 > ⚠️ Database writes should still go through the service. Avoid deleting
@@ -60,7 +61,7 @@ LIMIT 20;
 ## 4. CLI and automation follow-ups
 
 The repository does not yet surface runs through the developer tooling.
-Track ADE-CLI-11 to add `scripts/npm-runs.mjs` with helpers for
+Track ADE-TOOLS-11 to add `scripts/npm-runs.mjs` with helpers for
 `runs:list`, `runs:logs`, and `runs:tail`. Update this guide once the
 commands land so on-call engineers can rely on them instead of raw HTTP
 calls.
@@ -75,6 +76,6 @@ For visibility:
    `.../venvs/<workspace>/<config>/<deps_digest>/<environment_id>/logs/events.ndjson`.
 3. Use the `environments` table for status snapshots and troubleshooting.
 
-Refer to the event catalog in `.workpackages/ade-event-system-refactor/020-EVENT-TYPES-REFERENCE.md`
-for canonical payloads and the decision log in `docs/workpackages/WP12_ade_runs.md`
-for current operational policies (safe mode, deprecation schedule).
+Refer to the event catalog and decision log in the active work packages under
+`workpackages/` for canonical payloads and current operational policies (safe
+mode, deprecation schedule).

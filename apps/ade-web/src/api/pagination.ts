@@ -10,51 +10,57 @@ export function clampPageSize(size?: number): number | undefined {
   return Math.min(size, MAX_PAGE_SIZE);
 }
 
-export type ListPage<T> = {
-  readonly items: T[];
-  readonly page: number;
-  readonly perPage: number;
-  readonly pageCount: number;
-  readonly total: number;
-  readonly changesCursor: string;
+export type CursorMeta = {
+  readonly limit: number;
+  readonly hasMore: boolean;
+  readonly nextCursor: string | null;
+  readonly totalIncluded: boolean;
+  readonly totalCount: number | null;
+  readonly changesCursor?: string | null;
+};
+
+export type CursorPage<T> = {
+  readonly items?: readonly T[] | null;
+  readonly meta: CursorMeta;
+  readonly facets?: Record<string, unknown> | null;
 };
 
 export async function collectAllPages<T>(
-  fetchPage: (page: number) => Promise<ListPage<T>>,
+  fetchPage: (cursor: string | null) => Promise<CursorPage<T>>,
   options: { readonly maxPages?: number } = {},
-): Promise<ListPage<T>> {
+): Promise<CursorPage<T>> {
   const { maxPages = 50 } = options;
-  const pages: ListPage<T>[] = [];
+  const pages: CursorPage<T>[] = [];
   let combined: T[] = [];
-  let total: number | undefined;
+  let cursor: string | null = null;
 
-  for (let page = 1; page <= maxPages; page += 1) {
-    const pageData = await fetchPage(page);
+  for (let page = 0; page < maxPages; page += 1) {
+    const pageData = await fetchPage(cursor);
     pages.push(pageData);
     combined = combined.concat(pageData.items ?? []);
-    if (total === undefined) {
-      total = pageData.total;
+    if (!pageData.meta.hasMore) {
+      break;
     }
-    if (pageData.pageCount === 0 || page >= pageData.pageCount) {
+    cursor = pageData.meta.nextCursor ?? null;
+    if (!cursor) {
       break;
     }
   }
 
   const last = pages.at(-1);
-  const first = pages.at(0);
 
-  if (!last || !first) {
+  if (!last) {
     throw new Error("No pages were returned while collecting pagination results.");
   }
 
   return {
     ...last,
     items: combined,
-    page: 1,
-    perPage: first.perPage,
-    pageCount: 1,
-    total: total ?? last.total,
-    changesCursor: last.changesCursor,
+    meta: {
+      ...last.meta,
+      hasMore: false,
+      nextCursor: null,
+    },
   };
 }
 

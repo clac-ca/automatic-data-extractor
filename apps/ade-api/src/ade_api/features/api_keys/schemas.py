@@ -7,7 +7,7 @@ from datetime import datetime
 from pydantic import Field, field_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 
 
@@ -67,8 +67,8 @@ class ApiKeySummary(BaseSchema):
     last_used_at: datetime | None = None
 
 
-class ApiKeyPage(ListPage[ApiKeySummary]):
-    """Paginated collection of API keys."""
+class ApiKeyPage(CursorPage[ApiKeySummary]):
+    """Cursor-based collection of API keys."""
 
 
 __all__ = [

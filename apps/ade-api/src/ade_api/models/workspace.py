@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String
+from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,7 +22,7 @@ class Workspace(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     settings: Mapped[dict[str, Any]] = mapped_column(
-        MutableDict.as_mutable(JSON),
+        MutableDict.as_mutable(JSONB),
         nullable=False,
         default=dict,
     )

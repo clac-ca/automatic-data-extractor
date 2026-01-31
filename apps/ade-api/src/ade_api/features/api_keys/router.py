@@ -7,29 +7,23 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, Security, status
 
-from ade_api.api.deps import get_api_keys_service, get_idempotency_service
+from ade_api.api.deps import get_api_keys_service
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.etag import build_etag_token, format_weak_etag
-from ade_api.common.listing import (
-    ListPage,
-    ListQueryParams,
-    list_query_params,
-    strict_list_query_guard,
+from ade_api.common.cursor_listing import (
+    CursorPage,
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
 )
-from ade_api.common.sorting import resolve_sort
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf, require_global
-from ade_api.features.idempotency import (
-    IdempotencyService,
-    build_request_hash,
-    build_scope_key,
-    require_idempotency_key,
-)
 from ade_api.models import ApiKey
 
 from .schemas import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyPage, ApiKeySummary
 from .service import ApiKeyAccessDeniedError, ApiKeyNotFoundError, ApiKeyService
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["api-keys"])
 
@@ -75,15 +69,12 @@ def _make_create_response(result) -> ApiKeyCreateResponse:
     )
 
 
-def _map_page(page: ListPage[ApiKey]) -> ApiKeyPage:
+def _map_page(page: CursorPage[ApiKey]) -> ApiKeyPage:
     summaries = [_serialize_summary(record) for record in page.items]
     return ApiKeyPage(
         items=summaries,
-        page=page.page,
-        per_page=page.per_page,
-        page_count=page.page_count,
-        total=page.total,
-        changes_cursor=page.changes_cursor,
+        meta=page.meta,
+        facets=page.facets,
     )
 
 
@@ -107,12 +98,13 @@ def _api_key_etag_token(record: ApiKey) -> str:
 def list_my_api_keys(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> ApiKeyPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -121,9 +113,10 @@ def list_my_api_keys(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
     return _map_page(result_page)
@@ -142,26 +135,9 @@ def list_my_api_keys(
 )
 def create_my_api_key(
     payload: ApiKeyCreateRequest,
-    request: Request,
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
 ) -> ApiKeyCreateResponse:
-    scope_key = build_scope_key(principal_id=str(principal.user_id))
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
-
     try:
         result = service.create_for_user(
             user_id=principal.user_id,
@@ -174,15 +150,7 @@ def create_my_api_key(
             detail=str(exc),
         ) from exc
 
-    response_payload = _make_create_response(result)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=response_payload,
-    )
-    return response_payload
+    return _make_create_response(result)
 
 
 @router.get(
@@ -277,12 +245,13 @@ def list_user_api_keys(
     user_id: UserPath,
     _: Annotated[None, Security(require_global("api_keys.read_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> ApiKeyPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -291,9 +260,10 @@ def list_user_api_keys(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
     return _map_page(result_page)
 
@@ -345,27 +315,9 @@ def read_user_api_key(
 def create_user_api_key(
     user_id: UserPath,
     payload: ApiKeyCreateRequest,
-    request: Request,
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
 ) -> ApiKeyCreateResponse:
-    scope_key = build_scope_key(principal_id=str(principal.user_id))
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
-
     try:
         result = service.create_for_user(
             user_id=user_id,
@@ -378,15 +330,7 @@ def create_user_api_key(
             detail=str(exc),
         ) from exc
 
-    response_payload = _make_create_response(result)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=response_payload,
-    )
-    return response_payload
+    return _make_create_response(result)
 
 
 @router.delete(

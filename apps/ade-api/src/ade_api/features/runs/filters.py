@@ -21,7 +21,7 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_api.models import Document, Run, RunStatus, RunTableColumn
+from ade_api.models import FileVersion, Run, RunStatus, RunTableColumn
 from ade_api.settings import MAX_SET_SIZE
 
 ALLOWED_FILE_TYPES = {"xlsx", "xls", "csv", "pdf"}
@@ -53,7 +53,7 @@ RUN_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="inputDocumentId",
-            column=Run.input_document_id,
+            column=FileVersion.file_id,
             operators={
                 FilterOperator.EQ,
                 FilterOperator.NE,
@@ -112,7 +112,7 @@ RUN_FILTER_REGISTRY = FilterRegistry(
         ),
         FilterField(
             id="fileType",
-            column=Document.original_filename,
+            column=FileVersion.filename_at_upload,
             operators={FilterOperator.EQ, FilterOperator.IN, FilterOperator.NOT_IN},
             value_type=FilterValueType.STRING,
         ),
@@ -179,16 +179,19 @@ def apply_run_filters(
 ) -> Select:
     parsed_filters = prepare_filters(filters, RUN_FILTER_REGISTRY)
     predicates: list = []
-    join_document = False
+    join_file_version = False
     q_predicate = build_q_predicate(resource="runs", q=q, registry=SEARCH_REGISTRY)
     if q_predicate is not None:
-        join_document = True
+        join_file_version = True
 
     for parsed in parsed_filters:
         filter_id = parsed.field.id
 
+        if filter_id == "inputDocumentId":
+            join_file_version = True
+
         if filter_id == "fileType":
-            join_document = True
+            join_file_version = True
             values = parsed.value
             types = values if isinstance(values, list) else [values]
             normalized = {str(item).strip().lower() for item in types if str(item).strip()}
@@ -200,8 +203,8 @@ def apply_run_filters(
                     status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Invalid file type value(s): {', '.join(invalid)}",
                 )
-            lower_name = func.lower(Document.original_filename)
-            lower_type = func.lower(Document.content_type)
+            lower_name = func.lower(FileVersion.filename_at_upload)
+            lower_type = func.lower(FileVersion.content_type)
             type_predicates = []
             if "xlsx" in normalized:
                 type_predicates.append(
@@ -241,8 +244,8 @@ def apply_run_filters(
     if combined is not None:
         stmt = stmt.where(combined)
 
-    if join_document:
-        stmt = stmt.join(Document, Run.input_document_id == Document.id)
+    if join_file_version:
+        stmt = stmt.join(FileVersion, Run.input_file_version_id == FileVersion.id)
     if q_predicate is not None:
         stmt = stmt.where(q_predicate)
 

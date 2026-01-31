@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,12 +40,14 @@ class Run(UUIDPrimaryKeyMixin, Base):
     workspace_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
-    input_document_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False
+    input_file_version_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("file_versions.id", ondelete="NO ACTION"), nullable=False
     )
-    run_options: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    output_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    run_options: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    input_sheet_names: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    output_file_version_id: Mapped[UUID | None] = mapped_column(
+        GUID(), ForeignKey("file_versions.id", ondelete="NO ACTION"), nullable=True
+    )
     engine_spec: Mapped[str] = mapped_column(String(255), nullable=False)
     deps_digest: Mapped[str] = mapped_column(String(128), nullable=False)
     available_at: Mapped[datetime] = mapped_column(
@@ -84,23 +87,23 @@ class Run(UUIDPrimaryKeyMixin, Base):
         Index("ix_runs_configuration", "configuration_id"),
         Index("ix_runs_workspace", "workspace_id"),
         Index("ix_runs_status", "status"),
-        Index("ix_runs_input_document", "input_document_id"),
+        Index("ix_runs_input_file_version", "input_file_version_id"),
         Index("ix_runs_claim", "status", "available_at", "created_at"),
+        Index("ix_runs_status_created_at", "status", "created_at"),
         Index("ix_runs_claim_expires", "status", "claim_expires_at"),
         Index("ix_runs_status_completed", "status", "completed_at"),
         Index(
             "uq_runs_active_job",
             "workspace_id",
-            "input_document_id",
+            "input_file_version_id",
             "configuration_id",
             unique=True,
-            sqlite_where=text("status IN ('queued','running')"),
-            mssql_where=text("status IN ('queued','running')"),
+            postgresql_where=text("status IN ('queued','running')"),
         ),
         Index(
             "ix_runs_workspace_input_finished",
             "workspace_id",
-            "input_document_id",
+            "input_file_version_id",
             "completed_at",
             "started_at",
         ),

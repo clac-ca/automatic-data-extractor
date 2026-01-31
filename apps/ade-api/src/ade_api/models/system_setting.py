@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, String
+from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +19,7 @@ class SystemSetting(TimestampMixin, Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[dict[str, Any]] = mapped_column(
-        MutableDict.as_mutable(JSON), default=dict, nullable=False
+        MutableDict.as_mutable(JSONB), default=dict, nullable=False
     )
 
 

@@ -7,7 +7,12 @@ from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 from fastapi import Path as PathParam
 
 from ade_api.api.deps import get_workspaces_service
-from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort_sequence,
+    strict_cursor_query_guard,
+)
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.models import User
 
@@ -18,6 +23,7 @@ from .schemas import (
     WorkspaceMemberUpdate,
 )
 from .service import WorkspacesService
+from .sorting import MEMBER_CURSOR_FIELDS, MEMBER_DEFAULT_SORT
 
 router = APIRouter(
     prefix="/workspaces/{workspaceId}/members",
@@ -50,8 +56,8 @@ UserPath = Annotated[
 )
 def list_workspace_members(
     workspace_id: WorkspacePath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     _actor: Annotated[
         User,
         Security(
@@ -61,14 +67,20 @@ def list_workspace_members(
     ],
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspaceMemberPage:
+    resolved_sort = resolve_cursor_sort_sequence(
+        list_query.sort,
+        cursor_fields=MEMBER_CURSOR_FIELDS,
+        default=MEMBER_DEFAULT_SORT,
+    )
     return service.list_workspace_members(
         workspace_id=workspace_id,
-        sort=list_query.sort,
+        resolved_sort=resolved_sort,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
 

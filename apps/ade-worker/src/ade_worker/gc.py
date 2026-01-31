@@ -11,8 +11,10 @@ from pathlib import Path
 from sqlalchemy import delete, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from . import db
 from .paths import PathManager
 from .schema import environments, runs
+from .settings import Settings, get_settings
 
 logger = logging.getLogger("ade_worker.gc")
 
@@ -57,7 +59,6 @@ def gc_environments(
             (e.last_used_at IS NOT NULL AND e.last_used_at < :cutoff)
             OR (e.last_used_at IS NULL AND e.updated_at < :cutoff)
           )
-          AND (e.claim_expires_at IS NULL OR e.claim_expires_at <= :now)
           AND NOT EXISTS (
             SELECT 1
             FROM runs AS r
@@ -72,7 +73,7 @@ def gc_environments(
     )
 
     with SessionLocal() as session:
-        rows = session.execute(query, {"cutoff": cutoff, "now": now}).mappings().all()
+        rows = session.execute(query, {"cutoff": cutoff}).mappings().all()
 
     result.scanned = len(rows)
     for row in rows:
@@ -168,7 +169,34 @@ def _delete_tree(path: Path) -> bool:
         return True
     except Exception:
         logger.exception("gc: failed to delete path %s", path)
-        return False
+    return False
 
 
-__all__ = ["gc_environments", "gc_run_artifacts", "GcResult"]
+def run_gc(settings: Settings | None = None) -> tuple[GcResult, GcResult | None]:
+    settings = settings or get_settings()
+    engine = db.build_engine(settings)
+    SessionLocal = db.build_sessionmaker(engine)
+    paths = PathManager(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
+    now = datetime.utcnow().replace(tzinfo=None)
+
+    env_result = gc_environments(
+        SessionLocal=SessionLocal,
+        paths=paths,
+        now=now,
+        env_ttl_days=settings.worker_env_ttl_days,
+    )
+
+    run_result: GcResult | None = None
+    if settings.worker_run_artifact_ttl_days is not None:
+        run_result = gc_run_artifacts(
+            SessionLocal=SessionLocal,
+            paths=paths,
+            now=now,
+            run_ttl_days=settings.worker_run_artifact_ttl_days,
+        )
+
+    engine.dispose()
+    return env_result, run_result
+
+
+__all__ = ["gc_environments", "gc_run_artifacts", "GcResult", "run_gc"]

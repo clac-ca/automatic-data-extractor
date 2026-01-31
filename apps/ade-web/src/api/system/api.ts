@@ -1,5 +1,5 @@
-import { client } from "@api/client";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import type { components } from "@/types";
 
 export type SafeModeStatus = components["schemas"]["SafeModeStatus"];
 export type SafeModeUpdateRequest = components["schemas"]["SafeModeUpdateRequest"];

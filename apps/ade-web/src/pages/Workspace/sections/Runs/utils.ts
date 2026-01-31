@@ -1,5 +1,5 @@
-import type { RunResource } from "@schema";
-import type { RunMetrics, RunRecord, RunsCounts, RunsDateRange, RunsStatusFilter } from "./types";
+import type { RunResource } from "@/types";
+import type { RunFileType, RunMetrics, RunRecord, RunsCounts } from "./types";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -47,25 +47,40 @@ export function formatTimestamp(value: string | null | undefined): string {
   return date.toLocaleString();
 }
 
-export function formatResultLabel(run: RunRecord): string {
-  if (run.warnings === 0 && run.errors === 0) return "Clean";
-  if (typeof run.errors === "number" && run.errors > 0) return `${run.errors} errors`;
-  if (typeof run.warnings === "number") return `${run.warnings} warnings`;
-  return "—";
-}
-
-export function coerceStatus(value: string | null): RunsStatusFilter {
-  if (!value || value === "all") return "all";
-  if (["queued", "running", "succeeded", "failed"].includes(value)) {
-    return value as RunsStatusFilter;
+export function fileTypeLabel(type: RunFileType) {
+  switch (type) {
+    case "xlsx":
+      return "XLSX";
+    case "xls":
+      return "XLS";
+    case "csv":
+      return "CSV";
+    case "pdf":
+      return "PDF";
+    default:
+      return "File";
   }
-  return "all";
 }
 
-export function coerceDateRange(value: string | null): RunsDateRange {
-  if (!value) return "14d";
-  if (["14d", "7d", "24h", "30d", "custom"].includes(value)) return value as RunsDateRange;
-  return "14d";
+function fileExtension(name: string) {
+  const match = name.toLowerCase().match(/\\.([a-z0-9]+)$/);
+  return match?.[1] ?? "";
+}
+
+export function inferFileType(name: string | null | undefined, contentType?: string | null): RunFileType {
+  const normalizedName = name ?? "";
+  const ext = fileExtension(normalizedName);
+  if (ext === "xlsx") return "xlsx";
+  if (ext === "xls") return "xls";
+  if (ext === "csv") return "csv";
+  if (ext === "pdf") return "pdf";
+
+  const ct = (contentType ?? "").toLowerCase();
+  if (ct.includes("spreadsheetml")) return "xlsx";
+  if (ct.includes("ms-excel")) return "xls";
+  if (ct.includes("csv")) return "csv";
+  if (ct.includes("pdf")) return "pdf";
+  return "unknown";
 }
 
 export function buildCounts(runs: RunRecord[]): RunsCounts {
@@ -109,6 +124,7 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
 export function buildRunRecord(run: RunResource): RunRecord {
   const inputName = run.input?.filename ?? run.input?.document_id ?? `Run ${run.id}`;
   const outputName = run.output?.filename ?? null;
+  const fileType = inferFileType(run.input?.filename, run.input?.content_type ?? null);
   const startedAtLabel = formatTimestamp(run.started_at ?? run.created_at);
   const durationLabel = formatDuration(run.duration_seconds ?? null, run.status);
   const configLabel = run.configuration_id ?? "—";
@@ -122,6 +138,7 @@ export function buildRunRecord(run: RunResource): RunRecord {
     configLabel,
     startedAtLabel,
     durationLabel,
+    fileType,
     rows: null,
     warnings: null,
     errors: null,
@@ -133,23 +150,4 @@ export function buildRunRecord(run: RunResource): RunRecord {
     notes: run.failure_message ?? null,
     raw: run,
   };
-}
-
-export function buildCreatedAtRange(range: RunsDateRange, now = new Date()): [string, string] | null {
-  if (range === "custom") {
-    return null;
-  }
-  const end = new Date(now);
-  const start = new Date(now);
-  if (range === "24h") {
-    start.setHours(start.getHours() - 24);
-  } else if (range === "7d") {
-    start.setDate(start.getDate() - 7);
-  } else if (range === "30d") {
-    start.setDate(start.getDate() - 30);
-  } else {
-    start.setDate(start.getDate() - 14);
-  }
-
-  return [start.toISOString(), end.toISOString()];
 }

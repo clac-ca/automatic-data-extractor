@@ -1,4 +1,4 @@
-"""CLI to purge ADE storage directories and reset the database."""
+"""CLI to purge ADE storage (local paths + blob prefix) and reset the database."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from ade_api.db import build_engine
 from ..settings import Settings
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
-DEFAULT_STORAGE_ROOT = (REPO_ROOT / "data").resolve()
 
 
 def _normalize(path: Path | str | None) -> Path | None:
@@ -29,26 +28,17 @@ def _normalize(path: Path | str | None) -> Path | None:
     return resolved
 
 
-def _within_default_root(path: Path) -> bool:
+def _within_data_root(path: Path, data_root: Path) -> bool:
     try:
-        path.relative_to(DEFAULT_STORAGE_ROOT)
+        path.relative_to(data_root)
     except ValueError:
         return False
     return True
 
 
-def _resolve_sqlite_database_path(database_url: URL) -> Path | None:
-    if database_url.get_backend_name() != "sqlite":
-        return None
-
-    database = (database_url.database or "").strip()
-    if not database or database == ":memory:" or database.startswith("file:"):
-        return None
-
-    db_path = Path(database)
-    if not db_path.is_absolute():
-        db_path = (REPO_ROOT / db_path).resolve()
-    return db_path
+def _blob_prefix(settings: Settings) -> str:
+    prefix = settings.blob_prefix.strip("/")
+    return f"{prefix}/" if prefix else ""
 
 
 def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]:
@@ -59,22 +49,14 @@ def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]
         if normalized is not None:
             targets.add(normalized)
 
+    add(settings.data_dir)
     add(settings.workspaces_dir)
-    add(settings.documents_dir)
-    add(settings.configs_dir)
     add(settings.venvs_dir)
-    add(settings.runs_dir)
     add(settings.pip_cache_dir)
 
     pip_cache = _normalize(settings.pip_cache_dir)
-    if pip_cache and _within_default_root(pip_cache):
+    if pip_cache and _within_data_root(pip_cache, settings.data_dir):
         add(pip_cache.parent)
-
-    sqlite_path = _resolve_sqlite_database_path(database_url)
-    if sqlite_path:
-        add(sqlite_path)
-        if _within_default_root(sqlite_path):
-            add(sqlite_path.parent)
 
     return sorted(targets, key=lambda path: str(path))
 
@@ -88,6 +70,18 @@ def _describe_targets(targets: Iterable[Path]) -> None:
     for path in items:
         status = "" if path.exists() else " (missing)"
         print(f"  - {path}{status}")
+
+
+def _describe_blob_target(settings: Settings) -> None:
+    container = settings.blob_container or "(unset)"
+    prefix = _blob_prefix(settings) or "(root)"
+    print("Blob storage target:")
+    print(f"  - container: {container}")
+    print(f"  - prefix: {prefix}")
+    if settings.blob_connection_string:
+        print("  - auth: connection_string")
+    elif settings.blob_account_url:
+        print(f"  - auth: managed_identity ({settings.blob_account_url})")
 
 
 def _remove_path(path: Path) -> bool:
@@ -122,18 +116,125 @@ def _cleanup_targets(targets: Iterable[Path]) -> list[tuple[Path, Exception]]:
     return errors
 
 
-def _describe_database_target(database_url: URL, sqlite_path: Path | None) -> None:
+def _build_blob_container_client(settings: Settings):
+    try:
+        from azure.identity import DefaultAzureCredential
+        from azure.storage.blob import BlobServiceClient
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Azure Blob dependencies are not installed. Install azure-identity and "
+            "azure-storage-blob."
+        ) from exc
+
+    if not settings.blob_container:
+        raise RuntimeError("ADE_BLOB_CONTAINER is required.")
+
+    if settings.blob_connection_string:
+        service = BlobServiceClient.from_connection_string(
+            conn_str=settings.blob_connection_string
+        )
+    else:
+        if not settings.blob_account_url:
+            raise RuntimeError(
+                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
+            )
+        service = BlobServiceClient(
+            account_url=settings.blob_account_url,
+            credential=DefaultAzureCredential(),
+        )
+
+    return service.get_container_client(settings.blob_container)
+
+
+def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
+    errors: list[Exception] = []
+    deleted = 0
+
+    try:
+        from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
+    except ModuleNotFoundError:
+        return 0, [
+            RuntimeError(
+                "Azure Blob dependencies are not installed. Install azure-identity and "
+                "azure-storage-blob."
+            )
+        ]
+
+    try:
+        container_client = _build_blob_container_client(settings)
+    except Exception as exc:  # noqa: BLE001
+        return 0, [exc]
+
+    try:
+        container_client.get_container_properties()
+    except ResourceNotFoundError:
+        print("Blob container not found; skipping blob cleanup.")
+        return 0, []
+    except HttpResponseError as exc:
+        return 0, [exc]
+
+    prefix = _blob_prefix(settings)
+    prefix_label = prefix or "(root)"
+    print(f"Removing blobs under prefix: {prefix_label}")
+
+    def _iter_blobs(include: list[str] | None) -> Iterable:
+        try:
+            if include:
+                return container_client.list_blobs(name_starts_with=prefix, include=include)
+            return container_client.list_blobs(name_starts_with=prefix)
+        except TypeError:
+            return container_client.list_blobs(name_starts_with=prefix)
+
+    snapshot_iter = _iter_blobs(["snapshots"])
+    try:
+        for blob in snapshot_iter:
+            snapshot = getattr(blob, "snapshot", None)
+            if not snapshot:
+                continue
+            name = getattr(blob, "name", None) or str(blob)
+            try:
+                blob_client = container_client.get_blob_client(name, snapshot=snapshot)
+                blob_client.delete_blob()
+                deleted += 1
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+    except (HttpResponseError, ResourceNotFoundError) as exc:
+        errors.append(exc)
+
+    include_versions: list[str] | None = None
+    if settings.blob_require_versioning:
+        include_versions = ["versions", "deleted"]
+
+    version_iter = _iter_blobs(include_versions)
+    try:
+        for blob in version_iter:
+            name = getattr(blob, "name", None) or str(blob)
+            version_id = getattr(blob, "version_id", None)
+            try:
+                blob_client = container_client.get_blob_client(name, version_id=version_id)
+                delete_kwargs = {}
+                if version_id is None:
+                    delete_kwargs["delete_snapshots"] = "include"
+                blob_client.delete_blob(**delete_kwargs)
+                deleted += 1
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+    except (HttpResponseError, ResourceNotFoundError) as exc:
+        errors.append(exc)
+
+    if deleted:
+        print(f"🗑️  deleted {deleted} blob item(s)")
+    else:
+        print("No blobs found to delete.")
+
+    return deleted, errors
+
+
+def _describe_database_target(database_url: URL) -> None:
     backend = database_url.get_backend_name()
     rendered = database_url.render_as_string(hide_password=True)
     print("Database target:")
-    if backend == "sqlite":
-        if sqlite_path:
-            status = "" if sqlite_path.exists() else " (missing)"
-            print(f"  - SQLite database file: {sqlite_path}{status}")
-        else:
-            print(f"  - SQLite database: {rendered}")
-    else:
-        print(f"  - {backend} database: {rendered}")
+    print(f"  - {backend} database: {rendered}")
 
 
 def _drop_all_tables(settings: Settings) -> int:
@@ -159,7 +260,7 @@ def _drop_all_tables(settings: Settings) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Delete configured ADE storage directories and databases.",
+        description="Delete configured ADE storage (local paths + blob prefix) and databases.",
     )
     parser.add_argument(
         "--yes",
@@ -176,16 +277,16 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = Settings()
     if not settings.database_url:
-        raise RuntimeError("ADE_DATABASE_URL is required.")
-    database_url = make_url(settings.database_url)
-    sqlite_path = _resolve_sqlite_database_path(database_url)
+        raise RuntimeError("Database settings are required (set ADE_DATABASE_URL).")
+    database_url = make_url(str(settings.database_url))
     targets = _gather_storage_targets(settings, database_url)
 
     _describe_targets(targets)
-    _describe_database_target(database_url, sqlite_path)
+    _describe_blob_target(settings)
+    _describe_database_target(database_url)
 
     if args.dry_run:
-        print("Dry run mode enabled; no database tables or paths were removed.")
+        print("Dry run mode enabled; no database tables, blob data, or paths were removed.")
         return 0
 
     if not args.yes:
@@ -199,27 +300,20 @@ def main(argv: list[str] | None = None) -> int:
             print("🛑 storage reset cancelled")
             return 2
 
-    backend = database_url.get_backend_name()
     drop_error: Exception | None = None
     dropped_tables: int | None = None
 
-    if backend == "sqlite":
-        if sqlite_path:
-            print("SQLite database file will be removed from storage paths; skipping table drop.")
-        else:
-            print("SQLite in-memory or URI database detected; no tables to drop.")
-    else:
-        print("Dropping database tables...")
-        try:
-            dropped_tables = _drop_all_tables(settings)
-        except Exception as exc:  # noqa: BLE001
-            drop_error = exc
+    print("Dropping database tables...")
+    try:
+        dropped_tables = _drop_all_tables(settings)
+    except Exception as exc:  # noqa: BLE001
+        drop_error = exc
 
-        if drop_error is None:
-            if dropped_tables:
-                print(f"🗑️  dropped {dropped_tables} table(s)")
-            else:
-                print("No tables found to drop.")
+    if drop_error is None:
+        if dropped_tables:
+            print(f"🗑️  dropped {dropped_tables} table(s)")
+        else:
+            print("No tables found to drop.")
 
     if targets:
         print("Removing storage paths...")
@@ -227,12 +321,17 @@ def main(argv: list[str] | None = None) -> int:
     else:
         errors = []
 
-    if drop_error or errors:
+    print("Removing blob storage...")
+    _, blob_errors = _delete_blob_prefix(settings)
+
+    if drop_error or errors or blob_errors:
         print("❌ storage reset incomplete:")
         if drop_error:
             print(f"  - database reset failed: {drop_error}")
         for path, exc in errors:
             print(f"  - {path}: {exc}")
+        for exc in blob_errors:
+            print(f"  - blob cleanup failed: {exc}")
         return 1
 
     print("🧹 storage reset complete")

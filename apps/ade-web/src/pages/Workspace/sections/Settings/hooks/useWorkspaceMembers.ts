@@ -1,31 +1,31 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { MAX_PAGE_SIZE, useFlattenedPages } from "@api/pagination";
+import { MAX_PAGE_SIZE, useFlattenedPages } from "@/api/pagination";
 
-import { addWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberRoles } from "@api/workspaces/api";
-import { workspacesKeys } from "@hooks/workspaces";
-import type { WorkspaceMember, WorkspaceMemberCreatePayload, WorkspaceMemberPage } from "@schema/workspaces";
-import type { User } from "@schema";
+import { addWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberRoles } from "@/api/workspaces/api";
+import { workspacesKeys } from "@/hooks/workspaces";
+import type { WorkspaceMember, WorkspaceMemberCreatePayload, WorkspaceMemberPage } from "@/types/workspaces";
+import type { User } from "@/types";
 
 const MEMBERS_PAGE_SIZE = MAX_PAGE_SIZE;
 
 const memberListParams = {
-  page: 1,
-  pageSize: MEMBERS_PAGE_SIZE,
+  limit: MEMBERS_PAGE_SIZE,
 } as const;
 
 export function useWorkspaceMembersQuery(workspaceId: string) {
   const query = useInfiniteQuery<WorkspaceMemberPage>({
     queryKey: workspacesKeys.members(workspaceId, memberListParams),
-    initialPageParam: 1,
+    initialPageParam: null,
     queryFn: ({ pageParam, signal }) =>
       listWorkspaceMembers(workspaceId, {
-        page: typeof pageParam === "number" ? pageParam : 1,
-        pageSize: MEMBERS_PAGE_SIZE,
+        limit: MEMBERS_PAGE_SIZE,
+        cursor: typeof pageParam === "string" ? pageParam : null,
+        includeTotal: true,
         signal,
       }),
     getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.pageCount ? lastPage.page + 1 : undefined,
+      lastPage.meta.hasMore ? lastPage.meta.nextCursor ?? undefined : undefined,
     enabled: workspaceId.length > 0,
     staleTime: 15_000,
     placeholderData: (previous) => previous,
@@ -33,7 +33,7 @@ export function useWorkspaceMembersQuery(workspaceId: string) {
 
   const pages = query.data?.pages ?? [];
   const members = useFlattenedPages(pages, (member) => member.user_id);
-  const total = pages[0]?.total ?? pages[pages.length - 1]?.total ?? undefined;
+  const total = pages[0]?.meta.totalCount ?? undefined;
 
   return {
     ...query,

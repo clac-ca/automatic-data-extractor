@@ -204,8 +204,8 @@ def get_bearer_authenticator(
             try:
                 payload = decode_token(
                     token=candidate,
-                    secret=settings.jwt_secret_value,
-                    algorithms=[settings.jwt_algorithm],
+                    secret=settings.secret_key_value,
+                    algorithms=[settings.algorithm],
                     audience=["fastapi-users:auth"],
                 )
             except Exception:

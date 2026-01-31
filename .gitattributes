@@ -1,0 +1,7 @@
+# Ensure consistent LF endings everywhere by default
+* text=auto eol=lf
+
+# Windows-friendly overrides for true CRLF consumers
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

@@ -5,8 +5,8 @@ export type AlertTone = "info" | "success" | "warning" | "danger";
 
 const TONE_STYLE: Record<AlertTone, string> = {
   info: "bg-muted text-muted-foreground ring-border/60",
-  success: "bg-primary/10 text-primary ring-primary/20",
-  warning: "bg-accent text-accent-foreground ring-accent/60",
+  success: "bg-success/10 text-success ring-success/20 dark:bg-success/20",
+  warning: "bg-warning/10 text-warning ring-warning/20 dark:bg-warning/20",
   danger: "bg-destructive/10 text-destructive ring-destructive/20 dark:bg-destructive/20",
 };
 

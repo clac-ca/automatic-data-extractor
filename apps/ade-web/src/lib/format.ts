@@ -15,3 +15,20 @@ export function formatDate(
     return "";
   }
 }
+
+export function getInitials(name?: string | null, email?: string | null) {
+  if (name && name.trim().length > 0) {
+    const parts = name.trim().split(/\s+/);
+    const first = parts[0]?.[0];
+    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
+    if (first) {
+      return `${first}${last ?? ""}`.toUpperCase();
+    }
+  }
+
+  if (email && email.trim().length > 0) {
+    return email.trim()[0]?.toUpperCase() ?? "?";
+  }
+
+  return "?";
+}

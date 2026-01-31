@@ -1,17 +1,15 @@
 import { useEffect, useMemo } from "react";
 
-import { useNavigate } from "@app/navigation/history";
+import { generatePath, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { ApiError, groupProblemDetailsErrors } from "@api";
-import type { UserSummary } from "@api/users/api";
-import { useSession } from "@components/providers/auth/SessionContext";
-import { useCreateWorkspaceMutation } from "@hooks/workspaces";
-import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
-import { useUsersQuery } from "@hooks/users/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
+import { ApiError, groupProblemDetailsErrors } from "@/api";
+import type { UserSummary } from "@/api/users/api";
+import { useSession } from "@/providers/auth/SessionContext";
+import { useCreateWorkspaceMutation } from "./hooks/useCreateWorkspaceMutation";
+import { useUsersQuery } from "@/hooks/users/useUsersQuery";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -114,7 +112,9 @@ function WorkspaceCreateContent() {
       },
       {
         onSuccess(workspace) {
-          navigate(getDefaultWorkspacePath(workspace.id));
+          navigate(
+            generatePath("/workspaces/:workspaceId/documents", { workspaceId: workspace.id }),
+          );
         },
         onError(error: unknown) {
           if (error instanceof ApiError) {
@@ -145,7 +145,7 @@ function WorkspaceCreateContent() {
   });
 
   return (
-    <WorkspaceDirectoryLayout>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="space-y-6">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold text-foreground">Create a workspace</h1>
@@ -232,13 +232,13 @@ function WorkspaceCreateContent() {
             <Button type="button" variant="secondary" onClick={() => navigate("/workspaces")} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Creating workspace…" : "Create workspace"}
             </Button>
           </div>
         </form>
       </div>
-    </WorkspaceDirectoryLayout>
+    </div>
   );
 }
 

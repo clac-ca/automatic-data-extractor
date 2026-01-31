@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from ade_api.common.cursor_listing import (
+    CursorFieldSpec,
+    cursor_field,
+    cursor_field_nulls_last,
+    parse_datetime,
+    parse_enum,
+    parse_uuid,
+)
 from ade_api.common.sql import nulls_last
-from ade_api.models import Run
+from ade_api.models import Run, RunStatus
 
 SORT_FIELDS = {
     "id": (Run.id.asc(), Run.id.desc()),
@@ -20,4 +28,12 @@ SORT_FIELDS = {
 DEFAULT_SORT = ["-createdAt"]
 ID_FIELD = (Run.id.asc(), Run.id.desc())
 
-__all__ = ["DEFAULT_SORT", "ID_FIELD", "SORT_FIELDS"]
+CURSOR_FIELDS: dict[str, CursorFieldSpec[Run]] = {
+    "id": cursor_field(lambda run: run.id, parse_uuid),
+    "createdAt": cursor_field(lambda run: run.created_at, parse_datetime),
+    "startedAt": cursor_field_nulls_last(lambda run: run.started_at, parse_datetime),
+    "completedAt": cursor_field_nulls_last(lambda run: run.completed_at, parse_datetime),
+    "status": cursor_field(lambda run: run.status, parse_enum(RunStatus)),
+}
+
+__all__ = ["CURSOR_FIELDS", "DEFAULT_SORT", "ID_FIELD", "SORT_FIELDS"]

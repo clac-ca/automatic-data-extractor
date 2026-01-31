@@ -4,7 +4,7 @@ import type {
   components as GeneratedComponents,
   paths as GeneratedPaths,
   operations as GeneratedOperations,
-} from "@schema/generated/openapi";
+} from "@/types/generated/openapi";
 
 // Base OpenAPI maps. Useful when you need to index into components or paths directly.
 export type components = GeneratedComponents;
@@ -26,6 +26,11 @@ export type RunBatchCreateOptions = GeneratedComponents["schemas"]["RunBatchCrea
 export type RunBatchCreateRequest = GeneratedComponents["schemas"]["RunBatchCreateRequest"];
 export type RunBatchCreateResponse = GeneratedComponents["schemas"]["RunBatchCreateResponse"];
 export type { RunSummary } from "./runSummary";
+
+// Document comments
+export type DocumentCommentCreate = GeneratedComponents["schemas"]["DocumentCommentCreate"];
+export type DocumentCommentOut = GeneratedComponents["schemas"]["DocumentCommentOut"];
+export type DocumentCommentPage = GeneratedComponents["schemas"]["DocumentCommentPage"];
 
 // RBAC and workspace types
 export type ScopeType = GeneratedComponents["schemas"]["ScopeType"];

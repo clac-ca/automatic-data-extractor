@@ -23,7 +23,7 @@ from ade_api.db import get_sessionmaker
 from ade_api.models import AccessToken
 from ade_api.settings import Settings
 
-from .oidc_router import router as oidc_router
+from .sso_router import router as sso_router
 from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
 from .service import AuthService, SetupAlreadyCompletedError
 
@@ -52,7 +52,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
 
     router.include_router(cookie_router, prefix="/cookie", tags=["auth"])
     router.include_router(jwt_router, prefix="/jwt", tags=["auth"])
-    router.include_router(oidc_router, prefix="", tags=["auth"])
+    router.include_router(sso_router, prefix="", tags=["auth"])
 
     router.include_router(
         fastapi_users.get_register_router(UserRead, UserCreate),

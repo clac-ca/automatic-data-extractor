@@ -18,10 +18,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import paginate_sequence
+from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_sequence_cursor
 from ade_api.common.logging import log_context
 from ade_api.common.search import matches_tokens, parse_q
-from ade_api.common.sorting import sort_sequence
 from ade_api.features.rbac import (
     AssignmentError,
     RbacService,
@@ -59,14 +58,6 @@ from .schemas import (
     WorkspacePage,
 )
 from .settings import apply_processing_paused, read_processing_paused
-from .sorting import (
-    DEFAULT_SORT,
-    MEMBER_DEFAULT_SORT,
-    MEMBER_SORT_FIELDS,
-    SORT_FIELDS,
-    id_key,
-    member_id_key,
-)
 
 if TYPE_CHECKING:
     from ade_api.features.rbac.schemas import RoleCreate, RoleUpdate
@@ -327,12 +318,13 @@ class WorkspacesService:
         self,
         *,
         user: User,
-        sort: list[str],
+        resolved_sort: ResolvedCursorSort[WorkspaceOut],
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        page: int,
-        per_page: int,
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
         global_permissions: frozenset[str] | None = None,
     ) -> WorkspacePage:
         memberships = self.list_memberships(
@@ -350,20 +342,15 @@ class WorkspacesService:
                 q=q,
             )
         ]
-        ordered = sort_sequence(
+        page_result = paginate_sequence_cursor(
             filtered,
-            sort,
-            allowed=SORT_FIELDS,
-            default=DEFAULT_SORT,
-            id_key=id_key,
-        )
-        page_result = paginate_sequence(
-            ordered,
-            page=page,
-            per_page=per_page,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
-        return WorkspacePage(**page_result.model_dump())
+        return WorkspacePage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
 
     # ------------------------------------------------------------------
     # CRUD
@@ -568,12 +555,13 @@ class WorkspacesService:
         self,
         *,
         workspace_id: UUID,
-        sort: list[str],
+        resolved_sort: ResolvedCursorSort[WorkspaceMemberOut],
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
-        page: int,
-        per_page: int,
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
     ) -> WorkspaceMemberPage:
         self._ensure_workspace(workspace_id)
         parsed_filters = parse_workspace_member_filters(filters)
@@ -603,20 +591,15 @@ class WorkspacesService:
                     [str(member.user_id), *member.role_slugs],
                 )
             ]
-        ordered = sort_sequence(
+        page_result = paginate_sequence_cursor(
             members,
-            sort,
-            allowed=MEMBER_SORT_FIELDS,
-            default=MEMBER_DEFAULT_SORT,
-            id_key=member_id_key,
-        )
-        page_result = paginate_sequence(
-            ordered,
-            page=page,
-            per_page=per_page,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
-        return WorkspaceMemberPage(**page_result.model_dump())
+        return WorkspaceMemberPage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
 
     def add_workspace_member(
         self,

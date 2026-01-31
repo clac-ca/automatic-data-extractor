@@ -13,4 +13,4 @@ export {
   SaveIcon as MenuIconSave,
   TabSavingSpinner,
   UnpinIcon as MenuIconUnpin,
-} from "@components/icons";
+} from "@/components/icons";

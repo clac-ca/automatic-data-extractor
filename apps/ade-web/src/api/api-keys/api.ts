@@ -1,14 +1,14 @@
-import { client } from "@api/client";
-import { createIdempotencyKey } from "@api/idempotency";
-import { buildListQuery, type FilterItem } from "@api/listing";
-import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@schema";
+import { client } from "@/api/client";
+import { buildListQuery, type FilterItem } from "@/api/listing";
+import type { ApiKeyCreateResponse, ApiKeyPage, components } from "@/types";
 
 export interface ListPageOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly includeRevoked?: boolean;
   readonly sort?: string;
   readonly q?: string;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -28,13 +28,9 @@ export async function listMyApiKeys(options: ListPageOptions = {}): Promise<ApiK
 
 export async function createMyApiKey(
   payload: CreateApiKeyRequest,
-  idempotencyKey?: string,
 ): Promise<ApiKeyCreateResponse> {
   const { data } = await client.POST("/api/v1/users/me/apikeys", {
     body: payload,
-    headers: {
-      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("api-key"),
-    },
   });
   if (!data) {
     throw new Error("Expected API key creation payload.");
@@ -64,14 +60,10 @@ export async function listUserApiKeys(userId: string, options: ListPageOptions =
 export async function createUserApiKey(
   userId: string,
   payload: CreateApiKeyRequest,
-  idempotencyKey?: string,
 ): Promise<ApiKeyCreateResponse> {
   const { data } = await client.POST("/api/v1/users/{userId}/apikeys", {
     params: { path: { userId } },
     body: payload,
-    headers: {
-      "Idempotency-Key": idempotencyKey ?? createIdempotencyKey("api-key"),
-    },
   });
   if (!data) {
     throw new Error("Expected API key creation payload.");
@@ -96,10 +88,11 @@ function buildApiKeyListQuery(options: ListPageOptions) {
     filters.push({ id: "revokedAt", operator: "isEmpty" });
   }
   return buildListQuery({
-    page: options.page,
-    perPage: options.pageSize,
+    limit: options.limit,
+    cursor: options.cursor ?? null,
     sort: options.sort ?? null,
     q: options.q ?? null,
     filters,
+    includeTotal: options.includeTotal,
   });
 }

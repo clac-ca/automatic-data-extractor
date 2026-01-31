@@ -69,7 +69,13 @@ def test_authenticate_websocket_prefers_api_key() -> None:
         },
         cookies={"ade_session": "cookie-token"},
     )
-    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(
+        _env_file=None,
+        secret_key="test-secret-key-for-tests-please-change",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+    )
     session = FakeSession(
         {
             api_user_id: _user(api_user_id),
@@ -105,7 +111,13 @@ def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
         headers={"authorization": "Bearer bearer-token"},
         cookies={"ade_session": "cookie-token"},
     )
-    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(
+        _env_file=None,
+        secret_key="test-secret-key-for-tests-please-change",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+    )
     session = FakeSession(
         {
             bearer_user_id: _user(bearer_user_id),
@@ -139,7 +151,13 @@ def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
         cookies={"ade_session": "cookie-token"},
         query_params={"access_token": "query-token"},
     )
-    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(
+        _env_file=None,
+        secret_key="test-secret-key-for-tests-please-change",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+    )
     session = FakeSession(
         {
             cookie_user_id: _user(cookie_user_id),
@@ -169,7 +187,13 @@ def test_authenticate_websocket_falls_back_to_query_param() -> None:
     cookie_service = StubAuthenticator(None)
 
     websocket = FakeWebSocket(query_params={"access_token": "query-token"})
-    settings = Settings(_env_file=None, jwt_secret="test-jwt-secret-for-tests-please-change")
+    settings = Settings(
+        _env_file=None,
+        secret_key="test-secret-key-for-tests-please-change",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+    )
     session = FakeSession({query_user_id: _user(query_user_id)})
 
     principal = authenticate_websocket(

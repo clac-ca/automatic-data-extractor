@@ -31,8 +31,10 @@ Introduce the topic in 1–3 sentences. State context and constraints briefly. I
 Open with brief background or the first task. Introduce code with a sentence and a colon:
 
 ```bash
-source setup.sh   # or ensure venv + pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
-ade dev
+./setup.sh
+ade api dev
+ade worker start
+ade web dev
 ```
 
 If steps are required, use a numbered list:
@@ -78,7 +80,7 @@ print(normalized)  # ['A123', 'A124', None, 'A125']
 - Next: <Link to the next logical page>
 - Reference: <Link to a reference page>
 - Troubleshooting: <Link to a related guide>
-- Verify locally: consider `ade test`, `pytest -q`, or `alembic upgrade head`
+- Verify locally: consider `ade api test`, `pytest -q`, or `alembic upgrade head`
 
 ---
 

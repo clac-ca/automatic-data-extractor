@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { UIEvent } from "react";
 import clsx from "clsx";
 
-import { DownloadIcon } from "@components/icons";
+import { DownloadIcon } from "@/components/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { createScopedStorage } from "@lib/storage";
-import { uiStorageKeys } from "@lib/uiStorageKeys";
+import { createScopedStorage } from "@/lib/storage";
+import { uiStorageKeys } from "@/lib/uiStorageKeys";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";
@@ -391,9 +391,9 @@ function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] 
   const cancelled = isCancelledStatus(status);
   const tone =
     status === "succeeded"
-      ? "bg-primary"
+      ? "bg-success"
       : status === "running" || status === "queued"
-        ? "bg-accent-foreground/60"
+        ? "bg-info/60"
         : cancelled
           ? "bg-muted-foreground"
           : "bg-destructive";
@@ -404,11 +404,11 @@ function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] 
 function consoleMessageClass(level: WorkbenchConsoleLine["level"]) {
   switch (level) {
     case "warning":
-      return "text-accent-foreground";
+      return "text-warning";
     case "error":
       return "text-destructive";
     case "success":
-      return "text-primary";
+      return "text-success";
     default:
       return "text-foreground";
   }
@@ -463,11 +463,11 @@ function levelBadge(level: WorkbenchConsoleLine["level"]) {
 function prefixTone(level: WorkbenchConsoleLine["level"]) {
   switch (level) {
     case "warning":
-      return "text-accent-foreground";
+      return "text-warning";
     case "error":
       return "text-destructive";
     case "success":
-      return "text-primary";
+      return "text-success";
     default:
       return "text-muted-foreground/70";
   }

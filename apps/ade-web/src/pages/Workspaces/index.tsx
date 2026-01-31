@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { parseAsInteger, parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
 
-import { useNavigate } from "@app/navigation/history";
-import { useSearchParams } from "@app/navigation/urlState";
+import { generatePath, useNavigate } from "react-router-dom";
 
-import { useSession } from "@components/providers/auth/SessionContext";
-import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@hooks/workspaces";
-import { useDebouncedCallback } from "@hooks/use-debounced-callback";
-import { getDefaultWorkspacePath } from "@app/navigation/workspacePaths";
-import { writePreferredWorkspaceId } from "@lib/workspacePreferences";
-import type { WorkspaceProfile } from "@schema/workspaces";
+import { useSession } from "@/providers/auth/SessionContext";
+import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@/hooks/workspaces";
+import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
+import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
-import { PageState } from "@components/layouts/page-state";
-import { WorkspaceDirectoryLayout } from "@pages/Workspaces/components/WorkspaceDirectoryLayout";
-import { GlobalNavSearch } from "@components/shell/GlobalNavSearch";
-import { SearchField } from "@components/inputs/SearchField";
+import { PageState } from "@/components/layout";
 import { Alert } from "@/components/ui/alert";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
+import { DataTablePagination } from "@/components/data-table/data-table-pagination";
+import { DataTableAdvancedToolbar } from "@/components/data-table/data-table-advanced-toolbar";
+import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
+import type { ColumnDef } from "@tanstack/react-table";
+import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
+import { DEFAULT_WORKSPACE_PAGE_SIZE } from "@/hooks/workspaces";
+import { getValidFilters } from "@/lib/data-table";
+import type { FilterJoinOperator } from "@/api/listing";
 
 export default function WorkspacesScreen() {
   return <WorkspacesIndexContent />;
@@ -22,9 +27,7 @@ export default function WorkspacesScreen() {
 
 function WorkspacesIndexContent() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const session = useSession();
-  const workspacesQuery = useWorkspacesQuery();
   const setDefaultWorkspaceMutation = useSetDefaultWorkspaceMutation();
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
   const [setDefaultError, setSetDefaultError] = useState<string | null>(null);
@@ -35,79 +38,86 @@ function WorkspacesIndexContent() {
   const canCreateWorkspace =
     normalizedPermissions.includes("workspaces.create") ||
     normalizedPermissions.includes("workspaces.manage_all");
-  const urlSearchQuery = useMemo(() => searchParams.get("q") ?? "", [searchParams]);
-  const [searchQuery, setSearchQuery] = useState(urlSearchQuery);
-  const updateSearchParams = useCallback(
-    (value: string) => {
-      const params = new URLSearchParams(searchParams);
-      const trimmed = value.trim();
-      if (trimmed) {
-        params.set("q", trimmed);
-      } else {
-        params.delete("q");
-      }
-      const nextSearch = params.toString();
-      if (nextSearch === searchParams.toString()) return;
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams],
+  const [filtersValue, setFiltersValue] = useQueryState("filters", parseAsString);
+  const [joinOperator] = useQueryState(
+    "joinOperator",
+    parseAsStringEnum(["and", "or"]).withDefault("and"),
   );
-  const debouncedUpdateSearchParams = useDebouncedCallback(updateSearchParams, 200);
-  const handleSearchQueryChange = useCallback(
-    (value: string) => {
-      setSearchQuery(value);
-      debouncedUpdateSearchParams(value);
-    },
-    [debouncedUpdateSearchParams],
+  const [page] = useQueryState("page", parseAsInteger.withDefault(1));
+  const [perPage] = useQueryState(
+    "perPage",
+    parseAsInteger.withDefault(DEFAULT_WORKSPACE_PAGE_SIZE),
   );
+  const columns = useMemo<ColumnDef<WorkspaceProfile>[]>(() => {
+    return [
+      {
+        id: "name",
+        accessorKey: "name",
+        enableSorting: true,
+        enableColumnFilter: true,
+        meta: { label: "Name", variant: "text" },
+      },
+      {
+        id: "slug",
+        accessorKey: "slug",
+        enableSorting: true,
+        enableColumnFilter: true,
+        meta: { label: "Slug", variant: "text" },
+      },
+      {
+        id: "isDefault",
+        accessorKey: "is_default",
+        enableSorting: true,
+        enableColumnFilter: true,
+        meta: { label: "Default", variant: "boolean" },
+      },
+      {
+        id: "processingPaused",
+        accessorKey: "processing_paused",
+        enableSorting: true,
+        enableColumnFilter: true,
+        meta: { label: "Processing paused", variant: "boolean" },
+      },
+    ];
+  }, []);
+  const columnIds = useMemo(
+    () => new Set(columns.map((column) => column.id).filter(Boolean) as string[]),
+    [columns],
+  );
+  const [sorting] = useQueryState(
+    "sort",
+    getSortingStateParser<WorkspaceProfile>(columnIds).withDefault([
+      { id: "name", desc: false },
+    ]),
+  );
+  const normalizedFilters = useMemo(() => {
+    if (!filtersValue) return [];
+    const parsed =
+      getFiltersStateParser<WorkspaceProfile>(columnIds).parse(filtersValue) ?? [];
+    return getValidFilters(parsed);
+  }, [filtersValue, columnIds]);
+  const effectiveSort = sorting?.length ? JSON.stringify(sorting) : null;
+  const workspacesQuery = useWorkspacesQuery({
+    page,
+    pageSize: perPage,
+    sort: effectiveSort,
+    filters: normalizedFilters.length > 0 ? normalizedFilters : undefined,
+    joinOperator: joinOperator as FilterJoinOperator,
+  });
   const workspacesPage = workspacesQuery.data;
   const workspaces: WorkspaceProfile[] = useMemo(
     () => workspacesPage?.items ?? [],
     [workspacesPage?.items],
   );
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const visibleWorkspaces = useMemo(() => {
-    if (!normalizedSearch) {
-      return workspaces;
-    }
-    return workspaces.filter((workspace) => {
-      const name = workspace.name.toLowerCase();
-      const slug = workspace.slug?.toLowerCase() ?? "";
-      return name.includes(normalizedSearch) || slug.includes(normalizedSearch);
-    });
-  }, [workspaces, normalizedSearch]);
   const goToWorkspace = useCallback(
-    (workspaceId: string) => navigate(getDefaultWorkspacePath(workspaceId)),
+    (workspaceId: string) =>
+      navigate(generatePath("/workspaces/:workspaceId/documents", { workspaceId })),
     [navigate],
   );
 
-  useEffect(() => {
-    if (urlSearchQuery !== searchQuery) {
-      setSearchQuery(urlSearchQuery);
-    }
-  }, [searchQuery, urlSearchQuery]);
-
-  const actions = canCreateWorkspace ? (
-    <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
-      Create workspace
-    </Button>
-  ) : undefined;
-
-  const handleWorkspaceSearchSubmit = useCallback((value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return;
-    }
-    const firstMatch = visibleWorkspaces[0];
-    if (firstMatch) {
-      goToWorkspace(firstMatch.id);
-    }
-  }, [visibleWorkspaces, goToWorkspace]);
-
-  const handleResetSearch = useCallback(() => {
-    setSearchQuery("");
-    updateSearchParams("");
-  }, [updateSearchParams]);
+  const handleResetFilters = useCallback(() => {
+    setFiltersValue(null);
+  }, [setFiltersValue]);
 
   const handleSetDefaultWorkspace = useCallback(
     async (workspace: WorkspaceProfile) => {
@@ -126,11 +136,28 @@ function WorkspacesIndexContent() {
     [setDefaultWorkspaceMutation],
   );
 
-  const topBarSearch = <GlobalNavSearch scope={{ kind: "directory" }} />;
+  const { table } = useDataTable({
+    data: workspaces,
+    columns,
+    pageCount:
+      typeof workspacesPage?.meta.totalCount === "number"
+        ? Math.max(1, Math.ceil(workspacesPage.meta.totalCount / perPage))
+        : 1,
+    initialState: {
+      sorting: [{ id: "name", desc: false }],
+      pagination: { pageSize: DEFAULT_WORKSPACE_PAGE_SIZE },
+    },
+    enableAdvancedFilter: true,
+    clearOnDefault: true,
+  });
+
+  useEffect(() => {
+    table.setPageIndex(0);
+  }, [filtersValue, table]);
 
   if (workspacesQuery.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex min-h-full items-center justify-center bg-background px-6">
         <PageState title="Loading workspaces" variant="loading" />
       </div>
     );
@@ -138,7 +165,7 @@ function WorkspacesIndexContent() {
 
   if (workspacesQuery.isError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex min-h-full items-center justify-center bg-background px-6">
         <PageState
           title="We couldn't load your workspaces"
           description="Refresh the page or try again later."
@@ -154,7 +181,19 @@ function WorkspacesIndexContent() {
   }
 
   const mainContent =
-    workspaces.length === 0 ? (
+    workspaces.length === 0 && normalizedFilters.length > 0 ? (
+      <div className="space-y-4">
+        <PageState
+          title="No workspaces matching your filters"
+          description="Try adjusting or clearing the filters."
+          action={
+            <Button variant="secondary" onClick={handleResetFilters}>
+              Clear filters
+            </Button>
+          }
+        />
+      </div>
+    ) : workspaces.length === 0 ? (
       canCreateWorkspace ? (
         <EmptyStateCreate onCreate={() => navigate("/workspaces/new")} />
       ) : (
@@ -169,18 +208,6 @@ function WorkspacesIndexContent() {
           />
         </div>
       )
-    ) : visibleWorkspaces.length === 0 ? (
-      <div className="space-y-4">
-        <PageState
-          title={`No workspaces matching "${searchQuery}"`}
-          description="Try searching by another workspace name or slug."
-          action={
-            <Button variant="secondary" onClick={handleResetSearch}>
-              Clear search
-            </Button>
-          }
-        />
-      </div>
     ) : (
       <div className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-soft">
         <header>
@@ -194,16 +221,17 @@ function WorkspacesIndexContent() {
             {setDefaultError}
           </Alert>
         ) : null}
-        <SearchField
-          value={searchQuery}
-          onValueChange={handleSearchQueryChange}
-          onSubmit={handleWorkspaceSearchSubmit}
-          onClear={handleResetSearch}
-          placeholder="Search workspaces by name or slug"
-          className="w-full"
-        />
+        <DataTableAdvancedToolbar table={table}>
+          <DataTableSortList table={table} align="start" />
+          <DataTableFilterList table={table} align="start" />
+          <div className="ml-auto">
+            <Button size="sm" variant="ghost" onClick={handleResetFilters}>
+              Reset
+            </Button>
+          </div>
+        </DataTableAdvancedToolbar>
         <section className="grid gap-5 lg:grid-cols-2">
-          {visibleWorkspaces.map((workspace) => {
+          {workspaces.map((workspace) => {
             const isUpdatingDefault =
               setDefaultWorkspaceMutation.isPending && pendingWorkspaceId === workspace.id;
             return (
@@ -247,17 +275,21 @@ function WorkspacesIndexContent() {
             );
           })}
         </section>
+        <div className="pt-2">
+          <DataTablePagination table={table} />
+        </div>
       </div>
     );
 
   return (
-    <WorkspaceDirectoryLayout
-      actions={actions}
-      search={topBarSearch}
-      sidePanel={<DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />}
-    >
-      {mainContent}
-    </WorkspaceDirectoryLayout>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div>{mainContent}</div>
+        <aside className="space-y-6">
+          <DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />
+        </aside>
+      </div>
+    </div>
   );
 }
 
@@ -302,7 +334,7 @@ function EmptyStateCreate({ onCreate }: { onCreate: () => void }) {
       <p className="mt-2 text-sm text-muted-foreground">
         Create your first workspace to start uploading configuration sets and documents.
       </p>
-      <Button variant="primary" onClick={onCreate} className="mt-6">
+      <Button onClick={onCreate} className="mt-6">
         Create workspace
       </Button>
     </div>

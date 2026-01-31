@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { client } from "@api/client";
+import { client } from "@/api/client";
 import { createConfigurationDirectory, deleteConfigurationDirectory } from "../api";
 
 describe("configuration directory api helpers", () => {

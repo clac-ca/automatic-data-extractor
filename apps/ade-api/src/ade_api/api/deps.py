@@ -8,21 +8,27 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from ade_api.db import get_db
+from ade_api.infra.storage import AzureBlobStorage, get_storage_adapter
 from ade_api.settings import Settings, get_settings
 
 SessionDep = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
+def get_blob_storage(request: Request) -> AzureBlobStorage:
+    return get_storage_adapter(request)
+
+
+StorageDep = Annotated[AzureBlobStorage, Depends(get_blob_storage)]
+
+
 def _build_config_storage(settings: Settings):
     from ade_api.features.configs.storage import ConfigStorage
 
-    if settings.configs_dir is None:
-        raise RuntimeError("ADE_CONFIGS_DIR is not configured")
     return ConfigStorage(settings=settings)
 
 
@@ -50,10 +56,10 @@ def get_system_settings_service(session: SessionDep):
     return SystemSettingsService(session=session)
 
 
-def get_documents_service(session: SessionDep, settings: SettingsDep):
+def get_documents_service(session: SessionDep, settings: SettingsDep, storage: StorageDep):
     from ade_api.features.documents.service import DocumentsService
 
-    return DocumentsService(session=session, settings=settings)
+    return DocumentsService(session=session, settings=settings, storage=storage)
 
 
 def get_health_service(session: SessionDep, settings: SettingsDep):
@@ -77,11 +83,16 @@ def get_configurations_service(session: SessionDep, settings: SettingsDep):
     return ConfigurationsService(session=session, storage=storage)
 
 
-def get_runs_service(session: SessionDep, settings: SettingsDep):
+def get_runs_service(session: SessionDep, settings: SettingsDep, storage: StorageDep):
     from ade_api.features.runs.service import RunsService
 
-    storage = _build_config_storage(settings)
-    return RunsService(session=session, settings=settings, storage=storage)
+    config_storage = _build_config_storage(settings)
+    return RunsService(
+        session=session,
+        settings=settings,
+        storage=config_storage,
+        blob_storage=storage,
+    )
 
 
 def get_workspaces_service(session: SessionDep, settings: SettingsDep):
@@ -90,10 +101,10 @@ def get_workspaces_service(session: SessionDep, settings: SettingsDep):
     return WorkspacesService(session=session, settings=settings)
 
 
-def get_idempotency_service(session: SessionDep, settings: SettingsDep):
-    from ade_api.features.idempotency.service import IdempotencyService
+def get_sso_service(session: SessionDep, settings: SettingsDep):
+    from ade_api.features.sso.service import SsoService
 
-    return IdempotencyService(session=session, settings=settings)
+    return SsoService(session=session, settings=settings)
 
 
 __all__ = [
@@ -107,5 +118,5 @@ __all__ = [
     "get_configurations_service",
     "get_runs_service",
     "get_workspaces_service",
-    "get_idempotency_service",
+    "get_sso_service",
 ]

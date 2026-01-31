@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+import json
 from typing import Any, TypeVar
 
 from fastapi import HTTPException, Query
@@ -20,21 +21,57 @@ def _dedupe_preserve_order(tokens: list[str]) -> list[str]:
     return out
 
 
+def _parse_json_sort(raw: str) -> list[str]:
+    trimmed = raw.strip()
+    if not trimmed:
+        return []
+    try:
+        decoded = json.loads(trimmed)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="sort must be valid JSON",
+        ) from exc
+    if isinstance(decoded, dict):
+        decoded = [decoded]
+    if not isinstance(decoded, list):
+        raise HTTPException(status_code=422, detail="sort must be a JSON array")
+    tokens: list[str] = []
+    for index, item in enumerate(decoded):
+        if isinstance(item, str):
+            token = item.strip()
+            if token:
+                tokens.append(token)
+            continue
+        if not isinstance(item, dict):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Sort #{index + 1} must be an object",
+            )
+        raw_id = item.get("id")
+        if not isinstance(raw_id, str) or not raw_id.strip():
+            raise HTTPException(
+                status_code=422,
+                detail=f"Sort #{index + 1} must include a non-empty 'id'",
+            )
+        desc = item.get("desc", False)
+        if not isinstance(desc, bool):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Sort #{index + 1} 'desc' must be a boolean",
+            )
+        name = raw_id.strip()
+        tokens.append(f"-{name}" if desc else name)
+    return tokens
+
+
 def parse_sort(raw: str | None) -> list[str]:
     """Normalise the raw `sort` query parameter into canonical tokens."""
 
     if not raw:
         return []
-    tokens: list[str] = []
-    for fragment in raw.split(","):
-        token = fragment.strip()
-        if not token:
-            continue
-        descending = token.startswith("-")
-        name = (token[1:] if descending else token).strip()
-        if not name:
-            continue
-        tokens.append(f"-{name}" if descending else name)
+
+    tokens = _parse_json_sort(raw)
     tokens = _dedupe_preserve_order(tokens)
     if len(tokens) > MAX_SORT_FIELDS:
         raise HTTPException(
@@ -136,7 +173,10 @@ def make_sort_dependency(*, allowed: SortAllowedMap, default: Sequence[str], id_
     """Return a FastAPI dependency that parses and resolves sort tokens."""
 
     allowed_list = ", ".join(sorted(allowed.keys()))
-    doc = "CSV; prefix '-' for DESC. Allowed: " + allowed_list + ". Example: -createdAt,name"
+    doc = (
+        "JSON array of {id, desc}. "
+        f"Allowed: {allowed_list}. Example: [{{\"id\":\"createdAt\",\"desc\":true}}]"
+    )
 
     def dependency(sort: str | None = Query(None, description=doc)) -> OrderBy:
         tokens = parse_sort(sort)

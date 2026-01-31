@@ -10,7 +10,7 @@ Base URL
 
 ---
 
-## GET /health — Health check
+## GET /api/v1/health — Health check
 
 Description: Returns service health.
 

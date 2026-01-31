@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkbenchConsoleStore } from "./consoleStore";
 import type { WorkbenchConsoleLine } from "../types";
 
-import { createRun, streamRunEventsForRun, type RunStreamOptions } from "@api/runs/api";
-import { eventName, eventPayload, eventTimestamp, type RunStreamEvent } from "@schema/runs";
+import { createRun, streamRunEventsForRun, type RunStreamOptions } from "@/api/runs/api";
+import { eventName, eventPayload, eventTimestamp, type RunStreamEvent } from "@/types/runs";
 
 export type JobStreamStatus = "idle" | "running" | "succeeded" | "failed";
 

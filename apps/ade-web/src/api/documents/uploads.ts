@@ -1,14 +1,14 @@
-import type { components } from "@schema";
-import { createIdempotencyKey } from "@api/idempotency";
-import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@lib/uploads/xhr";
+import type { components } from "@/types";
+import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@/lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
 export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];
+export type DocumentConflictMode = components["schemas"]["DocumentConflictMode"];
 
 interface UploadDocumentOptions {
   readonly onProgress?: (progress: UploadProgress) => void;
-  readonly idempotencyKey?: string;
   readonly runOptions?: DocumentUploadRunOptions;
+  readonly conflictMode?: DocumentConflictMode;
 }
 
 export function uploadWorkspaceDocument(
@@ -21,13 +21,13 @@ export function uploadWorkspaceDocument(
   if (options.runOptions) {
     formData.append("run_options", JSON.stringify(options.runOptions));
   }
+  if (options.conflictMode) {
+    formData.append("conflictMode", options.conflictMode);
+  }
   return uploadWithProgressXHR<DocumentUploadResponse>(
     `/api/v1/workspaces/${workspaceId}/documents`,
     formData,
     {
-      headers: {
-        "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey("document-upload"),
-      },
       onProgress: options.onProgress,
     },
   );

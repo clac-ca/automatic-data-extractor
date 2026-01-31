@@ -1,51 +1,48 @@
 import pytest
-from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
-
 from ade_api.db import build_engine
 from ade_api.settings import Settings
 
 
-def test_build_engine_strips_sql_credentials_for_managed_identity() -> None:
-    pytest.importorskip("pyodbc")
+def test_build_engine_allows_managed_identity_passwordless_url() -> None:
     settings = Settings(
         _env_file=None,
-        database_url=(
-            "mssql+pyodbc://user:secret@contoso.database.windows.net:1433/ade"
-            "?Trusted_Connection=yes"
-        ),
+        database_url="postgresql://user@contoso.postgres.database.azure.com:5432/ade?sslmode=require",
         database_auth_mode="managed_identity",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     engine = build_engine(settings)
     try:
         url = engine.url
-        assert url.username is None
+        assert url.username == "user"
         assert url.password is None
-        assert "Trusted_Connection" not in (url.query or {})
     finally:
         engine.dispose()
 
 
-def test_build_engine_normalizes_mssql_driver() -> None:
-    pytest.importorskip("pyodbc")
+def test_build_engine_normalizes_postgres_driver() -> None:
     settings = Settings(
         _env_file=None,
-        database_url="mssql://user:secret@contoso.database.windows.net:1433/ade",
+        database_url="postgresql://user:secret@contoso.postgres.database.azure.com:5432/ade",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
     engine = build_engine(settings)
     try:
-        assert engine.url.drivername.startswith("mssql+pyodbc")
+        assert engine.url.drivername == "postgresql+psycopg"
     finally:
         engine.dispose()
 
 
-def test_build_engine_sqlite_in_memory_smoke() -> None:
-    settings = Settings(_env_file=None, database_url="sqlite:///:memory:")
-    engine = build_engine(settings)
-    try:
-        assert isinstance(engine.pool, StaticPool)
-        with engine.connect() as conn:
-            assert conn.execute(text("SELECT 1")).scalar_one() == 1
-    finally:
-        engine.dispose()
+def test_settings_rejects_non_postgres_urls() -> None:
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            database_url="sqlite:///tmp/test.db",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )

@@ -13,6 +13,9 @@ An **environment** is a Python virtualenv that contains:
 * `ade_engine`
 * the configuration package (`ade_config`)
 
+The worker provisions these virtualenvs with **uv** and installs the engine + config
+package into the environment before marking it ready.
+
 Environments are keyed by:
 
 * `workspace_id`
@@ -31,7 +34,7 @@ marks them `ready` for reuse.
 ./data/venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
 ```
 
-Override the base with `ADE_VENVS_DIR` if needed.
+Override the base with `ADE_DATA_DIR` if needed.
 
 ---
 

@@ -1,15 +1,17 @@
 import React from "react";
 import userEvent from "@testing-library/user-event";
-import { render, screen } from "@test/test-utils";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { useNavigate } from "@app/navigation/history";
+import { createMemoryRouter, RouterProvider, useLocation, useNavigate } from "react-router-dom";
+import { AllProviders } from "@/test/test-utils";
 
 import { useUnsavedChangesGuard, UNSAVED_CHANGES_PROMPT } from "../useUnsavedChangesGuard";
 
 function GuardHarness({ confirm }: { readonly confirm: (message: string) => boolean }) {
   const [dirty, setDirty] = React.useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useUnsavedChangesGuard({ isDirty: dirty, confirm });
 
@@ -21,7 +23,7 @@ function GuardHarness({ confirm }: { readonly confirm: (message: string) => bool
       <button type="button" onClick={() => navigate("/other")}>
         navigate-away
       </button>
-      <button type="button" onClick={() => navigate(`${window.location.pathname}?file=foo`, { replace: true })}>
+      <button type="button" onClick={() => navigate(`${location.pathname}?file=foo`, { replace: true })}>
         update-query
       </button>
     </div>
@@ -29,17 +31,31 @@ function GuardHarness({ confirm }: { readonly confirm: (message: string) => bool
 }
 
 describe("useUnsavedChangesGuard", () => {
-  it("blocks navigation when the user cancels and wires beforeunload", async () => {
-    window.history.replaceState(null, "", "/workspaces/acme/config-builder/foo/editor");
+  function renderWithRouter(ui: React.ReactElement, route: string) {
+    const router = createMemoryRouter(
+      [
+        {
+          path: "*",
+          element: <AllProviders>{ui}</AllProviders>,
+        },
+      ],
+      { initialEntries: [route] },
+    );
+    return { router, ...rtlRender(<RouterProvider router={router} />) };
+  }
 
+  it("blocks navigation when the user cancels and wires beforeunload", async () => {
     const confirmMock = vi.fn().mockReturnValue(false);
-    render(<GuardHarness confirm={confirmMock} />);
+    const { router } = renderWithRouter(
+      <GuardHarness confirm={confirmMock} />,
+      "/workspaces/acme/config-builder/foo/editor",
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "mark-dirty" }));
     await userEvent.click(screen.getByRole("button", { name: "navigate-away" }));
 
     expect(confirmMock).toHaveBeenCalledWith(UNSAVED_CHANGES_PROMPT);
-    expect(window.location.pathname).toBe("/workspaces/acme/config-builder/foo/editor");
+    expect(router.state.location.pathname).toBe("/workspaces/acme/config-builder/foo/editor");
 
     const event = new Event("beforeunload", { cancelable: true });
     Object.defineProperty(event, "returnValue", { writable: true, value: undefined });
@@ -50,10 +66,11 @@ describe("useUnsavedChangesGuard", () => {
   });
 
   it("allows navigation when confirmed and ignores internal query updates", async () => {
-    window.history.replaceState(null, "", "/workspaces/acme/config-builder/foo/editor");
-
     const confirmMock = vi.fn().mockReturnValue(true);
-    render(<GuardHarness confirm={confirmMock} />);
+    const { router } = renderWithRouter(
+      <GuardHarness confirm={confirmMock} />,
+      "/workspaces/acme/config-builder/foo/editor",
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "mark-dirty" }));
     await userEvent.click(screen.getByRole("button", { name: "update-query" }));
@@ -63,6 +80,6 @@ describe("useUnsavedChangesGuard", () => {
     await userEvent.click(screen.getByRole("button", { name: "navigate-away" }));
 
     expect(confirmMock).toHaveBeenCalledWith(UNSAVED_CHANGES_PROMPT);
-    expect(window.location.pathname).toBe("/other");
+    await waitFor(() => expect(router.state.location.pathname).toBe("/other"));
   });
 });

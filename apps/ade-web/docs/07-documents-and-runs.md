@@ -111,7 +111,6 @@ export interface DocumentListRow {
   fileType: "xlsx" | "xls" | "csv" | "pdf" | "unknown";
   byteSize: number;
 
-  status: DocumentStatus; // uploaded | processing | processed | failed | archived
   createdAt: string;      // ISO 8601 string
   updatedAt: string;
   activityAt: string;
@@ -120,14 +119,16 @@ export interface DocumentListRow {
   assignee?: UserSummary | null;
   tags: string[];
 
-  latestRun?: DocumentRunSummary | null;
-  latestSuccessfulRun?: DocumentRunSummary | null;
+  lastRun?: DocumentRunSummary | null;
+  lastSuccessfulRun?: DocumentRunSummary | null;
   latestResult?: DocumentResultSummary | null;
 }
 
 export interface DocumentRunSummary {
   id: string;
   status: RunStatus;
+  phase: DocumentRunPhase; // queued | building | running | succeeded | failed
+  createdAt: string;
   startedAt?: string | null;
   completedAt?: string | null;
   errorSummary?: string | null; // Optional status or error message
@@ -147,31 +148,28 @@ A more detailed `DocumentRecord` (from `DocumentOut`) can extend this when the d
 * Uploading a “new version” of a file always yields a **new** `document.id`.
 * All run APIs consume **document IDs** and never mutate or replace the underlying file.
 
-### 2.2 Status lifecycle
+### 2.2 Run phase (derived)
 
-`DocumentStatus` is defined centrally (e.g. in `@schema/document`) and must not be re‑declared ad‑hoc.
+Documents do not expose a top-level status. The UI relies on the latest run:
 
-Conceptual meanings:
-
-* `uploaded` – file is stored; no run yet.
-* `processing` – at least one active run currently includes this document.
-* `processed` – the last relevant run completed successfully.
-* `failed` – the last relevant run completed with an error.
-* `archived` – document is retained for history but excluded from normal interactions.
-
-Typical transitions:
-
-* `null` → `uploaded` when upload completes.
-* `uploaded | processed | failed` → `processing` when a run starts for this document.
-* `processing` → `processed` when the run succeeds.
-* `processing` → `failed` when the run fails.
-* Any → `archived` via explicit user action.
+* `lastRun` is the most recently **created** run (shows up as soon as it is queued).
+* `lastRun.status` matches the persisted run status (`queued`, `running`, `succeeded`, `failed`).
+* `lastRun.phase` is the UI-friendly phase:
+  * if `status=queued` and the environment is not ready → `building`
+  * otherwise → same as `status`
+* `lastRun.phaseReason` is optional and only set when `phase=building`:
+  * `environment_missing`, `environment_queued`, `environment_building`, `environment_failed`
+* `lastSuccessfulRun` points at the latest successful output.
 
 UI behaviour:
 
-* The `status` field is rendered as a badge in the Documents list.
-* `latestRun` is shown as a secondary indicator (e.g. “Latest run: succeeded 2 hours ago”).
-* The UI **never infers** document status from run history; it only displays what the backend returns.
+* Render `lastRun.phase` as the primary badge in the Documents list.
+* Use `lastSuccessfulRun` to gate output downloads and previews.
+
+Custom status:
+
+* Users may add a custom “status” field later via document custom fields.
+* The system API/UI never depends on that field; it always uses `lastRun.*` for run state.
 
 ---
 
@@ -214,17 +212,17 @@ The hooks live in the Documents feature and delegate HTTP details to shared API 
 Documents URL state is encoded in query parameters:
 
 * `q` – free‑text search (name and potentially other fields).
-* `status` – comma‑separated list of document statuses.
+* `lastRunPhase` – comma‑separated list of run phases.
 * `sort` – sort key, e.g.:
 
   * `-createdAt` (newest first)
-  * `-latestRunAt` (most recently run first)
+  * `-lastRunAt` (most recently run first)
 * `view` – optional preset (e.g. `all`, `mine`, `attention`, `recent`).
 
 Rules:
 
 * All filter changes must be reflected in the URL via `setSearchParams`.
-* For small toggles (e.g. clicking a status pill), use `setSearchParams(..., { replace: true })` to avoid filling history with near‑duplicate entries.
+* For small toggles (e.g. clicking a phase pill), use `setSearchParams(..., { replace: true })` to avoid filling history with near‑duplicate entries.
 * The parameter names above are **canonical** for Documents. Add or change them only via the helper functions:
 
   * `parseDocumentFilters(searchParams)`
@@ -253,7 +251,7 @@ User flow:
 
 Guidelines:
 
-* Keep the UX optimistic, but treat the documents query as the **source of truth** for final status.
+* Keep the UX optimistic, but treat the documents query as the **source of truth** for run phase and metadata.
 * Handle duplicate file names gracefully; uniqueness is not required.
 
 ### 3.4 Row actions
@@ -268,10 +266,10 @@ Each `DocumentRow` typically provides:
 
   * Opens the run dialog (see §7) with this document preselected.
 
-* **Archive/Delete**
+* **Delete**
 
   * Calls: `DELETE /api/v1/workspaces/{workspaceId}/documents/{documentId}`
-    (usually a soft delete / archive).
+    (soft delete; `deletedAt`/`deletedBy` are retained).
 
 Constraints:
 
@@ -392,7 +390,7 @@ A more detailed run detail view extends this with:
 
 ### 5.2 Run status
 
-Canonical `RunStatus` values (defined centrally in `@schema`):
+Canonical `RunStatus` values (defined centrally in `@/types`):
 
 * `queued` – accepted, waiting to start.
 * `running` – in progress.
@@ -687,8 +685,11 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}`
   Retrieve document metadata.
 
+* `GET /api/v1/workspaces/{workspaceId}/documents/events/stream`
+  Stream document change events (SSE). Use `include=rows` to include a `DocumentListRow` payload for `document.changed` events.
+
 * `DELETE /api/v1/workspaces/{workspaceId}/documents/{documentId}`
-  Soft delete / archive a document.
+  Soft delete a document.
 
 * `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/download`
   Download the original file.
@@ -763,13 +764,13 @@ The backend always enforces Safe mode; UI disabling is a convenience to avoid su
 
 To keep Documents and Runs predictable (for both humans and agents), ADE Web relies on a few invariants:
 
-1. **Document status comes from the backend.**
-   The UI never derives `DocumentStatus` from run history; it only displays what the backend reports.
+1. **Document run phase comes from the backend.**
+   The UI never derives phases from raw run history; it displays `lastRun` and `lastRun.phase` as provided.
 
 2. **Run semantics are consistent everywhere.**
    `RunStatus`, `RunOptions` (`dryRun`, `validateOnly`, `inputSheetNames`, `mode`), and timestamps mean the same thing in:
 
-   * Document `latestRun` summaries,
+   * Document `lastRun` summaries,
    * The Runs ledger,
    * Configuration‑scoped runs.
 

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { useSettingsSection } from "../sectionContext";
-import { buildWeakEtag } from "@api/etag";
+import { buildWeakEtag } from "@/api/etag";
 import {
   useCreateWorkspaceRoleMutation,
   useDeleteWorkspaceRoleMutation,
@@ -12,7 +12,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
-import type { PermissionDefinition, RoleDefinition } from "@schema/workspaces";
+import type { PermissionDefinition, RoleDefinition } from "@/types/workspaces";
 import { Alert } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
@@ -63,7 +63,7 @@ export function RolesSettingsPage() {
     return (rolesQuery.data?.items ?? []).slice().sort((a, b) => collator.compare(a.name, b.name));
   }, [rolesQuery.data]);
 
-  const roleCount = rolesQuery.data?.total ?? roles.length;
+  const roleCount = rolesQuery.data?.meta.totalCount ?? roles.length;
   const selectedParam = params[0];
   const isCreateOpen = selectedParam === "new";
   const selectedRoleId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;

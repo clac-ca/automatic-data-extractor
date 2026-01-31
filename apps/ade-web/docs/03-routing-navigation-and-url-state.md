@@ -21,21 +21,21 @@ The routing and navigation layer is designed to be:
 
 - **Predictable** – the URL always tells you “where you are” and “what you’re looking at”.
 - **Shareable** – copying the URL should reopen the same view with the same filters/layout.
-- **Small** – a thin wrapper around `window.history`, not a framework inside a framework.
+- **Small** – keep the route table explicit and avoid over‑abstracting navigation.
 - **Guardable** – editors can block navigation when there are unsaved changes.
 
 We follow a few rules:
 
 1. The **location bar is authoritative**. A reload should land you back on the same screen with the same view state.
-2. All navigation goes through **`NavProvider`** (`useNavigate` / `Link` / `NavLink`), not raw `history.pushState`.
+2. All navigation goes through **React Router** (`useNavigate` / `Link` / `NavLink`), not raw `history.pushState`.
 3. **Query parameters** are the standard way to represent view‑level state that should survive refresh and be shareable.
 4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Configuration Builder workbench).
 
 ### Canonical sources and names
 
-- Build workspace routes via helpers in `@app/navigation` instead of hand‑rolled strings so the route map below and the code stay in sync.
+- Build workspace routes via React Router utilities (`generatePath`, `createSearchParams`) and keep them close to their consumers so the route map below and the code stay in sync.
 - Query parameter names for workspace sections are defined in the Documents/Runs filter helpers (`parseDocumentFilters` / `buildDocumentSearchParams`, `parseRunFilters` / `buildRunSearchParams`) described in `docs/06` and `docs/07`; add new keys there to keep deep links consistent.
-- Permission checks referenced in navigation (e.g. showing nav items) should use the keys from `@schema` and the workspace context helpers, not ad‑hoc strings.
+- Permission checks referenced in navigation (e.g. showing nav items) should use the keys from `@/types` and the workspace context helpers, not ad‑hoc strings.
 
 ---
 
@@ -47,34 +47,50 @@ The high‑level stack looks like this:
 // main.tsx
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <RouterProvider router={router} />
   </React.StrictMode>,
 );
 ````
 
 ```tsx
-// app/App.tsx
-export function App() {
+// app/layouts/AppShell.tsx
+export function AppShell() {
   return (
-    <NavProvider>
+    <NuqsAdapter>
       <AppProviders>
-        <ScreenSwitch />
+        <Outlet />
       </AppProviders>
-    </NavProvider>
+    </NuqsAdapter>
   );
 }
 ```
 
-* **`NavProvider`**
-  Owns the current location, listens to `popstate`, applies navigation blockers, and exposes navigation hooks.
+```tsx
+// app/routes.tsx
+export const appRoutes = [
+  {
+    element: <AppShell />,
+    children: [
+      { path: "login", element: <LoginScreen /> },
+      { element: <ProtectedLayout />, children: [/* ... */] },
+    ],
+  },
+];
+```
 
-* **`AppProviders`**
-  Wraps the app with React Query and any other cross‑cutting providers.
+* **`RouterProvider`**
+  Owns the router state and coordinates navigation.
 
-* **`ScreenSwitch`**
-  Looks at `location.pathname` and chooses the top‑level screen. It is the **only place** that maps raw paths to top‑level React components.
+* **`AppShell`**
+  Wraps the app with global providers (React Query, Nuqs).
 
-Everything below `ScreenSwitch` (workspaces, documents, runs, Configuration Builder) uses URL‑encoded view state and query parameters.
+* **`ProtectedLayout`**
+  Gates authenticated routes (`RequireSession`).
+
+* **`routes.tsx`**
+  Central route table mapping paths to pages.
+
+Everything below the route table (workspaces, documents, runs, Configuration Builder) uses URL‑encoded view state and query parameters.
 
 ---
 
@@ -82,25 +98,29 @@ Everything below `ScreenSwitch` (workspaces, documents, runs, Configuration Buil
 
 ### 3.1 Top‑level routes
 
-`ScreenSwitch` handles a small, explicit set of path prefixes (pseudo‑code):
+Route mapping lives in `app/routes.tsx` (simplified):
 
 ```ts
-switch (true) {
-  case path === "/":                  return <HomeScreen />;
-  case path === "/login":             return <LoginScreen />;
-  case path === "/auth/callback":     return <AuthCallbackScreen />;
-  case path === "/setup":             return <SetupScreen />;
-  case path === "/logout":            return <LogoutScreen />;
-
-  case path === "/workspaces":        return <WorkspacesScreen />;
-  case path === "/workspaces/new":    return <WorkspaceCreateScreen />;
-
-  case path.startsWith("/workspaces/"):
-    return <WorkspaceScreen />;
-
-  default:
-    return <NotFoundScreen />;
-}
+export const appRoutes = [
+  {
+    element: <AppShell />,
+    children: [
+      { path: "login", element: <LoginScreen /> },
+      { path: "logout", element: <LogoutScreen /> },
+      { path: "setup", element: <SetupScreen /> },
+      {
+        element: <ProtectedLayout />,
+        children: [
+          { index: true, element: <HomeScreen /> },
+          { path: "workspaces", element: <WorkspacesScreen /> },
+          { path: "workspaces/new", element: <WorkspaceCreateScreen /> },
+          { path: "workspaces/:workspaceId/*", element: <WorkspaceScreen /> },
+          { path: "*", element: <NotFoundScreen /> },
+        ],
+      },
+    ],
+  },
+];
 ```
 
 Supported top‑level routes:
@@ -109,7 +129,6 @@ Supported top‑level routes:
 | ---------------------------- | ------------------------------------------- |
 | `/`                          | Entry strategy (decide login/setup/app).    |
 | `/login`                     | Login form & auth provider selection.       |
-| `/auth/callback`             | Auth provider callback handler.             |
 | `/setup`                     | First‑time administrator setup.             |
 | `/logout`                    | Logout and session teardown.                |
 | `/workspaces`                | Workspace directory.                        |
@@ -144,88 +163,22 @@ If the workspace ID is valid but the section segment is unknown, the shell shoul
 Workspace routes are derived from:
 
 * `pages/Workspace/components/workspaceNavigation.ts` (section definitions + `getWorkspacePrimaryNavigation`)
-* `app/navigation/workspacePaths.ts` (default section path)
+* React Router utilities like `generatePath` for default workspace URLs (for example, `/workspaces/:workspaceId/documents`)
 
 Use these helpers for nav links and redirects instead of hand‑rolled strings. Keeping one source of truth helps the tables above stay in sync with the code.
 
 ---
 
-## 4. Navigation model (`NavProvider`)
+## 4. Navigation model (React Router)
 
-`NavProvider` is our small custom router: it owns `location`, exposes navigation hooks, and coordinates blockers.
+React Router v7 owns history, location, and navigation. Use its hooks and components directly.
 
-### 4.1 Core types
-
-```ts
-type LocationLike = {
-  pathname: string;
-  search: string;
-  hash: string;
-};
-
-type NavigationKind = "push" | "replace" | "pop";
-
-type NavigationIntent = {
-  readonly to: string;             // full URL string (path + search + hash)
-  readonly location: LocationLike; // parsed target
-  readonly kind: NavigationKind;
-};
-
-type NavigationBlocker = (intent: NavigationIntent) => boolean;
-```
-
-* **`LocationLike`** – the minimal location object we expose to components.
-* **`NavigationIntent`** – “we are about to navigate to `to`”.
-* **`NavigationBlocker`** – returns `true` to allow navigation, `false` to cancel.
-
-### 4.2 Provider behaviour
-
-`NavProvider`:
-
-1. **Initialises location**
-
-   * Reads `window.location` on mount.
-   * Normalises the pathname (e.g. trims trailing `/`).
-
-2. **Handles back/forward (`popstate`)**
-
-   * Subscribes to `window.onpopstate`.
-   * On event:
-
-     * Constructs a `NavigationIntent` with `kind: "pop"` and the new target.
-     * Runs all registered blockers:
-
-       * If **any** returns `false`:
-
-         * Reverts to the previous URL via `history.pushState`.
-         * Does **not** update its internal `location` state.
-       * Otherwise, updates `location`.
-
-3. **Handles programmatic navigation**
-
-   * Exposes `navigate(to, options?)` via `useNavigate()` (see below).
-   * For programmatic calls:
-
-     * Resolves `to` with `new URL(to, window.location.origin)`.
-     * Builds a `NavigationIntent` with `kind: "push"` or `"replace"`.
-     * Runs blockers.
-     * If allowed:
-
-       * Calls `history.pushState` or `history.replaceState`.
-       * Dispatches a synthetic `PopStateEvent` so all navigation paths go through the same logic.
-
-The result: back/forward, `Link` clicks, and `navigate()` all share one code path and one blocker mechanism.
-
-Because `new URL(to, window.location.origin)` assumes a root‑served app, if ADE Web ever needs to live under a sub‑path we will centralise the base path in `NavProvider` (or a dedicated routes module) instead of sprinkling `/`‑prefixed strings through components.
-
-### 4.3 Reading the current location (`useLocation`)
+### 4.1 Reading the current location (`useLocation`)
 
 ```ts
 const { pathname, search, hash } = useLocation();
 ```
 
-* Returns the current `LocationLike`.
-* Updates whenever navigation is accepted.
 * Use this in any component that needs to:
 
   * Match route segments (e.g. active nav items).
@@ -233,12 +186,9 @@ const { pathname, search, hash } = useLocation();
 
 **Do not** read `window.location` directly inside React components.
 
-### 4.4 Programmatic navigation (`useNavigate`)
+### 4.2 Programmatic navigation (`useNavigate`)
 
 ```ts
-type NavigateOptions = { replace?: boolean };
-type Navigate = (to: string, options?: NavigateOptions) => void;
-
 const navigate = useNavigate();
 navigate("/workspaces");
 ```
@@ -249,119 +199,67 @@ navigate("/workspaces");
   * A relative path (`../documents`).
   * A query‑only change (`?view=members`).
 
-* `replace: true` uses `history.replaceState`, substituting the current entry rather than pushing a new one.
-
 **Guidelines:**
 
 * Use `replace: true` when you’re **fixing** or **normalising** a URL (e.g. invalid `view` value → `view=general`).
 * Use the default (`replace: false`) when you’re taking a **logical step** (navigating to another screen).
 
-Never call `history.pushState` or `window.location` directly for internal navigation; always go through `navigate`.
+### 4.3 Navigation blockers (`useBlocker`)
 
-### 4.5 Navigation blockers (`useNavigationBlocker`)
-
-Use navigation blockers when a view has **unsaved changes** that shouldn’t be lost silently.
-
-Conceptual API:
-
-```ts
-useNavigationBlocker(blocker: NavigationBlocker, when: boolean);
-```
+Use `useBlocker` when a view has **unsaved changes** that shouldn’t be lost silently.
 
 Example pattern for the Configuration Builder editor:
 
 ```ts
-const { pathname } = useLocation();
+const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+  if (!hasUnsavedChanges) return false;
+  if (currentLocation.pathname === nextLocation.pathname) return false;
+  return true;
+});
 
-useNavigationBlocker(
-  (intent) => {
-    if (!hasUnsavedChanges) return true;
-
-    const samePath = intent.location.pathname === pathname;
-    if (samePath) {
-      // allow query/hash changes even when dirty
-      return true;
-    }
-
-    // Show your own confirmation UI instead of window.confirm in the real code
-    return window.confirm("You have unsaved changes. Leave without saving?");
-  },
-  hasUnsavedChanges,
-);
+useEffect(() => {
+  if (blocker.state !== "blocked") return;
+  if (window.confirm("You have unsaved changes. Leave without saving?")) {
+    blocker.proceed();
+  } else {
+    blocker.reset();
+  }
+}, [blocker]);
 ```
 
 Guidelines:
 
 * Blockers should be **local** to the component that owns the unsaved state.
-* They must be **fast** and side‑effect‑free apart from prompting the user.
 * Always treat query/hash‑only changes specially (usually allowed even when dirty).
 
 ---
 
 ## 5. SPA links (`Link` and `NavLink`)
 
-We wrap `<a>` to get SPA navigation while preserving browser semantics (right‑click, middle‑click, copy link).
+Use React Router’s `Link` and `NavLink` from `react-router-dom`. They render `<a>` tags and preserve normal browser semantics (right‑click, middle‑click, copy link) while keeping navigation client‑side.
 
 ### 5.1 `Link`
 
-Conceptual props:
+Use `Link` for all **internal** navigations where you would otherwise use `<a>`:
 
-```ts
-interface LinkProps
-  extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
-  to: string;
-  replace?: boolean;
-}
+```tsx
+<Link to="/workspaces">Workspaces</Link>
 ```
-
-Behaviour:
-
-* Renders `<a href={to}>…</a>`.
-
-* On click:
-
-  1. Calls any `onClick` handler.
-  2. If `event.defaultPrevented`, does nothing else.
-  3. If a modifier key is pressed (`meta`, `ctrl`, `shift`, `alt`) or it’s not a left‑click:
-
-     * Let the browser handle it (new tab/window, context menu).
-  4. Otherwise:
-
-     * `preventDefault()`.
-     * Call `navigate(to, { replace })`.
-
-Use `Link` for all **internal** navigations where you would otherwise use `<a>`.
 
 ### 5.2 `NavLink`
 
-`NavLink` adds an “active” state on top of `Link`:
-
-```ts
-const isActive = end
-  ? pathname === to
-  : pathname === to || pathname.startsWith(`${to}/`);
-```
-
-Extra props:
-
-* `end?: boolean` – if true, only exact path matches are active.
-* `className?: string | ((state: { isActive: boolean }) => string)`.
-* `children: ReactNode | ((state: { isActive: boolean }) => ReactNode)`.
-
-Typical usage for left navigation inside the workspace shell:
+`NavLink` adds an “active” state that you can use for styling:
 
 ```tsx
 <NavLink
-  to={routes.workspaceRuns(workspaceId)}
-  className={({ isActive }) =>
-    clsx("nav-item", isActive && "nav-item--active")
-  }
+  to="/workspaces/123/runs"
+  className={({ isActive }) => clsx("nav-item", isActive && "nav-item--active")}
 >
   Runs
 </NavLink>
 ```
 
-Use `NavLink` anywhere you want route‑aware styling, e.g. nav menus, route‑backed tabs.
+Use `NavLink` anywhere you want route‑aware styling, e.g. nav menus or route‑backed tabs.
 
 ---
 
@@ -391,22 +289,11 @@ it should live in the URL.
 
 ### 6.2 Low‑level helpers
 
-Helpers in `shared/urlState` handle raw query string operations:
+Use the platform and React Router utilities directly:
 
-* `toURLSearchParams(init)`
-
-  * Accepts strings, `URLSearchParams`, arrays, or plain objects.
-  * Produces a `URLSearchParams` instance.
-
-* `getParam(search, key)`
-
-  * Extracts a single value from a `search` string (with or without `?`).
-
-* `setParams(url, patch)`
-
-  * Patches query parameters on a `URL` object and returns the new `path + search + hash`.
-
-You rarely need these directly; they power `useSearchParams()`.
+* `new URLSearchParams(search)` for parsing.
+* `createSearchParams()` for building query strings.
+* `useSearchParams()` for read/write access tied to router state.
 
 ### 6.3 `useSearchParams()`
 
@@ -502,13 +389,13 @@ This section defines the expected query parameters per view. Having one place to
 
 On `/login` and related auth routes:
 
-* `redirectTo` (string):
+* `returnTo` (string):
 
   * Target path after successful login.
-  * Must be a **relative**, same‑origin path.
+  * Must be a **relative**, same-origin path.
   * Examples: `/workspaces`, `/workspaces/123/documents`.
 
-The backend and frontend both validate `redirectTo` to avoid open redirects.
+The backend and frontend both validate `returnTo` to avoid open redirects.
 
 ### 7.2 Workspace settings
 
@@ -531,15 +418,15 @@ On `/workspaces/:workspaceId/documents`:
 
   * Free‑text query (document name, source, etc.).
 
-* `status` (string):
+* `lastRunPhase` (string):
 
-  * Comma‑separated document statuses.
-  * Example: `status=uploaded,processed,failed`.
+  * Comma‑separated run phases.
+  * Example: `lastRunPhase=queued,failed`.
 
 * `sort` (string):
 
   * Sort key and direction.
-  * Examples: `sort=-created_at`, `sort=-last_run_at`.
+  * Examples: `sort=-createdAt`, `sort=-lastRunAt`.
 
 * `view` (string):
 
@@ -605,15 +492,15 @@ When adding new routes or URL‑encoded state, follow this checklist:
    * Global (auth, setup, workspace directory) vs workspace‑scoped (`/workspaces/:workspaceId/...`).
    * Which feature folder will own the screen (`pages/Workspace/sections/Runs`, etc.).
 
-2. **Add a `Screen` component and hook it into `ScreenSwitch`**
+2. **Add a page component and wire it into routing**
 
    * Create `SomethingScreen.tsx` under the appropriate feature folder.
-   * Add a branch in `ScreenSwitch` (for top‑level) or in `WorkspaceScreen` (for sections).
+   * Add a route in `app/routes.tsx` (for top‑level) or a branch in `WorkspaceScreen` (for sections).
 
 3. **Define route helpers**
 
-  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.ts` and `app/navigation/workspacePaths.ts` (see §3.3).
-   * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
+  * Centralise URL construction in `pages/Workspace/components/workspaceNavigation.ts` and use `generatePath` for workspace URLs (see §3.3).
+  * Use these helpers in `Link` / `NavLink`, navigation logic, and tests instead of ad‑hoc strings.
 
 4. **Register query parameters here**
 

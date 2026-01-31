@@ -1,23 +1,25 @@
-import { client } from "@api/client";
-import { buildListQuery } from "@api/listing";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import { buildListQuery } from "@/api/listing";
+import type { components } from "@/types";
 
 export interface FetchUsersOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly search?: string;
   readonly sort?: string;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
 export async function fetchUsers(options: FetchUsersOptions = {}): Promise<UserListPage> {
-  const { page, pageSize, search, signal } = options;
+  const { limit, cursor, search, signal, includeTotal } = options;
   const trimmedSearch = search?.trim();
   const query = buildListQuery({
-    page,
-    perPage: pageSize,
+    limit,
+    cursor: cursor ?? null,
     sort: options.sort ?? null,
     q: trimmedSearch ?? null,
+    includeTotal,
   });
 
   const { data } = await client.GET("/api/v1/users", {

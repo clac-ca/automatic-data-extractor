@@ -1,21 +1,24 @@
-import type { RunStatus } from "@schema";
+import type { RunStatus } from "@/types";
 
-import type { RunsFilters } from "./types";
+export const DEFAULT_PAGE_SIZE = 10;
 
-export const DEFAULT_RUNS_FILTERS: RunsFilters = {
-  search: "",
-  status: "all",
-  dateRange: "14d",
-  configurationId: null,
-};
+export const RUNS_SORT_IDS = new Set([
+  "id",
+  "status",
+  "createdAt",
+  "startedAt",
+  "completedAt",
+]);
 
-export const DATE_RANGE_OPTIONS: { value: RunsFilters["dateRange"]; label: string }[] = [
-  { value: "14d", label: "Last 14 days" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "24h", label: "Last 24 hours" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "custom", label: "Custom range" },
-];
+export const RUNS_FILTER_IDS = new Set([
+  "status",
+  "configurationId",
+  "createdAt",
+  "startedAt",
+  "completedAt",
+  "fileType",
+  "hasOutput",
+]);
 
 export const RUN_STATUS_META: Record<
   RunStatus,

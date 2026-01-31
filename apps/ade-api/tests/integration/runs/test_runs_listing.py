@@ -44,19 +44,19 @@ async def test_workspace_run_listing_filters_by_status(
     run_ok = make_run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
-        document_id=document.id,
+        file_version_id=document.current_version_id,
         status=RunStatus.SUCCEEDED,
     )
     run_failed = make_run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
-        document_id=document.id,
+        file_version_id=document.current_version_id,
         status=RunStatus.FAILED,
     )
     run_other_workspace = make_run(
         workspace_id=seed_identity.secondary_workspace_id,
         configuration_id=other_configuration.id,
-        document_id=document_other.id,
+        file_version_id=document_other.current_version_id,
         status=RunStatus.SUCCEEDED,
     )
     db_session.add_all([run_ok, run_failed, run_other_workspace])
@@ -67,10 +67,12 @@ async def test_workspace_run_listing_filters_by_status(
     all_runs = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
+        params={"includeTotal": "true"},
     )
     assert all_runs.status_code == 200
     payload = all_runs.json()
-    assert payload["total"] == 2
+    assert payload["meta"]["totalIncluded"] is True
+    assert payload["meta"]["totalCount"] == 2
 
     status_filters = json.dumps(
         [{"id": "status", "operator": "eq", "value": RunStatus.SUCCEEDED.value}]
@@ -78,9 +80,10 @@ async def test_workspace_run_listing_filters_by_status(
     filtered = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        params={"filters": status_filters},
+        params={"filters": status_filters, "includeTotal": "true"},
     )
     assert filtered.status_code == 200
     filtered_payload = filtered.json()
-    assert filtered_payload["total"] == 1
+    assert filtered_payload["meta"]["totalIncluded"] is True
+    assert filtered_payload["meta"]["totalCount"] == 1
     assert filtered_payload["items"][0]["id"] == str(run_ok.id)

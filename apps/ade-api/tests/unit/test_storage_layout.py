@@ -9,20 +9,26 @@ from ade_api.infra.storage import (
     workspace_run_root,
     workspace_venvs_root,
 )
-from ade_api.settings import DEFAULT_VENVS_DIR, Settings
+from ade_api.settings import Settings
 
 
 def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("ADE_VENVS_DIR", raising=False)
-    settings = Settings(_env_file=None, workspaces_dir=tmp_path / "workspaces")
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
+    )
 
     workspace_id = "acme-ws"
     config_id = "cfg-01"
     run_id = "run-456"
 
-    base = (tmp_path / "workspaces" / workspace_id).resolve()
+    base = (tmp_path / "data" / "workspaces" / workspace_id).resolve()
     assert workspace_root(settings, workspace_id) == base
-    assert workspace_documents_root(settings, workspace_id) == base / "documents"
+    assert workspace_documents_root(settings, workspace_id) == base / "files"
     assert (
         workspace_config_root(
             settings,
@@ -33,17 +39,20 @@ def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     )
     assert workspace_run_root(settings, workspace_id) == base / "runs"
     assert workspace_run_root(settings, workspace_id, run_id) == base / "runs" / run_id
-    assert workspace_venvs_root(settings, workspace_id) == (DEFAULT_VENVS_DIR / workspace_id).resolve()
+    assert (
+        workspace_venvs_root(settings, workspace_id)
+        == (tmp_path / "data" / "venvs" / workspace_id).resolve()
+    )
 
 
-def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
+def test_workspace_layout_uses_data_dir(tmp_path: Path) -> None:
     settings = Settings(
         _env_file=None,
-        workspaces_dir=tmp_path / "workspaces",
-        documents_dir=tmp_path / "docs-override",
-        configs_dir=tmp_path / "configs-override",
-        runs_dir=tmp_path / "runs-override",
-        venvs_dir=tmp_path / "venvs-override",
+        data_dir=tmp_path / "data-root",
+        database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
     )
 
     workspace_id = "override-ws"
@@ -51,21 +60,21 @@ def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
 
     assert (
         workspace_documents_root(settings, workspace_id)
-        == (tmp_path / "docs-override" / workspace_id / "documents").resolve()
+        == (tmp_path / "data-root" / "workspaces" / workspace_id / "files").resolve()
     )
     assert (
         workspace_config_root(settings, workspace_id, config_id)
-        == (tmp_path / "configs-override" / workspace_id / "config_packages" / config_id).resolve()
+        == (tmp_path / "data-root" / "workspaces" / workspace_id / "config_packages" / config_id).resolve()
     )
     assert (
         workspace_run_root(settings, workspace_id)
-        == (tmp_path / "runs-override" / workspace_id / "runs").resolve()
+        == (tmp_path / "data-root" / "workspaces" / workspace_id / "runs").resolve()
     )
     assert (
         workspace_run_root(settings, workspace_id, "run-123")
-        == (tmp_path / "runs-override" / workspace_id / "runs" / "run-123").resolve()
+        == (tmp_path / "data-root" / "workspaces" / workspace_id / "runs" / "run-123").resolve()
     )
     assert (
         workspace_venvs_root(settings, workspace_id)
-        == (tmp_path / "venvs-override" / workspace_id).resolve()
+        == (tmp_path / "data-root" / "venvs" / workspace_id).resolve()
     )

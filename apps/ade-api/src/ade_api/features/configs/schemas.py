@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 from ade_api.models import ConfigurationStatus
 
@@ -74,8 +74,8 @@ class ConfigValidationIssue(BaseSchema):
     message: str
 
 
-class ConfigurationPage(ListPage[ConfigurationRecord]):
-    """Paginated configuration listing."""
+class ConfigurationPage(CursorPage[ConfigurationRecord]):
+    """Cursor-based configuration listing."""
 
 
 class ConfigurationValidateResponse(BaseSchema):

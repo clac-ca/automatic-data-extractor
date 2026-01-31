@@ -13,7 +13,7 @@ This doc is for people working on `ade-web` internals. It explains how the workb
 > * `07-documents-and-runs.md` (canonical `RunOptions`)
 > * `08-configurations-and-config-builder.md`
 > * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` and
->   `apps/ade-engine/docs/11-ade-event-model.md` (event schemas)
+>   `https://github.com/clac-ca/ade-engine/blob/main/docs/11-ade-event-model.md` (event schemas)
 
 Workbench run actions always use the canonical **`RunOptions`** shape (camelCase:
 `dryRun`, `validateOnly`, `inputSheetNames`, optional `mode`) and then convert to backend snake_case fields.
@@ -107,7 +107,7 @@ Window state is **session‑local only** and not persisted. On reload we always 
 
 ### 1.3 Unsaved changes and navigation blocking
 
-The workbench uses a navigation blocker (e.g. `useNavigationBlocker`) to avoid accidental loss of edits.
+The workbench uses an unsaved‑changes guard (`useUnsavedChangesGuard` / `useBlocker`) to avoid accidental loss of edits.
 
 * A **tab** is dirty if:
 
@@ -716,7 +716,7 @@ Error handling is intentionally explicit:
 Low‑level event schemas are documented in:
 
 * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` (see the run streaming section)
-* `apps/ade-engine/docs/11-ade-event-model.md` (canonical event model)
+* `https://github.com/clac-ca/ade-engine/blob/main/docs/11-ade-event-model.md` (canonical event model)
 
 ---
 

@@ -15,8 +15,8 @@ relies on older runs endpoints. Key touchpoints:
   - Bulk "Run selected" actions now call `POST /api/v1/configurations/{configurationId}/runs/batch` and skip sheet selection.
   - `DocumentRunsDrawer` keeps run drawer state in `document_runs` storage
     keys and displays the "Run" button per document. Update the request
-    handlers to call `POST /api/v1/configurations/{configurationId}/runs` and stream
-    events into the console once the backend is wired up.
+    handlers to call `POST /api/v1/configurations/{configurationId}/runs` and poll
+    run status until completion, then download logs via `/runs/{runId}/events/download`.
   - `useDocumentRunsQuery` (search for `runsQuery`) polls the runs router
     to show historical runs. Replace it with the workspace runs list endpoint
     and add pagination/`after_id` handling.
@@ -27,21 +27,21 @@ relies on older runs endpoints. Key touchpoints:
 ## Config Builder panel (Terminal | Run | Problems)
 
 - `apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/` now
-  consumes run NDJSON streams (`/runs/{runId}/events/stream`): `Terminal` shows
+  consumes run NDJSON logs (`/runs/{runId}/events/download`): `Terminal` shows
   raw logs, `Problems` shows validation issues, and `Run` hosts output and event
   log cards.
 - `BottomPanel.tsx` already accepts console lines with `origin` and supports
   origin/level filters, follow toggle, and clear. Keep feeding it run events
   via `describeRunEvent`.
 - `Workbench.tsx` keeps `validationState.status/lastRunAt` and the latest run
-  metadata. Ensure these hydrate from the streaming runs endpoints and the
-  follow-up fetches (`fetchRun`, `runOutputUrl`, `runLogsUrl`).
+  metadata. Ensure these hydrate from polling (`fetchRun`) and the
+  follow-up fetches (`runOutputUrl`, `runLogsUrl`).
 - The chrome "Last run" pill opens the `Run` tab; the primary action is labeled
   **Test run**. Update any onboarding or inline help to reflect the new naming.
 
 ## Generated API types
 
-Once the backend endpoints are available, run `ade types` to regenerate
+Once the backend endpoints are available, run `ade api types` to regenerate
 `apps/ade-web/src/types/generated/openapi.d.ts` and add curated schema exports
 under `apps/ade-web/src/types/`. Update the React hooks to use those types
 instead of ad-hoc interfaces.

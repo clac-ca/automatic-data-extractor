@@ -3,33 +3,32 @@
 from __future__ import annotations
 
 import logging
-import mimetypes
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import (
     APIRouter,
     Depends,
+    File,
     HTTPException,
     Path,
     Query,
     Request,
     Response,
     Security,
+    UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, StreamingResponse
-from sse_starlette.sse import EventSourceResponse
+from fastapi.responses import StreamingResponse
 
-from ade_api.api.deps import SessionDep, SettingsDep, get_idempotency_service, get_runs_service
+from ade_api.api.deps import SettingsDep, get_runs_service
 from ade_api.common.downloads import build_content_disposition
-from ade_api.common.listing import (
-    ListQueryParams,
-    list_query_params,
-    strict_list_query_guard,
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
 )
-from ade_api.common.sorting import resolve_sort
-from ade_api.common.sse import stream_ndjson_events
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -41,12 +40,7 @@ from ade_api.core.auth import AuthenticatedPrincipal
 from ade_api.db import get_sessionmaker
 from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.idempotency import (
-    IdempotencyService,
-    build_request_hash,
-    build_scope_key,
-    require_idempotency_key,
-)
+from ade_api.infra.storage import StorageLimitError, get_storage_adapter
 from ade_api.models import RunStatus
 
 from .exceptions import (
@@ -79,7 +73,7 @@ from .schemas import (
     RunWorkspaceCreateRequest,
 )
 from .service import RunsService
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
     tags=["runs"],
@@ -149,27 +143,9 @@ def create_run_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunCreateRequest,
-    request: Request,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     """Create a run for ``configuration_id`` and enqueue execution."""
-
-    scope_key = build_scope_key(principal_id=str(principal.user_id))
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
 
     try:
         run = service.prepare_run(
@@ -184,13 +160,6 @@ def create_run_endpoint(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     resource = service.to_resource(run)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=resource,
-    )
     return resource
 
 
@@ -204,27 +173,9 @@ def create_runs_batch_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunBatchCreateRequest,
-    request: Request,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``configuration_id`` and enqueue execution."""
-
-    scope_key = build_scope_key(principal_id=str(principal.user_id))
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
 
     try:
         runs = service.prepare_runs_batch(
@@ -239,13 +190,6 @@ def create_runs_batch_endpoint(
 
     resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=response_payload,
-    )
     return response_payload
 
 
@@ -259,30 +203,9 @@ def create_workspace_run_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceCreateRequest,
-    request: Request,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     """Create a run for ``workspace_id`` and enqueue execution."""
-
-    scope_key = build_scope_key(
-        principal_id=str(principal.user_id),
-        workspace_id=str(workspace_id),
-    )
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
 
     try:
         run = service.prepare_run_for_workspace(
@@ -299,13 +222,6 @@ def create_workspace_run_endpoint(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     resource = service.to_resource(run)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=resource,
-    )
     return resource
 
 
@@ -319,30 +235,9 @@ def create_workspace_runs_batch_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceBatchCreateRequest,
-    request: Request,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    idempotency_key: Annotated[str, Depends(require_idempotency_key)],
-    idempotency: Annotated[IdempotencyService, Depends(get_idempotency_service)],
     service: RunsService = runs_service_dependency,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``workspace_id`` and enqueue execution."""
-
-    scope_key = build_scope_key(
-        principal_id=str(principal.user_id),
-        workspace_id=str(workspace_id),
-    )
-    request_hash = build_request_hash(
-        method=request.method,
-        path=request.url.path,
-        payload=payload,
-    )
-    replay = idempotency.resolve_replay(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-    )
-    if replay:
-        return replay.to_response()
 
     try:
         runs = service.prepare_runs_batch_for_workspace(
@@ -358,13 +253,6 @@ def create_workspace_runs_batch_endpoint(
 
     resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)
-    idempotency.store_response(
-        key=idempotency_key,
-        scope_key=scope_key,
-        request_hash=request_hash,
-        status_code=status.HTTP_201_CREATED,
-        body=response_payload,
-    )
     return response_payload
 
 
@@ -375,14 +263,15 @@ def create_workspace_runs_batch_endpoint(
 )
 def list_configuration_runs_endpoint(
     configuration_id: ConfigurationPath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
     try:
-        order_by = resolve_sort(
+        resolved_sort = resolve_cursor_sort(
             list_query.sort,
             allowed=SORT_FIELDS,
+            cursor_fields=CURSOR_FIELDS,
             default=DEFAULT_SORT,
             id_field=ID_FIELD,
         )
@@ -391,9 +280,10 @@ def list_configuration_runs_endpoint(
             filters=list_query.filters,
             join_operator=list_query.join_operator,
             q=list_query.q,
-            order_by=order_by,
-            page=list_query.page,
-            per_page=list_query.per_page,
+            resolved_sort=resolved_sort,
+            limit=list_query.limit,
+            cursor=list_query.cursor,
+            include_total=list_query.include_total,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -406,13 +296,14 @@ def list_configuration_runs_endpoint(
 )
 def list_workspace_runs_endpoint(
     workspace_id: WorkspacePath,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
@@ -421,9 +312,10 @@ def list_workspace_runs_endpoint(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
 
 
@@ -518,66 +410,30 @@ def download_run_input_endpoint(
     request: Request,
     settings: SettingsDep,
 ) -> StreamingResponse:
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
-            _, document, stream = service.stream_run_input(run_id=run_id)
-            media_type = document.content_type or "application/octet-stream"
-            disposition = document.original_filename
+            service = RunsService(
+                session=session,
+                settings=settings,
+                blob_storage=blob_storage,
+            )
+            _, document, version, stream = service.stream_run_input(run_id=run_id)
+            media_type = version.content_type or "application/octet-stream"
+            filename = version.filename_at_upload or document.name
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except (RunDocumentMissingError, RunInputMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = disposition
+    response.headers["Content-Disposition"] = build_content_disposition(filename)
     return response
-
-
-@router.get("/runs/{runId}/events/stream")
-def stream_run_events_endpoint(
-    run_id: RunPath,
-    request: Request,
-    settings: SettingsDep,
-    after_sequence: int | None = Query(default=None, ge=0),
-) -> EventSourceResponse:
-    last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
-        "Last-Event-ID"
-    )
-    start_offset = after_sequence
-    if start_offset is None and last_event_id_header:
-        try:
-            start_offset = int(last_event_id_header)
-        except ValueError:
-            start_offset = None
-    start_offset = start_offset or 0
-
-    session_factory = get_sessionmaker(request)
-    try:
-        with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
-            log_path = service.get_event_log_path(run_id=run_id)
-    except RunNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return EventSourceResponse(
-        stream_ndjson_events(
-            path=log_path,
-            start_offset=start_offset,
-            stop_events={"run.complete"},
-            ping_interval=15,
-        ),
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @router.get(
     "/runs/{runId}/events/download",
-    response_class=FileResponse,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Events unavailable"}},
     summary="Download run events (NDJSON log)",
 )
@@ -586,19 +442,22 @@ def download_run_events_file_endpoint(
     request: Request,
     settings: SettingsDep,
 ):
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
-            path = service.get_logs_file_path(run_id=run_id)
+            service = RunsService(
+                session=session,
+                settings=settings,
+                blob_storage=blob_storage,
+            )
+            stream = service.stream_run_logs(run_id=run_id)
     except (RunNotFoundError, RunLogsFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return FileResponse(
-        path=path,
-        media_type="application/x-ndjson",
-        filename=path.name,
-        headers={"Content-Disposition": build_content_disposition(path.name)},
-    )
+    filename = "events.ndjson"
+    response = StreamingResponse(stream, media_type="application/x-ndjson")
+    response.headers["Content-Disposition"] = build_content_disposition(filename)
+    return response
 
 
 @router.get(
@@ -620,9 +479,54 @@ def get_run_output_metadata_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
+@router.post(
+    "/runs/{runId}/output",
+    response_model=RunOutput,
+    status_code=status.HTTP_201_CREATED,
+    response_model_exclude_none=True,
+    dependencies=[Security(require_csrf)],
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Run or input document not found"},
+        status.HTTP_409_CONFLICT: {"description": "Run output cannot be uploaded yet"},
+        status.HTTP_413_CONTENT_TOO_LARGE: {
+            "description": "Uploaded file exceeds the configured size limit.",
+        },
+    },
+    summary="Upload manual run output",
+)
+def upload_run_output_endpoint(
+    run_id: RunPath,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    service: RunsService = runs_service_dependency,
+    *,
+    file: Annotated[UploadFile, File(...)],
+) -> RunOutput:
+    try:
+        return service.upload_manual_output(
+            run_id=run_id,
+            upload=file,
+            actor_id=principal.user_id,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunDocumentMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunOutputNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "OUTPUT_NOT_READY",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+    except StorageLimitError as exc:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+
+
 @router.get(
     "/runs/{runId}/output/download",
-    response_class=FileResponse,
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Output not found"},
         status.HTTP_409_CONFLICT: {"description": "Output not ready"},
@@ -634,12 +538,17 @@ def download_run_output_endpoint(
     request: Request,
     settings: SettingsDep,
 ):
+    blob_storage = get_storage_adapter(request)
     session_factory = get_sessionmaker(request)
     try:
         with session_factory() as session:
-            service = RunsService(session=session, settings=settings)
+            service = RunsService(
+                session=session,
+                settings=settings,
+                blob_storage=blob_storage,
+            )
             try:
-                _, path = service.resolve_output_for_download(run_id=run_id)
+                _, output_file, output_version, stream = service.stream_run_output(run_id=run_id)
             except RunOutputNotReadyError as exc:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
@@ -665,13 +574,11 @@ def download_run_output_endpoint(
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return FileResponse(
-        path=path,
-        media_type=media_type,
-        filename=path.name,
-        headers={"Content-Disposition": build_content_disposition(path.name)},
-    )
+    media_type = output_version.content_type or "application/octet-stream"
+    filename = output_version.filename_at_upload or output_file.name
+    response = StreamingResponse(stream, media_type=media_type)
+    response.headers["Content-Disposition"] = build_content_disposition(filename)
+    return response
 
 
 @router.get(

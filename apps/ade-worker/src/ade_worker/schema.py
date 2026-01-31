@@ -1,8 +1,4 @@
-"""SQLAlchemy Core schema for the worker.
-
-This is intentionally tiny and uses portable types so it works on:
-- SQLite (local dev)
-- SQL Server / Azure SQL (prod)
+"""SQLAlchemy Core schema for the worker (Postgres).
 
 If your main application already owns these tables, keep their names/columns aligned.
 """
@@ -10,7 +6,6 @@ If your main application already owns these tables, keep their names/columns ali
 from __future__ import annotations
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -22,27 +17,28 @@ from sqlalchemy import (
     Text,
     Index,
     UniqueConstraint,
-    text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 
 metadata = MetaData()
+
+UUID_TYPE = PG_UUID(as_uuid=True)
+TS = DateTime(timezone=True)
 
 # ---- Domain tables (minimal fields used by worker) ----
 environments = Table(
     "environments",
     metadata,
-    Column("id", String(36), primary_key=True),
-    Column("workspace_id", String(36), nullable=False),
-    Column("configuration_id", String(36), nullable=False),
+    Column("id", UUID_TYPE, primary_key=True),
+    Column("workspace_id", UUID_TYPE, nullable=False),
+    Column("configuration_id", UUID_TYPE, nullable=False),
     Column("engine_spec", String(255), nullable=False),
     Column("deps_digest", String(128), nullable=False),
     Column("status", String(20), nullable=False),
     Column("error_message", Text, nullable=True),
-    Column("claimed_by", String(255), nullable=True),
-    Column("claim_expires_at", DateTime, nullable=True),
-    Column("created_at", DateTime, nullable=False),
-    Column("updated_at", DateTime, nullable=False),
-    Column("last_used_at", DateTime, nullable=True),
+    Column("created_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
+    Column("last_used_at", TS, nullable=True),
     Column("python_version", String(50), nullable=True),
     Column("python_interpreter", String(512), nullable=True),
     Column("engine_version", String(50), nullable=True),
@@ -54,7 +50,6 @@ environments = Table(
         name="ux_environments_key",
     ),
     Index("ix_environments_claim", "status", "created_at"),
-    Index("ix_environments_claim_expires", "status", "claim_expires_at"),
     Index("ix_environments_status_last_used", "status", "last_used_at"),
     Index("ix_environments_status_updated", "status", "updated_at"),
 )
@@ -62,67 +57,80 @@ environments = Table(
 runs = Table(
     "runs",
     metadata,
-    Column("id", String(36), primary_key=True),
-    Column("workspace_id", String(36), nullable=False),
-    Column("configuration_id", String(36), nullable=False),
-    Column("input_document_id", String(36), nullable=False),
+    Column("id", UUID_TYPE, primary_key=True),
+    Column("workspace_id", UUID_TYPE, nullable=False),
+    Column("configuration_id", UUID_TYPE, nullable=False),
+    Column("input_file_version_id", UUID_TYPE, nullable=False),
+    Column("output_file_version_id", UUID_TYPE, nullable=True),
 
-    Column("input_sheet_names", Text, nullable=True),    # JSON text
-    Column("run_options", Text, nullable=True),          # JSON text
-    Column("output_path", String(512), nullable=True),
+    Column("input_sheet_names", JSONB, nullable=True),
+    Column("run_options", JSONB, nullable=True),
     Column("engine_spec", String(255), nullable=False),
     Column("deps_digest", String(128), nullable=False),
 
     Column("status", String(20), nullable=False),
-    Column("available_at", DateTime, nullable=False),
+    Column("available_at", TS, nullable=False),
     Column("attempt_count", Integer, nullable=False, server_default="0"),
     Column("max_attempts", Integer, nullable=False, server_default="3"),
     Column("claimed_by", String(255), nullable=True),
-    Column("claim_expires_at", DateTime, nullable=True),
+    Column("claim_expires_at", TS, nullable=True),
 
     Column("exit_code", Integer, nullable=True),
     Column("error_message", Text, nullable=True),
 
-    Column("created_at", DateTime, nullable=False),
-    Column("started_at", DateTime, nullable=True),
-    Column("completed_at", DateTime, nullable=True),
+    Column("created_at", TS, nullable=False),
+    Column("started_at", TS, nullable=True),
+    Column("completed_at", TS, nullable=True),
     Index("ix_runs_claim", "status", "available_at", "created_at"),
+    Index("ix_runs_status_created_at", "status", "created_at"),
     Index("ix_runs_claim_expires", "status", "claim_expires_at"),
     Index("ix_runs_status_completed", "status", "completed_at"),
 )
 
-documents = Table(
-    "documents",
+files = Table(
+    "files",
     metadata,
-    Column("id", String(36), primary_key=True),
-    Column("workspace_id", String(36), nullable=False),
-    Column("original_filename", String(255), nullable=False),
-    Column("stored_uri", String(512), nullable=False),   # typically file:<relative-path>
-    Column("status", String(20), nullable=False),        # uploaded|processing|processed|failed
-    Column("version", Integer, nullable=False),
-    Column("updated_at", DateTime, nullable=False),
-    Column("last_run_at", DateTime, nullable=True),
-    Column("deleted_at", DateTime, nullable=True),
+    Column("id", UUID_TYPE, primary_key=True),
+    Column("workspace_id", UUID_TYPE, nullable=False),
+    Column("kind", String(50), nullable=False),
+    Column("name", String(255), nullable=False),
+    Column("name_key", String(255), nullable=False),
+    Column("blob_name", String(512), nullable=False),
+    Column("current_version_id", UUID_TYPE, nullable=True),
+    Column("source_file_id", UUID_TYPE, nullable=True),
+    Column("comment_count", Integer, nullable=False),
+    Column("attributes", JSONB, nullable=False),
+    Column("uploaded_by_user_id", UUID_TYPE, nullable=True),
+    Column("assignee_user_id", UUID_TYPE, nullable=True),
+    Column("last_run_id", UUID_TYPE, nullable=True),
+    Column("deleted_at", TS, nullable=True),
+    Column("deleted_by_user_id", UUID_TYPE, nullable=True),
+    Column("created_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
 )
 
-document_events = Table(
-    "document_events",
+file_versions = Table(
+    "file_versions",
     metadata,
-    Column("cursor", BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True),
-    Column("workspace_id", String(36), nullable=False),
-    Column("document_id", String(36), nullable=False),
-    Column("event_type", String(40), nullable=False),
-    Column("document_version", Integer, nullable=False),
-    Column("occurred_at", DateTime, nullable=False),
-    Index("ix_document_events_workspace_cursor", "workspace_id", "cursor"),
-    Index("ix_document_events_workspace_document", "workspace_id", "document_id"),
-    Index("ix_document_events_workspace_occurred", "workspace_id", "occurred_at"),
+    Column("id", UUID_TYPE, primary_key=True),
+    Column("file_id", UUID_TYPE, nullable=False),
+    Column("version_no", Integer, nullable=False),
+    Column("origin", String(50), nullable=False),
+    Column("run_id", UUID_TYPE, nullable=True),
+    Column("created_by_user_id", UUID_TYPE, nullable=True),
+    Column("sha256", String(64), nullable=False),
+    Column("byte_size", Integer, nullable=False),
+    Column("content_type", String(255), nullable=True),
+    Column("filename_at_upload", String(255), nullable=False),
+    Column("storage_version_id", String(128), nullable=True),
+    Column("created_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
 )
 
 run_metrics = Table(
     "run_metrics",
     metadata,
-    Column("run_id", String(36), primary_key=True),
+    Column("run_id", UUID_TYPE, primary_key=True),
     Column("evaluation_outcome", String(20), nullable=True),
     Column("evaluation_findings_total", Integer, nullable=True),
     Column("evaluation_findings_info", Integer, nullable=True),
@@ -152,7 +160,7 @@ run_metrics = Table(
 run_fields = Table(
     "run_fields",
     metadata,
-    Column("run_id", String(36), primary_key=True),
+    Column("run_id", UUID_TYPE, primary_key=True),
     Column("field", String(128), primary_key=True),
     Column("label", String(255), nullable=True),
     Column("detected", Boolean, nullable=False),
@@ -166,7 +174,7 @@ run_fields = Table(
 run_table_columns = Table(
     "run_table_columns",
     metadata,
-    Column("run_id", String(36), primary_key=True),
+    Column("run_id", UUID_TYPE, primary_key=True),
     Column("workbook_index", Integer, primary_key=True),
     Column("workbook_name", String(255), nullable=False),
     Column("sheet_index", Integer, primary_key=True),
@@ -189,148 +197,22 @@ run_table_columns = Table(
 REQUIRED_TABLES = [
     "environments",
     "runs",
-    "documents",
-    "document_events",
+    "files",
+    "file_versions",
     "run_metrics",
     "run_fields",
     "run_table_columns",
 ]
 
-def install_document_event_triggers(engine) -> None:
-    with engine.begin() as connection:
-        dialect = connection.dialect.name
-        if dialect == "sqlite":
-            connection.exec_driver_sql(
-                """
-                CREATE TRIGGER IF NOT EXISTS trg_documents_events_insert
-                AFTER INSERT ON documents
-                BEGIN
-                    INSERT INTO document_events (
-                        workspace_id,
-                        document_id,
-                        event_type,
-                        document_version,
-                        occurred_at
-                    )
-                    VALUES (
-                        NEW.workspace_id,
-                        NEW.id,
-                        'document.changed',
-                        NEW.version,
-                        NEW.updated_at
-                    );
-                END;
-                """
-            )
-            connection.exec_driver_sql(
-                """
-                CREATE TRIGGER IF NOT EXISTS trg_documents_events_update
-                AFTER UPDATE ON documents
-                WHEN NEW.version != OLD.version
-                BEGIN
-                    INSERT INTO document_events (
-                        workspace_id,
-                        document_id,
-                        event_type,
-                        document_version,
-                        occurred_at
-                    )
-                    VALUES (
-                        NEW.workspace_id,
-                        NEW.id,
-                        CASE
-                            WHEN NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL
-                                THEN 'document.deleted'
-                            ELSE 'document.changed'
-                        END,
-                        NEW.version,
-                        NEW.updated_at
-                    );
-                END;
-                """
-            )
-            return
-
-        if dialect == "mssql":
-            connection.execute(
-                text(
-                    """
-                    IF OBJECT_ID('dbo.trg_documents_events_insert', 'TR') IS NULL
-                    EXEC('
-                    CREATE TRIGGER dbo.trg_documents_events_insert
-                    ON dbo.documents
-                    AFTER INSERT
-                    AS
-                    BEGIN
-                        SET NOCOUNT ON;
-                        INSERT INTO document_events (
-                            workspace_id,
-                            document_id,
-                            event_type,
-                            document_version,
-                            occurred_at
-                        )
-                        SELECT
-                            i.workspace_id,
-                            i.id,
-                            ''document.changed'',
-                            i.version,
-                            i.updated_at
-                        FROM inserted AS i;
-                    END;
-                    ');
-                    """
-                )
-            )
-            connection.execute(
-                text(
-                    """
-                    IF OBJECT_ID('dbo.trg_documents_events_update', 'TR') IS NULL
-                    EXEC('
-                    CREATE TRIGGER dbo.trg_documents_events_update
-                    ON dbo.documents
-                    AFTER UPDATE
-                    AS
-                    BEGIN
-                        SET NOCOUNT ON;
-                        INSERT INTO document_events (
-                            workspace_id,
-                            document_id,
-                            event_type,
-                            document_version,
-                            occurred_at
-                        )
-                        SELECT
-                            i.workspace_id,
-                            i.id,
-                            CASE
-                                WHEN i.deleted_at IS NOT NULL AND d.deleted_at IS NULL
-                                    THEN ''document.deleted''
-                                ELSE ''document.changed''
-                            END,
-                            i.version,
-                            i.updated_at
-                        FROM inserted AS i
-                        INNER JOIN deleted AS d ON d.id = i.id
-                        WHERE i.version <> d.version;
-                    END;
-                    ');
-                    """
-                )
-            )
-            return
-
-        raise ValueError(f"Unsupported dialect for document_events triggers: {dialect}")
 
 __all__ = [
     "metadata",
     "environments",
     "runs",
-    "documents",
-    "document_events",
+    "files",
+    "file_versions",
     "run_metrics",
     "run_fields",
     "run_table_columns",
     "REQUIRED_TABLES",
-    "install_document_event_triggers",
 ]

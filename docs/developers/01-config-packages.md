@@ -26,7 +26,7 @@ You can place files anywhere under `ade_config`; the built-in template auto-disc
 - **Hooks** run at lifecycle points; table hooks may replace the DataFrame by returning a new one.
 
 ## Settings
-Engine settings live outside the config code in `.env`, env vars (`ADE_ENGINE_*`), or optional `settings.toml` (see `apps/ade-engine/docs/settings.md`). Common keys:
+Engine settings live outside the config code in `.env`, env vars (`ADE_ENGINE_*`), or optional `settings.toml` (see https://github.com/clac-ca/ade-engine/blob/main/docs/settings.md). Common keys:
 
 - `remove_unmapped_columns`
 - `write_diagnostics_columns`

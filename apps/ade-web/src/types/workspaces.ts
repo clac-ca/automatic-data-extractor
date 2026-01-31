@@ -14,7 +14,7 @@ import type {
   WorkspacePage,
   WorkspaceUpdate,
   User,
-} from "@schema";
+} from "@/types";
 
 export type WorkspaceProfile = WorkspaceOut;
 export type WorkspaceListPage = WorkspacePage;

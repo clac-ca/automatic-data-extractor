@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useRef } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
-import { ChevronDownIcon } from "@components/icons";
+import { ChevronDownIcon } from "@/components/icons";
 
 const BASE_PRIMARY =
   "inline-flex items-center gap-2 rounded-l-md px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:cursor-not-allowed";

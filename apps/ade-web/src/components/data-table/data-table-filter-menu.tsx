@@ -9,9 +9,9 @@ import {
   Text,
   X,
 } from "lucide-react";
+import { useQueryState } from "nuqs";
 import * as React from "react";
 
-import { useSearchParams } from "@app/navigation/urlState";
 import { DataTableRangeFilter } from "@/components/data-table/data-table-range-filter";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -40,7 +40,7 @@ import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { getDefaultFilterOperator, getFilterOperators } from "@/lib/data-table";
 import { formatDate } from "@/lib/format";
 import { generateId } from "@/lib/id";
-import { parseFiltersState, serializeFiltersState } from "@/lib/parsers";
+import { getFiltersStateParser } from "@/lib/parsers";
 import { cn } from "@/lib/utils";
 import type { ExtendedColumnFilter, FilterOperator } from "@/types/data-table";
 
@@ -49,50 +49,24 @@ const THROTTLE_MS = 50;
 const FILTER_SHORTCUT_KEY = "f";
 const REMOVE_FILTER_SHORTCUTS = ["backspace", "delete"];
 
-type FiltersUpdater<TData> =
-  | ExtendedColumnFilter<TData>[]
-  | ((prev: ExtendedColumnFilter<TData>[]) => ExtendedColumnFilter<TData>[]);
-
 interface DataTableFilterMenuProps<TData>
   extends React.ComponentProps<typeof PopoverContent> {
   table: Table<TData>;
   debounceMs?: number;
   throttleMs?: number;
   shallow?: boolean;
-  history?: "push" | "replace";
-  startTransition?: React.TransitionStartFunction;
   disabled?: boolean;
 }
 
 export function DataTableFilterMenu<TData>({
   table,
   debounceMs = DEBOUNCE_MS,
-  throttleMs: _throttleMs = THROTTLE_MS,
-  shallow: _shallow = true,
-  history = "replace",
-  startTransition,
+  throttleMs = THROTTLE_MS,
+  shallow = true,
   disabled,
   ...props
 }: DataTableFilterMenuProps<TData>) {
   const id = React.useId();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const replace = history !== "push";
-
-  const setParams = React.useCallback(
-    (updater: (params: URLSearchParams) => URLSearchParams) => {
-      const applyUpdate = () =>
-        setSearchParams((prev) => updater(new URLSearchParams(prev)), {
-          replace,
-        });
-
-      if (startTransition) {
-        startTransition(() => applyUpdate());
-      } else {
-        applyUpdate();
-      }
-    },
-    [replace, setSearchParams, startTransition],
-  );
 
   const columns = React.useMemo(() => {
     return table
@@ -132,36 +106,15 @@ export function DataTableFilterMenu<TData>({
     [inputValue, selectedColumn],
   );
 
-  const filtersKey = table.options.meta?.queryKeys?.filters ?? "filters";
-  const columnIds = React.useMemo(
-    () => columns.map((field) => field.id),
-    [columns],
-  );
-
-  const filters = React.useMemo(() => {
-    return parseFiltersState<TData>(searchParams.get(filtersKey), columnIds);
-  }, [searchParams, filtersKey, columnIds]);
-
-  const setFilters = React.useCallback(
-    (updater: FiltersUpdater<TData>) => {
-      setParams((params) => {
-        const current = parseFiltersState<TData>(
-          params.get(filtersKey),
-          columnIds,
-        );
-        const nextFilters =
-          typeof updater === "function" ? updater(current) : updater;
-
-        if (nextFilters.length === 0) {
-          params.delete(filtersKey);
-        } else {
-          params.set(filtersKey, serializeFiltersState(nextFilters));
-        }
-
-        return params;
-      });
-    },
-    [setParams, filtersKey, columnIds],
+  const [filters, setFilters] = useQueryState(
+    table.options.meta?.queryKeys?.filters ?? "filters",
+    getFiltersStateParser<TData>(columns.map((field) => field.id))
+      .withDefault([])
+      .withOptions({
+        clearOnDefault: true,
+        shallow,
+        throttleMs,
+      }),
   );
   const debouncedSetFilters = useDebouncedCallback(setFilters, debounceMs);
 

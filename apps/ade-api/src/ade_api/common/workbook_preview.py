@@ -10,18 +10,17 @@ from pydantic import Field
 
 from ade_api.common.schema import BaseSchema
 
-DEFAULT_PREVIEW_ROWS = 200
-DEFAULT_PREVIEW_COLUMNS = 50
-MAX_PREVIEW_ROWS = 500
-MAX_PREVIEW_COLUMNS = 200
+DEFAULT_PREVIEW_ROWS = 10_000
+DEFAULT_PREVIEW_COLUMNS = 10_000
+MAX_PREVIEW_ROWS = 10_000
+MAX_PREVIEW_COLUMNS = 10_000
 
 
 class WorkbookSheetPreview(BaseSchema):
-    """Table-ready preview for a single workbook sheet."""
+    """Preview for a single workbook sheet."""
 
     name: str
     index: int = Field(ge=0)
-    headers: list[str]
     rows: list[list[str]]
     total_rows: int = Field(alias="totalRows")
     total_columns: int = Field(alias="totalColumns")
@@ -158,33 +157,20 @@ def _preview_sheet_from_rows(
     trim_empty_columns: bool,
     trim_empty_rows: bool,
 ) -> WorkbookSheetPreview:
-    header_row = list(rows[0]) if rows else []
-    header_has_names = any(cell.strip() for cell in header_row)
-    preview_columns = max(
-        1,
-        min(
-            max_columns,
-            max(total_columns, len(header_row)),
-        ),
-    )
-    headers = _build_headers(header_row, preview_columns)
-    body_rows = [
-        _normalize_row(list(row), len(headers)) for row in rows[1:]
+    max_row_length = max((len(row) for row in rows), default=0)
+    preview_columns = min(max_columns, total_columns or max_row_length)
+    normalized_rows = [
+        _normalize_row(list(row), preview_columns) for row in rows
     ]
-    if trim_empty_columns:
-        headers, body_rows = _trim_empty_columns(
-            headers,
-            body_rows,
-            header_has_names=header_has_names,
-        )
     if trim_empty_rows:
-        body_rows = _trim_empty_rows(body_rows)
+        normalized_rows = _trim_empty_rows(normalized_rows)
+    if trim_empty_columns:
+        normalized_rows = _trim_empty_columns(normalized_rows)
 
     return WorkbookSheetPreview(
         name=name,
         index=index,
-        headers=headers,
-        rows=body_rows,
+        rows=normalized_rows,
         total_rows=total_rows,
         total_columns=total_columns,
         truncated_rows=total_rows > max_rows,
@@ -206,52 +192,24 @@ def _normalize_row(row: Sequence[str], length: int) -> list[str]:
     return [row[index] if index < len(row) else "" for index in range(length)]
 
 
-def _build_headers(raw: Sequence[str], total_columns: int) -> list[str]:
-    trimmed = [cell.strip() for cell in raw]
-    has_named = any(trimmed)
-    header_count = max(total_columns, len(trimmed), 1)
-    if has_named:
-        headers = trimmed
-    else:
-        headers = [_column_label(index) for index in range(header_count)]
-    return _normalize_row(headers, header_count)
+def _trim_empty_columns(rows: Sequence[Sequence[str]]) -> list[list[str]]:
+    if not rows:
+        return [list(row) for row in rows]
 
+    column_count = max((len(row) for row in rows), default=0)
+    if column_count == 0:
+        return [list(row) for row in rows]
 
-def _column_label(index: int) -> str:
-    label = ""
-    position = index + 1
-    while position > 0:
-        remainder = (position - 1) % 26
-        label = f"{chr(65 + remainder)}{label}"
-        position = (position - 1) // 26
-    return f"Column {label}"
-
-
-def _trim_empty_columns(
-    headers: Sequence[str],
-    rows: Sequence[Sequence[str]],
-    *,
-    header_has_names: bool,
-) -> tuple[list[str], list[list[str]]]:
-    if not headers:
-        return list(headers), [list(row) for row in rows]
-
-    keep_indices: list[int] = []
-    for index, header in enumerate(headers):
-        if header_has_names and header.strip():
-            keep_indices.append(index)
-            continue
-        if any(row[index].strip() for row in rows):
-            keep_indices.append(index)
+    keep_indices = [
+        index
+        for index in range(column_count)
+        if any(row[index].strip() for row in rows)
+    ]
 
     if not keep_indices:
-        keep_indices = [0]
+        return [[] for _ in rows]
 
-    trimmed_headers = [headers[index] for index in keep_indices]
-    trimmed_rows = [
-        [row[index] for index in keep_indices] for row in rows
-    ]
-    return trimmed_headers, trimmed_rows
+    return [[row[index] for index in keep_indices] for row in rows]
 
 
 def _trim_empty_rows(rows: Sequence[Sequence[str]]) -> list[list[str]]:

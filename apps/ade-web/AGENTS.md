@@ -1,4 +1,4 @@
-## Frontend Structure (Routerless, Layer-Based)
+## Frontend Structure (React Router v7, Standard Vite Layout)
 
 ```
 apps/ade-web/
@@ -7,35 +7,33 @@ apps/ade-web/
 ├─ vite.config.ts
 ├─ index.html
 └─ src/
-   ├─ main.tsx                     # Vite entry point → renders <App />
-   ├─ app/                         # Composition root (App.tsx, providers, navigation)
-   │  ├─ App.tsx                   # App shell + <ScreenSwitch />
-   │  ├─ providers/                # AppProviders + bootstrapping
-   │  └─ navigation/               # History-based navigation helpers
+   ├─ main.tsx                     # Vite entry point → renders <RouterProvider />
+   ├─ app/                         # App shell, routing, and layouts
+   │  ├─ routes.tsx                # Route definitions
+   │  ├─ router.tsx                # createBrowserRouter wiring
+   │  └─ layouts/                  # App layouts (AppShell, PublicLayout, WorkspaceLayout, ...)
+   ├─ providers/                   # AppProviders + auth/theme/notifications
    ├─ api/                         # HTTP client + domain API calls
-   ├─ pages/                       # Route-level pages (Home, Login, Workspace, …)
-	   ├─ components/                  # Shared UI primitives + layouts + providers
-	   │  ├─ ui/                        # Buttons, inputs, tabs, dialogs, etc.
-	   │  ├─ layouts/                   # Layout scaffolding (PageState, etc.)
-	   │  ├─ providers/                 # Auth, theme, notifications
-	   │  ├─ shell/                     # Global chrome (top bar, profile menu, etc.)
-	   │  ├─ icons.tsx                  # Icon exports
-	   ├─ globals.css                  # Global styles + theme tokens
-	   ├─ vite-env.d.ts                # Vite client typings + globals
-	   ├─ hooks/                       # React Query + shared app hooks
-	   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
-	   ├─ types/                       # Curated, app-facing type exports
-   │  └─ generated/                # Raw OpenAPI-derived types
-   └─ test/                        # Vitest setup + helpers
+   ├─ pages/                       # Route-level pages (Home, Login, Workspace, ...)
+   ├─ components/                  # Shared UI + navigation + layout primitives
+   │  ├─ topbar/                   # Global top bar + actions
+   │  ├─ layout/                   # Reusable layout components (PageState, ...)
+   │  ├─ ui/                       # Buttons, inputs, dialogs, etc. (shadcn)
+   │  └─ icons.tsx                 # Icon exports
+   ├─ hooks/                       # React Query + shared app hooks
+   ├─ lib/                         # Cross-cutting utilities (storage, uploads, preferences)
+   ├─ types/                       # Human-authored, app-facing type exports
+   │  └─ generated/                # Raw OpenAPI-derived types (never edit)
+   ├─ test/                        # Vitest setup + helpers
+   └─ index.css                    # Global styles + theme tokens
 ```
 
 ### Navigation & URL helpers
 
-* The app no longer uses React Router. A lightweight history provider powers navigation.
-* Use the helpers from `@app/navigation`:
-  * `NavProvider`, `useNavigate`, `useLocation`, `useSearchParams`
-  * `Link`/`NavLink` render `<a>` tags with history-aware click handling.
-* Page selection happens inside `app/App.tsx` – add new pages by extending the switch logic there.
+* The app uses **React Router v7 (data router)**.
+* Route definitions live in `src/app/routes.tsx`; the router is created in `src/app/router.tsx`.
+* Use `react-router-dom` hooks/components directly:
+  * `useNavigate`, `useLocation`, `useSearchParams`, `Link`, `NavLink`, `generatePath`, `createSearchParams`.
 
 ### Commands
 
@@ -51,7 +49,7 @@ ade openapi-types  # regenerate TS types from the FastAPI schema
 
 * Co-locate page-specific components under the owning page. Promote to `components/`, `hooks/`, `api/`, or `lib/` only when reuse emerges.
 * Keep OpenAPI types in `types/generated/`. Run `ade openapi-types` after backend schema changes.
-* Import API contracts from `@schema` (curated) instead of `@schema/generated`. Extend `src/types/` when new types are needed.
+* Import app types from `@/types` and `@/types/generated` as needed.
 * Prefer the shared API client and generated types for HTTP interactions.
 
 ---
@@ -64,7 +62,7 @@ This app is a **Vite + React + TypeScript SPA** built to be boringly predictable
 
 Think in three layers:
 
-1. **App shell** – global providers, layout, navigation wiring (`src/app/`).
+1. **App shell** – global providers, layout, navigation wiring (`src/app/layouts/`, `src/app/routes.tsx`, `src/providers/`).
 2. **Pages** – URL-addressable pages and big experiences (`src/pages`).
 3. **Shared building blocks** – reusable UI + app infrastructure (`src/components`, `src/api`, `src/hooks`, `src/lib`).
 
@@ -74,23 +72,26 @@ Screens are thin: they **compose** things, they don’t invent new infra.
 
 ### 2. Folder contracts
 
-- `src/app/`
-  - Bootstrapping and global wiring (App shell, providers, navigation).
+- `src/`
+  - `app/routes.tsx`, `app/router.tsx`, and `app/layouts/` for routing + layout shells.
+- `src/app/layouts/`
+  - App-level layouts and shell containers.
+- `src/providers/`
+  - AppProviders + auth/theme/notifications providers.
 - `src/pages/`
   - One folder per **page**, with an `index.tsx`.
   - Subfolders like `sections/` and `components/` are allowed, but keep them page-specific.
-  - Put **page-specific logic and UI** here.
 - `src/components/`
-  - Small, reusable, **a11y-correct** UI primitives under `components/ui/` (e.g., Tabs, Button, Dialog).
-  - Shared layouts under `components/layouts/` and shell chrome under `components/shell/`.
-  - Shared providers and UI-level contexts under `components/providers/`.
+  - UI primitives under `components/ui/`.
+  - Shared top bar chrome under `components/topbar/`.
+  - Reusable layout helpers under `components/layout/`.
 - `src/api/`
   - HTTP client + domain API calls (no React).
 - `src/hooks/`
   - Shared React hooks (React Query hooks, global app hooks).
 - `src/lib/`
   - Cross-cutting helpers (storage, uploads, local preferences).
-- `src/globals.css`
+- `src/index.css`
   - Global styles and theme tokens.
 - `src/types/`
   - Human-authored, app-facing types (and curated re-exports from generated types).
@@ -103,11 +104,10 @@ If you’re not sure where something goes: default to co-locating it under the *
 
 ### 3. Navigation
 
-- We use a **router-less model** based on the History API:
-  - A `NavProvider` exposes `useLocation` and `useNavigate`.
-- A pure `ScreenSwitch` turns `location.pathname` (and sometimes query params) into “which page/section to render”.
+- We use **React Router v7** with a central route config.
+- Route wiring lives in `src/routes.tsx` and `src/router.tsx`.
 - When you add or change pages:
-  - Update the central switch logic explicitly.
+  - Update the route table explicitly.
   - Keep path → page mapping **simple and obvious** (no hidden routing magic).
 - Deep links must work:
   - Direct navigation + browser refresh should always land on the correct screen/section.
@@ -131,8 +131,8 @@ If you’re not sure where something goes: default to co-locating it under the *
 
 ### 5. Types
 
-- Prefer importing app types from **`@schema`**.
-- Generated types live in **`@schema/generated`**; treat them as low-level building blocks, not the main API.
+- Prefer importing app types from `@/types`.
+- Generated types live in `@/types/generated`; treat them as low-level building blocks, not the main API.
 - It’s normal to define small domain types for UI and derived models (e.g., editor file, workspace section enum, dirty state). Put those in `types/` or in a local `types/` under the relevant page/section.
 
 ---
@@ -162,17 +162,17 @@ When you add new functionality:
 
 1. **New page or major experience**  
    - Create a folder under `src/pages/YourPage` with `index.tsx`.
-   - Wire it into the central page switch.
+   - Wire it into `src/routes.tsx`.
 2. **New sub-area inside a page**  
    - Create `sections/SubArea/index.tsx` under the relevant page.
 3. **Reusable pieces**  
-   - UI widgets → `src/components/ui/` or `src/components/layouts/`.  
+   - UI widgets → `src/components/ui/` or `src/components/layout/`.  
+   - Navigation chrome → `src/components/topbar/`.  
    - API calls → `src/api/`.  
    - Shared React hooks → `src/hooks/`.  
    - Non-React helpers → `src/lib/` (uploads, storage, etc.).  
-   - Utilities → `src/lib/`.
 4. **Types**  
-   - Add or refine app-facing types in `src/types/`, not next to generated types.
+   - Add or refine app-facing types in `src/types/`.
 
 ---
 

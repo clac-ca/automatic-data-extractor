@@ -1,9 +1,8 @@
 """Filesystem layout for the worker.
 
-Align with the API storage layout (venvs root is configurable):
+Align with the API storage layout (venvs/run roots are configurable):
 - data/workspaces/<workspace_id>/config_packages/<configuration_id>
-- data/workspaces/<workspace_id>/documents/<stored_uri>
-- data/workspaces/<workspace_id>/runs/<run_id>
+- <runs_root>/<run_id>
 - venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
 """
 
@@ -39,20 +38,6 @@ def _normalize_uuid(value: str | uuid.UUID) -> str:
         return text
 
 
-def _strip_file_uri(uri: str) -> str:
-    # Supports:
-    # - file:/abs/path
-    # - file:relative/path
-    if not uri.startswith("file:"):
-        raise ValueError(f"Unsupported URI scheme: {uri!r}")
-    path = uri[len("file:") :]
-    if path.startswith("//") and not path.startswith("///"):
-        # file://host/path is not supported
-        raise ValueError(f"Unsupported file URI: {uri!r}")
-    if path.startswith("///"):
-        # file:///abs/path -> /abs/path
-        path = path[2:]
-    return path
 
 
 def _safe_segment(value: str, *, fallback: str) -> str:
@@ -79,19 +64,17 @@ def _deps_digest_segment(deps_digest: str) -> str:
 class PathManager:
     data_dir: Path
     venvs_dir: Path
+    runs_root_dir: Path
 
     # --- roots ---
     def workspaces_root(self) -> Path:
         return _safe_join(self.data_dir, "workspaces")
 
-    def documents_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "documents")
-
     def configs_root(self, workspace_id: str) -> Path:
         return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "config_packages")
 
     def runs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "runs")
+        return self.runs_root_dir
 
     def venvs_root(self, workspace_id: str) -> Path:
         return _safe_join(self.venvs_dir, _normalize_uuid(workspace_id))
@@ -149,7 +132,7 @@ class PathManager:
 
     # --- runs ---
     def run_dir(self, workspace_id: str, run_id: str) -> Path:
-        return _safe_join(self.runs_root(workspace_id), _normalize_uuid(run_id))
+        return _safe_join(self.runs_root_dir, _normalize_uuid(run_id))
 
     def run_input_dir(self, workspace_id: str, run_id: str) -> Path:
         return _safe_join(self.run_dir(workspace_id, run_id), "input")
@@ -159,16 +142,6 @@ class PathManager:
 
     def run_event_log_path(self, workspace_id: str, run_id: str) -> Path:
         return _safe_join(self.run_dir(workspace_id, run_id), "logs", "events.ndjson")
-
-    # --- documents ---
-    def document_storage_path(self, *, workspace_id: str, stored_uri: str) -> Path:
-        uri = (stored_uri or "").strip()
-        if not uri:
-            raise ValueError("stored_uri is empty")
-        if uri.startswith("file:"):
-            uri = _strip_file_uri(uri)
-        uri = uri.lstrip("/")  # always treat as relative-to-documents root
-        return _safe_join(self.documents_root(workspace_id), uri)
 
     # --- venv executables ---
     def python_in_venv(self, venv_dir: Path) -> Path:

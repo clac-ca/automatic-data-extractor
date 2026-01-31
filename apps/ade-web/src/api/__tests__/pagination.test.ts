@@ -15,28 +15,35 @@ describe("pagination helpers", () => {
       .fn()
       .mockResolvedValueOnce({
         items: [1, 2],
-        page: 1,
-        perPage: 2,
-        pageCount: 2,
-        total: 4,
-        changesCursor: "0",
+        meta: {
+          limit: 2,
+          hasMore: true,
+          nextCursor: "next",
+          totalIncluded: false,
+          totalCount: null,
+          changesCursor: "0",
+        },
       })
       .mockResolvedValueOnce({
         items: [3, 4],
-        page: 2,
-        perPage: 2,
-        pageCount: 2,
-        total: 4,
-        changesCursor: "0",
+        meta: {
+          limit: 2,
+          hasMore: false,
+          nextCursor: null,
+          totalIncluded: false,
+          totalCount: null,
+          changesCursor: "0",
+        },
       });
 
     const result = await collectAllPages(fetchPage);
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage).toHaveBeenNthCalledWith(1, null);
+    expect(fetchPage).toHaveBeenNthCalledWith(2, "next");
     expect(result.items).toEqual([1, 2, 3, 4]);
-    expect(result.page).toBe(1);
-    expect(result.pageCount).toBe(1);
-    expect(result.perPage).toBe(2);
-    expect(result.total).toBe(4);
+    expect(result.meta.hasMore).toBe(false);
+    expect(result.meta.nextCursor).toBe(null);
+    expect(result.meta.limit).toBe(2);
   });
 });

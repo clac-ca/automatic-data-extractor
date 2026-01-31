@@ -10,13 +10,10 @@ from typing import Any, Literal
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
-from ade_api.common.listing import ListPage
+from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
-from ade_api.models import (
-    DocumentSource,
-    DocumentStatus,
-    RunStatus,
-)
+from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
+from ade_api.models import FileVersionOrigin, RunStatus
 
 
 class DocumentFileType(str, Enum):
@@ -27,6 +24,14 @@ class DocumentFileType(str, Enum):
     CSV = "csv"
     PDF = "pdf"
     UNKNOWN = "unknown"
+
+
+class DocumentConflictMode(str, Enum):
+    """Conflict handling for document uploads."""
+
+    REJECT = "reject"
+    UPLOAD_NEW_VERSION = "upload_new_version"
+    KEEP_BOTH = "keep_both"
 
 
 class UserSummary(BaseSchema):
@@ -49,29 +54,24 @@ class DocumentOut(BaseSchema):
 
     id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
     workspace_id: UUIDStr = Field(alias="workspaceId")
-    name: str = Field(
-        alias="original_filename",
-        serialization_alias="name",
-        description="Display name mapped from the original filename.",
-    )
+    name: str = Field(description="Display name for the document.")
     content_type: str | None = Field(default=None, alias="contentType")
     byte_size: int = Field(alias="byteSize")
+    current_version_no: int | None = Field(
+        default=None,
+        alias="currentVersionNo",
+        description="Current file version number for this document.",
+    )
+    comment_count: int = Field(default=0, alias="commentCount")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         alias="attributes",
         serialization_alias="metadata",
     )
-    status: DocumentStatus
-    source: DocumentSource
-    expires_at: datetime = Field(alias="expiresAt")
+    source: FileVersionOrigin | None = Field(default=None)
     activity_at: datetime | None = Field(default=None, alias="activityAt")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
-    version: int = Field(description="Monotonic document version.")
-    etag: str | None = Field(
-        default=None,
-        description="Weak ETag for optimistic concurrency checks.",
-    )
     deleted_at: datetime | None = Field(default=None, alias="deletedAt")
     assignee_user_id: UUIDStr | None = Field(default=None, alias="assigneeId")
     deleted_by: UUIDStr | None = Field(
@@ -97,20 +97,25 @@ class DocumentOut(BaseSchema):
         serialization_alias="assignee",
         description="Summary of the assigned user when available.",
     )
-    latest_run: DocumentRunSummary | None = Field(
+    last_run: DocumentRunSummary | None = Field(
         default=None,
-        alias="latestRun",
-        description="Latest run execution associated with the document when available.",
+        alias="lastRun",
+        description="Last run created for the document when available.",
     )
-    latest_successful_run: DocumentRunSummary | None = Field(
+    last_run_metrics: RunMetricsResource | None = Field(
         default=None,
-        alias="latestSuccessfulRun",
-        description="Latest successful run execution associated with the document when available.",
+        alias="lastRunMetrics",
+        description="Last run metrics summary when available.",
     )
-    latest_result: DocumentResultSummary | None = Field(
+    last_run_table_columns: list[RunColumnResource] | None = Field(
         default=None,
-        alias="latestResult",
-        description="Summary of the latest result metadata, when available.",
+        alias="lastRunTableColumns",
+        description="Last run table column details when available.",
+    )
+    last_run_fields: list[RunFieldResource] | None = Field(
+        default=None,
+        alias="lastRunFields",
+        description="Last run field detection summaries when available.",
     )
     list_row: DocumentListRow | None = Field(
         default=None,
@@ -242,23 +247,6 @@ class DocumentBatchDeleteResponse(BaseSchema):
     document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
 
 
-class DocumentBatchArchiveRequest(BaseSchema):
-    """Payload for archiving or restoring multiple documents."""
-
-    document_ids: list[UUIDStr] = Field(
-        ...,
-        min_length=1,
-        alias="documentIds",
-        description="Documents to archive or restore (all-or-nothing).",
-    )
-
-
-class DocumentBatchArchiveResponse(BaseSchema):
-    """Response envelope for batch archive or restore operations."""
-
-    documents: list[DocumentOut] = Field(default_factory=list)
-
-
 class TagCatalogItem(BaseSchema):
     """Tag entry with document counts."""
 
@@ -266,15 +254,19 @@ class TagCatalogItem(BaseSchema):
     document_count: int = Field(ge=0)
 
 
-class TagCatalogPage(ListPage[TagCatalogItem]):
-    """Paginated tag catalog."""
+class TagCatalogPage(CursorPage[TagCatalogItem]):
+    """Cursor-based tag catalog."""
 
 
 class DocumentRunSummary(BaseSchema):
-    """Minimal representation of a run associated with a document."""
+    """Minimal representation of the latest run row for a document."""
 
     id: UUIDStr = Field(description="Run identifier.")
     status: RunStatus
+    created_at: datetime = Field(
+        alias="createdAt",
+        description="Timestamp for when the run was created.",
+    )
     started_at: datetime | None = Field(
         default=None,
         alias="startedAt",
@@ -285,19 +277,11 @@ class DocumentRunSummary(BaseSchema):
         alias="completedAt",
         description="Timestamp for when the run completed, if available.",
     )
-    error_summary: str | None = Field(
+    error_message: str | None = Field(
         default=None,
-        alias="errorSummary",
-        description="Optional error summary from the run.",
+        alias="errorMessage",
+        description="Optional error message from the run.",
     )
-
-
-class DocumentResultSummary(BaseSchema):
-    """Summary of the latest document result metadata."""
-
-    attention: int = Field(ge=0)
-    unmapped: int = Field(ge=0)
-    pending: bool | None = None
 
 
 class DocumentListRow(BaseSchema):
@@ -307,55 +291,88 @@ class DocumentListRow(BaseSchema):
     workspace_id: UUIDStr = Field(alias="workspaceId")
     name: str = Field(description="Display name mapped from the original filename.")
     file_type: DocumentFileType = Field(alias="fileType")
-    status: DocumentStatus
     uploader: UserSummary | None = None
     assignee: UserSummary | None = None
     tags: list[str] = Field(default_factory=list)
     byte_size: int = Field(alias="byteSize")
+    current_version_no: int | None = Field(default=None, alias="currentVersionNo")
+    comment_count: int = Field(default=0, alias="commentCount")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     activity_at: datetime = Field(alias="activityAt")
-    version: int = Field(description="Monotonic document version.")
-    etag: str | None = Field(
+    last_run: DocumentRunSummary | None = Field(default=None, alias="lastRun")
+    last_run_metrics: RunMetricsResource | None = Field(default=None, alias="lastRunMetrics")
+    last_run_table_columns: list[RunColumnResource] | None = Field(
         default=None,
-        description="Weak ETag for optimistic concurrency checks.",
+        alias="lastRunTableColumns",
     )
-    latest_run: DocumentRunSummary | None = Field(default=None, alias="latestRun")
-    latest_successful_run: DocumentRunSummary | None = Field(
-        default=None,
-        alias="latestSuccessfulRun",
-    )
-    latest_result: DocumentResultSummary | None = Field(default=None, alias="latestResult")
+    last_run_fields: list[RunFieldResource] | None = Field(default=None, alias="lastRunFields")
 
 
-class DocumentListPage(ListPage[DocumentListRow]):
-    """Paginated envelope of document list rows."""
+class DocumentListPage(CursorPage[DocumentListRow]):
+    """Cursor-based envelope of document list rows."""
 
-    changes_cursor: str = Field(
-        description="Watermark cursor for the documents change feed at response time.",
-        alias="changesCursor",
-    )
+
+DocumentChangeOp = Literal["upsert", "delete"]
 
 
 class DocumentChangeEntry(BaseSchema):
     """Single entry from the documents change feed."""
 
-    cursor: str
-    type: Literal["document.changed", "document.deleted"]
+    id: str
+    op: DocumentChangeOp
     document_id: UUIDStr = Field(alias="documentId")
-    occurred_at: datetime = Field(alias="occurredAt")
-    document_version: int = Field(alias="documentVersion")
-    row: DocumentListRow | None = Field(
+
+
+class DocumentChangeDeltaResponse(BaseSchema):
+    """Delta response for document changes."""
+
+    changes: list[DocumentChangeEntry]
+    next_since: str = Field(alias="nextSince")
+    has_more: bool = Field(alias="hasMore")
+
+
+class DocumentCommentCreate(BaseSchema):
+    """Payload for creating a document comment."""
+
+    body: str = Field(min_length=1, max_length=4000)
+    mentions: list[UUIDStr] | None = Field(
         default=None,
-        description="Optional list row snapshot for changed documents.",
+        description="Optional list of mentioned user IDs.",
     )
 
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("body is required")
+        return stripped
 
-class DocumentChangesPage(BaseSchema):
-    """Envelope for cursor-based change feed results."""
 
-    items: list[DocumentChangeEntry] = Field(default_factory=list)
-    next_cursor: str = Field(alias="nextCursor")
+class DocumentCommentOut(BaseSchema):
+    """Serialized representation of a document comment."""
+
+    id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
+    document_id: UUIDStr = Field(alias="file_id", serialization_alias="documentId")
+    body: str
+    author: UserSummary | None = Field(
+        default=None,
+        alias="author_user",
+        serialization_alias="author",
+    )
+    mentions: list[UserSummary] = Field(
+        default_factory=list,
+        alias="mentioned_users",
+        serialization_alias="mentions",
+    )
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class DocumentCommentPage(CursorPage[DocumentCommentOut]):
+    """Cursor-based envelope of document comments."""
 
 
 class DocumentUploadRunOptions(BaseSchema):
@@ -389,19 +406,21 @@ class DocumentSheet(BaseSchema):
 
 
 __all__ = [
-    "DocumentBatchArchiveRequest",
-    "DocumentBatchArchiveResponse",
     "DocumentBatchDeleteRequest",
     "DocumentBatchDeleteResponse",
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
+    "DocumentConflictMode",
+    "DocumentChangeDeltaResponse",
     "DocumentChangeEntry",
-    "DocumentChangesPage",
+    "DocumentChangeOp",
     "DocumentFileType",
     "DocumentListPage",
     "DocumentListRow",
     "DocumentOut",
-    "DocumentResultSummary",
+    "DocumentCommentCreate",
+    "DocumentCommentOut",
+    "DocumentCommentPage",
     "DocumentRunSummary",
     "DocumentSheet",
     "DocumentTagsPatch",

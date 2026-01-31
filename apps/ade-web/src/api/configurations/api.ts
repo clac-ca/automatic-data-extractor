@@ -1,6 +1,6 @@
-import { apiFetch, client } from "@api/client";
-import type { ListQueryParams } from "@api/listing";
-import { ApiError, tryParseProblemDetails } from "@api/errors";
+import { apiFetch, client } from "@/api/client";
+import { buildListQuery } from "@/api/listing";
+import { ApiError, tryParseProblemDetails } from "@/api/errors";
 
 import type {
   ConfigurationPage,
@@ -11,10 +11,9 @@ import type {
   FileReadJson,
   FileRenameResponse,
   FileWriteResponse,
-} from "@schema/configurations";
-import type { paths } from "@schema";
+} from "@/types/configurations";
+import type { paths } from "@/types";
 
-type ListConfigurationsQuery = ListQueryParams;
 type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];
 type ImportConfigurationBody =
@@ -25,9 +24,10 @@ type UpsertConfigurationFileQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}"]["put"]["parameters"]["query"];
 
 export interface ListConfigurationsOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly sort?: string;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -35,18 +35,13 @@ export async function listConfigurations(
   workspaceId: string,
   options: ListConfigurationsOptions = {},
 ): Promise<ConfigurationPage> {
-  const { signal, page, pageSize, sort } = options;
-  const query: ListConfigurationsQuery = {};
-
-  if (typeof page === "number" && page > 0) {
-    query.page = page;
-  }
-  if (typeof pageSize === "number" && pageSize > 0) {
-    query.perPage = pageSize;
-  }
-  if (sort) {
-    query.sort = sort;
-  }
+  const { signal, limit, cursor, sort, includeTotal } = options;
+  const query = buildListQuery({
+    limit,
+    cursor: cursor ?? null,
+    sort: sort ?? null,
+    includeTotal,
+  });
 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/configurations", {
     params: {

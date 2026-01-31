@@ -1,45 +1,26 @@
-import type { ReactNode } from "react";
-
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { render, screen } from "@test/test-utils";
+import { render, screen } from "@/test/test-utils";
 import WorkspacesScreen from "..";
 
 const mockUseWorkspacesQuery = vi.fn();
 const mockUseSetDefaultWorkspaceMutation = vi.fn();
 
-vi.mock("@components/providers/auth/SessionContext", () => ({
+vi.mock("@/providers/auth/SessionContext", () => ({
   useSession: () => ({
     user: { permissions: ["workspaces.manage_all"] },
   }),
 }));
 
-vi.mock("@hooks/workspaces", () => ({
+vi.mock("@/hooks/workspaces", () => ({
   useWorkspacesQuery: (...args: unknown[]) => mockUseWorkspacesQuery(...args),
   useSetDefaultWorkspaceMutation: () => mockUseSetDefaultWorkspaceMutation(),
+  DEFAULT_WORKSPACE_PAGE_SIZE: 200,
 }));
 
-vi.mock("@app/navigation/workspacePaths", () => ({
-  getDefaultWorkspacePath: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
-}));
-
-vi.mock("@lib/workspacePreferences", () => ({
+vi.mock("@/lib/workspacePreferences", () => ({
   writePreferredWorkspaceId: () => undefined,
-}));
-
-vi.mock("@pages/Workspaces/components/WorkspaceDirectoryLayout", () => ({
-  WorkspaceDirectoryLayout: ({ children }: { readonly children: ReactNode }) => (
-    <div data-testid="workspace-layout">{children}</div>
-  ),
-}));
-
-vi.mock("@components/shell/GlobalNavSearch", () => ({
-  GlobalNavSearch: () => <div data-testid="global-search" />,
-}));
-
-vi.mock("@hooks/useShortcutHint", () => ({
-  useShortcutHint: () => undefined,
 }));
 
 describe("WorkspacesScreen", () => {
@@ -77,11 +58,15 @@ describe("WorkspacesScreen", () => {
     mockUseWorkspacesQuery.mockReturnValue({
       data: {
         items: workspaces,
-        page: 1,
-        perPage: 2,
-        pageCount: 1,
-        total: 2,
-        changesCursor: "0",
+        meta: {
+          limit: 2,
+          hasMore: false,
+          nextCursor: null,
+          totalIncluded: true,
+          totalCount: 2,
+          changesCursor: "0",
+        },
+        facets: null,
       },
       isLoading: false,
       isError: false,

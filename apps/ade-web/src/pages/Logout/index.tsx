@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useNavigate } from "@app/navigation/history";
-import { performLogout, sessionKeys } from "@api/auth/api";
+import { useNavigate } from "react-router-dom";
+import { performLogout, sessionKeys } from "@/api/auth/api";
 
 export default function LogoutScreen() {
   const navigate = useNavigate();

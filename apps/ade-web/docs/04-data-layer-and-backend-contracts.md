@@ -62,7 +62,7 @@ Design goals:
 
 ## 2. HTTP client
 
-All HTTP calls go through `src/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
+All HTTP calls go through `src/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@/types`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
 
 ### 2.1 Responsibilities
 
@@ -218,9 +218,12 @@ You should be able to navigate from a backend route to its module and function w
 
 All list endpoints share the same query keys and response envelope.
 
-**Query params**: `page`, `perPage`, `sort`, `filters`, `joinOperator`, `q`
+**Query params**: `limit`, `cursor`, `sort`, `filters`, `joinOperator`, `q`, `includeTotal`, `includeFacets`
 
-**Envelope**: `items`, `page`, `perPage`, `pageCount`, `total`, `changesCursor`
+**Envelope**: `items`, `meta`, `facets`
+
+`meta` contains `limit`, `hasMore`, `nextCursor`, `totalIncluded`, `totalCount`, and optional
+`changesCursor` when a change feed is available.
 
 `filters` is a URL-encoded JSON array of `{ id, operator, value }` items using
 the Tablecn-compatible DSL. Unknown query params return `422`.
@@ -249,9 +252,10 @@ Session:
 
 Auth providers:
 
-* `GET /api/v1/auth/providers`                – configured auth providers.
-* `GET /api/v1/auth/oidc/{provider}/authorize` – start SSO login (302 redirect).
-* `GET /api/v1/auth/oidc/{provider}/callback`  – finish SSO login.
+* `GET /api/v1/auth/providers` – configured auth providers (password + active SSO).
+* `GET /api/v1/auth/sso/providers` – public SSO provider list for the login screen.
+* `GET /api/v1/auth/sso/{providerId}/authorize` – start SSO login (302 redirect).
+* `GET /api/v1/auth/sso/{providerId}/callback` – finish SSO login.
 
 **Example functions**
 
@@ -633,7 +637,7 @@ API keys:
 Hooks:
 
 * `useUsersQuery()`
-* (API keys hooks not yet defined; call `@api/api-keys/api` directly from pages as needed.)
+* (API keys hooks not yet defined; call `@/api/api-keys/api` directly from pages as needed.)
 
 ---
 

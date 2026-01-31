@@ -98,7 +98,7 @@ Workspace
 | Run                   | Run           | `Run`                  | `runId`                          | `runs/<run_id>/…`                                        |
 | Document              | Document      | `Document`             | `documentId`, `workspaceId`      | `documents/<document_id>.<ext>`                          |
 
-> OpenAPI-generated types live under `@schema`. In app code we alias them to clean domain names instead of using the raw generated names everywhere.
+> OpenAPI-generated types live under `@/types`. In app code we alias them to clean domain names instead of using the raw generated names everywhere.
 
 ---
 
@@ -129,4 +129,5 @@ Workspace
 ### 4.5 Document
 
 * Immutable input file uploaded into a workspace.
-* Status: `uploaded`, `processing`, `processed`, `failed`, `archived`.
+* No top-level status; run state is exposed via `lastRun.phase` (`queued`, `building`, `running`, `succeeded`, `failed`) with optional `lastRun.phaseReason` when `phase=building`.
+* `lastSuccessfulRun` points at the latest successful output when available.

@@ -17,5 +17,4 @@ async def test_info_endpoint_returns_metadata(async_client: AsyncClient, setting
     payload = response.json()
     assert payload["version"] == settings.app_version
     assert payload["commitSha"] == settings.app_commit_sha
-    assert payload["environment"] == settings.app_environment
     assert payload.get("startedAt")

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import anyio
 import io
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import openpyxl
 import pytest
 from httpx import AsyncClient
 
 from ade_api.common.encoding import json_dumps
-from ade_api.models import Document
+from ade_api.models import File
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -30,10 +30,7 @@ async def test_upload_list_download_document(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -52,11 +49,12 @@ async def test_upload_list_download_document(
     listing = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert listing.status_code == 200
     payload = listing.json()
-    assert payload["page"] == 1
-    assert payload["perPage"] == 50
-    assert payload["pageCount"] >= 1
-    assert payload["total"] >= 1
-    assert "changesCursor" in payload
+    assert payload["meta"]["limit"] == 50
+    assert payload["meta"]["hasMore"] is False
+    assert payload["meta"].get("nextCursor") is None
+    assert payload["meta"]["totalIncluded"] is False
+    assert payload["meta"].get("totalCount") is None
+    assert "changesCursor" in payload["meta"]
     assert any(item["id"] == document_id for item in payload["items"])
     assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 
@@ -82,10 +80,7 @@ async def test_upload_document_ignores_blank_metadata(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -108,10 +103,7 @@ async def test_list_documents_rejects_unknown_query_params(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     response = await async_client.get(
         f"{workspace_base}/documents",
@@ -132,10 +124,7 @@ async def test_upload_document_does_not_cache_worksheets(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     workbook = openpyxl.Workbook()
     workbook.active.title = "Sheet A"
@@ -157,7 +146,7 @@ async def test_upload_document_does_not_cache_worksheets(
 
     assert upload.status_code == 201, upload.text
     document_id = UUID(upload.json()["id"])
-    record = await anyio.to_thread.run_sync(db_session.get, Document, document_id)
+    record = await anyio.to_thread.run_sync(db_session.get, File, document_id)
     assert record is not None
     assert "worksheets" not in (record.attributes or {})
 
@@ -172,10 +161,7 @@ async def test_upload_document_exceeds_limit_returns_413(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Idempotency-Key": f"idem-{uuid4().hex}",
-    }
+    headers = {"Authorization": f"Bearer {token}"}
 
     override_app_settings(storage_upload_max_bytes=8)
 

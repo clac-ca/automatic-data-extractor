@@ -8,7 +8,13 @@ from ade_api.settings import Settings
 
 def test_init_shutdown_db_state() -> None:
     app = FastAPI()
-    settings = Settings(_env_file=None, database_url="sqlite:///:memory:")
+    settings = Settings(
+        _env_file=None,
+        database_url="postgresql://user:pass@localhost:5432/ade?sslmode=disable",
+        blob_container="ade-test",
+        blob_connection_string="UseDevelopmentStorage=true",
+        secret_key="test-secret-key-for-tests-please-change",
+    )
 
     init_db(app, settings)
     assert get_engine(app) is not None

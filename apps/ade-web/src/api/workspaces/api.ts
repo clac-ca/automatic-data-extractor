@@ -1,7 +1,7 @@
-import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@api/listing";
-import { clampPageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@api/pagination";
-import { client } from "@api/client";
-import type { paths, ScopeType } from "@schema";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
+import { clampPageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/api/pagination";
+import { client } from "@/api/client";
+import type { paths, ScopeType } from "@/types";
 import type { PathsWithMethod } from "openapi-typescript-helpers";
 
 import type {
@@ -17,7 +17,7 @@ import type {
   WorkspaceMemberRolesUpdatePayload,
   WorkspaceProfile,
   WorkspaceUpdatePayload,
-} from "@schema/workspaces";
+} from "@/types/workspaces";
 
 export const DEFAULT_WORKSPACE_PAGE_SIZE = MAX_PAGE_SIZE;
 export const DEFAULT_MEMBER_PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -28,25 +28,27 @@ const WORKSPACE_SCOPE: ScopeType = "workspace";
 
 
 export interface ListWorkspacesOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly sort?: string;
   readonly q?: string;
   readonly filters?: FilterItem[];
   readonly joinOperator?: FilterJoinOperator;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
 export async function fetchWorkspaces(options: ListWorkspacesOptions = {}): Promise<WorkspaceListPage> {
-  const { page, pageSize, sort, q, filters, joinOperator, signal } = options;
-  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_WORKSPACE_PAGE_SIZE);
+  const { limit, cursor, sort, q, filters, joinOperator, includeTotal, signal } = options;
+  const normalizedPageSize = clampPageSize(limit ?? DEFAULT_WORKSPACE_PAGE_SIZE);
   const query = buildListQuery({
-    page,
-    perPage: normalizedPageSize,
+    limit: normalizedPageSize,
+    cursor: cursor ?? null,
     sort: sort ?? null,
     q,
     filters,
     joinOperator,
+    includeTotal,
   });
 
   const { data } = await client.GET("/api/v1/workspaces", {
@@ -93,12 +95,13 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 }
 
 export interface ListWorkspaceMembersOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly sort?: string;
   readonly q?: string;
   readonly filters?: FilterItem[];
   readonly joinOperator?: FilterJoinOperator;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
@@ -106,15 +109,16 @@ export async function listWorkspaceMembers(
   workspaceId: string,
   options: ListWorkspaceMembersOptions = {},
 ): Promise<WorkspaceMemberPage> {
-  const { page, pageSize, sort, q, filters, joinOperator, signal } = options;
-  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_MEMBER_PAGE_SIZE);
+  const { limit, cursor, sort, q, filters, joinOperator, includeTotal, signal } = options;
+  const normalizedPageSize = clampPageSize(limit ?? DEFAULT_MEMBER_PAGE_SIZE);
   const query = buildListQuery({
-    page,
-    perPage: normalizedPageSize,
+    limit: normalizedPageSize,
+    cursor: cursor ?? null,
     sort: sort ?? null,
     q,
     filters,
     joinOperator,
+    includeTotal,
   });
 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/members", {
@@ -179,25 +183,27 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
 }
 
 export interface ListWorkspaceRolesOptions {
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly sort?: string;
   readonly q?: string;
   readonly joinOperator?: FilterJoinOperator;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
 export async function listWorkspaceRoles(options: ListWorkspaceRolesOptions = {}): Promise<RoleListPage> {
-  const { page, pageSize, sort, q, joinOperator, signal } = options;
-  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_ROLE_PAGE_SIZE);
+  const { limit, cursor, sort, q, joinOperator, includeTotal, signal } = options;
+  const normalizedPageSize = clampPageSize(limit ?? DEFAULT_ROLE_PAGE_SIZE);
   const filters: FilterItem[] = [{ id: "scopeType", operator: "eq", value: WORKSPACE_SCOPE }];
   const query = buildListQuery({
-    page,
-    perPage: normalizedPageSize,
+    limit: normalizedPageSize,
+    cursor: cursor ?? null,
     sort: sort ?? null,
     q,
     filters,
     joinOperator,
+    includeTotal,
   });
 
   const { data } = await client.GET("/api/v1/roles", { params: { query }, signal });
@@ -251,25 +257,27 @@ export async function deleteWorkspaceRole(
 
 export interface ListPermissionsOptions {
   readonly scope?: ScopeType;
-  readonly page?: number;
-  readonly pageSize?: number;
+  readonly limit?: number;
+  readonly cursor?: string | null;
   readonly sort?: string;
   readonly q?: string;
   readonly joinOperator?: FilterJoinOperator;
+  readonly includeTotal?: boolean;
   readonly signal?: AbortSignal;
 }
 
 export async function listPermissions(options: ListPermissionsOptions = {}): Promise<PermissionListPage> {
-  const { scope = WORKSPACE_SCOPE, page, pageSize, sort, q, joinOperator, signal } = options;
-  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_PERMISSION_PAGE_SIZE);
+  const { scope = WORKSPACE_SCOPE, limit, cursor, sort, q, joinOperator, includeTotal, signal } = options;
+  const normalizedPageSize = clampPageSize(limit ?? DEFAULT_PERMISSION_PAGE_SIZE);
   const filters: FilterItem[] = [{ id: "scopeType", operator: "eq", value: scope }];
   const query = buildListQuery({
-    page,
-    perPage: normalizedPageSize,
+    limit: normalizedPageSize,
+    cursor: cursor ?? null,
     sort: sort ?? null,
     q,
     filters,
     joinOperator,
+    includeTotal,
   });
 
   const { data } = await client.GET("/api/v1/permissions", {

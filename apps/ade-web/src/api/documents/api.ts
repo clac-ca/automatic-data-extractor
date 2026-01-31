@@ -1,44 +1,46 @@
-import { client } from "@api/client";
-import { apiFetch } from "@api/client";
-import { ApiError } from "@api/errors";
-import type { FilterItem, FilterJoinOperator } from "@api/listing";
-import { encodeFilters } from "@api/listing";
-import type { components } from "@schema";
+import { client } from "@/api/client";
+import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
+import type { components } from "@/types";
 
-export type DocumentRecord = components["schemas"]["DocumentOut"] & { etag?: string | null };
-export type DocumentListRow = components["schemas"]["DocumentListRow"] & { etag?: string | null };
+export type DocumentRecord = components["schemas"]["DocumentOut"];
+export type DocumentListRow = components["schemas"]["DocumentListRow"];
 export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "items"> & {
   items?: DocumentListRow[] | null;
 };
 export type DocumentPageResult = DocumentListPage;
-export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
-export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
-export type DocumentStatus = components["schemas"]["DocumentStatus"];
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
 
-export class DocumentChangesResyncError extends Error {
-  readonly latestCursor: string;
-  readonly oldestCursor: string | null;
-
-  constructor(latestCursor: string, oldestCursor: string | null = null) {
-    super("Document changes cursor is too old; resync required.");
-    this.name = "DocumentChangesResyncError";
-    this.latestCursor = latestCursor;
-    this.oldestCursor = oldestCursor;
-  }
-}
-
 export type ListDocumentsQuery = {
-  page: number;
-  perPage: number;
+  limit: number;
+  cursor?: string | null;
   sort?: string | null;
-  filters?: FilterItem[];
+  filters?: FilterItem[] | string | null;
   joinOperator?: FilterJoinOperator;
   q?: string | null;
+  includeTotal?: boolean;
+  includeFacets?: boolean;
+  includeRunMetrics?: boolean;
+  includeRunTableColumns?: boolean;
+  includeRunFields?: boolean;
 };
+
+type DocumentIncludeOptions = {
+  includeRunMetrics?: boolean;
+  includeRunTableColumns?: boolean;
+  includeRunFields?: boolean;
+};
+
+function buildDocumentIncludeQuery(options?: DocumentIncludeOptions) {
+  if (!options) return {};
+  const query: Record<string, unknown> = {};
+  if (options.includeRunMetrics) query.includeRunMetrics = true;
+  if (options.includeRunTableColumns) query.includeRunTableColumns = true;
+  if (options.includeRunFields) query.includeRunFields = true;
+  return query;
+}
 
 const DEFAULT_DOCUMENTS_PAGE_SIZE = 50;
 
@@ -95,21 +97,31 @@ export async function fetchWorkspaceDocuments(
   workspaceId: string,
   options: {
     sort: string | null;
-    page: number;
-    perPage: number;
-    filters?: FilterItem[];
+    limit: number;
+    cursor?: string | null;
+    filters?: FilterItem[] | string | null;
     joinOperator?: FilterJoinOperator;
     q?: string | null;
+    includeTotal?: boolean;
+    includeFacets?: boolean;
+    includeRunMetrics?: boolean;
+    includeRunTableColumns?: boolean;
+    includeRunFields?: boolean;
   },
   signal?: AbortSignal,
 ): Promise<DocumentPageResult> {
   const query = {
-    sort: options.sort ?? undefined,
-    page: options.page > 0 ? options.page : 1,
-    perPage: options.perPage > 0 ? options.perPage : DEFAULT_DOCUMENTS_PAGE_SIZE,
-    q: options.q ?? undefined,
-    filters: encodeFilters(options.filters),
-    joinOperator: options.joinOperator,
+    ...buildListQuery({
+      sort: options.sort ?? null,
+      limit: options.limit > 0 ? options.limit : DEFAULT_DOCUMENTS_PAGE_SIZE,
+      cursor: options.cursor ?? null,
+      q: options.q ?? null,
+      filters: options.filters,
+      joinOperator: options.joinOperator,
+      includeTotal: options.includeTotal,
+      includeFacets: options.includeFacets,
+    }),
+    ...buildDocumentIncludeQuery(options),
   };
 
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
@@ -121,55 +133,16 @@ export async function fetchWorkspaceDocuments(
   return data;
 }
 
-export async function fetchWorkspaceDocumentChanges(
-  workspaceId: string,
-  options: { cursor: string; limit?: number; includeRows?: boolean },
-  signal?: AbortSignal,
-): Promise<DocumentChangesPage> {
-  const query = new URLSearchParams({
-    cursor: options.cursor,
-  });
-  if (typeof options.limit === "number") {
-    query.set("limit", String(options.limit));
-  }
-  if (options.includeRows) {
-    query.set("includeRows", "true");
-  }
-
-  const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/documents/changes?${query.toString()}`,
-    { signal },
-  );
-
-  if (response.status === 410) {
-    const payload = (await response.json().catch(() => null)) as
-      | { detail?: { error?: string; latestCursor?: string; oldestCursor?: string } }
-      | null;
-    const latestCursor = payload?.detail?.latestCursor;
-    const oldestCursor = payload?.detail?.oldestCursor ?? null;
-    if (latestCursor) {
-      throw new DocumentChangesResyncError(latestCursor, oldestCursor);
-    }
-  }
-
-  if (!response.ok) {
-    throw new ApiError(`Request failed with status ${response.status}`, response.status);
-  }
-
-  const data = (await response.json().catch(() => null)) as DocumentChangesPage | null;
-  if (!data) {
-    throw new Error("Expected document changes payload.");
-  }
-  return data;
-}
 
 export async function fetchWorkspaceDocumentById(
   workspaceId: string,
   documentId: string,
+  options: DocumentIncludeOptions = {},
   signal?: AbortSignal,
 ): Promise<DocumentRecord> {
+  const query = buildDocumentIncludeQuery(options);
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
-    params: { path: { workspaceId, documentId } },
+    params: { path: { workspaceId, documentId }, query },
     signal,
   });
   if (!data) throw new Error("Expected document payload.");
@@ -179,10 +152,12 @@ export async function fetchWorkspaceDocumentById(
 export async function fetchWorkspaceDocumentRowById(
   workspaceId: string,
   documentId: string,
+  options: DocumentIncludeOptions = {},
   signal?: AbortSignal,
 ): Promise<DocumentListRow> {
+  const query = buildDocumentIncludeQuery(options);
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents/{documentId}/listrow", {
-    params: { path: { workspaceId, documentId } },
+    params: { path: { workspaceId, documentId }, query },
     signal,
   });
   if (!data) throw new Error("Expected document list row payload.");
@@ -193,7 +168,6 @@ export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
   payload: { assigneeId?: string | null; metadata?: Record<string, unknown> | null },
-  options: { ifMatch?: string | null } = {},
 ): Promise<DocumentRecord> {
   const body: {
     assigneeId?: string | null;
@@ -206,15 +180,9 @@ export async function patchWorkspaceDocument(
     body.metadata = payload.metadata ?? null;
   }
 
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-
   const { data } = await client.PATCH("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
     body,
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 
   if (!data) throw new Error("Expected updated document record.");
@@ -224,16 +192,9 @@ export async function patchWorkspaceDocument(
 export async function deleteWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  options: { ifMatch?: string | null } = {},
 ): Promise<void> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-
   await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
     params: { path: { workspaceId, documentId } },
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
 }
 
@@ -250,64 +211,53 @@ export async function deleteWorkspaceDocumentsBatch(
   return data.documentIds ?? [];
 }
 
-export async function archiveWorkspaceDocument(
-  workspaceId: string,
-  documentId: string,
-  options: { ifMatch?: string | null } = {},
-): Promise<DocumentRecord> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
-    params: { path: { workspaceId, documentId } },
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-  });
+const DEFAULT_ID_FILTER_BATCH = 50;
 
-  if (!data) throw new Error("Expected updated document record.");
-  return data;
-}
-
-export async function restoreWorkspaceDocument(
-  workspaceId: string,
-  documentId: string,
-  options: { ifMatch?: string | null } = {},
-): Promise<DocumentRecord> {
-  const headers: Record<string, string> = {};
-  if (options.ifMatch) {
-    headers["If-Match"] = options.ifMatch;
-  }
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
-    params: { path: { workspaceId, documentId } },
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-  });
-
-  if (!data) throw new Error("Expected updated document record.");
-  return data;
-}
-
-export async function archiveWorkspaceDocumentsBatch(
+export async function fetchWorkspaceDocumentRowsByIdFilter(
   workspaceId: string,
   documentIds: string[],
-): Promise<DocumentRecord[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
-    params: { path: { workspaceId } },
-    body: { documentIds },
-  });
+  options: {
+    sort: string | null;
+    filters?: FilterItem[] | null;
+    joinOperator?: FilterJoinOperator;
+    q?: string | null;
+    includeRunMetrics?: boolean;
+    includeRunTableColumns?: boolean;
+    includeRunFields?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<DocumentListRow[]> {
+  const uniqueIds = Array.from(new Set(documentIds)).filter((id) => id);
+  if (uniqueIds.length === 0) return [];
 
-  if (!data) throw new Error("Expected updated document records.");
-  return data.documents ?? [];
-}
+  const filtersBase = options.filters ?? [];
+  const batches: string[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += DEFAULT_ID_FILTER_BATCH) {
+    batches.push(uniqueIds.slice(i, i + DEFAULT_ID_FILTER_BATCH));
+  }
 
-export async function restoreWorkspaceDocumentsBatch(
-  workspaceId: string,
-  documentIds: string[],
-): Promise<DocumentRecord[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
-    params: { path: { workspaceId } },
-    body: { documentIds },
-  });
+  const byId = new Map<string, DocumentListRow>();
+  for (const batch of batches) {
+    // Use the list endpoint with `id in [...]` so membership respects the same server-side filters.
+    const filters = [...filtersBase, { id: "id", operator: "in", value: batch }];
+    const page = await fetchWorkspaceDocuments(
+      workspaceId,
+      {
+        limit: batch.length,
+        sort: options.sort,
+        filters,
+        joinOperator: options.joinOperator,
+        q: options.q,
+        includeRunMetrics: options.includeRunMetrics,
+        includeRunTableColumns: options.includeRunTableColumns,
+        includeRunFields: options.includeRunFields,
+      },
+      signal,
+    );
+    (page.items ?? []).forEach((row) => {
+      byId.set(row.id, row);
+    });
+  }
 
-  if (!data) throw new Error("Expected updated document records.");
-  return data.documents ?? [];
+  return Array.from(byId.values());
 }

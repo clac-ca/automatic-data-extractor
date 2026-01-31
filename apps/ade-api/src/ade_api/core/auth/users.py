@@ -80,8 +80,8 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, UUID]):
         password_helper: PasswordHelper,
     ) -> None:
         super().__init__(user_db)
-        self.reset_password_token_secret = settings.jwt_secret_value
-        self.verification_token_secret = settings.jwt_secret_value
+        self.reset_password_token_secret = settings.secret_key_value
+        self.verification_token_secret = settings.secret_key_value
         self.password_helper = password_helper
 
     async def authenticate(self, credentials):  # type: ignore[override]
@@ -335,9 +335,9 @@ def get_cookie_backend(settings: Settings) -> AuthenticationBackend:
 
 def get_jwt_strategy(settings: Settings) -> JWTStrategy:
     return JWTStrategy(
-        secret=settings.jwt_secret_value,
-        lifetime_seconds=int(settings.jwt_access_ttl.total_seconds()),
-        algorithm=settings.jwt_algorithm,
+        secret=settings.secret_key_value,
+        lifetime_seconds=int(settings.access_token_expire_minutes * 60),
+        algorithm=settings.algorithm,
     )
 
 

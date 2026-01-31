@@ -2,8 +2,6 @@
 
 This file is **for AI coding agents** working on the `ade` codebase. ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-If you are operating inside a subdirectory with its own `AGENTS.md`, follow the nearest instructions in the directory tree (they override this file).
-
 ## Repo map
 
 ```
@@ -11,18 +9,11 @@ automatic-data-extractor/
 ├─ apps/
 │  ├─ ade-api/      # FastAPI backend (API only)
 │  ├─ ade-web/      # React/Vite SPA
-│  ├─ ade-engine/   # Engine runtime (Python package + Typer CLI)
-│  ├─ ade-worker/   # Background worker (builds + runs)
-│  └─ ade-cli/      # Orchestration CLI (console script: ade)
+│  └─ ade-worker/   # Background worker (builds + runs).
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
 ```
-
-Docs to know:
-- Top-level `docs/` (guides, admin, templates, events)
-- Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI)
-- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing)
 
 ## Ownership boundaries
 
@@ -40,7 +31,7 @@ Docs to know:
 - Artifact storage paths and cleanup decisions
 - Updating run results and statuses
 
-### `ade-engine` (runtime engine)
+### `ade-engine` (runtime engine, external repo)
 - Core normalization/processing pipeline and domain logic
 - CLI commands (`process`, `config`, `version`) and engine runtime APIs
 - IO, mapping, validation, normalization rules, telemetry hooks
@@ -57,51 +48,44 @@ Docs to know:
 
 ## ade CLI essentials
 
-Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
-
-- `ade setup` — one-time bootstrap (venv, hooks).
-- `ade dev [--api-only|--web-only|--no-worker] [--api-port 9000]` — run dev services (api/web/worker; disable worker if needed).
-- `ade start` — serve the API + worker (run `ade migrate` first). `ade worker` — run the worker only. `ade build` — build web assets.
-- `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
-- `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
-- Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
-
-### Help snapshots (truncated)
-
 ```bash
-$ ade --help
-Usage: ade [OPTIONS] COMMAND [ARGS]...
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  setup     Bootstrap repo env and hooks
-  dev       Run API/web dev servers (+ worker)
-  start     Serve API + worker
-  worker    Run the background worker only
-  build     Build web assets
-  tests     Run Python/JS tests
-  lint      Lint/format helpers
-  bundle    Bundle files into Markdown
-  types     Generate frontend API types
-  migrate   Run DB migrations
-  routes    List FastAPI routes
-  users     Manage users/roles
-  docker    Local Docker helpers
-  clean     Remove build artifacts/caches
-  reset     Clean + venv reset
-  ci        Full lint/test/build pipeline
+# Dev env (repo root)
+./setup.sh
 ```
 
 ```bash
-$ python -m ade_engine --help
-Usage: python -m ade_engine [OPTIONS] COMMAND [ARGS]...
+# CLI discovery (source of truth)
+ade --help
+ade api --help
+ade worker --help
+ade-api --help
+ade-worker --help
+ade-engine --help
+```
 
-Commands:
-  process  Process inputs with the ADE engine (file/batch)
-  config   Create and validate config packages
-  version  Show engine version
+```bash
+# Common workflows
+ade dev              # api + worker + web (reload)
+ade start            # api + worker + web (nginx)
+ade api dev          # api only (reload)
+ade api start        # api only (prod-style)
+ade worker start
+ade web serve        # nginx (built assets)
+ade web dev          # requires dev deps + node_modules
+```
+
+```bash
+# Quality checks
+ade api types
+ade api lint
+ade api test
+npm run lint --prefix apps/ade-web
+npm run test --prefix apps/ade-web
+```
+
+```bash
+# Build web assets
+ade web build        # or: npm run build --prefix apps/ade-web
 ```
 
 ## Engine CLI quick runs (current)
@@ -135,29 +119,12 @@ ade-engine process batch \
   --config-package my-config
 ```
 
-## Bundle examples
-
-```bash
-# Bundle docs as Markdown
-ade bundle --ext md --out /tmp/bundle.md docs/
-
-# Bundle with filters (skips __pycache__ automatically)
-ade bundle --include "src/**" --include "apps/ade-api/src/ade_api/**/*.py" \
-           --out /tmp/bundle.md
-
-# Copy a bundle to the clipboard (opt-in)
-ade bundle README.md apps/ade-api/AGENTS.md --clip
-
-# Bundle specific files quickly
-ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
-```
-
 ## Frontend API types
 
-- Generated types: `apps/ade-web/src/types/openapi.d.ts`.
-- If missing/stale, run `ade types` before touching frontend API code.
+- Generated types: `apps/ade-web/src/types/generated/openapi.d.ts`.
+- If missing/stale, run `ade api types` before touching frontend API code.
 - Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
 ## 🤖 Agent rules
 
-1. Always run `ade tests` before committing and `ade ci` before pushing or opening a PR.
+1. Always run `ade api test` before committing and run the relevant frontend/backend checks for touched areas.

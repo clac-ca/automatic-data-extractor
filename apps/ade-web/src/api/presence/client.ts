@@ -1,4 +1,4 @@
-import { resolveApiUrl } from "@api/client";
+import { resolveApiUrl } from "@/api/client";
 
 export function resolveWebSocketUrl(path: string) {
   const resolved = resolveApiUrl(path);

@@ -58,7 +58,7 @@ function AvatarGroup(props: AvatarGroupProps) {
     dir = "ltr",
     size = 40,
     max,
-    asChild: _asChild,
+    asChild,
     reverse = false,
     renderOverflow,
     className,
@@ -77,8 +77,7 @@ function AvatarGroup(props: AvatarGroupProps) {
   const overflowCount = shouldTruncate ? itemCount - (max - 1) : 0;
   const totalRenderedItems = shouldTruncate ? max : itemCount;
 
-  // AvatarGroup renders multiple items; avoid Slot/asChild here to prevent runtime crashes.
-  const RootPrimitive = "div";
+  const RootPrimitive = asChild ? Slot : "div";
 
   return (
     <RootPrimitive
@@ -200,12 +199,8 @@ function AvatarGroupItem(props: AvatarGroupItemProps) {
     };
   }, [size, index, orientation, dir, reverse, itemCount]);
 
-  // Slot requires a single React element; fallback wrapper handles text/arrays/fragments safely.
-  const ItemWrapper =
-    React.isValidElement(child) && child.type !== React.Fragment ? Slot : "span";
-
   return (
-    <ItemWrapper
+    <Slot
       data-slot="avatar-group-item"
       className={cn(
         "size-full shrink-0 overflow-hidden rounded-full [&_img]:size-full",
@@ -218,7 +213,7 @@ function AvatarGroupItem(props: AvatarGroupItemProps) {
       {...itemProps}
     >
       {child}
-    </ItemWrapper>
+    </Slot>
   );
 }
 

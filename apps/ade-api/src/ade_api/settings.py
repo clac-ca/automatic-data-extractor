@@ -2,93 +2,20 @@
 
 from __future__ import annotations
 
-import json
-import os
-import secrets
 from datetime import timedelta
 from functools import lru_cache
+import json
 from pathlib import Path
-from typing import Annotated, Any, Literal
-from urllib.parse import urlparse
+import re
+from typing import Literal
 
-from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-from sqlalchemy.engine import URL, make_url
+from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---- Defaults ---------------------------------------------------------------
 
-MODULE_DIR = Path(__file__).resolve().parent
-
-
-def _detect_repo_root(start: Path) -> Path:
-    for p in [start, *start.parents]:
-        if (p / "apps").is_dir():
-            return p
-        if (p / ".git").is_dir():
-            return p
-    return Path.cwd()
-
-
-REPO_ROOT = _detect_repo_root(MODULE_DIR)
-
-
-def _env_file() -> str:
-    override = os.getenv("ADE_ENV_FILE")
-    if override and override.strip():
-        return str(Path(override).expanduser().resolve())
-    return str((REPO_ROOT / ".env").resolve())
-
-
-def _candidate_api_roots() -> list[Path]:
-    """Return candidate directories that may hold alembic.ini + migrations."""
-
-    candidates = [
-        MODULE_DIR.parent.parent,  # source layout: apps/ade-api
-        MODULE_DIR,  # packaged assets alongside the module (if bundled)
-        MODULE_DIR.parent,  # site-packages/ade_api
-        Path.cwd() / "apps" / "ade-api",  # common repo/docker working directory
-        Path.cwd(),  # final fallback to current working directory
-    ]
-
-    seen: set[Path] = set()
-    resolved: list[Path] = []
-    for path in candidates:
-        try:
-            absolute = path.expanduser().resolve()
-        except OSError:
-            continue
-        if absolute not in seen:
-            seen.add(absolute)
-            resolved.append(absolute)
-    return resolved
-
-
-def _detect_api_root() -> Path:
-    """Pick a sensible API root that actually contains Alembic assets."""
-
-    default_root = MODULE_DIR.parent.parent
-    for candidate in _candidate_api_roots():
-        if (candidate / "alembic.ini").exists() and (candidate / "migrations").exists():
-            return candidate
-    return default_root
-
-
-DEFAULT_API_ROOT = _detect_api_root()
-DEFAULT_STORAGE_ROOT = REPO_ROOT / "data"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
-DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
-DEFAULT_WORKSPACES_DIR = DEFAULT_STORAGE_ROOT / "workspaces"
-DEFAULT_DB_FILENAME = "ade.sqlite"
-DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
-DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
-DEFAULT_DOCUMENTS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_CONFIGS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_VENVS_DIR = DEFAULT_STORAGE_ROOT / "venvs"
-DEFAULT_RUNS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
-DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
-DEFAULT_ENGINE_SPEC = "apps/ade-engine"
-DEFAULT_FRONTEND_DIST_DIR = Path("apps/ade-web/dist")
+DEFAULT_CORS_ORIGINS: list[str] = []
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 2000
@@ -98,84 +25,6 @@ MAX_SEARCH_LEN = 128
 MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
 
-_UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-
-
-# ---- Helpers ----------------------------------------------------------------
-
-
-def _parse_duration(value: Any, *, field_name: str) -> timedelta:
-    """Accept seconds (int/float/str) or '60s'/'5m'/'1h'/'14d'."""
-    if isinstance(value, timedelta):
-        return value
-    if isinstance(value, (int, float)):
-        seconds = float(value)
-    elif isinstance(value, str):
-        s = value.strip()
-        if not s:
-            raise ValueError(f"{field_name} must not be blank")
-        try:
-            seconds = float(s)  # plain seconds
-        except ValueError:
-            unit = s[-1].lower()
-            num = s[:-1].strip()
-            if unit not in _UNIT_SECONDS or not num:
-                raise ValueError(f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'") from None
-            try:
-                seconds = float(num) * _UNIT_SECONDS[unit]
-            except ValueError as exc:
-                raise ValueError(f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'") from exc
-    else:
-        raise TypeError(f"{field_name} must be number, duration string, or timedelta")
-    if seconds <= 0:
-        raise ValueError(f"{field_name} must be > 0 seconds")
-    return timedelta(seconds=seconds)
-
-
-def _list_from_env(value: Any, *, default: list[str]) -> list[str]:
-    """JSON array or comma string; strip empties; dedupe preserving order."""
-    if value in (None, "", []):
-        items = list(default)
-    elif isinstance(value, str):
-        s = value.strip()
-        if not s:
-            items = list(default)
-        elif s.startswith("["):
-            try:
-                parsed = json.loads(s)
-            except json.JSONDecodeError as exc:
-                raise ValueError("Expected a JSON array") from exc
-            if not isinstance(parsed, list):
-                raise ValueError("Expected a JSON array")
-            items = [str(x).strip() for x in parsed if str(x).strip()]
-        else:
-            items = [seg.strip() for seg in s.split(",") if seg.strip()]
-    elif isinstance(value, (list, tuple, set)):
-        items = [str(x).strip() for x in value if str(x).strip()]
-    else:
-        raise TypeError("Expected string or list")
-
-    seen, out = set(), []
-    for x in items:
-        if x not in seen:
-            seen.add(x)
-            out.append(x)
-    return out
-
-
-def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
-    """Expand, absolutize, and resolve a configurable path."""
-
-    if value in (None, ""):
-        candidate = default
-    elif isinstance(value, Path):
-        candidate = value
-    else:
-        candidate = Path(str(value).strip())
-    if not candidate.is_absolute():
-        candidate = REPO_ROOT / candidate
-    return candidate.expanduser().resolve()
-
 
 # ---- Settings ---------------------------------------------------------------
 
@@ -184,20 +33,20 @@ class Settings(BaseSettings):
     """FastAPI settings loaded from ADE_* environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=_env_file(),
+        env_file=".env",
         env_file_encoding="utf-8",
         env_prefix="ADE_",
         case_sensitive=False,
         extra="ignore",
         env_ignore_empty=True,
+        enable_decoding=False,
+        populate_by_name=True,
+        str_strip_whitespace=True,
     )
-
-    _jwt_secret_generated: bool = PrivateAttr(default=False)
 
     # Core
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "1.6.1"
-    app_environment: str = "unknown"
     app_commit_sha: str = "unknown"
     api_docs_enabled: bool = False
     docs_url: str = "/docs"
@@ -212,67 +61,43 @@ class Settings(BaseSettings):
     api_port: int | None = Field(default=None, ge=1, le=65535)
     api_workers: int | None = Field(default=None, ge=1)
     frontend_url: str | None = None
-    frontend_dist_dir: Path | None = Field(default=None)
-    server_cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: list(DEFAULT_CORS_ORIGINS)
-    )
-    idempotency_key_ttl: timedelta = Field(default=timedelta(hours=24))
-
-    # Paths
-    api_root: Path = Field(default=DEFAULT_API_ROOT)
-    alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
-    alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
+    server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
+    server_cors_origin_regex: str | None = Field(default=None)
 
     # Storage
-    workspaces_dir: Path = Field(default=DEFAULT_WORKSPACES_DIR)
-    documents_dir: Path = Field(default=DEFAULT_DOCUMENTS_DIR)
-    configs_dir: Path = Field(default=DEFAULT_CONFIGS_DIR)
-    venvs_dir: Path = Field(default=DEFAULT_VENVS_DIR)
-    runs_dir: Path = Field(default=DEFAULT_RUNS_DIR)
-    pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
+    data_dir: Path = Field(default=Path("data"))
+    blob_account_url: str | None = Field(default=None)
+    blob_connection_string: str | None = Field(default=None)
+    blob_container: str | None = Field(default=None)
+    blob_prefix: str = Field(default="workspaces")
+    blob_require_versioning: bool = Field(default=True)
+    blob_request_timeout_seconds: float = Field(default=30.0, gt=0)
+    blob_max_concurrency: int = Field(default=4, ge=1)
+    blob_upload_chunk_size_bytes: int = Field(default=4 * 1024 * 1024, ge=1)
+    blob_download_chunk_size_bytes: int = Field(default=1024 * 1024, ge=1)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
-    documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
     documents_upload_concurrency_limit: int | None = Field(8, ge=1)
 
     # Engine
-    engine_spec: str = Field(
-        default=DEFAULT_ENGINE_SPEC,
-        validation_alias="ADE_ENGINE_PACKAGE_PATH",
-    )
+    engine_spec: str = Field(default="ade-engine @ git+https://github.com/clac-ca/ade-engine@main")
 
     # Database
-    database_url: str | None = None
+    database_url: PostgresDsn = Field(..., description="Postgres database URL.")
     database_echo: bool = False
     database_log_level: str | None = None
-    database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
+    database_pool_size: int = Field(5, ge=1)
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
     database_pool_recycle: int = Field(1800, ge=0)
-    database_auth_mode: Literal["sql_password", "managed_identity"] = Field(default="sql_password")
-    database_mi_client_id: str | None = None
-    database_sqlite_journal_mode: Literal[
-        "WAL",
-        "DELETE",
-        "TRUNCATE",
-        "PERSIST",
-        "MEMORY",
-        "OFF",
-    ] = "WAL"
-    database_sqlite_synchronous: Literal["OFF", "NORMAL", "FULL", "EXTRA"] = "NORMAL"
-    database_sqlite_busy_timeout_ms: int = Field(30000, ge=0)
-    database_sqlite_begin_mode: Literal["DEFERRED", "IMMEDIATE", "EXCLUSIVE"] | None = None
+    database_auth_mode: Literal["password", "managed_identity"] = "password"
+    database_sslrootcert: str | None = Field(default=None)
+    document_changes_retention_days: int = Field(default=14, ge=1)
 
     # JWT
-    jwt_secret: SecretStr | None = Field(
-        default=None,
-        description=(
-            "Secret used to sign session cookies and bearer tokens; set to a long random string "
-            "(e.g. python - <<'PY'\\nimport secrets; print(secrets.token_urlsafe(64))\\nPY)"
-        ),
-    )
-    jwt_algorithm: str = "HS256"
-    jwt_access_ttl: timedelta = Field(default=timedelta(hours=1))
+    secret_key: SecretStr = Field(..., min_length=32)
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = Field(30, ge=1)
 
     # Sessions
     session_cookie_name: str = "ade_session"
@@ -290,268 +115,97 @@ class Settings(BaseSettings):
     auth_disabled: bool = False
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
+    auth_force_sso: bool = False
+    auth_sso_auto_provision: bool = False
+    auth_sso_providers_json: str | None = None
+    sso_encryption_key: SecretStr | None = None
 
     # Runs
     preview_timeout_seconds: float = Field(10, gt=0)
 
-    # OIDC
-    oidc_enabled: bool = False
-    oidc_client_id: str | None = None
-    oidc_client_secret: SecretStr | None = None
-    oidc_issuer: str | None = None
-    oidc_redirect_url: str | None = None  # may be relative ('/auth/callback')
-    oidc_scopes: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["openid", "email", "profile"]
-    )
-    auth_force_sso: bool = False
-    auth_sso_auto_provision: bool = True
-
     # ---- Validators ----
-
-    @field_validator("server_public_url", mode="before")
-    @classmethod
-    def _v_public_url(cls, v: Any) -> str:
-        s = str(v).strip()
-        p = urlparse(s)
-        if p.scheme not in {"http", "https"} or not p.netloc:
-            raise ValueError("ADE_SERVER_PUBLIC_URL must be an http(s) URL")
-        return s.rstrip("/")
-
-    @field_validator("frontend_url", mode="before")
-    @classmethod
-    def _v_frontend_url(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        s = str(v).strip()
-        p = urlparse(s)
-        if p.scheme not in {"http", "https"} or not p.netloc:
-            raise ValueError("ADE_FRONTEND_URL must be an http(s) URL")
-        return s.rstrip("/")
-
-    @field_validator("log_level", mode="before")
-    @classmethod
-    def _v_log_level(cls, v: Any) -> str:
-        s = ("" if v is None else str(v).strip()).upper()
-        return s or "INFO"
-
-    @field_validator("database_log_level", mode="before")
-    @classmethod
-    def _v_db_log_level(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return cls._v_log_level(v)
 
     @field_validator("server_cors_origins", mode="before")
     @classmethod
-    def _v_cors(cls, v: Any) -> list[str]:
-        return _list_from_env(v, default=DEFAULT_CORS_ORIGINS)
-
-    @field_validator("oidc_scopes", mode="before")
-    @classmethod
-    def _v_scopes(cls, v: Any) -> list[str]:
-        return _list_from_env(v, default=["openid", "email", "profile"])
-
-    @field_validator("database_auth_mode", mode="before")
-    @classmethod
-    def _v_db_auth_mode(cls, v: Any) -> str:
-        if v in (None, ""):
-            return "sql_password"
-        mode = str(v).strip().lower()
-        if mode not in {"sql_password", "managed_identity"}:
-            raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
-        return mode
-
-
-    @field_validator("database_mi_client_id", mode="before")
-    @classmethod
-    def _v_db_mi_client(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip()
-
-    @field_validator("database_sqlite_journal_mode", "database_sqlite_synchronous", mode="before")
-    @classmethod
-    def _v_sqlite_pragma_enum(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip().upper()
-
-    @field_validator("database_sqlite_begin_mode", mode="before")
-    @classmethod
-    def _v_sqlite_begin_mode(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        return str(v).strip().upper()
-
-    @field_validator("jwt_secret", mode="before")
-    @classmethod
-    def _v_jwt_secret(cls, v: Any) -> SecretStr:
-        if v is None:
-            return None  # handled in finalize
-        raw = v.get_secret_value() if isinstance(v, SecretStr) else str(v or "").strip()
-        if raw and set(raw) == {"*"}:
-            return None
-        if raw and len(raw) < 32:
-            raise ValueError(
-                "ADE_JWT_SECRET must be at least 32 characters. Use a long random string "
-                "(e.g. python - <<'PY'\\nimport secrets; print(secrets.token_urlsafe(64))\\nPY)."
-            )
-        return SecretStr(raw) if raw else None
-
-    @field_validator(
-        "jwt_access_ttl",
-        "session_access_ttl",
-        "failed_login_lock_duration",
-        "storage_document_retention_period",
-        "documents_change_feed_retention_period",
-        "idempotency_key_ttl",
-        mode="before",
-    )
-    @classmethod
-    def _v_durations(cls, v: Any, info: ValidationInfo) -> timedelta:
-        return _parse_duration(v, field_name=info.field_name)
-
-    @field_validator("oidc_issuer", mode="before")
-    @classmethod
-    def _v_oidc_issuer(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        s = str(v).strip()
-        p = urlparse(s)
-        if p.scheme != "https" or not p.netloc:
-            raise ValueError("ADE_OIDC_ISSUER must be an https URL")
-        return p.geturl().rstrip("/")
-
-    @field_validator("oidc_redirect_url", mode="before")
-    @classmethod
-    def _v_oidc_redirect(cls, v: Any) -> str | None:
-        if v in (None, ""):
-            return None
-        s = str(v).strip()
-        if s.startswith("/"):
-            return s
-        p = urlparse(s)
-        if p.scheme != "https" or not p.netloc:
-            raise ValueError("ADE_OIDC_REDIRECT_URL must be https or a path starting with '/'")
-        return p.geturl().rstrip("/")
-
-    @field_validator("frontend_dist_dir", mode="before")
-    @classmethod
-    def _v_frontend_dist_dir(cls, v: Any) -> Path | None:
-        if v in (None, ""):
-            return None
-        return Path(v)
-
-    # ---- Finalize: resolve paths & validate OIDC ----
+    def _parse_cors_origins(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return parsed
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        if isinstance(value, tuple):
+            return list(value)
+        return value
 
     @model_validator(mode="after")
-    def _finalize(self) -> Settings:
-        self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
-        self.alembic_ini_path = _resolve_path(self.alembic_ini_path, default=DEFAULT_ALEMBIC_INI)
-        self.alembic_migrations_dir = _resolve_path(
-            self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
-        )
-
-        self.workspaces_dir = _resolve_path(self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR)
-        if "documents_dir" not in self.model_fields_set:
-            self.documents_dir = self.workspaces_dir
-        if "configs_dir" not in self.model_fields_set:
-            self.configs_dir = self.workspaces_dir
-        if "runs_dir" not in self.model_fields_set:
-            self.runs_dir = self.workspaces_dir
-        self.documents_dir = _resolve_path(self.documents_dir, default=self.workspaces_dir)
-        self.configs_dir = _resolve_path(self.configs_dir, default=self.workspaces_dir)
-        self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
-        self.runs_dir = _resolve_path(self.runs_dir, default=self.workspaces_dir)
-        self.pip_cache_dir = _resolve_path(self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR)
-
-        if self.frontend_dist_dir:
-            self.frontend_dist_dir = _resolve_path(
-                self.frontend_dist_dir, default=DEFAULT_FRONTEND_DIST_DIR
+    def _finalize(self) -> "Settings":
+        self.log_level = self.log_level.upper()
+        if self.algorithm != "HS256":
+            raise ValueError("ADE_ALGORITHM must be HS256.")
+        if len(self.secret_key.get_secret_value().encode("utf-8")) < 32:
+            raise ValueError("ADE_SECRET_KEY must be at least 32 bytes (recommend 64+).")
+        if not self.blob_container:
+            raise ValueError("ADE_BLOB_CONTAINER is required.")
+        if self.blob_connection_string and self.blob_account_url:
+            raise ValueError(
+                "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
             )
-
-        if not self.frontend_url:
-            self.frontend_url = self.server_public_url
-
-        if not self.database_url:
-            sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)
-            self.database_url = f"sqlite:///{sqlite.as_posix()}"
-
-        url = make_url(self.database_url)
-        query = dict(url.query or {})
-
-        if (
-            url.get_backend_name() == "sqlite"
-            and "database_sqlite_busy_timeout_ms" not in self.model_fields_set
-        ):
-            self.database_sqlite_busy_timeout_ms = int(self.database_pool_timeout * 1000)
-
-        if url.get_backend_name() == "mssql" and "driver" not in query:
-            query["driver"] = "ODBC Driver 18 for SQL Server"
-
-        if self.database_auth_mode == "managed_identity":
-            if url.get_backend_name() != "mssql":
-                raise ValueError(
-                    "ADE_DATABASE_AUTH_MODE=managed_identity requires an mssql+pyodbc DSN"
-                )
-            url = URL.create(
-                drivername=url.drivername,
-                username=None,
-                password=None,
-                host=url.host,
-                port=url.port,
-                database=url.database,
-                query=query,
+        if not self.blob_connection_string and not self.blob_account_url:
+            raise ValueError(
+                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
             )
-        elif query != url.query:
-            url = url.set(query=query)
-
-        self.database_url = url.render_as_string(hide_password=False)
-
-        if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
-            self.jwt_secret = SecretStr(secrets.token_urlsafe(64))
-            self._jwt_secret_generated = True
-
-        oidc_config = {
-            "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
-            "ADE_OIDC_CLIENT_SECRET": self.oidc_client_secret,
-            "ADE_OIDC_ISSUER": self.oidc_issuer,
-            "ADE_OIDC_REDIRECT_URL": self.oidc_redirect_url,
-        }
-        provided_oidc_values = [name for name, val in oidc_config.items() if val]
-
-        if not self.oidc_enabled and len(provided_oidc_values) == len(oidc_config):
-            self.oidc_enabled = True
-
-        if self.oidc_enabled:
-            missing = [name for name, val in oidc_config.items() if not val]
-            if missing:
-                raise ValueError("OIDC enabled but missing: " + ", ".join(missing))
-            if "openid" not in self.oidc_scopes:
-                self.oidc_scopes = ["openid", *self.oidc_scopes]
-            if self.oidc_redirect_url and self.oidc_redirect_url.startswith("/"):
-                self.oidc_redirect_url = f"{self.server_public_url}{self.oidc_redirect_url}"
-        else:
-            # If disabled, discourage partial config that hints at a misconfigured env
-            if provided_oidc_values:
-                raise ValueError("Set ADE_OIDC_ENABLED=true when supplying other OIDC settings")
+        if self.blob_account_url:
+            self.blob_account_url = self.blob_account_url.rstrip("/")
+        if self.blob_prefix:
+            self.blob_prefix = self.blob_prefix.strip("/")
+        if self.server_cors_origin_regex:
+            re.compile(self.server_cors_origin_regex)
 
         return self
+
+    @property
+    def workspaces_dir(self) -> Path:
+        return self.data_dir / "workspaces"
+
+    @property
+    def documents_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def configs_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def runs_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def venvs_dir(self) -> Path:
+        return self.data_dir / "venvs"
+
+    @property
+    def pip_cache_dir(self) -> Path:
+        return self.data_dir / "cache" / "pip"
 
     # ---- Convenience ----
 
     @property
-    def jwt_secret_value(self) -> str:
-        return self.jwt_secret.get_secret_value()
-
-    @property
-    def jwt_secret_generated(self) -> bool:
-        return self._jwt_secret_generated
+    def secret_key_value(self) -> str:
+        return self.secret_key.get_secret_value()
 
 
 @lru_cache(maxsize=1)
 def _build_settings() -> Settings:
-    return Settings(_env_file=_env_file())
+    return Settings()
 
 
 def get_settings() -> Settings:
@@ -565,7 +219,6 @@ def reload_settings() -> Settings:
 
 __all__ = [
     "DEFAULT_CORS_ORIGINS",
-    "DEFAULT_DB_FILENAME",
     "DEFAULT_PUBLIC_URL",
     "Settings",
     "get_settings",

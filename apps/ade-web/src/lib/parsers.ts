@@ -1,3 +1,4 @@
+import { createParser } from "nuqs/server";
 import { z } from "zod";
 
 import { dataTableConfig } from "@/config/data-table";
@@ -12,36 +13,41 @@ const sortingItemSchema = z.object({
   desc: z.boolean(),
 });
 
-function normalizeKeys(columnIds?: string[] | Set<string>) {
-  if (!columnIds) return null;
-  return columnIds instanceof Set ? columnIds : new Set(columnIds);
-}
-
-export const parseSortingState = <TData>(
-  value: string | null,
+export const getSortingStateParser = <TData>(
   columnIds?: string[] | Set<string>,
-): ExtendedColumnSort<TData>[] => {
-  if (!value) return [];
-  const validKeys = normalizeKeys(columnIds);
-  try {
-    const parsed = JSON.parse(value);
-    const result = z.array(sortingItemSchema).safeParse(parsed);
+) => {
+  const validKeys = columnIds
+    ? columnIds instanceof Set
+      ? columnIds
+      : new Set(columnIds)
+    : null;
 
-    if (!result.success) return [];
+  return createParser({
+    parse: (value) => {
+      try {
+        const parsed = JSON.parse(value);
+        const result = z.array(sortingItemSchema).safeParse(parsed);
 
-    if (validKeys && result.data.some((item) => !validKeys.has(item.id))) {
-      return [];
-    }
+        if (!result.success) return null;
 
-    return result.data as ExtendedColumnSort<TData>[];
-  } catch {
-    return [];
-  }
+        if (validKeys && result.data.some((item) => !validKeys.has(item.id))) {
+          return null;
+        }
+
+        return result.data as ExtendedColumnSort<TData>[];
+      } catch {
+        return null;
+      }
+    },
+    serialize: (value) => JSON.stringify(value),
+    eq: (a, b) =>
+      a.length === b.length &&
+      a.every(
+        (item, index) =>
+          item.id === b[index]?.id && item.desc === b[index]?.desc,
+      ),
+  });
 };
-
-export const serializeSortingState = <TData>(
-  value: ExtendedColumnSort<TData>[],
-): string => JSON.stringify(value);
 
 const filterItemSchema = z.object({
   id: z.string(),
@@ -53,28 +59,41 @@ const filterItemSchema = z.object({
 
 export type FilterItemSchema = z.infer<typeof filterItemSchema>;
 
-export const parseFiltersState = <TData>(
-  value: string | null,
+export const getFiltersStateParser = <TData>(
   columnIds?: string[] | Set<string>,
-): ExtendedColumnFilter<TData>[] => {
-  if (!value) return [];
-  const validKeys = normalizeKeys(columnIds);
-  try {
-    const parsed = JSON.parse(value);
-    const result = z.array(filterItemSchema).safeParse(parsed);
+) => {
+  const validKeys = columnIds
+    ? columnIds instanceof Set
+      ? columnIds
+      : new Set(columnIds)
+    : null;
 
-    if (!result.success) return [];
+  return createParser({
+    parse: (value) => {
+      try {
+        const parsed = JSON.parse(value);
+        const result = z.array(filterItemSchema).safeParse(parsed);
 
-    if (validKeys && result.data.some((item) => !validKeys.has(item.id))) {
-      return [];
-    }
+        if (!result.success) return null;
 
-    return result.data as ExtendedColumnFilter<TData>[];
-  } catch {
-    return [];
-  }
+        if (validKeys && result.data.some((item) => !validKeys.has(item.id))) {
+          return null;
+        }
+
+        return result.data as ExtendedColumnFilter<TData>[];
+      } catch {
+        return null;
+      }
+    },
+    serialize: (value) => JSON.stringify(value),
+    eq: (a, b) =>
+      a.length === b.length &&
+      a.every(
+        (filter, index) =>
+          filter.id === b[index]?.id &&
+          filter.value === b[index]?.value &&
+          filter.variant === b[index]?.variant &&
+          filter.operator === b[index]?.operator,
+      ),
+  });
 };
-
-export const serializeFiltersState = <TData>(
-  value: ExtendedColumnFilter<TData>[],
-): string => JSON.stringify(value);

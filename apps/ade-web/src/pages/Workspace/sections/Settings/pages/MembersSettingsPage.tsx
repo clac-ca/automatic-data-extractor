@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
-import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
-import { useUsersQuery } from "@hooks/users/useUsersQuery";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
+import { useUsersQuery } from "@/hooks/users/useUsersQuery";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { useSettingsSection } from "../sectionContext";
 import {
@@ -12,10 +12,10 @@ import {
   useWorkspaceMembersQuery,
 } from "../hooks/useWorkspaceMembers";
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition, WorkspaceMember } from "@schema/workspaces";
-import type { UserSummary } from "@api/users/api";
+import type { RoleDefinition, WorkspaceMember } from "@/types/workspaces";
+import type { UserSummary } from "@/api/users/api";
 import { Alert } from "@/components/ui/alert";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import {
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { SettingsSection } from "../components/SettingsSection";
+import { getInitials } from "@/lib/format";
 
 type MemberWithUser = WorkspaceMember & { user?: UserSummary };
 
@@ -163,11 +164,16 @@ export function MembersSettingsPage() {
                     .map((roleId) => availableRoles.find((role) => role.id === roleId)?.name ?? roleId)
                     .sort((a, b) => a.localeCompare(b));
                   const label = member.user?.display_name ?? member.user?.email ?? member.user_id;
+                  const initials = getInitials(member.user?.display_name, member.user?.email);
                   return (
                     <TableRow key={member.user_id} className="text-sm text-foreground">
                       <TableCell className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <Avatar name={member.user?.display_name} email={member.user?.email} size="sm" />
+                          <Avatar aria-hidden="true" className="h-8 w-8" title={label}>
+                            <AvatarFallback className="text-sm font-semibold text-foreground">
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-foreground">{label}</p>
                             <p className="truncate text-xs text-muted-foreground">
@@ -517,6 +523,7 @@ function MemberDrawer({
   const title = member
     ? member.user?.display_name ?? member.user?.email ?? member.user_id
     : "Member details";
+  const initials = getInitials(member?.user?.display_name, member?.user?.email);
 
   return (
     <>
@@ -532,7 +539,11 @@ function MemberDrawer({
           <div className="space-y-4">
             {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
             <div className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
-              <Avatar name={member.user?.display_name} email={member.user?.email} size="md" />
+              <Avatar aria-hidden="true" className="h-10 w-10" title={title}>
+                <AvatarFallback className="text-base font-semibold text-foreground">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div className="space-y-1">
                 <p className="text-base font-semibold text-foreground">
                   {member.user?.display_name ?? member.user?.email ?? member.user_id}

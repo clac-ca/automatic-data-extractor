@@ -1,4 +1,4 @@
-import type { components } from "@schema";
+import type { components } from "@/types";
 
 export type ProblemDetailsErrorItem = components["schemas"]["ProblemDetailsErrorItem"];
 export type ProblemDetails = components["schemas"]["ProblemDetails"];

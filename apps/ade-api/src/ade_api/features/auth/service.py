@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ade_api.features.rbac import RbacService
-from ade_api.models import User
+from ade_api.models import SsoProviderStatus, User
 from ade_api.settings import Settings
 
 from .schemas import (
@@ -35,10 +35,11 @@ class AuthService:
         setup_required = self.is_setup_required()
         registration_mode = self._registration_mode(setup_required)
         providers = self.list_auth_providers().providers
+        sso_configured = self._sso_configured()
         return AuthSetupStatusResponse(
             setup_required=setup_required,
             registration_mode=registration_mode,
-            oidc_configured=bool(self.settings.oidc_enabled),
+            oidc_configured=sso_configured,
             providers=providers,
         )
 
@@ -60,13 +61,16 @@ class AuthService:
                 )
             )
 
-        if self.settings.oidc_enabled:
+        from ade_api.features.sso.service import SsoService
+
+        sso_service = SsoService(session=self.session, settings=self.settings)
+        for provider in sso_service.list_active_providers():
             providers.append(
                 AuthProvider(
-                    id="oidc",
-                    label="Single sign-on",
+                    id=provider.id,
+                    label=provider.label,
                     type="oidc",
-                    start_url="/api/v1/auth/oidc/oidc/authorize",
+                    start_url=f"/api/v1/auth/sso/{provider.id}/authorize",
                 )
             )
 
@@ -74,6 +78,15 @@ class AuthService:
             providers=providers,
             force_sso=bool(self.settings.auth_force_sso),
         )
+
+    def _sso_configured(self) -> bool:
+        from ade_api.features.sso.service import SsoService
+
+        sso_service = SsoService(session=self.session, settings=self.settings)
+        for provider in sso_service.list_providers():
+            if provider.status != SsoProviderStatus.DELETED:
+                return True
+        return False
 
     def create_first_admin(self, payload: AuthSetupRequest, *, password_hash: str) -> User:
         if not self.is_setup_required():

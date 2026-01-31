@@ -26,8 +26,10 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 1. Action — Describe the action to take. For example, install deps and start dev services:
 
    ```bash
-   source setup.sh   # create/activate venv, install packages
-   ade dev           # starts API + web + worker in watch mode
+   ./setup.sh
+   ade api dev       # terminal 1
+   ade worker start  # terminal 2
+   ade web dev       # terminal 3
    ```
 
 2. Next action — For example, run backend migrations and tests:

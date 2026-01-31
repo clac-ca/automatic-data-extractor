@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
+from uuid import UUID
 
+from sqlalchemy import text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base, NAMING_CONVENTION, metadata
@@ -27,13 +28,17 @@ def utc_now() -> datetime:
 class UUIDPrimaryKeyMixin:
     """Standard GUID primary key."""
 
-    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    id: Mapped[UUID] = mapped_column(
+        GUID(),
+        primary_key=True,
+        server_default=text("uuidv7()"),
+    )
 
 
 class TimestampMixin:
     """App-managed UTC timestamps.
 
-    Keeps behavior consistent across SQLite and SQL Server without relying on DB triggers.
+    Keeps behavior consistent without relying on DB triggers.
     """
 
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=utc_now)

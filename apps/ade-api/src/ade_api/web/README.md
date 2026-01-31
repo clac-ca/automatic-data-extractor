@@ -1,14 +1,12 @@
 # ADE Web Assets
 
-The API can serve the built SPA bundle when `ADE_FRONTEND_DIST_DIR` is set.
+The API no longer serves the SPA bundle. Use `ade web serve` (nginx) or another
+static web server (CDN, object storage, etc.) to host `apps/ade-web/dist`.
+The ADE image includes the built assets under `/app/web/dist`.
 
 Example (repo root):
 
 ```bash
-ade build
-ADE_FRONTEND_DIST_DIR=apps/ade-web/dist uvicorn ade_api.main:create_app --factory
+ade web build
+ade web serve --dist-dir apps/ade-web/dist --proxy-target http://localhost:8000
 ```
-
-When running via `ade start`, the CLI sets `ADE_FRONTEND_DIST_DIR` for you.
-If you prefer a dedicated web server or reverse proxy, serve the `dist/`
-directory separately and run `ade start --no-web`.

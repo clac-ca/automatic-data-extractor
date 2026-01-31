@@ -7,7 +7,7 @@ name = "ade-api"
 version = "1.6.5"
 description = "Internal ADE FastAPI service."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
@@ -20,7 +20,8 @@ dependencies = [
   "alembic==1.17.2",
   "azure-core==1.36.0",
   "azure-identity==1.25.1",
-  "pyodbc==5.3.0",
+  "azure-storage-blob==12.26.0",
+  "psycopg[binary]==3.3.2",
   "pydantic==2.12.5",
   "pydantic-settings==2.12.0",
   "python-multipart==0.0.21",
@@ -33,8 +34,12 @@ dependencies = [
   "authlib==1.6.6",
   "sse-starlette==3.1.1",
   "pwdlib[argon2]==0.3.0",
-  "ade-engine",
+  "typer>=0.12"
 ]
+
+[project.scripts]
+ade-api = "ade_api.cli:app"
+ade = "ade_api.cli_root:app"
 
 [project.optional-dependencies]
 dev = [
@@ -63,6 +68,8 @@ include = ["ade_api*"]
 "ade_api" = [
   "py.typed",
   "openapi.json",
+  "alembic.ini",
+  "migrations/**/*",
   "web/**/*",
 ]
 
@@ -75,10 +82,15 @@ testpaths = [
 asyncio_mode = "auto"
 addopts = "-ra"
 pythonpath = ["src"]
+markers = [
+  "unit: fast tests with no external dependencies",
+  "integration: tests requiring external services (Postgres, etc.)",
+  "e2e: end-to-end tests",
+]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -87,7 +99,7 @@ select = ["E", "F", "I", "B", "UP"]
 preview = true
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 disallow_untyped_defs = true

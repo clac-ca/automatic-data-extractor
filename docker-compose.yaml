@@ -1,0 +1,79 @@
+# docker-compose.yaml
+#
+# Quickstart: starts ADE (api + worker + web) with local Postgres & Azurite.
+# The ade container runs `ade start` (API + worker + nginx).
+# The web server listens on :8000 and proxies /api to the API running on :8001.
+#
+# Requirements:
+# - Docker and Docker Compose
+#
+# Build / Run:
+#   docker compose up --build
+#
+# Diagram of services:
+#
+#   Host
+#    │  http://localhost:8000
+#    ▼
+# [8000]  ┌──────────────┐
+#         │ ade          │  api + worker + nginx
+#         └──────┬───────┘
+#                ├───────────────> postgres:5432
+#                └───────────────> azurite:10000
+#
+services:
+  ade:
+    image: ${ADE_IMAGE:-automatic-data-extractor:local}
+    build:
+      context: .
+      target: final
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+    volumes:
+      - ade_data:/app/data
+    ports:
+      - 8000:8000
+      # - 8001:8001 # optional: expose API directly
+    command: ["ade", "start"]
+    environment:
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces} # Default local prefix
+      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false} # disable versioning requirement for local Azurite
+      ADE_DATA_DIR: /app/data
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000} # change me!
+
+  postgres:
+    image: postgres:18-bookworm
+    ports:
+      - 5432:5432
+    volumes:
+      - ade_pg_data:/var/lib/postgresql
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
+      POSTGRES_DB: ${POSTGRES_DB:-ade}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
+    ports:
+      - 10000:10000
+    volumes:
+      - ade_azurite_data:/data
+    environment:
+      AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+
+volumes:
+  ade_data:
+  ade_pg_data:
+  ade_azurite_data:

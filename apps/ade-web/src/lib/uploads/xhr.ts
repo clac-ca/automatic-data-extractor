@@ -1,5 +1,5 @@
-import { buildApiHeaders, resolveApiUrl } from "@api/client";
-import { ApiError, isProblemDetailsContentType, type ProblemDetails } from "@api/errors";
+import { buildApiHeaders, resolveApiUrl } from "@/api/client";
+import { ApiError, isProblemDetailsContentType, type ProblemDetails } from "@/api/errors";
 
 export type UploadProgress = {
   readonly loaded: number;

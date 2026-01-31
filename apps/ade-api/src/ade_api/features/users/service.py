@@ -11,11 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_api.common.listing import paginate_query
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
-from ade_api.common.types import OrderBy
 from ade_api.core.security.hashing import hash_password
 from ade_api.features.api_keys.service import ApiKeyService
 from ade_api.features.rbac import RbacService
@@ -78,9 +77,10 @@ class UsersService:
     def list_users(
         self,
         *,
-        page: int,
-        per_page: int,
-        order_by: OrderBy,
+        limit: int,
+        cursor: str | None,
+        resolved_sort: ResolvedCursorSort[User],
+        include_total: bool,
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
         q: str | None,
@@ -90,9 +90,9 @@ class UsersService:
         logger.debug(
             "users.list.start",
             extra=log_context(
-                page=page,
-                per_page=per_page,
-                order_by=str(order_by),
+                limit=limit,
+                cursor=cursor,
+                order_by=str(resolved_sort.order_by),
                 q=q,
             ),
         )
@@ -104,12 +104,13 @@ class UsersService:
             join_operator=join_operator,
             q=q,
         )
-        page_result = paginate_query(
+        page_result = paginate_query_cursor(
             self._session,
             stmt,
-            page=page,
-            per_page=per_page,
-            order_by=order_by,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
             changes_cursor="0",
         )
 
@@ -117,22 +118,14 @@ class UsersService:
         for user in page_result.items:
             items.append(self._serialize_user(user))
 
-        result = UserPage(
-            items=items,
-            page=page_result.page,
-            per_page=page_result.per_page,
-            page_count=page_result.page_count,
-            total=page_result.total,
-            changes_cursor=page_result.changes_cursor,
-        )
+        result = UserPage(items=items, meta=page_result.meta, facets=page_result.facets)
 
         logger.info(
             "users.list.success",
             extra=log_context(
-                page=result.page,
-                per_page=result.per_page,
+                limit=result.meta.limit,
                 count=len(result.items),
-                total=result.total,
+                total=result.meta.total_count,
             ),
         )
         return result

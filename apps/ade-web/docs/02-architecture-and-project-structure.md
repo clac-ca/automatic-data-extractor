@@ -20,7 +20,7 @@ Everything below exists to make those goals explicit.
 ### Instant understanding defaults
 
 - **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `pages/Workspace/sections/...`).
-- **One canonical home per concept:** navigation helpers live under `@app/navigation`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
+- **One canonical home per concept:** route helpers use React Router utilities and live close to their consumers; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
 - **Reuse patterns:** new list/detail flows should copy Documents/Runs; new URL‑backed filters should reuse the existing filter helpers rather than inventing new query names; NDJSON streaming should go through the helper in `api/ndjson`.
 - **Respect the layers:** never import “upwards” (e.g. `api/` → `pages/`); linting enforces the boundaries.
 
@@ -36,9 +36,9 @@ All relevant code lives under `apps/ade-web/src`:
 apps/ade-web/
   src/
     main.tsx          # Vite entry point
-    app/              # App shell: App.tsx, providers, navigation
+    app/              # App shell: routes, router, layouts
     api/              # HTTP client + domain API calls
-    pages/            # Route-level pages (aliased as "@pages")
+    pages/            # Route-level pages (aliased as "@/pages")
     components/       # Shared UI primitives, layouts, providers, shell
     hooks/            # Shared React hooks (React Query + app hooks)
     lib/              # Cross-cutting utilities (storage, uploads, preferences)
@@ -49,7 +49,7 @@ apps/ade-web/
     test/             # Vitest setup and shared testing helpers
 ````
 
-> Page folders live in `src/pages` and are imported via `@pages/*`. There is no `src/features` directory.
+> Page folders live in `src/pages` and are imported via `@/pages/*`. There is no `src/features` directory.
 
 At a high level:
 
@@ -69,7 +69,7 @@ We treat the codebase as layered, with imports flowing “down” only:
 ```text
         app/
           ↑
-      pages (@pages)
+      pages (@/pages)
    ↑    ↑    ↑     ↑
 components api hooks lib
         ↑
@@ -83,16 +83,16 @@ components api hooks lib
 Allowed dependencies:
 
 * `app/` → may import from `pages/`, `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`.
-* `pages/` → may import from `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`, and `app/navigation`.
-* `components/`, `api/`, `hooks/`, `lib/` → may import from `types/`, `types/generated/`, and `app/navigation`.
+* `pages/` → may import from `components/`, `api/`, `hooks/`, `lib/`, `types/`, `types/generated/`, and `app/layouts`.
+* `components/`, `api/`, `hooks/`, `lib/` → may import from `types/`, `types/generated/`.
 * `types/` → may import from `types/generated/` (if needed).
 * `types/generated/` → must not import from anywhere else.
-* `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@test`.
+* `test/` → may import from anything in `src/`, but nothing in `src/` should import from `@/test`.
 
 Forbidden dependencies:
 
-* `components/`, `api/`, `hooks/`, `lib/` **must not** import from `pages/` or `app/` (except `app/navigation`).
-* `pages/` **must not** import from `app/` (except `app/navigation`).
+* `components/`, `api/`, `hooks/`, `lib/` **must not** import from `pages/` or `app/`.
+* `pages/` **must not** import from `app/` (except `app/layouts`).
 
 If you ever want to import “upwards” (e.g. from `api/` to `pages/`), that’s a sign the code should be moved into a smaller module at the right layer.
 
@@ -110,22 +110,21 @@ Typical structure:
 src/
   main.tsx
   app/
-    App.tsx
-    providers/
-      AppProviders.tsx
-    navigation/
-      history.tsx
-      Link.tsx
-      urlState.ts
-      paths.ts
+    layouts/
+      AppShell.tsx
+      AuthenticatedLayout.tsx
+      PublicLayout.tsx
+      WorkspaceLayout.tsx
+    routes.tsx
+    router.tsx
 ```
 
 What belongs here:
 
-* `<App>` – root component used in `main.tsx`.
-* `NavProvider` – custom navigation context built on `window.history` (see `app/navigation`).
-* `AppProviders` – React Query client and other global providers (in `app/providers/`).
-* `ScreenSwitch` – top‑level route switch (lives in `app/App.tsx`).
+* `AppShell`/`ProtectedLayout` – app‑level layout + auth gating (in `app/layouts/AppShell.tsx`).
+* `routes.tsx` – route table (top‑level mapping of paths to pages).
+* `router.tsx` – `createBrowserRouter` wiring used by `main.tsx`.
+* `AppProviders` – React Query client and other global providers (in `src/providers/AppProviders.tsx`).
 
 What does **not** belong here:
 
@@ -139,7 +138,7 @@ The app shell is glue and composition only.
 
 ## 5. `pages/` – page/feature slices
 
-**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings). The physical folder is `src/pages/`, imported via the `@pages/*` alias.
+**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings). The physical folder is `src/pages/`, imported via the `@/pages/*` alias.
 
 Example structure:
 
@@ -148,8 +147,6 @@ src/pages/
   Home/
     index.tsx
   Login/
-    index.tsx
-  AuthCallback/
     index.tsx
   Logout/
     index.tsx
@@ -243,11 +240,13 @@ src/components/
     auth/
     notifications/
     theme/
-  shell/
-    GlobalTopBar.tsx
-    GlobalSearchField.tsx
-    ProfileDropdown.tsx
-    AppearanceMenu.tsx
+  topbar/
+    TopbarControls.tsx
+    TopbarSearch.tsx
+    actions/
+      AppearanceMenu.tsx
+      ProfileDropdown.tsx
+      AboutVersionsModal.tsx
   icons.tsx
 ```
 
@@ -258,7 +257,7 @@ What belongs here:
 * Alerts, banners, toasts.
 * Tabs, context menus, dropdowns.
 * Avatars and profile menus.
-* Global top bar and search field components (under `components/shell/`).
+* Global top bar and search field components (under `components/topbar/`).
 * Monaco editor wrapper (`components/ui/code-editor`).
 
 What does **not** belong here:
@@ -306,9 +305,7 @@ src/lib/
   storage.ts
   workspacePreferences.ts
 
-src/app/navigation/
-  authNavigation.ts
-  workspacePaths.ts
+React Router utilities (for example, `generatePath`, `createSearchParams`) are used directly in feature modules.
 ```
 
 What belongs here:
@@ -363,7 +360,7 @@ Typical content:
 
 The curated types already use wire shapes, so mapping helpers are only needed when you introduce UI‑specific view models.
 
-Features import types from `@schema`, not from `@schema/generated`, to keep the rest of the code insulated from backend schema churn.
+Features import types from `@/types`, not from `@/types/generated`, to keep the rest of the code insulated from backend schema churn.
 
 ---
 
@@ -382,7 +379,7 @@ src/test/
 
 * `setup.ts` is referenced from `vitest.config.ts` and runs before each test.
 * Factories can live here or near their domains, but this is the central place for shared ones.
-* Only test code should import from `@test/*`.
+* Only test code should import from `@/test/*`.
 
 Tests for a specific component or hook live alongside that code (e.g. `RunsScreen.test.tsx` next to `RunsScreen.tsx`).
 
@@ -390,17 +387,16 @@ Tests for a specific component or hook live alongside that code (e.g. `RunsScree
 
 ## 10. Path aliases and import style
 
-We use a small set of TS/Vite aliases to keep imports readable:
+We use a single TS/Vite alias (`@`) for `src/` to keep imports readable:
 
-* `@pages` → `src/pages`
-* `@app` → `src/app`
-* `@components` → `src/components`
-* `@api` → `src/api`
-* `@hooks` → `src/hooks`
-* `@lib` → `src/lib`
-* `@schema` → `src/types`
-* `@schema/generated` → `src/types/generated`
-* `@test` → `src/test` (tests only)
+* `@/pages` → `src/pages`
+* `@/components` → `src/components`
+* `@/api` → `src/api`
+* `@/hooks` → `src/hooks`
+* `@/lib` → `src/lib`
+* `@/types` → `src/types`
+* `@/types/generated` → `src/types/generated`
+* `@/test` → `src/test` (tests only)
 
 Guidelines:
 
@@ -408,10 +404,10 @@ Guidelines:
 
   ```ts
   // Good
-  import WorkspaceScreen from "@pages/Workspace";
-  import { GlobalTopBar } from "@components/shell/GlobalTopBar";
-  import { createRun } from "@api/runs/api";
-  import type { RunResource } from "@schema";
+  import WorkspaceScreen from "@/pages/Workspace";
+  import { TopbarControls } from "@/components/topbar/TopbarControls";
+  import { createRun } from "@/api/runs/api";
+  import type { RunResource } from "@/types";
 
   // Avoid
   import { createRun } from "../../../api/runs/api";
@@ -465,7 +461,7 @@ This section summarises naming conventions used in this document. See **01‑dom
 
 * **State / infra hooks** use descriptive names:
 
-  * `useSafeModeStatus`, `useWorkbenchUrlState`, `useNavigationBlocker`, `useSearchParams`.
+  * `useSafeModeStatus`, `useWorkbenchUrlState`, `useUnsavedChangesGuard`, `useSearchParams`.
 
 ### 11.4 API modules
 
@@ -493,7 +489,7 @@ Feature hooks wrap these functions into React Query calls.
 * Domain types are singular, PascalCase:
 
   * `WorkspaceSummary`, `WorkspaceDetail`.
-  * `DocumentListRow`, `DocumentRecord`, `DocumentStatus`.
+  * `DocumentListRow`, `DocumentRecord`, `DocumentRunPhase`.
   * `RunResource`, `RunStatus`.
   * `Configuration`.
 
@@ -508,9 +504,10 @@ To make the structure concrete, here’s how the **Documents** section of the wo
 ```text
 src/
   app/
-    App.tsx                       # ScreenSwitch lives here
-    navigation/
-      urlState.ts                 # useSearchParams helpers
+    layouts/
+      AppShell.tsx                # App shell + ProtectedLayout
+    routes.tsx                    # Route table
+    router.tsx                    # Router wiring
   api/
     documents/
       index.ts                    # listWorkspaceDocuments, uploadDocument, deleteDocument...
@@ -528,30 +525,30 @@ src/
       input/
       alert/
   types/
-    documents.ts                  # DocumentListRow, DocumentRecord, DocumentStatus
+    documents.ts                  # DocumentListRow, DocumentRecord, DocumentRunPhase
 ```
 
 Flow:
 
 1. **Routing**
 
-   * `ScreenSwitch` (inside `app/App.tsx`) examines the current location.
+   * Route definitions in `app/routes.tsx` map URLs to pages.
    * `/workspaces/:workspaceId/documents` is mapped to `DocumentsScreen`.
 
 2. **Screen logic**
 
    * `DocumentsScreen`:
 
-     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `@app/navigation/urlState`.
+     * Reads search parameters (`q`, `status`, `sort`, `view`) via `useSearchParams` from `react-router-dom`.
      * Calls `useDocumentsQuery(workspaceId, filters)` to fetch data.
      * Renders the page layout.
      * Composes `DocumentsFilters`, `DocumentsTable`, and `RunExtractionDialog`.
 
 3. **Data fetching**
 
-   * `useDocumentsQuery` uses React Query and `@api/documents` under the hood.
-   * `@api/documents` builds the `/api/v1/workspaces/{workspaceId}/documents` URL and parses the JSON response.
-   * The response is mapped into `DocumentListRow[]` using types from `@schema`.
+   * `useDocumentsQuery` uses React Query and `@/api/documents` under the hood.
+   * `@/api/documents` builds the `/api/v1/workspaces/{workspaceId}/documents` URL and parses the JSON response.
+   * The response is mapped into `DocumentListRow[]` using types from `@/types`.
 
 4. **Presentation**
 
@@ -567,4 +564,4 @@ The **Runs** section follows the same pattern, with:
 * `api/runs/api.ts`.
 * Domain types in `types/runs.ts`.
 
-If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/App.tsx`, use `api/`, `hooks/`, and `lib/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.
+If you follow the structure and rules in this doc, adding or changing a feature should always feel the same: pick the right folder in `pages/`, wire it through `app/routes.tsx`, use `api/`, `hooks/`, and `lib/` for cross‑cutting logic, and build the UI out of `components/ui` primitives.

@@ -8,14 +8,18 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 
 from ade_api.api.deps import get_users_service
-from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
-from ade_api.common.sorting import resolve_sort
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
+)
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 from ade_api.models import User
 
 from .schemas import UserOut, UserPage, UserUpdate
 from .service import UsersService
-from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["users"], dependencies=[Security(require_authenticated)])
 
@@ -42,20 +46,22 @@ USER_ID_PARAM = Annotated[
 )
 def list_users(
     _: Annotated[User, Security(require_global("users.read_all"))],
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserPage:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
         default=DEFAULT_SORT,
         id_field=ID_FIELD,
     )
     return service.list_users(
-        page=list_query.page,
-        per_page=list_query.per_page,
-        order_by=order_by,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        resolved_sort=resolved_sort,
+        include_total=list_query.include_total,
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,

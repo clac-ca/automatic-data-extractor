@@ -33,7 +33,16 @@ class _CaptureHandler(logging.Handler):
 
 
 def test_log_context_includes_correlation_and_fields():
-    setup_logging(Settings(_env_file=None, log_level="DEBUG"))
+    setup_logging(
+        Settings(
+            _env_file=None,
+            log_level="DEBUG",
+            database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )
+    )
     handler = _CaptureHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(ConsoleLogFormatter())
@@ -59,7 +68,16 @@ def test_log_context_includes_correlation_and_fields():
 
 
 def test_unhandled_exception_handler_logs_with_correlation():
-    setup_logging(Settings(_env_file=None, log_level="DEBUG"))
+    setup_logging(
+        Settings(
+            _env_file=None,
+            log_level="DEBUG",
+            database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )
+    )
     handler = _CaptureHandler()
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(ConsoleLogFormatter())

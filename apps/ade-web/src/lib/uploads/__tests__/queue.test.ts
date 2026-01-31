@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { useUploadQueue } from "@lib/uploads/queue";
+import { useUploadQueue } from "@/lib/uploads/queue";
 
 type Deferred<T> = {
   promise: Promise<T>;

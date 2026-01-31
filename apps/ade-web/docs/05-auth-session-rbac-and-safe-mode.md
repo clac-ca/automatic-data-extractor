@@ -168,7 +168,7 @@ The setup screen:
 * On success, redirects to:
 
   * The workspace directory (`/workspaces`), or
-  * A validated `redirectTo` path, if present.
+  * A validated `returnTo` path, if present.
 
 Setup endpoints are public but should be callable only while `setup_required == true`. After setup, this flag becomes false and the `/setup` path should redirect to `/login` or `/workspaces`.
 
@@ -189,7 +189,7 @@ Flow:
    * On success:
 
      * Invalidate and refetch the `session` and `effectivePermissions` queries.
-     * Redirect to `redirectTo` (if safe) or to the default route.
+     * Redirect to `returnTo` (if safe) or to the default route.
 3. On invalid credentials:
 
    * Show an inline form error.
@@ -207,30 +207,21 @@ Logout:
 
 When SSO is enabled, providers are listed via:
 
-* `GET /api/v1/auth/providers`.
-* Public SSO endpoints (`/auth/providers`, `/auth/setup`, `/auth/cookie/login`, and the SSO redirects) are the only unauthenticated surface area; everything else requires a session cookie, bearer token, or API key.
+* `GET /api/v1/auth/sso/providers`.
+* Public auth endpoints (`/auth/providers`, `/auth/sso/providers`, `/auth/setup`, `/auth/cookie/login`, `/auth/jwt/login`, and the SSO redirects) are the only unauthenticated surface area; everything else requires a session cookie, bearer token, or API key.
 
 SSO flow:
 
 1. `/login` renders buttons for each provider.
-2. Clicking a provider navigates to `GET /api/v1/auth/oidc/{provider}/authorize?return_to=<path>`:
+2. Clicking a provider navigates to `GET /api/v1/auth/sso/{providerId}/authorize?returnTo=<path>`:
 
    * Backend responds with a redirect to the IdP.
-3. After IdP authentication, the user is redirected to `GET /api/v1/auth/oidc/{provider}/callback`.
-4. Backend verifies the callback, establishes a session, and then redirects to the ADE Web app (e.g. `/auth/callback?return_to=/path`).
-
-The `/auth/callback` screen:
-
-* Optionally shows a “Signing you in…” loading state.
-* Refetches the `session` and `effectivePermissions` queries.
-* Redirects just like email/password login:
-
-  * To a validated `return_to`, or
-  * To the default route.
+3. After IdP authentication, the user is redirected to `GET /api/v1/auth/sso/{providerId}/callback`.
+4. Backend verifies the callback, establishes a session, and redirects directly to the sanitized `returnTo` path.
 
 ### 3.4 Redirect handling
 
-`redirectTo` is used to send the user back to where they were going, for example:
+`returnTo` is used to send the user back to where they were going, for example:
 
 * After login,
 * After SSO callback,
@@ -238,26 +229,18 @@ The `/auth/callback` screen:
 
 Redirect safety rules:
 
-* Accept only **relative paths**, e.g. `/workspaces/123/runs`.
-* Reject any string that:
+* Accept only **relative paths** beginning with `/`, e.g. `/workspaces/123/runs`.
+* Reject absolute URLs, protocol-relative URLs (`//...`), or paths with control characters.
 
-  * Contains a scheme (`://`),
-  * Starts with `//`,
-  * Resolves outside the current origin,
-  * Starts with suspicious prefixes (`javascript:`, etc).
-
-We centralise this logic in a helper, e.g.:
+We centralize this logic in a helper, e.g.:
 
 ```ts
-function resolveRedirectPath(raw?: string | null): string;
+function resolveRedirectParam(raw?: string | null): string;
 ```
 
-If validation fails or `redirectTo` is omitted:
+If validation fails or `returnTo` is omitted:
 
-* Fallback to:
-
-  * The user’s default workspace (if a workspace is marked `is_default`), or
-  * The workspace directory (`/workspaces`).
+* Fallback to `/` (the app home screen handles workspace routing).
 
 ---
 
@@ -278,7 +261,7 @@ Behaviour:
 
 * If the user navigates to an authenticated route and `useSessionQuery()` resolves as unauthenticated:
 
-  * Redirect them to `/login` with an optional `redirectTo` back to the original path.
+  * Redirect them to `/login` with an optional `returnTo` back to the original path.
 
 ### 4.2 Session expiry
 
@@ -306,7 +289,7 @@ The UI uses:
 
 Frontends treat auth‑related status codes consistently:
 
-* `401` → **not logged in**. Redirect to `/login` (preserving a safe `redirectTo` where appropriate).
+* `401` → **not logged in**. Redirect to `/login` (preserving a safe `returnTo` where appropriate).
 * `403` → **logged in but not allowed**. Keep the user on the current screen and surface a permissions experience (hide or disable actions with explanatory copy).
 
 ---
@@ -629,7 +612,7 @@ UI pattern:
 
 ### 7.1 Redirect safety
 
-Any time `redirectTo` is used (login, SSO, setup), we must:
+Any time `returnTo` is used (login, SSO, setup), we must:
 
 * Accept only relative URLs (starting with `/`).
 * Reject:
@@ -638,15 +621,15 @@ Any time `redirectTo` is used (login, SSO, setup), we must:
   * Protocol‑relative URLs (`//…`),
   * `javascript:` or similar schemes.
 
-Safe logic belongs in a single helper (`resolveRedirectPath`) that is used by:
+Safe logic belongs in a single helper (`resolveRedirectParam`) that is used by:
 
 * The login flow.
 * The SSO callback screen.
 * The setup screen.
 
-If `redirectTo` is unsafe or missing:
+If `returnTo` is unsafe or missing:
 
-* Redirect to `/workspaces` or to the user’s default workspace path.
+* Redirect to `/` (the app home screen handles workspace routing).
 
 ### 7.2 Storage safety
 

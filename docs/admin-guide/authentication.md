@@ -35,12 +35,117 @@ The dependency `get_current_principal` tries API key → session cookie → bear
 
 ## Single sign-on
 
-When `ADE_OIDC_ENABLED=true`, the API exposes:
+ADE now manages OIDC providers in the database and exposes a dedicated SSO surface:
 
-- `GET /api/v1/auth/oidc/{provider}/authorize` — 302 redirect to the IdP (sets state + return_to cookies).
-- `GET /api/v1/auth/oidc/{provider}/callback` — validates the response, provisions or links users, and sets a session cookie.
-  - Browser mode redirects to `ADE_FRONTEND_URL/auth/callback?return_to=...`.
-  - JSON mode returns `{ "ok": true }` when `response_mode=json` or `Accept: application/json` is used.
+- `GET /api/v1/auth/sso/providers` — public provider list for the login screen.
+- `GET /api/v1/auth/sso/{providerId}/authorize` — 302 redirect to the IdP (server-stored state, PKCE, nonce).
+- `GET /api/v1/auth/sso/{providerId}/callback` — validates the response, links/provisions users, and sets a session cookie.
+  - Browser mode redirects to the sanitized `returnTo` path.
+  - JSON mode returns `{ "ok": true, "returnTo": "/path", "error": null }` when `Accept: application/json` is used.
+
+Provider configuration is managed via admin APIs:
+
+- `GET/POST /api/v1/admin/sso/providers`
+- `GET/PATCH/DELETE /api/v1/admin/sso/providers/{id}`
+- `GET/PUT /api/v1/admin/sso/settings` (global enable/disable)
+
+Operational settings:
+
+- `ADE_AUTH_FORCE_SSO=true` disables password login in favor of SSO.
+- `ADE_AUTH_SSO_AUTO_PROVISION` enables auto-provisioning for new SSO users (default: false).
+- `ADE_AUTH_SSO_PROVIDERS_JSON` syncs env-managed providers into the database at startup.
+- `ADE_SSO_ENCRYPTION_KEY` encrypts provider client secrets at rest (falls back to `ADE_SECRET_KEY` if unset).
+
+### Provider management
+
+Providers are created and managed via `/api/v1/admin/sso/providers`. Required fields:
+
+- `id` (slug): lower-case, URL-safe (`^[a-z0-9][a-z0-9-_]{2,63}$`).
+- `label`: human-readable name shown on the login screen.
+- `issuer`: https URL for the IdP issuer.
+- `clientId`: OIDC client ID.
+- `clientSecret`: write-only secret; read responses never return it.
+- `status`: `active`, `disabled`, or `deleted`.
+- `domains`: optional list of email domains for routing (and auto-provision allow-list).
+
+Disable providers by setting `status=disabled`; delete is a soft delete that preserves identities.
+
+### Env-managed providers (startup sync)
+
+To declare providers in configuration-as-code, set `ADE_AUTH_SSO_PROVIDERS_JSON` to a JSON array at process startup. When set
+(including `[]`), the API performs a startup sync:
+
+- Upserts every provider from the env list into the database.
+- Marks env-managed providers as `managedBy="env"` and `locked=true`.
+- Releases env-managed providers missing from the env list by flipping them to `managedBy="db"` and `locked=false`.
+
+Example:
+
+```json
+[
+  {
+    "id": "okta-primary",
+    "type": "oidc",
+    "label": "Okta",
+    "issuer": "https://issuer.example.com",
+    "clientId": "abc123",
+    "clientSecret": "secret",
+    "domains": ["example.com"],
+    "status": "active"
+  }
+]
+```
+
+Notes:
+
+- ENV changes require a restart; there is no hot reload.
+- `managedBy` and `locked` appear only on admin provider responses.
+- To move an env-managed provider back to DB-managed, remove it from the env list and restart.
+
+### Domain routing
+
+Domain routing selects a provider based on the user's email domain. Configure domains via the provider `domains` list:
+
+- Domains are stored lower-case (IDNA/punycode for internationalized domains).
+- Each domain can map to only one provider.
+- If no domain matches, the UI can still show all active providers.
+
+### Auto-provision allow-list
+
+Auto-provisioning is allowed only when `ADE_AUTH_SSO_AUTO_PROVISION=true` and the provider has `domains` configured that match
+the user's email domain. If auto-provisioning is disabled (or a provider has no domains configured), users must already exist
+in ADE or be linked by an admin.
+
+### Error codes
+
+SSO failures return stable codes in `ssoError`:
+
+- `PROVIDER_NOT_FOUND` - provider ID is missing or deleted.
+- `PROVIDER_DISABLED` - provider is disabled or globally disabled.
+- `PROVIDER_MISCONFIGURED` - missing credentials, discovery failure, or JWKS failure.
+- `UPSTREAM_ERROR` - IdP returned an error response.
+- `STATE_INVALID` - state missing/unknown or provider mismatch.
+- `STATE_EXPIRED` - state expired before callback.
+- `STATE_REUSED` - state already consumed.
+- `TOKEN_EXCHANGE_FAILED` - code exchange failed at the token endpoint.
+- `ID_TOKEN_INVALID` - ID token failed validation (signature/issuer/audience/nonce).
+- `EMAIL_MISSING` - IdP did not return an email claim.
+- `EMAIL_NOT_VERIFIED` - email is not verified by the IdP.
+- `AUTO_PROVISION_DISABLED` - auto-provisioning is disabled for new SSO users.
+- `DOMAIN_NOT_ALLOWED` - email domain not allow-listed for auto-provisioning.
+- `USER_NOT_ALLOWED` - user is inactive or a service account.
+- `IDENTITY_CONFLICT` - provider subject linked to another user.
+- `RATE_LIMITED` - too many attempts from the same client.
+- `INTERNAL_ERROR` - unexpected server error during the SSO flow.
+
+### Troubleshooting
+
+- `PROVIDER_MISCONFIGURED`: verify issuer URL, client ID/secret, and that discovery and JWKS endpoints are reachable.
+- `ID_TOKEN_INVALID`: confirm the IdP `iss` matches the configured issuer and that `aud` includes the client ID.
+- `TOKEN_EXCHANGE_FAILED`: check the token endpoint URL, client authentication method, and PKCE verifier length.
+- `EMAIL_MISSING`: ensure the IdP returns an email claim and that `scope` includes `email`.
+- `EMAIL_NOT_VERIFIED` or `DOMAIN_NOT_ALLOWED`: verify IdP email verification settings and provider domain allow-lists.
+- `AUTO_PROVISION_DISABLED`: enable `ADE_AUTH_SSO_AUTO_PROVISION` if you want new SSO users to be created automatically.
 
 ## Security dependencies
 
@@ -50,8 +155,8 @@ Routers share dependencies from `ade_api.core.http.dependencies` so OpenAPI docu
 - `require_global(<permission>)` / `require_workspace(<permission>)` enforce RBAC via the principal-aware authoriser and surface
   structured 403 responses with permission and scope context.
 - `require_csrf` enforces double-submit CSRF for cookie-authenticated unsafe methods.
-- OpenAPI marks only `/health`, `/auth/providers`, `/auth/setup` (GET/POST), `/auth/cookie/login`, `/auth/jwt/login`,
-  `/auth/register`, and OIDC authorize/callback as public; everything else inherits the default security schemes.
+- OpenAPI marks only `/api/v1/health`, `/api/v1/auth/providers`, `/api/v1/auth/sso/providers`, `/api/v1/auth/setup` (GET/POST), `/api/v1/auth/cookie/login`,
+  `/api/v1/auth/jwt/login`, `/api/v1/auth/register`, and SSO authorize/callback as public; everything else inherits the default security schemes.
 
 ## Extending the system
 

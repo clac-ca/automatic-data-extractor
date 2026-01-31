@@ -7,11 +7,11 @@ flags, and rollback considerations.
 ## 1. Pre-deploy validation
 
 - Confirm the target environment includes the Alembic migration
-  `apps/ade-api/migrations/versions/0004_environments_runs_no_builds.py`.
-- Run `ade ci` locally and ensure the backend image builds with the new
+  `apps/ade-api/src/ade_api/migrations/versions/0004_environments_runs_no_builds.py`.
+- Run `ade api test` locally and ensure the backend image builds with the new
   FastAPI routers mounted (`/api/v1/configurations/{configurationId}/runs`, `/api/v1/runs/...`).
 - Review `docs/ade_runs_api_spec.md#manual-qa-checklist` and run at least
-  one queued run + SSE tail scenario against staging.
+  one queued run + log download scenario against staging.
 
 ## 2. Configuration flags
 
@@ -19,9 +19,9 @@ flags, and rollback considerations.
   execution and return a validation error. Disable the flag in production
   to permit engine execution. Document the toggle in your change
   management system when flipping it.
-- `ADE_VENVS_DIR` – ensure the directory exists on local storage and
+- `ADE_DATA_DIR` – ensure the venv directory exists on local storage and
   matches the path used by the worker
-  (`${ADE_VENVS_DIR}/<workspace>/<config>/<deps_digest>/<environment_id>/.venv`).
+  (`${ADE_DATA_DIR}/venvs/<workspace>/<config>/<deps_digest>/<environment_id>/.venv`).
   If the venv is missing, the worker will provision a new environment.
 
 ## 3. Release sequence
@@ -31,8 +31,8 @@ flags, and rollback considerations.
 3. Deploy or restart the worker process/container so queued jobs can execute.
 4. Verify health probes and log output for the new router registration
    (`ade_api.features.runs.router`).
-5. Trigger a dry-run execution (`dry_run=true`) and tail
-   `/runs/{runId}/events/stream` to verify event logs and database persistence.
+5. Trigger a dry-run execution (`dry_run=true`) and download
+   `/runs/{runId}/events/download` to verify event logs and database persistence.
 6. Notify frontend teams that the API is live so they can schedule their
    UI integration.
 
@@ -41,7 +41,7 @@ flags, and rollback considerations.
 - **Trigger new environments:** Environments are rebuilt when dependency manifests change (new `deps_digest`) or when the environment is missing on disk. There is no build API; deleting a stale environment folder is safe—the worker recreates it on demand.
 - **Diagnose environment failures:** Inspect the environment log on disk (`.../venvs/<workspace>/<config>/<deps_digest>/<environment_id>/logs/events.ndjson`) alongside the worker logs. Environment events use the `environment.*` namespace.
 - **Diagnose missing venvs:** If the environment directory is missing, the worker requeues provisioning and the run waits until it becomes `ready`. Ensure the venv root is writable/local and has free space.
-- **Local cleanup:** It is safe to delete old environment folders under `ADE_VENVS_DIR` once they are no longer referenced by queued/running runs. The worker GC can handle this automatically.
+- **Local cleanup:** It is safe to delete old environment folders under `${ADE_DATA_DIR}/venvs` once they are no longer referenced by queued/running runs. The worker GC can handle this automatically.
 
 ## 4. Rollback strategy
 

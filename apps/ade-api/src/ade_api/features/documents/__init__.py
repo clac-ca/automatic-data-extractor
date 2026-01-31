@@ -1,5 +1,3 @@
-"""Documents module scaffolding for the backend rewrite."""
+"""Document feature package."""
 
-from .storage import DocumentStorage, StoredDocument
-
-__all__ = ["DocumentStorage", "StoredDocument"]
+__all__: list[str] = []

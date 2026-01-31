@@ -2,7 +2,9 @@ export type FilterOperator =
   | "eq"
   | "ne"
   | "in"
+  | "inArray"
   | "notIn"
+  | "notInArray"
   | "lt"
   | "lte"
   | "gt"
@@ -11,7 +13,9 @@ export type FilterOperator =
   | "notILike"
   | "isEmpty"
   | "isNotEmpty"
-  | "between";
+  | "between"
+  | "isBetween"
+  | "isRelativeToToday";
 
 export type FilterJoinOperator = "and" | "or";
 
@@ -31,12 +35,14 @@ export type FilterItem = {
 };
 
 export type ListQueryParams = {
-  page?: number;
-  perPage?: number;
+  limit?: number;
+  cursor?: string;
   sort?: string;
   filters?: string;
   joinOperator?: FilterJoinOperator;
   q?: string;
+  includeTotal?: boolean;
+  includeFacets?: boolean;
 };
 
 export function encodeFilters(filters?: readonly FilterItem[]): string | undefined {
@@ -47,24 +53,29 @@ export function encodeFilters(filters?: readonly FilterItem[]): string | undefin
 }
 
 export function buildListQuery(options: {
-  page?: number;
-  perPage?: number;
+  limit?: number;
+  cursor?: string | null;
   sort?: string | null;
-  filters?: FilterItem[];
+  filters?: FilterItem[] | string | null;
   joinOperator?: FilterJoinOperator;
   q?: string | null;
+  includeTotal?: boolean;
+  includeFacets?: boolean;
 }): ListQueryParams {
   const query: ListQueryParams = {};
-  if (typeof options.page === "number" && options.page > 0) {
-    query.page = options.page;
+  if (typeof options.limit === "number" && options.limit > 0) {
+    query.limit = options.limit;
   }
-  if (typeof options.perPage === "number" && options.perPage > 0) {
-    query.perPage = options.perPage;
+  if (options.cursor) {
+    query.cursor = options.cursor;
   }
   if (options.sort) {
     query.sort = options.sort;
   }
-  const encoded = encodeFilters(options.filters);
+  const encoded =
+    typeof options.filters === "string"
+      ? options.filters.trim()
+      : encodeFilters(options.filters);
   if (encoded) {
     query.filters = encoded;
     if (options.joinOperator) {
@@ -73,6 +84,12 @@ export function buildListQuery(options: {
   }
   if (options.q) {
     query.q = options.q;
+  }
+  if (typeof options.includeTotal === "boolean") {
+    query.includeTotal = options.includeTotal;
+  }
+  if (typeof options.includeFacets === "boolean") {
+    query.includeFacets = options.includeFacets;
   }
   return query;
 }

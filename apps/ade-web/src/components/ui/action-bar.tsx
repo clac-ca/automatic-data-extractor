@@ -5,10 +5,10 @@ import { Slot } from "@radix-ui/react-slot";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import { Button } from "@/components/ui/button";
-import { useComposedRefs } from "@/lib/compose-refs";
-import { cn } from "@/lib/utils";
 import { useAsRef } from "@/hooks/use-as-ref";
 import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
+import { useComposedRefs } from "@/lib/compose-refs";
+import { cn } from "@/lib/utils";
 
 const ROOT_NAME = "ActionBar";
 const GROUP_NAME = "ActionBarGroup";
@@ -206,7 +206,7 @@ function ActionBar(props: ActionBarProps) {
           {...rootProps}
           ref={composedRef}
           className={cn(
-            "fixed z-[var(--app-z-popover)] rounded-lg border bg-card shadow-lg outline-none",
+            "fixed z-50 rounded-lg border bg-card shadow-lg outline-none",
             "fade-in-0 zoom-in-95 animate-in duration-250 [animation-timing-function:cubic-bezier(0.16,1,0.3,1)]",
             "data-[side=bottom]:slide-in-from-bottom-4 data-[side=top]:slide-in-from-top-4",
             "motion-reduce:animate-none motion-reduce:transition-none",

@@ -9,8 +9,13 @@ from ade_api.api.deps import SessionDep
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
-from ade_api.common.listing import ListQueryParams, list_query_params, strict_list_query_guard
-from ade_api.common.sorting import resolve_sort
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    resolve_cursor_sort_sequence,
+    strict_cursor_query_guard,
+)
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf
 from ade_api.core.rbac.types import ScopeType
@@ -39,11 +44,15 @@ from ade_api.features.rbac.service import (
 )
 from ade_api.features.rbac.sorting import (
     ASSIGNMENT_DEFAULT_SORT,
+    ASSIGNMENT_CURSOR_FIELDS,
     ASSIGNMENT_ID_FIELD,
     ASSIGNMENT_SORT_FIELDS,
     PERMISSION_DEFAULT_SORT,
+    PERMISSION_CURSOR_FIELDS,
     PERMISSION_ID_FIELD,
     PERMISSION_SORT_FIELDS,
+    ROLE_CURSOR_FIELDS,
+    ROLE_DEFAULT_SORT,
 )
 from ade_api.models import Role, User, UserRoleAssignment
 
@@ -179,8 +188,8 @@ def _ensure_workspace_permission(
 def list_permissions(
     principal: PrincipalDep,
     session: SessionDep,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> PermissionPage:
     service = RbacService(session=session)
     # Require ability to read roles/permissions
@@ -190,9 +199,10 @@ def list_permissions(
         permission_key="roles.read_all",
     )
 
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=PERMISSION_SORT_FIELDS,
+        cursor_fields=PERMISSION_CURSOR_FIELDS,
         default=PERMISSION_DEFAULT_SORT,
         id_field=PERMISSION_ID_FIELD,
     )
@@ -200,9 +210,10 @@ def list_permissions(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
     items = [
         PermissionOut(
@@ -216,14 +227,7 @@ def list_permissions(
         )
         for permission in page_result.items
     ]
-    return PermissionPage(
-        items=items,
-        page=page_result.page,
-        per_page=page_result.per_page,
-        page_count=page_result.page_count,
-        total=page_result.total,
-        changes_cursor=page_result.changes_cursor,
-    )
+    return PermissionPage(items=items, meta=page_result.meta, facets=page_result.facets)
 
 
 # ---------------------------------------------------------------------------
@@ -240,8 +244,8 @@ def list_permissions(
 def list_roles(
     principal: PrincipalDep,
     session: SessionDep,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> RolePage:
     service = RbacService(session=session)
     _ensure_global_permission(
@@ -250,21 +254,24 @@ def list_roles(
         permission_key="roles.read_all",
     )
 
+    resolved_sort = resolve_cursor_sort_sequence(
+        list_query.sort,
+        cursor_fields=ROLE_CURSOR_FIELDS,
+        default=ROLE_DEFAULT_SORT,
+    )
     role_page = service.list_roles(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        sort=list_query.sort,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
     return RolePage(
         items=[_serialize_role(role) for role in role_page.items],
-        page=role_page.page,
-        per_page=role_page.per_page,
-        page_count=role_page.page_count,
-        total=role_page.total,
-        changes_cursor=role_page.changes_cursor,
+        meta=role_page.meta,
+        facets=role_page.facets,
     )
 
 
@@ -440,8 +447,8 @@ def delete_role(
 def list_assignments(
     principal: PrincipalDep,
     session: SessionDep,
-    list_query: Annotated[ListQueryParams, Depends(list_query_params)],
-    _guard: Annotated[None, Depends(strict_list_query_guard())],
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> RoleAssignmentPage:
     service = RbacService(session=session)
     _ensure_global_permission(
@@ -450,9 +457,10 @@ def list_assignments(
         permission_key="roles.read_all",
     )
 
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=ASSIGNMENT_SORT_FIELDS,
+        cursor_fields=ASSIGNMENT_CURSOR_FIELDS,
         default=ASSIGNMENT_DEFAULT_SORT,
         id_field=ASSIGNMENT_ID_FIELD,
     )
@@ -460,17 +468,15 @@ def list_assignments(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
-        order_by=order_by,
-        page=list_query.page,
-        per_page=list_query.per_page,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
     return RoleAssignmentPage(
         items=[_serialize_assignment(item) for item in assignments.items],
-        page=assignments.page,
-        per_page=assignments.per_page,
-        page_count=assignments.page_count,
-        total=assignments.total,
-        changes_cursor=assignments.changes_cursor,
+        meta=assignments.meta,
+        facets=assignments.facets,
     )
 
 
@@ -514,9 +520,10 @@ def _load_user_role_assignments(
     service: RbacService,
     user_id: UUID,
 ) -> list[UserRoleAssignment]:
-    order_by = resolve_sort(
+    resolved_sort = resolve_cursor_sort(
         [],
         allowed=ASSIGNMENT_SORT_FIELDS,
+        cursor_fields=ASSIGNMENT_CURSOR_FIELDS,
         default=ASSIGNMENT_DEFAULT_SORT,
         id_field=ASSIGNMENT_ID_FIELD,
     )
@@ -527,9 +534,10 @@ def _load_user_role_assignments(
         ],
         join_operator=FilterJoinOperator.AND,
         q=None,
-        order_by=order_by,
-        page=1,
-        per_page=1000,
+        resolved_sort=resolved_sort,
+        limit=1000,
+        cursor=None,
+        include_total=False,
         default_active_only=False,
     )
     return assignments_page.items

@@ -19,7 +19,7 @@ Future versions will follow the same resource model. When breaking changes are r
 
 ## Operational endpoints
 
-- `GET /health` returns `200` when the process is running (no database check).
+- `GET /api/v1/health` returns `200` when the process is running (no database check).
 - `GET /ready` verifies database connectivity and returns `200` when ready (else `503`).
 - `GET /api/v1/info` returns build/runtime metadata (`version`, `commitSha`, `environment`, `startedAt`).
 
@@ -66,26 +66,26 @@ All non-2xx responses use `application/problem+json` with a consistent schema:
 
 ### Optimistic concurrency
 
-- `GET` item endpoints return an `ETag` header.
-- `PATCH` and `DELETE` require `If-Match` with that ETag.
+- Most mutable item endpoints (configs, roles, API keys) return an `ETag` header.
+- `PATCH` and `DELETE` for those endpoints require `If-Match` with that ETag.
   - Missing `If-Match` returns `428 precondition_required`.
   - Mismatched `If-Match` returns `412 precondition_failed`.
+- Document endpoints do **not** use `ETag`/`If-Match`; updates and deletes are unconditional.
 
 Example:
 
 ```http
-GET /api/v1/workspaces/ws_123/documents/doc_123
-ETag: W/"doc_123:1700000000"
+GET /api/v1/workspaces/ws_123/configurations/config_123
+ETag: W/"config_123:1700000000"
 
-PATCH /api/v1/workspaces/ws_123/documents/doc_123
-If-Match: W/"doc_123:1700000000"
+PATCH /api/v1/workspaces/ws_123/configurations/config_123
+If-Match: W/"config_123:1700000000"
 ```
 
 ### Idempotent POSTs
 
-- Creating documents, runs, and API keys requires `Idempotency-Key`.
-- Replaying the same key + payload returns the original response.
-- Reusing a key with a different payload returns `409 idempotency_key_conflict`.
+ADE no longer requires `Idempotency-Key` headers for documents, runs, or API keys.
+Clients should rely on standard retry semantics and backend validation errors.
 
 ## Core resources
 
@@ -96,12 +96,14 @@ params return `422`.
 
 Query params:
 
-- `page` (1-based, default `1`)
-- `perPage` (default `50`, max `200`)
-- `sort` (CSV list of fields, prefix `-` for DESC)
+- `limit` (default `50`, max `200`)
+- `cursor` (opaque cursor token)
+- `sort` (JSON array of `{ id, desc }`)
 - `filters` (URL-encoded JSON array of `{ id, operator, value }`)
 - `joinOperator` (`and` or `or`, default `and`)
 - `q` (free-text search)
+- `includeTotal` (default `false`)
+- `includeFacets` (default `false`)
 
 See `docs/reference/list-search.md` for `q` tokenization rules and per-resource
 searchable fields.
@@ -111,16 +113,20 @@ Response envelope:
 ```json
 {
   "items": [],
-  "page": 1,
-  "perPage": 50,
-  "pageCount": 0,
-  "total": 0,
-  "changesCursor": "0"
+  "meta": {
+    "limit": 50,
+    "hasMore": false,
+    "nextCursor": null,
+    "totalIncluded": false,
+    "totalCount": null,
+    "changesCursor": "0"
+  },
+  "facets": null
 }
 ```
 
-`changesCursor` is a snapshot watermark. For resources without change feeds it
-is `"0"`.
+`changesCursor` is the latest document change cursor at the time of the list
+response. Use it as the starting `since` value for `/documents/delta`.
 
 Filter operators follow the Tablecn DSL (for example `eq`, `in`, `between`,
 `iLike`, `isEmpty`). Values must match the operator shape (arrays for `in`,
@@ -147,20 +153,25 @@ two-element arrays for `between`, etc.).
 
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
-- `GET /workspaces/{workspaceId}/documents` – list documents with pagination, sorting, and filters; includes a `changesCursor`
-  watermark in the response body and `X-Ade-Changes-Cursor` header.
-- `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand).
+- `GET /workspaces/{workspaceId}/documents` – list documents with pagination, sorting, and filters.
+- `GET /workspaces/{workspaceId}/documents/stream` – Server-Sent Events (SSE) stream for document change notifications (workspace-scoped, minimal payload).
+- `GET /workspaces/{workspaceId}/documents/delta?since=<cursor>` – pull changes since a change cursor; use with the SSE stream for live updates.
+- The list endpoint accepts `filters=[{"id":"id","operator":"in","value":["..."]}]` for membership checks using the same filter semantics as the UI.
+- `POST /workspaces/{workspaceId}/documents` – multipart upload endpoint (accepts optional metadata JSON); uploads store bytes + metadata only (worksheet inspection is on-demand). Pass `conflictMode=upload_new_version` or `conflictMode=keep_both` to resolve name collisions (default is `409`).
 - `GET /workspaces/{workspaceId}/documents/{documentId}` – fetch metadata, including upload timestamps and submitter.
+- `POST /workspaces/{workspaceId}/documents/{documentId}/versions` – upload a new document version (same identity, new version number).
 - `GET /workspaces/{workspaceId}/documents/{documentId}/download` – download the stored file with a safe `Content-Disposition` header.
+- `GET /workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download` – download a specific historical version.
 - `GET /workspaces/{workspaceId}/documents/{documentId}/sheets` – enumerate worksheets for spreadsheet uploads by inspecting the stored file (falls back to a single-sheet descriptor for other file types; returns `422` when parsing fails).
 - `DELETE /workspaces/{workspaceId}/documents/{documentId}` – remove a document, if permitted.
 
-**Change feed + streaming**
+**Realtime document changes**
 
-- `GET /workspaces/{workspaceId}/documents/changes?cursor=<int>` – cursor-based change feed (use `nextCursor` as the new cursor).
-- `GET /workspaces/{workspaceId}/documents/changes/stream?cursor=<int>` – SSE stream of the same feed; honors `Last-Event-ID` or `cursor`.
-- When a cursor is too old the API returns `410` with `{"error": "resync_required", "oldestCursor": "...", "latestCursor": "..."}`.
-- Change entries are minimal (`documentId`, `documentVersion`, `occurredAt`); clients fetch the latest row on `document.changed`.
+- The SSE stream emits minimal payloads (`documentId`, `op`, `id`) and uses the SSE `id` field so browsers can send `Last-Event-ID` on reconnect.
+- Use `/documents/delta?since=<cursor>` to pull changes; if you receive `410 Gone`, refresh the list and reset your cursor.
+- Change cursors are retained for ~14 days via periodic cleanup of the `document_changes` table.
+- Migrations that rebuild `document_changes` reset cursors; clients should refresh the list after deploys that touch the change feed.
+- Keep SSE connections open with proxy-friendly settings (HTTP/2 preferred); the stream emits keepalive events and uses small payloads to stay within Postgres NOTIFY limits.
 
 **Resumable upload sessions (large files)**
 
@@ -178,12 +189,11 @@ Trigger and monitor extraction runs. Creation is configuration-scoped; reads are
 - `POST /configurations/{configurationId}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection).
 - `GET /workspaces/{workspaceId}/runs` – list recent runs for a workspace; use the filter DSL for status or source document filters.
 - `GET /runs/{runId}` – retrieve run metadata (status, timing, configuration, input/output hints).
-- `GET /runs/{runId}/events` – fetch structured events (JSON or NDJSON).
-- `GET /runs/{runId}/events/stream` – SSE stream of the run event log.
+- `GET /runs/{runId}/events/download` – download the NDJSON event log.
 - `GET /runs/{runId}/input` – fetch input metadata; `GET /runs/{runId}/input/download` downloads the original file.
 - `GET /runs/{runId}/output` – fetch output metadata (`ready`, size, content type, download URL).
+- `POST /runs/{runId}/output` – upload a manual output version (does not enqueue a run).
 - `GET /runs/{runId}/output/download` – download the normalized output; returns `409` when not ready.
-- `GET /runs/{runId}/events/download` – download the NDJSON event log.
 
 ### Configurations
 

@@ -3,16 +3,11 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { useLocation, useNavigate } from "@app/navigation/history";
-import { ApiError } from "@api";
-import { sessionKeys } from "@api/auth/api";
-import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";
-import {
-  buildLoginRedirect,
-  chooseDestination,
-  resolveRedirectParam,
-} from "@app/navigation/authNavigation";
-import { completeSetup } from "@api/setup/api";
+import { createSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { ApiError } from "@/api";
+import { sessionKeys } from "@/api/auth/api";
+import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
+import { completeSetup } from "@/api/setup/api";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -33,6 +28,47 @@ const setupSchema = z
     message: "Passwords do not match.",
   });
 
+const DEFAULT_RETURN_TO = "/";
+
+function sanitizeReturnTo(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null;
+  }
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+function resolveReturnTo(value: string | null | undefined) {
+  return sanitizeReturnTo(value) ?? DEFAULT_RETURN_TO;
+}
+
+function pickReturnTo(sessionReturnTo: string | null | undefined, fallback: string | null | undefined) {
+  const sessionPath = sanitizeReturnTo(sessionReturnTo);
+  if (sessionPath) {
+    return sessionPath;
+  }
+  const fallbackPath = sanitizeReturnTo(fallback);
+  if (fallbackPath) {
+    return fallbackPath;
+  }
+  return DEFAULT_RETURN_TO;
+}
+
+function buildRedirectPath(basePath: string, returnTo: string | null | undefined) {
+  const safeReturnTo = sanitizeReturnTo(returnTo);
+  if (!safeReturnTo || safeReturnTo === DEFAULT_RETURN_TO) {
+    return basePath;
+  }
+  const query = createSearchParams({ returnTo: safeReturnTo }).toString();
+  return `${basePath}?${query}`;
+}
+
 interface SetupFormValues {
   displayName: string;
   email: string;
@@ -46,9 +82,9 @@ export default function SetupScreen() {
   const queryClient = useQueryClient();
 
   const setupQuery = useSetupStatusQuery(true);
-  const redirectTo = useMemo(() => {
+  const returnTo = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return resolveRedirectParam(params.get("redirectTo"));
+    return resolveReturnTo(params.get("returnTo"));
   }, [location.search]);
 
   useEffect(() => {
@@ -56,9 +92,9 @@ export default function SetupScreen() {
       return;
     }
     if (!setupQuery.data?.setup_required) {
-      navigate(buildLoginRedirect(redirectTo), { replace: true });
+      navigate(buildRedirectPath("/login", returnTo), { replace: true });
     }
-  }, [navigate, redirectTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending]);
+  }, [navigate, returnTo, setupQuery.data?.setup_required, setupQuery.isError, setupQuery.isPending]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,7 +125,9 @@ export default function SetupScreen() {
     setFormError(null);
 
     const formData = new FormData(event.currentTarget);
-    const raw = Object.fromEntries(formData.entries()) as Partial<SetupFormValues> & { redirectTo?: string };
+    const raw = Object.fromEntries(formData.entries()) as Partial<SetupFormValues> & {
+      returnTo?: string;
+    };
     const parsed = setupSchema.safeParse(raw);
 
     if (!parsed.success) {
@@ -99,7 +137,7 @@ export default function SetupScreen() {
     }
 
     setIsSubmitting(true);
-    const destination = resolveRedirectParam(raw.redirectTo);
+    const destination = resolveReturnTo(raw.returnTo);
 
     try {
       const session = await completeSetup({
@@ -108,7 +146,7 @@ export default function SetupScreen() {
         password: parsed.data.password,
       });
       queryClient.setQueryData(sessionKeys.detail(), session);
-      navigate(chooseDestination(session.return_to, destination), { replace: true });
+      navigate(pickReturnTo(session.return_to, destination), { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const message = error.problem?.detail ?? error.message ?? "Setup failed. Try again.";
@@ -137,7 +175,7 @@ export default function SetupScreen() {
         </header>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <input type="hidden" name="redirectTo" value={redirectTo} />
+          <input type="hidden" name="returnTo" value={returnTo} />
           <div className="grid gap-6 md:grid-cols-2">
             <FormField label="Display name" required>
               <Input
@@ -187,7 +225,7 @@ export default function SetupScreen() {
           {formError ? <Alert tone="danger">{formError}</Alert> : null}
 
           <div className="flex justify-end">
-            <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Creating administrator…" : "Create administrator"}
             </Button>
           </div>

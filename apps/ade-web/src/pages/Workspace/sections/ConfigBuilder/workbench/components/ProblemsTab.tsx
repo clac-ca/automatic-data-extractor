@@ -35,7 +35,7 @@ function validationMessageClass(level: WorkbenchValidationState["messages"][numb
     case "error":
       return "text-destructive";
     case "warning":
-      return "text-accent-foreground";
+      return "text-warning";
     default:
       return "text-muted-foreground";
   }

@@ -3,7 +3,7 @@
 This directory contains the FastAPI application that powers ADE. Install it in editable mode during development:
 
 ```bash
-pip install -e apps/ade-api[dev]
+uv pip install -e apps/ade-api[dev]
 ```
 
 See the repository root `README.md` for full setup instructions.
@@ -20,6 +20,6 @@ Configurations are still stored under `./data/workspaces/{workspace_id}/config_p
 ## Logging
 
 - The API uses a console formatter with correlation IDs: `2025-11-27T03:05:00.302Z INFO  ade_api.features.runs.service [cid=abcd1234] run.create.success workspace_id=... run_id=...`
-- Set `ADE_LOG_LEVEL=DEBUG` to see debug logs; default is `INFO`. Example: `ADE_LOG_LEVEL=DEBUG ade dev --api-only`.
+- Set `ADE_LOG_LEVEL=DEBUG` to see debug logs; default is `INFO`. Example: `ADE_LOG_LEVEL=DEBUG ade api dev`.
 - Request logs include the `X-Request-ID` correlation ID and request metadata; global exception handlers log unexpected errors and 5xx `HTTPException`s.
 - Attach domain IDs via `extra=log_context(...)` when logging (workspace/config/environment/run/document/user IDs).
