@@ -61,7 +61,7 @@ LIMIT 20
 ## 4. CLI and automation follow-ups
 
 The repository does not yet surface runs through the developer tooling.
-Track ADE-CLI-11 to add `scripts/npm-runs.mjs` with helpers for
+Track ADE-TOOLS-11 to add `scripts/npm-runs.mjs` with helpers for
 `runs:list`, `runs:logs`, and `runs:tail`. Update this guide once the
 commands land so on-call engineers can rely on them instead of raw HTTP
 calls.

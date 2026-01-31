@@ -37,7 +37,9 @@ Fix:
 - Start services:
 
 ```bash
-ade dev
+ade api dev
+ade worker start
+ade web dev
 ```
 
 - Apply migrations:

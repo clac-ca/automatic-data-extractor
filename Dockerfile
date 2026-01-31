@@ -1,7 +1,6 @@
 ARG PYTHON_IMAGE=python:3.12-slim-bookworm
-ARG NODE_IMAGE=node:24-bookworm-slim
 
-# Prod image (final stage by default):
+# Build image:
 #   docker build -t <image>:latest .
 
 # ============================================================
@@ -13,10 +12,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # ============================================================
-# BUILD ARTIFACTS (production only)
+# BUILD STAGE (build deps here so the final image stays small)
 # ============================================================
-# python-builder outputs /opt/venv
-FROM python-base AS python-builder
+# outputs /opt/venv
+FROM python-base AS build
 WORKDIR /src
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -36,46 +35,43 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY apps/ade-api/ /src/apps/ade-api/
 COPY apps/ade-worker/ /src/apps/ade-worker/
-COPY apps/ade-cli/ /src/apps/ade-cli/
-RUN pip install /src/apps/ade-api /src/apps/ade-worker /src/apps/ade-cli
+RUN pip install /src/apps/ade-api /src/apps/ade-worker
 
-# web-builder outputs dist/
-FROM ${NODE_IMAGE} AS web-builder
-WORKDIR /src/apps/ade-web
-
-COPY apps/ade-web/package.json apps/ade-web/package-lock.json ./
+# ============================================================
+# WEB BUILD STAGE (build frontend assets)
+# ============================================================
+FROM node:20-bookworm-slim AS web-build
+WORKDIR /web
+COPY apps/ade-web/package*.json /web/
 RUN npm ci
-
-COPY apps/ade-web/ ./
+COPY apps/ade-web/ /web/
 RUN npm run build
 
 # ============================================================
-# PRODUCTION (copies venv + dist)
+# FINAL STAGE (small runtime image)
 # ============================================================
-FROM python-base AS production
+FROM python-base AS final
 WORKDIR /app
 
 # Runtime deps only.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libpq5 \
+    nginx \
   && rm -rf /var/lib/apt/lists/*
 
 # Create non-root runtime user.
 RUN useradd -m -u 10001 appuser
 
 # Copy Python deps and set PATH.
-COPY --from=python-builder /opt/venv /opt/venv
+COPY --from=build /opt/venv /opt/venv
+COPY --from=web-build /web/dist /app/web/dist
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy built web assets.
-COPY --from=web-builder /src/apps/ade-web/dist /app/web/dist
-ENV ADE_FRONTEND_DIST_DIR="/app/web/dist"
-
 # Ensure runtime data dir exists and is owned by appuser.
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
+RUN mkdir -p /app/data /app/web && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
-# Run `ade start` by default.
+# Run API + worker + web (nginx) in a single container by default.
 CMD ["ade", "start"]

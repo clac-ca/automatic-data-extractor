@@ -13,7 +13,7 @@ from ade_api.commands import common
 
 
 def run_lint(fix: bool = False) -> None:
-    api_root = Path(__file__).resolve().parents[2]
+    api_root = Path(__file__).resolve().parents[3]
     ruff_bin = shutil.which("ruff")
     if not ruff_bin:
         typer.echo("❌ ruff not found. Install dev dependencies (run `./setup.sh`).", err=True)

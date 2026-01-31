@@ -101,6 +101,18 @@ def _render_datetime(value: datetime | None) -> str:
     return value.isoformat()
 
 
+def _json_default(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    return str(value)
+
+
+def _emit_json(payload: object) -> None:
+    typer.echo(json.dumps(payload, indent=2, default=_json_default))
+
+
 def _scope_and_workspace(scope: str, workspace_id: str | None):
     from ade_api.core.rbac.types import ScopeType
 
@@ -190,7 +202,7 @@ def _list_users(
             }
             for row in rows
         ]
-        typer.echo(json.dumps(payload, indent=2))
+        _emit_json(payload)
         return
 
     if not rows:
@@ -303,7 +315,7 @@ def _create_user(
             }
             for a in assignments
         ]
-        typer.echo(json.dumps(payload, indent=2))
+        _emit_json(payload)
         return
 
     typer.echo(f"Created user {profile.email} ({profile.id})")
@@ -351,7 +363,7 @@ def _show_user(*, user_ref: str, json_output: bool) -> None:
             }
             for a in assignments
         ]
-        typer.echo(json.dumps(payload, indent=2))
+        _emit_json(payload)
         return
 
     typer.echo(f"ID:           {profile.id}")
@@ -384,11 +396,14 @@ def _update_user(
     from ade_api.features.users.schemas import UserUpdate
     from fastapi import HTTPException
 
+    payload_data: dict[str, object] = {}
+    if display_name is not None:
+        payload_data["display_name"] = display_name
+    if active_flag is not None:
+        payload_data["is_active"] = active_flag
+
     try:
-        payload = UserUpdate(
-            display_name=display_name,
-            is_active=active_flag,
-        )
+        payload = UserUpdate(**payload_data)
     except ValueError as exc:
         _echo_error(str(exc))
         raise typer.Exit(code=1) from exc
@@ -406,7 +421,7 @@ def _update_user(
             raise typer.Exit(code=1) from exc
 
     if json_output:
-        typer.echo(json.dumps(updated.model_dump(), indent=2))
+        _emit_json(updated.model_dump())
         return
 
     typer.echo(f"Updated user {updated.email} ({updated.id})")
@@ -512,7 +527,7 @@ def _list_roles(
             }
             for a in assignments
         ]
-        typer.echo(json.dumps(payload, indent=2))
+        _emit_json(payload)
         return
 
     if not assignments:

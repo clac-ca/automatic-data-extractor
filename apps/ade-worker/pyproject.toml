@@ -21,7 +21,7 @@ dependencies = [
 
   "uv==0.9.26",
   "sqlalchemy==2.0.44",
-  "psycopg[binary]==3.2.3",
+  "psycopg[binary]==3.3.2",
   "azure-identity==1.25.1",
   "azure-storage-blob==12.26.0",
   "pydantic==2.12.5",

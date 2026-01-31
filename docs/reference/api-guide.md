@@ -19,7 +19,7 @@ Future versions will follow the same resource model. When breaking changes are r
 
 ## Operational endpoints
 
-- `GET /health` returns `200` when the process is running (no database check).
+- `GET /api/v1/health` returns `200` when the process is running (no database check).
 - `GET /ready` verifies database connectivity and returns `200` when ready (else `503`).
 - `GET /api/v1/info` returns build/runtime metadata (`version`, `commitSha`, `environment`, `startedAt`).
 

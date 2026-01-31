@@ -38,8 +38,8 @@ ADE reads database settings from environment variables (prefix `ADE_`):
 
 ADE expects:
 
-* Migrations to be applied before starting the API/worker (`ade dev`, `ade start`, and
-  `ade api start` run them automatically; otherwise use `ade api migrate`).
+* Migrations to be applied before starting the API/worker (`ade dev`, `ade api dev`, and
+  `ade-api start` run them automatically; otherwise use `ade api migrate`).
 * The same configuration (DSN + auth mode) for both runtime and migrations.
 
 ## 2. Using Azure Database for PostgreSQL with password auth
@@ -129,6 +129,6 @@ On startup, ADE will:
 * Start with **`password`** if you need a simple bring‑up.
 * Move to **`managed_identity`** as your long‑term, secure, secretless configuration.
 
-Once the environment variables are set, `ade start` (or `ade api start`) will run migrations
+Once the environment variables are set, `ade api start` (or `ade-api start`) will run migrations
 automatically. If you are launching the API/worker manually, run `ade api migrate` to bootstrap
  the schema first.

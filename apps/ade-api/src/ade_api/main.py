@@ -21,7 +21,6 @@ from .common.problem_details import ApiError
 from .core.http.errors import register_auth_exception_handlers
 from .features.health.ops import router as ops_router
 from .settings import Settings, get_settings
-from .web.spa import mount_spa
 
 API_PREFIX = "/api"
 
@@ -61,8 +60,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ops_router, include_in_schema=False)
     app.include_router(create_api_router(settings), prefix=API_PREFIX)
     configure_openapi(app, settings)
-
-    mount_spa(app, settings.frontend_dist_dir)
 
     return app
 

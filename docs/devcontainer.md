@@ -43,9 +43,9 @@ ade dev
 Or run components separately:
 
 ```bash
-ade dev --api
-ade dev --worker
-ade dev --web
+ade api dev
+ade worker start
+ade web dev
 ```
 
 ## Ports

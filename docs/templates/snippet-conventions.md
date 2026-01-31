@@ -38,7 +38,7 @@ database:
 - Prefer showing only the commands a user should run:
 
 ```bash
-ade test
+ade api test
 ```
 
 - If showing output, separate it clearly:

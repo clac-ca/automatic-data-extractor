@@ -12,12 +12,20 @@ from ade_api.commands import common
 
 
 def run_types() -> None:
-    """Generate OpenAPI JSON and TypeScript types into apps/ade-web/src/types/generated/openapi.d.ts."""
+    """Generate OpenAPI JSON and TypeScript types for apps/ade-web."""
 
     openapi_path = Path(__file__).resolve().parents[1] / "openapi.json"
     output_path = common.FRONTEND_DIR / "src" / "types" / "generated" / "openapi.d.ts"
 
-    common.run([sys.executable, "-m", "ade_api.scripts.generate_openapi", "--output", str(openapi_path)])
+    common.run(
+        [
+            sys.executable,
+            "-m",
+            "ade_api.scripts.generate_openapi",
+            "--output",
+            str(openapi_path),
+        ]
+    )
 
     if not common.FRONTEND_DIR.exists():
         typer.echo("ℹ️  frontend missing; OpenAPI JSON generated only.")

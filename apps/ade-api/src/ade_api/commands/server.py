@@ -19,31 +19,6 @@ def _prepare_env() -> dict[str, str]:
     env["PATH"] = f"{python_bin}{os.pathsep}{env.get('PATH', '')}"
     return env
 
-
-def _ensure_frontend_dist(env: dict[str, str], *, web: bool) -> None:
-    if not web:
-        env.pop("ADE_FRONTEND_DIST_DIR", None)
-        return
-
-    dist_env = env.get("ADE_FRONTEND_DIST_DIR")
-    if not dist_env:
-        typer.echo(
-            "❌ ADE_FRONTEND_DIST_DIR is required when --web is enabled.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    dist_path = Path(dist_env)
-    if not dist_path.exists():
-        typer.echo(
-            f"❌ frontend dist dir not found: {dist_path}. "
-            "Set ADE_FRONTEND_DIST_DIR to a valid path.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    env["ADE_FRONTEND_DIST_DIR"] = dist_env
-    typer.echo(f"🧭 Frontend dist:        {dist_env}")
-
-
 def run_dev(
     *,
     host: str | None = None,
@@ -82,9 +57,8 @@ def run_start(
     host: str | None = None,
     port: int | None = None,
     workers: int | None = None,
-    web: bool = True,
 ) -> None:
-    """Start the API server (runs migrations; serves web if enabled)."""
+    """Start the API server (runs migrations)."""
 
     settings = Settings()
     port = int(port if port is not None else (settings.api_port or 8000))
@@ -92,7 +66,6 @@ def run_start(
     workers = int(workers if workers is not None else (settings.api_workers or 1))
 
     env = _prepare_env()
-    _ensure_frontend_dist(env, web=web)
 
     typer.echo("🗄️  Running migrations…")
     run_migrate()
@@ -109,17 +82,51 @@ def run_start(
 def register(app: typer.Typer) -> None:
     @app.command(name="dev", help="Run the API dev server only (uvicorn --reload).")
     def dev(
-        host: str = typer.Option(None, "--host", help="Host/interface for the API dev server.", envvar="ADE_API_HOST"),
-        port: int = typer.Option(None, "--port", help="Port for the API dev server.", envvar="ADE_API_PORT"),
-        workers: int = typer.Option(None, "--workers", help="Number of API worker processes.", envvar="ADE_API_WORKERS", min=1),
+        host: str = typer.Option(
+            None,
+            "--host",
+            help="Host/interface for the API dev server.",
+            envvar="ADE_API_HOST",
+        ),
+        port: int = typer.Option(
+            None,
+            "--port",
+            help="Port for the API dev server.",
+            envvar="ADE_API_PORT",
+        ),
+        workers: int = typer.Option(
+            None,
+            "--workers",
+            help="Number of API worker processes.",
+            envvar="ADE_API_WORKERS",
+            min=1,
+        ),
     ) -> None:
         run_dev(host=host, port=port, workers=workers)
 
-    @app.command(name="start", help="Start the API server (runs migrations; serves web if enabled).")
+    @app.command(
+        name="start",
+        help="Start the API server (runs migrations).",
+    )
     def start(
-        host: str = typer.Option(None, "--host", help="Host/interface for the API server.", envvar="ADE_API_HOST"),
-        port: int = typer.Option(None, "--port", help="Port for the API server.", envvar="ADE_API_PORT"),
-        workers: int = typer.Option(None, "--workers", help="Number of API worker processes.", envvar="ADE_API_WORKERS", min=1),
-        web: bool = typer.Option(True, "--web/--no-web", help="Serve the built frontend from this process."),
+        host: str = typer.Option(
+            None,
+            "--host",
+            help="Host/interface for the API server.",
+            envvar="ADE_API_HOST",
+        ),
+        port: int = typer.Option(
+            None,
+            "--port",
+            help="Port for the API server.",
+            envvar="ADE_API_PORT",
+        ),
+        workers: int = typer.Option(
+            None,
+            "--workers",
+            help="Number of API worker processes.",
+            envvar="ADE_API_WORKERS",
+            min=1,
+        ),
     ) -> None:
-        run_start(host=host, port=port, workers=workers, web=web)
+        run_start(host=host, port=port, workers=workers)

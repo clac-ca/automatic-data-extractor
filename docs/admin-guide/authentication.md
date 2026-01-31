@@ -155,8 +155,8 @@ Routers share dependencies from `ade_api.core.http.dependencies` so OpenAPI docu
 - `require_global(<permission>)` / `require_workspace(<permission>)` enforce RBAC via the principal-aware authoriser and surface
   structured 403 responses with permission and scope context.
 - `require_csrf` enforces double-submit CSRF for cookie-authenticated unsafe methods.
-- OpenAPI marks only `/health`, `/auth/providers`, `/auth/sso/providers`, `/auth/setup` (GET/POST), `/auth/cookie/login`,
-  `/auth/jwt/login`, `/auth/register`, and SSO authorize/callback as public; everything else inherits the default security schemes.
+- OpenAPI marks only `/api/v1/health`, `/api/v1/auth/providers`, `/api/v1/auth/sso/providers`, `/api/v1/auth/setup` (GET/POST), `/api/v1/auth/cookie/login`,
+  `/api/v1/auth/jwt/login`, `/api/v1/auth/register`, and SSO authorize/callback as public; everything else inherits the default security schemes.
 
 ## Extending the system
 

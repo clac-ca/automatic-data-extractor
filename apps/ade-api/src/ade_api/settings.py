@@ -61,7 +61,6 @@ class Settings(BaseSettings):
     api_port: int | None = Field(default=None, ge=1, le=65535)
     api_workers: int | None = Field(default=None, ge=1)
     frontend_url: str | None = None
-    frontend_dist_dir: Path | None = Field(default=None)
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
     server_cors_origin_regex: str | None = Field(default=None)
 

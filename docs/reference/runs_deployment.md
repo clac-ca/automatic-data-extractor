@@ -8,7 +8,7 @@ flags, and rollback considerations.
 
 - Confirm the target environment includes the Alembic migration
   `apps/ade-api/src/ade_api/migrations/versions/0004_environments_runs_no_builds.py`.
-- Run `ade ci` locally and ensure the backend image builds with the new
+- Run `ade api test` locally and ensure the backend image builds with the new
   FastAPI routers mounted (`/api/v1/configurations/{configurationId}/runs`, `/api/v1/runs/...`).
 - Review `docs/ade_runs_api_spec.md#manual-qa-checklist` and run at least
   one queued run + log download scenario against staging.

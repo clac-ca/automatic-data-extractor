@@ -9,8 +9,7 @@ automatic-data-extractor/
 ├─ apps/
 │  ├─ ade-api/      # FastAPI backend (API only)
 │  ├─ ade-web/      # React/Vite SPA
-│  ├─ ade-worker/   # Background worker (builds + runs).
-│  └─ ade-cli/      # Orchestration CLI (console script: ade)
+│  └─ ade-worker/   # Background worker (builds + runs).
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
@@ -57,42 +56,36 @@ automatic-data-extractor/
 ```bash
 # CLI discovery (source of truth)
 ade --help
-ade <command> --help
+ade api --help
+ade worker --help
+ade-api --help
+ade-worker --help
 ade-engine --help
 ```
 
 ```bash
 # Common workflows
-ade dev
-ade dev --no-worker
-ade dev --api-only
-ade dev --web-only
-ade dev --worker-only
-ade dev --api-port 9000
-
-ade start
-ade api
-ade worker
+ade dev              # api + worker + web (reload)
+ade start            # api + worker + web (nginx)
+ade api dev          # api only (reload)
+ade api start        # api only (prod-style)
+ade worker start
+ade web serve        # nginx (built assets)
+ade web dev          # requires dev deps + node_modules
 ```
 
 ```bash
 # Quality checks
 ade api types
-ade lint --scope backend
-ade lint --scope frontend
-ade lint --fix
-ade test
-ade ci
-ade ci --skip-types
-ade ci --skip-tests
+ade api lint
+ade api test
+npm run lint --prefix apps/ade-web
+npm run test --prefix apps/ade-web
 ```
 
 ```bash
-# Utilities
-ade build
-ade bundle --ext md --out /tmp/bundle.md docs/
-ade clean --yes
-ade reset --yes
+# Build web assets
+ade web build        # or: npm run build --prefix apps/ade-web
 ```
 
 ## Engine CLI quick runs (current)
@@ -126,23 +119,6 @@ ade-engine process batch \
   --config-package my-config
 ```
 
-## Bundle examples
-
-```bash
-# Bundle docs as Markdown
-ade bundle --ext md --out /tmp/bundle.md docs/
-
-# Bundle with filters (skips __pycache__ automatically)
-ade bundle --include "src/**" --include "apps/ade-api/src/ade_api/**/*.py" \
-           --out /tmp/bundle.md
-
-# Copy a bundle to the clipboard (opt-in)
-ade bundle README.md apps/ade-api/AGENTS.md --clip
-
-# Bundle specific files quickly
-ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
-```
-
 ## Frontend API types
 
 - Generated types: `apps/ade-web/src/types/generated/openapi.d.ts`.
@@ -151,4 +127,4 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 
 ## 🤖 Agent rules
 
-1. Always run `ade test` before committing and `ade ci` before pushing or opening a PR.
+1. Always run `ade api test` before committing and run the relevant frontend/backend checks for touched areas.

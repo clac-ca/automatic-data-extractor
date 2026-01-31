@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from enum import Enum
-from pathlib import Path
 
 import typer
 
@@ -36,6 +35,8 @@ def run_tests(suite: TestSuite) -> None:
     cmd = [sys.executable, "-m", "pytest"]
     if suite is not TestSuite.ALL:
         cmd.extend(["-m", suite.value])
+    if suite is TestSuite.UNIT:
+        cmd.extend(["--ignore", "tests/integration"])
     common.run(cmd, cwd=api_root)
 
 

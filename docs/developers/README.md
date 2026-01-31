@@ -51,8 +51,16 @@ will always nest `workspace_id` beneath the derived roots.
 ade dev
 ```
 
-This runs the API, web app, and worker together. Use `ade dev --no-worker` when
-you want to isolate the API or frontend.
+Or run components separately:
+
+```bash
+ade api dev
+ade worker start
+ade web dev
+```
+
+Run each command in its own terminal. Use `ade api dev` alone when you want to
+isolate the API, or skip `ade worker start` if you do not need background jobs.
 
 ---
 

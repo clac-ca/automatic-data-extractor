@@ -1,7 +1,8 @@
 # docker-compose.yml
 #
-# Quickstart: starts ADE (api+web+worker) with local Postgres & Azurite.
-# This compose file builds the ADE image locally from the Dockerfile unless ADE_IMAGE points to a prebuilt tag.
+# Quickstart: starts ADE (api + worker + web) with local Postgres & Azurite.
+# The ade container runs `ade start` (API + worker + nginx).
+# The web server listens on :8000 and proxies /api to the API running on :8001.
 #
 # Requirements:
 # - Docker and Docker Compose
@@ -14,31 +15,29 @@
 #   Host
 #    │  http://localhost:8000
 #    ▼
-# [8000]  ┌──────────────┐        [5432]  ┌──────────────┐
-#         │ ade          │ ───────>       │ postgres     │
-#         │ api + worker │                └──────────────┘
+# [8000]  ┌──────────────┐
+#         │ ade          │  api + worker + nginx
 #         └──────┬───────┘
-#                │
-#                │                [10000] ┌──────────────┐
-#                └───────────────>        │ azurite      │
-#                                         └──────────────┘
+#                ├───────────────> postgres:5432
+#                └───────────────> azurite:10000
 #
 services:
   ade:
     image: ${ADE_IMAGE:-automatic-data-extractor:local}
     build:
       context: .
-      target: production
+      target: final
     depends_on:
       postgres:
         condition: service_healthy
       azurite:
         condition: service_started
-    ports:
-      - 8000:8000
     volumes:
       - ade_data:/app/data
-      # - ./data:/app/data
+    ports:
+      - 8000:8000
+      # - 8001:8001 # optional: expose API directly
+    command: ["ade", "start"]
     environment:
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
@@ -46,7 +45,6 @@ services:
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces} # Default local prefix
       ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false} # disable versioning requirement for local Azurite
       ADE_DATA_DIR: /app/data
-
       ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000} # change me!
 
   postgres:

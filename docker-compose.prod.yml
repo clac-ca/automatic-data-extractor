@@ -1,6 +1,7 @@
 # docker-compose.prod.yml
 #
-# Production (single container): runs ADE (API + Web + worker) and connects to existing Postgres and Azure Storage services.
+# Production: runs ADE API + worker + web (nginx) in a single container.
+# The web server listens on :8000 and proxies /api to the API running on :8001.
 #
 # Requirements:
 # - Docker and Docker Compose
@@ -16,13 +17,14 @@
 #    │  http://localhost:8000
 #    ▼
 # [8000]  ┌──────────────┐
-#         │ ade          │  api + worker + web
+#         │ ade          │  api + worker + nginx
 #         └──────┬───────┘
 #                ├───────────────> external Postgres
 #                └───────────────> external Azure Storage
 services:
   ade:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    command: ["ade", "start"]
     ports:
       - 8000:8000
     volumes:

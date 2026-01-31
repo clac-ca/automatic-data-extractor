@@ -27,7 +27,9 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 
    ```bash
    ./setup.sh
-   ade dev           # starts API + web + worker in watch mode
+   ade api dev       # terminal 1
+   ade worker start  # terminal 2
+   ade web dev       # terminal 3
    ```
 
 2. Next action — For example, run backend migrations and tests:

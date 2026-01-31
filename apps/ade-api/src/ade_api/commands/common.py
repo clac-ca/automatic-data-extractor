@@ -6,8 +6,8 @@ import json
 import os
 import shutil
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import typer
 
@@ -33,7 +33,12 @@ REPO_ROOT = _find_repo_root()
 FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
 
 
-def run(command: Iterable[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
+def run(
+    command: Iterable[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> None:
     cmd_list = list(command)
     typer.echo(f"↪️  {' '.join(cmd_list)}", err=True)
     completed = subprocess.run(cmd_list, cwd=cwd, env=env, check=False)
@@ -41,7 +46,12 @@ def run(command: Iterable[str], *, cwd: Path | None = None, env: dict[str, str] 
         raise typer.Exit(code=completed.returncode)
 
 
-def require_command(command: str, *, friendly_name: str | None = None, fix_hint: str | None = None) -> str:
+def require_command(
+    command: str,
+    *,
+    friendly_name: str | None = None,
+    fix_hint: str | None = None,
+) -> str:
     friendly = friendly_name or command
     found = shutil.which(command)
     if found:
@@ -87,7 +97,10 @@ def ensure_node_modules(frontend_dir: Path | None = None) -> None:
         typer.echo("⚠️  package.json missing in apps/ade-web; cannot continue.", err=True)
         raise typer.Exit(code=1)
     if not (directory / "node_modules").exists():
-        typer.echo("❌ Frontend dependencies not installed. Run `npm install` in apps/ade-web.", err=True)
+        typer.echo(
+            "❌ Frontend dependencies not installed. Run `npm install` in apps/ade-web.",
+            err=True,
+        )
         raise typer.Exit(code=1)
 
 

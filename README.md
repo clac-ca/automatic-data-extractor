@@ -1,209 +1,119 @@
 # Automatic Data Extractor (ADE)
 
-[![CI](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci.yml)
-[![Docker Image (GHCR)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/docker.yml/badge.svg)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/docker.yml)
-ADE is a multi-app project:
+ADE is a self-hostable document extraction service with an **API**, **Web UI**, and a background **worker**.
 
-- **ade-api** — HTTP API (FastAPI)
-- **ade-worker** — background worker (event-driven via Postgres NOTIFY/LISTEN)
-- **ade-web** — React UI
-- **ade-cli** — CLI + container entrypoint
+For local development, ADE runs with **Postgres** and **Azurite** (an Azure Blob Storage emulator) so it works out of the box with no external services.  
+For production, ADE connects to an existing **Postgres** database and **Azure Blob Storage** account.
 
-This repository publishes **one Docker image** that contains **api + worker + cli + built web assets**.
+---
 
-## Quickstart (Docker, local)
+## Prerequisites
 
-The easiest local path is Docker Compose because ADE depends on:
-- Postgres
-- Blob storage (Azurite locally, Azure Storage in production)
+Install these first:
 
-### Clone + run (local build)
+- **Docker** (includes Docker Compose):
+  - Docker Desktop (Windows/macOS/Linux): https://docs.docker.com/get-started/introduction/get-docker-desktop/
+  - Linux alternative (Docker Engine): https://docs.docker.com/engine/install/
+- **Get the code** (pick one):
+  - **No Git:** download the repo as a ZIP from GitHub: https://docs.github.com/en/get-started/start-your-journey/downloading-files-from-github
+  - **With Git:** install Git: https://git-scm.com/install/ and clone the repo: https://docs.github.com/articles/cloning-a-repository
+- **Optional (recommended for contributors):** VS Code Dev Container workflow
+  - VS Code: https://code.visualstudio.com/download
+  - Dev Containers extension: https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers
 
-```bash
-git clone https://github.com/clac-ca/automatic-data-extractor.git \
-  && cd automatic-data-extractor \
-  && docker compose up -d postgres azurite
+---
 
-# Create the blob container once (Azurite)
-docker compose run --rm ade python -c "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); s.get_container_client(c).exists() or s.create_container(c); print('blob container ready:', c)"
+## Get the code
 
-# Start ADE (builds the image if needed)
-docker compose up -d ade
-```
+### Option A — Download ZIP (no Git)
+1. On the GitHub repo page, click **Code → Download ZIP**
+2. Unzip it
+3. Open a terminal in the unzipped folder (the one with `docker-compose.yml`)
 
-After the last step you have:
-- Postgres (local container)
-- Azurite (blob-only)
-- ADE (single container by default runs API + worker)
-
-> **Note:** `docker-compose.yml` contains safe **development defaults** (including a default Postgres password).
-> Data is stored in a named Docker volume (`ade_data`) unless you override the volume mapping.
-> To keep data on the host, replace the volume with `./data:/app/data` (bind mounts may need matching UID/GID permissions).
-> For anything beyond local evaluation, override values with environment variables or a `.env` file.
-
-### Optional: use a .env file
+### Option B — Clone with Git
+1. Run:
 
 ```bash
-cp .env.example .env
-docker compose -f docker-compose.yml up
-```
-
-## Running the image directly
-
-The image is “CLI-style”:
-
-- `ENTRYPOINT ["ade"]`
-- default `CMD ["start"]`
-
-So running without arguments behaves like running `ade start`.
-
-### Start ade-api + ade-web + ade-worker (default)
-
-```bash
-docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest
-```
-
-### Start only ade-api + ade-web
-
-```bash
-docker run --rm -p 8000:8000 --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest api start
-```
-
-### Start only ade-worker
-
-```bash
-docker run --rm --env-file .env -e ADE_DATA_DIR=/app/data -v ./data:/app/data ghcr.io/clac-ca/automatic-data-extractor:latest worker start
-```
-
-### What `ade start` does
-
-`ade start` runs:
-
-- Migrations
-- API and worker together
-- Serves the built frontend when `ADE_FRONTEND_DIST_DIR` is set (the production image sets `/app/web/dist`; from source, run `ade build` and set `ADE_FRONTEND_DIST_DIR=apps/ade-web/dist`)
-
-Ensure the database named in `ADE_DATABASE_URL` already exists (for compose, this is handled by `POSTGRES_DB`).
-
-## Standard production pattern (recommended)
-
-Even though we publish **one image**, the most common deployment style is still:
-
-- one container running the API
-- one container running the worker
-- both containers use the **same image**, but different commands
-
-Use `docker-compose.prod.yml` for single-container BYO services, or `docker-compose.prod.split.yml` for split API + worker:
-
-```bash
-ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.prod.yml up
-# or
-ADE_IMAGE=ghcr.io/clac-ca/automatic-data-extractor:latest docker compose -f docker-compose.prod.split.yml up
-```
-
-## Configuration (ADE_ env vars)
-
-All ADE configuration uses `ADE_*` variables.
-
-### Database (Postgres)
-
-- `ADE_DATABASE_URL` (canonical SQLAlchemy URL, e.g. `postgresql+psycopg://user:pass@host:5432/db?sslmode=disable`)
-- `ADE_DATABASE_AUTH_MODE` (`password` or `managed_identity`)
-- `ADE_DATABASE_SSLROOTCERT` (optional CA path for verify-full)
-
-### Storage (Azure Blob)
-
-- `ADE_BLOB_CONTAINER` (required, private container)
-- `ADE_BLOB_ACCOUNT_URL` (managed identity / AAD, e.g. `https://<account>.blob.core.windows.net`)
-- `ADE_BLOB_CONNECTION_STRING` (connection string for Azurite or shared-key auth)
-- `ADE_BLOB_PREFIX` (optional; defaults to `workspaces`)
-
-Auth is inferred: if `ADE_BLOB_CONNECTION_STRING` is set, it is used; otherwise
-`ADE_BLOB_ACCOUNT_URL` is required and ADE uses `DefaultAzureCredential`.
-
-`ADE_DATABASE_URL`, `ADE_BLOB_CONTAINER`, and one of `ADE_BLOB_ACCOUNT_URL` or
-`ADE_BLOB_CONNECTION_STRING` are required in all environments.
-
-## Development (VS Code Devcontainer)
-
-1) Copy env defaults:
-
-```bash
-cp .env.example .env
-```
-
-2) Open VS Code → **Dev Containers: Reopen in Container**
-
-The devcontainer runs:
-
-```bash
-./setup.sh
-```
-
-This installs:
-
-- Python deps for `ade-api`, `ade-worker`, and `ade-cli` via uv (workspace sync)
-- Node deps for `ade-web` (via your lockfile)
-
-3) Run everything:
-
-```bash
-ade dev
-```
-
-## Build the production image locally
-
-```bash
-ade docker build
-```
-
-Then:
-
-```bash
-ade docker run
+git clone https://github.com/clac-ca/automatic-data-extractor
+cd automatic-data-extractor
 ```
 
 ---
 
-## CI, GHCR publishing, and releases
+## Quickstart (local)
 
-This repo is set up as a “first-class” container project:
+This starts ADE + local Postgres + local Azurite.
 
-- **CI** runs on every PR and on pushes to `main` (`.github/workflows/ci.yml`).
-- **Docker images** are built with BuildKit and published to **GitHub Container Registry (GHCR)** (`.github/workflows/docker.yml`).
-- **GitHub Releases** are created automatically on version tags (`.github/workflows/release.yml`).
+```bash
+docker compose up --build
+```
 
-### Image name
+Open:
 
-By default, images are published as:
+* `http://localhost:8000`
 
-- `ghcr.io/clac-ca/automatic-data-extractor`
+Stop:
 
-### Tagging strategy
+```bash
+docker compose down
+```
 
-Standard, predictable tags:
+Reset local data (database + storage + ADE data):
 
-- On `main` pushes:
-  - `main`
-  - `sha-<shortsha>`
-- On version tags (e.g. `v1.2.3`):
-  - `1.2.3`
-  - `1.2`
-  - `1`
-  - `latest`
+```bash
+docker compose down -v
+```
 
-### Releasing
+---
 
-Create and push a `vX.Y.Z` tag to cut a release; GitHub Actions will publish the GHCR image and create a GitHub Release.
+## Production
 
-See `docs/releasing.md` for the full workflow.
+Production uses **external Postgres** and **external Azure Blob Storage**.
+The default deployment runs a single container that starts **API**, **worker**, and **web (nginx)**.
 
-## Why this design is “standard”
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
 
-This repo follows common Docker UX patterns:
+Alternate (split services across containers):
 
-- **Command-driven roles** (pass a subcommand to run worker vs api) — used by images like Vault and Sentry.
-- **ENTRYPOINT + CMD** pattern so `docker run image` “just works” and `docker run image <cmd>` overrides behavior.
-- **Compose quickstart** published as a single file fetched by `curl`, like Airflow’s official docs.
+```bash
+docker compose -f docker-compose.prod.split.yml pull
+docker compose -f docker-compose.prod.split.yml up -d
+```
 
-See docs links in `docs/` (and in the work package).
+Create a `.env` file next to the compose file you run (minimum):
+
+```env
+ADE_DATABASE_URL=postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
+
+# Azure Blob (choose one auth method supported by your deployment)
+ADE_BLOB_ACCOUNT_URL=https://<account>.blob.core.windows.net
+ADE_BLOB_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
+
+ADE_BLOB_CONTAINER=ade
+ADE_SECRET_KEY=<long-random-secret>
+```
+
+See `.env.example` for the full set of supported environment variables.
+
+Tip: for a single container with a subset of services, use `ade start --services api,web`
+or set `ADE_START_SERVICES=api,web`.
+
+---
+
+## Development (VS Code Dev Container)
+
+If you’re contributing, the fastest setup is a dev container:
+
+1. Install Docker + VS Code + the Dev Containers extension
+2. Open the repo in VS Code
+3. Run **“Dev Containers: Reopen in Container”**
+
+---
+
+## Troubleshooting
+
+* See logs: `docker compose logs -f`
+* “Start fresh”: `docker compose down -v`
