@@ -1,4 +1,4 @@
-# docker-compose.prod.split.yml
+# docker-compose.prod.split.yaml
 #
 # Production (split): run API, worker, and web in separate containers using the same image.
 # The web container runs nginx and proxies /api to the api service.
@@ -9,7 +9,7 @@
 # - External Azure Storage account (Blob)
 #
 # Build / Run:
-#   docker compose -f docker-compose.prod.split.yml up --build
+#   docker compose -f docker-compose.prod.split.yaml up --build
 #
 # Diagram of services:
 #

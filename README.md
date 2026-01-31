@@ -28,7 +28,7 @@ Install these first:
 ### Option A — Download ZIP (no Git)
 1. On the GitHub repo page, click **Code → Download ZIP**
 2. Unzip it
-3. Open a terminal in the unzipped folder (the one with `docker-compose.yml`)
+3. Open a terminal in the unzipped folder (the one with `docker-compose.yaml`)
 
 ### Option B — Clone with Git
 1. Run:
@@ -72,15 +72,15 @@ Production uses **external Postgres** and **external Azure Blob Storage**.
 The default deployment runs a single container that starts **API**, **worker**, and **web (nginx)**.
 
 ```bash
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yaml pull
+docker compose -f docker-compose.prod.yaml up -d
 ```
 
 Alternate (split services across containers):
 
 ```bash
-docker compose -f docker-compose.prod.split.yml pull
-docker compose -f docker-compose.prod.split.yml up -d
+docker compose -f docker-compose.prod.split.yaml pull
+docker compose -f docker-compose.prod.split.yaml up -d
 ```
 
 Create a `.env` file next to the compose file you run (minimum):

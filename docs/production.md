@@ -14,9 +14,9 @@ docker build -t ade-app:local .
 
 ```bash
 cp .env.example .env
-ADE_IMAGE=ade-app:local docker compose -f docker-compose.prod.yml up
+ADE_IMAGE=ade-app:local docker compose -f docker-compose.prod.yaml up
 # or split services
-ADE_IMAGE=ade-app:local docker compose -f docker-compose.prod.split.yml up
+ADE_IMAGE=ade-app:local docker compose -f docker-compose.prod.split.yaml up
 ```
 
 The split compose file runs `ade api start`, `ade worker start`, and `ade web serve`

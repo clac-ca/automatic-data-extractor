@@ -1,6 +1,6 @@
 {
   "name": "ADE Dev (Postgres + Azurite)",
-  "dockerComposeFile": "docker-compose.yml",
+  "dockerComposeFile": "docker-compose.yaml",
   "service": "ade",
   "workspaceFolder": "/workspaces/automatic-data-extractor",
   "shutdownAction": "stopCompose",

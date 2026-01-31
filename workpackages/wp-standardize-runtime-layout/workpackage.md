@@ -52,8 +52,8 @@ Make the container runtime layout and startup behave like a standard Python app:
 
 3.0 Simplify quickstart storage init
   3.1 Remove `blob_init`
-    - [x] Remove `blob_init` service from `docker-compose.yml`.
-    - [x] Update `depends_on` in `docker-compose.yml` accordingly.
+    - [x] Remove `blob_init` service from `docker-compose.yaml`.
+    - [x] Update `depends_on` in `docker-compose.yaml` accordingly.
   3.2 Document storage init options
     - [x] Add a simple manual step (CLI or script) to create the container.
     - [x] Document manual container creation (no auto-create option).
@@ -76,7 +76,7 @@ Make the container runtime layout and startup behave like a standard Python app:
 
 - `ade start` runs in the production image without any repo layout copied into the container.
 - Alembic migrations run successfully using packaged resources.
-- `docker-compose.yml` quickstart works without `blob_init` and provides a clear manual or CLI option for container creation.
+- `docker-compose.yaml` quickstart works without `blob_init` and provides a clear manual or CLI option for container creation.
 - Docs explain named volume defaults and how to switch to bind mounts.
 - All changes are simple, explicit, and easy to follow in code.
 

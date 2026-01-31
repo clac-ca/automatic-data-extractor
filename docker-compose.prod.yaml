@@ -1,4 +1,4 @@
-# docker-compose.prod.yml
+# docker-compose.prod.yaml
 #
 # Production: runs ADE API + worker + web (nginx) in a single container.
 # The web server listens on :8000 and proxies /api to the API running on :8001.
@@ -9,7 +9,7 @@
 # - External Azure Storage account (Blob)
 #
 # Build / Run:
-#   docker compose -f docker-compose.prod.yml up --build
+#   docker compose -f docker-compose.prod.yaml up --build
 #
 # Diagram of services:
 #

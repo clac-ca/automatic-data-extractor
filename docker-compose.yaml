@@ -1,4 +1,4 @@
-# docker-compose.yml
+# docker-compose.yaml
 #
 # Quickstart: starts ADE (api + worker + web) with local Postgres & Azurite.
 # The ade container runs `ade start` (API + worker + nginx).

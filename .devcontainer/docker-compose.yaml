@@ -1,4 +1,4 @@
-# .devcontainer/docker-compose.yml
+# .devcontainer/docker-compose.yaml
 #
 # Devcontainer stack: a long-running "ade" dev shell + local Postgres + local Azurite.
 # You develop inside the "ade" container; Postgres/Azurite are dependencies.
