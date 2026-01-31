@@ -74,13 +74,22 @@ services:
       - ade_azurite_data:/data
     environment:
       AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net'); const c=net.createConnection({host:'127.0.0.1',port:10000}); const t=setTimeout(()=>{c.destroy(); process.exit(1)}, 1000); c.on('connect',()=>{clearTimeout(t); c.end(); process.exit(0)}); c.on('error',()=>{clearTimeout(t); process.exit(1)});"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
 
   azurite-init:
-    image: ${ADE_IMAGE:-automatic-data-extractor:local}
+    image: mcr.microsoft.com/azure-cli:2.82.0
     depends_on:
       azurite:
-        condition: service_started
-    command: ["python", "-c", "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); client=s.get_container_client(c); client.exists() or client.create_container(); print('blob container ready:', c)"]
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - az storage container create --name "$ADE_BLOB_CONTAINER" --connection-string "$ADE_BLOB_CONNECTION_STRING"
     environment:
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}

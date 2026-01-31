@@ -13,7 +13,7 @@
   ],
 
   "postCreateCommand": "bash -lc './setup.sh'",
-  "waitFor": "postCreateCommand", // Ensure venv is setup with ade installed before opening
+  //waitFor": "postCreateCommand", // Ensure venv is setup with ade installed before opening
   
   "forwardPorts": [
     "postgres:5432",
