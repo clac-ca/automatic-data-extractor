@@ -45,7 +45,7 @@
     "date-fns": "^4.1.0",
     "lodash": "^4.17.23",
     "lucide-react": "^0.563.0",
-    "marked": "^16.4.2",
+    "marked": "^17.0.1",
     "monaco-editor": "^0.55.1",
     "nanoid": "^5.1.6",
     "nuqs": "^2.8.7",
