@@ -12,7 +12,9 @@ import tempfile
 import textwrap
 import time
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlparse
+from urllib.request import urlopen
 
 import typer
 
@@ -335,11 +337,30 @@ def _run_stack(
     commands: dict[str, tuple[list[str], Path | None]],
     *,
     env: dict[str, str],
+    on_ready: Callable[[dict[str, subprocess.Popen]], dict[str, tuple[list[str], Path | None]] | None]
+    | None = None,
 ) -> None:
     procs: dict[str, subprocess.Popen] = {}
     for name, (cmd, cwd) in commands.items():
         typer.echo(f"▶️  starting {name}: {' '.join(cmd)}")
         procs[name] = subprocess.Popen(cmd, cwd=cwd, env=env)
+
+    if on_ready is not None:
+        try:
+            extra = on_ready(procs)
+        except Exception:  # noqa: BLE001
+            for name, proc in procs.items():
+                _terminate(proc, name=name)
+            raise
+        if extra:
+            for name, (cmd, cwd) in extra.items():
+                if name in procs:
+                    typer.echo(f"❌ Duplicate service name: {name}", err=True)
+                    for other_name, other_proc in procs.items():
+                        _terminate(other_proc, name=other_name)
+                    raise typer.Exit(code=1)
+                typer.echo(f"▶️  starting {name}: {' '.join(cmd)}")
+                procs[name] = subprocess.Popen(cmd, cwd=cwd, env=env)
 
     def _shutdown(signum: int, _frame) -> None:  # type: ignore[override]
         typer.echo(f"🛑 received signal {signum}; stopping...")
@@ -364,6 +385,30 @@ def _run_stack(
     finally:
         for name, proc in procs.items():
             _terminate(proc, name=name)
+
+
+def _wait_for_api(
+    *,
+    url: str,
+    api_proc: subprocess.Popen | None,
+    timeout_seconds: float,
+    interval_seconds: float,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        if api_proc is not None and api_proc.poll() is not None:
+            raise RuntimeError("API process exited before it became ready.")
+        try:
+            with urlopen(url, timeout=5) as response:
+                if 200 <= response.status < 300:
+                    return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+        time.sleep(interval_seconds)
+    if last_error:
+        raise RuntimeError(f"API health check failed: {last_error}")
+    raise RuntimeError("API health check timed out.")
 
 
 @app.callback()
@@ -436,6 +481,7 @@ def start(
     resolved_host = host or "0.0.0.0"
     resolved_port = None
     resolved_workers = 1
+    deferred_commands: dict[str, tuple[list[str], Path | None]] = {}
 
     if "api" in selected:
         settings = Settings()
@@ -490,10 +536,32 @@ def start(
             port=web_port,
             proxy_target=proxy_target,
         )
-        commands["web"] = (web_cmd, cwd)
+        if "api" in selected:
+            deferred_commands["web"] = (web_cmd, cwd)
+        else:
+            commands["web"] = (web_cmd, cwd)
 
     try:
-        _run_stack(commands, env=env)
+        health_timeout = float(os.getenv("ADE_WEB_WAIT_TIMEOUT", "60"))
+        health_interval = float(os.getenv("ADE_WEB_WAIT_INTERVAL", "0.5"))
+        health_url = None
+        if "api" in selected and deferred_commands:
+            health_url = f"{proxy_target}/api/v1/health"
+
+        def _on_ready(procs: dict[str, subprocess.Popen]) -> dict[str, tuple[list[str], Path | None]] | None:
+            if not deferred_commands:
+                return None
+            if health_url:
+                typer.echo("⏳ Waiting for API before starting web...")
+                _wait_for_api(
+                    url=health_url,
+                    api_proc=procs.get("api"),
+                    timeout_seconds=health_timeout,
+                    interval_seconds=health_interval,
+                )
+            return deferred_commands
+
+        _run_stack(commands, env=env, on_ready=_on_ready if deferred_commands else None)
     finally:
         if nginx_runtime_dir is not None:
             shutil.rmtree(nginx_runtime_dir, ignore_errors=True)
