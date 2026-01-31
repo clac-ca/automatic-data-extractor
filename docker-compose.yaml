@@ -32,6 +32,8 @@ services:
         condition: service_healthy
       azurite:
         condition: service_started
+      azurite-init:
+        condition: service_completed_successfully
     volumes:
       - ade_data:/app/data
     ports:
@@ -72,6 +74,17 @@ services:
       - ade_azurite_data:/data
     environment:
       AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+
+  azurite-init:
+    image: ${ADE_IMAGE:-automatic-data-extractor:local}
+    depends_on:
+      azurite:
+        condition: service_started
+    command: ["python", "-c", "import os; from azure.storage.blob import BlobServiceClient as B; cs=os.environ['ADE_BLOB_CONNECTION_STRING']; c=os.getenv('ADE_BLOB_CONTAINER','ade'); s=B.from_connection_string(cs); client=s.get_container_client(c); client.exists() or client.create_container(); print('blob container ready:', c)"]
+    environment:
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
+    restart: "no"
 
 volumes:
   ade_data:
