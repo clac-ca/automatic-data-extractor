@@ -17,7 +17,7 @@ the devcontainer starts a Postgres container and ADE uses that by default.
 
 
 ## 2. Prerequisites
-- **Python 3.12+** and **uv** available on your `PATH`. Windows installers live at
+- **Python 3.14.2+** and **uv** available on your `PATH`. Windows installers live at
   <https://www.python.org/downloads/>. Install uv from <https://astral.sh/uv>.
 - **Node.js 20 LTS** (includes `npm`). Download from
   <https://nodejs.org/en/download/>.

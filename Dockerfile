@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE=python:3.12-slim-bookworm
+ARG PYTHON_IMAGE=python:3.14.2-slim-bookworm
 
 # Build image:
 #   docker build -t <image>:latest .

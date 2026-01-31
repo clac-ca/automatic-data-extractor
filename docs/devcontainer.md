@@ -2,7 +2,7 @@
 
 This repo is set up to run **fully locally** in a VS Code Dev Container:
 
-- Workspace container: Python 3.12
+- Workspace container: Python 3.14.2
 - Local dependencies (Docker Compose):
   - Postgres 18 (Linux container)
   - Azurite (Azure Storage emulator, blob-only)
