@@ -65,7 +65,7 @@ services:
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
-    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --skipApiVersionCheck # azure-storage-blob 12.28.0 sends x-ms-version 2026-02-06 which Azurite 3.35.0 rejects
     ports:
       - 10000:10000
     volumes:
