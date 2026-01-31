@@ -24,7 +24,7 @@ env:
 
 jobs:
   build:
-    name: Build multi-arch image and publish
+    name: Build image and publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,9 +32,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
+        if: github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -56,8 +57,6 @@ jobs:
           tags: |
             # Branch name (e.g. development)
             type=ref,event=branch
-            # PR number (e.g. pr-123)
-            type=ref,event=pr
             # Short SHA (e.g. sha-abc1234)
             type=sha,format=short,prefix=sha-
             # Release tags from git tag vX.Y.Z -> docker tags 1.2.3, 1.2, 1 (+ latest auto)
@@ -70,7 +69,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
