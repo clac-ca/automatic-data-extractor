@@ -6,12 +6,17 @@
   "shutdownAction": "stopCompose",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
-  "postStartCommand": "bash -lc './setup.sh'",
+  "postCreateCommand": "bash -lc './setup.sh'",
+  "postStartCommand": "bash -lc 'uv sync --dev --frozen'",
   "remoteEnv": {
     "PATH": "/workspaces/automatic-data-extractor/.venv/bin:${containerEnv:PATH}"
   },
   "customizations": {
     "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
       "settings": {
         "python.defaultInterpreterPath": "/workspaces/automatic-data-extractor/.venv/bin/python",
         "python.terminal.activateEnvironment": true
