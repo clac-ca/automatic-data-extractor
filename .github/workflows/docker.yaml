@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "Dockerfile"
+      - ".dockerignore"
       - "apps/**"
       - "scripts/**"
       - ".github/workflows/docker.yaml"

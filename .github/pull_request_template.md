@@ -13,7 +13,7 @@ Steps to verify locally and/or in CI:
 
 - [ ] `ade ci` (or relevant subset)
 - [ ] `docker build .` (if Docker changes)
-- [ ] `docker compose -f compose.quickstart.yaml up` (if dev stack changes)
+- [ ] `docker compose -f docker-compose.yaml up` (if dev stack changes)
 
 ## Screenshots / recordings (if UI)
 

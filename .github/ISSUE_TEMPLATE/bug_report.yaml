@@ -17,7 +17,6 @@ body:
       options:
         - ade-api
         - ade-worker
-        - ade-cli
         - ade-web
         - devcontainer / local deps
         - CI / workflows
@@ -65,7 +64,7 @@ body:
         ADE tag: ghcr.io/...:v1.2.3
         OS: macOS 14.x (Apple Silicon)
         Docker: 26.x
-        Run mode: docker compose (compose.quickstart.yaml)
+        Run mode: docker compose (docker-compose.yaml)
     validations:
       required: true
   - type: checkboxes
