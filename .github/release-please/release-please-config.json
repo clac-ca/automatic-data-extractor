@@ -1,0 +1,33 @@
+{
+    "packages": {
+        ".": {
+            "release-type": "simple",
+            "version-file": "VERSION",
+            "changelog-path": "CHANGELOG.md",
+            "include-component-in-tag": false
+        },
+        "apps/ade-api": {
+            "release-type": "python",
+            "package-name": "ade-api",
+            "component": "ade-api",
+            "skip-changelog": true,
+            "skip-github-release": true
+        },
+        "apps/ade-web": {
+            "release-type": "node",
+            "package-name": "ade-web",
+            "component": "ade-web",
+            "skip-changelog": true,
+            "skip-github-release": true
+        },
+        "apps/ade-worker": {
+            "release-type": "python",
+            "package-name": "ade-worker",
+            "component": "ade-worker",
+            "skip-changelog": true,
+            "skip-github-release": true
+        }
+    },
+    "include-v-in-tag": true,
+    "tag-separator": "-"
+}

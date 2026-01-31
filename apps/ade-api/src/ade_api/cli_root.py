@@ -20,13 +20,14 @@ import typer
 
 from ade_api import cli as api_cli
 from ade_api.commands import common
+from ade_api.commands import tests as api_tests
 from ade_api.commands.migrate import run_migrate
 from ade_api.settings import Settings
 
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE root CLI (start/dev/api/worker/web).",
+    help="ADE root CLI (start/dev/test/api/worker/web).",
 )
 
 _SERVICE_NAMES = {"api", "worker", "web"}
@@ -34,6 +35,10 @@ _SERVICE_NAMES = {"api", "worker", "web"}
 
 def _has_dev_deps() -> bool:
     return importlib.util.find_spec("pytest") is not None
+
+
+def _parse_test_suite(value: str | None) -> api_tests.TestSuite:
+    return api_tests.parse_suite(value)
 
 
 def _prepare_env() -> dict[str, str]:
@@ -420,6 +425,28 @@ def _main(ctx: typer.Context) -> None:
 app.add_typer(api_cli.app, name="api")
 _register_worker(app)
 
+
+@app.command(name="test", help="Run ADE tests (API + worker + web).")
+def test(
+    suite: str | None = typer.Argument(
+        None,
+        help="Suite to run for API/worker: unit, integration, or all (default: unit).",
+    ),
+) -> None:
+    resolved_suite = _parse_test_suite(suite)
+    api_tests.run_tests(resolved_suite)
+
+    try:
+        from ade_worker import cli as worker_cli
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"ℹ️  ade-worker not available: {exc}", err=True)
+    else:
+        if hasattr(worker_cli, "run_tests") and hasattr(worker_cli, "parse_suite"):
+            worker_cli.run_tests(worker_cli.parse_suite(suite))
+        else:
+            typer.echo("ℹ️  ade-worker test command not available.", err=True)
+
+    _run_web("test")
 
 @app.command(name="start", help="Start API + worker + web (nginx).")
 def start(

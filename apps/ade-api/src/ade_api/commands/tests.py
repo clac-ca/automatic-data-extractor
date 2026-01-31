@@ -16,7 +16,7 @@ class TestSuite(str, Enum):
     ALL = "all"
 
 
-def _parse_suite(value: str | None) -> TestSuite:
+def parse_suite(value: str | None) -> TestSuite:
     if value is None:
         return TestSuite.UNIT
     normalized = value.strip().lower()
@@ -48,4 +48,4 @@ def register(app: typer.Typer) -> None:
             help="Suite to run: unit, integration, or all (default: unit).",
         ),
     ) -> None:
-        run_tests(_parse_suite(suite))
+        run_tests(parse_suite(suite))

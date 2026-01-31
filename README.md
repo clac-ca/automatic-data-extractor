@@ -2,35 +2,63 @@
 
 ADE is a self-hostable document extraction service with an **API**, **Web UI**, and a background **worker**.
 
-For local development, ADE runs with **Postgres** and **Azurite** (an Azure Blob Storage emulator) so it works out of the box with no external services.  
-For production, ADE connects to an existing **Postgres** database and **Azure Blob Storage** account.
-
 ---
 
 ## Prerequisites
 
 Install these first:
 
-- **Docker** (includes Docker Compose):
-  - Docker Desktop (Windows/macOS/Linux): https://docs.docker.com/get-started/introduction/get-docker-desktop/
-  - Linux alternative (Docker Engine): https://docs.docker.com/engine/install/
-- **Get the code** (pick one):
-  - **No Git:** download the repo as a ZIP from GitHub: https://docs.github.com/en/get-started/start-your-journey/downloading-files-from-github
-  - **With Git:** install Git: https://git-scm.com/install/ and clone the repo: https://docs.github.com/articles/cloning-a-repository
+- **Docker** (includes Docker Compose)
+  - Windows:
+    ```bash
+    winget install --id Docker.DockerDesktop
+    ```
+  - macOS:
+    ```bash
+    brew install --cask docker
+    ```
+  - Linux (Ubuntu/Debian):
+    ```bash
+    curl -fsSL https://get.docker.com | sh
+    ```
+- **Git**
+  - Windows:
+    ```bash
+    winget install --id Git.Git
+    ```
+  - macOS:
+    ```bash
+    brew install git
+    ```
+  - Linux (Ubuntu/Debian):
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y git
+    ```
 - **Optional (recommended for contributors):** VS Code Dev Container workflow
-  - VS Code: https://code.visualstudio.com/download
-  - Dev Containers extension: https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers
+  - VS Code
+    - Windows:
+      ```bash
+      winget install --id Microsoft.VisualStudioCode
+      ```
+    - macOS:
+      ```bash
+      brew install --cask visual-studio-code
+      ```
+    - Linux (Ubuntu/Debian):
+      ```bash
+      sudo snap install code --classic
+      ```
+  - Dev Containers extension
+    ```bash
+    code --install-extension ms-vscode-remote.remote-containers
+    ```
 
 ---
 
 ## Get the code
 
-### Option A — Download ZIP (no Git)
-1. On the GitHub repo page, click **Code → Download ZIP**
-2. Unzip it
-3. Open a terminal in the unzipped folder (the one with `docker-compose.yaml`)
-
-### Option B — Clone with Git
+### Clone with Git
 1. Run:
 
 ```bash
