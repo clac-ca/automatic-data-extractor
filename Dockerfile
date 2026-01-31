@@ -8,8 +8,7 @@ ARG PYTHON_IMAGE=python:3.14.2-slim-bookworm
 # ============================================================
 FROM ${PYTHON_IMAGE} AS python-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PYTHONUNBUFFERED=1
 
 # ============================================================
 # BUILD STAGE (build deps here so the final image stays small)
@@ -18,24 +17,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 FROM python-base AS build
 WORKDIR /src
 
+# git is required to install ade-engine from GitHub until it is published.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
-    libpq-dev \
-  && rm -rf /var/lib/apt/lists/* \
-  && python -m venv /opt/venv \
-  && /opt/venv/bin/pip install --upgrade pip
-
-# git is required to install ade-engine from GitHub until it is published.
-RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    libpq-dev \
   && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/opt/venv/bin:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:0.9.28 /uv /uvx /bin/
 
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
+COPY pyproject.toml uv.lock /src/
 COPY apps/ade-api/ /src/apps/ade-api/
 COPY apps/ade-worker/ /src/apps/ade-worker/
-RUN pip install /src/apps/ade-api /src/apps/ade-worker
+RUN uv sync --frozen --no-dev --no-editable
 
 # ============================================================
 # WEB BUILD STAGE (build frontend assets)

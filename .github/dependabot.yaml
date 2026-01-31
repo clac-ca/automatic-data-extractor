@@ -17,10 +17,10 @@ updates:
         update-types: ["minor", "patch"]
 
   # -----------------------------
-  # API + Worker (pip) dependencies
+  # API + Worker (uv) dependencies
   # -----------------------------
-  - package-ecosystem: "pip"
-    directory: "/apps/ade-api"
+  - package-ecosystem: "uv"
+    directory: "/"
     target-branch: "development"
     schedule:
       interval: "monthly"
@@ -28,17 +28,5 @@ updates:
       prefix: "deps"
       include: "scope"
     groups:
-      pip-minor-patch:
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "pip"
-    directory: "/apps/ade-worker"
-    target-branch: "development"
-    schedule:
-      interval: "monthly"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    groups:
-      pip-minor-patch:
+      uv-minor-patch:
         update-types: ["minor", "patch"]
