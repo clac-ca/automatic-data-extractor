@@ -2,9 +2,6 @@
 
 ADE is a self-hostable document extraction service with an **API**, **Web UI**, and a background **worker**.
 
-For local development, ADE runs with **Postgres** and **Azurite** (an Azure Blob Storage emulator) so it works out of the box with no external services.  
-For production, ADE connects to an existing **Postgres** database and **Azure Blob Storage** account.
-
 ---
 
 ## Prerequisites

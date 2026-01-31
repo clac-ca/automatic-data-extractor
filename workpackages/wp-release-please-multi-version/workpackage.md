@@ -27,39 +27,39 @@ Implement Release Please in manifest mode so ADE has independent component versi
 
 1.0 Design + config decisions
   1.1 Confirm version sources and tag naming
-    - [ ] Define root image version file location (`VERSION`) and format.
-    - [ ] Confirm component version files (api/worker `pyproject.toml`, web `package.json`).
-    - [ ] Lock tag conventions for image and components.
+    - [x] Define root image version file location (`VERSION`) and format.
+    - [x] Confirm component version files (api/worker `pyproject.toml`, web `package.json`).
+    - [x] Lock tag conventions for image and components.
   1.2 Release Please mode
-    - [ ] Choose manifest mode (multi-package) with root package for image.
-    - [ ] Decide changelog locations (root + per-component or per-component only).
+    - [x] Choose manifest mode (multi-package) with root package for image.
+    - [x] Decide changelog locations (root + per-component or per-component only).
 
 2.0 Release Please configuration
   2.1 Add config files
-    - [ ] Create `release-please-config.json` with package definitions and paths.
-    - [ ] Create `.release-please-manifest.json` with initial versions.
+    - [x] Create `release-please-config.json` with package definitions and paths.
+    - [x] Create `.release-please-manifest.json` with initial versions.
   2.2 Workflow wiring
-    - [ ] Add/update `release-please` workflow targeting `development`.
-    - [ ] Ensure permissions and token handling are standard and minimal.
+    - [x] Add/update `release-please` workflow targeting `development`.
+    - [x] Ensure permissions and token handling are standard and minimal.
 
 3.0 Docker tagging alignment
   3.1 Image version integration
-    - [ ] Ensure image tags use `vX.Y.Z` from Release Please tags.
-    - [ ] Confirm `latest` behavior (release tags only).
+    - [x] Ensure image tags use `vX.Y.Z` from Release Please tags.
+    - [x] Confirm `latest` behavior (release tags only).
 
 4.0 Documentation + validation
   4.1 Docs
-    - [ ] Update README/docs to describe multi-version releases and image version.
-    - [ ] Document release flow and tag mapping.
+    - [x] Update README/docs to describe multi-version releases and image version.
+    - [x] Document release flow and tag mapping.
   4.2 Validation
-    - [ ] Validate config structure and example release PR contents.
-    - [ ] Confirm workflows trigger on `development` and tags.
+    - [x] Validate config structure and example release PR contents.
+    - [x] Confirm workflows trigger on `development` and tags.
 
 ### Open Questions
 
-- Should we maintain a root changelog (`CHANGELOG.md`) in addition to per-component changelogs?
-- What initial root image version should `VERSION` start at (current release tag or new baseline)?
-- Should Release Please be allowed to bump the root image version on docs-only changes, or only runtime components?
+- Root changelog: yes. Use a root `CHANGELOG.md` for the image/bundle; per-component changelogs are skipped.
+- Initial root image version: `1.6.5`, aligned to the current API version.
+- Root image version bumps on any change (no path exclusions to keep the flow simple).
 
 ---
 

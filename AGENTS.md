@@ -125,6 +125,15 @@ ade-engine process batch \
 - If missing/stale, run `ade api types` before touching frontend API code.
 - Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
+## Agent primer (collaboration norms)
+
+- Default branch: `development` (PRs and direct work target this branch).
+- Commit style: Conventional Commits (`feat:`, `fix:`, `deps:`, `chore:`).
+- Use `deps:` for dependency updates that should trigger a patch release.
+- Stage only task-related files; avoid bundling unrelated changes.
+- Versions/changelog are managed by Release Please; do not bump `VERSION` or `CHANGELOG.md` manually unless requested.
+- See `CONTRIBUTING.md` for the full collaboration and release flow.
+
 ## 🤖 Agent rules
 
 1. Always run `ade api test` before committing and run the relevant frontend/backend checks for touched areas.

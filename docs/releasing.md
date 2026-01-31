@@ -1,74 +1,49 @@
-# Releasing ADE (manual tags)
+# Releasing ADE (Release Please)
 
-This repo publishes a Docker image to **GitHub Container Registry (GHCR)** via GitHub Actions.
+ADE uses **Release Please** (manifest mode) to manage versions for the bundled
+Docker image and each component. Releases happen from the `development` branch.
+Release Please config lives in `.github/release-please/`.
 
-A “release” is a **git tag** of the form `vX.Y.Z` (Semantic Versioning).
+## Version sources
 
-> The Docker workflow builds/pushes on:
-> - pushes to `main` (tagged as `main` + `sha-...`)
-> - version tags `v*` (tagged as `1.2.3`, `1.2`, `1`, and typically `latest`)
+- **Image (bundle) version**: root `VERSION`
+- **API version**: `apps/ade-api/pyproject.toml`
+- **Web version**: `apps/ade-web/package.json`
+- **Worker version**: `apps/ade-worker/pyproject.toml`
 
----
+The bundle changelog lives at `CHANGELOG.md`. Component changelogs are not
+maintained (components are versioned, but only the bundle changelog is updated).
 
-## 1) Pre-release sanity
+## Tag conventions
 
-- [ ] `main` is green (CI passing).
-- [ ] No unreviewed/unfinished migrations are pending.
-- [ ] `docker-compose.yaml` still works from scratch (fresh clone).
-- [ ] Confirm the intended release version follows SemVer:
-  - MAJOR = breaking change
-  - MINOR = new functionality, backwards compatible
-  - PATCH = bug fix, backwards compatible
+Git tags:
+- **Image/bundle tag**: `vX.Y.Z`
+- **Component tags**:
+  - `ade-api-vX.Y.Z`
+  - `ade-web-vX.Y.Z`
+  - `ade-worker-vX.Y.Z`
 
-## 2) Prepare release notes
+Docker image tags (from the `vX.Y.Z` release tag):
+- `X.Y.Z`, `X.Y`, `X`
+- `latest` (release tags only)
 
-- [ ] Identify the PRs/issues included since last release.
-- [ ] Draft a short “What’s new” section and a “Breaking changes” section (if any).
-- [ ] Note any required config changes (env vars, compose changes).
-- [ ] If API behavior changed, ensure README/docs are updated.
+## Release flow (standard)
 
-## 3) Local verification (recommended)
+1) Merge feature/fix PRs into `development` using **Conventional Commits**.
+2) Release Please opens (or updates) a **Release PR** on `development`.
+3) Review and merge the Release PR.
+4) Release Please creates tags:
+   - `vX.Y.Z` for the image
+   - `ade-*-vX.Y.Z` for components that changed
+5) The Docker workflow builds/pushes images when the tag is created.
 
-From a clean working tree:
+## Token note
 
-- [ ] Build the production image:
-  ```bash
-  docker build -t ade-app:local .
-  ```
-- [ ] Run quickstart stack:
-  ```bash
-  docker compose -f docker-compose.yaml up
-  ```
-- [ ] Verify API responds and worker starts cleanly.
+To ensure that tags created by Release Please trigger other workflows
+(e.g. Docker builds), set a PAT in `RELEASE_PLEASE_TOKEN`. The default
+`GITHUB_TOKEN` does **not** trigger downstream workflows on tag creation.
 
-## 4) Create and push the tag
+## Quick sanity (optional)
 
-- [ ] Create an annotated tag:
-  ```bash
-  git tag -a vX.Y.Z -m "Release vX.Y.Z"
-  ```
-- [ ] Push the tag:
-  ```bash
-  git push origin vX.Y.Z
-  ```
-
-## 5) Watch GitHub Actions
-
-- [ ] Confirm `Docker Image (GHCR)` workflow runs on the tag and publishes images.
-- [ ] Confirm tags exist in GHCR:
-  - `ghcr.io/clac-ca/automatic-data-extractor:1.2.3`
-  - `ghcr.io/clac-ca/automatic-data-extractor:1.2`
-  - `ghcr.io/clac-ca/automatic-data-extractor:1`
-  - `ghcr.io/clac-ca/automatic-data-extractor:latest` (if configured)
-
-## 6) Create/verify GitHub Release
-
-- [ ] Confirm `Release` workflow created a GitHub Release (or create it manually).
-- [ ] Paste release notes (What’s new + upgrade notes).
-- [ ] Link to the images and quickstart instructions.
-
-## 7) Post-release follow-ups
-
-- [ ] Announce release (if applicable).
-- [ ] Open issues for any follow-up cleanup.
-- [ ] If a hotfix is needed, repeat as `vX.Y.(Z+1)`.
+- `docker compose -f docker-compose.yaml up --build`
+- Verify API health and worker startup logs
