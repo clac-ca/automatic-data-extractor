@@ -32,6 +32,8 @@ cp .env.example .env
 ./setup.sh
 ```
 
+`setup.sh` uses `uv sync` to create/update the `.venv` in the repo root and installs web deps with `npm ci`.
+
 ## Run the stack (dev)
 
 Start everything (API + worker + web dev server):

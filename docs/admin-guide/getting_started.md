@@ -51,14 +51,14 @@ environment variables in your shell.
    ```bash
    git clone https://github.com/clac-ca/automatic-data-extractor.git
    cd automatic-data-extractor
-   # Optional: create/activate a venv first if you want isolation.
-   # python -m venv .venv
+   # uv will create the project venv at .venv automatically.
+   # If you want to activate it explicitly:
    # source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
    ./setup.sh
    ```
 
    Note: `ade-worker` installs `ade-engine` from the separate engine repo (currently tracking `@main`; tags will follow).
-   `setup.sh` installs `ade-api[dev]` and `ade-worker[dev]`. The `ade` command comes from `ade-api`; web commands (`ade web ...`) are available when dev deps and Node are installed.
+   `setup.sh` runs `uv sync` (using `uv.lock`) to install `ade-api` and `ade-worker` plus dev extras. The `ade` command comes from `ade-api`; web commands (`ade web ...`) are available when dev deps and Node are installed.
 
 2. Start the dev services (this runs migrations first):
 

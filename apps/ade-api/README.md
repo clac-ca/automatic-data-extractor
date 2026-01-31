@@ -1,10 +1,12 @@
 # ADE API Service
 
-This directory contains the FastAPI application that powers ADE. Install it in editable mode during development:
+This directory contains the FastAPI application that powers ADE. From the repo root, install dev deps with:
 
 ```bash
-uv pip install -e apps/ade-api[dev]
+uv sync --dev
 ```
+
+Or run `./setup.sh` to install both API + worker dependencies and the web assets.
 
 See the repository root `README.md` for full setup instructions.
 
