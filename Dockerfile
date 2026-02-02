@@ -57,7 +57,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     tini \
   && rm -rf /var/lib/apt/lists/*
-RUN sed -i 's|pid /run/nginx.pid;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf
 
 # Create non-root runtime user.
 RUN useradd -m -u 10001 appuser
@@ -65,6 +64,7 @@ RUN useradd -m -u 10001 appuser
 # Copy Python deps and set PATH.
 COPY --from=build /opt/venv /opt/venv
 COPY --from=web-build /web/dist /usr/share/nginx/html
+COPY frontend/ade-web/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY frontend/ade-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY frontend/ade-web/nginx/entrypoint.sh /usr/local/bin/ade-web-entrypoint
 ENV PATH="/opt/venv/bin:$PATH"
