@@ -10,11 +10,11 @@
 # 1) Install Python 3.14+
 # 2) Install Node.js 22+
 # 3) Run:
+#
 #    bash ./setup.sh
 #
 # Notes:
 # - You'll be prompted to install 'uv' if it's missing.
-# - Safe to re-run; it updates Python and web dependencies.
 # -----------------------------------------------------------------------------
 set -euo pipefail
 

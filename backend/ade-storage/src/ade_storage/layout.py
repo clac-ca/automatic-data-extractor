@@ -6,12 +6,15 @@ avoid root-level one-off modules.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from uuid import UUID
 
 from .settings import StorageLayoutSettings
 
 __all__ = [
+    "ensure_storage_roots",
+    "storage_roots",
     "workspace_config_root",
     "workspace_documents_root",
     "workspace_root",
@@ -22,6 +25,36 @@ __all__ = [
 
 def _workspace_base(root: Path, workspace_id: UUID | object) -> Path:
     return Path(root) / str(workspace_id)
+
+
+def storage_roots(settings: StorageLayoutSettings) -> tuple[Path, ...]:
+    """Return unique storage root directories in a stable order."""
+
+    roots = [
+        Path(settings.workspaces_dir),
+        Path(settings.configs_dir),
+        Path(settings.runs_dir),
+        Path(settings.documents_dir),
+        Path(settings.venvs_dir),
+    ]
+    unique = list(dict.fromkeys(roots))
+    return tuple(unique)
+
+
+def ensure_storage_roots(
+    settings: StorageLayoutSettings,
+    *,
+    extra: Iterable[Path] | None = None,
+) -> tuple[Path, ...]:
+    """Ensure storage root directories exist."""
+
+    roots = list(storage_roots(settings))
+    if extra is not None:
+        roots.extend(Path(item) for item in extra)
+    unique = list(dict.fromkeys(roots))
+    for root in unique:
+        root.mkdir(parents=True, exist_ok=True)
+    return tuple(unique)
 
 
 def workspace_root(settings: StorageLayoutSettings, workspace_id: UUID) -> Path:

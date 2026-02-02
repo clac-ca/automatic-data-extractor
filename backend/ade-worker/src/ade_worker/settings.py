@@ -53,7 +53,6 @@ class Settings(BaseSettings):
     worker_lease_seconds: int = Field(900, ge=1)
     worker_backoff_base_seconds: int = Field(5, ge=0)
     worker_backoff_max_seconds: int = Field(300, ge=0)
-    worker_max_attempts_default: int = Field(3, ge=1)
 
     # ---- Runtime filesystem ------------------------------------------------
     data_dir: Path = Field(default=Path("data"))
@@ -96,8 +95,28 @@ class Settings(BaseSettings):
         return self
 
     @property
+    def workspaces_dir(self) -> Path:
+        return self.data_dir / "workspaces"
+
+    @property
+    def documents_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def configs_dir(self) -> Path:
+        return self.workspaces_dir
+
+    @property
+    def runs_dir(self) -> Path:
+        return self.worker_runs_dir
+
+    @property
     def venvs_dir(self) -> Path:
         return self.data_dir / "venvs"
+
+    @property
+    def pip_cache_dir(self) -> Path:
+        return self.data_dir / "cache" / "pip"
 
     def backoff_seconds(self, attempt_count: int) -> int:
         base = max(0, int(self.worker_backoff_base_seconds))

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from ade_api.common.problem_details import ApiError
 from ade_api.core.auth.errors import AuthenticationError, PermissionDeniedError
 from ade_api.settings import Settings, get_settings
-from ade_db.engine import build_engine
+from ade_db.engine import build_engine, build_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def init_db(app: FastAPI, settings: Settings | None = None) -> None:
     if existing_engine is not None:
         existing_engine.dispose()
 
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    SessionLocal = build_sessionmaker(engine)
     app.state.db_engine = engine
     app.state.db_sessionmaker = SessionLocal
 

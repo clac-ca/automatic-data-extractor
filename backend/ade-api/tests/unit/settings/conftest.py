@@ -47,7 +47,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_WORKER_POLL_INTERVAL_MAX",
         "ADE_WORKER_CLEANUP_INTERVAL",
         "ADE_WORKER_LEASE_SECONDS",
-        "ADE_WORKER_MAX_ATTEMPTS_DEFAULT",
         "ADE_WORKER_BACKOFF_BASE_SECONDS",
         "ADE_WORKER_BACKOFF_MAX_SECONDS",
         "ADE_WORKER_LOG_LEVEL",

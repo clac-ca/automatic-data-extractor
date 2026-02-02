@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from ade_api.db.migrations import run_migrations
+from ade_db.migrations_runner import run_migrations
 
 
 def run_migrate(revision: str = "head") -> None:

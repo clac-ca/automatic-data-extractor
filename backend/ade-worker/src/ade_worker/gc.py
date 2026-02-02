@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import delete, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import db
+from ade_db.engine import build_engine, build_sessionmaker
 from .paths import PathManager
 from ade_db.schema import environments, runs
 from .settings import Settings, get_settings
@@ -174,9 +174,9 @@ def _delete_tree(path: Path) -> bool:
 
 def run_gc(settings: Settings | None = None) -> tuple[GcResult, GcResult | None]:
     settings = settings or get_settings()
-    engine = db.build_engine(settings)
-    SessionLocal = db.build_sessionmaker(engine)
-    paths = PathManager(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
+    engine = build_engine(settings)
+    SessionLocal = build_sessionmaker(engine)
+    paths = PathManager(settings, settings.pip_cache_dir)
     now = datetime.utcnow().replace(tzinfo=None)
 
     env_result = gc_environments(

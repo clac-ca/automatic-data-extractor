@@ -1,9 +1,9 @@
 """Filesystem layout for the worker.
 
-Align with the API storage layout (venvs/run roots are configurable):
-- data/workspaces/<workspace_id>/config_packages/<configuration_id>
-- <runs_root>/<run_id>
-- venvs/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
+Workspace roots mirror ade-storage layout helpers:
+- <configs_root>/<workspace_id>/config_packages/<configuration_id>
+- <runs_root>/<workspace_id>/runs/<run_id>
+- <venvs_root>/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
 """
 
 from __future__ import annotations
@@ -12,6 +12,13 @@ import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+from ade_storage import (
+    workspace_config_root,
+    workspace_run_root,
+    workspace_venvs_root,
+)
+from ade_storage.settings import StorageLayoutSettings
 
 
 class UnsafePathError(ValueError):
@@ -62,25 +69,21 @@ def _deps_digest_segment(deps_digest: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class PathManager:
-    data_dir: Path
-    venvs_dir: Path
-    runs_root_dir: Path
+    layout: StorageLayoutSettings
+    pip_cache_root: Path
 
     # --- roots ---
-    def workspaces_root(self) -> Path:
-        return _safe_join(self.data_dir, "workspaces")
-
     def configs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.workspaces_root(), _normalize_uuid(workspace_id), "config_packages")
+        return workspace_config_root(self.layout, _normalize_uuid(workspace_id))
 
     def runs_root(self, workspace_id: str) -> Path:
-        return self.runs_root_dir
+        return workspace_run_root(self.layout, _normalize_uuid(workspace_id))
 
     def venvs_root(self, workspace_id: str) -> Path:
-        return _safe_join(self.venvs_dir, _normalize_uuid(workspace_id))
+        return workspace_venvs_root(self.layout, _normalize_uuid(workspace_id))
 
     def pip_cache_dir(self) -> Path:
-        return _safe_join(self.data_dir, "cache", "pip")
+        return self.pip_cache_root
 
     # --- config packages ---
     def config_package_dir(self, workspace_id: str, configuration_id: str) -> Path:
@@ -132,7 +135,7 @@ class PathManager:
 
     # --- runs ---
     def run_dir(self, workspace_id: str, run_id: str) -> Path:
-        return _safe_join(self.runs_root_dir, _normalize_uuid(run_id))
+        return _safe_join(self.runs_root(workspace_id), _normalize_uuid(run_id))
 
     def run_input_dir(self, workspace_id: str, run_id: str) -> Path:
         return _safe_join(self.run_dir(workspace_id, run_id), "input")

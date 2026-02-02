@@ -36,7 +36,7 @@ from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.workspaces.repository import WorkspacesRepository
 from ade_api.features.workspaces.settings import read_processing_paused
-from ade_storage import AzureBlobStorage
+from ade_storage import StorageAdapter
 from ade_db.models import (
     Configuration,
     ConfigurationStatus,
@@ -146,7 +146,7 @@ class RunsService:
         session: Session,
         settings: Settings,
         storage: ConfigStorage | None = None,
-        blob_storage: AzureBlobStorage,
+        blob_storage: StorageAdapter,
     ) -> None:
         from ade_api.features.documents.service import DocumentsService
 

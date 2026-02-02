@@ -10,8 +10,15 @@ This list focuses on the most common settings for local and production use.
   - 32+ bytes recommended.
 - `ADE_DATA_DIR` (optional)
   - Default: `data`
+- `ADE_WORKER_RUNS_DIR` (optional)
+  - Default: `/tmp/ade-runs`
 - `ADE_API_PORT` (optional)
   - Default: `8000` (API-only). When running with the web entrypoint on `8000`, set to `8001`.
+
+## Local filesystem layout
+
+- Workspaces root: `ADE_DATA_DIR/workspaces`
+- Run artifacts (worker): `ADE_WORKER_RUNS_DIR/<workspace_id>/runs/<run_id>`
 
 ## Database
 

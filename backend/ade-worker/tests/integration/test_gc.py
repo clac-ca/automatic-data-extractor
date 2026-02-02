@@ -9,6 +9,16 @@ from sqlalchemy.orm import sessionmaker
 
 from ade_worker.gc import gc_environments
 from ade_worker.paths import PathManager
+
+
+class _Layout:
+    def __init__(self, root: Path, runs_root: Path | None = None) -> None:
+        self.workspaces_dir = root / "workspaces"
+        self.configs_dir = self.workspaces_dir
+        self.documents_dir = self.workspaces_dir
+        self.runs_dir = runs_root or (root / "runs")
+        self.venvs_dir = root / "venvs"
+        self.pip_cache_dir = root / "cache" / "pip"
 from ade_db.schema import environments, runs
 from .helpers import seed_file_with_version
 
@@ -131,7 +141,9 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs", tmp_path / "runs")
+    data_root = tmp_path / "data"
+    layout = _Layout(data_root, tmp_path / "runs")
+    paths = PathManager(layout, layout.pip_cache_dir)
 
     workspace_id = _uuid()
     configuration_id = _uuid()
@@ -181,7 +193,9 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs", tmp_path / "runs")
+    data_root = tmp_path / "data"
+    layout = _Layout(data_root, tmp_path / "runs")
+    paths = PathManager(layout, layout.pip_cache_dir)
 
     workspace_id = _uuid()
     configuration_id = _uuid()
@@ -220,7 +234,9 @@ def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    paths = PathManager(tmp_path / "data", tmp_path / "data" / "venvs", tmp_path / "runs")
+    data_root = tmp_path / "data"
+    layout = _Layout(data_root, tmp_path / "runs")
+    paths = PathManager(layout, layout.pip_cache_dir)
 
     workspace_id = _uuid()
     configuration_id = _uuid()

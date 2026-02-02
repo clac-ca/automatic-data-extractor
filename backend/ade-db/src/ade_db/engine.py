@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine, URL, make_url
+from sqlalchemy.orm import Session, sessionmaker
 
 # Optional dependency (Managed Identity)
 try:
@@ -89,6 +90,14 @@ def _create_postgres_engine(url: URL, settings: DatabaseSettings) -> Engine:
     return engine
 
 
+def _normalize_psycopg_url(url: URL) -> URL:
+    if url.drivername in {"postgresql", "postgres"}:
+        return url
+    if url.drivername.startswith("postgresql+"):
+        return url.set(drivername="postgresql")
+    return url
+
+
 def build_engine(settings: DatabaseSettings) -> Engine:
     if not settings.database_url:
         raise ValueError("Settings.database_url is required.")
@@ -100,35 +109,55 @@ def build_engine(settings: DatabaseSettings) -> Engine:
     raise ValueError("Unsupported database backend. Use postgresql+psycopg://.")
 
 
-def build_engine_from_url(
-    database_url: str | URL,
-    *,
-    database_echo: bool = False,
-    database_auth_mode: str = "password",
-    database_sslrootcert: str | None = None,
-    database_pool_size: int = 5,
-    database_max_overflow: int = 10,
-    database_pool_timeout: int = 30,
-    database_pool_recycle: int = 1800,
-) -> Engine:
-    class _Settings:
-        def __init__(self):
-            self.database_url = database_url
-            self.database_echo = database_echo
-            self.database_auth_mode = database_auth_mode
-            self.database_sslrootcert = database_sslrootcert
-            self.database_pool_size = database_pool_size
-            self.database_max_overflow = database_max_overflow
-            self.database_pool_timeout = database_pool_timeout
-            self.database_pool_recycle = database_pool_recycle
+def build_sessionmaker(engine: Engine) -> sessionmaker[Session]:
+    """Return a standard Session factory for ADE services."""
+    return sessionmaker(bind=engine, expire_on_commit=False)
 
-    return build_engine(_Settings())
+
+def build_psycopg_connect_kwargs(settings: DatabaseSettings) -> dict[str, Any]:
+    """Build psycopg connection kwargs from settings."""
+    url = _normalize_psycopg_url(make_url(str(settings.database_url)))
+    params: dict[str, Any] = {
+        "host": url.host,
+        "port": url.port,
+        "user": url.username,
+        "dbname": url.database,
+    }
+    if url.password:
+        params["password"] = url.password
+    params.update(url.query or {})
+
+    if settings.database_auth_mode == "managed_identity":
+        params["password"] = get_azure_postgres_access_token()
+        params.setdefault("sslmode", "require")
+    if settings.database_sslrootcert:
+        params["sslrootcert"] = settings.database_sslrootcert
+
+    return params
+
+
+def assert_tables_exist(
+    engine: Engine,
+    required_tables: list[str],
+    *,
+    schema: str | None = None,
+) -> None:
+    """Raise if required tables are missing."""
+    inspector = inspect(engine)
+    missing = [t for t in required_tables if not inspector.has_table(t, schema=schema)]
+    if missing:
+        raise RuntimeError(
+            f"Missing required tables: {', '.join(missing)}. "
+            "Run `ade db migrate` before starting ADE services."
+        )
 
 
 __all__ = [
     "DatabaseSettings",
     "build_engine",
-    "build_engine_from_url",
     "attach_azure_postgres_managed_identity",
     "get_azure_postgres_access_token",
+    "build_sessionmaker",
+    "assert_tables_exist",
+    "build_psycopg_connect_kwargs",
 ]

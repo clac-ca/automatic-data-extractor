@@ -5,8 +5,19 @@ from pathlib import Path
 from ade_worker.paths import PathManager
 
 
+class _Layout:
+    def __init__(self, root: Path) -> None:
+        self.workspaces_dir = root / "workspaces"
+        self.configs_dir = self.workspaces_dir
+        self.documents_dir = self.workspaces_dir
+        self.runs_dir = root / "runs"
+        self.venvs_dir = root / "venvs"
+        self.pip_cache_dir = root / "cache" / "pip"
+
+
 def test_environment_path_is_stable(tmp_path: Path) -> None:
-    paths = PathManager(tmp_path, tmp_path / "venvs", tmp_path / "runs")
+    layout = _Layout(tmp_path)
+    paths = PathManager(layout, layout.pip_cache_dir)
     path_a = paths.environment_root(
         workspace_id="ws-1",
         configuration_id="cfg-1",

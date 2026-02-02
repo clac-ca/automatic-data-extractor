@@ -22,14 +22,20 @@ from typing import Any, Callable
 from uuid import uuid4
 
 import psycopg
-from sqlalchemy.engine import Engine, URL, make_url
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from ade_db.engine import (
+    assert_tables_exist,
+    build_engine,
+    build_psycopg_connect_kwargs,
+    build_sessionmaker,
+)
 from . import db
 from .paths import PathManager
 from ade_db.schema import REQUIRED_TABLES
 from .settings import Settings, get_settings
-from ade_storage import build_storage_adapter
+from ade_storage import build_storage_adapter, ensure_storage_roots
 
 logger = logging.getLogger("ade_worker")
 
@@ -61,47 +67,16 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _ensure_runtime_dirs(data_dir: Path, venvs_dir: Path, runs_root_dir: Path) -> None:
-    for sub in ["db", "workspaces", "cache/pip"]:
-        _ensure_dir(data_dir / sub)
-    _ensure_dir(venvs_dir)
-    _ensure_dir(runs_root_dir)
+def _ensure_runtime_dirs(settings: Settings) -> None:
+    ensure_storage_roots(settings)
+    _ensure_dir(settings.pip_cache_dir)
 
 
 # --- LISTEN / NOTIFY ---
 
 
-def _normalize_psycopg_url(url: URL) -> URL:
-    if url.drivername in {"postgresql", "postgres"}:
-        return url
-    if url.drivername.startswith("postgresql+"):
-        return url.set(drivername="postgresql")
-    return url
-
-
-def _build_listen_connect_kwargs(settings: Settings) -> dict[str, Any]:
-    url = _normalize_psycopg_url(make_url(str(settings.database_url)))
-    params: dict[str, Any] = {
-        "host": url.host,
-        "port": url.port,
-        "user": url.username,
-        "dbname": url.database,
-    }
-    if url.password:
-        params["password"] = url.password
-    params.update(url.query or {})
-
-    if settings.database_auth_mode == "managed_identity":
-        params["password"] = db.get_azure_postgres_access_token()
-        params.setdefault("sslmode", "require")
-    if settings.database_sslrootcert:
-        params["sslrootcert"] = settings.database_sslrootcert
-
-    return params
-
-
 def _listen_connect(settings: Settings, *, channel: str) -> psycopg.Connection:
-    params = _build_listen_connect_kwargs(settings)
+    params = build_psycopg_connect_kwargs(settings)
     conn = psycopg.connect(**params, autocommit=True)
     with conn.cursor() as cur:
         cur.execute(f"LISTEN {channel}")
@@ -941,7 +916,7 @@ class Worker:
 
     def _cleanup_run_dir(self, *, run_dir: Path, workspace_id: str, run_id: str) -> None:
         try:
-            run_root = self.paths.runs_root_dir.resolve()
+            run_root = self.paths.runs_root(workspace_id).resolve()
             run_dir_resolved = run_dir.resolve()
             run_dir_resolved.relative_to(run_root)
         except Exception:
@@ -1994,15 +1969,15 @@ def main() -> int:
     settings = get_settings()
     _setup_logging(settings.worker_log_level)
 
-    _ensure_runtime_dirs(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
+    _ensure_runtime_dirs(settings)
 
-    engine = db.build_engine(settings)
-    db.assert_tables_exist(engine, REQUIRED_TABLES)
+    engine = build_engine(settings)
+    assert_tables_exist(engine, REQUIRED_TABLES)
 
     worker_id = settings.worker_id or _default_worker_id()
 
-    paths = PathManager(settings.data_dir, settings.venvs_dir, settings.worker_runs_dir)
-    SessionLocal = db.build_sessionmaker(engine)
+    paths = PathManager(settings, settings.pip_cache_dir)
+    SessionLocal = build_sessionmaker(engine)
     storage = build_storage_adapter(settings)
 
     runner = SubprocessRunner()

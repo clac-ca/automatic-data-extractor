@@ -1,3 +1,3 @@
-"""Infrastructure adapters (venv utilities, versioning)."""
+"""Infrastructure adapters (versioning)."""
 
-__all__ = ["venv", "versions"]
+__all__ = ["versions"]

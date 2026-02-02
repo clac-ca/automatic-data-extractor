@@ -12,18 +12,17 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from ade_api.db import get_db
-from ade_storage import AzureBlobStorage, get_storage_adapter
+from ade_storage import StorageAdapter, get_storage_adapter
 from ade_api.settings import Settings, get_settings
 
 SessionDep = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def get_blob_storage(request: Request) -> AzureBlobStorage:
+def get_blob_storage(request: Request) -> StorageAdapter:
     return get_storage_adapter(request)
 
-
-StorageDep = Annotated[AzureBlobStorage, Depends(get_blob_storage)]
+StorageDep = Annotated[StorageAdapter, Depends(get_blob_storage)]
 
 
 def _build_config_storage(settings: Settings):

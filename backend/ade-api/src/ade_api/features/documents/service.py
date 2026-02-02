@@ -38,7 +38,7 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
-from ade_storage import AzureBlobStorage, StorageError, StorageLimitError, StoredObject
+from ade_storage import StorageAdapter, StorageError, StorageLimitError, StoredObject
 from ade_db.models import (
     File,
     FileComment,
@@ -155,7 +155,7 @@ class DocumentsService:
         *,
         session: Session,
         settings: Settings,
-        storage: AzureBlobStorage,
+        storage: StorageAdapter,
     ) -> None:
         self._session = session
         self._settings = settings

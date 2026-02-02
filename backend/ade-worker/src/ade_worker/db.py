@@ -5,19 +5,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Iterable
+from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, inspect, select, text, update, func
+from sqlalchemy import delete, insert, select, text, update, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from ade_db.engine import (  # noqa: F401
-    attach_azure_postgres_managed_identity,
-    build_engine as shared_build_engine,
-    get_azure_postgres_access_token,
-)
 from ade_db.schema import (
     environments,
     files,
@@ -27,7 +21,6 @@ from ade_db.schema import (
     run_table_columns,
     runs,
 )
-from .settings import Settings, get_settings
 
 # --- SQL snippets ---
 
@@ -133,32 +126,6 @@ class RunClaim:
     id: str
     attempt_count: int
     max_attempts: int
-
-
-# --- Engine / Session helpers ---
-
-def build_engine(settings: Settings | None = None) -> Engine:
-    settings = settings or get_settings()
-    return shared_build_engine(settings)
-
-
-def build_sessionmaker(engine: Engine) -> sessionmaker[Session]:
-    return sessionmaker(bind=engine, expire_on_commit=False)
-
-
-def assert_tables_exist(
-    engine: Engine,
-    required_tables: Iterable[str],
-    *,
-    schema: str | None = None,
-) -> None:
-    inspector = inspect(engine)
-    missing = [t for t in required_tables if not inspector.has_table(t, schema=schema)]
-    if missing:
-        raise RuntimeError(
-            f"Missing required tables: {', '.join(missing)}. "
-            "Run `ade db migrate` before starting ade-worker."
-        )
 
 
 # --- Queue / lease helpers ---
@@ -670,12 +637,6 @@ def replace_run_table_columns(
 
 __all__ = [
     "RunClaim",
-    "DEFAULT_AZURE_PG_SCOPE",
-    "attach_azure_postgres_managed_identity",
-    "get_azure_postgres_access_token",
-    "build_engine",
-    "build_sessionmaker",
-    "assert_tables_exist",
     "claim_runs",
     "heartbeat_run",
     "ack_run_success",

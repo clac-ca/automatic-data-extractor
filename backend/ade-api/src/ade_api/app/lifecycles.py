@@ -21,7 +21,13 @@ from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
-from ade_storage import StorageError, get_storage_adapter, init_storage, shutdown_storage
+from ade_storage import (
+    StorageError,
+    ensure_storage_roots,
+    get_storage_adapter,
+    init_storage,
+    shutdown_storage,
+)
 from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -47,16 +53,7 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 
     resolved = settings or get_settings()
 
-    targets: set[Path] = {
-        Path(resolved.data_dir),
-        Path(resolved.workspaces_dir),
-        Path(resolved.venvs_dir),
-        Path(resolved.pip_cache_dir),
-        Path(resolved.data_dir) / "db",
-    }
-
-    for target in targets:
-        target.mkdir(parents=True, exist_ok=True)
+    ensure_storage_roots(resolved, extra=[Path(resolved.pip_cache_dir)])
 
     _validate_venvs_dir(Path(resolved.venvs_dir))
 
