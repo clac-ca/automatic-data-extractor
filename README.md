@@ -15,6 +15,7 @@ Self-hostable document extraction service with an **API**, **Web UI**, and backg
 - [Development (Dev Container)](#development-dev-container)
 - [Operations](#operations)
 - [Troubleshooting](#troubleshooting)
+- [Docs](#docs)
 
 ---
 
@@ -30,7 +31,7 @@ Self-hostable document extraction service with an **API**, **Web UI**, and backg
 git clone https://github.com/clac-ca/automatic-data-extractor
 cd automatic-data-extractor
 docker compose up --build -d postgres azurite azurite-init
-docker compose run --rm api ade-api migrate
+docker compose run --rm api ade db migrate
 docker compose up -d api worker web
 ````
 
@@ -136,6 +137,10 @@ docker compose down -v
   * `docker compose down -v`
 
 ---
+
+## Docs
+
+Full documentation lives in `docs/index.md`.
 
 ## Contributing
 

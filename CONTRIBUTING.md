@@ -17,17 +17,19 @@ We use **Conventional Commits**:
 - Avoid bundling unrelated changes
 
 ## Testing
-- Backend (unit): `ade-api test`
-- Backend (integration/all): `ade-api test integration` or `ade-api test all`
-- Worker (unit): `ade-worker test`
-- Worker (integration/all): `ade-worker test integration` or `ade-worker test all`
-- Frontend: `npm run test --prefix apps/ade-web`
-- Lint (backend): `ade-api lint`
-- Lint (frontend): `npm run lint --prefix apps/ade-web`
+- Backend (unit): `ade api test`
+- Backend (integration/all): `ade api test integration` or `ade api test all`
+- Worker (unit): `ade worker test`
+- Worker (integration/all): `ade worker test integration` or `ade worker test all`
+- Frontend: `ade web test`
+- Lint (backend): `ade api lint`
+- Lint (frontend): `ade web lint`
+- Full suite: `ade test`
 
 ## Releases
 - Releases are handled by **Release Please** on `development`
 - Do not bump versions manually
 - Image version lives in `VERSION`
-- Component versions live in each app manifest
+- Backend version lives in `backend/pyproject.toml`
+- Frontend version lives in `frontend/ade-web/package.json`
 - See `docs/releasing.md` for details

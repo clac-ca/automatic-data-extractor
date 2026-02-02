@@ -1,0 +1,62 @@
+# CLI reference
+
+## Root CLI
+
+```bash
+ade start            # start api + worker + web (default)
+ade dev              # start api dev + worker + web dev
+ade test             # run api + worker + web tests
+```
+
+Service selection:
+
+- `ADE_SERVICES=api,worker,web` (default)
+- `ADE_SERVICES=api` (only API)
+- `ADE_SERVICES=worker` (only worker)
+- `ADE_SERVICES=web` (only web)
+
+You can also pass `--services` to `ade start` and `ade dev`.
+
+## API
+
+```bash
+ade api start
+ade api dev
+ade api routes
+ade api types
+ade api users
+ade api test
+ade api lint
+```
+
+## Worker
+
+```bash
+ade worker start
+ade worker dev
+ade worker gc
+ade worker test
+```
+
+## Web
+
+```bash
+ade web start
+ade web dev
+ade web build
+ade web test
+ade web test:watch
+ade web test:coverage
+ade web lint
+ade web typecheck
+ade web preview
+```
+
+## Database
+
+```bash
+ade db migrate
+ade db history
+ade db current
+ade db stamp <rev>
+```

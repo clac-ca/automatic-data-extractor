@@ -26,11 +26,12 @@
 services:
   api:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["ade-api", "start"]
+    command: ["ade", "start"]
     volumes:
       - ade_data:/app/data
       # - ./data:/app/data
     environment:
+      ADE_SERVICES: api
       ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
       ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
@@ -46,10 +47,11 @@ services:
 
   worker:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["ade-worker", "start"]
+    command: ["ade", "start"]
     volumes:
       - ade_data:/app/data
     environment:
+      ADE_SERVICES: worker
       ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
       ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
@@ -65,13 +67,14 @@ services:
 
   web:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["/usr/local/bin/ade-web-entrypoint"]
+    command: ["ade", "start"]
     depends_on:
       api:
         condition: service_started
     ports:
       - 8080:8080
     environment:
+      ADE_SERVICES: web
       ADE_WEB_PROXY_TARGET: http://api:8000
 
 volumes:

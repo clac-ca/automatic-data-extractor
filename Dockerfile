@@ -29,20 +29,18 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.28 /uv /uvx /bin/
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
-COPY apps/ade-api/ /src/apps/ade-api/
-COPY apps/ade-worker/ /src/apps/ade-worker/
-RUN uv --project /src/apps/ade-api sync --frozen --no-dev --no-editable
-# Preserve ade-api install while adding ade-worker dependencies.
-RUN uv --project /src/apps/ade-worker sync --frozen --no-dev --no-editable --inexact
+COPY backend/ /src/backend/
+WORKDIR /src/backend
+RUN uv sync --frozen --no-dev --no-editable
 
 # ============================================================
 # WEB BUILD STAGE (build frontend assets)
 # ============================================================
 FROM node:20-bookworm-slim AS web-build
 WORKDIR /web
-COPY apps/ade-web/package*.json /web/
+COPY frontend/ade-web/package*.json /web/
 RUN npm ci
-COPY apps/ade-web/ /web/
+COPY frontend/ade-web/ /web/
 RUN npm run build
 
 # ============================================================
@@ -57,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     gettext-base \
     nginx \
+    tini \
   && rm -rf /var/lib/apt/lists/*
 RUN sed -i 's|pid /run/nginx.pid;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf
 
@@ -66,8 +65,8 @@ RUN useradd -m -u 10001 appuser
 # Copy Python deps and set PATH.
 COPY --from=build /opt/venv /opt/venv
 COPY --from=web-build /web/dist /usr/share/nginx/html
-COPY apps/ade-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
-COPY apps/ade-web/nginx/entrypoint.sh /usr/local/bin/ade-web-entrypoint
+COPY frontend/ade-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY frontend/ade-web/nginx/entrypoint.sh /usr/local/bin/ade-web-entrypoint
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Ensure runtime dirs are owned by appuser.
@@ -76,5 +75,6 @@ RUN mkdir -p /app/data /var/cache/nginx /var/run/nginx /var/lib/nginx /var/log/n
 USER appuser
 
 EXPOSE 8080 8000
-# Default to the API service; override per container/compose role.
-CMD ["ade-api", "start"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
+# Default to all services; override per container/compose role.
+CMD ["ade", "start"]

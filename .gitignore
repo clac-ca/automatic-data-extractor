@@ -10,9 +10,10 @@ __pycache__/
 coverage.xml
 
 # Node / web
-apps/ade-web/node_modules/
-apps/ade-web/dist/
-apps/ade-web/.vite/
+frontend/ade-web/node_modules/
+frontend/ade-web/dist/
+frontend/ade-web/.vite/
+frontend/ade-web/public/version.json
 
 # Local env / secrets
 .env

@@ -19,12 +19,12 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 .pnpm-store/
-apps/**/node_modules
+frontend/**/node_modules
 
 # Build outputs
 dist/
 build/
-apps/ade-web/dist/
+frontend/ade-web/dist/
 
 # Local data & misc
 data/
@@ -37,4 +37,4 @@ artifacts/
 # Env files (avoid baking secrets into images)
 .env
 .env.*
-apps/ade-web/.env*
+frontend/ade-web/.env*

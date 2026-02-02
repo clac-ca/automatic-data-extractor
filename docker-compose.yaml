@@ -39,8 +39,9 @@ services:
       - ade_data:/app/data
     ports:
       - 8000:8000
-    command: ["ade-api", "start"]
+    command: ["ade", "start"]
     environment:
+      ADE_SERVICES: api
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
@@ -60,8 +61,9 @@ services:
         condition: service_completed_successfully
     volumes:
       - ade_data:/app/data
-    command: ["ade-worker", "start"]
+    command: ["ade", "start"]
     environment:
+      ADE_SERVICES: worker
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
@@ -77,8 +79,9 @@ services:
         condition: service_started
     ports:
       - 8080:8080
-    command: ["/usr/local/bin/ade-web-entrypoint"]
+    command: ["ade", "start"]
     environment:
+      ADE_SERVICES: web
       ADE_WEB_PROXY_TARGET: http://api:8000
 
   postgres:
@@ -121,7 +124,7 @@ services:
     command:
       - sh
       - -c
-      - az storage container create --name "$ADE_BLOB_CONTAINER" --connection-string "$ADE_BLOB_CONNECTION_STRING"
+      - az storage container create --name "$$ADE_BLOB_CONTAINER" --connection-string "$$ADE_BLOB_CONNECTION_STRING"
     environment:
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}

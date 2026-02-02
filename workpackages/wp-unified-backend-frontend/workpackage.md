@@ -110,66 +110,76 @@ CLI command map (target behavior):
 3) `subpackages/versions` (after CLI + layout; before docs rewrite)
 4) `subpackages/docs` (last, once commands and paths are finalized)
 
+### Execution Stages (Suggested)
+
+Stage 1: Repo layout + unified backend packaging (WBS 1.0)
+Stage 2: Shared infra packages (WBS 2.0)
+Stage 3: Root CLI + service delegation (WBS 3.0)
+Stage 4: Test orchestration + frontend hooks (WBS 4.0–5.0)
+Stage 5: Container/runtime updates (WBS 6.0)
+Stage 6: Version reporting (WBS 7.0)
+Stage 7: Docs + release tooling and docs rewrite (WBS 8.0–9.0)
+
 ### Work Breakdown Structure (WBS)
 
 1.0 Repo layout + packaging (foundation)
   1.1 Move backend/frontend folders
-    - [ ] Create `backend/ade-api` and `backend/ade-worker` paths and move code/tests/readmes.
-    - [ ] Create `backend/ade-db` and `backend/ade-storage` paths.
-    - [ ] Move `apps/ade-web` to `frontend/ade-web`.
-    - [ ] Update references to old paths in scripts, docs, and configs.
+    - [x] Create `backend/ade-api` and `backend/ade-worker` paths and move code/tests/readmes.
+    - [x] Create `backend/ade-db` and `backend/ade-storage` paths.
+    - [x] Move `apps/ade-web` to `frontend/ade-web`.
+    - [x] Update references to old paths in scripts, docs, and configs.
   1.2 Unified backend pyproject
-    - [ ] Create `backend/pyproject.toml` with combined metadata, deps, scripts, and package data.
-    - [ ] Configure package discovery for `backend/ade-api/src` and `backend/ade-worker/src`.
-    - [ ] Configure package discovery for `backend/ade-db/src` and `backend/ade-storage/src`.
-    - [ ] Consolidate tooling config (pytest, ruff, mypy, coverage) at backend root.
-    - [ ] Generate a single `backend/uv.lock` and remove per-service locks.
+    - [x] Create `backend/pyproject.toml` with combined metadata, deps, scripts, and package data.
+    - [x] Configure package discovery for `backend/ade-api/src` and `backend/ade-worker/src`.
+    - [x] Configure package discovery for `backend/ade-db/src` and `backend/ade-storage/src`.
+    - [x] Consolidate tooling config (pytest, ruff, mypy, coverage) at backend root.
+    - [x] Generate a single `backend/uv.lock` and remove per-service locks.
 
 2.0 Shared infra (subpackage)
   2.1 Centralize DB + storage
-    - [ ] Complete shared DB/storage packages (see `subpackages/shared-infra/workpackage.md`).
+    - [x] Complete shared DB/storage packages (see `subpackages/shared-infra/workpackage.md`).
 
 3.0 CLI orchestration
   3.1 CLI subpackage
-    - [ ] Complete CLI implementation (see `subpackages/cli/workpackage.md`).
+    - [x] Complete CLI implementation (see `subpackages/cli/workpackage.md`).
 
 4.0 Test orchestration
   4.1 Root + per-service tests
-    - [ ] Implement `ade test` to run api + worker + web tests.
-    - [ ] Preserve `ade api test` and `ade worker test` for targeted runs.
-    - [ ] Keep frontend tests runnable via `ade web test`.
+    - [x] Implement `ade test` to run api + worker + web tests.
+    - [x] Preserve `ade api test` and `ade worker test` for targeted runs.
+    - [x] Keep frontend tests runnable via `ade web test`.
 
 5.0 Frontend hooks
   5.1 Simplify `ade web` commands
-    - [ ] Centralize npm command invocation and path handling for web subcommands.
+    - [x] Centralize npm command invocation and path handling for web subcommands.
 
 6.0 Container + runtime
   6.1 Dockerfile updates
-    - [ ] Point backend installs to `backend/pyproject.toml`.
-    - [ ] Build frontend from `frontend/ade-web` and copy dist into nginx.
-    - [ ] Install `tini` and set ENTRYPOINT for proper signal handling.
-    - [ ] Set image default CMD to `ade start`.
-    - [ ] Remove multi-step backend install (single `uv sync` for unified backend).
+    - [x] Point backend installs to `backend/pyproject.toml`.
+    - [x] Build frontend from `frontend/ade-web` and copy dist into nginx.
+    - [x] Install `tini` and set ENTRYPOINT for proper signal handling.
+    - [x] Set image default CMD to `ade start`.
+    - [x] Remove multi-step backend install (single `uv sync` for unified backend).
   6.2 Flexible service composition
-    - [ ] Add entrypoint/supervisor to start api/worker/web based on `ADE_SERVICES`.
-    - [ ] Keep single-image, multi-container usage supported (api+web, worker, etc.).
+    - [x] Add entrypoint/supervisor to start api/worker/web based on `ADE_SERVICES`.
+    - [x] Keep single-image, multi-container usage supported (api+web, worker, etc.).
 
 7.0 Version reporting (subpackage)
   7.1 API + frontend update
-    - [ ] Complete version reporting updates (see `subpackages/versions/workpackage.md`).
+    - [x] Complete version reporting updates (see `subpackages/versions/workpackage.md`).
 
 8.0 Docs + release tooling
   8.1 Docs and scripts
-    - [ ] Update `setup.sh` to install backend deps via `backend/pyproject.toml` and frontend via `frontend/ade-web`.
-    - [ ] Update docs to reference new paths and CLI commands.
-    - [ ] Normalize all path references from `apps/` to `backend/` + `frontend/`.
+    - [x] Update `setup.sh` to install backend deps via `backend/pyproject.toml` and frontend via `frontend/ade-web`.
+    - [x] Update docs to reference new paths and CLI commands.
+    - [x] Normalize all path references from `apps/` to `backend/` + `frontend/`.
   8.2 Release Please config
-    - [ ] Update release config to the new backend version file location (if needed).
-    - [ ] Confirm tag/version strategy for unified backend distribution.
+    - [x] Update release config to the new backend version file location (if needed).
+    - [x] Confirm tag/version strategy for unified backend distribution.
 
 9.0 Docs rewrite (subpackage)
   9.1 Replace existing docs set
-    - [ ] Complete documentation rewrite (see `subpackages/docs/workpackage.md`).
+    - [x] Complete documentation rewrite (see `subpackages/docs/workpackage.md`).
 
 ### Open Questions
 

@@ -68,27 +68,27 @@ Locked decisions:
 
 1.0 Package layout
   1.1 Create ade-db package
-    - [ ] Add `backend/ade-db/src/ade_db` with metadata/models/migrations.
-    - [ ] Add Alembic config (`alembic.ini`, `env.py`) inside ade_db.
-    - [ ] Wire package data so migrations ship with the backend distribution.
+    - [x] Add `backend/ade-db/src/ade_db` with metadata/models/migrations.
+    - [x] Add Alembic config (`alembic.ini`, `env.py`) inside ade_db.
+    - [x] Wire package data so migrations ship with the backend distribution.
   1.2 Create ade-storage package
-    - [ ] Add `backend/ade-storage/src/ade_storage` with storage helpers.
-    - [ ] Define minimal storage client/config/path helpers used by api/worker.
+    - [x] Add `backend/ade-storage/src/ade_storage` with storage helpers.
+    - [x] Define minimal storage client/config/path helpers used by api/worker.
 
 2.0 Integrate services
   2.1 API integration
-    - [ ] Update ade-api imports to use `ade_db` models/metadata.
-    - [ ] Update blob storage usage to use `ade_storage` helpers.
+    - [x] Update ade-api imports to use `ade_db` models/metadata.
+    - [x] Update blob storage usage to use `ade_storage` helpers.
   2.2 Worker integration
-    - [ ] Update ade-worker imports to use `ade_db` models/metadata.
-    - [ ] Update blob storage usage to use `ade_storage` helpers.
+    - [x] Update ade-worker imports to use `ade_db` models/metadata.
+    - [x] Update blob storage usage to use `ade_storage` helpers.
 
 3.0 Migrations and CLI
   3.1 ade db commands
-    - [ ] Add `ade db migrate` (upgrade head) command to root CLI.
-    - [ ] Optionally add `ade db history/current/stamp` if needed.
+    - [x] Add `ade db migrate` (upgrade head) command to root CLI.
+    - [x] Optionally add `ade db history/current/stamp` if needed.
   3.2 Tests
-    - [ ] Update tests for new package locations.
+    - [x] Update tests for new package locations.
 
 ### Open Questions
 

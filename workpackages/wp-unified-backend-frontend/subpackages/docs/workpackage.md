@@ -55,28 +55,28 @@ Rationale (reader-first):
 
 1.0 Documentation plan
   1.1 Define new IA
-    - [ ] Confirm the target IA above and adjust if needed.
-    - [ ] Identify obsolete docs to remove/archive.
+    - [x] Confirm the target IA above and adjust if needed.
+    - [x] Identify obsolete docs to remove/archive.
 
 2.0 Author new docs
   2.1 Getting started
-    - [ ] Fresh setup steps for backend + frontend.
-    - [ ] New CLI overview and common workflows.
+    - [x] Fresh setup steps for backend + frontend.
+    - [x] New CLI overview and common workflows.
   2.2 Development
-    - [ ] Dev environment and testing workflows.
-    - [ ] Backend vs frontend responsibilities and where to work.
+    - [x] Dev environment and testing workflows.
+    - [x] Backend vs frontend responsibilities and where to work.
   2.3 Deployment
-    - [ ] Single-image model and service composition options.
-    - [ ] Docker compose examples (api+web, worker-only, all-in-one).
+    - [x] Single-image model and service composition options.
+    - [x] Docker compose examples (api+web, worker-only, all-in-one).
   2.4 Operations
-    - [ ] Migration steps and database initialization.
-    - [ ] Logs, troubleshooting, and common fixes.
+    - [x] Migration steps and database initialization.
+    - [x] Logs, troubleshooting, and common fixes.
 
 3.0 Cleanup + validation
   3.1 Remove stale content
-    - [ ] Remove or archive obsolete docs files.
+    - [x] Remove or archive obsolete docs files.
   3.2 Check references
-    - [ ] Ensure all links and command examples match the new layout.
+    - [x] Ensure all links and command examples match the new layout.
 
 ### Open Questions
 

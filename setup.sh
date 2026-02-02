@@ -25,13 +25,14 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 # Install web dependencies.
-npm ci --prefix apps/ade-web
+npm ci --prefix frontend/ade-web
 
-# Sync Python dependencies into a shared venv (.venv) using per-service lockfiles.
-export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$PWD/.venv}"
-uv --project apps/ade-api sync --dev
-uv --project apps/ade-worker sync --dev
+# Sync Python dependencies using the unified backend project (creates backend/.venv).
+pushd backend >/dev/null
+uv sync
 
 # Smoke-check the CLIs.
-uv --project apps/ade-api run ade-api --help
-uv --project apps/ade-worker run ade-worker --help
+uv run ade --help
+uv run ade-api --help
+uv run ade-worker --help
+popd >/dev/null

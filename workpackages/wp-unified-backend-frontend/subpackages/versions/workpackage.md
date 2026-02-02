@@ -36,24 +36,24 @@ Locked decision:
 
 1.0 Backend version reporting
   1.1 Define new version fields
-    - [ ] Update backend models/schemas and endpoint logic.
+    - [x] Update backend models/schemas and endpoint logic.
   1.2 Wire unified distribution name
-    - [ ] Use `automatic-data-extractor` for backend version lookup.
-    - [ ] Keep ade-engine reporting intact.
+    - [x] Use `automatic-data-extractor` for backend version lookup.
+    - [x] Keep ade-engine reporting intact.
   1.3 Add web version source
-    - [ ] Generate `version.json` from frontend package metadata during build.
-    - [ ] Read `version.json` in the API (fallback to `unknown` when absent).
-    - [ ] Default to `/usr/share/nginx/html/version.json` with an override env var if needed.
+    - [x] Generate `version.json` from frontend package metadata during build.
+    - [x] Read `version.json` in the API (fallback to `unknown` when absent).
+    - [x] Default to `/usr/share/nginx/html/version.json` with an override env var if needed.
 
 2.0 Frontend updates
   2.1 Types + UI
-    - [ ] Regenerate OpenAPI types if needed.
-    - [ ] Update frontend version UI to display new fields.
+    - [x] Regenerate OpenAPI types if needed.
+    - [x] Update frontend version UI to display new fields.
 
 3.0 Compatibility
   3.1 Adjust docs + tests
-    - [ ] Update docs referencing version fields.
-    - [ ] Update any tests expecting old version response shape.
+    - [x] Update docs referencing version fields.
+    - [x] Update any tests expecting old version response shape.
 
 ### Open Questions
 

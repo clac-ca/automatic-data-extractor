@@ -82,7 +82,7 @@ services:
     command:
       - sh
       - -c
-      - az storage container create --name "$ADE_BLOB_CONTAINER" --connection-string "$ADE_BLOB_CONNECTION_STRING"
+      - az storage container create --name "$$ADE_BLOB_CONTAINER" --connection-string "$$ADE_BLOB_CONNECTION_STRING"
     environment:
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}

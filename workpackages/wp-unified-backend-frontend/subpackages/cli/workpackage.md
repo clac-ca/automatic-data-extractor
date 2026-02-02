@@ -31,32 +31,32 @@ Implement a root `ade` CLI in the unified backend distribution that can start/de
 
 1.0 Root CLI package
   1.1 Create CLI package + entry point
-    - [ ] Add new Python module for `ade` (e.g. `ade_cli/cli.py`).
-    - [ ] Register `ade` console script in backend `pyproject.toml`.
+    - [x] Add new Python module for `ade` (e.g. `ade_cli/cli.py`).
+    - [x] Register `ade` console script in backend `pyproject.toml`.
   1.2 Core commands
-    - [ ] Implement `ade start` to run api+worker+web by default.
-    - [ ] Implement `ade dev` to run api dev + worker + web dev.
-    - [ ] Implement `ade test` to run api + worker + web tests.
-    - [ ] Add `--services` and `ADE_SERVICES` handling.
+    - [x] Implement `ade start` to run api+worker+web by default.
+    - [x] Implement `ade dev` to run api dev + worker + web dev.
+    - [x] Implement `ade test` to run api + worker + web tests.
+    - [x] Add `--services` and `ADE_SERVICES` handling.
 
 2.0 Service delegation
   2.1 API delegation
-    - [ ] Implement `ade api <args>` delegating to `ade-api` CLI.
+    - [x] Implement `ade api <args>` delegating to `ade-api` CLI.
   2.2 Worker delegation
-    - [ ] Implement `ade worker <args>` delegating to `ade-worker` CLI.
+    - [x] Implement `ade worker <args>` delegating to `ade-worker` CLI.
   2.3 Web delegation
-    - [ ] Implement `ade web start|dev|build|test|lint|typecheck|preview` via npm/nginx.
-    - [ ] Keep nginx start via `frontend/ade-web/nginx/entrypoint.sh` (standard entrypoint naming).
+    - [x] Implement `ade web start|dev|build|test|lint|typecheck|preview` via npm/nginx.
+    - [x] Keep nginx start via `frontend/ade-web/nginx/entrypoint.sh` (standard entrypoint naming).
   2.4 DB delegation
-    - [ ] Implement `ade db migrate` (and optional history/current/stamp).
-    - [ ] Keep `ade api migrate` as an alias to `ade db migrate` (optional).
+    - [x] Implement `ade db migrate` (and optional history/current/stamp).
+    - [x] Keep `ade api migrate` as an alias to `ade db migrate` (optional).
 
 3.0 Operational details
   3.1 Process orchestration
-    - [ ] Spawn subprocesses with clean signal handling (tini in container).
-    - [ ] Fail fast if any child process exits unexpectedly.
+    - [x] Spawn subprocesses with clean signal handling (tini in container).
+    - [x] Fail fast if any child process exits unexpectedly.
   3.2 Docs touchpoints
-    - [ ] Update CLI usage in docs to reflect `ade` commands.
+    - [x] Update CLI usage in docs to reflect `ade` commands.
 
 ### Open Questions
 

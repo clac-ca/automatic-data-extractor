@@ -6,10 +6,14 @@ This file is **for AI coding agents** working on the `ade` codebase. ADE is a li
 
 ```
 automatic-data-extractor/
-├─ apps/
+├─ backend/
 │  ├─ ade-api/      # FastAPI backend (API only)
-│  ├─ ade-web/      # React/Vite SPA
-│  └─ ade-worker/   # Background worker (builds + runs).
+│  ├─ ade-worker/   # Background worker (builds + runs)
+│  ├─ ade-db/       # Shared DB schema + migrations
+│  ├─ ade-storage/  # Shared blob storage helpers
+│  └─ pyproject.toml
+├─ frontend/
+│  └─ ade-web/      # React/Vite SPA
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
@@ -55,6 +59,7 @@ automatic-data-extractor/
 
 ```bash
 # CLI discovery (source of truth)
+ade --help
 ade-api --help
 ade-worker --help
 ade-engine --help
@@ -62,25 +67,27 @@ ade-engine --help
 
 ```bash
 # Common workflows
-ade-api dev          # api only (reload)
-ade-api start        # api only (prod-style)
-ade-worker start
-npm run dev --prefix apps/ade-web
+ade dev              # api + worker + web (reload)
+ade start            # api + worker + web (prod-style)
+ade api dev          # api only (reload)
+ade worker start
+ade web dev
 ```
 
 ```bash
 # Quality checks
-ade-api types
-ade-api lint
-ade-api test
-ade-worker test
-npm run lint --prefix apps/ade-web
-npm run test --prefix apps/ade-web
+ade api types
+ade api lint
+ade api test
+ade worker test
+ade web lint
+ade web test
+ade test
 ```
 
 ```bash
 # Build web assets
-npm run build --prefix apps/ade-web
+ade web build
 ```
 
 ## Engine CLI quick runs (current)
@@ -116,8 +123,8 @@ ade-engine process batch \
 
 ## Frontend API types
 
-- Generated types: `apps/ade-web/src/types/generated/openapi.d.ts`.
-- If missing/stale, run `ade-api types` before touching frontend API code.
+- Generated types: `frontend/ade-web/src/types/generated/openapi.d.ts`.
+- If missing/stale, run `ade api types` before touching frontend API code.
 - Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
 ## Agent primer (collaboration norms)
@@ -131,4 +138,4 @@ ade-engine process batch \
 
 ## 🤖 Agent rules
 
-1. Always run `ade-api test` (and `ade-worker test` if applicable) before committing and run the relevant frontend/backend checks for touched areas.
+1. Always run `ade test` (or the affected service tests) before committing and run the relevant frontend/backend checks for touched areas.

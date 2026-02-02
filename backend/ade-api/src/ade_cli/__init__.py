@@ -1,0 +1,1 @@
+"""Root ADE CLI."""

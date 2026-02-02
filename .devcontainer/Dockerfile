@@ -4,10 +4,10 @@ FROM ${PYTHON_IMAGE}
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Prefer the workspace venv for all container processes (including VS Code + extensions like Codex).
+# Prefer the backend venv for all container processes (including VS Code + extensions like Codex).
 # Docker-Compose can't reliably prepend to PATH using the existing value, so we do it here.
-ENV VIRTUAL_ENV=/workspaces/automatic-data-extractor/.venv \
-    PATH="/workspaces/automatic-data-extractor/.venv/bin:${PATH}"
+ENV VIRTUAL_ENV=/workspaces/automatic-data-extractor/backend/.venv \
+    PATH="/workspaces/automatic-data-extractor/backend/.venv/bin:${PATH}"
 
 ARG USERNAME=vscode
 ARG USER_UID=1000
