@@ -27,7 +27,9 @@ from sse_starlette.sse import EventSourceResponse
 from ade_api.api.deps import (
     SettingsDep,
     get_documents_service,
+    get_documents_service_read,
     get_runs_service,
+    get_runs_service_read,
 )
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.cursor_listing import (
@@ -46,7 +48,7 @@ from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
 )
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
-from ade_api.db import get_sessionmaker
+from ade_api.db import get_session_factory
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
@@ -135,7 +137,11 @@ DocumentPath = Annotated[
     ),
 ]
 DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
+DocumentsServiceReadDep = Annotated[
+    DocumentsService, Depends(get_documents_service_read)
+]
 RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
+RunsServiceReadDep = Annotated[RunsService, Depends(get_runs_service_read)]
 DocumentReader = Annotated[
     User,
     Security(
@@ -417,7 +423,7 @@ def upload_document_version(
 def list_documents(
     workspace_id: WorkspacePath,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     actor: DocumentReader,
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
@@ -459,7 +465,7 @@ async def stream_document_changes(
     cursor: Annotated[str | None, Query(description="Change cursor.")] = None,
 ) -> EventSourceResponse:
     start_token = _resolve_event_token(request, cursor)
-    session_factory = get_sessionmaker(request)
+    session_factory = get_session_factory(request)
     events_hub = get_document_changes_hub(request)
 
     async def event_stream():
@@ -533,7 +539,7 @@ async def stream_document_changes(
 )
 def list_document_changes_delta(
     workspace_id: WorkspacePath,
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
     *,
     since: Annotated[str, Query(description="Change cursor.")],
@@ -756,7 +762,7 @@ def patch_document_tags(
 def read_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
@@ -796,7 +802,7 @@ def read_document(
 def read_document_list_row(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
@@ -837,7 +843,7 @@ def list_document_comments(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
 ) -> DocumentCommentPage:
     try:
@@ -926,7 +932,7 @@ def download_document(
     _actor: DocumentReader,
 ) -> StreamingResponse:
     blob_storage = get_storage_adapter(request)
-    session_factory = get_sessionmaker(request)
+    session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
             service = DocumentsService(
@@ -974,7 +980,7 @@ def download_document_version(
     _actor: DocumentReader,
 ) -> StreamingResponse:
     blob_storage = get_storage_adapter(request)
-    session_factory = get_sessionmaker(request)
+    session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
             service = DocumentsService(
@@ -1026,7 +1032,7 @@ def download_document_version(
 def preview_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
     *,
     max_rows: Annotated[
@@ -1128,7 +1134,7 @@ def preview_document(
 def list_document_sheets_endpoint(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
 ) -> list[DocumentSheet]:
     try:
@@ -1233,7 +1239,7 @@ def delete_documents_batch(
 def list_document_tags(
     workspace_id: WorkspacePath,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
-    service: DocumentsServiceDep,
+    service: DocumentsServiceReadDep,
     _actor: DocumentReader,
 ) -> TagCatalogPage:
     try:

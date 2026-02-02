@@ -1,5 +1,5 @@
 import pytest
-from ade_api.db import build_engine
+from ade_db.engine import build_engine
 from ade_api.settings import Settings
 
 

@@ -18,7 +18,8 @@ from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.commands.common import REPO_ROOT, load_dotenv
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
-from ade_api.db import build_engine, get_db, get_sessionmaker
+from ade_db.engine import build_engine
+from ade_api.db import get_db, get_session_factory
 from ade_api.db.migrations import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app

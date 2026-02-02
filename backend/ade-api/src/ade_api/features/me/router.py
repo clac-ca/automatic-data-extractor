@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, Security, status
 
-from ade_api.api.deps import SessionDep, SettingsDep
+from ade_api.api.deps import ReadSessionDep, SettingsDep
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, get_rbac_service, require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
@@ -26,7 +26,7 @@ router = APIRouter(
 
 
 def get_me_service(
-    session: SessionDep,
+    session: ReadSessionDep,
     rbac: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> MeService:
     """Per-request MeService factory."""

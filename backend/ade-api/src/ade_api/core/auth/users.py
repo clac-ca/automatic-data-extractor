@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.responses import Response
 
-from ade_api.db import get_sessionmaker
+from ade_api.db import get_session_factory
 from ade_db.models import AccessToken, OAuthAccount, User
 from ade_api.settings import Settings, get_settings
 
@@ -265,13 +265,13 @@ class SyncAccessTokenDatabase(AccessTokenDatabase[AccessToken]):
 
 
 async def get_user_db(
-    session_factory: Annotated[sessionmaker[Session], Depends(get_sessionmaker)],
+    session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
 ) -> AsyncIterator[SyncUserDatabase]:
     yield SyncUserDatabase(session_factory, User, OAuthAccount)
 
 
 async def get_access_token_db(
-    session_factory: Annotated[sessionmaker[Session], Depends(get_sessionmaker)],
+    session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
 ) -> AsyncIterator[SyncAccessTokenDatabase]:
     yield SyncAccessTokenDatabase(session_factory, AccessToken)
 

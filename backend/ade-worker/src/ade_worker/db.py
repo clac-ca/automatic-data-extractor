@@ -1,16 +1,15 @@
-"""Database helpers + SQL for ade-worker (Postgres only)."""
+"""Database helpers for ADE worker (Postgres only)."""
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, text, update, func
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from ade_db.schema import (
     environments,
@@ -22,7 +21,7 @@ from ade_db.schema import (
     runs,
 )
 
-# --- SQL snippets ---
+# --- SQL snippets -----------------------------------------------------------
 
 POSTGRES_CLAIM_RUN_BATCH = """    WITH next_run AS (
     SELECT id
@@ -119,7 +118,7 @@ WHERE status = 'running'
   AND attempt_count >= max_attempts;
 """
 
-# --- Types ---
+# --- Types ------------------------------------------------------------------
 
 @dataclass(frozen=True, slots=True)
 class RunClaim:
@@ -128,10 +127,10 @@ class RunClaim:
     max_attempts: int
 
 
-# --- Queue / lease helpers ---
+# --- Queue / lease helpers --------------------------------------------------
 
 def claim_runs(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     *,
     worker_id: str,
     now: datetime,
@@ -145,8 +144,7 @@ def claim_runs(
         "lease_expires_at": lease_expires_at,
         "limit": max(1, int(limit)),
     }
-    with SessionLocal.begin() as session:
-        rows = session.execute(text(POSTGRES_CLAIM_RUN_BATCH), params).mappings().all()
+    rows = session.execute(text(POSTGRES_CLAIM_RUN_BATCH), params).mappings().all()
     return [
         RunClaim(
             id=str(row.get("id") or ""),
@@ -158,7 +156,7 @@ def claim_runs(
 
 
 def heartbeat_run(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     *,
     run_id: str,
     worker_id: str,
@@ -171,8 +169,7 @@ def heartbeat_run(
         "worker_id": worker_id,
         "lease_expires_at": lease_expires_at,
     }
-    with SessionLocal.begin() as session:
-        result = session.execute(text(RUN_HEARTBEAT), params)
+    result = session.execute(text(RUN_HEARTBEAT), params)
     return bool(getattr(result, "rowcount", 0) == 1)
 
 
@@ -281,15 +278,6 @@ def mark_environment_building(
     return bool(getattr(result, "rowcount", 0) == 1)
 
 
-@contextmanager
-def advisory_lock(conn, *, key: str):
-    conn.execute(text("SELECT pg_advisory_lock(hashtextextended(:key, 0))"), {"key": key})
-    try:
-        yield
-    finally:
-        conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key})
-
-
 def try_advisory_lock(conn, *, key: str) -> bool:
     result = conn.execute(
         text("SELECT pg_try_advisory_lock(hashtextextended(:key, 0))"),
@@ -303,74 +291,68 @@ def advisory_unlock(conn, *, key: str) -> None:
 
 
 def expire_run_leases(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     *,
     now: datetime,
     backoff_base_seconds: int,
     backoff_max_seconds: int,
 ) -> int:
-    with SessionLocal.begin() as session:
-        terminal_count = session.execute(
-            text(RUN_EXPIRE_TERMINAL_BULK),
-            {"now": now},
-        ).rowcount or 0
-        requeue_count = session.execute(
-            text(RUN_EXPIRE_REQUEUE_BULK),
-            {
-                "now": now,
-                "backoff_base": max(0, int(backoff_base_seconds)),
-                "backoff_max": max(0, int(backoff_max_seconds)),
-            },
-        ).rowcount or 0
+    terminal_count = session.execute(
+        text(RUN_EXPIRE_TERMINAL_BULK),
+        {"now": now},
+    ).rowcount or 0
+    requeue_count = session.execute(
+        text(RUN_EXPIRE_REQUEUE_BULK),
+        {
+            "now": now,
+            "backoff_base": max(0, int(backoff_base_seconds)),
+            "backoff_max": max(0, int(backoff_max_seconds)),
+        },
+    ).rowcount or 0
     return int(terminal_count) + int(requeue_count)
 
 
 def next_run_due_at(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     *,
     now: datetime,
 ) -> datetime | None:
-    with SessionLocal() as session:
-        row = session.execute(
-            select(func.min(runs.c.available_at)).where(
-                runs.c.status == "queued",
-                runs.c.attempt_count < runs.c.max_attempts,
-                runs.c.available_at > now,
-            )
-        ).scalar()
+    row = session.execute(
+        select(func.min(runs.c.available_at)).where(
+            runs.c.status == "queued",
+            runs.c.attempt_count < runs.c.max_attempts,
+            runs.c.available_at > now,
+        )
+    ).scalar()
     return row
 
 
-# --- Repository helpers ---
+# --- Repository helpers -----------------------------------------------------
 
-def load_environment(SessionLocal: sessionmaker[Session], env_id: str) -> dict[str, Any] | None:
-    with SessionLocal() as session:
-        row = session.execute(
-            select(environments).where(environments.c.id == env_id)
-        ).mappings().first()
+def load_environment(session: Session, env_id: str) -> dict[str, Any] | None:
+    row = session.execute(
+        select(environments).where(environments.c.id == env_id)
+    ).mappings().first()
     return dict(row) if row else None
 
 
-def load_run(SessionLocal: sessionmaker[Session], run_id: str) -> dict[str, Any] | None:
-    with SessionLocal() as session:
-        row = session.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
+def load_run(session: Session, run_id: str) -> dict[str, Any] | None:
+    row = session.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
     return dict(row) if row else None
 
 
-def load_file(SessionLocal: sessionmaker[Session], file_id: str) -> dict[str, Any] | None:
-    with SessionLocal() as session:
-        row = session.execute(select(files).where(files.c.id == file_id)).mappings().first()
+def load_file(session: Session, file_id: str) -> dict[str, Any] | None:
+    row = session.execute(select(files).where(files.c.id == file_id)).mappings().first()
     return dict(row) if row else None
 
 
 def load_file_version(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     file_version_id: str,
 ) -> dict[str, Any] | None:
-    with SessionLocal() as session:
-        row = session.execute(
-            select(file_versions).where(file_versions.c.id == file_version_id)
-        ).mappings().first()
+    row = session.execute(
+        select(file_versions).where(file_versions.c.id == file_version_id)
+    ).mappings().first()
     return dict(row) if row else None
 
 
@@ -464,80 +446,78 @@ def create_output_file_version(
 
 
 def ensure_environment(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     *,
     run: dict[str, Any],
     now: datetime,
 ) -> dict[str, Any] | None:
-    with SessionLocal.begin() as session:
-        row = session.execute(
-            select(environments).where(
-                environments.c.workspace_id == run["workspace_id"],
-                environments.c.configuration_id == run["configuration_id"],
-                environments.c.engine_spec == run["engine_spec"],
-                environments.c.deps_digest == run["deps_digest"],
-            )
-        ).mappings().first()
-        if row:
-            return dict(row)
-
-        env_row = {
-            "id": uuid4(),
-            "workspace_id": run["workspace_id"],
-            "configuration_id": run["configuration_id"],
-            "engine_spec": run["engine_spec"],
-            "deps_digest": run["deps_digest"],
-            "status": "queued",
-            "error_message": None,
-            "created_at": now,
-            "updated_at": now,
-            "last_used_at": None,
-            "python_version": None,
-            "python_interpreter": None,
-            "engine_version": None,
-        }
-        stmt = (
-            pg_insert(environments)
-            .values(**env_row)
-            .on_conflict_do_nothing(
-                index_elements=[
-                    "workspace_id",
-                    "configuration_id",
-                    "engine_spec",
-                    "deps_digest",
-                ]
-            )
+    row = session.execute(
+        select(environments).where(
+            environments.c.workspace_id == run["workspace_id"],
+            environments.c.configuration_id == run["configuration_id"],
+            environments.c.engine_spec == run["engine_spec"],
+            environments.c.deps_digest == run["deps_digest"],
         )
-        session.execute(stmt)
+    ).mappings().first()
+    if row:
+        return dict(row)
 
-        row = session.execute(
-            select(environments).where(
-                environments.c.workspace_id == run["workspace_id"],
-                environments.c.configuration_id == run["configuration_id"],
-                environments.c.engine_spec == run["engine_spec"],
-                environments.c.deps_digest == run["deps_digest"],
-            )
-        ).mappings().first()
-        return dict(row) if row else None
+    env_row = {
+        "id": uuid4(),
+        "workspace_id": run["workspace_id"],
+        "configuration_id": run["configuration_id"],
+        "engine_spec": run["engine_spec"],
+        "deps_digest": run["deps_digest"],
+        "status": "queued",
+        "error_message": None,
+        "created_at": now,
+        "updated_at": now,
+        "last_used_at": None,
+        "python_version": None,
+        "python_interpreter": None,
+        "engine_version": None,
+    }
+    stmt = (
+        pg_insert(environments)
+        .values(**env_row)
+        .on_conflict_do_nothing(
+            index_elements=[
+                "workspace_id",
+                "configuration_id",
+                "engine_spec",
+                "deps_digest",
+            ]
+        )
+    )
+    session.execute(stmt)
+
+    row = session.execute(
+        select(environments).where(
+            environments.c.workspace_id == run["workspace_id"],
+            environments.c.configuration_id == run["configuration_id"],
+            environments.c.engine_spec == run["engine_spec"],
+            environments.c.deps_digest == run["deps_digest"],
+        )
+    ).mappings().first()
+    return dict(row) if row else None
 
 
 def mark_environment_queued(
-    SessionLocal: sessionmaker[Session],
+    session: Session,
     *,
     env_id: str,
     now: datetime,
     error_message: str,
 ) -> None:
-    with SessionLocal.begin() as session:
-        session.execute(
-            update(environments)
-            .where(environments.c.id == env_id)
-            .values(
-                status="queued",
-                error_message=error_message,
-                updated_at=now,
-            )
+    session.execute(
+        update(environments)
+        .where(environments.c.id == env_id)
+        .values(
+            status="queued",
+            error_message=error_message,
+            updated_at=now,
         )
+    )
 
 
 def record_environment_metadata(
@@ -635,6 +615,9 @@ def replace_run_table_columns(
     session.execute(insert(run_table_columns), payload)
 
 
+# --- Exports ----------------------------------------------------------------
+
+
 __all__ = [
     "RunClaim",
     "claim_runs",
@@ -644,7 +627,6 @@ __all__ = [
     "ack_environment_success",
     "ack_environment_failure",
     "mark_environment_building",
-    "advisory_lock",
     "try_advisory_lock",
     "advisory_unlock",
     "expire_run_leases",

@@ -7,6 +7,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.orm import sessionmaker
 
 from ade_worker import db
+from ade_db.engine import session_scope
 from ade_db.schema import environments, runs
 from .helpers import seed_file_with_version
 
@@ -96,7 +97,7 @@ def _insert_run(
 
 
 def test_run_claim_does_not_require_ready_environment(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     workspace_id = _uuid()
     configuration_id = _uuid()
@@ -113,13 +114,14 @@ def test_run_claim_does_not_require_ready_environment(engine) -> None:
         now=now,
     )
 
-    claims = db.claim_runs(
-        SessionLocal,
-        worker_id="worker-1",
-        now=now,
-        lease_seconds=60,
-        limit=1,
-    )
+    with session_scope(session_factory) as session:
+        claims = db.claim_runs(
+            session,
+            worker_id="worker-1",
+            now=now,
+            lease_seconds=60,
+            limit=1,
+        )
     claim = claims[0] if claims else None
     assert claim is not None
     assert claim.id.lower() == run_id.lower()
@@ -137,7 +139,7 @@ def test_run_claim_does_not_require_ready_environment(engine) -> None:
 
 
 def test_run_lease_expire_requeues(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     expired_at = now - timedelta(minutes=5)
     run_id = _uuid()
@@ -158,12 +160,13 @@ def test_run_lease_expire_requeues(engine) -> None:
         claim_expires_at=expired_at,
     )
 
-    processed = db.expire_run_leases(
-        SessionLocal,
-        now=now,
-        backoff_base_seconds=5,
-        backoff_max_seconds=5,
-    )
+    with session_scope(session_factory) as session:
+        processed = db.expire_run_leases(
+            session,
+            now=now,
+            backoff_base_seconds=5,
+            backoff_max_seconds=5,
+        )
     assert processed == 1
 
     with engine.begin() as conn:
@@ -187,7 +190,7 @@ def test_run_lease_expire_requeues(engine) -> None:
 
 
 def test_environment_mark_building_sets_status(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     env_id = _uuid()
     workspace_id = _uuid()
@@ -204,7 +207,7 @@ def test_environment_mark_building_sets_status(engine) -> None:
         now=now,
     )
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         ok = db.mark_environment_building(session, env_id=env_id, now=now)
     assert ok is True
 
@@ -218,7 +221,7 @@ def test_environment_mark_building_sets_status(engine) -> None:
 
 
 def test_environment_ack_success_clears_claim(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     env_id = _uuid()
     workspace_id = _uuid()
@@ -235,7 +238,7 @@ def test_environment_ack_success_clears_claim(engine) -> None:
         now=now,
     )
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         ok = db.ack_environment_success(
             session,
             env_id=env_id,
@@ -252,7 +255,7 @@ def test_environment_ack_success_clears_claim(engine) -> None:
 
 
 def test_run_ack_failure_requeues(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     retry_at = now + timedelta(minutes=2)
     run_id = _uuid()
@@ -274,7 +277,7 @@ def test_run_ack_failure_requeues(engine) -> None:
         claimed_by="worker-4",
     )
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         ok = db.ack_run_failure(
             session,
             run_id=run_id,

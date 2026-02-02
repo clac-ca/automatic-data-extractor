@@ -11,11 +11,12 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from ade_api.db import get_db
+from ade_api.db import get_db_read, get_db_write
 from ade_storage import StorageAdapter, get_storage_adapter
 from ade_api.settings import Settings, get_settings
 
-SessionDep = Annotated[Session, Depends(get_db)]
+WriteSessionDep = Annotated[Session, Depends(get_db_write)]
+ReadSessionDep = Annotated[Session, Depends(get_db_read)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
@@ -31,37 +32,69 @@ def _build_config_storage(settings: Settings):
     return ConfigStorage(settings=settings)
 
 
-def get_users_service(session: SessionDep, settings: SettingsDep):
+def get_users_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.users.service import UsersService
 
     return UsersService(session=session, settings=settings)
 
 
-def get_api_keys_service(session: SessionDep, settings: SettingsDep):
+def get_users_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.users.service import UsersService
+
+    return UsersService(session=session, settings=settings)
+
+
+def get_api_keys_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.api_keys.service import ApiKeyService
 
     return ApiKeyService(session=session, settings=settings)
 
 
-def get_auth_service(session: SessionDep, settings: SettingsDep):
+def get_api_keys_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.api_keys.service import ApiKeyService
+
+    return ApiKeyService(session=session, settings=settings)
+
+
+def get_auth_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.auth.service import AuthService
 
     return AuthService(session=session, settings=settings)
 
 
-def get_system_settings_service(session: SessionDep):
+def get_auth_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.auth.service import AuthService
+
+    return AuthService(session=session, settings=settings)
+
+
+def get_system_settings_service(session: WriteSessionDep):
     from ade_api.features.system_settings.service import SystemSettingsService
 
     return SystemSettingsService(session=session)
 
 
-def get_documents_service(session: SessionDep, settings: SettingsDep, storage: StorageDep):
+def get_system_settings_service_read(session: ReadSessionDep):
+    from ade_api.features.system_settings.service import SystemSettingsService
+
+    return SystemSettingsService(session=session)
+
+
+def get_documents_service(session: WriteSessionDep, settings: SettingsDep, storage: StorageDep):
     from ade_api.features.documents.service import DocumentsService
 
     return DocumentsService(session=session, settings=settings, storage=storage)
 
 
-def get_health_service(session: SessionDep, settings: SettingsDep):
+def get_documents_service_read(
+    session: ReadSessionDep, settings: SettingsDep, storage: StorageDep
+):
+    from ade_api.features.documents.service import DocumentsService
+
+    return DocumentsService(session=session, settings=settings, storage=storage)
+
+
+def get_health_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.health.service import HealthService
     from ade_api.features.system_settings.service import SafeModeService
 
@@ -69,20 +102,41 @@ def get_health_service(session: SessionDep, settings: SettingsDep):
     return HealthService(settings=settings, safe_mode_service=safe_mode)
 
 
-def get_safe_mode_service(session: SessionDep, settings: SettingsDep):
+def get_health_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.health.service import HealthService
+    from ade_api.features.system_settings.service import SafeModeService
+
+    safe_mode = SafeModeService(session=session, settings=settings)
+    return HealthService(settings=settings, safe_mode_service=safe_mode)
+
+
+def get_safe_mode_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.system_settings.service import SafeModeService
 
     return SafeModeService(session=session, settings=settings)
 
 
-def get_configurations_service(session: SessionDep, settings: SettingsDep):
+def get_safe_mode_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.system_settings.service import SafeModeService
+
+    return SafeModeService(session=session, settings=settings)
+
+
+def get_configurations_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.configs.service import ConfigurationsService
 
     storage = _build_config_storage(settings)
     return ConfigurationsService(session=session, storage=storage)
 
 
-def get_runs_service(session: SessionDep, settings: SettingsDep, storage: StorageDep):
+def get_configurations_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.configs.service import ConfigurationsService
+
+    storage = _build_config_storage(settings)
+    return ConfigurationsService(session=session, storage=storage)
+
+
+def get_runs_service(session: WriteSessionDep, settings: SettingsDep, storage: StorageDep):
     from ade_api.features.runs.service import RunsService
 
     config_storage = _build_config_storage(settings)
@@ -94,13 +148,37 @@ def get_runs_service(session: SessionDep, settings: SettingsDep, storage: Storag
     )
 
 
-def get_workspaces_service(session: SessionDep, settings: SettingsDep):
+def get_runs_service_read(session: ReadSessionDep, settings: SettingsDep, storage: StorageDep):
+    from ade_api.features.runs.service import RunsService
+
+    config_storage = _build_config_storage(settings)
+    return RunsService(
+        session=session,
+        settings=settings,
+        storage=config_storage,
+        blob_storage=storage,
+    )
+
+
+def get_workspaces_service(session: WriteSessionDep, settings: SettingsDep):
     from ade_api.features.workspaces.service import WorkspacesService
 
     return WorkspacesService(session=session, settings=settings)
 
 
-def get_sso_service(session: SessionDep, settings: SettingsDep):
+def get_workspaces_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.workspaces.service import WorkspacesService
+
+    return WorkspacesService(session=session, settings=settings)
+
+
+def get_sso_service(session: WriteSessionDep, settings: SettingsDep):
+    from ade_api.features.sso.service import SsoService
+
+    return SsoService(session=session, settings=settings)
+
+
+def get_sso_service_read(session: ReadSessionDep, settings: SettingsDep):
     from ade_api.features.sso.service import SsoService
 
     return SsoService(session=session, settings=settings)
@@ -108,14 +186,25 @@ def get_sso_service(session: SessionDep, settings: SettingsDep):
 
 __all__ = [
     "get_users_service",
+    "get_users_service_read",
     "get_api_keys_service",
+    "get_api_keys_service_read",
     "get_auth_service",
+    "get_auth_service_read",
     "get_system_settings_service",
+    "get_system_settings_service_read",
     "get_documents_service",
+    "get_documents_service_read",
     "get_health_service",
+    "get_health_service_read",
     "get_safe_mode_service",
+    "get_safe_mode_service_read",
     "get_configurations_service",
+    "get_configurations_service_read",
     "get_runs_service",
+    "get_runs_service_read",
     "get_workspaces_service",
+    "get_workspaces_service_read",
     "get_sso_service",
+    "get_sso_service_read",
 ]

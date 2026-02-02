@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import delete, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from ade_db.engine import build_engine, build_sessionmaker
+from ade_db.engine import build_engine, session_scope
 from .paths import PathManager
 from ade_db.schema import environments, runs
 from .settings import Settings, get_settings
@@ -29,7 +29,7 @@ class GcResult:
 
 def gc_environments(
     *,
-    SessionLocal: sessionmaker[Session],
+    session_factory: sessionmaker[Session],
     paths: PathManager,
     now: datetime,
     env_ttl_days: int,
@@ -72,7 +72,7 @@ def gc_environments(
         """
     )
 
-    with SessionLocal() as session:
+    with session_factory() as session:
         rows = session.execute(query, {"cutoff": cutoff}).mappings().all()
 
     result.scanned = len(rows)
@@ -93,7 +93,7 @@ def gc_environments(
             result.failed += 1
             continue
 
-        with SessionLocal.begin() as session:
+        with session_scope(session_factory) as session:
             deleted = session.execute(
                 delete(environments).where(environments.c.id == env_id)
             ).rowcount or 0
@@ -117,7 +117,7 @@ def gc_environments(
 
 def gc_run_artifacts(
     *,
-    SessionLocal: sessionmaker[Session],
+    session_factory: sessionmaker[Session],
     paths: PathManager,
     now: datetime,
     run_ttl_days: int,
@@ -138,7 +138,7 @@ def gc_run_artifacts(
         """
     )
 
-    with SessionLocal() as session:
+    with session_factory() as session:
         rows = session.execute(query, {"cutoff": cutoff}).mappings().all()
 
     result.scanned = len(rows)
@@ -175,12 +175,12 @@ def _delete_tree(path: Path) -> bool:
 def run_gc(settings: Settings | None = None) -> tuple[GcResult, GcResult | None]:
     settings = settings or get_settings()
     engine = build_engine(settings)
-    SessionLocal = build_sessionmaker(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     paths = PathManager(settings, settings.pip_cache_dir)
     now = datetime.utcnow().replace(tzinfo=None)
 
     env_result = gc_environments(
-        SessionLocal=SessionLocal,
+        session_factory=session_factory,
         paths=paths,
         now=now,
         env_ttl_days=settings.worker_env_ttl_days,
@@ -189,7 +189,7 @@ def run_gc(settings: Settings | None = None) -> tuple[GcResult, GcResult | None]
     run_result: GcResult | None = None
     if settings.worker_run_artifact_ttl_days is not None:
         run_result = gc_run_artifacts(
-            SessionLocal=SessionLocal,
+            session_factory=session_factory,
             paths=paths,
             now=now,
             run_ttl_days=settings.worker_run_artifact_ttl_days,

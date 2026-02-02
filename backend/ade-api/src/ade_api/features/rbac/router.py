@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, Security, status
-from ade_api.api.deps import SessionDep
+from ade_api.api.deps import ReadSessionDep, WriteSessionDep
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
@@ -187,7 +187,7 @@ def _ensure_workspace_permission(
 )
 def list_permissions(
     principal: PrincipalDep,
-    session: SessionDep,
+    session: ReadSessionDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> PermissionPage:
@@ -243,7 +243,7 @@ def list_permissions(
 )
 def list_roles(
     principal: PrincipalDep,
-    session: SessionDep,
+    session: ReadSessionDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> RolePage:
@@ -286,7 +286,7 @@ def list_roles(
 def create_role(
     payload: RoleCreate,
     principal: PrincipalDep,
-    session: SessionDep,
+    session: WriteSessionDep,
 ) -> RoleOut:
     service = RbacService(session=session)
     _ensure_global_permission(
@@ -314,7 +314,18 @@ def create_role(
 
 def _load_role(
     role_id: RolePath,
-    session: SessionDep,
+    session: WriteSessionDep,
+) -> Role:
+    service = RbacService(session=session)
+    role = service.get_role(role_id)
+    if role is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
+    return role
+
+
+def _load_role_readonly(
+    role_id: RolePath,
+    session: ReadSessionDep,
 ) -> Role:
     service = RbacService(session=session)
     role = service.get_role(role_id)
@@ -330,9 +341,9 @@ def _load_role(
     summary="Retrieve a role definition",
 )
 def read_role(
-    role: Annotated[Role, Depends(_load_role)],
+    role: Annotated[Role, Depends(_load_role_readonly)],
     principal: PrincipalDep,
-    session: SessionDep,
+    session: ReadSessionDep,
     response: Response,
 ) -> RoleOut:
     service = RbacService(session=session)
@@ -359,7 +370,7 @@ def update_role(
     payload: RoleUpdate,
     role: Annotated[Role, Depends(_load_role)],
     principal: PrincipalDep,
-    session: SessionDep,
+    session: WriteSessionDep,
     request: Request,
     response: Response,
 ) -> RoleOut:
@@ -409,7 +420,7 @@ def update_role(
 def delete_role(
     role: Annotated[Role, Depends(_load_role)],
     principal: PrincipalDep,
-    session: SessionDep,
+    session: WriteSessionDep,
     request: Request,
 ) -> Response:
     service = RbacService(session=session)
@@ -446,7 +457,7 @@ def delete_role(
 )
 def list_assignments(
     principal: PrincipalDep,
-    session: SessionDep,
+    session: ReadSessionDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> RoleAssignmentPage:
@@ -489,7 +500,7 @@ def list_assignments(
 def read_assignment(
     assignment_id: AssignmentPath,
     principal: PrincipalDep,
-    session: SessionDep,
+    session: ReadSessionDep,
     response: Response,
 ) -> RoleAssignmentOut:
     service = RbacService(session=session)
@@ -551,7 +562,7 @@ def _load_user_role_assignments(
 def list_user_roles(
     user_id: UserPath,
     principal: PrincipalDep,
-    session: SessionDep,
+    session: ReadSessionDep,
 ) -> UserRolesEnvelope:
     service = RbacService(session=session)
     _ensure_global_permission(
@@ -577,7 +588,7 @@ def assign_user_role(
     user_id: UserPath,
     role_id: RolePath,
     principal: PrincipalDep,
-    session: SessionDep,
+    session: WriteSessionDep,
 ) -> UserRolesEnvelope:
     service = RbacService(session=session)
     _ensure_global_permission(
@@ -614,7 +625,7 @@ def remove_user_role(
     user_id: UserPath,
     role_id: RolePath,
     principal: PrincipalDep,
-    session: SessionDep,
+    session: WriteSessionDep,
     request: Request,
 ) -> Response:
     service = RbacService(session=session)

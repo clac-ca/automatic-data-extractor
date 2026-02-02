@@ -50,6 +50,9 @@ Standardize ade-api and ade-worker around the shared ade-db and ade-storage pack
 8.0 Simplification Sweep
   8.1 Subpackage: simplification-sweep
     - [x] Execute simplification-sweep workpackage
+9.0 DB Module Standardization
+  9.1 Subpackage: db-standardization
+    - [x] Execute db-standardization workpackage
 
 ### Open Questions
 
@@ -66,6 +69,7 @@ Standardize ade-api and ade-worker around the shared ade-db and ade-storage pack
 - API and worker use shared storage-root creation.
 - Docs include storage layout guidance.
 - Remove unused helpers/settings where safe.
+- DB module layout and naming are consistent across API/worker.
 - CLI/env handling is consistent and minimal across services.
 - Redundant modules removed with no loss of functionality; tests pass.
 

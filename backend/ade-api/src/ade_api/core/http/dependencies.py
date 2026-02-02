@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
-from ade_api.db import get_db
+from ade_api.db import get_db_read
 from ade_db.models import AccessToken, User
 from ade_api.settings import Settings, get_settings
 
@@ -27,7 +27,7 @@ from ..auth.principal import AuthVia, PrincipalType
 from ..rbac.service_interface import RbacService as RbacServiceInterface
 from ..security.tokens import decode_token
 
-SessionDep = Annotated[Session, Depends(get_db)]
+ReadSessionDep = Annotated[Session, Depends(get_db_read)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 PermissionDependency = Callable[..., User]
@@ -124,7 +124,7 @@ class _RbacAdapter(RbacServiceInterface):
 
 
 def get_api_key_authenticator(
-    db: SessionDep,
+    db: ReadSessionDep,
     settings: SettingsDep,
 ) -> ApiKeyAuthenticator:
     """Provide the API key authenticator."""
@@ -146,7 +146,7 @@ def get_api_key_authenticator_websocket(
 
 
 def get_cookie_authenticator(
-    db: SessionDep,
+    db: ReadSessionDep,
     settings: SettingsDep,
 ) -> CookieAuthenticator:
     """Authenticate cookie session tokens against the access_tokens table."""
@@ -190,7 +190,7 @@ def get_cookie_authenticator(
 
 
 def get_bearer_authenticator(
-    db: SessionDep,
+    db: ReadSessionDep,
     settings: SettingsDep,
 ) -> BearerAuthenticator:
     """Authenticate JWT bearer tokens for non-browser clients."""
@@ -238,7 +238,7 @@ def get_bearer_authenticator(
 
 
 def get_rbac_service(
-    db: SessionDep,
+    db: ReadSessionDep,
 ) -> RbacServiceInterface:
     """Return the RBAC service implementation."""
 
@@ -247,7 +247,7 @@ def get_rbac_service(
 
 def get_current_principal(
     request: Request,
-    db: SessionDep,
+    db: ReadSessionDep,
     settings: SettingsDep,
     api_key_service: Annotated[
         ApiKeyAuthenticator,
@@ -276,7 +276,7 @@ def get_current_principal(
 
 def require_authenticated(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    db: SessionDep,
+    db: ReadSessionDep,
 ) -> User:
     """Ensure the request is authenticated and return the persisted user."""
 
@@ -298,7 +298,7 @@ def require_permission(
     def dependency(
         request: Request,
         principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-        db: SessionDep,
+        db: ReadSessionDep,
         rbac: Annotated[RbacServiceInterface, Depends(get_rbac_service)],
     ) -> User:
         workspace_id = None

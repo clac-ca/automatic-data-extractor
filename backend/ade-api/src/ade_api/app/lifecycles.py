@@ -16,7 +16,7 @@ from sqlalchemy.engine import make_url
 
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
-from ade_api.db import get_engine, get_sessionmaker_from_app, init_db, shutdown_db
+from ade_api.db import get_engine_from_app, get_session_factory_from_app, init_db, shutdown_db
 from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
@@ -163,8 +163,8 @@ def create_application_lifespan(
         logger.info("db.init.complete", extra={"database_url": safe_url})
         init_storage(app, settings)
 
-        engine = get_engine(app)
-        session_factory = get_sessionmaker_from_app(app)
+        engine = get_engine_from_app(app)
+        session_factory = get_session_factory_from_app(app)
         storage = get_storage_adapter(app)
 
         def _check_db_connection() -> None:

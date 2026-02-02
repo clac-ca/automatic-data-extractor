@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, Security, status
 
-from ade_api.api.deps import get_safe_mode_service
+from ade_api.api.deps import get_safe_mode_service, get_safe_mode_service_read
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 
 from .schemas import SafeModeStatus, SafeModeUpdateRequest
@@ -26,7 +26,7 @@ router = APIRouter(
     summary="Read ADE safe mode status",
 )
 def read_safe_mode(
-    service: Annotated[SafeModeService, Depends(get_safe_mode_service)],
+    service: Annotated[SafeModeService, Depends(get_safe_mode_service_read)],
 ) -> SafeModeStatus:
     """Return the current ADE safe mode status."""
 

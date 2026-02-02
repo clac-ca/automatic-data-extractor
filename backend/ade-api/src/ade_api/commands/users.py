@@ -67,22 +67,16 @@ def _user_context() -> Iterator[UserCommandContext]:
     """Context manager that yields a ``UserCommandContext`` and commits on success."""
     from sqlalchemy.orm import sessionmaker
 
-    from ade_api.db import build_engine
+    from ade_db.engine import build_engine, session_scope
     from ade_api.settings import Settings
 
     settings = Settings()
     engine = build_engine(settings)
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    session = SessionLocal()
-    ctx = UserCommandContext(session=session, settings=settings)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     try:
-        yield ctx
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
+        with session_scope(session_factory) as session:
+            yield UserCommandContext(session=session, settings=settings)
     finally:
-        session.close()
         engine.dispose()
 
 

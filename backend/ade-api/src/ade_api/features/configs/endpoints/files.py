@@ -21,7 +21,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ade_api.api.deps import get_configurations_service
+from ade_api.api.deps import get_configurations_service, get_configurations_service_read
 from ade_api.core.http import require_csrf, require_workspace
 from ade_db.models import User
 
@@ -55,6 +55,13 @@ router = APIRouter()
 
 FilePathParam = Annotated[str, Path(alias="filePath")]
 DirectoryPathParam = Annotated[str, Path(alias="directoryPath")]
+
+ConfigurationsServiceDep = Annotated[
+    ConfigurationsService, Depends(get_configurations_service)
+]
+ConfigurationsServiceReadDep = Annotated[
+    ConfigurationsService, Depends(get_configurations_service_read)
+]
 
 
 def _accepts_json(request: Request, override: str | None) -> bool:
@@ -122,7 +129,7 @@ def list_config_files(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceReadDep,
     _actor: Annotated[
         User,
         Security(
@@ -196,7 +203,7 @@ def read_config_file(
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceReadDep,
     _actor: Annotated[
         User,
         Security(
@@ -295,7 +302,7 @@ def head_config_file(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceReadDep,
     _actor: Annotated[
         User,
         Security(
@@ -347,7 +354,7 @@ def upsert_config_file(
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -423,7 +430,7 @@ def delete_config_file(
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -483,7 +490,7 @@ def create_config_directory(
     configuration_id: ConfigurationIdPath,
     directory_path: DirectoryPathParam,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -521,7 +528,7 @@ def delete_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     directory_path: DirectoryPathParam,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -564,7 +571,7 @@ def rename_config_file(
     configuration_id: ConfigurationIdPath,
     file_path: FilePathParam,
     payload: FileRenameRequest,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(

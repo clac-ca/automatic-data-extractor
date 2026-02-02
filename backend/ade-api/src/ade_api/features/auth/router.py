@@ -9,7 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.routing import APIRoute
 from fastapi_users.authentication.strategy import DatabaseStrategy
 from fastapi_users.password import PasswordHelper
-from ade_api.api.deps import get_auth_service
+from ade_api.api.deps import get_auth_service, get_auth_service_read
 from ade_api.core.auth.users import (
     SyncAccessTokenDatabase,
     UserCreate,
@@ -19,7 +19,7 @@ from ade_api.core.auth.users import (
 )
 from ade_api.core.http import require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db import get_sessionmaker
+from ade_api.db import get_session_factory
 from ade_db.models import AccessToken
 from ade_api.settings import Settings
 
@@ -68,7 +68,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         summary="Return setup status for the first admin user",
     )
     def get_setup_status(
-        service: Annotated[AuthService, Depends(get_auth_service)],
+        service: Annotated[AuthService, Depends(get_auth_service_read)],
     ) -> AuthSetupStatusResponse:
         return service.get_setup_status()
 
@@ -85,7 +85,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         password_hash = password_helper.hash(payload.password.get_secret_value())
 
         try:
-            session_factory = get_sessionmaker(request)
+            session_factory = get_session_factory(request)
 
             def _create_admin():
                 with session_factory() as session:
@@ -100,7 +100,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         except SetupAlreadyCompletedError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-        access_token_db = SyncAccessTokenDatabase(get_sessionmaker(request), AccessToken)
+        access_token_db = SyncAccessTokenDatabase(get_session_factory(request), AccessToken)
         strategy = DatabaseStrategy(
             access_token_db,
             lifetime_seconds=int(settings.session_access_ttl.total_seconds()),
@@ -117,7 +117,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         summary="Return configured authentication providers",
     )
     def list_auth_providers(
-        service: Annotated[AuthService, Depends(get_auth_service)],
+        service: Annotated[AuthService, Depends(get_auth_service_read)],
     ) -> AuthProviderListResponse:
         return service.list_auth_providers()
 

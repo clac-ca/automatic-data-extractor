@@ -16,7 +16,7 @@ from asgi_lifespan import LifespanManager
 from sqlalchemy.orm import Session
 
 from ade_api.core.security.hashing import hash_password
-from ade_api.db import get_sessionmaker_from_app
+from ade_api.db import get_session_factory_from_app
 from ade_api.db.migrations import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
@@ -218,7 +218,7 @@ async def test_document_change_stream_round_trip(
     committed_client: AsyncClient,
     committed_app,
 ) -> None:
-    session_factory = get_sessionmaker_from_app(committed_app)
+    session_factory = get_session_factory_from_app(committed_app)
     with session_factory() as session:
         seed_identity = _seed_identity(session)
 

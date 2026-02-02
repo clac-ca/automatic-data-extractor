@@ -1,28 +1,45 @@
-# ADE API Service
+# ADE API (FastAPI control plane)
 
-This directory contains the FastAPI application that powers ADE. From the repo root, install dev deps with:
+API service for ADE: auth, configuration lifecycle, documents, runs, and
+system status.
+
+## Quickstart (dev from repo root)
 
 ```bash
 cd backend
 uv sync
+ade db migrate
+ade api dev
 ```
 
-Or run `./setup.sh` to install both API + worker dependencies and the web assets.
+Alternative: run `./setup.sh` from the repo root to install backend + frontend
+dependencies.
 
-See the repository root `README.md` for full setup instructions.
+## Key commands
 
-## Config scaffolding
+```bash
+ade api dev
+ade api start
+ade api routes
+ade api types
+ade api test
+ade api lint
+```
 
-The API no longer bundles or syncs template folders. When you create a configuration from the UI/API, it shells out to the ade-engine CLI:
+## Required env vars (minimal)
 
-- `ade-engine config init <workspace>/<config_id>` – lays down the built-in starter template that ships with the engine package.
-- `ade-engine config validate --config-package <path>` – checks that the generated/edited package imports and registers correctly.
+- `ADE_DATABASE_URL`
+- `ADE_SECRET_KEY`
+- `ADE_BLOB_CONNECTION_STRING` or `ADE_BLOB_ACCOUNT_URL`
+- `ADE_BLOB_CONTAINER` (optional but standard)
 
-Configurations are still stored under `./data/workspaces/{workspace_id}/config_packages/{config_id}/` by default, and you can clone/import existing configs as before. The create-configuration API supports `source.type="template"` (engine starter template) and `source.type="clone"` (copy an existing configuration).
+## Notes
 
-## Logging
+- Run migrations before starting: `ade db migrate`.
+- Default API port is `http://localhost:8001` (see CLI reference).
 
-- The API uses a console formatter with correlation IDs: `2025-11-27T03:05:00.302Z INFO  ade_api.features.runs.service [cid=abcd1234] run.create.success workspace_id=... run_id=...`
-- Set `ADE_LOG_LEVEL=DEBUG` to see debug logs; default is `INFO`. Example: `ADE_LOG_LEVEL=DEBUG ade-api dev`.
-- Request logs include the `X-Request-ID` correlation ID and request metadata; global exception handlers log unexpected errors and 5xx `HTTPException`s.
-- Attach domain IDs via `extra=log_context(...)` when logging (workspace/config/environment/run/document/user IDs).
+## Links
+
+- `../../docs/getting-started/first-run.md`
+- `../../docs/reference/cli.md`
+- `../../docs/guides/developer.md`

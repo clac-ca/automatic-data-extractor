@@ -12,62 +12,16 @@ from typing import Any, Callable
 
 import psycopg
 from fastapi import FastAPI, Request
-from sqlalchemy.engine import URL, make_url
 from ade_api.settings import Settings
+from ade_db.engine import build_psycopg_connect_kwargs
 
 from .changes import DOCUMENT_CHANGES_CHANNEL
 
-# Optional dependency (Managed Identity)
-try:  # pragma: no cover - optional dependency
-    from azure.identity import DefaultAzureCredential  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    DefaultAzureCredential = None  # type: ignore[assignment]
-
-DEFAULT_AZURE_PG_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
 DEFAULT_POLL_SECONDS = 1.0
 DEFAULT_QUEUE_SIZE = 200
 MAX_BACKOFF_SECONDS = 30.0
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_psycopg_url(url: URL) -> URL:
-    if url.drivername in {"postgresql", "postgres"}:
-        return url
-    if url.drivername.startswith("postgresql+"):
-        return url.set(drivername="postgresql")
-    return url
-
-
-def _get_azure_postgres_access_token() -> str:
-    if DefaultAzureCredential is None:
-        raise RuntimeError(
-            "Managed Identity requires 'azure-identity'. Install it or set "
-            "ADE_DATABASE_AUTH_MODE=password."
-        )
-    credential = DefaultAzureCredential()
-    return credential.get_token(DEFAULT_AZURE_PG_SCOPE).token
-
-
-def _build_listen_connect_kwargs(settings: Settings) -> dict[str, Any]:
-    url = _normalize_psycopg_url(make_url(str(settings.database_url)))
-    params: dict[str, Any] = {
-        "host": url.host,
-        "port": url.port,
-        "user": url.username,
-        "dbname": url.database,
-    }
-    if url.password:
-        params["password"] = url.password
-    params.update(url.query or {})
-
-    if settings.database_auth_mode == "managed_identity":
-        params["password"] = _get_azure_postgres_access_token()
-        params.setdefault("sslmode", "require")
-    if settings.database_sslrootcert:
-        params["sslrootcert"] = settings.database_sslrootcert
-
-    return params
 
 
 EventPayload = dict[str, Any]
@@ -182,7 +136,7 @@ class DocumentChangesHub:
         while not self._stop_event.is_set():
             connection = None
             try:
-                connect_kwargs = _build_listen_connect_kwargs(self._settings)
+                connect_kwargs = build_psycopg_connect_kwargs(self._settings)
                 connection = psycopg.connect(**connect_kwargs, autocommit=True)
                 with connection.cursor() as cursor:
                     cursor.execute(f"LISTEN {self._channel}")

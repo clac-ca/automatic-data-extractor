@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import MetaData, inspect
 from sqlalchemy.engine import URL, make_url
 
-from ade_api.db import build_engine
+from ade_db.engine import build_engine
 
 from ..settings import Settings
 

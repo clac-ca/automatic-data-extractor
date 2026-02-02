@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
-from ade_api.api.deps import get_workspaces_service
+from ade_api.api.deps import get_workspaces_service, get_workspaces_service_read
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
     cursor_query_params,
@@ -26,7 +26,10 @@ from .service import WorkspacesService
 from .sorting import DEFAULT_SORT, WORKSPACE_CURSOR_FIELDS
 
 router = APIRouter(tags=["workspaces"], dependencies=[Security(require_authenticated)])
-workspaces_service_dependency = Depends(get_workspaces_service)
+WorkspacesServiceDep = Annotated[WorkspacesService, Depends(get_workspaces_service)]
+WorkspacesServiceReadDep = Annotated[
+    WorkspacesService, Depends(get_workspaces_service_read)
+]
 
 WORKSPACE_CREATE_BODY = Body(...)
 WORKSPACE_UPDATE_BODY = Body(...)
@@ -70,7 +73,7 @@ def create_workspace(
         User,
         Security(require_global("workspaces.create")),
     ],
-    service: WorkspacesService = workspaces_service_dependency,
+    service: WorkspacesServiceDep,
     *,
     payload: WorkspaceCreate = WORKSPACE_CREATE_BODY,
 ) -> WorkspaceOut:
@@ -103,7 +106,7 @@ def list_workspaces(
     current_user: Annotated[User, Security(require_authenticated)],
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
-    service: WorkspacesService = workspaces_service_dependency,
+    service: WorkspacesServiceReadDep,
 ) -> WorkspacePage:
     resolved_sort = resolve_cursor_sort_sequence(
         list_query.sort,
@@ -187,7 +190,7 @@ def update_workspace(
             scopes=["{workspaceId}"],
         ),
     ],
-    service: WorkspacesService = workspaces_service_dependency,
+    service: WorkspacesServiceDep,
     *,
     payload: WorkspaceUpdate = WORKSPACE_UPDATE_BODY,
 ) -> WorkspaceOut:
@@ -228,7 +231,7 @@ def delete_workspace(
             scopes=["{workspaceId}"],
         ),
     ],
-    service: WorkspacesService = workspaces_service_dependency,
+    service: WorkspacesServiceDep,
 ) -> Response:
     service.delete_workspace(workspace_id=workspace.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -257,7 +260,7 @@ def set_default_workspace(
             scopes=["{workspaceId}"],
         ),
     ],
-    service: WorkspacesService = workspaces_service_dependency,
+    service: WorkspacesServiceDep,
 ) -> Response:
     service.set_default_workspace(
         workspace_id=workspace.id,

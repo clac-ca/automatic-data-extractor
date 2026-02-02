@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, Security, status
 
-from ade_api.api.deps import get_api_keys_service
+from ade_api.api.deps import get_api_keys_service, get_api_keys_service_read
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.cursor_listing import (
@@ -41,6 +41,8 @@ ApiKeyPath = Annotated[
         alias="apiKeyId",
     ),
 ]
+ApiKeysServiceDep = Annotated[ApiKeyService, Depends(get_api_keys_service)]
+ApiKeysServiceReadDep = Annotated[ApiKeyService, Depends(get_api_keys_service_read)]
 
 
 def _serialize_summary(record: ApiKey) -> ApiKeySummary:
@@ -97,7 +99,7 @@ def _api_key_etag_token(record: ApiKey) -> str:
 )
 def list_my_api_keys(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceReadDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> ApiKeyPage:
@@ -136,7 +138,7 @@ def list_my_api_keys(
 def create_my_api_key(
     payload: ApiKeyCreateRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceDep,
 ) -> ApiKeyCreateResponse:
     try:
         result = service.create_for_user(
@@ -166,7 +168,7 @@ def create_my_api_key(
 def read_my_api_key(
     api_key_id: ApiKeyPath,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceReadDep,
     response: Response,
 ) -> ApiKeySummary:
     try:
@@ -196,7 +198,7 @@ def read_my_api_key(
 def revoke_my_api_key(
     api_key_id: ApiKeyPath,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceDep,
     request: Request,
 ) -> Response:
     try:
@@ -244,7 +246,7 @@ def revoke_my_api_key(
 def list_user_api_keys(
     user_id: UserPath,
     _: Annotated[None, Security(require_global("api_keys.read_all"))],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceReadDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> ApiKeyPage:
@@ -282,7 +284,7 @@ def read_user_api_key(
     user_id: UserPath,
     api_key_id: ApiKeyPath,
     _: Annotated[None, Security(require_global("api_keys.read_all"))],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceReadDep,
     response: Response,
 ) -> ApiKeySummary:
     try:
@@ -316,7 +318,7 @@ def create_user_api_key(
     user_id: UserPath,
     payload: ApiKeyCreateRequest,
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceDep,
 ) -> ApiKeyCreateResponse:
     try:
         result = service.create_for_user(
@@ -350,7 +352,7 @@ def revoke_user_api_key(
     user_id: UserPath,
     api_key_id: ApiKeyPath,
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
-    service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
+    service: ApiKeysServiceDep,
     request: Request,
 ) -> Response:
     try:

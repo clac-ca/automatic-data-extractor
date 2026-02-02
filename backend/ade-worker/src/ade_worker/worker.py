@@ -29,7 +29,7 @@ from ade_db.engine import (
     assert_tables_exist,
     build_engine,
     build_psycopg_connect_kwargs,
-    build_sessionmaker,
+    session_scope,
 )
 from . import db
 from .paths import PathManager
@@ -871,7 +871,7 @@ class EnvBuildResult:
 class Worker:
     settings: Settings
     engine: Engine
-    SessionLocal: sessionmaker[Session]
+    session_factory: sessionmaker[Session]
     worker_id: str
     paths: PathManager
     runner: SubprocessRunner
@@ -903,6 +903,17 @@ class Worker:
             delay = self.settings.backoff_seconds(claim.attempt_count)
             return now + timedelta(seconds=int(delay))
         return None
+
+    def _heartbeat_run(self, *, run_id: str, now: datetime | None = None) -> bool:
+        timestamp = now or utcnow()
+        with session_scope(self.session_factory) as session:
+            return db.heartbeat_run(
+                session,
+                run_id=run_id,
+                worker_id=self.worker_id,
+                now=timestamp,
+                lease_seconds=int(self.settings.worker_lease_seconds),
+            )
 
     def _upload_run_log(self, *, workspace_id: str, run_id: str) -> None:
         log_path = self.paths.run_event_log_path(workspace_id, run_id)
@@ -993,13 +1004,7 @@ class Worker:
         def heartbeat() -> bool:
             nonlocal run_lost
             if run_claim:
-                ok_run = db.heartbeat_run(
-                    self.SessionLocal,
-                    run_id=run_claim.id,
-                    worker_id=self.worker_id,
-                    now=utcnow(),
-                    lease_seconds=int(self.settings.worker_lease_seconds),
-                )
+                ok_run = self._heartbeat_run(run_id=run_claim.id)
                 if not ok_run:
                     run_lost = True
                     return False
@@ -1082,7 +1087,7 @@ class Worker:
             )
 
             finished_at = utcnow()
-            with self.SessionLocal.begin() as session:
+            with session_scope(self.session_factory) as session:
                 ok = db.ack_environment_success(
                     session,
                     env_id=env_id,
@@ -1117,7 +1122,7 @@ class Worker:
                 context=ctx,
             )
             finished_at = utcnow()
-            with self.SessionLocal.begin() as session:
+            with session_scope(self.session_factory) as session:
                 db.ack_environment_failure(
                     session,
                     env_id=env_id,
@@ -1132,7 +1137,7 @@ class Worker:
             finished_at = utcnow()
             exit_code = last_exit_code or 1
 
-            with self.SessionLocal.begin() as session:
+            with session_scope(self.session_factory) as session:
                 ok = db.ack_environment_failure(
                     session,
                     env_id=env_id,
@@ -1172,7 +1177,8 @@ class Worker:
         run_claim: db.RunClaim,
         now: datetime,
     ) -> tuple[dict[str, Any] | None, str | None, bool]:
-        env = db.ensure_environment(self.SessionLocal, run=run, now=now)
+        with session_scope(self.session_factory) as session:
+            env = db.ensure_environment(session, run=run, now=now)
         if not env:
             return None, "Environment missing", False
 
@@ -1193,24 +1199,19 @@ class Worker:
                 if got_lock:
                     break
                 if run_claim:
-                    ok = db.heartbeat_run(
-                        self.SessionLocal,
-                        run_id=run_claim.id,
-                        worker_id=self.worker_id,
-                        now=utcnow(),
-                        lease_seconds=int(self.settings.worker_lease_seconds),
-                    )
+                    ok = self._heartbeat_run(run_id=run_claim.id)
                     if not ok:
                         return None, None, True
                 time.sleep(0.2 + random.random() * 0.8)
 
-            env = db.load_environment(self.SessionLocal, env_id)
+            with self.session_factory() as session:
+                env = db.load_environment(session, env_id)
             if not env:
                 return None, "Environment missing", False
             if str(env.get("status") or "").lower() == "ready":
                 return env, None, False
 
-            with self.SessionLocal.begin() as session:
+            with session_scope(self.session_factory) as session:
                 db.mark_environment_building(session, env_id=env_id, now=now)
 
             build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
@@ -1222,7 +1223,8 @@ class Worker:
         if build.run_lost:
             return None, None, True
 
-        env = db.load_environment(self.SessionLocal, env_id)
+        with self.session_factory() as session:
+            env = db.load_environment(session, env_id)
         if env and str(env.get("status") or "").lower() == "ready":
             return env, None, False
 
@@ -1236,7 +1238,8 @@ class Worker:
         run_dir: Path | None = None
         try:
     
-            run = db.load_run(self.SessionLocal, run_id)
+            with self.session_factory() as session:
+                run = db.load_run(session, run_id)
             if not run:
                 logger.error("run not found: %s", run_id)
                 return
@@ -1299,12 +1302,13 @@ class Worker:
             python_bin = self.paths.python_in_venv(venv_dir)
             if not python_bin.exists():
                 logger.warning("environment python missing: %s", python_bin)
-                db.mark_environment_queued(
-                    self.SessionLocal,
-                    env_id=environment_id,
-                    now=now,
-                    error_message="Missing venv python; requeueing environment",
-                )
+                with session_scope(self.session_factory) as session:
+                    db.mark_environment_queued(
+                        session,
+                        env_id=environment_id,
+                        now=now,
+                        error_message="Missing venv python; requeueing environment",
+                    )
                 self._handle_run_failure(
                     claim,
                     run_id,
@@ -1333,7 +1337,7 @@ class Worker:
                 )
                 return
     
-            with self.SessionLocal.begin() as session:
+            with session_scope(self.session_factory) as session:
                 db.touch_environment_last_used(session, env_id=environment_id, now=now)
     
             options = parse_run_options(
@@ -1346,7 +1350,7 @@ class Worker:
     
             if options.dry_run:
                 finished_at = utcnow()
-                with self.SessionLocal.begin() as session:
+                with session_scope(self.session_factory) as session:
                     ok = db.ack_run_success(
                         session,
                         run_id=run_id,
@@ -1397,13 +1401,7 @@ class Worker:
                         else None,
                         cwd=None,
                         env=self._pip_env(),
-                        heartbeat=lambda: db.heartbeat_run(
-                            self.SessionLocal,
-                            run_id=claim.id,
-                            worker_id=self.worker_id,
-                            now=utcnow(),
-                            lease_seconds=int(self.settings.worker_lease_seconds),
-                        ),
+                        heartbeat=lambda: self._heartbeat_run(run_id=claim.id),
                         heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                         context=ctx,
                     )
@@ -1417,7 +1415,7 @@ class Worker:
                     return
                 finished_at = utcnow()
                 if res.exit_code == 0:
-                    with self.SessionLocal.begin() as session:
+                    with session_scope(self.session_factory) as session:
                         ok = db.ack_run_success(
                             session,
                             run_id=run_id,
@@ -1464,24 +1462,25 @@ class Worker:
                     )
                 return
     
-            file_version = db.load_file_version(self.SessionLocal, input_file_version_id)
-            if not file_version:
-                self._handle_run_failure(
-                    claim,
-                    run_id,
-                    document_id,
-                    event_log,
-                    ctx,
-                    now,
-                    run_started_at,
-                    2,
-                    f"Document version not found: {input_file_version_id}",
-                )
-                return
-    
-            file_id = str(file_version.get("file_id") or "")
-            document_id = file_id or document_id
-            file_row = db.load_file(self.SessionLocal, file_id)
+            with self.session_factory() as session:
+                file_version = db.load_file_version(session, input_file_version_id)
+                if not file_version:
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id,
+                        event_log,
+                        ctx,
+                        now,
+                        run_started_at,
+                        2,
+                        f"Document version not found: {input_file_version_id}",
+                    )
+                    return
+
+                file_id = str(file_version.get("file_id") or "")
+                document_id = file_id or document_id
+                file_row = db.load_file(session, file_id)
             if not file_row or str(file_row.get("kind") or "").lower() != "input":
                 self._handle_run_failure(
                     claim,
@@ -1579,13 +1578,7 @@ class Worker:
                     else None,
                     cwd=None,
                     env=self._pip_env(),
-                    heartbeat=lambda: db.heartbeat_run(
-                        self.SessionLocal,
-                        run_id=claim.id,
-                        worker_id=self.worker_id,
-                        now=utcnow(),
-                        lease_seconds=int(self.settings.worker_lease_seconds),
-                    ),
+                    heartbeat=lambda: self._heartbeat_run(run_id=claim.id),
                     heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                     context=ctx,
                     on_json_event=on_event,
@@ -1636,7 +1629,7 @@ class Worker:
                         output_filename = output_abs.name
                         output_display_name = f"{file_row.get('name') or output_filename} (Output)"
                         output_name_key = f"output:{file_id}"
-                        with self.SessionLocal.begin() as session:
+                        with session_scope(self.session_factory) as session:
                             output_file_row = db.ensure_output_file(
                                 session,
                                 workspace_id=workspace_id,
@@ -1665,7 +1658,7 @@ class Worker:
                             return
                     else:
                         output_path = None
-                with self.SessionLocal.begin() as session:
+                with session_scope(self.session_factory) as session:
                     ok = db.ack_run_success(
                         session,
                         run_id=run_id,
@@ -1769,7 +1762,7 @@ class Worker:
     ) -> None:
         retry_at = self._retry_at(claim, now)
 
-        with self.SessionLocal.begin() as session:
+        with session_scope(self.session_factory) as session:
             ok = db.ack_run_failure(
                 session,
                 run_id=run_id,
@@ -1860,14 +1853,15 @@ class Worker:
 
                     if mono >= next_maintenance:
                         try:
-                            expired_runs = int(
-                                db.expire_run_leases(
-                                    self.SessionLocal,
-                                    now=now,
-                                    backoff_base_seconds=int(self.settings.worker_backoff_base_seconds),
-                                    backoff_max_seconds=int(self.settings.worker_backoff_max_seconds),
+                            with session_scope(self.session_factory) as session:
+                                expired_runs = int(
+                                    db.expire_run_leases(
+                                        session,
+                                        now=now,
+                                        backoff_base_seconds=int(self.settings.worker_backoff_base_seconds),
+                                        backoff_max_seconds=int(self.settings.worker_backoff_max_seconds),
+                                    )
                                 )
-                            )
                             if expired_runs:
                                 logger.info("expired %s stuck run leases", expired_runs)
                         except Exception:
@@ -1883,7 +1877,8 @@ class Worker:
 
                     wait_seconds = max(0.0, min(listen_timeout, next_maintenance - mono))
 
-                    next_due = db.next_run_due_at(self.SessionLocal, now=now)
+                    with self.session_factory() as session:
+                        next_due = db.next_run_due_at(session, now=now)
                     if next_due is not None:
                         if next_due.tzinfo is None:
                             next_due = next_due.replace(tzinfo=timezone.utc)
@@ -1941,13 +1936,14 @@ class Worker:
 
         while capacity > 0:
             batch_size = min(CLAIM_BATCH_SIZE, capacity)
-            run_claims = db.claim_runs(
-                self.SessionLocal,
-                worker_id=self.worker_id,
-                now=now,
-                lease_seconds=int(self.settings.worker_lease_seconds),
-                limit=batch_size,
-            )
+            with session_scope(self.session_factory) as session:
+                run_claims = db.claim_runs(
+                    session,
+                    worker_id=self.worker_id,
+                    now=now,
+                    lease_seconds=int(self.settings.worker_lease_seconds),
+                    limit=batch_size,
+                )
             if not run_claims:
                 break
             for claim in run_claims:
@@ -1977,7 +1973,7 @@ def main() -> int:
     worker_id = settings.worker_id or _default_worker_id()
 
     paths = PathManager(settings, settings.pip_cache_dir)
-    SessionLocal = build_sessionmaker(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     storage = build_storage_adapter(settings)
 
     runner = SubprocessRunner()
@@ -1985,7 +1981,7 @@ def main() -> int:
     Worker(
         settings=settings,
         engine=engine,
-        SessionLocal=SessionLocal,
+        session_factory=session_factory,
         worker_id=worker_id,
         paths=paths,
         runner=runner,

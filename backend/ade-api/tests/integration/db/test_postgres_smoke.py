@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from ade_api.db import build_engine
+from ade_db.engine import build_engine
 
 
 def test_postgres_smoke_select_one(base_settings) -> None:

@@ -7,6 +7,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.orm import sessionmaker
 
 from ade_worker import db
+from ade_db.engine import session_scope
 from ade_db.schema import (
     environments,
     run_fields,
@@ -98,7 +99,7 @@ def _insert_environment(
 
 
 def test_get_or_create_environment_inserts_once(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     workspace_id = _uuid()
@@ -115,11 +116,14 @@ def test_get_or_create_environment_inserts_once(engine) -> None:
         now=now,
     )
 
-    run = db.load_run(SessionLocal, run_id)
+    with session_factory() as session:
+        run = db.load_run(session, run_id)
     assert run is not None
 
-    env_first = db.ensure_environment(SessionLocal, run=run, now=now)
-    env_second = db.ensure_environment(SessionLocal, run=run, now=now)
+    with session_scope(session_factory) as session:
+        env_first = db.ensure_environment(session, run=run, now=now)
+    with session_scope(session_factory) as session:
+        env_second = db.ensure_environment(session, run=run, now=now)
 
     assert env_first is not None
     assert env_second is not None
@@ -131,7 +135,7 @@ def test_get_or_create_environment_inserts_once(engine) -> None:
 
 
 def test_get_or_create_environment_keeps_failed_status(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     workspace_id = _uuid()
@@ -160,17 +164,19 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
         now=now,
     )
 
-    run = db.load_run(SessionLocal, run_id)
+    with session_factory() as session:
+        run = db.load_run(session, run_id)
     assert run is not None
 
-    env = db.ensure_environment(SessionLocal, run=run, now=now)
+    with session_scope(session_factory) as session:
+        env = db.ensure_environment(session, run=run, now=now)
     assert env is not None
     assert str(env["id"]) == env_id
     assert env["status"] == "failed"
 
 
 def test_replace_run_metrics_overwrites(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     run_id = _uuid()
@@ -187,7 +193,7 @@ def test_replace_run_metrics_overwrites(engine) -> None:
         now=now,
     )
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         db.replace_run_metrics(
             session,
             run_id=run_id,
@@ -205,7 +211,7 @@ def test_replace_run_metrics_overwrites(engine) -> None:
     assert row["evaluation_outcome"] == "partial"
     assert row["evaluation_findings_total"] == 2
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         db.replace_run_metrics(
             session,
             run_id=run_id,
@@ -223,7 +229,7 @@ def test_replace_run_metrics_overwrites(engine) -> None:
 
 
 def test_replace_run_fields_is_idempotent(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     run_id = _uuid()
@@ -259,14 +265,14 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
         },
     ]
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         db.replace_run_fields(session, run_id=run_id, rows=rows)
 
     with engine.begin() as conn:
         first = conn.execute(select(run_fields)).mappings().all()
     assert len(first) == 2
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         db.replace_run_fields(
             session,
             run_id=run_id,
@@ -289,7 +295,7 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
 
 
 def test_replace_run_table_columns_is_idempotent(engine) -> None:
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
     run_id = _uuid()
@@ -325,7 +331,7 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
         }
     ]
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         db.replace_run_table_columns(session, run_id=run_id, rows=columns)
 
     with engine.begin() as conn:
@@ -333,7 +339,7 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
     assert len(first) == 1
     assert first[0]["mapped_field"] == "email"
 
-    with SessionLocal.begin() as session:
+    with session_scope(session_factory) as session:
         db.replace_run_table_columns(session, run_id=run_id, rows=[])
 
     with engine.begin() as conn:

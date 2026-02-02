@@ -21,7 +21,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.api.deps import SettingsDep, get_runs_service
+from ade_api.api.deps import SettingsDep, get_runs_service, get_runs_service_read
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
@@ -37,7 +37,7 @@ from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
 )
 from ade_api.core.auth import AuthenticatedPrincipal
-from ade_api.db import get_sessionmaker
+from ade_api.db import get_session_factory
 from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_storage import StorageLimitError, get_storage_adapter
@@ -79,7 +79,8 @@ router = APIRouter(
     tags=["runs"],
     dependencies=[Security(require_authenticated)],
 )
-runs_service_dependency = Depends(get_runs_service)
+RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
+RunsServiceReadDep = Annotated[RunsService, Depends(get_runs_service_read)]
 logger = logging.getLogger(__name__)
 
 WorkspacePath = Annotated[
@@ -143,7 +144,7 @@ def create_run_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunCreateRequest,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceDep,
 ) -> RunResource:
     """Create a run for ``configuration_id`` and enqueue execution."""
 
@@ -173,7 +174,7 @@ def create_runs_batch_endpoint(
     *,
     configuration_id: ConfigurationPath,
     payload: RunBatchCreateRequest,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceDep,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``configuration_id`` and enqueue execution."""
 
@@ -203,7 +204,7 @@ def create_workspace_run_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceCreateRequest,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceDep,
 ) -> RunResource:
     """Create a run for ``workspace_id`` and enqueue execution."""
 
@@ -235,7 +236,7 @@ def create_workspace_runs_batch_endpoint(
     *,
     workspace_id: WorkspacePath,
     payload: RunWorkspaceBatchCreateRequest,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceDep,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``workspace_id`` and enqueue execution."""
 
@@ -265,7 +266,7 @@ def list_configuration_runs_endpoint(
     configuration_id: ConfigurationPath,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> RunPage:
     try:
         resolved_sort = resolve_cursor_sort(
@@ -298,7 +299,7 @@ def list_workspace_runs_endpoint(
     workspace_id: WorkspacePath,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> RunPage:
     resolved_sort = resolve_cursor_sort(
         list_query.sort,
@@ -322,7 +323,7 @@ def list_workspace_runs_endpoint(
 @router.get("/runs/{runId}", response_model=RunResource)
 def get_run_endpoint(
     run_id: RunPath,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> RunResource:
     run = service.get_run(run_id)
     if run is None:
@@ -337,7 +338,7 @@ def get_run_endpoint(
 )
 def get_run_metrics_endpoint(
     run_id: RunPath,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> RunMetricsResource:
     try:
         metrics = service.get_run_metrics(run_id=run_id)
@@ -355,7 +356,7 @@ def get_run_metrics_endpoint(
 )
 def list_run_fields_endpoint(
     run_id: RunPath,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> list[RunFieldResource]:
     try:
         fields = service.list_run_fields(run_id=run_id)
@@ -372,7 +373,7 @@ def list_run_fields_endpoint(
 def list_run_columns_endpoint(
     run_id: RunPath,
     filters: Annotated[RunColumnFilters, Depends(get_run_column_filters)],
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> list[RunColumnResource]:
     try:
         columns = service.list_run_columns(run_id=run_id, filters=filters)
@@ -389,7 +390,7 @@ def list_run_columns_endpoint(
 )
 def get_run_input_endpoint(
     run_id: RunPath,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> RunInput:
     try:
         return service.get_run_input_metadata(run_id=run_id)
@@ -411,7 +412,7 @@ def download_run_input_endpoint(
     settings: SettingsDep,
 ) -> StreamingResponse:
     blob_storage = get_storage_adapter(request)
-    session_factory = get_sessionmaker(request)
+    session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
             service = RunsService(
@@ -443,7 +444,7 @@ def download_run_events_file_endpoint(
     settings: SettingsDep,
 ):
     blob_storage = get_storage_adapter(request)
-    session_factory = get_sessionmaker(request)
+    session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
             service = RunsService(
@@ -471,7 +472,7 @@ def download_run_events_file_endpoint(
 )
 def get_run_output_metadata_endpoint(
     run_id: RunPath,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> RunOutput:
     try:
         return service.get_run_output_metadata(run_id=run_id)
@@ -497,7 +498,7 @@ def get_run_output_metadata_endpoint(
 def upload_run_output_endpoint(
     run_id: RunPath,
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceDep,
     *,
     file: Annotated[UploadFile, File(...)],
 ) -> RunOutput:
@@ -539,7 +540,7 @@ def download_run_output_endpoint(
     settings: SettingsDep,
 ):
     blob_storage = get_storage_adapter(request)
-    session_factory = get_sessionmaker(request)
+    session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
             service = RunsService(
@@ -599,7 +600,7 @@ def download_run_output_endpoint(
 )
 def list_run_output_sheets_endpoint(
     run_id: RunPath,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
 ) -> list[RunOutputSheet]:
     try:
         return service.list_run_output_sheets(run_id=run_id)
@@ -656,7 +657,7 @@ def list_run_output_sheets_endpoint(
 def preview_run_output_endpoint(
     run_id: RunPath,
     response: Response,
-    service: RunsService = runs_service_dependency,
+    service: RunsServiceReadDep,
     *,
     max_rows: Annotated[
         int,

@@ -19,7 +19,7 @@ from ade_api.core.http.dependencies import (
     get_cookie_authenticator,
     get_rbac_service,
 )
-from ade_api.db import get_sessionmaker_from_app
+from ade_api.db import get_session_factory
 from ade_db.models import User
 from ade_api.settings import Settings
 
@@ -131,7 +131,7 @@ async def presence_ws(
     workspace_id: WorkspacePath,
     settings: SettingsDep,
 ) -> None:
-    SessionLocal = get_sessionmaker_from_app(websocket.scope["app"])
+    SessionLocal = get_session_factory(websocket)
 
     def _run_db_work(work: Callable[[Session], Any]) -> Any:
         with SessionLocal() as session:

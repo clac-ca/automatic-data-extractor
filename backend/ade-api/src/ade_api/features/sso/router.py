@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
-from ade_api.api.deps import get_sso_service
+from ade_api.api.deps import get_sso_service, get_sso_service_read
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 from ade_db.models import SsoProvider
 
@@ -56,7 +56,7 @@ def _serialize_provider(provider: SsoProvider) -> SsoProviderAdminOut:
 )
 def list_providers(
     _: Annotated[object, Security(require_global("system.settings.read"))],
-    service: Annotated[SsoService, Depends(get_sso_service)],
+    service: Annotated[SsoService, Depends(get_sso_service_read)],
 ) -> SsoProviderListResponse:
     providers = [_serialize_provider(provider) for provider in service.list_providers()]
     return SsoProviderListResponse(items=providers)
@@ -97,7 +97,7 @@ def create_provider(
 def get_provider(
     _: Annotated[object, Security(require_global("system.settings.read"))],
     provider_id: PROVIDER_ID_PARAM,
-    service: Annotated[SsoService, Depends(get_sso_service)],
+    service: Annotated[SsoService, Depends(get_sso_service_read)],
 ) -> SsoProviderAdminOut:
     provider = service.get_provider(provider_id)
     return _serialize_provider(provider)

@@ -7,8 +7,10 @@ from uuid import uuid4
 from sqlalchemy import insert, select, text
 from sqlalchemy.orm import sessionmaker
 
+from ade_db.schema import environments, runs
 from ade_worker.gc import gc_environments
 from ade_worker.paths import PathManager
+from .helpers import seed_file_with_version
 
 
 class _Layout:
@@ -19,8 +21,6 @@ class _Layout:
         self.runs_dir = runs_root or (root / "runs")
         self.venvs_dir = root / "venvs"
         self.pip_cache_dir = root / "cache" / "pip"
-from ade_db.schema import environments, runs
-from .helpers import seed_file_with_version
 
 
 def _uuid() -> str:
@@ -139,7 +139,7 @@ def _make_env_dir(
 
 def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     data_root = tmp_path / "data"
     layout = _Layout(data_root, tmp_path / "runs")
@@ -180,7 +180,7 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
         env_id=env_id,
     )
 
-    result = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
+    result = gc_environments(session_factory=session_factory, paths=paths, now=now, env_ttl_days=1)
 
     assert result.deleted == 0
     assert env_path.exists()
@@ -191,7 +191,7 @@ def test_gc_env_skips_when_run_active(engine, tmp_path: Path) -> None:
 
 def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     data_root = tmp_path / "data"
     layout = _Layout(data_root, tmp_path / "runs")
@@ -221,7 +221,7 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
         env_id=env_id,
     )
 
-    result = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=30)
+    result = gc_environments(session_factory=session_factory, paths=paths, now=now, env_ttl_days=30)
 
     assert result.deleted == 1
     assert not env_path.exists()
@@ -232,7 +232,7 @@ def test_gc_env_deletes_cold_non_active(engine, tmp_path: Path) -> None:
 
 def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
     _create_config_table(engine)
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     data_root = tmp_path / "data"
     layout = _Layout(data_root, tmp_path / "runs")
@@ -262,8 +262,8 @@ def test_gc_env_idempotent(engine, tmp_path: Path) -> None:
         env_id=env_id,
     )
 
-    first = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
-    second = gc_environments(SessionLocal=SessionLocal, paths=paths, now=now, env_ttl_days=1)
+    first = gc_environments(session_factory=session_factory, paths=paths, now=now, env_ttl_days=1)
+    second = gc_environments(session_factory=session_factory, paths=paths, now=now, env_ttl_days=1)
 
     assert first.deleted == 1
     assert second.deleted == 0

@@ -23,7 +23,7 @@ from ade_api.common.time import utc_now
 from ade_api.common.urls import sanitize_return_to
 from ade_api.core.auth.users import get_cookie_transport, get_password_helper
 from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db import get_db
+from ade_api.db import get_db_write, get_db_read
 from ade_db.models import (
     AccessToken,
     SsoIdentity,
@@ -372,7 +372,7 @@ def _issue_session_token(session: Session, *, user: User) -> str:
 def list_sso_providers(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)] = None,
-    db: Annotated[Session, Depends(get_db)] = None,
+    db: Annotated[Session, Depends(get_db_read)] = None,
 ) -> PublicSsoProviderListResponse:
     settings = settings or get_settings()
     service = SsoService(session=db, settings=settings)
@@ -398,7 +398,7 @@ def authorize_sso(
     request: Request,
     return_to: Annotated[str | None, Query(alias="returnTo")] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,
-    db: Annotated[Session, Depends(get_db)] = None,
+    db: Annotated[Session, Depends(get_db_write)] = None,
 ) -> Response:
     settings = settings or get_settings()
     if not _AUTHORIZE_LIMITER.allow(_rate_limit_key(request, provider_id, "authorize")):
@@ -474,7 +474,7 @@ def callback_sso(
     request: Request,
     password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
     settings: Annotated[Settings, Depends(get_settings)] = None,
-    db: Annotated[Session, Depends(get_db)] = None,
+    db: Annotated[Session, Depends(get_db_write)] = None,
 ) -> Response:
     settings = settings or get_settings()
     try:

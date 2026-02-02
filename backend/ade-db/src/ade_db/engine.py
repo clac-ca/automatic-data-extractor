@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from contextlib import contextmanager
+import re
+from typing import Any, Iterator, Protocol
 
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine, URL, make_url
@@ -26,6 +28,8 @@ class DatabaseSettings(Protocol):
     database_max_overflow: int
     database_pool_timeout: int
     database_pool_recycle: int
+    database_connect_timeout_seconds: int | None
+    database_statement_timeout_ms: int | None
 
 
 def _apply_sslrootcert(url: URL, sslrootcert: str | None) -> URL:
@@ -33,6 +37,27 @@ def _apply_sslrootcert(url: URL, sslrootcert: str | None) -> URL:
         return url
     query = dict(url.query or {})
     query["sslrootcert"] = sslrootcert
+    return url.set(query=query)
+
+
+_STATEMENT_TIMEOUT_RE = re.compile(r"(?:^|\s)-c\s+statement_timeout=\S+")
+
+
+def _append_statement_timeout(options: str, timeout_ms: int) -> str:
+    cleaned = _STATEMENT_TIMEOUT_RE.sub("", options or "").strip()
+    snippet = f"-c statement_timeout={int(timeout_ms)}"
+    if not cleaned:
+        return snippet
+    return f"{cleaned} {snippet}"
+
+
+def _apply_postgres_timeouts(url: URL, settings: DatabaseSettings) -> URL:
+    query = dict(url.query or {})
+    if settings.database_connect_timeout_seconds is not None:
+        query["connect_timeout"] = str(int(settings.database_connect_timeout_seconds))
+    if settings.database_statement_timeout_ms is not None:
+        options = str(query.get("options", "")).strip()
+        query["options"] = _append_statement_timeout(options, settings.database_statement_timeout_ms)
     return url.set(query=query)
 
 
@@ -72,6 +97,7 @@ def _create_postgres_engine(url: URL, settings: DatabaseSettings) -> Engine:
         raise ValueError("For Postgres, use postgresql+psycopg://... (psycopg is required).")
 
     url = _apply_sslrootcert(url, settings.database_sslrootcert)
+    url = _apply_postgres_timeouts(url, settings)
 
     engine = create_engine(
         url,
@@ -109,14 +135,26 @@ def build_engine(settings: DatabaseSettings) -> Engine:
     raise ValueError("Unsupported database backend. Use postgresql+psycopg://.")
 
 
-def build_sessionmaker(engine: Engine) -> sessionmaker[Session]:
-    """Return a standard Session factory for ADE services."""
-    return sessionmaker(bind=engine, expire_on_commit=False)
+@contextmanager
+def session_scope(
+    session_factory: sessionmaker[Session],
+) -> Iterator[Session]:
+    """Standard session scope with commit/rollback."""
+    session = session_factory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def build_psycopg_connect_kwargs(settings: DatabaseSettings) -> dict[str, Any]:
     """Build psycopg connection kwargs from settings."""
     url = _normalize_psycopg_url(make_url(str(settings.database_url)))
+    url = _apply_postgres_timeouts(url, settings)
     params: dict[str, Any] = {
         "host": url.host,
         "port": url.port,
@@ -157,7 +195,7 @@ __all__ = [
     "build_engine",
     "attach_azure_postgres_managed_identity",
     "get_azure_postgres_access_token",
-    "build_sessionmaker",
+    "session_scope",
     "assert_tables_exist",
     "build_psycopg_connect_kwargs",
 ]

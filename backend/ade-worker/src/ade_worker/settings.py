@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
     database_pool_recycle: int = Field(1800, ge=0)
+    database_connect_timeout_seconds: int | None = Field(default=10, ge=0)
+    database_statement_timeout_ms: int | None = Field(default=30_000, ge=0)
 
     # ---- Worker identity & loop -------------------------------------------
     worker_id: str | None = None

@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 
-from ade_api.api.deps import get_users_service
+from ade_api.api.deps import get_users_service, get_users_service_read
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
     cursor_query_params,
@@ -48,7 +48,7 @@ def list_users(
     _: Annotated[User, Security(require_global("users.read_all"))],
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
-    service: Annotated[UsersService, Depends(get_users_service)],
+    service: Annotated[UsersService, Depends(get_users_service_read)],
 ) -> UserPage:
     resolved_sort = resolve_cursor_sort(
         list_query.sort,
@@ -89,7 +89,7 @@ def list_users(
 def get_user(
     _: Annotated[User, Security(require_global("users.read_all"))],
     user_id: USER_ID_PARAM,
-    service: Annotated[UsersService, Depends(get_users_service)],
+    service: Annotated[UsersService, Depends(get_users_service_read)],
 ) -> UserOut:
     return service.get_user(user_id=user_id)
 

@@ -20,7 +20,12 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.api.deps import SettingsDep, get_configurations_service, get_runs_service
+from ade_api.api.deps import (
+    SettingsDep,
+    get_configurations_service,
+    get_configurations_service_read,
+    get_runs_service,
+)
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.cursor_listing import (
@@ -30,7 +35,7 @@ from ade_api.common.cursor_listing import (
     strict_cursor_query_guard,
 )
 from ade_api.core.http import require_csrf, require_workspace
-from ade_api.db import get_sessionmaker
+from ade_api.db import get_session_factory
 from ade_api.features.runs.service import RunsService
 from ade_db.models import User
 
@@ -73,6 +78,12 @@ MAKE_ACTIVE_BODY = Body(
     description="Make the configuration active (archives any existing active configuration).",
 )
 
+ConfigurationsServiceDep = Annotated[ConfigurationsService, Depends(get_configurations_service)]
+ConfigurationsServiceReadDep = Annotated[
+    ConfigurationsService, Depends(get_configurations_service_read)
+]
+RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
+
 
 @router.get(
     "/configurations",
@@ -82,7 +93,7 @@ MAKE_ACTIVE_BODY = Body(
 )
 def list_configurations(
     workspace_id: WorkspaceIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceReadDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     _actor: Annotated[
@@ -122,7 +133,7 @@ def read_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     response: Response,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceReadDep,
     _actor: Annotated[
         User,
         Security(
@@ -155,7 +166,7 @@ def read_configuration(
 )
 def create_configuration(
     workspace_id: WorkspaceIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -202,7 +213,7 @@ def create_configuration(
 )
 def import_configuration(
     workspace_id: WorkspaceIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -253,7 +264,7 @@ def import_configuration(
 def validate_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceReadDep,
     _actor: Annotated[
         User,
         Security(
@@ -294,8 +305,8 @@ def validate_configuration(
 def publish_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
-    runs_service: Annotated[RunsService, Depends(get_runs_service)],
+    service: ConfigurationsServiceDep,
+    runs_service: RunsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -344,7 +355,7 @@ def publish_configuration_endpoint(
 def archive_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(
@@ -388,7 +399,7 @@ def export_config(
     if format != "zip":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="unsupported_format")
     try:
-        session_factory = get_sessionmaker(request)
+        session_factory = get_session_factory(request)
         with session_factory() as session:
             storage = ConfigStorage(settings=settings)
             service = ConfigurationsService(session=session, storage=storage)
@@ -416,7 +427,7 @@ def replace_configuration_from_archive(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     request: Request,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    service: ConfigurationsServiceDep,
     _actor: Annotated[
         User,
         Security(

@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import Depends, Path
 
-from ade_api.api.deps import SessionDep, SettingsDep
+from ade_api.api.deps import ReadSessionDep, SettingsDep
 from ade_api.core.http import require_authenticated
 from ade_db.models import User
 
@@ -16,7 +16,7 @@ from .service import WorkspacesService
 
 def get_workspace_profile(
     user: Annotated[User, Depends(require_authenticated)],
-    session: SessionDep,
+    session: ReadSessionDep,
     settings: SettingsDep,
     workspace_id: Annotated[
         UUID,

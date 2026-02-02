@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 from sqlalchemy import text
 
-from ade_api.api.deps import SessionDep, SettingsDep
+from ade_api.api.deps import ReadSessionDep, SettingsDep
 from ade_api.common.problem_details import ApiError
 from ade_api.common.time import utc_now
 
@@ -36,7 +36,7 @@ def read_liveness(settings: SettingsDep) -> HealthCheckResponse:
     summary="Service readiness probe",
     response_model_exclude_none=True,
 )
-def read_readiness(settings: SettingsDep, db: SessionDep) -> HealthCheckResponse:
+def read_readiness(settings: SettingsDep, db: ReadSessionDep) -> HealthCheckResponse:
     """Return readiness status after checking critical dependencies."""
 
     try:

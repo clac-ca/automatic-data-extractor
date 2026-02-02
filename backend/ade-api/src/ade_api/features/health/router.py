@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from ade_api.api.deps import get_health_service
+from ade_api.api.deps import get_health_service_read
 
 from .schemas import HealthCheckResponse
 from .service import HealthService
@@ -22,7 +22,7 @@ router = APIRouter()
     response_model_exclude_none=True,
 )
 def read_health(
-    service: Annotated[HealthService, Depends(get_health_service)],
+    service: Annotated[HealthService, Depends(get_health_service_read)],
 ) -> HealthCheckResponse:
     """Return the current health information for ADE."""
     return service.status()
