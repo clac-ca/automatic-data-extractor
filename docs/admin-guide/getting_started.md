@@ -12,8 +12,8 @@ the devcontainer starts a Postgres container and ADE uses that by default.
   `apps/ade-api/src/ade_api/main.py` handles requests, while `ade-worker`
   provisions environments and executes runs from the database queue.
 - **Frontend SPA** – the React app in `apps/ade-web` runs on the Vite dev server
-  in development; in production the built SPA is served by nginx via `ade web serve`
-  (or `ade start`), while the API remains API-only.
+  in development; in production the built SPA is served by nginx (see
+  `apps/ade-web/nginx/default.conf.template`), while the API remains API-only.
 
 
 ## 2. Prerequisites
@@ -58,27 +58,27 @@ environment variables in your shell.
    ```
 
    Note: `ade-worker` installs `ade-engine` from the separate engine repo (currently tracking `@main`; tags will follow).
-   `setup.sh` runs `uv sync` (using `uv.lock`) to install `ade-api` and `ade-worker` plus dev extras. The `ade` command comes from `ade-api`; web commands (`ade web ...`) are available when dev deps and Node are installed.
+   `setup.sh` runs `uv --project apps/ade-api sync --dev` and `uv --project apps/ade-worker sync --dev` into a shared `.venv`. Use `ade-api` and `ade-worker` CLIs; the web app uses `npm` scripts in `apps/ade-web`.
 
-2. Start the dev services (this runs migrations first):
+2. Apply migrations, then start the dev services:
 
    ```bash
-   ade dev
+   ade-api migrate
+   ade-api dev
    ```
 
    Ensure Postgres is reachable (local container or external Postgres) and `ADE_DATABASE_URL` is set
    before starting the services.
 
-   If you prefer separate terminals, start the worker and web dev server:
+   In separate terminals, start the worker and web dev server:
 
    ```bash
-   ade worker start
-   ade web dev
+   ade-worker start
+   npm run dev --prefix apps/ade-web
    ```
 
-   - Dev flow: `ade dev` (or `ade api dev` + `ade worker start` + `ade web dev`).
-   - Prod-ish flow: `ade start` (all-in-one) or `ade api start` + `ade worker start` + `ade web serve`.
-   - Use `ade start --services api,web` (or `ADE_START_SERVICES=api,web`) for a single container with a subset of services.
+   - Dev flow: `ade-api dev` + `ade-worker start` + `npm run dev --prefix apps/ade-web`.
+   - Prod-ish flow: `docker compose up -d api worker web`.
 
 3. Confirm the API is healthy:
 
@@ -86,20 +86,21 @@ environment variables in your shell.
    curl http://localhost:8000/api/v1/health
    ```
 
-All runtime state stays under `data/` except the Postgres data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local Postgres dev, remove the Postgres volume after the container stops (for example: `docker volume rm <compose_project>_ade_pg_data`), then `ade dev` or `ade api dev` will re-run migrations on the next launch (or run `ade api migrate` manually if you prefer). Leave `data/workspaces/<workspace_id>/files/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/` except the Postgres data directory, which is stored in a Docker named volume. Stop the API/worker processes before deleting files and remove only the pieces you need to refresh. For local Postgres dev, remove the Postgres volume after the container stops (for example: `docker volume rm <compose_project>_ade_pg_data`), then re-run `ade-api migrate` before restarting services. Leave `data/workspaces/<workspace_id>/files/` intact unless you intend to delete uploaded sources.
 
 ### Run API and web manually (optional)
 If you prefer separate terminals, run the API and web servers independently. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
+If you have not applied migrations yet, run `ade-api migrate` before starting the API.
 
 ```bash
 # Terminal 1
-ade api dev
+ade-api dev
 
 # Terminal 2
-ade web dev
+npm run dev --prefix apps/ade-web
 
 # Terminal 3 (optional)
-ade worker start
+ade-worker start
 ```
 
 Tip: If you frequently switch branches, re-run `./setup.sh` after pulling changes so your environment stays in sync with the code.
@@ -116,43 +117,39 @@ cd automatic-data-extractor
 docker build -t ade-app:local .
 ```
 
-### 5.2 Run the container
-All-in-one:
-
-```bash
-docker run --detach --name ade --env-file .env -p 8000:8000 ade-app:local ade start
-```
-
-Split services:
+### 5.2 Run the containers (split services)
 
 ```bash
 docker network create ade-net
 
+docker run --rm --name ade-migrate --network ade-net --env-file .env \
+  ade-app:local ade-api migrate
+
 docker run --detach --name ade-api --network ade-net --env-file .env \
-  ade-app:local ade api start
+  ade-app:local ade-api start
 
 docker run --detach --name ade-worker --network ade-net --env-file .env \
-  ade-app:local ade worker start
+  ade-app:local ade-worker start
 
-docker run --detach --name ade-web --network ade-net -p 8000:8000 \
+docker run --detach --name ade-web --network ade-net -p 8080:8080 \
   -e ADE_WEB_PROXY_TARGET=http://ade-api:8000 \
-  ade-app:local ade web serve
+  ade-app:local /usr/local/bin/ade-web-entrypoint
 ```
 
 The bind mount keeps documents and runtime artifacts under `./data` so they
 survive container restarts. The database itself lives in your Postgres
 instance (local container or external Postgres), so ensure `ADE_DATABASE_URL` is set
-before startup. The API container runs migrations on startup via `ade start` or `ade api start` (or `ade-api start`).
+before startup. Run `ade-api migrate` before starting the API/worker services.
 Check health the same way:
 
 ```bash
 curl http://localhost:8000/api/v1/health
 ```
 
-To stop and remove the container:
+To stop and remove the containers:
 
 ```bash
-docker rm -f ade
+docker rm -f ade-api ade-worker ade-web
 ```
 
 ## 6. Where ADE Stores Data
@@ -176,6 +173,6 @@ administrators through the API while the frontend experience is completed.
 
 ## 8. Troubleshooting
 - **`uvicorn` exits immediately:** ensure the Python dependencies are installed (run `./setup.sh`) and that the configured port is free. When using `--reload`, verify the file watcher can spawn a subprocess; otherwise fall back to the default single-process mode (`uvicorn ade_api.main:app`).
-- **Port conflicts on 8000:** for `ade start` set `ADE_WEB_PORT` (or `--web-port`); for API-only runs use `ade api start --port 9000` or stop the conflicting process.
-- **Frontend shows a blank page:** rebuild assets with `ade web build` (or `npm run build` in `apps/ade-web/`) and confirm the web server is pointing at the built `dist/` directory and proxying `/api` to the API service.
+- **Port conflicts on 8080:** change the host port mapping in Compose or `docker run -p` for the web container; for API-only runs use `ade-api start --port 9000` or stop the conflicting process.
+- **Frontend shows a blank page:** rebuild assets with `npm run build --prefix apps/ade-web` and confirm nginx is serving `/usr/share/nginx/html` and proxying `/api` to the API service.
 - **Frontend cannot reach the API:** ensure the backend is accessible at the same origin and that requests target the `/api/v1` prefix.

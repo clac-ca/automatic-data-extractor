@@ -13,7 +13,7 @@ State what this guide helps the reader do and any assumptions. Keep it short.
 Prerequisites (optional):
 
 - Dependencies installed (run `./setup.sh`)
-- Access to a local API (`ade api dev`)
+- Access to a local API (`ade-api dev`)
 
 ---
 

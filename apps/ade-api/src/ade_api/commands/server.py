@@ -9,7 +9,6 @@ from pathlib import Path
 import typer
 
 from ade_api.commands import common
-from ade_api.commands.migrate import run_migrate
 from ade_api.settings import Settings
 
 
@@ -38,9 +37,6 @@ def run_dev(
     if workers > 1:
         typer.echo("Note: API workers > 1; disabling reload in dev.")
 
-    typer.echo("🗄️  Running migrations…")
-    run_migrate()
-
     uvicorn_bin = common.uvicorn_path()
     api_cmd = [uvicorn_bin, "ade_api.main:app", "--host", host, "--port", str(port)]
     if workers == 1:
@@ -58,7 +54,7 @@ def run_start(
     port: int | None = None,
     workers: int | None = None,
 ) -> None:
-    """Start the API server (runs migrations)."""
+    """Start the API server (requires migrations to be applied)."""
 
     settings = Settings()
     port = int(port if port is not None else (settings.api_port or 8000))
@@ -66,9 +62,6 @@ def run_start(
     workers = int(workers if workers is not None else (settings.api_workers or 1))
 
     env = _prepare_env()
-
-    typer.echo("🗄️  Running migrations…")
-    run_migrate()
 
     uvicorn_bin = common.uvicorn_path()
     api_cmd = [uvicorn_bin, "ade_api.main:app", "--host", host, "--port", str(port)]
@@ -80,7 +73,10 @@ def run_start(
 
 
 def register(app: typer.Typer) -> None:
-    @app.command(name="dev", help="Run the API dev server only (uvicorn --reload).")
+    @app.command(
+        name="dev",
+        help="Run the API dev server only (apply migrations first).",
+    )
     def dev(
         host: str = typer.Option(
             None,
@@ -106,7 +102,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command(
         name="start",
-        help="Start the API server (runs migrations).",
+        help="Start the API server (requires migrations).",
     )
     def start(
         host: str = typer.Option(

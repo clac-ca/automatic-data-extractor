@@ -39,7 +39,6 @@ dependencies = [
 
 [project.scripts]
 ade-api = "ade_api.cli:app"
-ade = "ade_api.cli_root:app"
 
 [project.optional-dependencies]
 dev = [

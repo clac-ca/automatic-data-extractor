@@ -32,9 +32,9 @@ Open with brief background or the first task. Introduce code with a sentence and
 
 ```bash
 ./setup.sh
-ade api dev
-ade worker start
-ade web dev
+ade-api dev
+ade-worker start
+npm run dev --prefix apps/ade-web
 ```
 
 If steps are required, use a numbered list:
@@ -80,7 +80,7 @@ print(normalized)  # ['A123', 'A124', None, 'A125']
 - Next: <Link to the next logical page>
 - Reference: <Link to a reference page>
 - Troubleshooting: <Link to a related guide>
-- Verify locally: consider `ade api test`, `pytest -q`, or `alembic upgrade head`
+- Verify locally: consider `ade-api test`, `pytest -q`, or `alembic upgrade head`
 
 ---
 

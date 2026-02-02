@@ -20,24 +20,18 @@ set -euo pipefail
 
 # Check for uv, prompt to install if missing.
 if ! command -v uv >/dev/null 2>&1; then
-  read -r -p "uv is required. Install now? [y/N] " install_uv
-  case "$install_uv" in
-    [yY])
-      curl -LsSf https://astral.sh/uv/install.sh | sh
-      export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-      ;;
-    *)
-      echo "Install uv from https://astral.sh/uv and re-run ./setup.sh." >&2
-      exit 1
-      ;;
-  esac
+  echo "Install uv from https://astral.sh/uv and re-run ./setup.sh." >&2
+  exit 1
 fi
 
 # Install web dependencies.
 npm ci --prefix apps/ade-web
 
-# Sync Python dependencies into the project venv (.venv) using the lockfile.
-uv sync --dev
+# Sync Python dependencies into a shared venv (.venv) using per-service lockfiles.
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$PWD/.venv}"
+uv --project apps/ade-api sync --dev
+uv --project apps/ade-worker sync --dev
 
-# Smoke-check the CLI.
-uv run ade --help
+# Smoke-check the CLIs.
+uv --project apps/ade-api run ade-api --help
+uv --project apps/ade-worker run ade-worker --help

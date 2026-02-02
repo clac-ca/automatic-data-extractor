@@ -48,19 +48,19 @@ will always nest `workspace_id` beneath the derived roots.
 ## Local dev quickstart
 
 ```bash
-ade dev
+ade-api dev
 ```
 
 Or run components separately:
 
 ```bash
-ade api dev
-ade worker start
-ade web dev
+ade-api dev
+ade-worker start
+npm run dev --prefix apps/ade-web
 ```
 
-Run each command in its own terminal. Use `ade api dev` alone when you want to
-isolate the API, or skip `ade worker start` if you do not need background jobs.
+Run each command in its own terminal. Use `ade-api dev` alone when you want to
+isolate the API, or skip `ade-worker start` if you do not need background jobs.
 
 ---
 

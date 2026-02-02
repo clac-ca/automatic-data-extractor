@@ -55,9 +55,6 @@ automatic-data-extractor/
 
 ```bash
 # CLI discovery (source of truth)
-ade --help
-ade api --help
-ade worker --help
 ade-api --help
 ade-worker --help
 ade-engine --help
@@ -65,27 +62,25 @@ ade-engine --help
 
 ```bash
 # Common workflows
-ade dev              # api + worker + web (reload)
-ade start            # api + worker + web (nginx)
-ade api dev          # api only (reload)
-ade api start        # api only (prod-style)
-ade worker start
-ade web serve        # nginx (built assets)
-ade web dev          # requires dev deps + node_modules
+ade-api dev          # api only (reload)
+ade-api start        # api only (prod-style)
+ade-worker start
+npm run dev --prefix apps/ade-web
 ```
 
 ```bash
 # Quality checks
-ade api types
-ade api lint
-ade api test
+ade-api types
+ade-api lint
+ade-api test
+ade-worker test
 npm run lint --prefix apps/ade-web
 npm run test --prefix apps/ade-web
 ```
 
 ```bash
 # Build web assets
-ade web build        # or: npm run build --prefix apps/ade-web
+npm run build --prefix apps/ade-web
 ```
 
 ## Engine CLI quick runs (current)
@@ -122,7 +117,7 @@ ade-engine process batch \
 ## Frontend API types
 
 - Generated types: `apps/ade-web/src/types/generated/openapi.d.ts`.
-- If missing/stale, run `ade api types` before touching frontend API code.
+- If missing/stale, run `ade-api types` before touching frontend API code.
 - Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
 ## Agent primer (collaboration norms)
@@ -136,4 +131,4 @@ ade-engine process batch \
 
 ## 🤖 Agent rules
 
-1. Always run `ade api test` before committing and run the relevant frontend/backend checks for touched areas.
+1. Always run `ade-api test` (and `ade-worker test` if applicable) before committing and run the relevant frontend/backend checks for touched areas.

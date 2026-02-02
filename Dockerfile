@@ -29,10 +29,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.28 /uv /uvx /bin/
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
-COPY pyproject.toml uv.lock /src/
 COPY apps/ade-api/ /src/apps/ade-api/
 COPY apps/ade-worker/ /src/apps/ade-worker/
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv --project /src/apps/ade-api sync --frozen --no-dev --no-editable
+# Preserve ade-api install while adding ade-worker dependencies.
+RUN uv --project /src/apps/ade-worker sync --frozen --no-dev --no-editable --inexact
 
 # ============================================================
 # WEB BUILD STAGE (build frontend assets)
@@ -54,21 +55,26 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libpq5 \
+    gettext-base \
     nginx \
   && rm -rf /var/lib/apt/lists/*
+RUN sed -i 's|pid /run/nginx.pid;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf
 
 # Create non-root runtime user.
 RUN useradd -m -u 10001 appuser
 
 # Copy Python deps and set PATH.
 COPY --from=build /opt/venv /opt/venv
-COPY --from=web-build /web/dist /app/web/dist
+COPY --from=web-build /web/dist /usr/share/nginx/html
+COPY apps/ade-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY apps/ade-web/nginx/entrypoint.sh /usr/local/bin/ade-web-entrypoint
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Ensure runtime data dir exists and is owned by appuser.
-RUN mkdir -p /app/data /app/web && chown -R appuser:appuser /app
+# Ensure runtime dirs are owned by appuser.
+RUN mkdir -p /app/data /var/cache/nginx /var/run/nginx /var/lib/nginx /var/log/nginx \
+  && chown -R appuser:appuser /app /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/templates /var/cache/nginx /var/run/nginx /var/lib/nginx /var/log/nginx
 USER appuser
 
-EXPOSE 8000
-# Run API + worker + web (nginx) in a single container by default.
-CMD ["ade", "start"]
+EXPOSE 8080 8000
+# Default to the API service; override per container/compose role.
+CMD ["ade-api", "start"]

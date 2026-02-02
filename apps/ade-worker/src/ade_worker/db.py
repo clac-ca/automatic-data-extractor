@@ -200,7 +200,7 @@ def assert_tables_exist(
     if missing:
         raise RuntimeError(
             f"Missing required tables: {', '.join(missing)}. "
-            "Run migrations via ade-api before starting ade-worker."
+            "Run `ade-api migrate` before starting ade-worker."
         )
 
 

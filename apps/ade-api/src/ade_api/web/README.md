@@ -1,12 +1,18 @@
 # ADE Web Assets
 
-The API no longer serves the SPA bundle. Use `ade web serve` (nginx) or another
-static web server (CDN, object storage, etc.) to host `apps/ade-web/dist`.
-The ADE image includes the built assets under `/app/web/dist`.
+The API no longer serves the SPA bundle. Host the built web assets via nginx
+(or a CDN/object storage). The ADE image includes the built assets under
+`/usr/share/nginx/html` and ships an nginx template at
+`/etc/nginx/templates/default.conf.template`.
 
-Example (repo root):
+Local development:
 
 ```bash
-ade web build
-ade web serve --dist-dir apps/ade-web/dist --proxy-target http://localhost:8000
+cd apps/ade-web
+npm run dev
 ```
+
+Container runtime (image):
+
+- Use `/usr/local/bin/ade-web-entrypoint`, which renders the nginx template with
+  `ADE_WEB_PROXY_TARGET` and starts nginx.

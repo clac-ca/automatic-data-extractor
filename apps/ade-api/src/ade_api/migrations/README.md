@@ -14,7 +14,7 @@ Postgres:
 ```bash
 ADE_DATABASE_URL="postgresql+psycopg://user:password@pg.example.com:5432/dbname?sslmode=verify-full" \
 ADE_DATABASE_SSLROOTCERT="/path/to/ca.crt" \
-  ade api migrate
+  ade-api migrate
 ```
 
 Managed Identity (Azure Database for PostgreSQL):
@@ -23,5 +23,5 @@ Managed Identity (Azure Database for PostgreSQL):
 ADE_DATABASE_URL="postgresql+psycopg://<identity-name>@pg.example.com:5432/dbname?sslmode=verify-full" \
 ADE_DATABASE_SSLROOTCERT="/path/to/ca.crt" \
 ADE_DATABASE_AUTH_MODE=managed_identity \
-  ade api migrate
+  ade-api migrate
 ```

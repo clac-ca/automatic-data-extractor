@@ -1,7 +1,7 @@
 # docker-compose.prod.yaml
 #
-# Production: runs ADE API + worker + web (nginx) in a single container.
-# The web server listens on :8000 and proxies /api to the API running on :8001.
+# Production: run API, worker, and web in separate containers using the same image.
+# The web server listens on :8080 and proxies /api to the API running on :8000.
 #
 # Requirements:
 # - Docker and Docker Compose
@@ -14,19 +14,19 @@
 # Diagram of services:
 #
 #   Host
-#    │  http://localhost:8000
+#    │  http://localhost:8080
 #    ▼
-# [8000]  ┌──────────────┐
-#         │ ade          │  api + worker + nginx
+# [8080]  ┌──────────────┐
+#         │ web          │  nginx + SPA
 #         └──────┬───────┘
+#                ├───────────────> api:8000
+#                └───────────────> worker
 #                ├───────────────> external Postgres
 #                └───────────────> external Azure Storage
 services:
-  ade:
+  api:
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["ade", "start"]
-    ports:
-      - 8000:8000
+    command: ["ade-api", "start"]
     volumes:
       - ade_data:/app/data
       # - ./data:/app/data
@@ -43,6 +43,36 @@ services:
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
 
       ADE_SECRET_KEY: ${ADE_SECRET_KEY}
+
+  worker:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    command: ["ade-worker", "start"]
+    volumes:
+      - ade_data:/app/data
+    environment:
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
+
+      ADE_DATA_DIR: /app/data
+
+      ADE_BLOB_ACCOUNT_URL: ${ADE_BLOB_ACCOUNT_URL} # https://<account>.blob.core.windows.net
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
+
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
+
+  web:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    command: ["/usr/local/bin/ade-web-entrypoint"]
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - 8080:8080
+    environment:
+      ADE_WEB_PROXY_TARGET: http://api:8000
 
 volumes:
   ade_data:

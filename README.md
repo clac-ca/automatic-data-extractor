@@ -29,12 +29,14 @@ Self-hostable document extraction service with an **API**, **Web UI**, and backg
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor
 cd automatic-data-extractor
-docker compose up --build
+docker compose up --build -d postgres azurite azurite-init
+docker compose run --rm api ade-api migrate
+docker compose up -d api worker web
 ````
 
 Open:
 
-* [http://localhost:8000](http://localhost:8000)
+* [http://localhost:8080](http://localhost:8080)
 
 Stop:
 
@@ -57,23 +59,11 @@ Production uses:
 * **External Postgres**
 * **External Azure Blob Storage**
 
-ADE can run as:
-
-* **Single container** (API + worker + web/nginx) — default
-* **Split services** (separate containers)
-
-### Option A: single container (recommended default)
+ADE runs as **split services** (separate containers) using the same image:
 
 ```bash
 docker compose -f docker-compose.prod.yaml pull
 docker compose -f docker-compose.prod.yaml up -d
-```
-
-### Option B: split services
-
-```bash
-docker compose -f docker-compose.prod.split.yaml pull
-docker compose -f docker-compose.prod.split.yaml up -d
 ```
 
 ---
@@ -104,12 +94,9 @@ See `.env.example` for the full set of supported environment variables.
 
 To start only a subset of services:
 
-* CLI:
-
-  * `ade start --services api,web`
-* Or via env:
-
-  * `ADE_START_SERVICES=api,web`
+```bash
+docker compose up -d api web
+```
 
 ---
 

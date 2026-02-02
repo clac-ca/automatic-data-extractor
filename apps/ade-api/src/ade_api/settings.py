@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=Path("data"))
     blob_account_url: str | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
-    blob_container: str | None = Field(default=None)
+    blob_container: str = Field(default="ade")
     blob_prefix: str = Field(default="workspaces")
     blob_require_versioning: bool = Field(default=True)
     blob_request_timeout_seconds: float = Field(default=30.0, gt=0)
@@ -153,8 +153,6 @@ class Settings(BaseSettings):
             raise ValueError("ADE_ALGORITHM must be HS256.")
         if len(self.secret_key.get_secret_value().encode("utf-8")) < 32:
             raise ValueError("ADE_SECRET_KEY must be at least 32 bytes (recommend 64+).")
-        if not self.blob_container:
-            raise ValueError("ADE_BLOB_CONTAINER is required.")
         if self.blob_connection_string and self.blob_account_url:
             raise ValueError(
                 "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."

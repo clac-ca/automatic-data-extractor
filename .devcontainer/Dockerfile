@@ -17,8 +17,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     build-essential \
     ca-certificates \
+    curl \
+    git \
     libpq-dev \
     sudo \
+  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && curl -LsSf https://astral.sh/uv/install.sh | sh \
+  && mv /root/.local/bin/uv /usr/local/bin/uv \
+  && mv /root/.local/bin/uvx /usr/local/bin/uvx \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid "${USER_GID}" "${USERNAME}" \
   && useradd  --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" \

@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Storage (Azure Blob only)
     blob_account_url: AnyHttpUrl | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
-    blob_container: str | None = Field(default=None)
+    blob_container: str = Field(default="ade")
     blob_prefix: str = Field(default="workspaces")
     blob_require_versioning: bool = Field(default=True)
     blob_request_timeout_seconds: float = Field(
@@ -86,8 +86,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
-        if not self.blob_container:
-            raise ValueError("ADE_BLOB_CONTAINER is required.")
         if self.blob_connection_string and self.blob_account_url:
             raise ValueError(
                 "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."

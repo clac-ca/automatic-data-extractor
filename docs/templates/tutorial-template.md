@@ -27,9 +27,9 @@ Explain the step’s purpose and provide clear, numbered sub‑steps:
 
    ```bash
    ./setup.sh
-   ade api dev       # terminal 1
-   ade worker start  # terminal 2
-   ade web dev       # terminal 3
+   ade-api dev       # terminal 1
+   ade-worker start  # terminal 2
+   npm run dev --prefix apps/ade-web  # terminal 3
    ```
 
 2. Next action — For example, run backend migrations and tests:

@@ -239,7 +239,7 @@ def create_application_lifespan(
                     exc_info=True,
                 )
                 raise RuntimeError(
-                    "Database schema is not initialized. Run `ade migrate` before starting the API."
+                    "Database schema is not initialized. Run `ade-api migrate` before starting the API."
                 ) from exc
 
             await asyncio.to_thread(_sync_rbac_registry)

@@ -38,8 +38,7 @@ ADE reads database settings from environment variables (prefix `ADE_`):
 
 ADE expects:
 
-* Migrations to be applied before starting the API/worker (`ade dev`, `ade api dev`, and
-  `ade-api start` run them automatically; otherwise use `ade api migrate`).
+* Migrations to be applied before starting the API/worker (run `ade-api migrate`).
 * The same configuration (DSN + auth mode) for both runtime and migrations.
 
 ## 2. Using Azure Database for PostgreSQL with password auth
@@ -74,7 +73,7 @@ ADE_DATABASE_AUTH_MODE=password
 On startup, ADE will:
 
 1. Connect to Postgres with the supplied credentials.
-2. Expect the schema to be migrated already (`ade api migrate`).
+2. Expect the schema to be migrated already (`ade-api migrate`).
 3. Serve traffic using Postgres as the backing store.
 
 ---
@@ -118,7 +117,7 @@ On startup, ADE will:
 * Use `DefaultAzureCredential` inside the container to obtain an access token for
   `https://ossrdbms-aad.database.windows.net/.default`.
 * Pass that token to psycopg as the password.
-* Serve traffic with **no credentials in the DSN** after migrations are applied (`ade api migrate`).
+* Serve traffic with **no credentials in the DSN** after migrations are applied (`ade-api migrate`).
 
 ---
 
@@ -129,6 +128,5 @@ On startup, ADE will:
 * Start with **`password`** if you need a simple bring‑up.
 * Move to **`managed_identity`** as your long‑term, secure, secretless configuration.
 
-Once the environment variables are set, `ade api start` (or `ade-api start`) will run migrations
-automatically. If you are launching the API/worker manually, run `ade api migrate` to bootstrap
- the schema first.
+Once the environment variables are set, run `ade-api migrate` to bootstrap the schema before
+starting the API/worker services.

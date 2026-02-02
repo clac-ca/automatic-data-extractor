@@ -58,7 +58,7 @@ def _find_repo_root() -> Path:
 def _worker_root() -> Path:
     root = _find_repo_root()
     candidate = root / "apps" / "ade-worker"
-    if (candidate / "pyproject.toml").is_file():
+    if candidate.is_dir():
         return candidate
     return root
 
@@ -72,7 +72,7 @@ def _run(command: list[str], *, cwd: Path) -> None:
 
 def run_tests(suite: TestSuite) -> None:
     worker_root = _worker_root()
-    if not (worker_root / "pyproject.toml").is_file():
+    if not (worker_root / "tests").is_dir():
         typer.echo("❌ Worker tests require the repo checkout (apps/ade-worker).", err=True)
         raise typer.Exit(code=1)
 

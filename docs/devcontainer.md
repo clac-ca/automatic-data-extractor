@@ -32,22 +32,23 @@ cp .env.example .env
 ./setup.sh
 ```
 
-`setup.sh` uses `uv sync` to create/update the `.venv` in the repo root and installs web deps with `npm ci`.
+`setup.sh` uses `uv --project apps/ade-api sync --dev` and `uv --project apps/ade-worker sync --dev` to create/update the shared `.venv` in the repo root, and installs web deps with `npm ci`.
 
 ## Run the stack (dev)
 
 Start everything (API + worker + web dev server):
 
 ```bash
-ade dev
+ade-api migrate
+ade-api dev
 ```
 
 Or run components separately:
 
 ```bash
-ade api dev
-ade worker start
-ade web dev
+ade-api dev
+ade-worker start
+npm run dev --prefix apps/ade-web
 ```
 
 ## Ports

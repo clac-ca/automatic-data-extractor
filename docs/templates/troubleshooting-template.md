@@ -37,9 +37,9 @@ Fix:
 - Start services:
 
 ```bash
-ade api dev
-ade worker start
-ade web dev
+ade-api dev
+ade-worker start
+npm run dev --prefix apps/ade-web
 ```
 
 - Apply migrations:

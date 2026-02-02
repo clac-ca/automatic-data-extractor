@@ -45,7 +45,7 @@ python -m ade_worker
 ## Schema
 
 See `ade_worker/schema.py` for table definitions.
-The worker never creates tables; run migrations via ade-api before starting ade-worker.
+The worker never creates tables; run `ade-api migrate` before starting ade-worker.
 
 ## Garbage collection
 
