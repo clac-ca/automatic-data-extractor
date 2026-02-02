@@ -13,7 +13,9 @@ const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url)
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
 const appVersion = packageJson.version ?? "unknown";
 
-const proxyTarget = (process.env.ADE_API_PROXY_TARGET ?? "http://localhost:8000").replace(/\/+$/, "");
+const proxyTarget = (process.env.ADE_API_PROXY_TARGET ?? "http://localhost:8001").replace(/\/+$/, "");
+const devPortRaw = Number.parseInt(process.env.ADE_WEB_DEV_PORT ?? "8000", 10);
+const devPort = Number.isNaN(devPortRaw) ? 8000 : devPortRaw;
 const apiTarget = proxyTarget.replace(/\/api\/v1\/?$/, "").replace(/\/api\/?$/, "");
 
 export default defineConfig({
@@ -28,7 +30,7 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5173,
+    port: devPort,
     strictPort: true,
     proxy: {
       "/api": {

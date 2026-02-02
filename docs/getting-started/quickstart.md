@@ -27,7 +27,7 @@ docker compose run --rm api ade db migrate
 docker compose up -d api worker web
 ```
 
-Open the web UI at `http://localhost:8080`.
+Open the web UI at `http://localhost:8000`.
 
 ## Stop and reset
 

@@ -8,6 +8,10 @@ ade dev              # start api dev + worker + web dev
 ade test             # run api + worker + web tests
 ```
 
+Ports (default):
+- `ade dev`: web on `http://localhost:8000`, API on `http://localhost:8001`
+- `ade start`: web on `http://localhost:8000`, API on `http://localhost:8001`
+
 Service selection:
 
 - `ADE_SERVICES=api,worker,web` (default)

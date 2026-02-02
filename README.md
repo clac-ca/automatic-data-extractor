@@ -37,7 +37,7 @@ docker compose up -d api worker web
 
 Open:
 
-* [http://localhost:8080](http://localhost:8080)
+* [http://localhost:8000](http://localhost:8000)
 
 Stop:
 

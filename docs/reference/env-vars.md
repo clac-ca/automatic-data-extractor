@@ -10,6 +10,8 @@ This list focuses on the most common settings for local and production use.
   - 32+ bytes recommended.
 - `ADE_DATA_DIR` (optional)
   - Default: `data`
+- `ADE_API_PORT` (optional)
+  - Default: `8000` (API-only). When running with the web entrypoint on `8000`, set to `8001`.
 
 ## Database
 
@@ -40,5 +42,9 @@ Additional settings:
 
 - `ADE_WEB_PROXY_TARGET`
   - The API URL that nginx proxies to (web container).
+- `ADE_WEB_DEV_PORT`
+  - Port for the Vite dev server (default: `8000`).
+- `ADE_API_PROXY_TARGET`
+  - API base URL used by the Vite dev server proxy (default: `http://localhost:8001`).
 - `ADE_WEB_VERSION_FILE`
   - Path to `version.json` for the web UI (default: `/usr/share/nginx/html/version.json`).

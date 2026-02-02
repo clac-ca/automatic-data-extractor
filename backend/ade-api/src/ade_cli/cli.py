@@ -50,12 +50,16 @@ def _run(command: Iterable[str], *, cwd: Path | None = None) -> None:
         raise typer.Exit(code=completed.returncode)
 
 
-def _spawn_processes(commands: dict[str, list[str]], *, cwd: Path) -> None:
+def _spawn_processes(
+    commands: dict[str, tuple[list[str], dict[str, str] | None]],
+    *,
+    cwd: Path,
+) -> None:
     processes: dict[str, subprocess.Popen[str]] = {}
     try:
-        for name, cmd in commands.items():
+        for name, (cmd, env) in commands.items():
             typer.echo(f"-> {' '.join(cmd)}", err=True)
-            processes[name] = subprocess.Popen(cmd, cwd=cwd)
+            processes[name] = subprocess.Popen(cmd, cwd=cwd, env=env)
 
         while True:
             for name, proc in processes.items():
@@ -125,13 +129,21 @@ def start(
     ),
 ) -> None:
     selected = _parse_services(services)
-    commands: dict[str, list[str]] = {}
+    base_env = os.environ.copy()
+    commands: dict[str, tuple[list[str], dict[str, str] | None]] = {}
+    api_needs_alt_port = "api" in selected and "web" in selected
     if "api" in selected:
-        commands["api"] = ["ade-api", "start"]
+        api_env = base_env.copy()
+        if api_needs_alt_port:
+            api_env.setdefault("ADE_API_PORT", "8001")
+        commands["api"] = (["ade-api", "start"], api_env)
     if "worker" in selected:
-        commands["worker"] = ["ade-worker", "start"]
+        commands["worker"] = (["ade-worker", "start"], base_env)
     if "web" in selected:
-        commands["web"] = _web_entrypoint_cmd()
+        web_env = base_env.copy()
+        if api_needs_alt_port:
+            web_env.setdefault("ADE_WEB_PROXY_TARGET", "http://127.0.0.1:8001")
+        commands["web"] = (_web_entrypoint_cmd(), web_env)
     _spawn_processes(commands, cwd=REPO_ROOT)
 
 
@@ -145,13 +157,22 @@ def dev(
     ),
 ) -> None:
     selected = _parse_services(services)
-    commands: dict[str, list[str]] = {}
+    base_env = os.environ.copy()
+    commands: dict[str, tuple[list[str], dict[str, str] | None]] = {}
+    api_needs_alt_port = "api" in selected and "web" in selected
     if "api" in selected:
-        commands["api"] = ["ade-api", "dev"]
+        api_env = base_env.copy()
+        if api_needs_alt_port:
+            api_env.setdefault("ADE_API_PORT", "8001")
+        commands["api"] = (["ade-api", "dev"], api_env)
     if "worker" in selected:
-        commands["worker"] = ["ade-worker", "start"]
+        commands["worker"] = (["ade-worker", "start"], base_env)
     if "web" in selected:
-        commands["web"] = _npm_cmd("run", "dev")
+        web_env = base_env.copy()
+        web_env.setdefault("ADE_WEB_DEV_PORT", "8000")
+        if api_needs_alt_port:
+            web_env.setdefault("ADE_API_PROXY_TARGET", "http://localhost:8001")
+        commands["web"] = (_npm_cmd("run", "dev"), web_env)
     _spawn_processes(commands, cwd=REPO_ROOT)
 
 

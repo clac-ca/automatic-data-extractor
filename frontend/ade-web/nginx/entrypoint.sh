@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -e
 
-: "${ADE_WEB_PROXY_TARGET:=http://api:8000}"
+: "${ADE_WEB_PROXY_TARGET:=http://127.0.0.1:8001}"
 export ADE_WEB_PROXY_TARGET
 
 envsubst '${ADE_WEB_PROXY_TARGET}' \

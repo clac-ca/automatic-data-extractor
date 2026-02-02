@@ -1,7 +1,7 @@
 # docker-compose.prod.yaml
 #
 # Production: run API, worker, and web in separate containers using the same image.
-# The web server listens on :8080 and proxies /api to the API running on :8000.
+# The web server listens on :8000 and proxies /api to the API running on :8001.
 #
 # Requirements:
 # - Docker and Docker Compose
@@ -14,12 +14,12 @@
 # Diagram of services:
 #
 #   Host
-#    │  http://localhost:8080
+#    │  http://localhost:8000
 #    ▼
-# [8080]  ┌──────────────┐
+# [8000]  ┌──────────────┐
 #         │ web          │  nginx + SPA
 #         └──────┬───────┘
-#                ├───────────────> api:8000
+#                ├───────────────> api:8001
 #                └───────────────> worker
 #                ├───────────────> external Postgres
 #                └───────────────> external Azure Storage
@@ -32,6 +32,7 @@ services:
       # - ./data:/app/data
     environment:
       ADE_SERVICES: api
+      ADE_API_PORT: 8001
       ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
       ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
@@ -72,10 +73,10 @@ services:
       api:
         condition: service_started
     ports:
-      - 8080:8080
+      - 8000:8000
     environment:
       ADE_SERVICES: web
-      ADE_WEB_PROXY_TARGET: http://api:8000
+      ADE_WEB_PROXY_TARGET: http://api:8001
 
 volumes:
   ade_data:

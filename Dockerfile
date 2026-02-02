@@ -74,7 +74,7 @@ RUN mkdir -p /app/data /var/cache/nginx /var/run/nginx /var/lib/nginx /var/log/n
   && chown -R appuser:appuser /app /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/templates /var/cache/nginx /var/run/nginx /var/lib/nginx /var/log/nginx
 USER appuser
 
-EXPOSE 8080 8000
+EXPOSE 8000 8001
 ENTRYPOINT ["/usr/bin/tini", "--"]
 # Default to all services; override per container/compose role.
 CMD ["ade", "start"]

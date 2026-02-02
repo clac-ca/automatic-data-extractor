@@ -1,7 +1,7 @@
 # docker-compose.yaml
 #
 # Quickstart: starts ADE (api + worker + web) with local Postgres & Azurite.
-# The web server listens on :8080 and proxies /api to the API running on :8000.
+# The web server listens on :8000 and proxies /api to the API running on :8001.
 #
 # Requirements:
 # - Docker and Docker Compose
@@ -12,12 +12,12 @@
 # Diagram of services:
 #
 #   Host
-#    │  http://localhost:8080
+#    │  http://localhost:8000
 #    ▼
-# [8080]  ┌──────────────┐
+# [8000]  ┌──────────────┐
 #         │ web          │  nginx + SPA
 #         └──────┬───────┘
-#                ├───────────────> api:8000
+#                ├───────────────> api:8001
 #                └───────────────> worker
 #                ├───────────────> postgres:5432
 #                └───────────────> azurite:10000
@@ -38,10 +38,11 @@ services:
     volumes:
       - ade_data:/app/data
     ports:
-      - 8000:8000
+      - 8001:8001
     command: ["ade", "start"]
     environment:
       ADE_SERVICES: api
+      ADE_API_PORT: 8001
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
@@ -78,11 +79,11 @@ services:
       api:
         condition: service_started
     ports:
-      - 8080:8080
+      - 8000:8000
     command: ["ade", "start"]
     environment:
       ADE_SERVICES: web
-      ADE_WEB_PROXY_TARGET: http://api:8000
+      ADE_WEB_PROXY_TARGET: http://api:8001
 
   postgres:
     image: postgres:18-bookworm

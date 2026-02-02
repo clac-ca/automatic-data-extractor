@@ -7,12 +7,15 @@ ADE ships as a single container image that can run any combination of services.
 The default image command runs all three services:
 
 ```bash
-docker run --rm -p 8080:8080 -p 8000:8000 \
+docker run --rm -p 8000:8000 \
   -e ADE_DATABASE_URL=... \
   -e ADE_BLOB_CONNECTION_STRING=... \
   -e ADE_SECRET_KEY=... \
   ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
+
+Note: when the web entrypoint is enabled, the API listens on `8001` internally and nginx
+proxies `/api` to it.
 
 ## Split containers (recommended at scale)
 
