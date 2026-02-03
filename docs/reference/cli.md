@@ -6,7 +6,10 @@
 ade start            # start api + worker + web (default)
 ade dev              # start api dev + worker + web dev
 ade test             # run api + worker + web tests
+ade reset            # reset db + storage + local data/venv (destructive)
 ```
+
+`ade reset` requires `ADE_ALLOW_DESTRUCTIVE=1` (or `--force`) and `--yes`.
 
 Ports (default):
 - `ade dev`: web on `http://localhost:8000`, API on `http://localhost:8001`
@@ -63,10 +66,12 @@ ade db migrate
 ade db history
 ade db current
 ade db stamp <rev>
+ade db reset
 ```
 
 ## Storage
 
 ```bash
 ade storage check
+ade storage reset
 ```

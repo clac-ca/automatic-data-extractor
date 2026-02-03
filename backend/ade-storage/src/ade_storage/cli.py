@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from enum import Enum
+
 import typer
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,7 +51,7 @@ class StorageSettings(BaseSettings):
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE storage CLI (check connectivity).",
+    help="ADE storage CLI (check, reset).",
 )
 
 
@@ -64,7 +66,35 @@ def check() -> None:
     settings = StorageSettings()
     adapter = build_storage_adapter(settings)
     adapter.check_connection()
-    typer.echo("✅ storage connection OK")
+    typer.echo("storage connection OK")
+
+
+class ResetMode(str, Enum):
+    PREFIX = "prefix"
+    CONTAINER = "container"
+
+
+@app.command(name="reset", help="Delete ADE blobs from storage (destructive).")
+def reset(
+    mode: ResetMode = typer.Option(
+        ResetMode.PREFIX,
+        "--mode",
+        help="Delete by prefix (default) or entire container contents.",
+    ),
+    yes: bool = typer.Option(False, "--yes", help="Confirm destructive reset."),
+) -> None:
+    if not yes:
+        typer.echo("error: reset requires --yes", err=True)
+        raise typer.Exit(code=1)
+
+    settings = StorageSettings()
+    adapter = build_storage_adapter(settings)
+    if mode is ResetMode.PREFIX:
+        prefix = settings.blob_prefix
+    else:
+        prefix = None
+    deleted = adapter.delete_prefix(prefix)
+    typer.echo(f"deleted {deleted} blobs")
 
 
 if __name__ == "__main__":

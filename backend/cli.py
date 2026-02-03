@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from enum import Enum
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Iterable
@@ -14,11 +16,17 @@ import typer
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE CLI (start, dev, test, api, worker, db, storage, web).",
+    help="ADE CLI (start, dev, test, reset, api, worker, db, storage, web).",
 )
 
 SERVICE_ORDER = ("api", "worker", "web")
 SERVICE_SET = set(SERVICE_ORDER)
+DESTRUCTIVE_ENV_KEYS = {"1", "true", "yes", "y", "on"}
+
+
+class StorageResetMode(str, Enum):
+    PREFIX = "prefix"
+    CONTAINER = "container"
 
 
 def _find_repo_root() -> Path:
@@ -48,6 +56,32 @@ def _run(command: Iterable[str], *, cwd: Path | None = None) -> None:
     completed = subprocess.run(cmd_list, cwd=cwd, check=False)
     if completed.returncode != 0:
         raise typer.Exit(code=completed.returncode)
+
+
+def _allow_destructive(force: bool) -> bool:
+    if force:
+        return True
+    raw = os.getenv("ADE_ALLOW_DESTRUCTIVE", "")
+    return raw.strip().lower() in DESTRUCTIVE_ENV_KEYS
+
+
+def _is_current_venv(path: Path) -> bool:
+    try:
+        return Path(sys.prefix).resolve().is_relative_to(path.resolve())
+    except ValueError:
+        return False
+
+
+def _remove_dir(path: Path, *, force: bool) -> None:
+    if not path.exists():
+        return
+    if _is_current_venv(path) and not force:
+        typer.echo(
+            f"warning: skipping removal of active virtualenv at {path} (use --force)",
+            err=True,
+        )
+        return
+    shutil.rmtree(path)
 
 
 def _spawn_processes(
@@ -187,6 +221,51 @@ def test() -> None:
     _run(["ade-api", "test"], cwd=REPO_ROOT)
     _run(["ade-worker", "test"], cwd=REPO_ROOT)
     _run(_npm_cmd("run", "test"), cwd=REPO_ROOT)
+
+
+@app.command(name="reset", help="Reset DB, storage, and local state (destructive).")
+def reset(
+    db: bool = typer.Option(True, "--db/--no-db", help="Reset the database."),
+    storage: bool = typer.Option(True, "--storage/--no-storage", help="Reset blob storage."),
+    data: bool = typer.Option(True, "--data/--no-data", help="Clear local data directory."),
+    venv: bool = typer.Option(True, "--venv/--no-venv", help="Remove local virtualenvs."),
+    storage_mode: StorageResetMode = typer.Option(
+        StorageResetMode.PREFIX,
+        "--storage-mode",
+        help="Storage reset mode: prefix (default) or container.",
+    ),
+    yes: bool = typer.Option(False, "--yes", help="Confirm destructive reset."),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Allow destructive reset without ADE_ALLOW_DESTRUCTIVE=1.",
+    ),
+) -> None:
+    if not yes:
+        typer.echo("error: reset requires --yes", err=True)
+        raise typer.Exit(code=1)
+    if not _allow_destructive(force):
+        typer.echo(
+            "error: destructive actions disabled (set ADE_ALLOW_DESTRUCTIVE=1 or use --force)",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    if db:
+        _run(["ade-db", "reset", "--yes"], cwd=REPO_ROOT)
+    if storage:
+        _run(
+            ["ade-storage", "reset", "--yes", "--mode", storage_mode.value],
+            cwd=REPO_ROOT,
+        )
+    if data:
+        data_dir = REPO_ROOT / "data"
+        if data_dir.exists():
+            shutil.rmtree(data_dir)
+        data_dir.mkdir(parents=True, exist_ok=True)
+    if venv:
+        _remove_dir(REPO_ROOT / ".venv", force=force)
+        _remove_dir(REPO_ROOT / "backend" / ".venv", force=force)
 
 
 # --- Service delegation ----------------------------------------------------

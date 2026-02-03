@@ -17,7 +17,10 @@ ade db migrate
 ade db history
 ade db current
 ade db stamp <rev>
+ade db reset
 ```
+
+`ade db reset` is destructive and requires `--yes`.
 
 ## Required env vars (minimal)
 

@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import typer
 from alembic import command
+from sqlalchemy import text
 
+from ade_api.settings import get_settings
+
+from .engine import build_engine
 from .migrations_runner import alembic_config, run_migrations
 
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE database CLI (migrate, history, current, stamp).",
+    help="ADE database CLI (migrate, history, current, stamp, reset).",
 )
 
 
@@ -50,6 +54,22 @@ def stamp(
 ) -> None:
     with alembic_config() as cfg:
         command.stamp(cfg, revision)
+
+
+@app.command(name="reset", help="Drop and recreate the public schema, then migrate.")
+def reset(
+    yes: bool = typer.Option(False, "--yes", help="Confirm destructive reset."),
+) -> None:
+    if not yes:
+        typer.echo("error: reset requires --yes", err=True)
+        raise typer.Exit(code=1)
+
+    settings = get_settings()
+    engine = build_engine(settings)
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+    run_migrations()
 
 
 if __name__ == "__main__":

@@ -45,6 +45,11 @@ Additional settings:
 - `ADE_SERVICES`
   - Comma-separated list: `api,worker,web`
 
+## CLI safety
+
+- `ADE_ALLOW_DESTRUCTIVE`
+  - Set to `1`/`true`/`yes` to enable destructive CLI operations (e.g., `ade reset`).
+
 ## Web
 
 - `ADE_WEB_PROXY_TARGET`

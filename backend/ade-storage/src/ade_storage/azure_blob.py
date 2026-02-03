@@ -196,5 +196,29 @@ class AzureBlobStorage(StorageAdapter):
         except HttpResponseError as exc:
             raise StorageError("Failed to delete blob") from exc
 
+    def delete_prefix(self, prefix: str | None = None) -> int:
+        normalized = (prefix or "").strip("/")
+        name_starts_with = f"{normalized}/" if normalized else None
+        include = ["versions"] if self._config.require_versioning else None
+        deleted = 0
+        for blob in self._container_client.list_blobs(
+            name_starts_with=name_starts_with,
+            include=include,
+        ):
+            version_id = getattr(blob, "version_id", None)
+            blob_client = self._container_client.get_blob_client(
+                blob.name,
+                version_id=version_id,
+            )
+            try:
+                blob_client.delete_blob()
+            except ResourceNotFoundError:
+                continue
+            except HttpResponseError as exc:
+                raise StorageError("Failed to delete blob") from exc
+            else:
+                deleted += 1
+        return deleted
+
 
 __all__ = ["AzureBlobConfig", "AzureBlobStorage"]

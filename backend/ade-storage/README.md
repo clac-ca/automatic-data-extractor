@@ -11,7 +11,10 @@ To validate storage connectivity:
 
 ```bash
 ade storage check
+ade storage reset
 ```
+
+`ade storage reset` is destructive and requires `--yes`.
 
 ## Key commands
 
