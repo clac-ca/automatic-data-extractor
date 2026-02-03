@@ -1,25 +1,25 @@
 {
-  "name": "ADE Dev (Postgres + Azurite)",
-  "dockerComposeFile": "docker-compose.yaml",
+  "name": "ADE Dev (Root Compose)",
+  "dockerComposeFile": [
+    "../docker-compose.yaml",
+    "docker-compose.override.yaml"
+  ],
   "service": "ade",
-  "workspaceFolder": "/workspaces/automatic-data-extractor",
+  "workspaceFolder": "/app",
   "shutdownAction": "stopCompose",
 
-  "remoteUser": "vscode",
+  "remoteUser": "appuser",
   "updateRemoteUserUID": true,
-
-  "mounts": [
-    "source=${localEnv:HOME}/.codex,target=/home/vscode/.codex,type=bind,consistency=cached"
-  ],
-
-  "postCreateCommand": "bash -lc './setup.sh'",
-  //waitFor": "postCreateCommand", // Ensure venv is setup with ade installed before opening
   
   "forwardPorts": [
+    "ade:8000",
+    "ade:8001",
     "postgres:5432",
     "azurite:10000"
   ],
   "portsAttributes": {
+    "ade:8000": { "label": "Web (nginx)" },
+    "ade:8001": { "label": "API" },
     "postgres:5432": { "label": "Postgres" },
     "azurite:10000": { "label": "Azurite (Blob)" }
   },
@@ -32,7 +32,7 @@
         "openai.chatgpt"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python"
+        "python.defaultInterpreterPath": "/opt/venv/bin/python"
       }
     }
   },

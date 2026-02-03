@@ -1,0 +1,17 @@
+# Devcontainer compose override.
+# Anything defined here will override or extend the root docker-compose.yaml.
+
+services:
+  ade:
+    image: automatic-data-extractor:development
+    build:
+      target: development # Uses development stage (editable install + dev deps).
+    volumes:
+      # Bind host ~/.codex; create_host_path avoids failures on host machines that never installed Codex.
+      - type: bind
+        source: ${HOME}/.codex
+        target: /home/appuser/.codex
+        bind:
+          create_host_path: true
+      # Mount the repo into /app for live code edits inside the devcontainer.
+      - ..:/app:cached

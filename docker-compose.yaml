@@ -1,8 +1,7 @@
 # docker-compose.yaml
 #
-# Quickstart: starts ADE (api + worker + web) in a single container,
-# plus local Postgres & Azurite.
-# The web server listens on :8000 and proxies /api to the API on :8001.
+# Quickstart: starts ADE (api + worker + web) with local Postgres & Azurite.
+# The web server listens on :8000 and proxies /api to the API running on :8001.
 #
 # Requirements:
 # - Docker and Docker Compose
@@ -15,18 +14,20 @@
 #   Host
 #    │  http://localhost:8000
 #    ▼
-# [8000]  ┌─────────────────────┐
-#         │ ade (api+worker+web)│
-#         └──────────┬──────────┘
-#                    ├───────────────> postgres:5432
-#                    └───────────────> azurite:10000
+# [8000]  ┌────────────────────────────┐
+#         │ ade (api + worker + web)   │
+#         └───────────┬────────────────┘
+#                     ├───────────────> postgres:5432
+#                     └───────────────> azurite:10000
 #
+
 services:
   ade:
     image: ${ADE_IMAGE:-automatic-data-extractor:local}
     build:
       context: .
-      target: final
+      dockerfile: Dockerfile
+      target: production # switch to 'development' for a dev build (includes dev tools)
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,9 +39,10 @@ services:
       - ade_data:/app/data
     ports:
       - 8000:8000
-      # - 8001:8001 # Uncomment to expose the API port outside the container (for direct host access).
-    command: ["ade", "start"]
     environment:
+      ADE_SERVICES: api,worker,web
+      ADE_API_PORT: 8001
+      ADE_WEB_PROXY_TARGET: http://127.0.0.1:8001
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
@@ -67,7 +69,7 @@ services:
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
-    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --skipApiVersionCheck # azure-storage-blob 12.28.0 sends x-ms-version 2026-02-06 which Azurite 3.35.0 rejects
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --disableTelemetry --skipApiVersionCheck # azure-storage-blob 12.28.0 sends x-ms-version 2026-02-06 which Azurite 3.35.0 rejects
     ports:
       - 10000:10000
     volumes:
