@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     )
     # NOTE: Using @main until ade-engine tags are published.
     engine_spec: str = Field(
-        default="ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
+        default="ade-engine @ git+https://github.com/clac-ca/ade-engine",
         validation_alias="ADE_ENGINE_PACKAGE_PATH",
     )
 

@@ -5,10 +5,12 @@ from __future__ import annotations
 import fnmatch
 import io
 import os
+import re
 import secrets
 import shutil
 import subprocess
 import sys
+import tomllib
 import zipfile
 from collections.abc import Iterable
 from hashlib import sha256
@@ -97,6 +99,7 @@ class ConfigStorage:
 
         try:
             self._run_engine_config_init(staging)
+            self._pin_engine_dependency(staging)
             issues, _ = self.validate_path(staging)
             if issues:
                 raise ConfigSourceInvalidError(issues)
@@ -240,6 +243,7 @@ class ConfigStorage:
 
         try:
             _prepare_stage()
+            self._pin_engine_dependency(staging)
             issues, digest = self.validate_path(staging)
             if issues:
                 raise ConfigSourceInvalidError(issues)
@@ -282,6 +286,7 @@ class ConfigStorage:
 
         _copy()
         try:
+            self._pin_engine_dependency(staging)
             issues, _ = self.validate_path(staging)
         except Exception:
             self._remove_path(staging)
@@ -334,6 +339,81 @@ class ConfigStorage:
             message_src = result.stderr.strip() or result.stdout.strip()
             message = message_src.splitlines()[0] if message_src else "Config init failed"
             raise ConfigSourceInvalidError([ConfigValidationIssue(path=".", message=message)])
+
+    def _engine_dependency_spec(self) -> str | None:
+        if self._settings is None:
+            return None
+        spec = (self._settings.engine_spec or "").strip()
+        if not spec:
+            return None
+        if spec.startswith("git+"):
+            if spec.startswith("ade-engine"):
+                return spec
+            return f"ade-engine @ {spec}"
+        candidate = Path(spec)
+        if candidate.exists():
+            return f"ade-engine @ {candidate.resolve().as_uri()}"
+        return spec
+
+    def _pin_engine_dependency(self, root: Path) -> None:
+        engine_spec = self._engine_dependency_spec()
+        if not engine_spec or engine_spec == "ade-engine":
+            return
+        pyproject = root / "pyproject.toml"
+        if not pyproject.is_file():
+            return
+        try:
+            content = pyproject.read_text(encoding="utf-8")
+            data = tomllib.loads(content)
+        except Exception:
+            return
+        deps = data.get("project", {}).get("dependencies")
+        if not isinstance(deps, list):
+            return
+
+        needs_pin = False
+        has_direct_ref = False
+        for dep in deps:
+            if not isinstance(dep, str):
+                continue
+            cleaned = dep.strip()
+            if cleaned == "ade-engine":
+                needs_pin = True
+                continue
+            if cleaned.startswith("ade-engine"):
+                if "@" in cleaned:
+                    has_direct_ref = True
+                else:
+                    return
+        if not needs_pin and not has_direct_ref:
+            return
+
+        escaped = engine_spec.replace("\\", "\\\\").replace('"', '\\"')
+        replacement = f'"{escaped}"'
+        updated = content
+        if needs_pin:
+            updated, count = re.subn(r'(["\'])ade-engine\1', replacement, content)
+            if count and "@" in engine_spec:
+                has_direct_ref = True
+        if has_direct_ref:
+            updated = self._ensure_hatch_direct_refs(updated)
+        if updated != content:
+            pyproject.write_text(updated, encoding="utf-8")
+
+    def _ensure_hatch_direct_refs(self, content: str) -> str:
+        if "allow-direct-references" in content:
+            return re.sub(
+                r"(allow-direct-references\\s*=\\s*)(true|false|True|False)",
+                r"\\1true",
+                content,
+            )
+        if "[tool.hatch.metadata]" in content:
+            return content.replace(
+                "[tool.hatch.metadata]",
+                "[tool.hatch.metadata]\\nallow-direct-references = true",
+                1,
+            )
+        return f"{content}\n\n[tool.hatch.metadata]\nallow-direct-references = true\n"
 
     def _engine_subprocess_env(self) -> dict[str, str]:
         env = os.environ.copy()

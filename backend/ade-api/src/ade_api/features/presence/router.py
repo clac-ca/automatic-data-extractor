@@ -150,7 +150,7 @@ async def presence_ws(
             session,
             settings,
             api_keys,
-            get_cookie_authenticator(session, settings),
+            get_cookie_authenticator(session, settings, session_factory=SessionLocal),
             get_bearer_authenticator(session, settings),
         )
         user = session.get(User, principal.user_id)

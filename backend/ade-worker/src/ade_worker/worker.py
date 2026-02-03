@@ -31,6 +31,7 @@ from ade_db.engine import (
     build_psycopg_connect_kwargs,
     session_scope,
 )
+from ade_db.models import EnvironmentStatus, FileKind
 from . import db
 from .paths import PathManager
 from ade_db.schema import REQUIRED_TABLES
@@ -957,8 +958,6 @@ class Worker:
         workspace_id = str(env["workspace_id"])
         configuration_id = str(env["configuration_id"])
         deps_digest = str(env["deps_digest"])
-        engine_spec = str(env.get("engine_spec") or self.settings.engine_spec)
-
         env_root = self.paths.environment_root(
             workspace_id,
             configuration_id,
@@ -1030,27 +1029,6 @@ class Worker:
             python_bin = self.paths.python_in_venv(venv_dir)
             if not python_bin.exists():
                 raise RuntimeError(f"venv python missing: {python_bin}")
-
-            install_engine = [uv_bin, "pip", "install", "--python", str(python_bin)]
-            if Path(str(engine_spec)).exists():
-                install_engine.extend(["-e", str(engine_spec)])
-            else:
-                install_engine.append(str(engine_spec))
-
-            res = self.runner.run(
-                install_engine,
-                event_log=event_log,
-                scope="environment.engine",
-                timeout_seconds=remaining(),
-                cwd=None,
-                env=install_env,
-                heartbeat=heartbeat,
-                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
-                context=ctx,
-            )
-            last_exit_code = res.exit_code
-            if res.exit_code != 0:
-                raise RuntimeError(f"engine install failed (exit {res.exit_code})")
 
             config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
             if not config_dir.exists():
@@ -1182,9 +1160,11 @@ class Worker:
         if not env:
             return None, "Environment missing", False
 
-        status = str(env.get("status") or "").lower()
-        if status == "ready":
+        status = env.get("status")
+        if status == EnvironmentStatus.READY:
             return env, None, False
+        if status is None or not isinstance(status, EnvironmentStatus):
+            return None, f"Invalid environment status: {status!r}", False
 
         env_id = str(env["id"])
         lock_key = (
@@ -1208,27 +1188,33 @@ class Worker:
                 env = db.load_environment(session, env_id)
             if not env:
                 return None, "Environment missing", False
-            if str(env.get("status") or "").lower() == "ready":
+            status = env.get("status")
+            if status == EnvironmentStatus.READY:
                 return env, None, False
+            if status is None or not isinstance(status, EnvironmentStatus):
+                return None, f"Invalid environment status: {status!r}", False
 
             with session_scope(self.session_factory) as session:
                 db.mark_environment_building(session, env_id=env_id, now=now)
 
             build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
+
+            if build.run_lost:
+                return None, None, True
+
+            with self.session_factory() as session:
+                env = db.load_environment(session, env_id)
+            status = env.get("status") if env else None
+            if status == EnvironmentStatus.READY:
+                return env, None, False
+            if status is None or (env and not isinstance(status, EnvironmentStatus)):
+                return None, f"Invalid environment status: {status!r}", False
+
+            return None, build.error_message or "Environment build failed", False
         finally:
             if got_lock:
                 db.advisory_unlock(lock_conn, key=lock_key)
             lock_conn.close()
-
-        if build.run_lost:
-            return None, None, True
-
-        with self.session_factory() as session:
-            env = db.load_environment(session, env_id)
-        if env and str(env.get("status") or "").lower() == "ready":
-            return env, None, False
-
-        return None, build.error_message or "Environment build failed", False
 
     def process_run(self, claim: db.RunClaim) -> None:
         now = utcnow()
@@ -1481,7 +1467,34 @@ class Worker:
                 file_id = str(file_version.get("file_id") or "")
                 document_id = file_id or document_id
                 file_row = db.load_file(session, file_id)
-            if not file_row or str(file_row.get("kind") or "").lower() != "input":
+            if not file_row:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Document not found: {document_id}",
+                )
+                return
+            kind = file_row.get("kind")
+            if kind is None or not isinstance(kind, FileKind):
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    document_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    f"Invalid document kind: {kind!r}",
+                )
+                return
+            if kind != FileKind.INPUT:
                 self._handle_run_failure(
                     claim,
                     run_id,

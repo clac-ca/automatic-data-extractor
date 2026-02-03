@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     documents_upload_concurrency_limit: int | None = Field(8, ge=1)
 
     # Engine
-    engine_spec: str = Field(default="ade-engine @ git+https://github.com/clac-ca/ade-engine@main")
+    engine_spec: str = Field(default="ade-engine @ git+https://github.com/clac-ca/ade-engine")
 
     # Database
     database_url: PostgresDsn = Field(..., description="Postgres database URL.")
