@@ -8,12 +8,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.common.time import utc_now
-from ade_api.db import get_db_read
-from ade_db.models import AccessToken, User
+from ade_api.db import get_db_read, get_session_factory
+from ade_db.models import AccessToken, ApiKey, User
 from ade_api.settings import Settings, get_settings
 
 from ..auth import (
@@ -126,12 +126,63 @@ class _RbacAdapter(RbacServiceInterface):
 def get_api_key_authenticator(
     db: ReadSessionDep,
     settings: SettingsDep,
+    session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
 ) -> ApiKeyAuthenticator:
     """Provide the API key authenticator."""
 
-    from ade_api.features.api_keys.service import ApiKeyService
+    from ade_api.features.api_keys.service import (
+        ApiKeyExpiredError,
+        ApiKeyNotFoundError,
+        ApiKeyOwnerInactiveError,
+        ApiKeyRevokedError,
+        ApiKeyService,
+        InvalidApiKeyFormatError,
+    )
 
-    return ApiKeyService(session=db, settings=settings)
+    service = ApiKeyService(session=db, settings=settings)
+
+    class _ApiKeyAuthenticator:
+        def __init__(self, *, session_factory: sessionmaker[Session]) -> None:
+            self._session_factory = session_factory
+
+        def _touch_usage(self, api_key_id: UUID) -> None:
+            with self._session_factory() as session:
+                session.execute(
+                    update(ApiKey)
+                    .where(ApiKey.id == api_key_id)
+                    .values(last_used_at=utc_now())
+                )
+                session.commit()
+
+        def authenticate(self, raw_token: str) -> AuthenticatedPrincipal | None:
+            try:
+                result = service.authenticate_token(raw_token, touch_usage=False)
+            except (
+                InvalidApiKeyFormatError,
+                ApiKeyNotFoundError,
+                ApiKeyExpiredError,
+                ApiKeyRevokedError,
+                ApiKeyOwnerInactiveError,
+            ) as exc:
+                raise AuthenticationError(str(exc)) from exc
+
+            api_key = result.api_key
+            owner = getattr(api_key, "user", None)
+            principal_type = (
+                PrincipalType.SERVICE_ACCOUNT
+                if getattr(owner, "is_service_account", False)
+                else PrincipalType.USER
+            )
+            principal = AuthenticatedPrincipal(
+                user_id=result.user_id,
+                principal_type=principal_type,
+                auth_via=AuthVia.API_KEY,
+                api_key_id=api_key.id,
+            )
+            self._touch_usage(api_key.id)
+            return principal
+
+    return _ApiKeyAuthenticator(session_factory=session_factory)
 
 
 def get_api_key_authenticator_websocket(
@@ -148,10 +199,16 @@ def get_api_key_authenticator_websocket(
 def get_cookie_authenticator(
     db: ReadSessionDep,
     settings: SettingsDep,
+    session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
 ) -> CookieAuthenticator:
     """Authenticate cookie session tokens against the access_tokens table."""
 
     class _CookieAuthenticator:
+        def _expire_token(self, token_id: UUID) -> None:
+            with session_factory() as session:
+                session.execute(delete(AccessToken).where(AccessToken.id == token_id))
+                session.commit()
+
         def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
             candidate = (token or "").strip()
             if not candidate:
@@ -168,8 +225,7 @@ def get_cookie_authenticator(
             if expires_at is None:
                 expires_at = access_token.created_at + settings.session_access_ttl
             if expires_at <= now:
-                db.delete(access_token)
-                db.flush()
+                self._expire_token(access_token.id)
                 return None
 
             user = db.get(User, access_token.user_id)
@@ -249,6 +305,7 @@ def get_current_principal(
     request: Request,
     db: ReadSessionDep,
     settings: SettingsDep,
+    session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
     api_key_service: Annotated[
         ApiKeyAuthenticator,
         Depends(get_api_key_authenticator),
@@ -263,6 +320,19 @@ def get_current_principal(
     ],
 ) -> AuthenticatedPrincipal:
     """Authenticate the incoming request and return the current principal."""
+
+    if settings.auth_disabled:
+        with session_factory() as session:
+            principal = authenticate_request(
+                request=request,
+                _db=session,
+                settings=settings,
+                api_key_service=api_key_service,
+                cookie_service=cookie_service,
+                bearer_service=bearer_service,
+            )
+            session.commit()
+            return principal
 
     return authenticate_request(
         request=request,

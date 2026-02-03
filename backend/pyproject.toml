@@ -43,9 +43,11 @@ dependencies = [
 ]
 
 [project.scripts]
-ade = "ade_cli.cli:app"
+ade = "cli:app"
 ade-api = "ade_api.cli:app"
 ade-worker = "ade_worker.cli:app"
+ade-db = "ade_db.cli:app"
+ade-storage = "ade_storage.cli:app"
 
 [dependency-groups]
 dev = [
@@ -61,6 +63,7 @@ dev = [
 # ---- Packaging ----
 [tool.setuptools]
 include-package-data = true
+py-modules = ["cli"]
 
 [tool.setuptools.packages.find]
 where = [
@@ -74,7 +77,6 @@ include = [
   "ade_worker*",
   "ade_db*",
   "ade_storage*",
-  "ade_cli*",
 ]
 
 # Keep type markers + assets needed at runtime.
@@ -136,7 +138,7 @@ disallow_untyped_defs = false
 
 [tool.coverage.run]
 branch = true
-source = ["ade_api", "ade_worker", "ade_db", "ade_storage", "ade_cli"]
+source = ["ade_api", "ade_worker", "ade_db", "ade_storage"]
 
 [tool.coverage.report]
 skip_empty = true

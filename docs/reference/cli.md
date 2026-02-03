@@ -64,3 +64,9 @@ ade db history
 ade db current
 ade db stamp <rev>
 ```
+
+## Storage
+
+```bash
+ade storage check
+```

@@ -7,6 +7,18 @@ Storage helpers used by ade-api and ade-worker.
 This package is used as a library. Configure via environment variables and
 start the services that depend on it.
 
+To validate storage connectivity:
+
+```bash
+ade storage check
+```
+
+## Key commands
+
+```bash
+ade storage check
+```
+
 ## Required env vars (minimal)
 
 - `ADE_BLOB_CONNECTION_STRING` or `ADE_BLOB_ACCOUNT_URL`

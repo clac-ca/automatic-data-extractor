@@ -5,17 +5,17 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Iterable
 
 import typer
-from alembic import command
 
-from ade_db.migrations_runner import alembic_config, run_migrations
-
-app = typer.Typer(add_completion=False, help="ADE CLI (api, worker, web, db).")
+app = typer.Typer(
+    add_completion=False,
+    invoke_without_command=True,
+    help="ADE CLI (api, worker, web, db, storage).",
+)
 
 SERVICE_ORDER = ("api", "worker", "web")
 SERVICE_SET = set(SERVICE_ORDER)
@@ -117,6 +117,12 @@ def _web_entrypoint_cmd() -> list[str]:
 
 def _npm_cmd(*args: str) -> list[str]:
     return ["npm", "--prefix", str(FRONTEND_DIR), *args]
+
+
+@app.callback()
+def _main(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
 
 
 @app.command(name="start", help="Start API + worker + web (default).")
@@ -265,48 +271,45 @@ def web_preview() -> None:
     _run(_npm_cmd("run", "preview"), cwd=REPO_ROOT)
 
 
-# --- DB commands -----------------------------------------------------------
+# --- DB & storage delegation ----------------------------------------------
+
+db_app = typer.Typer(
+    add_completion=False,
+    invoke_without_command=True,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Database CLI (delegates to ade-db).",
+)
 
 
-db_app = typer.Typer(add_completion=False, help="Database migrations.")
+@db_app.callback()
+def db(ctx: typer.Context) -> None:
+    args = list(ctx.args)
+    if not args:
+        args = ["--help"]
+    _run(["ade-db", *args], cwd=REPO_ROOT)
 
 
-@db_app.command(name="migrate", help="Apply Alembic migrations (upgrade head).")
-def db_migrate(
-    revision: str = typer.Argument("head", help="Alembic revision to upgrade to."),
-) -> None:
-    run_migrations(revision=revision)
+storage_app = typer.Typer(
+    add_completion=False,
+    invoke_without_command=True,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Storage CLI (delegates to ade-storage).",
+)
 
 
-@db_app.command(name="history", help="Show migration history.")
-def db_history(
-    rev_range: str | None = typer.Argument(None, help="Revision range (optional)."),
-    verbose: bool = typer.Option(False, "--verbose", help="Verbose output."),
-) -> None:
-    with alembic_config() as cfg:
-        command.history(cfg, rev_range, verbose=verbose)
-
-
-@db_app.command(name="current", help="Show current database revision.")
-def db_current(
-    verbose: bool = typer.Option(False, "--verbose", help="Verbose output."),
-) -> None:
-    with alembic_config() as cfg:
-        command.current(cfg, verbose=verbose)
-
-
-@db_app.command(name="stamp", help="Stamp revision without running migrations.")
-def db_stamp(
-    revision: str = typer.Argument(..., help="Alembic revision to stamp."),
-) -> None:
-    with alembic_config() as cfg:
-        command.stamp(cfg, revision)
+@storage_app.callback()
+def storage(ctx: typer.Context) -> None:
+    args = list(ctx.args)
+    if not args:
+        args = ["--help"]
+    _run(["ade-storage", *args], cwd=REPO_ROOT)
 
 
 app.add_typer(api_app, name="api")
 app.add_typer(worker_app, name="worker")
 app.add_typer(web_app, name="web")
 app.add_typer(db_app, name="db")
+app.add_typer(storage_app, name="storage")
 
 
 if __name__ == "__main__":
