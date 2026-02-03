@@ -21,7 +21,6 @@ app = typer.Typer(
 
 SERVICE_ORDER = ("api", "worker", "web")
 SERVICE_SET = set(SERVICE_ORDER)
-DESTRUCTIVE_ENV_KEYS = {"1", "true", "yes", "y", "on"}
 
 
 class StorageResetMode(str, Enum):
@@ -58,13 +57,6 @@ def _run(command: Iterable[str], *, cwd: Path | None = None) -> None:
         raise typer.Exit(code=completed.returncode)
 
 
-def _allow_destructive(force: bool) -> bool:
-    if force:
-        return True
-    raw = os.getenv("ADE_ALLOW_DESTRUCTIVE", "")
-    return raw.strip().lower() in DESTRUCTIVE_ENV_KEYS
-
-
 def _is_current_venv(path: Path) -> bool:
     try:
         return Path(sys.prefix).resolve().is_relative_to(path.resolve())
@@ -72,14 +64,11 @@ def _is_current_venv(path: Path) -> bool:
         return False
 
 
-def _remove_dir(path: Path, *, force: bool) -> None:
+def _remove_dir(path: Path) -> None:
     if not path.exists():
         return
-    if _is_current_venv(path) and not force:
-        typer.echo(
-            f"warning: skipping removal of active virtualenv at {path} (use --force)",
-            err=True,
-        )
+    if _is_current_venv(path):
+        typer.echo(f"warning: skipping removal of active virtualenv at {path}", err=True)
         return
     shutil.rmtree(path)
 
@@ -235,20 +224,9 @@ def reset(
         help="Storage reset mode: prefix (default) or container.",
     ),
     yes: bool = typer.Option(False, "--yes", help="Confirm destructive reset."),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Allow destructive reset without ADE_ALLOW_DESTRUCTIVE=1.",
-    ),
 ) -> None:
     if not yes:
         typer.echo("error: reset requires --yes", err=True)
-        raise typer.Exit(code=1)
-    if not _allow_destructive(force):
-        typer.echo(
-            "error: destructive actions disabled (set ADE_ALLOW_DESTRUCTIVE=1 or use --force)",
-            err=True,
-        )
         raise typer.Exit(code=1)
 
     if db:
@@ -264,8 +242,8 @@ def reset(
             shutil.rmtree(data_dir)
         data_dir.mkdir(parents=True, exist_ok=True)
     if venv:
-        _remove_dir(REPO_ROOT / ".venv", force=force)
-        _remove_dir(REPO_ROOT / "backend" / ".venv", force=force)
+        _remove_dir(REPO_ROOT / ".venv")
+        _remove_dir(REPO_ROOT / "backend" / ".venv")
 
 
 # --- Service delegation ----------------------------------------------------

@@ -9,7 +9,7 @@ ade test             # run api + worker + web tests
 ade reset            # reset db + storage + local data/venv (destructive)
 ```
 
-`ade reset` requires `ADE_ALLOW_DESTRUCTIVE=1` (or `--force`) and `--yes`.
+`ade reset` requires `--yes`.
 
 Ports (default):
 - `ade dev`: web on `http://localhost:8000`, API on `http://localhost:8001`
