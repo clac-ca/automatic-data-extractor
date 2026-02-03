@@ -9,7 +9,7 @@ from ade_api.commands import register_all
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE API CLI (dev, start, migrate, routes, users, types, tests).",
+    help="ADE API CLI (dev, start, test, lint, routes, types, users).",
 )
 
 

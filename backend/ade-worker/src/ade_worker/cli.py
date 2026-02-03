@@ -15,7 +15,7 @@ from .worker import main as worker_main
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE worker CLI (start, gc, test).",
+    help="ADE worker CLI (start, dev, test, gc).",
 )
 
 class TestSuite(str, Enum):
@@ -34,7 +34,7 @@ def parse_suite(value: str | None) -> TestSuite:
         return TestSuite.INTEGRATION
     if normalized in {"all", "a"}:
         return TestSuite.ALL
-    typer.echo("❌ Unknown test suite. Use unit, integration, or all.", err=True)
+    typer.echo("error: unknown test suite (use unit, integration, or all).", err=True)
     raise typer.Exit(code=1)
 
 
@@ -64,7 +64,7 @@ def _worker_root() -> Path:
 
 
 def _run(command: list[str], *, cwd: Path) -> None:
-    typer.echo(f"↪️  {' '.join(command)}", err=True)
+    typer.echo(f"-> {' '.join(command)}", err=True)
     completed = subprocess.run(command, cwd=cwd, check=False)
     if completed.returncode != 0:
         raise typer.Exit(code=completed.returncode)
@@ -73,7 +73,7 @@ def _run(command: list[str], *, cwd: Path) -> None:
 def run_tests(suite: TestSuite) -> None:
     worker_root = _worker_root()
     if not (worker_root / "tests").is_dir():
-        typer.echo("❌ Worker tests require the repo checkout (backend/ade-worker).", err=True)
+        typer.echo("error: worker tests require the repo checkout (backend/ade-worker).", err=True)
         raise typer.Exit(code=1)
 
     cmd = [sys.executable, "-m", "pytest"]
@@ -100,11 +100,6 @@ def dev() -> None:
     worker_main()
 
 
-@app.command(name="gc", help="Run garbage collection once.")
-def gc() -> None:
-    run_gc()
-
-
 @app.command(name="test", help="Run ADE worker tests (unit by default).")
 def test(
     suite: str | None = typer.Argument(
@@ -115,6 +110,9 @@ def test(
     run_tests(parse_suite(suite))
 
 
+@app.command(name="gc", help="Run garbage collection once.")
+def gc() -> None:
+    run_gc()
 
 
 if __name__ == "__main__":

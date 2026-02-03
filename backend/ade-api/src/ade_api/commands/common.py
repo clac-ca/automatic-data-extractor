@@ -40,7 +40,7 @@ def run(
     env: dict[str, str] | None = None,
 ) -> None:
     cmd_list = list(command)
-    typer.echo(f"↪️  {' '.join(cmd_list)}", err=True)
+    typer.echo(f"-> {' '.join(cmd_list)}", err=True)
     completed = subprocess.run(cmd_list, cwd=cwd, env=env, check=False)
     if completed.returncode != 0:
         raise typer.Exit(code=completed.returncode)
@@ -58,7 +58,7 @@ def require_command(
         return found
 
     hint = fix_hint or "Ensure the command is installed and available on PATH."
-    typer.echo(f"❌ {friendly} not found (looked for `{command}`).\n{hint}", err=True)
+    typer.echo(f"error: {friendly} not found (looked for `{command}`).\n{hint}", err=True)
     raise typer.Exit(code=1)
 
 
@@ -91,14 +91,14 @@ def load_frontend_package_json() -> dict:
 def ensure_node_modules(frontend_dir: Path | None = None) -> None:
     directory = frontend_dir or FRONTEND_DIR
     if not directory.exists():
-        typer.echo("⚠️  frontend directory missing; expected frontend/ade-web", err=True)
+        typer.echo("warning: frontend directory missing; expected frontend/ade-web", err=True)
         raise typer.Exit(code=1)
     if not (directory / "package.json").exists():
-        typer.echo("⚠️  package.json missing in frontend/ade-web; cannot continue.", err=True)
+        typer.echo("warning: package.json missing in frontend/ade-web; cannot continue.", err=True)
         raise typer.Exit(code=1)
     if not (directory / "node_modules").exists():
         typer.echo(
-            "❌ Frontend dependencies not installed. Run `npm install` in frontend/ade-web.",
+            "error: frontend dependencies not installed (run `npm install` in frontend/ade-web).",
             err=True,
         )
         raise typer.Exit(code=1)

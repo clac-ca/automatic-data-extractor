@@ -44,7 +44,7 @@ def run_dev(
     else:
         api_cmd.extend(["--workers", str(workers)])
 
-    typer.echo(f"🔧 API dev server:        http://{host}:{port}")
+    typer.echo(f"API dev server: http://{host}:{port}")
     common.run(api_cmd, cwd=common.REPO_ROOT, env=env)
 
 
@@ -68,7 +68,7 @@ def run_start(
     if workers and workers > 1:
         api_cmd.extend(["--workers", str(workers)])
 
-    typer.echo(f"🚀 Starting ADE API on http://{host}:{port}")
+    typer.echo(f"Starting ADE API on http://{host}:{port}")
     common.run(api_cmd, cwd=common.REPO_ROOT, env=env)
 
 

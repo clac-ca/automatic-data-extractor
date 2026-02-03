@@ -16,7 +16,7 @@ def run_lint(fix: bool = False) -> None:
     api_root = Path(__file__).resolve().parents[3]
     ruff_bin = shutil.which("ruff")
     if not ruff_bin:
-        typer.echo("❌ ruff not found. Install dev dependencies (run `./setup.sh`).", err=True)
+        typer.echo("error: ruff not found (install dev dependencies via `./setup.sh`).", err=True)
         raise typer.Exit(code=1)
 
     ruff_cmd = [sys.executable, "-m", "ruff", "check"]

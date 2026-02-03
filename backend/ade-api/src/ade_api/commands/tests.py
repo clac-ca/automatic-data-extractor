@@ -26,7 +26,7 @@ def parse_suite(value: str | None) -> TestSuite:
         return TestSuite.INTEGRATION
     if normalized in {"all", "a"}:
         return TestSuite.ALL
-    typer.echo("❌ Unknown test suite. Use unit, integration, or all.", err=True)
+    typer.echo("error: unknown test suite (use unit, integration, or all).", err=True)
     raise typer.Exit(code=1)
 
 

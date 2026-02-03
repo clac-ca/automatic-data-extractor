@@ -51,7 +51,7 @@ def run_types() -> None:
         ],
         cwd=common.FRONTEND_DIR,
     )
-    typer.echo(f"✅ generated {output_path.relative_to(common.REPO_ROOT)}")
+    typer.echo(f"generated {output_path.relative_to(common.REPO_ROOT)}")
 
 
 def register(app: typer.Typer) -> None:

@@ -14,7 +14,7 @@ import typer
 app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="ADE CLI (api, worker, web, db, storage).",
+    help="ADE CLI (start, dev, test, api, worker, db, storage, web).",
 )
 
 SERVICE_ORDER = ("api", "worker", "web")
@@ -191,39 +191,90 @@ def test() -> None:
 
 # --- Service delegation ----------------------------------------------------
 
-api_app = typer.Typer(
-    add_completion=False,
-    invoke_without_command=True,
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+
+@app.command(
+    name="api",
     help="API CLI (delegates to ade-api).",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
 )
-
-
-@api_app.callback()
 def api(ctx: typer.Context) -> None:
     args = list(ctx.args)
+    if args and args[0] == ctx.info_name:
+        args = args[1:]
     if not args:
         args = ["--help"]
     _run(["ade-api", *args], cwd=REPO_ROOT)
 
 
-worker_app = typer.Typer(
-    add_completion=False,
-    invoke_without_command=True,
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+@app.command(
+    name="worker",
     help="Worker CLI (delegates to ade-worker).",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
 )
-
-
-@worker_app.callback()
 def worker(ctx: typer.Context) -> None:
     args = list(ctx.args)
+    if args and args[0] == ctx.info_name:
+        args = args[1:]
     if not args:
         args = ["--help"]
     _run(["ade-worker", *args], cwd=REPO_ROOT)
 
 
-web_app = typer.Typer(add_completion=False, help="Web CLI (frontend).")
+@app.command(
+    name="db",
+    help="Database CLI (delegates to ade-db).",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+)
+def db(ctx: typer.Context) -> None:
+    args = list(ctx.args)
+    if args and args[0] == ctx.info_name:
+        args = args[1:]
+    if not args:
+        args = ["--help"]
+    _run(["ade-db", *args], cwd=REPO_ROOT)
+
+
+@app.command(
+    name="storage",
+    help="Storage CLI (delegates to ade-storage).",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+)
+def storage(ctx: typer.Context) -> None:
+    args = list(ctx.args)
+    if args and args[0] == ctx.info_name:
+        args = args[1:]
+    if not args:
+        args = ["--help"]
+    _run(["ade-storage", *args], cwd=REPO_ROOT)
+
+
+web_app = typer.Typer(
+    add_completion=False,
+    invoke_without_command=True,
+    help="Web CLI (frontend).",
+)
+
+
+@web_app.callback()
+def web(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
 
 
 @web_app.command(name="start", help="Serve built frontend via nginx entrypoint.")
@@ -271,45 +322,7 @@ def web_preview() -> None:
     _run(_npm_cmd("run", "preview"), cwd=REPO_ROOT)
 
 
-# --- DB & storage delegation ----------------------------------------------
-
-db_app = typer.Typer(
-    add_completion=False,
-    invoke_without_command=True,
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Database CLI (delegates to ade-db).",
-)
-
-
-@db_app.callback()
-def db(ctx: typer.Context) -> None:
-    args = list(ctx.args)
-    if not args:
-        args = ["--help"]
-    _run(["ade-db", *args], cwd=REPO_ROOT)
-
-
-storage_app = typer.Typer(
-    add_completion=False,
-    invoke_without_command=True,
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Storage CLI (delegates to ade-storage).",
-)
-
-
-@storage_app.callback()
-def storage(ctx: typer.Context) -> None:
-    args = list(ctx.args)
-    if not args:
-        args = ["--help"]
-    _run(["ade-storage", *args], cwd=REPO_ROOT)
-
-
-app.add_typer(api_app, name="api")
-app.add_typer(worker_app, name="worker")
 app.add_typer(web_app, name="web")
-app.add_typer(db_app, name="db")
-app.add_typer(storage_app, name="storage")
 
 
 if __name__ == "__main__":

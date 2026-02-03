@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import typer
 
-from . import lint, migrate, routes, server, tests, types, users
+from . import lint, routes, server, tests, types, users
 
 COMMAND_MODULES = (
     server,
-    migrate,
+    tests,
+    lint,
     routes,
     types,
     users,
-    tests,
-    lint,
 )
 
 
