@@ -3,7 +3,7 @@
 
 services:
   ade:
-    image: automatic-data-extractor:development
+    image: automatic-data-extractor:devcontainer
     build:
       target: development # Uses development stage (editable install + dev deps).
     volumes:
