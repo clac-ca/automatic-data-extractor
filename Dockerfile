@@ -138,6 +138,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Devcontainer shells require a valid interactive shell for the remote user.
+RUN usermod -s /bin/bash appuser
+
 # Include uv for local workflow convenience inside devcontainers.
 COPY --from=uv /uv /uvx /usr/local/bin/
 

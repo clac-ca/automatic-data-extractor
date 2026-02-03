@@ -6,6 +6,7 @@ services:
     image: automatic-data-extractor:devcontainer
     build:
       target: development # Uses development stage (editable install + dev deps).
+    command: ["sleep", "infinity"] # Keep container alive for VS Code attach; avoid exiting on `ade start` failures.
     volumes:
       # Bind host ~/.codex; create_host_path avoids failures on host machines that never installed Codex.
       - type: bind
@@ -14,4 +15,4 @@ services:
         bind:
           create_host_path: true
       # Mount the repo into /app for live code edits inside the devcontainer.
-      - ..:/app:cached
+      - .:/app:cached
