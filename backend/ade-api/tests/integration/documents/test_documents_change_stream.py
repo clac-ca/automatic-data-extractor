@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from ade_api.core.security.hashing import hash_password
 from ade_api.db import get_session_factory_from_app
-from ade_api.db.migrations import run_migrations
+from ade_db.migrations_runner import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_db.models import User, Workspace, WorkspaceMembership

@@ -305,7 +305,6 @@ def get_current_principal(
     request: Request,
     db: ReadSessionDep,
     settings: SettingsDep,
-    session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
     api_key_service: Annotated[
         ApiKeyAuthenticator,
         Depends(get_api_key_authenticator),
@@ -320,19 +319,6 @@ def get_current_principal(
     ],
 ) -> AuthenticatedPrincipal:
     """Authenticate the incoming request and return the current principal."""
-
-    if settings.auth_disabled:
-        with session_factory() as session:
-            principal = authenticate_request(
-                request=request,
-                _db=session,
-                settings=settings,
-                api_key_service=api_key_service,
-                cookie_service=cookie_service,
-                bearer_service=bearer_service,
-            )
-            session.commit()
-            return principal
 
     return authenticate_request(
         request=request,

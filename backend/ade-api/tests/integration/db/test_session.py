@@ -13,7 +13,7 @@ from asgi_lifespan import LifespanManager
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ade_api.db import get_db
+from ade_api.db import get_db_write
 
 
 @pytest.mark.asyncio
@@ -48,11 +48,11 @@ async def test_session_dependency_commits_and_populates_context(
         finally:
             session.close()
 
-    app.dependency_overrides[get_db] = _get_db_override
+    app.dependency_overrides[get_db_write] = _get_db_override
 
     @app.post(route_path)
     def _create_config(
-        session: Annotated[Session, Depends(get_db)],
+        session: Annotated[Session, Depends(get_db_write)],
     ) -> dict[str, bool | str]:
         assert isinstance(session, Session)
 
@@ -145,11 +145,11 @@ async def test_session_dependency_rolls_back_on_error(
         finally:
             session.close()
 
-    app.dependency_overrides[get_db] = _get_db_override
+    app.dependency_overrides[get_db_write] = _get_db_override
 
     @app.post(route_path)
     def _create_config(
-        session: Annotated[Session, Depends(get_db)],
+        session: Annotated[Session, Depends(get_db_write)],
     ) -> None:
         configuration_id = str(uuid4())
         now_iso = datetime.now(UTC).isoformat()

@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import logging
 import re
-import secrets
-import threading
 import uuid
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
@@ -18,8 +15,6 @@ from ade_api.settings import Settings
 from .errors import AuthenticationError
 from .principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 
-logger = logging.getLogger(__name__)
-_ADMIN_ROLE_SLUG = "global-admin"
 
 
 @runtime_checkable
@@ -42,7 +37,7 @@ class BearerAuthenticator(Protocol):
     def authenticate(self, token: str) -> AuthenticatedPrincipal | None: ...
 
 
-def _dev_principal(settings: Settings) -> AuthenticatedPrincipal:
+def dev_principal(settings: Settings) -> AuthenticatedPrincipal:
     """Return a synthetic principal for AUTH_DISABLED mode."""
 
     seed = settings.auth_disabled_user_email or "developer@example.com"
@@ -74,72 +69,9 @@ def _extract_api_key_from_headers(headers: Mapping[str, str]) -> str | None:
     return candidate.strip() if candidate else None
 
 
-_dev_user_lock = threading.Lock()
-_dev_user_ready: set[uuid.UUID] = set()
-
-
 def reset_auth_state() -> None:
     """Clear process-local auth caches (useful for tests)."""
-
-    _dev_user_ready.clear()
-
-
-def _ensure_dev_user(
-    principal: AuthenticatedPrincipal,
-    settings: Settings,
-    session: Session,
-) -> None:
-    """Ensure a backing User exists for auth-disabled mode (once per process)."""
-
-    # Deferred import avoids circular dependency during app startup.
-    from ade_db.models import User
-
-    if principal.user_id in _dev_user_ready:
-        return
-
-    with _dev_user_lock:
-        if principal.user_id in _dev_user_ready:
-            return
-
-        user = session.get(User, principal.user_id)
-        if user is None:
-            alias = settings.auth_disabled_user_email or "developer@example.com"
-            from ade_api.core.security.hashing import hash_password
-
-            user = User(
-                id=principal.user_id,
-                email=alias,
-                hashed_password=hash_password(secrets.token_urlsafe(32)),
-                display_name=settings.auth_disabled_user_name,
-                is_service_account=False,
-                is_active=True,
-                is_superuser=True,
-                is_verified=True,
-            )
-            session.add(user)
-            session.flush()
-
-        try:
-            from ade_api.features.rbac import RbacService
-
-            rbac = RbacService(session=session)
-            rbac.sync_system_roles()
-            admin_role = rbac.get_role_by_slug(slug=_ADMIN_ROLE_SLUG)
-            if admin_role is not None:
-                rbac.assign_role_if_missing(
-                    user_id=principal.user_id,
-                    role_id=admin_role.id,
-                    workspace_id=None,
-                )
-        except Exception:
-            logger.warning(
-                "auth.dev_user.bootstrap_failed",
-                exc_info=True,
-                extra={"user_id": str(principal.user_id)},
-            )
-            return
-
-        _dev_user_ready.add(principal.user_id)
+    return
 
 
 def _ensure_active_principal(
@@ -174,8 +106,7 @@ def authenticate_request(
     """
 
     if settings.auth_disabled:
-        principal = _dev_principal(settings)
-        _ensure_dev_user(principal, settings, _db)
+        principal = dev_principal(settings)
         _ensure_active_principal(principal=principal, session=_db)
         return principal
 
@@ -216,8 +147,7 @@ def authenticate_websocket(
     """Authenticate a WebSocket connection to a principal."""
 
     if settings.auth_disabled:
-        principal = _dev_principal(settings)
-        _ensure_dev_user(principal, settings, _db)
+        principal = dev_principal(settings)
         _ensure_active_principal(principal=principal, session=_db)
         return principal
 

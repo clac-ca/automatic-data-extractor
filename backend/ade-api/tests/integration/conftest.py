@@ -19,8 +19,8 @@ from ade_api.commands.common import REPO_ROOT, load_dotenv
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
 from ade_db.engine import build_engine
-from ade_api.db import get_db, get_session_factory
-from ade_api.db.migrations import run_migrations
+from ade_api.db import get_db_read, get_db_write, get_session_factory
+from ade_db.migrations_runner import run_migrations
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_db.models import Role, User, Workspace, WorkspaceMembership
@@ -99,9 +99,27 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     return settings
 
 
+def _ensure_blob_container(settings: Settings) -> None:
+    if not settings.blob_connection_string:
+        return
+    try:
+        from azure.core.exceptions import ResourceExistsError
+        from azure.storage.blob import BlobServiceClient
+    except ModuleNotFoundError:
+        return
+
+    service = BlobServiceClient.from_connection_string(settings.blob_connection_string)
+    container = service.get_container_client(settings.blob_container)
+    try:
+        container.create_container()
+    except ResourceExistsError:
+        pass
+
+
 @pytest.fixture(scope="session")
 def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     settings = _build_test_settings(tmp_path_factory)
+    _ensure_blob_container(settings)
     return settings
 
 
@@ -187,7 +205,7 @@ def app(
     app.state.settings = settings_ref["value"]
     app.dependency_overrides[get_settings] = lambda: settings_ref["value"]
 
-    def _get_db_override():
+    def _get_db_write_override():
         session = db_sessionmaker()
         try:
             yield session
@@ -198,7 +216,19 @@ def app(
         finally:
             session.close()
 
-    app.dependency_overrides[get_db] = _get_db_override
+    def _get_db_read_override():
+        session = db_sessionmaker()
+        try:
+            yield session
+            session.commit()
+        except BaseException:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db_write] = _get_db_write_override
+    app.dependency_overrides[get_db_read] = _get_db_read_override
     return app
 
 

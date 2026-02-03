@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
@@ -16,6 +17,8 @@ from sqlalchemy.engine import make_url
 
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
+from ade_api.core.auth.pipeline import dev_principal
+from ade_api.core.security.hashing import hash_password
 from ade_api.db import get_engine_from_app, get_session_factory_from_app, init_db, shutdown_db
 from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
@@ -29,6 +32,7 @@ from ade_storage import (
     shutdown_storage,
 )
 from ade_api.settings import Settings, get_settings
+from ade_db.models import User
 
 logger = logging.getLogger(__name__)
 MAINTENANCE_INTERVAL_SECONDS = 24 * 60 * 60
@@ -187,6 +191,38 @@ def create_application_lifespan(
                 except Exception:
                     logger.warning("rbac.registry.sync.failed", exc_info=True)
 
+        def _seed_dev_user() -> None:
+            if not settings.auth_disabled:
+                return
+
+            principal = dev_principal(settings)
+            with session_factory() as session:
+                with session.begin():
+                    user = session.get(User, principal.user_id)
+                    if user is None:
+                        alias = settings.auth_disabled_user_email or "developer@example.com"
+                        user = User(
+                            id=principal.user_id,
+                            email=alias,
+                            hashed_password=hash_password(secrets.token_urlsafe(32)),
+                            display_name=settings.auth_disabled_user_name,
+                            is_service_account=False,
+                            is_active=True,
+                            is_superuser=True,
+                            is_verified=True,
+                        )
+                        session.add(user)
+                        session.flush()
+
+                    service = RbacService(session=session)
+                    admin_role = service.get_role_by_slug(slug="global-admin")
+                    if admin_role is not None:
+                        service.assign_role_if_missing(
+                            user_id=principal.user_id,
+                            role_id=admin_role.id,
+                            workspace_id=None,
+                        )
+
         def _sync_sso_env_providers() -> None:
             with session_factory() as session:
                 with session.begin():
@@ -240,6 +276,7 @@ def create_application_lifespan(
                 ) from exc
 
             await asyncio.to_thread(_sync_rbac_registry)
+            await asyncio.to_thread(_seed_dev_user)
             await asyncio.to_thread(_sync_sso_env_providers)
             await asyncio.to_thread(_maintain_document_changes)
 
