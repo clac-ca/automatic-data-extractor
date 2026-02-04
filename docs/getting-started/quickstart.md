@@ -14,20 +14,12 @@ This is the fastest way to run ADE locally with a Postgres database and Azurite
 git clone https://github.com/clac-ca/automatic-data-extractor
 cd automatic-data-extractor
 
-# Start dependencies
+# Start ADE + dependencies (migrations run automatically)
 
-docker compose up --build -d postgres azurite azurite-init
-
-# Apply database migrations (first run only)
-
-docker compose run --rm api ade db migrate
-
-# Start ADE services
-
-docker compose up -d api worker web
+docker compose up --build
 ```
 
-Note: the compose file includes an `ade-init` one-shot service that fixes /app/data permissions for the `appuser`.
+Note: the container entrypoint fixes /app/data permissions (runs as root briefly, then drops to `appuser`). The default compose bind-mounts `./data`, so it will appear in your repo (gitignored) after first run.
 
 Open the web UI at `http://localhost:8000`.
 

@@ -23,7 +23,7 @@ container.
 
 ## Split containers (recommended at scale)
 
-If you mount a named volume at `/app/data`, use a one-shot init container to `chown` it to `appuser` before starting API/worker (the compose examples include `ade-init`).
+If you mount a named volume at `/app/data`, the container entrypoint will `chown` it on startup (root-then-drop) before launching the API/worker.
 
 Use `ADE_SERVICES` to control which services run in a container:
 

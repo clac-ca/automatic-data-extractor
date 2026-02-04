@@ -304,7 +304,9 @@ Env vars and flags do not.
 
 * [x] Simplify Dockerfile
 * [x] Standardize nginx directory
-* [x] Add init container for /app/data permissions
+* [x] Replace init container with root-then-drop entrypoint (gosu) for /app/data permissions
+* [x] Remove ade-init services from compose
+* [x] Bind-mount ./data for local dev troubleshooting
 
 ---
 
@@ -319,6 +321,7 @@ Env vars and flags do not.
 
 * [x] Local smoke tests
 * [ ] Verify overrides for `ade start` and `ade dev`
+* [ ] Verify root-then-drop permissions with local compose (no ade-init)
 
 ---
 

@@ -22,18 +22,6 @@
 #
 
 services:
-  ade-init:
-    image: ${ADE_IMAGE:-automatic-data-extractor:local}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    user: root
-    command: ["sh", "-c", "chown -R appuser:appuser /app/data"]
-    volumes:
-      - ade_data:/app/data
-    restart: "no"
-
   ade:
     image: ${ADE_IMAGE:-automatic-data-extractor:local}
     build:
@@ -41,8 +29,6 @@ services:
       dockerfile: Dockerfile
       target: production # switch to 'development' for a dev build (includes dev tools)
     depends_on:
-      ade-init:
-        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       azurite:
@@ -50,7 +36,7 @@ services:
       azurite-init:
         condition: service_completed_successfully
     volumes:
-      - ade_data:/app/data
+      - ./data:/app/data
     ports:
       - 8000:8000
     environment:
@@ -111,6 +97,5 @@ services:
     restart: "no"
 
 volumes:
-  ade_data:
   ade_pg_data:
   ade_azurite_data:

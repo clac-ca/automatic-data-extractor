@@ -112,6 +112,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       gettext-base \
+      gosu \
       libpq5 \
       nginx \
       tini \
@@ -124,6 +125,8 @@ RUN useradd -m -u 10001 -s /usr/sbin/nologin appuser
 COPY --from=web-build /web/dist /usr/share/nginx/html
 COPY frontend/ade-web/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY frontend/ade-web/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Writable runtime directories for nginx + ADE.
 RUN mkdir -p \
@@ -170,9 +173,8 @@ COPY --from=python-build-dev /app/backend /app/backend
 ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-USER appuser
 EXPOSE 8000
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["ade", "start"]
 
 # ============================================================
@@ -186,7 +188,6 @@ COPY --from=python-build-prod /opt/venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-USER appuser
 EXPOSE 8000
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["ade", "start"]

@@ -2,11 +2,6 @@
 # Anything defined here will override or extend the root docker-compose.yaml.
 
 services:
-  ade-init:
-    image: automatic-data-extractor:devcontainer
-    build:
-      target: development
-
   ade:
     image: automatic-data-extractor:devcontainer
     build:
