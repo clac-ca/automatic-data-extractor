@@ -65,7 +65,7 @@ def _env(name: str, default: str | None = None) -> str | None:
 
 def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     root = tmp_path_factory.mktemp("ade-api-tests")
-    data_dir = root / "data"
+    data_dir = root / "backend" / "data"
 
     auth_mode = (_env("DATABASE_AUTH_MODE") or "password").strip().lower()
     base_url = _env("DATABASE_URL")

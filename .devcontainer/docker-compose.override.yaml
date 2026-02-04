@@ -11,7 +11,7 @@ services:
       # Bind host ~/.codex; create_host_path avoids failures on host machines that never installed Codex.
       - type: bind
         source: ${HOME}/.codex
-        target: /home/appuser/.codex
+        target: /home/adeuser/.codex
         bind:
           create_host_path: true
       # Mount the repo into /app for live code edits inside the devcontainer.

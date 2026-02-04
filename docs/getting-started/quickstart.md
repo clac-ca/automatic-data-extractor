@@ -19,7 +19,7 @@ cd automatic-data-extractor
 docker compose up --build
 ```
 
-Note: the container entrypoint fixes /app/data permissions (runs as root briefly, then drops to `appuser`). The default compose bind-mounts `./data`, so it will appear in your repo (gitignored) after first run.
+Note: the container entrypoint fixes /app/backend/data permissions (runs as root briefly, then drops to `adeuser`). The default compose bind-mounts `./backend/data`, so it will appear in your repo (gitignored) after first run.
 
 Open the web UI at `http://localhost:8000`.
 

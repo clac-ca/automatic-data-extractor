@@ -119,7 +119,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root runtime user (keep the existing convention).
-RUN useradd -m -u 10001 -s /usr/sbin/nologin appuser
+RUN useradd -m -u 10001 -s /usr/sbin/nologin adeuser
 
 # Static web assets and nginx config template.
 COPY --from=web-build /web/dist /usr/share/nginx/html
@@ -130,12 +130,12 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Writable runtime directories for nginx + ADE.
 RUN mkdir -p \
-      /app/data \
+      /app/backend/data \
       /var/cache/nginx \
       /var/run/nginx \
       /var/lib/nginx \
       /var/log/nginx \
-    && chown -R appuser:appuser \
+    && chown -R adeuser:adeuser \
       /app \
       /etc/nginx/conf.d \
       /etc/nginx/templates \
@@ -158,7 +158,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Devcontainer shells require a valid interactive shell for the remote user.
-RUN usermod -s /bin/bash appuser
+RUN usermod -s /bin/bash adeuser
 
 # Include uv for local workflow convenience inside devcontainers.
 COPY --from=uv /uv /uvx /usr/local/bin/

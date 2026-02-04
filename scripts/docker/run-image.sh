@@ -23,4 +23,4 @@ if [[ ! -f ".env" ]]; then
 fi
 
 echo "==> Running ade-app:local"
-docker run --rm -it --env-file .env -e ADE_DATA_DIR=/app/data -p 8000:8000 -v "${ROOT_DIR}/data:/app/data" ade-app:local
+docker run --rm -it --env-file .env -e ADE_DATA_DIR=/app/backend/data -p 8000:8000 -v "${ROOT_DIR}/backend/data:/app/backend/data" ade-app:local

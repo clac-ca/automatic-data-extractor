@@ -330,7 +330,7 @@ def reset(
             cwd=REPO_ROOT,
         )
     if data:
-        data_dir = REPO_ROOT / "data"
+        data_dir = REPO_ROOT / "backend" / "data"
         if data_dir.exists():
             shutil.rmtree(data_dir)
         data_dir.mkdir(parents=True, exist_ok=True)

@@ -8,7 +8,7 @@
   "workspaceFolder": "/app",
   "shutdownAction": "stopCompose",
 
-  "remoteUser": "appuser",
+  "remoteUser": "adeuser",
   "updateRemoteUserUID": true,
   
   "forwardPorts": [

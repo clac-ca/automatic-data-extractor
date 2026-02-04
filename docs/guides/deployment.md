@@ -23,7 +23,7 @@ container.
 
 ## Split containers (recommended at scale)
 
-If you mount a named volume at `/app/data`, the container entrypoint will `chown` it on startup (root-then-drop) before launching the API/worker.
+If you mount a named volume at `/app/backend/data`, the container entrypoint will `chown` it on startup (root-then-drop) before launching the API/worker.
 
 Use `ADE_SERVICES` to control which services run in a container:
 
@@ -48,6 +48,14 @@ ade db migrate
 If you prefer to manage migrations manually (outside app startup), set
 `ADE_DB_MIGRATE_ON_START=false` in your environment (or `.env`) and run the
 migration command before launching containers.
+
+Multi-replica guidance:
+- Run migrations once as a one-off job, then start all replicas with `ADE_DB_MIGRATE_ON_START=false`.
+- Or enable auto-migrate on a single "leader" instance and set `ADE_DB_MIGRATE_ON_START=false` on others.
+
+Migrations are serialized via a Postgres advisory lock, so concurrent starts will wait
+instead of racing. It's still best practice to designate a single migration runner in
+production.
 
 Example (one-off migration with the image):
 

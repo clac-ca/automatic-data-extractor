@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     server_cors_origin_regex: str | None = Field(default=None)
 
     # Storage
-    data_dir: Path = Field(default=Path("data"))
+    data_dir: Path = Field(default=Path("backend/data"))
     blob_account_url: str | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
     blob_container: str = Field(default="ade")

@@ -19,8 +19,8 @@ frontend/ade-web/public/version.json
 .env
 
 # Local data volumes
-data/**
-!data/**/.gitkeep
+backend/data/**
+!backend/data/**/.gitkeep
 
 # OS
 .DS_Store

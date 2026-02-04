@@ -35,7 +35,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.password == "ade"
     assert url.query.get("sslmode") == "disable"
     assert settings.access_token_expire_minutes == 30
-    expected_root = Path("data")
+    expected_root = Path("backend/data")
     expected_workspaces = expected_root / "workspaces"
     expected_venvs = expected_root / "venvs"
     assert settings.data_dir == expected_root

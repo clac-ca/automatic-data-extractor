@@ -36,7 +36,7 @@ services:
       azurite-init:
         condition: service_completed_successfully
     volumes:
-      - ./data:/app/data
+      - ./backend/data:/app/backend/data
     ports:
       - 8000:8000
     environment:
@@ -47,7 +47,7 @@ services:
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces} # Default local prefix
       ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false} # disable versioning requirement for local Azurite
-      ADE_DATA_DIR: /app/data
+      ADE_DATA_DIR: /app/backend/data
       ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000} # change me!
 
   postgres:

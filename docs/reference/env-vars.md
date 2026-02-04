@@ -9,7 +9,7 @@ This list focuses on the most common settings for local and production use.
 - `ADE_SECRET_KEY` (required)
   - 32+ bytes recommended.
 - `ADE_DATA_DIR` (optional)
-  - Default: `data`
+  - Default: `backend/data`
 - `ADE_WORKER_RUNS_DIR` (optional)
   - Default: `/tmp/ade-runs`
 
