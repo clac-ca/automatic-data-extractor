@@ -309,6 +309,7 @@ Env vars and flags do not.
 * [x] Bind-mount ./backend/data for local dev troubleshooting
 * [x] Rename runtime user to `adeuser`
 * [x] Move default data dir to `backend/data` (settings + compose + docs + gitignore)
+* [x] Move nginx template rendering into entrypoint (CLI just runs nginx)
 
 ---
 

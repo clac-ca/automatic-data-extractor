@@ -159,53 +159,6 @@ def _resolve_internal_api_url(env: dict[str, str]) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _find_nginx_template() -> Path:
-    template = Path("/etc/nginx/templates/default.conf.tmpl")
-    if template.exists():
-        return template
-    typer.echo(
-        "error: nginx template not found (expected /etc/nginx/templates/default.conf.tmpl).",
-        err=True,
-    )
-    raise typer.Exit(code=1)
-
-
-def _render_nginx_config(*, internal_api_url: str) -> None:
-    template_path = _find_nginx_template()
-    conf_dir = Path("/etc/nginx/conf.d")
-    if not conf_dir.exists():
-        typer.echo(
-            "error: nginx config directory not found (expected /etc/nginx/conf.d).",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    envsubst_bin = shutil.which("envsubst")
-    if not envsubst_bin:
-        typer.echo(
-            "error: envsubst not found (install gettext-base to render nginx templates).",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    output_path = conf_dir / "default.conf"
-    template = template_path.read_text(encoding="utf-8")
-    env = os.environ.copy()
-    env["ADE_INTERNAL_API_URL"] = internal_api_url
-    completed = subprocess.run(
-        [envsubst_bin, "$ADE_INTERNAL_API_URL"],
-        input=template,
-        text=True,
-        env=env,
-        capture_output=True,
-    )
-    if completed.returncode != 0:
-        typer.echo(
-            completed.stderr or "error: envsubst failed to render nginx template.",
-            err=True,
-        )
-        raise typer.Exit(code=completed.returncode)
-    output_path.write_text(completed.stdout, encoding="utf-8")
-
-
 def _nginx_cmd() -> list[str]:
     nginx_bin = shutil.which("nginx")
     if not nginx_bin:
@@ -262,7 +215,6 @@ def start(
         web_env = base_env.copy()
         internal_api_url = _resolve_internal_api_url(base_env)
         web_env["ADE_INTERNAL_API_URL"] = internal_api_url
-        _render_nginx_config(internal_api_url=internal_api_url)
         commands["web"] = (_nginx_cmd(), web_env)
     _spawn_processes(commands, cwd=REPO_ROOT)
 
@@ -432,7 +384,6 @@ def web_start() -> None:
     base_env = os.environ.copy()
     web_env = base_env.copy()
     web_env["ADE_INTERNAL_API_URL"] = _resolve_internal_api_url(base_env)
-    _render_nginx_config(internal_api_url=web_env["ADE_INTERNAL_API_URL"])
     _run(_nginx_cmd(), cwd=REPO_ROOT, env=web_env)
 
 
