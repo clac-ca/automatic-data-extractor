@@ -16,6 +16,4 @@ services:
           create_host_path: true
       # Mount the repo into /app for live code edits inside the devcontainer.
       - .:/app:cached
-    tmpfs:
-      # Allow ade-web entrypoint to write nginx config when devcontainer updates appuser UID.
-      - /etc/nginx/conf.d:uid=1000,gid=1000,mode=755
+      - ./apps/ade-web/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
