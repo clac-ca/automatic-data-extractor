@@ -109,6 +109,8 @@ Fastest contributor setup:
 2. Open the repo in VS Code
 3. Run **“Dev Containers: Reopen in Container”**
 
+Note: nginx config is rendered when the container starts from the template baked into the image. If you change nginx templates or need a different `ADE_INTERNAL_API_URL` for nginx, rebuild or restart the container.
+
 ---
 
 ## Operations

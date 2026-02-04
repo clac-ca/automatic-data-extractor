@@ -16,5 +16,3 @@ services:
           create_host_path: true
       # Mount the repo into /app for live code edits inside the devcontainer.
       - .:/app:cached
-      - ./frontend/ade-web/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend/ade-web/nginx/default.conf.tmpl:/etc/nginx/templates/default.conf.tmpl:ro

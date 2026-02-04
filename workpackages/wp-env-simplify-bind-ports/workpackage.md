@@ -310,6 +310,7 @@ Env vars and flags do not.
 * [x] Rename runtime user to `adeuser`
 * [x] Move default data dir to `backend/data` (settings + compose + docs + gitignore)
 * [x] Move nginx template rendering into entrypoint (CLI just runs nginx)
+* [x] Remove nginx template bind-mounts from devcontainer (use baked config)
 
 ---
 
@@ -317,6 +318,7 @@ Env vars and flags do not.
 
 * [x] Update env reference
 * [x] Update quickstart and deployment docs
+* [x] Note nginx config render timing for devcontainer users
 
 ---
 
