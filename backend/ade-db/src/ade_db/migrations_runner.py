@@ -4,23 +4,28 @@ from __future__ import annotations
 
 import asyncio
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from importlib import resources
 from pathlib import Path
 from typing import Any, Iterator
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import text
 from ade_api.settings import Settings, get_settings
+
+from .engine import build_engine
 
 __all__ = [
     "alembic_config",
+    "migration_lock",
     "run_migrations",
     "run_migrations_async",
     "migration_timeout_seconds",
 ]
 
 DEFAULT_MIGRATION_TIMEOUT_S = 15.0
+MIGRATION_LOCK_KEY = 0xADEDB00  # 183,657,216: stable Postgres advisory lock key.
 
 
 def _alembic_resource_paths() -> tuple[Path, Path]:
@@ -43,6 +48,23 @@ def migration_timeout_seconds(value: Any | None = None) -> float | None:
     if timeout <= 0:
         return None
     return timeout
+
+
+@contextmanager
+def migration_lock(settings: Settings) -> Iterator[None]:
+    engine = build_engine(settings)
+    try:
+        with engine.connect() as base_conn:
+            conn = base_conn.execution_options(isolation_level="AUTOCOMMIT")
+            conn.execute(text("SET statement_timeout = 0"))
+            conn.execute(text("SELECT pg_advisory_lock(:key)"), {"key": MIGRATION_LOCK_KEY})
+            try:
+                yield
+            finally:
+                with suppress(Exception):
+                    conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY})
+    finally:
+        engine.dispose()
 
 
 @contextmanager
@@ -69,8 +91,10 @@ def alembic_config(settings: Settings | None = None) -> Iterator[Config]:
 
 
 def run_migrations(settings: Settings | None = None, *, revision: str = "head") -> None:
-    with alembic_config(settings) as alembic_cfg:
-        command.upgrade(alembic_cfg, revision)
+    resolved = settings or get_settings()
+    with migration_lock(resolved):
+        with alembic_config(resolved) as alembic_cfg:
+            command.upgrade(alembic_cfg, revision)
 
 
 async def run_migrations_async(
