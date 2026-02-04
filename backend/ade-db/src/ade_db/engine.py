@@ -186,7 +186,8 @@ def assert_tables_exist(
     if missing:
         raise RuntimeError(
             f"Missing required tables: {', '.join(missing)}. "
-            "Run `ade db migrate` before starting ADE services."
+            "Run `ade db migrate`, or use `ade start`/`ade dev` with migrations enabled "
+            "(default; set ADE_DB_MIGRATE_ON_START=false or --no-migrate to skip)."
         )
 
 

@@ -138,6 +138,14 @@ def _web_entrypoint_cmd() -> list[str]:
     return [str(script)]
 
 
+def _maybe_run_migrations(selected: list[str], migrate: bool) -> None:
+    if not migrate:
+        return
+    if not any(service in {"api", "worker"} for service in selected):
+        return
+    _run(["ade", "db", "migrate"], cwd=REPO_ROOT)
+
+
 def _npm_cmd(*args: str) -> list[str]:
     return ["npm", "--prefix", str(FRONTEND_DIR), *args]
 
@@ -156,8 +164,15 @@ def start(
         help="Comma-separated services to run (api,worker,web).",
         envvar="ADE_SERVICES",
     ),
+    migrate: bool = typer.Option(
+        True,
+        "--migrate/--no-migrate",
+        help="Run database migrations before starting services.",
+        envvar="ADE_DB_MIGRATE_ON_START",
+    ),
 ) -> None:
     selected = _parse_services(services)
+    _maybe_run_migrations(selected, migrate)
     base_env = os.environ.copy()
     commands: dict[str, tuple[list[str], dict[str, str] | None]] = {}
     api_needs_alt_port = "api" in selected and "web" in selected
@@ -184,8 +199,15 @@ def dev(
         help="Comma-separated services to run (api,worker,web).",
         envvar="ADE_SERVICES",
     ),
+    migrate: bool = typer.Option(
+        True,
+        "--migrate/--no-migrate",
+        help="Run database migrations before starting services.",
+        envvar="ADE_DB_MIGRATE_ON_START",
+    ),
 ) -> None:
     selected = _parse_services(services)
+    _maybe_run_migrations(selected, migrate)
     base_env = os.environ.copy()
     commands: dict[str, tuple[list[str], dict[str, str] | None]] = {}
     api_needs_alt_port = "api" in selected and "web" in selected

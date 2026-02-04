@@ -38,3 +38,16 @@ Apply database migrations before starting services:
 ```bash
 ade db migrate
 ```
+
+If you prefer to manage migrations manually (outside app startup), set
+`ADE_DB_MIGRATE_ON_START=false` in your environment (or `.env`) and run the
+migration command before launching containers.
+
+Example (one-off migration with the image):
+
+```bash
+docker run --rm \
+  -e ADE_DATABASE_URL=postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full \
+  ghcr.io/clac-ca/automatic-data-extractor:latest \
+  ade db migrate
+```

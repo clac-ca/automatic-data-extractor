@@ -13,6 +13,9 @@ ADE_SECRET_KEY=change-me-to-a-long-random-value
 
 ## 2) Run migrations
 
+If you use `ade dev` or `ade start`, migrations run automatically by default.
+To skip auto-migrate, set `ADE_DB_MIGRATE_ON_START=false` or pass `--no-migrate`.
+
 ```bash
 ade db migrate
 ```

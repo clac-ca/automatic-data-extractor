@@ -24,6 +24,10 @@ Service selection:
 
 You can also pass `--services` to `ade start` and `ade dev`.
 
+Migrations on start:
+- `ade start` and `ade dev` run `ade db migrate` by default when starting `api` and/or `worker`.
+- Disable with `--no-migrate` or `ADE_DB_MIGRATE_ON_START=false`.
+
 ## API
 
 ```bash
