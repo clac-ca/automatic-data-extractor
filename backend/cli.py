@@ -215,10 +215,13 @@ def _nginx_cmd() -> list[str]:
 
 
 def _maybe_run_migrations(selected: list[str], migrate: bool) -> None:
-    if not migrate:
-        return
     if not any(service in {"api", "worker"} for service in selected):
+        typer.echo("-> skip migrations (no api/worker selected)", err=True)
         return
+    if not migrate:
+        typer.echo("-> skip migrations (--no-migrate)", err=True)
+        return
+    typer.echo("-> running database migrations", err=True)
     _run(["ade", "db", "migrate"], cwd=REPO_ROOT)
 
 

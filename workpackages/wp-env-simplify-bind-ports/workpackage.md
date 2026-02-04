@@ -304,6 +304,7 @@ Env vars and flags do not.
 
 * [x] Simplify Dockerfile
 * [x] Standardize nginx directory
+* [x] Add init container for /app/data permissions
 
 ---
 

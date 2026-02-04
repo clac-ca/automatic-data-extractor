@@ -27,6 +27,8 @@ docker compose run --rm api ade db migrate
 docker compose up -d api worker web
 ```
 
+Note: the compose file includes an `ade-init` one-shot service that fixes /app/data permissions for the `appuser`.
+
 Open the web UI at `http://localhost:8000`.
 
 URL overrides:

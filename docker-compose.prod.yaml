@@ -22,7 +22,18 @@
 #                     ├───────────────> external Postgres
 #                     └───────────────> external Azure Storage
 services:
+  ade-init:
+    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+    user: root
+    command: ["sh", "-c", "chown -R appuser:appuser /app/data"]
+    volumes:
+      - ade_data:/app/data
+    restart: "no"
+
   ade:
+    depends_on:
+      ade-init:
+        condition: service_completed_successfully
     image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
     command: ["ade", "start"]
     volumes:
