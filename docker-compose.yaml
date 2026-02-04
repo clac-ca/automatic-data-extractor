@@ -41,8 +41,7 @@ services:
       - 8000:8000
     environment:
       ADE_SERVICES: api,worker,web
-      ADE_API_PORT: 8001
-      ADE_WEB_PROXY_TARGET: http://127.0.0.1:8001
+      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:-http://localhost:8000}
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container

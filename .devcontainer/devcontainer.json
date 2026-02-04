@@ -18,7 +18,7 @@
     "azurite:10000"
   ],
   "portsAttributes": {
-    "ade:8000": { "label": "Web (nginx)" },
+    "ade:8000": { "label": "Web" },
     "ade:8001": { "label": "API" },
     "postgres:5432": { "label": "Postgres" },
     "azurite:10000": { "label": "Azurite (Blob)" }

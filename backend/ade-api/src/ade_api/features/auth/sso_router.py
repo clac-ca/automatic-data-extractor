@@ -85,7 +85,7 @@ def _login_redirect(
     provider_id: str | None = None,
     return_to: str | None = None,
 ) -> RedirectResponse:
-    frontend = settings.frontend_url or settings.server_public_url
+    frontend = settings.public_web_url
     params: dict[str, str] = {"ssoError": code}
     if provider_id:
         params["providerId"] = provider_id
@@ -120,12 +120,12 @@ def _success_response(
 ) -> Response:
     if _wants_json(request):
         return JSONResponse({"ok": True, "returnTo": return_to, "error": None})
-    frontend = settings.frontend_url or settings.server_public_url
+    frontend = settings.public_web_url
     return RedirectResponse(f"{frontend}{return_to}")
 
 
 def _callback_url(settings: Settings, provider_id: str) -> str:
-    base = settings.server_public_url.rstrip("/")
+    base = settings.public_web_url.rstrip("/")
     return f"{base}/api/v1/auth/sso/{provider_id}/callback"
 
 

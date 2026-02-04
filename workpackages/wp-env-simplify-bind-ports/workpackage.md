@@ -34,9 +34,8 @@ This removes ambiguity between:
 
 * public URLs vs internal upstreams
 * dev (Vite) vs prod (nginx)
-* legacy env names vs canonical ones
 
-**All existing deployments must continue to work.**
+**Legacy env aliases are removed; deployments must update to the canonical env model.**
 
 ---
 
@@ -58,18 +57,19 @@ Both **Vite** and **nginx** must:
 
 1. Serve frontend assets
 2. Proxy `/api` → `ADE_INTERNAL_API_URL`
-3. Bind to `ADE_WEB_BIND_PORT`
+3. Bind to `8000`
 
 **Web servers receive exactly one API input:**
 `ADE_INTERNAL_API_URL`
+
+**Rule:** `ADE_INTERNAL_API_URL` must be an origin only (no `/api` path).
 
 ---
 
 ### Minimal web-related env model
 
 ```env
-ADE_WEB_BIND_PORT=8000
-ADE_INTERNAL_API_URL=http://localhost:8001
+ADE_INTERNAL_API_URL=http://localhost:8001  # origin only (no /api)
 ADE_PUBLIC_WEB_URL=http://localhost:8000
 ```
 
@@ -83,7 +83,8 @@ frontend/ade-web/
   src/
   vite.config.ts
   nginx/
-    default.conf.tmpl # single nginx template
+    nginx.conf        # minimal nginx config
+    default.conf.tmpl # site template (envsubst)
 ```
 
 ---
@@ -93,8 +94,13 @@ frontend/ade-web/
 ### nginx (`frontend/ade-web/nginx/default.conf.tmpl`)
 
 ```nginx
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  '' close;
+}
+
 server {
-  listen ${ADE_WEB_BIND_PORT};
+  listen 8000;
 
   root /usr/share/nginx/html;
   index index.html;
@@ -106,7 +112,7 @@ server {
   location /api/ {
     proxy_pass ${ADE_INTERNAL_API_URL};
     proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
@@ -121,7 +127,7 @@ server {
 ```ts
 export default defineConfig({
   server: {
-    port: Number(process.env.ADE_WEB_BIND_PORT ?? 8000),
+    port: 8000,
     proxy: {
       "/api": {
         target: process.env.ADE_INTERNAL_API_URL,
@@ -136,35 +142,21 @@ export default defineConfig({
 
 ## Canonical Environment Model
 
-### Bind ports (where processes listen)
+### Bind ports (fixed)
 
-* `ADE_API_BIND_PORT` (default: `8001`)
-* `ADE_WEB_BIND_PORT` (default: `8000`)
+* API always binds to `8001`
+* Web server always binds to `8000`
 
 ### URLs (what proxies and users use)
 
 * `ADE_PUBLIC_WEB_URL` – public-facing web URL
-* `ADE_INTERNAL_API_URL` – internal API upstream (used by nginx and Vite)
+* `ADE_INTERNAL_API_URL` – internal API upstream (origin only, used by nginx and Vite)
 
 ---
 
-## CLI Overrides
+## CLI Behavior
 
-Both commands accept explicit bind-port overrides:
-
-```bash
-ade start --api-bind-port 9001 --web-bind-port 9000
-ade dev   --api-bind-port 9001 --web-bind-port 9000
-```
-
-**Precedence rules**
-
-1. CLI flags
-2. Canonical env vars
-3. Legacy env vars
-4. Defaults
-
-`ade start` and `ade dev` behave identically.
+`ade start` and `ade dev` always use the fixed bind ports (web `8000`, API `8001`).
 
 ---
 
@@ -175,10 +167,7 @@ ade dev   --api-bind-port 9001 --web-bind-port 9000
 * Runs API, worker, and web (nginx)
 * Serves built frontend assets
 * Proxies `/api` → `ADE_INTERNAL_API_URL`
-* Uses:
-
-  * `ADE_API_BIND_PORT` for API
-  * `ADE_WEB_BIND_PORT` for nginx
+* Binds: API `8001`, web `8000`
 
 ---
 
@@ -187,10 +176,7 @@ ade dev   --api-bind-port 9001 --web-bind-port 9000
 * Runs API, worker, and web (Vite dev server)
 * Uses HMR
 * Proxies `/api` → `ADE_INTERNAL_API_URL`
-* Uses:
-
-  * `ADE_API_BIND_PORT` for API
-  * `ADE_WEB_BIND_PORT` for Vite
+* Binds: API `8001`, web `8000`
 
 **Key point:**
 Only the web server implementation changes.
@@ -220,12 +206,10 @@ Env vars and flags do not.
 
 ---
 
-## Port Change Rules
+## URL Change Rules
 
-* Changing `ADE_WEB_BIND_PORT` → update `ADE_PUBLIC_WEB_URL`
-* Changing `ADE_API_BIND_PORT` → update `ADE_INTERNAL_API_URL`
-
-No hidden coupling.
+* If the API host changes, update `ADE_INTERNAL_API_URL`.
+* If the public web host or scheme changes, update `ADE_PUBLIC_WEB_URL`.
 
 ---
 
@@ -233,45 +217,59 @@ No hidden coupling.
 
 ### In scope
 
-* Canonical env names for bind ports and URLs
-* `--api-bind-port` / `--web-bind-port` flags
-* Backward-compatible aliases:
-
-  * `ADE_API_PORT`
-  * `ADE_WEB_DEV_PORT`
-  * `ADE_WEB_PROXY_TARGET`
+* Canonical env names for URLs; bind ports fixed to `8000`/`8001`
+* Remove legacy env aliases (single canonical model)
 * Unified proxy config via `ADE_INTERNAL_API_URL`
 * Docs (env reference, quickstart, deployment)
 * Simplified Dockerfile and standardized nginx layout
 
 ### Out of scope
 
-* Removing legacy env vars
-* Breaking existing deployments
 * Auth, session, or routing behavior changes
 
 ---
 
 ## Work Breakdown Structure (WBS)
 
+## Stages
+
+### Stage 1: Env + CLI wiring
+
+- Canonical env names + precedence rules
+- API/web settings (canonical only)
+- Root CLI + web CLI fixed port behavior
+
+### Stage 2: Web proxy + Docker layout
+
+- nginx + Vite proxy configs
+- Dockerfile + nginx template layout
+- Docker Compose env wiring
+
+### Stage 3: Docs + validation
+
+- Env reference + quickstart/deployment docs
+- Local smoke checks
+
 ### 1.0 Env model and defaults
 
-* [ ] Finalize canonical env names
-* [ ] Define precedence rules
-* [ ] Confirm API default port (`8001`)
+* [x] Finalize canonical env names
+* [x] Define precedence rules
+* [x] Confirm API default port (`8001`)
+* [x] Enforce `ADE_INTERNAL_API_URL` origin-only input
+* [x] Remove legacy frontend URL alias (`ADE_FRONTEND_URL`)
 
-### 2.0 Settings and aliases
+### 2.0 Settings and validation
 
 #### 2.1 API
 
-* [ ] Add canonical settings
-* [ ] Preserve legacy parsing
-* [ ] Validate ports and URLs
+* [x] Add canonical settings
+* [x] Remove legacy parsing
+* [x] Validate ports and URLs
 
 #### 2.2 Worker / shared
 
-* [ ] Audit worker usage of URLs
-* [ ] Keep behavior consistent
+* [x] Audit worker usage of URLs
+* [x] Keep behavior consistent
 
 ---
 
@@ -279,13 +277,13 @@ No hidden coupling.
 
 #### 3.1 Root CLI
 
-* [ ] Add bind-port flags
-* [ ] Enforce override precedence
-* [ ] Remove ad-hoc port logic
+* [x] Remove bind-port flags
+* [x] Standardize fixed ports (web `8000`, API `8001`)
+* [x] Remove ad-hoc port logic
 
 #### 3.2 Web commands
 
-* [ ] Ensure `ade web start` uses canonical envs
+* [x] Ensure `ade web start` uses canonical envs
 
 ---
 
@@ -293,32 +291,32 @@ No hidden coupling.
 
 #### 4.1 nginx
 
-* [ ] Use `ADE_INTERNAL_API_URL`
-* [ ] Validate template rendering
+* [x] Use `ADE_INTERNAL_API_URL`
+* [x] Validate template rendering
+* [x] Simplify nginx.conf (minimal, standard) and render via envsubst
 
 #### 4.2 Vite
 
-* [ ] Use `ADE_INTERNAL_API_URL`
-* [ ] Support legacy aliases
+* [x] Use `ADE_INTERNAL_API_URL`
+* [x] Remove legacy aliases
 
 #### 4.3 Docker / layout
 
-* [ ] Simplify Dockerfile
-* [ ] Standardize nginx directory
+* [x] Simplify Dockerfile
+* [x] Standardize nginx directory
 
 ---
 
 ### 5.0 Documentation
 
-* [ ] Update env reference
-* [ ] Update quickstart and deployment docs
-* [ ] Add migration notes
+* [x] Update env reference
+* [x] Update quickstart and deployment docs
 
 ---
 
 ### 6.0 Validation
 
-* [ ] Local smoke tests
+* [x] Local smoke tests
 * [ ] Verify overrides for `ade start` and `ade dev`
 
 ---
@@ -326,22 +324,26 @@ No hidden coupling.
 ## Open Questions
 
 * Should the API always bind to `8001` if web is disabled?
+  * Decision: yes, always `8001`.
 * Do we need `ADE_PUBLIC_API_URL` if the UI always proxies `/api`?
+  * Decision: no (out of scope).
 * Should legacy env usage emit deprecation warnings?
+  * Decision: no (legacy envs are removed).
 
 ---
 
 ## Acceptance Criteria
 
 * Canonical env vars are supported and documented
-* Bind-port overrides work consistently
+* Fixed bind ports are enforced (web `8000`, API `8001`)
 * nginx and Vite proxy via `ADE_INTERNAL_API_URL`
-* Legacy envs continue to work unchanged
+* `ADE_INTERNAL_API_URL` is origin-only (no `/api` path)
+* Legacy env aliases removed
 
 ---
 
 ## Definition of Done
 
 * Implementation complete and locally verified
-* Docs updated with examples and migration notes
+* Docs updated with canonical examples
 * WBS checklist reflects completed work

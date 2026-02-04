@@ -43,7 +43,7 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             description=app.description,
             routes=app.routes,
         )
-        schema["servers"] = [{"url": settings.server_public_url}]
+        schema["servers"] = [{"url": settings.public_web_url}]
 
         components = schema.setdefault("components", {})
         security_schemes = components.setdefault("securitySchemes", {})

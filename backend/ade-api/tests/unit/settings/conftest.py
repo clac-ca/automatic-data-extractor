@@ -14,7 +14,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_API_DOCS_ENABLED",
         "ADE_SAFE_MODE",
         "ADE_LOG_LEVEL",
-        "ADE_SERVER_PUBLIC_URL",
+        "ADE_PUBLIC_WEB_URL",
         "ADE_SERVER_CORS_ORIGINS",
         "ADE_SERVER_CORS_ORIGIN_REGEX",
         "ADE_DATA_DIR",

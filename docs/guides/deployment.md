@@ -14,8 +14,12 @@ docker run --rm -p 8000:8000 \
   ghcr.io/clac-ca/automatic-data-extractor:latest
 ```
 
-Note: when the web entrypoint is enabled, the API listens on `8001` internally and nginx
-proxies `/api` to it.
+Note: ports are fixed (API `8001`, web `8000`). Use Docker port mappings to
+expose different external ports. nginx proxies `/api` to `ADE_INTERNAL_API_URL`
+which must be an origin (no `/api` path).
+
+For split containers, set `ADE_INTERNAL_API_URL=http://api:8001` in the web
+container.
 
 ## Split containers (recommended at scale)
 

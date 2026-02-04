@@ -11,6 +11,8 @@ import typer
 from ade_api.commands import common
 from ade_api.settings import Settings
 
+DEFAULT_API_BIND_PORT = 8001
+
 
 def _prepare_env() -> dict[str, str]:
     env = common.build_env()
@@ -21,13 +23,12 @@ def _prepare_env() -> dict[str, str]:
 def run_dev(
     *,
     host: str | None = None,
-    port: int | None = None,
     workers: int | None = None,
 ) -> None:
     """Run the API dev server (uvicorn --reload)."""
 
     settings = Settings()
-    port = int(port if port is not None else (settings.api_port or 8000))
+    port = DEFAULT_API_BIND_PORT
     host = host or (settings.api_host or "0.0.0.0")
     workers = int(workers if workers is not None else (settings.api_workers or 1))
 
@@ -51,13 +52,12 @@ def run_dev(
 def run_start(
     *,
     host: str | None = None,
-    port: int | None = None,
     workers: int | None = None,
 ) -> None:
     """Start the API server (requires migrations to be applied)."""
 
     settings = Settings()
-    port = int(port if port is not None else (settings.api_port or 8000))
+    port = DEFAULT_API_BIND_PORT
     host = host or (settings.api_host or "0.0.0.0")
     workers = int(workers if workers is not None else (settings.api_workers or 1))
 
@@ -84,12 +84,6 @@ def register(app: typer.Typer) -> None:
             help="Host/interface for the API dev server.",
             envvar="ADE_API_HOST",
         ),
-        port: int = typer.Option(
-            None,
-            "--port",
-            help="Port for the API dev server.",
-            envvar="ADE_API_PORT",
-        ),
         workers: int = typer.Option(
             None,
             "--workers",
@@ -98,7 +92,7 @@ def register(app: typer.Typer) -> None:
             min=1,
         ),
     ) -> None:
-        run_dev(host=host, port=port, workers=workers)
+        run_dev(host=host, workers=workers)
 
     @app.command(
         name="start",
@@ -111,12 +105,6 @@ def register(app: typer.Typer) -> None:
             help="Host/interface for the API server.",
             envvar="ADE_API_HOST",
         ),
-        port: int = typer.Option(
-            None,
-            "--port",
-            help="Port for the API server.",
-            envvar="ADE_API_PORT",
-        ),
         workers: int = typer.Option(
             None,
             "--workers",
@@ -125,4 +113,4 @@ def register(app: typer.Typer) -> None:
             min=1,
         ),
     ) -> None:
-        run_start(host=host, port=port, workers=workers)
+        run_start(host=host, workers=workers)

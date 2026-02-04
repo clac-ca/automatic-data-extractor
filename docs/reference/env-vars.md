@@ -12,8 +12,6 @@ This list focuses on the most common settings for local and production use.
   - Default: `data`
 - `ADE_WORKER_RUNS_DIR` (optional)
   - Default: `/tmp/ade-runs`
-- `ADE_API_PORT` (optional)
-  - Default: `8000` (API-only). When running with the web entrypoint on `8000`, set to `8001`.
 
 ## Local filesystem layout
 
@@ -48,11 +46,12 @@ Additional settings:
 
 ## Web
 
-- `ADE_WEB_PROXY_TARGET`
-  - The API URL that nginx proxies to (web container).
-- `ADE_WEB_DEV_PORT`
-  - Port for the Vite dev server (default: `8000`).
-- `ADE_API_PROXY_TARGET`
-  - API base URL used by the Vite dev server proxy (default: `http://localhost:8001`).
+Ports are fixed: web `8000`, API `8001`.
+- `ADE_INTERNAL_API_URL`
+  - Internal API upstream used by nginx and Vite (default: `http://localhost:8001`).
+  - Use the base origin only (no `/api` path).
+  - For split containers, set to `http://api:8001`.
+- `ADE_PUBLIC_WEB_URL`
+  - Public web URL used for redirects/cookies (default: `http://localhost:8000`).
 - `ADE_WEB_VERSION_FILE`
   - Path to `version.json` for the web UI (default: `/usr/share/nginx/html/version.json`).

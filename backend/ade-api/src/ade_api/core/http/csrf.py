@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 from fastapi import Response
 
@@ -18,18 +17,7 @@ class CookieSettings:
 
 
 def _resolve_cookie_settings(settings: Settings) -> CookieSettings:
-    frontend_url = settings.frontend_url or settings.server_public_url
-    try:
-        frontend = urlparse(frontend_url)
-        server = urlparse(settings.server_public_url)
-        cross_origin = (frontend.scheme, frontend.netloc) != (server.scheme, server.netloc)
-    except Exception:
-        cross_origin = False
-
-    if cross_origin:
-        return CookieSettings(secure=True, samesite="none")
-
-    secure = settings.server_public_url.lower().startswith("https://")
+    secure = settings.public_web_url.lower().startswith("https://")
     return CookieSettings(secure=secure, samesite="lax")
 
 

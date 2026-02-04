@@ -1,3 +1,8 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
 server {
     listen 8000;
     server_name _;
@@ -7,7 +12,7 @@ server {
     client_max_body_size 25m;
 
     location /api/ {
-        proxy_pass ${ADE_WEB_PROXY_TARGET};
+        proxy_pass ${ADE_INTERNAL_API_URL};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

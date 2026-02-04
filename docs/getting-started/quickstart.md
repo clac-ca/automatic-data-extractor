@@ -29,6 +29,10 @@ docker compose up -d api worker web
 
 Open the web UI at `http://localhost:8000`.
 
+URL overrides:
+- Update `ADE_INTERNAL_API_URL` if the API host changes (for split containers). Use the origin only (no `/api` path).
+- Update `ADE_PUBLIC_WEB_URL` if the public web host or scheme changes.
+
 ## Stop and reset
 
 ```bash

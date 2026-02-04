@@ -10,6 +10,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import urlparse
 
 import typer
 
@@ -21,6 +22,8 @@ app = typer.Typer(
 
 SERVICE_ORDER = ("api", "worker", "web")
 SERVICE_SET = set(SERVICE_ORDER)
+
+DEFAULT_INTERNAL_API_URL = "http://localhost:8001"
 
 
 class StorageResetMode(str, Enum):
@@ -49,10 +52,15 @@ REPO_ROOT = _find_repo_root()
 FRONTEND_DIR = REPO_ROOT / "frontend" / "ade-web"
 
 
-def _run(command: Iterable[str], *, cwd: Path | None = None) -> None:
+def _run(
+    command: Iterable[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> None:
     cmd_list = list(command)
     typer.echo(f"-> {' '.join(cmd_list)}", err=True)
-    completed = subprocess.run(cmd_list, cwd=cwd, check=False)
+    completed = subprocess.run(cmd_list, cwd=cwd, env=env, check=False)
     if completed.returncode != 0:
         raise typer.Exit(code=completed.returncode)
 
@@ -124,18 +132,86 @@ def _parse_services(value: str | None) -> list[str]:
     return ordered
 
 
-def _web_entrypoint_cmd() -> list[str]:
-    entrypoint = shutil.which("ade-web-entrypoint")
-    if entrypoint:
-        return [entrypoint]
-    script = FRONTEND_DIR / "nginx" / "entrypoint.sh"
-    if not script.exists():
+def _env_value(env: dict[str, str], name: str) -> str | None:
+    value = env.get(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _resolve_internal_api_url(env: dict[str, str]) -> str:
+    raw = _env_value(env, "ADE_INTERNAL_API_URL") or DEFAULT_INTERNAL_API_URL
+    trimmed = raw.rstrip("/")
+    parsed = urlparse(trimmed)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         typer.echo(
-            "error: web entrypoint not found (expected frontend/ade-web/nginx/entrypoint.sh).",
+            "error: ADE_INTERNAL_API_URL must be an origin like http://localhost:8001.",
             err=True,
         )
         raise typer.Exit(code=1)
-    return [str(script)]
+    if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
+        typer.echo(
+            "error: ADE_INTERNAL_API_URL must not include a path/query/fragment (no /api).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _find_nginx_template() -> Path:
+    template = Path("/etc/nginx/templates/default.conf.tmpl")
+    if template.exists():
+        return template
+    typer.echo(
+        "error: nginx template not found (expected /etc/nginx/templates/default.conf.tmpl).",
+        err=True,
+    )
+    raise typer.Exit(code=1)
+
+
+def _render_nginx_config(*, internal_api_url: str) -> None:
+    template_path = _find_nginx_template()
+    conf_dir = Path("/etc/nginx/conf.d")
+    if not conf_dir.exists():
+        typer.echo(
+            "error: nginx config directory not found (expected /etc/nginx/conf.d).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    envsubst_bin = shutil.which("envsubst")
+    if not envsubst_bin:
+        typer.echo(
+            "error: envsubst not found (install gettext-base to render nginx templates).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    output_path = conf_dir / "default.conf"
+    template = template_path.read_text(encoding="utf-8")
+    env = os.environ.copy()
+    env["ADE_INTERNAL_API_URL"] = internal_api_url
+    completed = subprocess.run(
+        [envsubst_bin, "$ADE_INTERNAL_API_URL"],
+        input=template,
+        text=True,
+        env=env,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        typer.echo(
+            completed.stderr or "error: envsubst failed to render nginx template.",
+            err=True,
+        )
+        raise typer.Exit(code=completed.returncode)
+    output_path.write_text(completed.stdout, encoding="utf-8")
+
+
+def _nginx_cmd() -> list[str]:
+    nginx_bin = shutil.which("nginx")
+    if not nginx_bin:
+        typer.echo("error: nginx not found in PATH.", err=True)
+        raise typer.Exit(code=1)
+    return [nginx_bin, "-g", "daemon off;"]
 
 
 def _maybe_run_migrations(selected: list[str], migrate: bool) -> None:
@@ -175,19 +251,16 @@ def start(
     _maybe_run_migrations(selected, migrate)
     base_env = os.environ.copy()
     commands: dict[str, tuple[list[str], dict[str, str] | None]] = {}
-    api_needs_alt_port = "api" in selected and "web" in selected
     if "api" in selected:
-        api_env = base_env.copy()
-        if api_needs_alt_port:
-            api_env.setdefault("ADE_API_PORT", "8001")
-        commands["api"] = (["ade-api", "start"], api_env)
+        commands["api"] = (["ade-api", "start"], base_env)
     if "worker" in selected:
         commands["worker"] = (["ade-worker", "start"], base_env)
     if "web" in selected:
         web_env = base_env.copy()
-        if api_needs_alt_port:
-            web_env.setdefault("ADE_WEB_PROXY_TARGET", "http://127.0.0.1:8001")
-        commands["web"] = (_web_entrypoint_cmd(), web_env)
+        internal_api_url = _resolve_internal_api_url(base_env)
+        web_env["ADE_INTERNAL_API_URL"] = internal_api_url
+        _render_nginx_config(internal_api_url=internal_api_url)
+        commands["web"] = (_nginx_cmd(), web_env)
     _spawn_processes(commands, cwd=REPO_ROOT)
 
 
@@ -210,19 +283,14 @@ def dev(
     _maybe_run_migrations(selected, migrate)
     base_env = os.environ.copy()
     commands: dict[str, tuple[list[str], dict[str, str] | None]] = {}
-    api_needs_alt_port = "api" in selected and "web" in selected
     if "api" in selected:
-        api_env = base_env.copy()
-        if api_needs_alt_port:
-            api_env.setdefault("ADE_API_PORT", "8001")
-        commands["api"] = (["ade-api", "dev"], api_env)
+        commands["api"] = (["ade-api", "dev"], base_env)
     if "worker" in selected:
         commands["worker"] = (["ade-worker", "start"], base_env)
     if "web" in selected:
         web_env = base_env.copy()
-        web_env.setdefault("ADE_WEB_DEV_PORT", "8000")
-        if api_needs_alt_port:
-            web_env.setdefault("ADE_API_PROXY_TARGET", "http://localhost:8001")
+        internal_api_url = _resolve_internal_api_url(base_env)
+        web_env["ADE_INTERNAL_API_URL"] = internal_api_url
         commands["web"] = (_npm_cmd("run", "dev"), web_env)
     _spawn_processes(commands, cwd=REPO_ROOT)
 
@@ -356,14 +424,21 @@ def web(ctx: typer.Context) -> None:
         typer.echo(ctx.get_help())
 
 
-@web_app.command(name="start", help="Serve built frontend via nginx entrypoint.")
+@web_app.command(name="start", help="Serve built frontend via nginx.")
 def web_start() -> None:
-    _run(_web_entrypoint_cmd(), cwd=REPO_ROOT)
+    base_env = os.environ.copy()
+    web_env = base_env.copy()
+    web_env["ADE_INTERNAL_API_URL"] = _resolve_internal_api_url(base_env)
+    _render_nginx_config(internal_api_url=web_env["ADE_INTERNAL_API_URL"])
+    _run(_nginx_cmd(), cwd=REPO_ROOT, env=web_env)
 
 
 @web_app.command(name="dev", help="Run Vite dev server.")
 def web_dev() -> None:
-    _run(_npm_cmd("run", "dev"), cwd=REPO_ROOT)
+    base_env = os.environ.copy()
+    web_env = base_env.copy()
+    web_env["ADE_INTERNAL_API_URL"] = _resolve_internal_api_url(base_env)
+    _run(_npm_cmd("run", "dev"), cwd=REPO_ROOT, env=web_env)
 
 
 @web_app.command(name="build", help="Build frontend assets.")

@@ -120,11 +120,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Non-root runtime user (keep the existing convention).
 RUN useradd -m -u 10001 -s /usr/sbin/nologin appuser
 
-# Static web assets and nginx config.
+# Static web assets and nginx config template.
 COPY --from=web-build /web/dist /usr/share/nginx/html
 COPY frontend/ade-web/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY frontend/ade-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
-COPY --chmod=755 frontend/ade-web/nginx/entrypoint.sh /usr/local/bin/ade-web-entrypoint
+COPY frontend/ade-web/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
+
+# Writable runtime directories for nginx + ADE.
+RUN mkdir -p \
+      /app/data \
+      /var/cache/nginx \
+      /var/run/nginx \
+      /var/lib/nginx \
+      /var/log/nginx \
+    && chown -R appuser:appuser \
+      /app \
+      /etc/nginx/conf.d \
+      /etc/nginx/templates \
+      /usr/share/nginx/html \
+      /var/cache/nginx \
+      /var/run/nginx \
+      /var/lib/nginx \
+      /var/log/nginx
 
 # ============================================================
 # development: development image (editable install + dev deps)
@@ -154,23 +170,6 @@ COPY --from=python-build-dev /app/backend /app/backend
 ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-# Writable runtime directories for nginx + ADE.
-RUN mkdir -p \
-      /app/data \
-      /var/cache/nginx \
-      /var/run/nginx \
-      /var/lib/nginx \
-      /var/log/nginx \
-    && chown -R appuser:appuser \
-      /app \
-      /etc/nginx/conf.d \
-      /etc/nginx/templates \
-      /usr/share/nginx/html \
-      /var/cache/nginx \
-      /var/run/nginx \
-      /var/lib/nginx \
-      /var/log/nginx
-
 USER appuser
 EXPOSE 8000
 ENTRYPOINT ["/usr/bin/tini", "--"]
@@ -186,23 +185,6 @@ COPY --from=python-build-prod /opt/venv /opt/venv
 
 ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
-
-# Writable runtime directories for nginx + ADE.
-RUN mkdir -p \
-      /app/data \
-      /var/cache/nginx \
-      /var/run/nginx \
-      /var/lib/nginx \
-      /var/log/nginx \
-    && chown -R appuser:appuser \
-      /app \
-      /etc/nginx/conf.d \
-      /etc/nginx/templates \
-      /usr/share/nginx/html \
-      /var/cache/nginx \
-      /var/run/nginx \
-      /var/lib/nginx \
-      /var/log/nginx
 
 USER appuser
 EXPOSE 8000

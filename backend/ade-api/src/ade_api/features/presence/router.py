@@ -69,12 +69,9 @@ def _origin_allowed(origin: str | None, settings: Settings) -> bool:
         if normalized:
             allowed.add(normalized)
 
-    for candidate in (settings.frontend_url, settings.server_public_url):
-        if not candidate:
-            continue
-        normalized = _normalize_origin(candidate)
-        if normalized:
-            allowed.add(normalized)
+    normalized_public = _normalize_origin(settings.public_web_url)
+    if normalized_public:
+        allowed.add(normalized_public)
 
     normalized_origin = _normalize_origin(origin)
     if not normalized_origin:

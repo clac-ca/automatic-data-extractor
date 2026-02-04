@@ -33,8 +33,7 @@ services:
       - 8001:8001
     environment:
       ADE_SERVICES: api,worker,web
-      ADE_API_PORT: 8001
-      ADE_WEB_PROXY_TARGET: http://127.0.0.1:8001
+      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:-http://localhost:8000}
 
       ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity

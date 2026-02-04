@@ -14,7 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ---- Defaults ---------------------------------------------------------------
 
-DEFAULT_PUBLIC_URL = "http://localhost:8000"
+DEFAULT_PUBLIC_WEB_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS: list[str] = []
 
 DEFAULT_PAGE_SIZE = 25
@@ -56,11 +56,9 @@ class Settings(BaseSettings):
     safe_mode: bool = False
 
     # Server
-    server_public_url: str = DEFAULT_PUBLIC_URL
+    public_web_url: str = DEFAULT_PUBLIC_WEB_URL
     api_host: str | None = None
-    api_port: int | None = Field(default=None, ge=1, le=65535)
     api_workers: int | None = Field(default=None, ge=1)
-    frontend_url: str | None = None
     web_version_file: Path = Field(default=Path("/usr/share/nginx/html/version.json"))
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
     server_cors_origin_regex: str | None = Field(default=None)
@@ -220,7 +218,7 @@ def reload_settings() -> Settings:
 
 __all__ = [
     "DEFAULT_CORS_ORIGINS",
-    "DEFAULT_PUBLIC_URL",
+    "DEFAULT_PUBLIC_WEB_URL",
     "Settings",
     "get_settings",
     "reload_settings",

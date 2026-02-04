@@ -13,10 +13,29 @@ const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url)
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
 const appVersion = packageJson.version ?? "unknown";
 
-const proxyTarget = (process.env.ADE_API_PROXY_TARGET ?? "http://localhost:8001").replace(/\/+$/, "");
-const devPortRaw = Number.parseInt(process.env.ADE_WEB_DEV_PORT ?? "8000", 10);
-const devPort = Number.isNaN(devPortRaw) ? 8000 : devPortRaw;
-const apiTarget = proxyTarget.replace(/\/api\/v1\/?$/, "").replace(/\/api\/?$/, "");
+const internalApiRaw = process.env.ADE_INTERNAL_API_URL ?? "http://localhost:8001";
+const devPort = 8000;
+
+const normalizeInternalApiUrl = (value: string): string => {
+  const trimmed = value.replace(/\/+$/, "");
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(
+      `ADE_INTERNAL_API_URL must be an origin like http://localhost:8001 (got "${value}").`,
+    );
+  }
+  if (parsed.pathname !== "/" && parsed.pathname !== "") {
+    throw new Error("ADE_INTERNAL_API_URL must not include a path (no /api).");
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error("ADE_INTERNAL_API_URL must not include query or fragment.");
+  }
+  return `${parsed.protocol}//${parsed.host}`;
+};
+
+const apiTarget = normalizeInternalApiUrl(internalApiRaw);
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), tsconfigPaths()],

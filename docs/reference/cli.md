@@ -11,9 +11,13 @@ ade reset            # reset db + storage + local data/venv (destructive)
 
 `ade reset` requires `--yes`.
 
-Ports (default):
+Ports (fixed):
 - `ade dev`: web on `http://localhost:8000`, API on `http://localhost:8001`
 - `ade start`: web on `http://localhost:8000`, API on `http://localhost:8001`
+
+Ports are fixed: web `8000`, API `8001`.
+
+Env equivalents: `ADE_INTERNAL_API_URL` (origin only, no `/api`), `ADE_PUBLIC_WEB_URL`.
 
 Service selection:
 
