@@ -1,49 +1,34 @@
 {
-  "name": "ADE Dev (Root Compose)",
+  "name": "ADE Dev",
   "dockerComposeFile": [
-    "../docker-compose.yaml",
-    "docker-compose.override.yaml"
+    "docker-compose.yaml"
   ],
   "service": "ade",
-  "workspaceFolder": "/app",
+  "runServices": ["ade"],
+  "workspaceFolder": "/workspaces/automatic-data-extractor",
   "shutdownAction": "stopCompose",
 
   "remoteUser": "adeuser",
   "updateRemoteUserUID": true,
-  
-  "forwardPorts": [
-    "ade:8000",
-    "ade:8001",
-    "postgres:5432",
-    "azurite:10000"
-  ],
+  "postCreateCommand": "./setup.sh",
+
+  "forwardPorts": [8000, 8001, 5432, 10000],
   "portsAttributes": {
-    "ade:8000": { "label": "Web" },
-    "ade:8001": { "label": "API" },
-    "postgres:5432": { "label": "Postgres" },
-    "azurite:10000": { "label": "Azurite (Blob)" }
+    "8000": { "label": "Web" },
+    "8001": { "label": "API" },
+    "5432": { "label": "Postgres" },
+    "10000": { "label": "Azurite (Blob)" }
   },
 
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance",
-        "openai.chatgpt"
+        "ms-python.vscode-pylance"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/opt/venv/bin/python"
+        "python.defaultInterpreterPath": "/workspaces/automatic-data-extractor/backend/.venv/bin/python"
       }
-    }
-  },
-
-  "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "moby": true,
-      "azureDnsAutoDetection": true,
-      "installDockerBuildx": true,
-      "version": "latest",
-      "dockerDashComposeVersion": "v2"
     }
   }
 }

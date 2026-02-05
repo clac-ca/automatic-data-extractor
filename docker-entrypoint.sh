@@ -6,7 +6,7 @@ set -eu
 # 2) Fix data directory ownership if running as root.
 # 3) Drop to the unprivileged runtime user and exec the real process.
 
-DATA_DIR="${ADE_DATA_DIR:-/app/backend/data}"
+DATA_DIR="${ADE_DATA_DIR:-/var/lib/ade/data}"
 APP_USER="${APP_USER:-adeuser}"
 DEFAULT_INTERNAL_API_URL="http://localhost:8001"
 
@@ -39,6 +39,11 @@ if [ "$(id -u)" = "0" ]; then
   # Ensure the mount exists even on first boot.
   mkdir -p "$DATA_DIR"
 
+  if ! id "$APP_USER" >/dev/null 2>&1; then
+    echo "error: runtime user '$APP_USER' not found." >&2
+    exit 1
+  fi
+
   # Resolve runtime uid/gid from the username (safer than hard-coding).
   APP_UID="$(id -u "$APP_USER")"
   APP_GID="$(id -g "$APP_USER")"
@@ -46,6 +51,14 @@ if [ "$(id -u)" = "0" ]; then
   # Only chown when needed to avoid slow recursive chowns on every boot.
   if [ "$(stat -c '%u:%g' "$DATA_DIR")" != "${APP_UID}:${APP_GID}" ]; then
     chown -R "${APP_UID}:${APP_GID}" "$DATA_DIR"
+  else
+    # Root dir owner matches. Probe once for nested uid/gid drift.
+    MISMATCH_PATH="$(
+      find "$DATA_DIR" -mindepth 1 \( -not -uid "$APP_UID" -o -not -gid "$APP_GID" \) -print -quit
+    )"
+    if [ -n "$MISMATCH_PATH" ]; then
+      chown -R "${APP_UID}:${APP_GID}" "$DATA_DIR"
+    fi
   fi
 
   exec gosu "$APP_USER" "$@"

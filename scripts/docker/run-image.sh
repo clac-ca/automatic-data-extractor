@@ -22,5 +22,13 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
-echo "==> Running ade-app:local"
-docker run --rm -it --env-file .env -e ADE_DATA_DIR=/app/backend/data -p 8000:8000 -v "${ROOT_DIR}/backend/data:/app/backend/data" ade-app:local
+IMAGE="${ADE_IMAGE:-automatic-data-extractor:local}"
+
+echo "==> Running ${IMAGE}"
+docker run \
+  --rm -it \
+  --env-file .env \
+  -e ADE_DATA_DIR=/var/lib/ade/data \
+  -p 8000:8000 \
+  -v "${ROOT_DIR}/backend/data:/var/lib/ade/data" \
+  "${IMAGE}"

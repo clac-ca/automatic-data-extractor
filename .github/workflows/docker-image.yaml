@@ -5,7 +5,10 @@ on:
     paths:
       - "Dockerfile"
       - ".dockerignore"
-      - "apps/**"
+      - "docker-compose.yaml"
+      - "docker-compose.prod.yaml"
+      - "docker-compose.prod.split.yaml"
+      - ".devcontainer/**"
       - "scripts/**"
       - ".github/workflows/docker-image.yaml"
   push:
@@ -40,6 +43,24 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Validate Compose configs
+        env:
+          ADE_IMAGE: ghcr.io/clac-ca/automatic-data-extractor:ci
+          ADE_DATABASE_URL: postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable
+          ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=dev;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+          ADE_BLOB_CONTAINER: ade
+          ADE_SECRET_KEY: ci-only-unsafe-secret-key-000000000000000000000000
+        run: |
+          docker compose -f .devcontainer/docker-compose.yaml config >/dev/null
+          docker compose -f docker-compose.prod.yaml config >/dev/null
+          docker compose -f docker-compose.prod.split.yaml config >/dev/null
+
+      - name: Build production target (smoke)
+        run: docker build --target production --platform linux/amd64 -t ade-ci:production .
+
+      - name: Build devcontainer target (smoke)
+        run: docker build --target devcontainer --platform linux/amd64 -t ade-ci:devcontainer .
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'

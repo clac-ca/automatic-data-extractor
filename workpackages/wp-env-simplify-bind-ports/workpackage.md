@@ -304,7 +304,7 @@ Env vars and flags do not.
 
 * [x] Simplify Dockerfile
 * [x] Standardize nginx directory
-* [x] Replace init container with root-then-drop entrypoint (gosu) for /app/backend/data permissions
+* [x] Replace init container with root-then-drop entrypoint (gosu) for /var/lib/ade/data permissions
 * [x] Remove ade-init services from compose
 * [x] Bind-mount ./backend/data for local dev troubleshooting
 * [x] Rename runtime user to `adeuser`

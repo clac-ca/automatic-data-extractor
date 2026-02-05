@@ -3,38 +3,39 @@
 ##
 ## Automatic Data Extractor (ADE)
 ##
-## Targets:
-##   - production (default): production image (small, non-editable, no dev deps)
-##   - development:      development image (editable install + dev deps)
+## Targets
+## - production   : runtime image for API + worker + web
+## - devcontainer : development image used by VS Code devcontainers
 ##
-## Examples:
-##   docker build -t automatic-data-extractor:prod --target production .
-##   docker build -t automatic-data-extractor:dev  --target development .
+## Principles
+## - Keep production lean and deterministic.
+## - Keep development ergonomic without mutating containers at startup.
 ##
 
 ARG PYTHON_IMAGE=python:3.14.2-slim-bookworm
-ARG NODE_IMAGE=node:20-bookworm-slim
+ARG NODE_IMAGE=node:22-bookworm-slim
 ARG UV_VERSION=0.9.28
 
-# ============================================================
-# Base: shared Python runtime defaults
-# ============================================================
+# ------------------------------------------------------------
+# Shared Python defaults.
+# ------------------------------------------------------------
 FROM ${PYTHON_IMAGE} AS python-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ============================================================
-# uv: copy uv/uvx binaries from the official image
-# ============================================================
-FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+# ------------------------------------------------------------
+# Toolchain sources.
+# ------------------------------------------------------------
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-bin
+FROM ${NODE_IMAGE} AS node-dev
 
-# ============================================================
-# python-build-base: common builder tooling for uv sync
-# ============================================================
-FROM python-base AS python-build-base
-WORKDIR /app/backend
+# ------------------------------------------------------------
+# backend-builder: install locked production Python environment.
+# Output: /opt/venv
+# ------------------------------------------------------------
+FROM python-base AS backend-builder
+WORKDIR /build/backend
 
-# OS packages needed to build Python deps (and install git-based deps).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
       ca-certificates \
@@ -42,58 +43,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv (binary) into the builder.
-COPY --from=uv /uv /uvx /usr/local/bin/
+COPY --from=uv-bin /uv /uvx /usr/local/bin/
 
-# Install the project environment into a standard, location-based venv.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_LINK_MODE=copy
 
-# ============================================================
-# python-deps-prod: install production dependencies only
-# (no project install; cached separately from source changes)
-# ============================================================
-FROM python-build-base AS python-deps-prod
 COPY backend/pyproject.toml backend/uv.lock ./
-
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev
 
-# ============================================================
-# python-build-prod: install the ADE project (non-editable)
-# output: /opt/venv (contains console scripts like `ade`)
-# ============================================================
-FROM python-deps-prod AS python-build-prod
 COPY backend/ ./
-
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
-# ============================================================
-# python-deps-dev: install dev dependencies only (no project)
-# cached separately from source changes
-# ============================================================
-FROM python-build-base AS python-deps-dev
-COPY backend/pyproject.toml backend/uv.lock ./
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-install-project --dev
-
-# ============================================================
-# python-build-dev: install the ADE project (editable)
-# IMPORTANT: the editable install path is /app/backend
-# ============================================================
-FROM python-deps-dev AS python-build-dev
-COPY backend/ ./
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --dev
-
-# ============================================================
-# web-build: build frontend static assets
-# ============================================================
-FROM ${NODE_IMAGE} AS web-build
-WORKDIR /web
+# ------------------------------------------------------------
+# web-builder: compile frontend assets.
+# ------------------------------------------------------------
+FROM ${NODE_IMAGE} AS web-builder
+WORKDIR /build/web
 
 COPY frontend/ade-web/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -102,13 +69,12 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY frontend/ade-web/ ./
 RUN npm run build
 
-# ============================================================
-# runtime-base: runtime OS deps + nginx config + built web assets
-# ============================================================
+# ------------------------------------------------------------
+# runtime-base: runtime-only OS deps, nginx config, static assets.
+# ------------------------------------------------------------
 FROM python-base AS runtime-base
-WORKDIR /app
+WORKDIR /
 
-# Runtime OS dependencies only.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       gettext-base \
@@ -118,25 +84,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root runtime user (keep the existing convention).
 RUN useradd -m -u 10001 -s /usr/sbin/nologin adeuser
 
-# Static web assets and nginx config template.
-COPY --from=web-build /web/dist /usr/share/nginx/html
-COPY frontend/ade-web/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY frontend/ade-web/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY --from=web-builder --chown=adeuser:adeuser /build/web/dist /usr/share/nginx/html
+COPY --chown=adeuser:adeuser frontend/ade-web/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY --chown=adeuser:adeuser frontend/ade-web/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
+COPY --chown=adeuser:adeuser docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Writable runtime directories for nginx + ADE.
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+
 RUN mkdir -p \
-      /app/backend/data \
+      /var/lib/ade/data \
       /var/cache/nginx \
       /var/run/nginx \
       /var/lib/nginx \
       /var/log/nginx \
     && chown -R adeuser:adeuser \
-      /app \
+      /var/lib/ade \
       /etc/nginx/conf.d \
       /etc/nginx/templates \
       /usr/share/nginx/html \
@@ -145,49 +110,48 @@ RUN mkdir -p \
       /var/lib/nginx \
       /var/log/nginx
 
-# ============================================================
-# development: development image (editable install + dev deps)
-# ============================================================
-FROM runtime-base AS development
+# ------------------------------------------------------------
+# production: shipped image.
+# ------------------------------------------------------------
+FROM runtime-base AS production
+COPY --from=backend-builder /opt/venv /opt/venv
 
-# Dev conveniences (keep minimal but practical).
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+EXPOSE 8000
+CMD ["ade", "start"]
+
+# ------------------------------------------------------------
+# devcontainer: developer image.
+# - build tools + git + libpq headers
+# - uv + Node.js 22 toolchain
+# - interactive shell user with passwordless sudo
+# ------------------------------------------------------------
+FROM python-base AS devcontainer
+WORKDIR /workspaces/automatic-data-extractor
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
+      ca-certificates \
+      curl \
       git \
       libpq-dev \
+      sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Devcontainer shells require a valid interactive shell for the remote user.
-RUN usermod -s /bin/bash adeuser
+COPY --from=uv-bin /uv /uvx /usr/local/bin/
+COPY --from=node-dev /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-dev /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-# Include uv for local workflow convenience inside devcontainers.
-COPY --from=uv /uv /uvx /usr/local/bin/
+RUN ln -sf ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
+    && ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
-# Copy the dev virtualenv (includes dev deps + editable ADE install).
-COPY --from=python-build-dev /opt/venv /opt/venv
+RUN useradd -m -u 10001 -s /bin/bash adeuser \
+    && usermod -aG sudo adeuser \
+    && echo "adeuser ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/90-adeuser \
+    && chmod 0440 /etc/sudoers.d/90-adeuser
 
-# Ensure the editable source path exists in the image.
-# (Devcontainers will typically bind-mount the repo at /app, replacing this.)
-COPY --from=python-build-dev /app/backend /app/backend
-
-ENV VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:$PATH"
-
-EXPOSE 8000
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
-CMD ["ade", "start"]
-
-# ============================================================
-# production: production image (small, no dev deps, non-editable)
-# ============================================================
-FROM runtime-base AS production
-
-# Copy the production virtualenv (includes ADE console scripts).
-COPY --from=python-build-prod /opt/venv /opt/venv
-
-ENV VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:$PATH"
-
-EXPOSE 8000
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
-CMD ["ade", "start"]
+USER adeuser
+CMD ["sleep", "infinity"]

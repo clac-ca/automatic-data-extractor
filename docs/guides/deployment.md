@@ -23,7 +23,7 @@ container.
 
 ## Split containers (recommended at scale)
 
-If you mount a named volume at `/app/backend/data`, the container entrypoint will `chown` it on startup (root-then-drop) before launching the API/worker.
+If you mount a named volume at `/var/lib/ade/data`, the container entrypoint will `chown` it on startup (root-then-drop) before launching the API/worker.
 
 Use `ADE_SERVICES` to control which services run in a container:
 
