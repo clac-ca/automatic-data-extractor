@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
 import typer
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .factory import build_storage_adapter
@@ -27,11 +28,21 @@ class StorageSettings(BaseSettings):
     blob_connection_string: str | None = None
     blob_container: str = "ade"
     blob_prefix: str = "workspaces"
-    blob_require_versioning: bool = True
+    blob_versioning_mode: Literal["auto", "require", "off"] = Field(default="auto")
     blob_request_timeout_seconds: float = Field(default=30.0, gt=0)
     blob_max_concurrency: int = Field(default=4, ge=1)
     blob_upload_chunk_size_bytes: int = Field(default=4 * 1024 * 1024, ge=1)
     blob_download_chunk_size_bytes: int = Field(default=1024 * 1024, ge=1)
+
+    @field_validator("blob_versioning_mode", mode="before")
+    @classmethod
+    def _normalize_blob_versioning_mode(cls, value: object) -> object:
+        if value is None:
+            return "auto"
+        raw = str(value).strip().lower()
+        if raw in {"auto", "require", "off"}:
+            return raw
+        raise ValueError("ADE_BLOB_VERSIONING_MODE must be one of: auto, require, off.")
 
     @model_validator(mode="after")
     def _finalize(self) -> "StorageSettings":

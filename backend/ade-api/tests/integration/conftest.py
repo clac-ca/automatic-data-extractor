@@ -93,7 +93,7 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         blob_container=blob_container,
         blob_connection_string=blob_connection_string,
         blob_account_url=blob_account_url,
-        blob_require_versioning=False,
+        blob_versioning_mode="off",
     )
     ensure_runtime_dirs(settings)
     return settings

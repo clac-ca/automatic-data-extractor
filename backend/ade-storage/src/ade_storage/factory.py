@@ -15,7 +15,7 @@ def build_storage_adapter(settings: BlobStorageSettings) -> AzureBlobStorage:
         connection_string=settings.blob_connection_string,
         container=settings.blob_container or "",
         prefix=settings.blob_prefix,
-        require_versioning=settings.blob_require_versioning,
+        versioning_mode=settings.blob_versioning_mode,
         request_timeout_seconds=settings.blob_request_timeout_seconds,
         max_concurrency=settings.blob_max_concurrency,
         upload_chunk_size_bytes=settings.blob_upload_chunk_size_bytes,

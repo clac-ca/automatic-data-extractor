@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -73,3 +75,37 @@ def test_invalid_worker_log_format_raises_validation_error(
 
     with pytest.raises(ValidationError, match="ADE_LOG_FORMAT"):
         Settings(_env_file=None)
+
+
+def test_worker_data_dir_default_matches_api_layout(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_required_env(monkeypatch)
+
+    settings = Settings(_env_file=None)
+
+    expected_root = Path("backend/data")
+    assert settings.data_dir == expected_root
+    assert settings.workspaces_dir == expected_root / "workspaces"
+    assert settings.venvs_dir == expected_root / "venvs"
+    assert settings.pip_cache_dir == expected_root / "cache" / "pip"
+    assert settings.blob_versioning_mode == "auto"
+
+
+@pytest.mark.parametrize(
+    ("env_name", "value", "expected_mode"),
+    [
+        ("ADE_BLOB_VERSIONING_MODE", "require", "require"),
+        ("ADE_BLOB_VERSIONING_MODE", "off", "off"),
+    ],
+)
+def test_worker_blob_versioning_mode_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+    env_name: str,
+    value: str,
+    expected_mode: str,
+) -> None:
+    _set_required_env(monkeypatch)
+    monkeypatch.setenv(env_name, value)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.blob_versioning_mode == expected_mode

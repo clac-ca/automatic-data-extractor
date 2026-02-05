@@ -107,3 +107,35 @@ def test_blob_backend_accepts_connection_string(monkeypatch: pytest.MonkeyPatch)
 
     assert settings.blob_connection_string == "UseDevelopmentStorage=true"
     assert settings.blob_container == "ade"
+
+
+@pytest.mark.parametrize(
+    ("env_name", "value", "expected"),
+    [
+        ("ADE_BLOB_VERSIONING_MODE", "auto", "auto"),
+        ("ADE_BLOB_VERSIONING_MODE", "require", "require"),
+        ("ADE_BLOB_VERSIONING_MODE", "off", "off"),
+    ],
+)
+def test_blob_versioning_mode_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+    env_name: str,
+    value: str,
+    expected: str,
+) -> None:
+    _set_required_env(monkeypatch)
+    monkeypatch.setenv(env_name, value)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.blob_versioning_mode == expected
+
+
+def test_blob_versioning_mode_rejects_invalid_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_required_env(monkeypatch)
+    monkeypatch.setenv("ADE_BLOB_VERSIONING_MODE", "enabled")
+
+    with pytest.raises(ValueError, match="ADE_BLOB_VERSIONING_MODE must be one of"):
+        Settings(_env_file=None)

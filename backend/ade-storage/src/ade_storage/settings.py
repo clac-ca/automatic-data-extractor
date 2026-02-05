@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 class BlobStorageSettings(Protocol):
@@ -11,7 +11,7 @@ class BlobStorageSettings(Protocol):
     blob_connection_string: str | None
     blob_container: str | None
     blob_prefix: str
-    blob_require_versioning: bool
+    blob_versioning_mode: Literal["auto", "require", "off"]
     blob_request_timeout_seconds: float
     blob_max_concurrency: int
     blob_upload_chunk_size_bytes: int

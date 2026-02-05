@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     blob_connection_string: str | None = Field(default=None)
     blob_container: str = Field(default="ade")
     blob_prefix: str = Field(default="workspaces")
-    blob_require_versioning: bool = Field(default=True)
+    blob_versioning_mode: Literal["auto", "require", "off"] = Field(default="auto")
     blob_request_timeout_seconds: float = Field(default=30.0, gt=0)
     blob_max_concurrency: int = Field(default=4, ge=1)
     blob_upload_chunk_size_bytes: int = Field(default=4 * 1024 * 1024, ge=1)
@@ -153,6 +153,16 @@ class Settings(BaseSettings):
         if isinstance(value, tuple):
             return list(value)
         return value
+
+    @field_validator("blob_versioning_mode", mode="before")
+    @classmethod
+    def _normalize_blob_versioning_mode(cls, value: object) -> object:
+        if value is None:
+            return "auto"
+        raw = str(value).strip().lower()
+        if raw in {"auto", "require", "off"}:
+            return raw
+        raise ValueError("ADE_BLOB_VERSIONING_MODE must be one of: auto, require, off.")
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
@@ -249,7 +259,6 @@ class Settings(BaseSettings):
     @property
     def secret_key_value(self) -> str:
         return self.secret_key.get_secret_value()
-
 
 @lru_cache(maxsize=1)
 def _build_settings() -> Settings:

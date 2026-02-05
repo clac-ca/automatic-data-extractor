@@ -31,7 +31,7 @@ ade storage check
 ## Notes
 
 - Azure Blob only (current implementation).
-- Container versioning is enforced on initialization.
+- Blob version handling is controlled by `ADE_BLOB_VERSIONING_MODE` (`auto|require|off`).
 
 ## Links
 

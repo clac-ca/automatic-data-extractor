@@ -11,7 +11,7 @@ def test_blob_storage_roundtrip() -> None:
     settings = Settings(
         _env_file=None,
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
-        blob_require_versioning=False,
+        blob_versioning_mode="off",
         secret_key="test-secret-key-for-tests-please-change",
     )
 

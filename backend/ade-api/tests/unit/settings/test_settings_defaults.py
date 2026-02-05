@@ -48,7 +48,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.blob_account_url is None
     assert settings.blob_container == "ade-test"
     assert settings.blob_prefix == "workspaces"
-    assert settings.blob_require_versioning is True
+    assert settings.blob_versioning_mode == "auto"
 
 
 def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

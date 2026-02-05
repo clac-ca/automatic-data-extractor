@@ -201,26 +201,42 @@ def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
     except (HttpResponseError, ResourceNotFoundError) as exc:
         errors.append(exc)
 
-    include_versions: list[str] | None = None
-    if settings.blob_require_versioning:
-        include_versions = ["versions", "deleted"]
+    versioning_mode = settings.blob_versioning_mode
+    include_versions = ["versions", "deleted"] if versioning_mode in {"auto", "require"} else None
 
-    version_iter = _iter_blobs(include_versions)
-    try:
-        for blob in version_iter:
-            name = getattr(blob, "name", None) or str(blob)
-            version_id = getattr(blob, "version_id", None)
-            try:
-                blob_client = container_client.get_blob_client(name, version_id=version_id)
-                delete_kwargs = {}
-                if version_id is None:
-                    delete_kwargs["delete_snapshots"] = "include"
-                blob_client.delete_blob(**delete_kwargs)
-                deleted += 1
-            except Exception as exc:  # noqa: BLE001
-                errors.append(exc)
-    except (HttpResponseError, ResourceNotFoundError) as exc:
-        errors.append(exc)
+    def _delete_versions(include: list[str] | None) -> tuple[int, list[Exception]]:
+        local_deleted = 0
+        local_errors: list[Exception] = []
+        version_iter = _iter_blobs(include)
+        try:
+            for blob in version_iter:
+                name = getattr(blob, "name", None) or str(blob)
+                version_id = getattr(blob, "version_id", None)
+                try:
+                    blob_client = container_client.get_blob_client(name, version_id=version_id)
+                    delete_kwargs = {}
+                    if version_id is None:
+                        delete_kwargs["delete_snapshots"] = "include"
+                    blob_client.delete_blob(**delete_kwargs)
+                    local_deleted += 1
+                except Exception as exc:  # noqa: BLE001
+                    local_errors.append(exc)
+        except (HttpResponseError, ResourceNotFoundError) as exc:
+            local_errors.append(exc)
+        return local_deleted, local_errors
+
+    version_deleted, version_errors = _delete_versions(include_versions)
+    deleted += version_deleted
+    errors.extend(version_errors)
+
+    if include_versions and versioning_mode == "auto":
+        unsupported_include = any(
+            isinstance(exc, HttpResponseError) for exc in version_errors
+        )
+        if unsupported_include and version_deleted == 0:
+            fallback_deleted, fallback_errors = _delete_versions(None)
+            deleted += fallback_deleted
+            errors.extend(fallback_errors)
 
     if deleted:
         print(f"🗑️  deleted {deleted} blob item(s)")

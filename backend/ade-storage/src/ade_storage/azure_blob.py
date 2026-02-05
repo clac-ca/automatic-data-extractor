@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import BinaryIO, Iterator
+from typing import BinaryIO, Iterator, Literal
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
@@ -18,7 +18,7 @@ class AzureBlobConfig:
     connection_string: str | None
     container: str
     prefix: str
-    require_versioning: bool
+    versioning_mode: Literal["auto", "require", "off"]
     request_timeout_seconds: float
     max_concurrency: int
     upload_chunk_size_bytes: int
@@ -129,7 +129,7 @@ class AzureBlobStorage(StorageAdapter):
             raise StorageError("Failed to upload blob") from exc
 
         version_id = result.get("version_id") if isinstance(result, dict) else None
-        if self._config.require_versioning and not version_id:
+        if self._config.versioning_mode == "require" and not version_id:
             raise StorageError(
                 "Blob versioning is required but no version_id was returned by upload. "
                 "Verify blob versioning is enabled for this storage account."
@@ -199,25 +199,54 @@ class AzureBlobStorage(StorageAdapter):
     def delete_prefix(self, prefix: str | None = None) -> int:
         normalized = (prefix or "").strip("/")
         name_starts_with = f"{normalized}/" if normalized else None
-        include = ["versions"] if self._config.require_versioning else None
         deleted = 0
-        for blob in self._container_client.list_blobs(
-            name_starts_with=name_starts_with,
-            include=include,
-        ):
-            version_id = getattr(blob, "version_id", None)
-            blob_client = self._container_client.get_blob_client(
-                blob.name,
-                version_id=version_id,
-            )
+
+        def _delete_from_iterable(iterable) -> int:
+            count = 0
+            for blob in iterable:
+                version_id = getattr(blob, "version_id", None)
+                blob_client = self._container_client.get_blob_client(
+                    blob.name,
+                    version_id=version_id,
+                )
+                try:
+                    blob_client.delete_blob()
+                except ResourceNotFoundError:
+                    continue
+                except HttpResponseError as exc:
+                    raise StorageError("Failed to delete blob") from exc
+                else:
+                    count += 1
+            return count
+
+        include_versions = self._config.versioning_mode in {"auto", "require"}
+
+        def _list_blobs(*, include: list[str] | None):
             try:
-                blob_client.delete_blob()
-            except ResourceNotFoundError:
-                continue
-            except HttpResponseError as exc:
-                raise StorageError("Failed to delete blob") from exc
-            else:
-                deleted += 1
+                if include is not None:
+                    return self._container_client.list_blobs(
+                        name_starts_with=name_starts_with,
+                        include=include,
+                    )
+                return self._container_client.list_blobs(name_starts_with=name_starts_with)
+            except TypeError:
+                if self._config.versioning_mode == "auto":
+                    return self._container_client.list_blobs(name_starts_with=name_starts_with)
+                raise StorageError(
+                    "Blob versioning metadata is required but storage backend does not support it. "
+                    "Set ADE_BLOB_VERSIONING_MODE=off or enable account-level blob versioning."
+                )
+
+        initial_include = ["versions"] if include_versions else None
+        blobs = _list_blobs(include=initial_include)
+        try:
+            deleted += _delete_from_iterable(blobs)
+        except HttpResponseError as exc:
+            if self._config.versioning_mode != "auto" or initial_include is None:
+                raise StorageError("Failed to list blobs for deletion") from exc
+            deleted += _delete_from_iterable(
+                self._container_client.list_blobs(name_starts_with=name_starts_with)
+            )
         return deleted
 
 

@@ -30,10 +30,11 @@ Self-hostable document extraction service with an **API**, **Web UI**, and backg
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor
 cd automatic-data-extractor
-docker compose up --build -d postgres azurite azurite-init
-docker compose run --rm api ade db migrate
-docker compose up -d api worker web
-````
+docker compose up --build -d
+```
+
+Optional: copy `.env.example` to `.env` only when you want to override defaults.
+Local compose defaults set `ADE_AUTH_DISABLED=true` for fastest startup.
 
 Open:
 
@@ -55,23 +56,56 @@ docker compose down -v
 
 ## Production deployment
 
-Production uses:
+Production uses external services:
 
-* **External Postgres**
-* **External Azure Blob Storage**
+* **Postgres**
+* **Azure Blob Storage**
 
-ADE runs as **split services** (separate containers) using the same image:
+`docker-compose.prod.yaml` is optimized for the common case: one `app` container running `api + worker + web`.
 
 ```bash
-docker compose -f docker-compose.prod.yaml pull
 docker compose -f docker-compose.prod.yaml up -d
+
+# Scale-out alternative (app + worker split)
+docker compose -f docker-compose.prod.split.yaml up -d
+docker compose -f docker-compose.prod.split.yaml up -d --scale worker=3
+
+# Optional: choose published image tag for this deploy command (default is main)
+ADE_DOCKER_TAG=development docker compose -f docker-compose.prod.yaml up -d
+```
+
+`ADE_DOCKER_TAG` is compose-only (image selection), not ADE runtime config.
+Keep runtime settings in `.env`; set tag overrides in shell/CI per deploy command.
+Changing tags takes effect only when containers are recreated (and typically after `docker compose pull`).
+
+Scaling guidance (start simple, then split):
+
+- In single-container mode, first tune in-container concurrency:
+  - `ADE_WORKER_CONCURRENCY` = max concurrent run slots per container (default `2`)
+  - `ADE_API_WORKERS` = API process count per container (default `1`)
+- If queue latency is still high or you need better fault isolation, move to split mode and scale `worker` containers.
+- In split mode, keep `ADE_WORKER_CONCURRENCY` moderate (for example `2`-`4`) and scale container count with `--scale worker=N`.
+
+Examples:
+
+```bash
+# Single-container tuning
+ADE_WORKER_CONCURRENCY=4 ADE_API_WORKERS=2 \
+docker compose -f docker-compose.prod.yaml up -d
+
+# Split deployment + horizontal worker scaling
+ADE_WORKER_CONCURRENCY=2 \
+docker compose -f docker-compose.prod.split.yaml up -d --scale worker=3
 ```
 
 ---
 
 ## Configuration
 
-Create a `.env` file **next to the compose file you run**.
+Create a `.env` file **next to the compose file you run** when you need to override ADE runtime settings.
+The compose examples in this repo read `.env` for interpolation and pass it to ADE containers at runtime.
+Use shell/CI overrides for compose-only controls (for example `ADE_DOCKER_TAG`) instead of storing them in `.env`.
+Local dependency variables (`POSTGRES_*`, `AZURITE_ACCOUNTS`) are also compose-only and not ADE runtime config.
 
 ### Minimum required (example)
 
@@ -79,10 +113,12 @@ Create a `.env` file **next to the compose file you run**.
 # Database (external)
 ADE_DATABASE_URL=postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
 
-# Azure Blob (choose ONE auth method supported by your deployment)
-ADE_BLOB_ACCOUNT_URL=https://<account>.blob.core.windows.net
-ADE_BLOB_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
+# Public web URL (required in production compose)
+ADE_PUBLIC_WEB_URL=https://ade.example.com
 
+# Azure Blob (set exactly one auth method; do not set both)
+# ADE_BLOB_ACCOUNT_URL=https://<account>.blob.core.windows.net
+# ADE_BLOB_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
 ADE_BLOB_CONTAINER=ade
 
 # App secret (required)
@@ -93,10 +129,10 @@ See `.env.example` for the full set of supported environment variables.
 
 ### Service selection (optional)
 
-To start only a subset of services:
+To run only a subset of in-container services:
 
 ```bash
-docker compose up -d api web
+ADE_SERVICES=api,web docker compose up -d app
 ```
 
 ---

@@ -24,13 +24,17 @@ class _DummyContainer:
         return _DummyBlob(self._result)
 
 
-def _make_storage(prefix: str = "workspaces") -> AzureBlobStorage:
+def _make_storage(
+    prefix: str = "workspaces",
+    *,
+    versioning_mode: str = "require",
+) -> AzureBlobStorage:
     cfg = AzureBlobConfig(
         account_url="https://example.blob.core.windows.net",
         connection_string=None,
         container="ade",
         prefix=prefix,
-        require_versioning=True,
+        versioning_mode=versioning_mode,
         request_timeout_seconds=30,
         max_concurrency=4,
         upload_chunk_size_bytes=4 * 1024 * 1024,
@@ -62,3 +66,10 @@ def test_require_versioning_allows_upload_with_version_id() -> None:
     storage._container_client = _DummyContainer(result={"version_id": "v1"})  # type: ignore[attr-defined]
     stored = storage.write("files/abc", io.BytesIO(b"data"))
     assert stored.version_id == "v1"
+
+
+def test_auto_mode_allows_upload_without_version_id() -> None:
+    storage = _make_storage(versioning_mode="auto")
+    storage._container_client = _DummyContainer(result={})  # type: ignore[attr-defined]
+    stored = storage.write("files/abc", io.BytesIO(b"data"))
+    assert stored.version_id is None

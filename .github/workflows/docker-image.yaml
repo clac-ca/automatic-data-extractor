@@ -12,7 +12,7 @@ on:
       - "scripts/**"
       - ".github/workflows/docker-image.yaml"
   push:
-    branches: [development]
+    branches: [main, development]
     tags:
       - "v*"
   workflow_dispatch:
@@ -46,13 +46,15 @@ jobs:
 
       - name: Validate Compose configs
         env:
-          ADE_IMAGE: ghcr.io/clac-ca/automatic-data-extractor:ci
+          ADE_DOCKER_TAG: ci
+          ADE_PUBLIC_WEB_URL: https://ade-ci.example.com
           ADE_DATABASE_URL: postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable
           ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=dev;BlobEndpoint=http://azurite:10000/devstoreaccount1;
           ADE_BLOB_CONTAINER: ade
           ADE_SECRET_KEY: ci-only-unsafe-secret-key-000000000000000000000000
         run: |
           docker compose -f .devcontainer/docker-compose.yaml config >/dev/null
+          docker compose -f docker-compose.yaml config >/dev/null
           docker compose -f docker-compose.prod.yaml config >/dev/null
           docker compose -f docker-compose.prod.split.yaml config >/dev/null
 
@@ -76,8 +78,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Branch name (e.g. development)
-            type=ref,event=branch
+            # Branch tags (main/development only)
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
             # Short SHA (e.g. sha-abc1234)
             type=sha,format=short,prefix=sha-
             # Release tags from git tag vX.Y.Z -> docker tags 1.2.3, 1.2, 1 (+ latest auto)

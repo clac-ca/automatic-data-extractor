@@ -10,6 +10,7 @@ set -euo pipefail
 #
 # Usage:
 #   bash scripts/docker/run-image.sh
+#   ADE_DOCKER_TAG=development bash scripts/docker/run-image.sh
 #
 # By default it exposes port 8000. If your API uses a different port, change it here.
 #
@@ -22,7 +23,7 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
-IMAGE="${ADE_IMAGE:-automatic-data-extractor:local}"
+IMAGE="ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}"
 
 echo "==> Running ${IMAGE}"
 docker run \

@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, PostgresDsn, model_validator
+from pydantic import AnyHttpUrl, Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ALLOWED_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
@@ -62,14 +62,14 @@ class Settings(BaseSettings):
     worker_backoff_max_seconds: int = Field(300, ge=0)
 
     # ---- Runtime filesystem ------------------------------------------------
-    data_dir: Path = Field(default=Path("data"))
+    data_dir: Path = Field(default=Path("backend/data"))
     worker_runs_dir: Path = Field(default=Path("/tmp/ade-runs"))
     # Storage (Azure Blob only)
     blob_account_url: AnyHttpUrl | None = Field(default=None)
     blob_connection_string: str | None = Field(default=None)
     blob_container: str = Field(default="ade")
     blob_prefix: str = Field(default="workspaces")
-    blob_require_versioning: bool = Field(default=True)
+    blob_versioning_mode: Literal["auto", "require", "off"] = Field(default="auto")
     blob_request_timeout_seconds: float = Field(
         default=30.0, gt=0
     )
@@ -89,6 +89,16 @@ class Settings(BaseSettings):
     # ---- Timeouts ----------------------------------------------------------
     worker_env_build_timeout_seconds: int = Field(600, ge=1)
     worker_run_timeout_seconds: int | None = None
+
+    @field_validator("blob_versioning_mode", mode="before")
+    @classmethod
+    def _normalize_blob_versioning_mode(cls, value: object) -> object:
+        if value is None:
+            return "auto"
+        raw = str(value).strip().lower()
+        if raw in {"auto", "require", "off"}:
+            return raw
+        raise ValueError("ADE_BLOB_VERSIONING_MODE must be one of: auto, require, off.")
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
@@ -150,7 +160,6 @@ class Settings(BaseSettings):
         base = max(0, int(self.worker_backoff_base_seconds))
         delay = base * (2 ** max(attempt_count - 1, 0))
         return min(int(self.worker_backoff_max_seconds), int(delay))
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
