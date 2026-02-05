@@ -1,19 +1,21 @@
 """Logging configuration and helpers for the ADE API backend.
 
-This module configures console-style logging for the entire process and exposes
-helpers for:
+This module configures process-wide logging and supports two formats:
+
+* human-readable console logs, and
+* structured JSON logs for production ingestion.
+
+It also exposes helpers for:
 
 * binding a request-scoped correlation ID, and
 * building consistent `extra` payloads for structured logs.
 
-Everything uses the standard :mod:`logging` library. The only customization is
-the formatter, which renders one human-readable line per log record, including
-timestamp, level, logger name, correlation ID, and any `extra` fields as
-``key=value`` pairs.
+Everything uses the standard :mod:`logging` library.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -105,15 +107,42 @@ class ConsoleLogFormatter(logging.Formatter):
         base = super().format(record)
 
         # Append any custom fields from `extra=...` as key=value pairs.
-        extras: list[str] = []
-        for key, value in record.__dict__.items():
-            if key in _STANDARD_ATTRS or key.startswith("_"):
-                continue
-            extras.append(f"{key}={_format_extra_value(value)}")
+        extras = [
+            f"{key}={_format_extra_value(value)}"
+            for key, value in sorted(_record_extras(record).items())
+        ]
 
         if extras:
             return f"{base} " + " ".join(extras)
         return base
+
+
+class JsonLogFormatter(logging.Formatter):
+    """Render log records as one JSON object per line."""
+
+    _time_format = "%Y-%m-%dT%H:%M:%S"
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, tz=UTC)
+        pattern = datefmt or self._time_format
+        base = dt.strftime(pattern)
+        return f"{base}.{int(record.msecs):03d}Z"
+
+    def format(self, record: logging.LogRecord) -> str:  # noqa: D401 - std signature
+        cid = getattr(record, "correlation_id", None) or _CORRELATION_ID.get() or "-"
+        record.correlation_id = cid
+        payload: dict[str, Any] = {
+            "timestamp": self.formatTime(record, self._time_format),
+            "level": record.levelname,
+            "service": "ade-api",
+            "logger": record.name,
+            "message": record.getMessage(),
+            "correlation_id": cid,
+        }
+        payload.update(_record_extras(record))
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=_json_default, separators=(",", ":"))
 
 
 # ---------------------------------------------------------------------------
@@ -124,8 +153,8 @@ class ConsoleLogFormatter(logging.Formatter):
 def setup_logging(settings: Settings) -> None:
     """Configure root logging for the ADE API process.
 
-    This installs a single console-style StreamHandler on stdout and sets the
-    root log level from ``settings.log_level`` (env: ``ADE_LOG_LEVEL``).
+    This installs a single StreamHandler and sets the API baseline log level
+    from ``settings.effective_api_log_level``.
 
     It also wires common third-party loggers (uvicorn, alembic, sqlalchemy) to
     propagate into the same root logger so that all logs share a consistent
@@ -133,42 +162,62 @@ def setup_logging(settings: Settings) -> None:
     """
     root_logger = logging.getLogger()
 
-    level_name = settings.log_level.upper()
-    level = getattr(logging, level_name, logging.INFO)
+    level_name = settings.effective_api_log_level
+    level = getattr(logging, level_name)
 
     configured = getattr(root_logger, _CONFIGURED_FLAG, False)
-    if not configured:
-        handler = logging.StreamHandler()
-        handler.setFormatter(ConsoleLogFormatter())
-        # Replace any existing handlers to avoid duplicate logs.
-        root_logger.handlers = [handler]
+    if not configured or not root_logger.handlers:
+        # Replace existing handlers once to avoid duplicate output.
+        root_logger.handlers = [logging.StreamHandler()]
         setattr(root_logger, _CONFIGURED_FLAG, True)
-    root_logger.setLevel(level)
-    handler = root_logger.handlers[0] if root_logger.handlers else None
+    else:
+        # Keep exactly one root handler for deterministic output.
+        root_logger.handlers = [root_logger.handlers[0]]
 
-    # Let common third-party loggers propagate into our root logger.
+    handler = root_logger.handlers[0]
+    handler.setFormatter(_build_formatter(settings.log_format))
+    root_logger.setLevel(level)
+
+    # Reset logger-specific overrides, then apply explicit policy.
     for name in (
         "uvicorn",
         "uvicorn.error",
         "uvicorn.access",
+        "ade_api.request",
         "alembic",
         "alembic.runtime.migration",
         "sqlalchemy",
+        "sqlalchemy.engine",
+        "sqlalchemy.pool",
     ):
         logger = logging.getLogger(name)
         logger.handlers.clear()
         logger.propagate = True
+        logger.disabled = False
+        logger.setLevel(logging.NOTSET)
+
+    logging.getLogger("uvicorn").setLevel(level)
+    logging.getLogger("uvicorn.error").setLevel(level)
+    logging.getLogger("ade_api.request").setLevel(
+        getattr(logging, settings.effective_request_log_level)
+    )
+
+    access_logger = logging.getLogger("uvicorn.access")
+    if settings.access_log_enabled:
+        access_logger.disabled = False
+        access_logger.propagate = True
+        access_logger.setLevel(getattr(logging, settings.effective_access_log_level))
+    else:
+        access_logger.handlers.clear()
+        access_logger.propagate = False
+        access_logger.disabled = True
 
     # Optional: dedicated DB logger level for SQLAlchemy noise control.
     db_level_name = settings.database_log_level
     if db_level_name:
-        db_level = getattr(logging, db_level_name.upper(), logging.DEBUG)
+        db_level = getattr(logging, db_level_name)
         for name in ("sqlalchemy.engine", "sqlalchemy.pool"):
-            logger = logging.getLogger(name)
-            logger.setLevel(db_level)
-            if handler is not None:
-                logger.handlers = [handler]
-            logger.propagate = False
+            logging.getLogger(name).setLevel(db_level)
 
 
 # ---------------------------------------------------------------------------
@@ -247,8 +296,28 @@ def _format_extra_value(value: Any) -> str:
     return str(value)
 
 
+def _record_extras(record: logging.LogRecord) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
+    for key, value in record.__dict__.items():
+        if key in _STANDARD_ATTRS or key.startswith("_"):
+            continue
+        extras[key] = value
+    return extras
+
+
+def _json_default(value: Any) -> str:
+    return str(value)
+
+
+def _build_formatter(log_format: str) -> logging.Formatter:
+    if log_format == "json":
+        return JsonLogFormatter()
+    return ConsoleLogFormatter()
+
+
 __all__ = [
     "ConsoleLogFormatter",
+    "JsonLogFormatter",
     "bind_request_context",
     "clear_request_context",
     "current_request_id",

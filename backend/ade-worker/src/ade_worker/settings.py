@@ -9,6 +9,9 @@ from typing import Literal
 from pydantic import AnyHttpUrl, Field, PostgresDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_ALLOWED_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+_ALLOWED_LOG_FORMATS = frozenset({"console", "json"})
+
 
 class Settings(BaseSettings):
     """Worker settings loaded from ADE_* env vars (and repo-root .env)."""
@@ -45,7 +48,9 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(2, ge=1)
     worker_listen_timeout_seconds: float = Field(60.0, gt=0)
     worker_cleanup_interval: float = Field(30.0, gt=0)
-    worker_log_level: str = "INFO"
+    log_format: str = "console"
+    log_level: str | None = None
+    worker_log_level: str | None = None
 
     # ---- Garbage collection (run via scheduled job) -----------------------
     worker_env_ttl_days: int = Field(30, ge=0)
@@ -87,6 +92,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
+        allowed_levels = ", ".join(sorted(_ALLOWED_LOG_LEVELS))
+        allowed_formats = ", ".join(sorted(_ALLOWED_LOG_FORMATS))
+
+        self.log_format = self.log_format.strip().lower()
+        if self.log_format not in _ALLOWED_LOG_FORMATS:
+            raise ValueError(f"ADE_LOG_FORMAT must be one of: {allowed_formats}.")
+
+        if self.log_level is not None:
+            self.log_level = self.log_level.strip().upper()
+            if self.log_level not in _ALLOWED_LOG_LEVELS:
+                raise ValueError(f"ADE_LOG_LEVEL must be one of: {allowed_levels}.")
+
+        if self.worker_log_level is not None:
+            self.worker_log_level = self.worker_log_level.strip().upper()
+            if self.worker_log_level not in _ALLOWED_LOG_LEVELS:
+                raise ValueError(f"ADE_WORKER_LOG_LEVEL must be one of: {allowed_levels}.")
+
         if self.blob_connection_string and self.blob_account_url:
             raise ValueError(
                 "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
@@ -95,6 +117,10 @@ class Settings(BaseSettings):
             raise ValueError("ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required.")
 
         return self
+
+    @property
+    def effective_worker_log_level(self) -> str:
+        return self.worker_log_level or self.log_level or "INFO"
 
     @property
     def workspaces_dir(self) -> Path:

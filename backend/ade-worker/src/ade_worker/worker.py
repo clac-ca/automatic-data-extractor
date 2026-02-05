@@ -44,6 +44,32 @@ CHANNEL_RUN_QUEUED = "ade_run_queued"
 CLAIM_BATCH_SIZE = 5
 LISTEN_MAX_BACKOFF_SECONDS = 30.0
 NOTIFY_JITTER_MS = 200
+_STANDARD_LOG_ATTRS = {
+    "name",
+    "msg",
+    "args",
+    "levelname",
+    "levelno",
+    "pathname",
+    "filename",
+    "module",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "lineno",
+    "funcName",
+    "created",
+    "msecs",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "processName",
+    "process",
+    "message",
+    "asctime",
+    "taskName",
+    "color_message",
+}
 
 
 # --- time / paths ---
@@ -57,11 +83,48 @@ def _default_worker_id() -> str:
     return f"{host}-{uuid4().hex[:8]}"
 
 
-def _setup_logging(level: str) -> None:
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)-5s %(name)s %(message)s",
-    )
+class WorkerJsonLogFormatter(logging.Formatter):
+    """Render worker logs as JSON objects for container log collectors."""
+
+    _time_format = "%Y-%m-%dT%H:%M:%S"
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        pattern = datefmt or self._time_format
+        base = dt.strftime(pattern)
+        return f"{base}.{int(record.msecs):03d}Z"
+
+    def format(self, record: logging.LogRecord) -> str:  # noqa: D401 - std signature
+        payload: dict[str, Any] = {
+            "timestamp": self.formatTime(record, self._time_format),
+            "level": record.levelname,
+            "service": "ade-worker",
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_LOG_ATTRS or key.startswith("_"):
+                continue
+            payload[key] = value
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=str, separators=(",", ":"))
+
+
+def _setup_logging(level: str, *, log_format: str) -> None:
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        root_logger.handlers = [logging.StreamHandler()]
+    else:
+        root_logger.handlers = [root_logger.handlers[0]]
+
+    handler = root_logger.handlers[0]
+    if log_format == "json":
+        handler.setFormatter(WorkerJsonLogFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-5s %(name)s %(message)s"))
+
+    root_logger.setLevel(getattr(logging, level))
 
 
 def _ensure_dir(path: Path) -> None:
@@ -1328,7 +1391,7 @@ class Worker:
     
             options = parse_run_options(
                 run.get("run_options"),
-                default_log_level=self.settings.worker_log_level,
+                default_log_level=self.settings.effective_worker_log_level,
             )
             sheet_names = options.input_sheet_names or _parse_input_sheet_names(run.get("input_sheet_names"))
             run_dir = self.paths.run_dir(workspace_id, run_id)
@@ -1976,7 +2039,10 @@ class Worker:
 
 def main() -> int:
     settings = get_settings()
-    _setup_logging(settings.worker_log_level)
+    _setup_logging(
+        settings.effective_worker_log_level,
+        log_format=settings.log_format,
+    )
 
     _ensure_runtime_dirs(settings)
 

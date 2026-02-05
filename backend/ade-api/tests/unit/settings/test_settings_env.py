@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from ade_api.settings import Settings
 
@@ -124,6 +125,63 @@ def test_logging_level_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> 
     settings = Settings(_env_file=None)
 
     assert settings.log_level == "WARNING"
+
+
+def test_logging_level_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Service-specific logging overrides should take precedence over ADE_LOG_LEVEL."""
+
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_LOG_LEVEL", "warning")
+    monkeypatch.setenv("ADE_API_LOG_LEVEL", "error")
+    monkeypatch.setenv("ADE_REQUEST_LOG_LEVEL", "info")
+    monkeypatch.setenv("ADE_ACCESS_LOG_LEVEL", "debug")
+    monkeypatch.setenv("ADE_LOG_FORMAT", "JSON")
+    settings = Settings(_env_file=None)
+
+    assert settings.log_format == "json"
+    assert settings.log_level == "WARNING"
+    assert settings.effective_api_log_level == "ERROR"
+    assert settings.effective_request_log_level == "INFO"
+    assert settings.effective_access_log_level == "DEBUG"
+
+
+@pytest.mark.parametrize(
+    ("env_name", "value"),
+    [
+        ("ADE_LOG_LEVEL", "verbose"),
+        ("ADE_API_LOG_LEVEL", "noisy"),
+        ("ADE_REQUEST_LOG_LEVEL", "trace"),
+        ("ADE_ACCESS_LOG_LEVEL", "chatty"),
+        ("ADE_DATABASE_LOG_LEVEL", "sql"),
+    ],
+)
+def test_invalid_log_levels_raise_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    env_name: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv(env_name, value)
+
+    with pytest.raises(ValidationError, match=env_name):
+        Settings(_env_file=None)
+
+
+def test_invalid_log_format_raises_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_LOG_FORMAT", "pretty")
+
+    with pytest.raises(ValidationError, match="ADE_LOG_FORMAT"):
+        Settings(_env_file=None)
 
 
 def test_cors_origin_regex_validation(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -20,6 +20,7 @@ def _prepare_env() -> dict[str, str]:
     env["PATH"] = f"{python_bin}{os.pathsep}{env.get('PATH', '')}"
     return env
 
+
 def run_dev(
     *,
     host: str | None = None,
@@ -39,7 +40,18 @@ def run_dev(
         typer.echo("Note: API workers > 1; disabling reload in dev.")
 
     uvicorn_bin = common.uvicorn_path()
-    api_cmd = [uvicorn_bin, "ade_api.main:app", "--host", host, "--port", str(port)]
+    api_cmd = [
+        uvicorn_bin,
+        "ade_api.main:app",
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--log-level",
+        settings.effective_api_log_level.lower(),
+    ]
+    if not settings.access_log_enabled:
+        api_cmd.append("--no-access-log")
     if workers == 1:
         api_cmd.extend(["--reload", "--reload-dir", "backend/ade-api"])
     else:
@@ -64,7 +76,18 @@ def run_start(
     env = _prepare_env()
 
     uvicorn_bin = common.uvicorn_path()
-    api_cmd = [uvicorn_bin, "ade_api.main:app", "--host", host, "--port", str(port)]
+    api_cmd = [
+        uvicorn_bin,
+        "ade_api.main:app",
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--log-level",
+        settings.effective_api_log_level.lower(),
+    ]
+    if not settings.access_log_enabled:
+        api_cmd.append("--no-access-log")
     if workers and workers > 1:
         api_cmd.extend(["--workers", str(workers)])
 

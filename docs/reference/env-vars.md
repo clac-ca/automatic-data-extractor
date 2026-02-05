@@ -14,6 +14,30 @@ This list focuses on the most common settings for local and production use.
 - `ADE_WORKER_RUNS_DIR` (optional)
   - Default: `/tmp/ade-runs`
 
+## Logging
+
+- `ADE_LOG_FORMAT` (optional)
+  - `console` (default) or `json`.
+- `ADE_LOG_LEVEL` (optional)
+  - Global default level for service logs (`INFO` default).
+  - Allowed values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+- `ADE_API_LOG_LEVEL` (optional)
+  - API-specific override. If unset, API uses `ADE_LOG_LEVEL`.
+- `ADE_WORKER_LOG_LEVEL` (optional)
+  - Worker-specific override. If unset, worker uses `ADE_LOG_LEVEL`.
+- `ADE_REQUEST_LOG_LEVEL` (optional, API)
+  - Override for API request-completion logger (`ade_api.request`).
+- `ADE_ACCESS_LOG_ENABLED` (optional, API)
+  - Controls uvicorn access logs (`true` default).
+- `ADE_ACCESS_LOG_LEVEL` (optional, API)
+  - Override for uvicorn access log level.
+- `ADE_DATABASE_LOG_LEVEL` (optional, API)
+  - Override for SQLAlchemy engine/pool logger levels.
+
+Precedence:
+- API effective level: `ADE_API_LOG_LEVEL` -> `ADE_LOG_LEVEL` -> `INFO`
+- Worker effective level: `ADE_WORKER_LOG_LEVEL` -> `ADE_LOG_LEVEL` -> `INFO`
+
 ## Local filesystem layout
 
 - Workspaces root: `ADE_DATA_DIR/workspaces`

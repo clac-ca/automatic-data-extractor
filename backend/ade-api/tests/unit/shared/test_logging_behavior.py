@@ -10,6 +10,7 @@ from starlette.requests import Request
 from ade_api.common.exceptions import unhandled_exception_handler
 from ade_api.common.logging import (
     ConsoleLogFormatter,
+    JsonLogFormatter,
     bind_request_context,
     clear_request_context,
     log_context,
@@ -125,3 +126,84 @@ def test_unhandled_exception_handler_logs_with_correlation():
         clear_request_context()
         root.removeHandler(handler)
         error_logger.removeHandler(handler)
+
+
+def test_json_formatter_emits_structured_output():
+    setup_logging(
+        Settings(
+            _env_file=None,
+            log_format="json",
+            log_level="INFO",
+            database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )
+    )
+    handler = _CaptureHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(JsonLogFormatter())
+    root = logging.getLogger()
+    root.addHandler(handler)
+    try:
+        bind_request_context("cid-json")
+        logging.getLogger("test.json").info("json.event", extra={"answer": 42})
+
+        assert handler.formatted, "Structured JSON log not captured"
+        payload = json.loads(handler.formatted[-1])
+        assert payload["message"] == "json.event"
+        assert payload["correlation_id"] == "cid-json"
+        assert payload["answer"] == 42
+        assert payload["service"] == "ade-api"
+    finally:
+        clear_request_context()
+        root.removeHandler(handler)
+
+
+def test_setup_logging_disables_access_logger_when_requested():
+    setup_logging(
+        Settings(
+            _env_file=None,
+            log_level="INFO",
+            access_log_enabled=False,
+            database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )
+    )
+    access_logger = logging.getLogger("uvicorn.access")
+    assert access_logger.disabled is True
+    assert access_logger.propagate is False
+
+
+def test_setup_logging_applies_request_log_level_override():
+    setup_logging(
+        Settings(
+            _env_file=None,
+            log_level="WARNING",
+            request_log_level="INFO",
+            database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )
+    )
+    request_logger = logging.getLogger("ade_api.request")
+    assert request_logger.level == logging.INFO
+
+
+def test_setup_logging_applies_effective_level_to_uvicorn_access_logger():
+    setup_logging(
+        Settings(
+            _env_file=None,
+            log_level="WARNING",
+            database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
+            blob_container="ade-test",
+            blob_connection_string="UseDevelopmentStorage=true",
+            secret_key="test-secret-key-for-tests-please-change",
+        )
+    )
+    access_logger = logging.getLogger("uvicorn.access")
+    assert access_logger.disabled is False
+    assert access_logger.level == logging.WARNING

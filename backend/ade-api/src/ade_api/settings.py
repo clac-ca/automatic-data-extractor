@@ -24,6 +24,8 @@ MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
 MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
+_ALLOWED_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+_ALLOWED_LOG_FORMATS = frozenset({"console", "json"})
 
 
 # ---- Settings ---------------------------------------------------------------
@@ -52,7 +54,12 @@ class Settings(BaseSettings):
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"
     openapi_url: str = "/openapi.json"
+    log_format: str = "console"
     log_level: str = "INFO"
+    api_log_level: str | None = None
+    request_log_level: str | None = None
+    access_log_enabled: bool = True
+    access_log_level: str | None = None
     safe_mode: bool = False
 
     # Server
@@ -149,7 +156,37 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> "Settings":
-        self.log_level = self.log_level.upper()
+        allowed_levels = ", ".join(sorted(_ALLOWED_LOG_LEVELS))
+        allowed_formats = ", ".join(sorted(_ALLOWED_LOG_FORMATS))
+
+        self.log_format = self.log_format.strip().lower()
+        if self.log_format not in _ALLOWED_LOG_FORMATS:
+            raise ValueError(f"ADE_LOG_FORMAT must be one of: {allowed_formats}.")
+
+        self.log_level = self.log_level.strip().upper()
+        if self.log_level not in _ALLOWED_LOG_LEVELS:
+            raise ValueError(f"ADE_LOG_LEVEL must be one of: {allowed_levels}.")
+
+        if self.api_log_level is not None:
+            self.api_log_level = self.api_log_level.strip().upper()
+            if self.api_log_level not in _ALLOWED_LOG_LEVELS:
+                raise ValueError(f"ADE_API_LOG_LEVEL must be one of: {allowed_levels}.")
+
+        if self.request_log_level is not None:
+            self.request_log_level = self.request_log_level.strip().upper()
+            if self.request_log_level not in _ALLOWED_LOG_LEVELS:
+                raise ValueError(f"ADE_REQUEST_LOG_LEVEL must be one of: {allowed_levels}.")
+
+        if self.access_log_level is not None:
+            self.access_log_level = self.access_log_level.strip().upper()
+            if self.access_log_level not in _ALLOWED_LOG_LEVELS:
+                raise ValueError(f"ADE_ACCESS_LOG_LEVEL must be one of: {allowed_levels}.")
+
+        if self.database_log_level is not None:
+            self.database_log_level = self.database_log_level.strip().upper()
+            if self.database_log_level not in _ALLOWED_LOG_LEVELS:
+                raise ValueError(f"ADE_DATABASE_LOG_LEVEL must be one of: {allowed_levels}.")
+
         if self.algorithm != "HS256":
             raise ValueError("ADE_ALGORITHM must be HS256.")
         if len(self.secret_key.get_secret_value().encode("utf-8")) < 32:
@@ -196,6 +233,18 @@ class Settings(BaseSettings):
         return self.data_dir / "cache" / "pip"
 
     # ---- Convenience ----
+
+    @property
+    def effective_api_log_level(self) -> str:
+        return self.api_log_level or self.log_level
+
+    @property
+    def effective_request_log_level(self) -> str:
+        return self.request_log_level or self.effective_api_log_level
+
+    @property
+    def effective_access_log_level(self) -> str:
+        return self.access_log_level or self.effective_api_log_level
 
     @property
     def secret_key_value(self) -> str:

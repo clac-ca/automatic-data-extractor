@@ -141,7 +141,7 @@ def create_application_lifespan(
         logger.info(
             "ade_api.startup",
             extra=log_context(
-                logging_level=settings.log_level,
+                logging_level=settings.effective_api_log_level,
                 safe_mode=bool(settings.safe_mode),
                 auth_disabled=bool(settings.auth_disabled),
                 version=settings.app_version,
