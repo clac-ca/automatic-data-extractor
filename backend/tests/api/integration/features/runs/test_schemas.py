@@ -11,7 +11,7 @@ from ade_api.features.runs.schemas import (
     RunLinks,
     RunResource,
 )
-from ade_db.models import RunStatus
+from ade_db.models import RunOperation, RunStatus
 
 
 @pytest.fixture
@@ -50,6 +50,7 @@ def test_run_resource_dump_uses_aliases_and_defaults(
         id=run_identifiers["run_id"],
         workspace_id=run_identifiers["workspace_id"],
         configuration_id=run_identifiers["configuration_id"],
+        operation=RunOperation.PROCESS,
         status=RunStatus.QUEUED,
         created_at=timestamp,
         links=_links_for(run_identifiers["run_id"]),
@@ -82,8 +83,8 @@ def test_run_create_request_serializes_minimal_options() -> None:
 
     assert payload == {
         "options": {
+            "operation": "process",
             "dry_run": False,
-            "validate_only": False,
             "active_sheet_only": False,
             "input_document_id": request.options.input_document_id,
         }

@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from ade_db.schema import (
-    environments,
+    configurations,
     files,
     file_versions,
     run_fields,
@@ -82,7 +82,6 @@ WHERE id = :run_id
   AND claimed_by = :worker_id;
 """
 
-
 RUN_HEARTBEAT = """    UPDATE runs
 SET
     claim_expires_at = :lease_expires_at
@@ -117,6 +116,7 @@ WHERE status = 'running'
   AND claim_expires_at < :now
   AND attempt_count >= max_attempts;
 """
+
 
 # --- Types ------------------------------------------------------------------
 
@@ -215,81 +215,6 @@ def ack_run_failure(
     return bool(getattr(result, "rowcount", 0) == 1)
 
 
-def ack_environment_success(
-    session: Session,
-    *,
-    env_id: str,
-    now: datetime,
-) -> bool:
-    params = {"env_id": env_id, "now": now}
-    result = session.execute(
-        text(
-            """UPDATE environments
-SET
-    status = 'ready',
-    error_message = NULL,
-    updated_at = :now
-WHERE id = :env_id
-  AND status = 'building';"""
-        ),
-        params,
-    )
-    return bool(getattr(result, "rowcount", 0) == 1)
-
-
-def ack_environment_failure(
-    session: Session,
-    *,
-    env_id: str,
-    now: datetime,
-    error_message: str,
-) -> bool:
-    params = {"env_id": env_id, "now": now, "error_message": error_message}
-    result = session.execute(
-        text(
-            """UPDATE environments
-SET
-    status = 'failed',
-    error_message = :error_message,
-    updated_at = :now
-WHERE id = :env_id
-  AND status = 'building';"""
-        ),
-        params,
-    )
-    return bool(getattr(result, "rowcount", 0) == 1)
-
-
-def mark_environment_building(
-    session: Session,
-    *,
-    env_id: str,
-    now: datetime,
-) -> bool:
-    result = session.execute(
-        update(environments)
-        .where(environments.c.id == env_id)
-        .values(
-            status="building",
-            error_message=None,
-            updated_at=now,
-        )
-    )
-    return bool(getattr(result, "rowcount", 0) == 1)
-
-
-def try_advisory_lock(conn, *, key: str) -> bool:
-    result = conn.execute(
-        text("SELECT pg_try_advisory_lock(hashtextextended(:key, 0))"),
-        {"key": key},
-    )
-    return bool(result.scalar())
-
-
-def advisory_unlock(conn, *, key: str) -> None:
-    conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key})
-
-
 def expire_run_leases(
     session: Session,
     *,
@@ -328,13 +253,6 @@ def next_run_due_at(
 
 
 # --- Repository helpers -----------------------------------------------------
-
-def load_environment(session: Session, env_id: str) -> dict[str, Any] | None:
-    row = session.execute(
-        select(environments).where(environments.c.id == env_id)
-    ).mappings().first()
-    return dict(row) if row else None
-
 
 def load_run(session: Session, run_id: str) -> dict[str, Any] | None:
     row = session.execute(select(runs).where(runs.c.id == run_id)).mappings().first()
@@ -445,111 +363,6 @@ def create_output_file_version(
     return payload
 
 
-def ensure_environment(
-    session: Session,
-    *,
-    run: dict[str, Any],
-    now: datetime,
-) -> dict[str, Any] | None:
-    row = session.execute(
-        select(environments).where(
-            environments.c.workspace_id == run["workspace_id"],
-            environments.c.configuration_id == run["configuration_id"],
-            environments.c.deps_digest == run["deps_digest"],
-        )
-    ).mappings().first()
-    if row:
-        return dict(row)
-
-    env_row = {
-        "id": uuid4(),
-        "workspace_id": run["workspace_id"],
-        "configuration_id": run["configuration_id"],
-        "deps_digest": run["deps_digest"],
-        "status": "queued",
-        "error_message": None,
-        "created_at": now,
-        "updated_at": now,
-        "last_used_at": None,
-        "python_version": None,
-        "python_interpreter": None,
-        "engine_version": None,
-    }
-    stmt = (
-        pg_insert(environments)
-        .values(**env_row)
-        .on_conflict_do_nothing(
-            index_elements=[
-                "workspace_id",
-                "configuration_id",
-                "deps_digest",
-            ]
-        )
-    )
-    session.execute(stmt)
-
-    row = session.execute(
-        select(environments).where(
-            environments.c.workspace_id == run["workspace_id"],
-            environments.c.configuration_id == run["configuration_id"],
-            environments.c.deps_digest == run["deps_digest"],
-        )
-    ).mappings().first()
-    return dict(row) if row else None
-
-
-def mark_environment_queued(
-    session: Session,
-    *,
-    env_id: str,
-    now: datetime,
-    error_message: str,
-) -> None:
-    session.execute(
-        update(environments)
-        .where(environments.c.id == env_id)
-        .values(
-            status="queued",
-            error_message=error_message,
-            updated_at=now,
-        )
-    )
-
-
-def record_environment_metadata(
-    session: Session,
-    *,
-    env_id: str,
-    now: datetime,
-    python_interpreter: str | None,
-    python_version: str | None,
-    engine_version: str | None,
-) -> None:
-    session.execute(
-        update(environments)
-        .where(environments.c.id == env_id)
-        .values(
-            python_interpreter=python_interpreter,
-            python_version=python_version,
-            engine_version=engine_version,
-            updated_at=now,
-        )
-    )
-
-
-def touch_environment_last_used(
-    session: Session,
-    *,
-    env_id: str,
-    now: datetime,
-) -> None:
-    session.execute(
-        update(environments)
-        .where(environments.c.id == env_id)
-        .values(last_used_at=now, updated_at=now)
-    )
-
-
 def record_run_result(
     session: Session,
     *,
@@ -569,6 +382,21 @@ def record_run_result(
             error_message=error_message,
         )
     )
+
+
+def record_configuration_validated_digest(
+    session: Session,
+    *,
+    configuration_id: str,
+    content_digest: str,
+    now: datetime,
+) -> bool:
+    result = session.execute(
+        update(configurations)
+        .where(configurations.c.id == configuration_id)
+        .values(content_digest=content_digest, updated_at=now)
+    )
+    return bool((result.rowcount or 0) == 1)
 
 
 def replace_run_metrics(
@@ -620,24 +448,15 @@ __all__ = [
     "heartbeat_run",
     "ack_run_success",
     "ack_run_failure",
-    "ack_environment_success",
-    "ack_environment_failure",
-    "mark_environment_building",
-    "try_advisory_lock",
-    "advisory_unlock",
     "expire_run_leases",
     "next_run_due_at",
-    "load_environment",
     "load_run",
     "load_file",
     "load_file_version",
     "ensure_output_file",
     "create_output_file_version",
-    "ensure_environment",
-    "mark_environment_queued",
-    "record_environment_metadata",
-    "touch_environment_last_used",
     "record_run_result",
+    "record_configuration_validated_digest",
     "replace_run_metrics",
     "replace_run_fields",
     "replace_run_table_columns",

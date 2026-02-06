@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_db.models import FileVersion, Run, RunField, RunMetrics, RunStatus, RunTableColumn
+from ade_db.models import FileVersion, Run, RunField, RunMetrics, RunOperation, RunStatus, RunTableColumn
 
 from .filters import RunColumnFilters, apply_run_column_filters, apply_run_filters
 
@@ -88,6 +88,7 @@ class RunsRepository:
             .where(
                 Run.configuration_id == configuration_id,
                 FileVersion.file_id.in_(document_ids),
+                Run.operation == RunOperation.PROCESS,
                 Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]),
             )
         )

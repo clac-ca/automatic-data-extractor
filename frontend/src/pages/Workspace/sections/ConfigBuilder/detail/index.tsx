@@ -10,7 +10,8 @@ import { PageState } from "@/components/layout";
 
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
-import { exportConfiguration, validateConfiguration } from "@/api/configurations/api";
+import { ApiError } from "@/api/errors";
+import { exportConfiguration } from "@/api/configurations/api";
 import {
   useArchiveConfigurationMutation,
   useConfigurationQuery,
@@ -25,6 +26,30 @@ import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
 
 interface ConfigurationDetailScreenProps {
   readonly params?: { readonly configId?: string };
+}
+
+function parseProblemCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) {
+    return null;
+  }
+  const detail = error.problem?.detail as unknown;
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (!detail || typeof detail !== "object") {
+    return null;
+  }
+  const payload = detail as Record<string, unknown>;
+  if (typeof payload.error === "string") {
+    return payload.error;
+  }
+  if (payload.error && typeof payload.error === "object") {
+    const nested = payload.error as Record<string, unknown>;
+    if (typeof nested.code === "string") {
+      return nested.code;
+    }
+  }
+  return null;
 }
 
 export default function ConfigurationDetailScreen({ params }: ConfigurationDetailScreenProps = {}) {
@@ -111,42 +136,15 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
   const duplicateConfig = useDuplicateConfigurationMutation(workspace.id);
 
   type MakeActiveDialogState =
-    | { stage: "checking" }
     | { stage: "confirm" }
-    | { stage: "issues"; issues: readonly { path: string; message: string }[] }
-    | { stage: "error"; message: string };
+    | { stage: "error"; message: string; validationRequired?: boolean };
 
   const [makeActiveOpen, setMakeActiveOpen] = useState(false);
   const [makeActiveState, setMakeActiveState] = useState<MakeActiveDialogState | null>(null);
 
-  useEffect(() => {
-    if (!makeActiveOpen || !config || !isDraft) {
-      return;
-    }
-    let cancelled = false;
-    setMakeActiveState({ stage: "checking" });
-    void validateConfiguration(workspace.id, config.id)
-      .then((result) => {
-        if (cancelled) return;
-        if (Array.isArray(result.issues) && result.issues.length > 0) {
-          setMakeActiveState({ stage: "issues", issues: result.issues });
-          return;
-        }
-        setMakeActiveState({ stage: "confirm" });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unable to validate configuration.";
-        setMakeActiveState({ stage: "error", message });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [config, isDraft, makeActiveOpen, workspace.id]);
-
   const openMakeActiveDialog = useCallback(() => {
     makeActiveConfig.reset();
-    setMakeActiveState({ stage: "checking" });
+    setMakeActiveState({ stage: "confirm" });
     setMakeActiveOpen(true);
   }, [makeActiveConfig]);
 
@@ -236,6 +234,15 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
           void refetchConfig();
         },
         onError(error) {
+          const code = parseProblemCode(error);
+          if (code === "validation_required") {
+            setMakeActiveState({
+              stage: "error",
+              message: "Validation is required. Run Validation in the editor, then publish again.",
+              validationRequired: true,
+            });
+            return;
+          }
           notifyToast({
             title: error instanceof Error ? error.message : "Unable to make configuration active.",
             intent: "danger",
@@ -392,23 +399,17 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
       <ConfirmDialog
         open={makeActiveOpen}
         title={
-          makeActiveState?.stage === "checking"
-            ? "Checking configuration…"
-            : makeActiveState?.stage === "issues"
-              ? "Fix validation issues first"
-              : "Make configuration active?"
+          makeActiveState?.stage === "error" && makeActiveState.validationRequired
+            ? "Validation required before publish"
+            : "Make configuration active?"
         }
         description={
-          makeActiveState?.stage === "checking"
-            ? "Running validation before activation."
-            : makeActiveState?.stage === "issues"
-              ? "This configuration has validation issues and can’t be activated yet."
-              : activeConfiguration
-                ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
-                : "This becomes the workspace’s live configuration for extraction runs."
+          activeConfiguration
+            ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
+            : "This becomes the workspace’s live configuration for extraction runs."
         }
         confirmLabel={
-          makeActiveState?.stage === "issues"
+          makeActiveState?.stage === "error" && makeActiveState.validationRequired
             ? "Open editor"
             : makeActiveState?.stage === "error"
               ? "Close"
@@ -420,7 +421,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
           setMakeActiveState(null);
         }}
         onConfirm={() => {
-          if (makeActiveState?.stage === "issues") {
+          if (makeActiveState?.stage === "error" && makeActiveState.validationRequired) {
             setMakeActiveOpen(false);
             openEditor();
             return;
@@ -433,26 +434,9 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
           handleConfirmMakeActive();
         }}
         isConfirming={makeActiveConfig.isPending}
-        confirmDisabled={makeActiveState?.stage === "checking" || makeActiveConfig.isPending}
+        confirmDisabled={makeActiveConfig.isPending}
       >
-        {makeActiveState?.stage === "checking" ? (
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
-            <span>Validating…</span>
-          </div>
-        ) : makeActiveState?.stage === "issues" ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground">Issues:</p>
-            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-background p-3 text-xs text-foreground">
-              {makeActiveState.issues.map((issue) => (
-                <li key={`${issue.path}:${issue.message}`} className="space-y-1">
-                  <p className="font-semibold">{issue.path}</p>
-                  <p className="text-muted-foreground">{issue.message}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : makeActiveState?.stage === "error" ? (
+        {makeActiveState?.stage === "error" ? (
           <p className="text-sm font-medium text-destructive">{makeActiveState.message}</p>
         ) : null}
       </ConfirmDialog>

@@ -4,22 +4,63 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import insert, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import sessionmaker
 
-from ade_worker import db
 from ade_db.engine import session_scope
 from ade_db.schema import (
-    environments,
+    configurations,
+    metadata,
     run_fields,
     run_metrics,
     run_table_columns,
     runs,
 )
-from .helpers import seed_file_with_version
+from ade_worker import db
 
 
 def _uuid() -> str:
     return str(uuid4())
+
+
+workspaces = metadata.tables["workspaces"]
+
+
+def _ensure_workspace_and_configuration(
+    engine,
+    *,
+    workspace_id: str,
+    configuration_id: str,
+    now: datetime,
+) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            pg_insert(workspaces)
+            .values(
+                id=workspace_id,
+                name=f"Workspace {workspace_id[:8]}",
+                slug=f"ws-{workspace_id}",
+                settings={},
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        conn.execute(
+            pg_insert(configurations)
+            .values(
+                id=configuration_id,
+                workspace_id=workspace_id,
+                display_name="Config A",
+                status="draft",
+                content_digest=None,
+                last_used_at=None,
+                activated_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
 
 
 def _insert_run(
@@ -32,12 +73,12 @@ def _insert_run(
     now: datetime,
     input_file_version_id: str | None = None,
 ) -> None:
-    if not input_file_version_id:
-        _, input_file_version_id = seed_file_with_version(
-            engine,
-            workspace_id=workspace_id,
-            now=now,
-        )
+    _ensure_workspace_and_configuration(
+        engine,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
+        now=now,
+    )
     with engine.begin() as conn:
         conn.execute(
             insert(runs).values(
@@ -55,6 +96,7 @@ def _insert_run(
                 max_attempts=3,
                 claimed_by=None,
                 claim_expires_at=None,
+                operation="process",
                 exit_code=None,
                 error_message=None,
                 created_at=now - timedelta(minutes=5),
@@ -64,154 +106,49 @@ def _insert_run(
         )
 
 
-def _insert_environment(
-    engine,
-    *,
-    env_id: str,
-    workspace_id: str,
-    configuration_id: str,
-    deps_digest: str,
-    status: str,
-    now: datetime,
-    error_message: str | None = None,
-) -> None:
-    with engine.begin() as conn:
-        conn.execute(
-            insert(environments).values(
-                id=env_id,
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                deps_digest=deps_digest,
-                status=status,
-                error_message=error_message,
-                created_at=now - timedelta(minutes=5),
-                updated_at=now - timedelta(minutes=5),
-                last_used_at=None,
-                python_version=None,
-                python_interpreter=None,
-                engine_version=None,
-            )
+def test_record_configuration_validated_digest_updates_row(engine) -> None:
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    now = datetime(2025, 1, 10, 12, 0, 0)
+    workspace_id = _uuid()
+    configuration_id = _uuid()
+    _ensure_workspace_and_configuration(
+        engine,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
+        now=now,
+    )
+
+    with session_scope(session_factory) as session:
+        updated = db.record_configuration_validated_digest(
+            session,
+            configuration_id=configuration_id,
+            content_digest="sha256:newdigest",
+            now=now,
         )
 
-
-def test_get_or_create_environment_inserts_once(engine) -> None:
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    now = datetime(2025, 1, 10, 12, 0, 0)
-
-    workspace_id = _uuid()
-    configuration_id = _uuid()
-    run_id = _uuid()
-
-    _insert_run(
-        engine,
-        run_id=run_id,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        deps_digest="sha256:aaa",
-        now=now,
-    )
-
-    with session_factory() as session:
-        run = db.load_run(session, run_id)
-    assert run is not None
-
-    with session_scope(session_factory) as session:
-        env_first = db.ensure_environment(session, run=run, now=now)
-    with session_scope(session_factory) as session:
-        env_second = db.ensure_environment(session, run=run, now=now)
-
-    assert env_first is not None
-    assert env_second is not None
-    assert env_first["id"] == env_second["id"]
+    assert updated is True
 
     with engine.begin() as conn:
-        rows = conn.execute(select(environments.c.id)).mappings().all()
-    assert len(rows) == 1
+        row = conn.execute(
+            select(configurations.c.content_digest).where(configurations.c.id == configuration_id)
+        ).first()
+    assert row is not None
+    assert row.content_digest == "sha256:newdigest"
 
 
-def test_get_or_create_environment_keeps_failed_status(engine) -> None:
+def test_record_configuration_validated_digest_returns_false_when_missing(engine) -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-
-    workspace_id = _uuid()
-    configuration_id = _uuid()
-    run_id = _uuid()
-    env_id = _uuid()
-
-    _insert_run(
-        engine,
-        run_id=run_id,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        deps_digest="sha256:xyz",
-        now=now,
-    )
-    _insert_environment(
-        engine,
-        env_id=env_id,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        deps_digest="sha256:xyz",
-        status="failed",
-        error_message="oops",
-        now=now,
-    )
-
-    with session_factory() as session:
-        run = db.load_run(session, run_id)
-    assert run is not None
+    missing_configuration_id = _uuid()
 
     with session_scope(session_factory) as session:
-        env = db.ensure_environment(session, run=run, now=now)
-    assert env is not None
-    assert str(env["id"]) == env_id
-    assert env["status"] == "failed"
-
-
-def test_get_or_create_environment_uses_deps_digest_in_cache_key(engine) -> None:
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    now = datetime(2025, 1, 10, 12, 0, 0)
-
-    workspace_id = _uuid()
-    configuration_id = _uuid()
-    run_a = _uuid()
-    run_b = _uuid()
-
-    _insert_run(
-        engine,
-        run_id=run_a,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        deps_digest="sha256:shared",
-        now=now,
-    )
-    _insert_run(
-        engine,
-        run_id=run_b,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        deps_digest="sha256:different",
-        now=now,
-    )
-
-    with session_factory() as session:
-        loaded_a = db.load_run(session, run_a)
-        loaded_b = db.load_run(session, run_b)
-    assert loaded_a is not None
-    assert loaded_b is not None
-
-    with session_scope(session_factory) as session:
-        env_a = db.ensure_environment(session, run=loaded_a, now=now)
-    with session_scope(session_factory) as session:
-        env_b = db.ensure_environment(session, run=loaded_b, now=now)
-
-    assert env_a is not None
-    assert env_b is not None
-    assert env_a["id"] != env_b["id"]
-
-    with engine.begin() as conn:
-        rows = conn.execute(select(environments.c.id)).mappings().all()
-    assert len(rows) == 2
+        updated = db.record_configuration_validated_digest(
+            session,
+            configuration_id=missing_configuration_id,
+            content_digest="sha256:newdigest",
+            now=now,
+        )
+    assert updated is False
 
 
 def test_replace_run_metrics_overwrites(engine) -> None:

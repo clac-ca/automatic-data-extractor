@@ -101,65 +101,6 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
 
     ensure_storage_roots(resolved, extra=[Path(resolved.pip_cache_dir)])
 
-    _validate_venvs_dir(Path(resolved.venvs_dir))
-
-
-def _validate_venvs_dir(venvs_dir: Path) -> None:
-    """Ensure the configured venvs directory is writable and likely local."""
-
-    venvs_dir.mkdir(parents=True, exist_ok=True)
-    marker = venvs_dir / ".ade-venv-writecheck"
-
-    try:
-        marker.write_text("ok", encoding="utf-8")
-        marker.unlink(missing_ok=True)
-    except OSError as exc:  # pragma: no cover - defensive guard for startup
-        raise RuntimeError(f"ADE_DATA_DIR/venvs is not writable: {venvs_dir} ({exc})") from exc
-
-    if _looks_like_network_share(venvs_dir):
-        logger.warning(
-            "venvs_dir.network_like",
-            extra={
-                "venvs_dir": str(venvs_dir),
-                "detail": "ADE_DATA_DIR/venvs appears to be on a network/SMB mount; "
-                "venvs must live on local storage",
-            },
-        )
-
-
-def _looks_like_network_share(path: Path) -> bool:
-    """Best-effort detection of network mounts (SMB/NFS/UNC)."""
-
-    as_posix = path.as_posix()
-    if as_posix.startswith("//") or as_posix.startswith("\\\\"):
-        return True
-
-    mounts_path = Path("/proc/mounts")
-    if mounts_path.exists():
-        try:
-            resolved = path.resolve()
-            best_match: tuple[int, str] | None = None
-            with mounts_path.open("r", encoding="utf-8") as fh:
-                for line in fh:
-                    parts = line.split()
-                    if len(parts) < 3:
-                        continue
-                    mount_point, fs_type = parts[1], parts[2]
-                    if fs_type.lower() in {"cifs", "smbfs", "nfs", "nfs4"}:
-                        if str(resolved).startswith(mount_point.rstrip("/") + "/"):
-                            depth = mount_point.count("/")
-                            if best_match is None or depth > best_match[0]:
-                                best_match = (depth, fs_type)
-            if best_match:
-                return True
-        except OSError:
-            return False
-
-    # Windows UNC paths handled above; as a fallback, flag paths under /mnt/ or /media/
-    # which are often backed by remote filesystems in containerized environments.
-    parts = {part.lower() for part in path.parts}
-    return "mnt" in parts or "media" in parts
-
 
 def create_application_lifespan(
     *,

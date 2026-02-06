@@ -2,8 +2,8 @@
 
 Workspace roots mirror ade-storage layout helpers:
 - <configs_root>/<workspace_id>/config_packages/<configuration_id>
-- <runs_root>/<workspace_id>/runs/<run_id>
-- <venvs_root>/<workspace_id>/<configuration_id>/<deps_digest>/<environment_id>/.venv
+- <worker_runs_root>/<workspace_id>/runs/<run_id>
+- <worker_venvs_root>/<workspace_id>/<configuration_id>/<deps_digest>/.venv
 """
 
 from __future__ import annotations
@@ -15,8 +15,6 @@ from pathlib import Path
 
 from ade_storage import (
     workspace_config_root,
-    workspace_run_root,
-    workspace_venvs_root,
 )
 from ade_storage.settings import StorageLayoutSettings
 
@@ -70,20 +68,22 @@ def _deps_digest_segment(deps_digest: str) -> str:
 @dataclass(frozen=True, slots=True)
 class PathManager:
     layout: StorageLayoutSettings
-    pip_cache_root: Path
+    worker_runs_root: Path
+    worker_venvs_root: Path
+    worker_pip_cache_root: Path
 
     # --- roots ---
     def configs_root(self, workspace_id: str) -> Path:
         return workspace_config_root(self.layout, _normalize_uuid(workspace_id))
 
     def runs_root(self, workspace_id: str) -> Path:
-        return workspace_run_root(self.layout, _normalize_uuid(workspace_id))
+        return _safe_join(self.worker_runs_root, _normalize_uuid(workspace_id), "runs")
 
     def venvs_root(self, workspace_id: str) -> Path:
-        return workspace_venvs_root(self.layout, _normalize_uuid(workspace_id))
+        return _safe_join(self.worker_venvs_root, _normalize_uuid(workspace_id))
 
     def pip_cache_dir(self) -> Path:
-        return self.pip_cache_root
+        return self.worker_pip_cache_root
 
     # --- config packages ---
     def config_package_dir(self, workspace_id: str, configuration_id: str) -> Path:
@@ -98,14 +98,14 @@ class PathManager:
         workspace_id: str,
         configuration_id: str,
         deps_digest: str,
-        environment_id: str,
+        environment_id: str | None = None,
     ) -> Path:
+        del environment_id
         segment = _deps_digest_segment(deps_digest)
         return _safe_join(
             self.venvs_root(workspace_id),
             _normalize_uuid(configuration_id),
             segment,
-            _normalize_uuid(environment_id),
         )
 
     def environment_venv_dir(
@@ -113,7 +113,7 @@ class PathManager:
         workspace_id: str,
         configuration_id: str,
         deps_digest: str,
-        environment_id: str,
+        environment_id: str | None = None,
     ) -> Path:
         return _safe_join(
             self.environment_root(workspace_id, configuration_id, deps_digest, environment_id),
@@ -125,7 +125,7 @@ class PathManager:
         workspace_id: str,
         configuration_id: str,
         deps_digest: str,
-        environment_id: str,
+        environment_id: str | None = None,
     ) -> Path:
         return _safe_join(
             self.environment_root(workspace_id, configuration_id, deps_digest, environment_id),

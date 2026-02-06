@@ -31,13 +31,13 @@ type RunCreatePathParams =
   paths["/api/v1/workspaces/{workspaceId}/runs"]["post"]["parameters"]["path"];
 
 export type RunStreamOptions = Partial<RunCreateOptions> & {
-  input_document_id: RunCreateRequest["input_document_id"];
+  input_document_id?: RunCreateRequest["input_document_id"];
   configuration_id?: RunCreateRequest["configuration_id"];
 };
 export const RUNS_PAGE_SIZE = 50;
 const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
+  operation: "process",
   dry_run: false,
-  validate_only: false,
   log_level: "INFO",
   active_sheet_only: false,
 };
@@ -197,8 +197,8 @@ export async function createRunForDocument(
     params: { path: { configurationId } },
     body: {
       options: {
+        operation: "process",
         dry_run: false,
-        validate_only: false,
         active_sheet_only: false,
         input_document_id: documentId,
       },
@@ -217,11 +217,11 @@ export async function createRun(
   const pathParams: RunCreatePathParams = { workspaceId };
   const { input_document_id, configuration_id, ...optionOverrides } = options;
   const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...optionOverrides };
-  if (!input_document_id) {
+  if (mergedOptions.operation === "process" && !input_document_id) {
     throw new Error("input_document_id is required to start a run.");
   }
   const body: RunCreateRequest = {
-    input_document_id,
+    input_document_id: input_document_id ?? undefined,
     configuration_id: configuration_id ?? undefined,
     options: mergedOptions,
   };

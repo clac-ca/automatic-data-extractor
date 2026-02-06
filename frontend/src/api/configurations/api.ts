@@ -5,7 +5,6 @@ import { ApiError, buildApiErrorMessage, tryParseProblemDetails } from "@/api/er
 import type {
   ConfigurationPage,
   ConfigurationRecord,
-  ConfigurationValidateResponse,
   DirectoryWriteResponse,
   FileListing,
   FileReadJson,
@@ -71,22 +70,6 @@ export async function readConfiguration(
     },
   );
   return (data ?? null) as ConfigurationRecord | null;
-}
-
-export async function validateConfiguration(
-  workspaceId: string,
-  configId: string,
-): Promise<ConfigurationValidateResponse> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/validate",
-    {
-      params: { path: { workspaceId, configurationId: configId } },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected validation payload.");
-  }
-  return data as ConfigurationValidateResponse;
 }
 
 export async function makeActiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {

@@ -88,8 +88,8 @@ describe("createRun", () => {
         input_document_id: "doc-123",
         configuration_id: "config-123",
         options: {
+          operation: "process",
           dry_run: true,
-          validate_only: false,
           log_level: "INFO",
           active_sheet_only: false,
         },
@@ -109,6 +109,38 @@ describe("createRun", () => {
     await expect(
       createRun("workspace-123", { input_document_id: "doc-123" }),
     ).rejects.toThrow("Expected run creation response.");
+  });
+
+  it("allows validation runs without an input document", async () => {
+    const postResponse = {
+      data: sampleRunResource,
+      response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
+    } as unknown as CreateRunPostResponse;
+    const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
+
+    await createRun(
+      "workspace-123",
+      {
+        operation: "validate",
+        configuration_id: "config-123",
+      },
+      undefined,
+    );
+
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs", {
+      params: { path: { workspaceId: "workspace-123" } },
+      body: {
+        input_document_id: undefined,
+        configuration_id: "config-123",
+        options: {
+          operation: "validate",
+          dry_run: false,
+          log_level: "INFO",
+          active_sheet_only: false,
+        },
+      },
+      signal: undefined,
+    });
   });
 });
 

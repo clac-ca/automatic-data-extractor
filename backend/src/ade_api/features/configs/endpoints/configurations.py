@@ -48,14 +48,13 @@ from ..exceptions import (
     ConfigStateError,
     ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
-    ConfigValidationFailedError,
+    ConfigValidationRequiredError,
 )
 from ..http import ConfigurationIdPath, WorkspaceIdPath, raise_problem
 from ..schemas import (
     ConfigurationCreate,
     ConfigurationPage,
     ConfigurationRecord,
-    ConfigurationValidateResponse,
 )
 from ..service import (
     ConfigurationsService,
@@ -272,52 +271,6 @@ def import_configuration(
 
 
 @router.post(
-    "/configurations/{configurationId}/validate",
-    dependencies=[Security(require_csrf)],
-    response_model=ConfigurationValidateResponse,
-    summary="Validate the configuration on disk",
-    response_model_exclude_none=True,
-)
-def validate_configuration(
-    workspace_id: WorkspaceIdPath,
-    configuration_id: ConfigurationIdPath,
-    service: ConfigurationsServiceReadDep,
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.configurations.manage"),
-            scopes=["{workspaceId}"],
-        ),
-    ],
-) -> ConfigurationValidateResponse:
-    try:
-        result = service.validate_configuration(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
-    except ConfigStorageNotFoundError as exc:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, detail="configuration_storage_missing"
-        ) from exc
-    except ConfigEngineDependencyMissingError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_engine_dependency_missing_detail(exc),
-        ) from exc
-
-    payload = ConfigurationValidateResponse(
-        id=result.configuration.id,
-        workspace_id=workspace_id,
-        status=result.configuration.status,
-        content_digest=result.content_digest,
-        issues=result.issues,
-    )
-    return payload
-
-
-@router.post(
     "/configurations/{configurationId}/publish",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
@@ -351,12 +304,11 @@ def publish_configuration_endpoint(
             status.HTTP_404_NOT_FOUND,
             detail="configuration_storage_missing",
         ) from exc
-    except ConfigValidationFailedError as exc:
-        detail = {
-            "error": "validation_failed",
-            "issues": [issue.model_dump() for issue in exc.issues],
-        }
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigValidationRequiredError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"error": "validation_required"},
+        ) from exc
     except ConfigEngineDependencyMissingError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

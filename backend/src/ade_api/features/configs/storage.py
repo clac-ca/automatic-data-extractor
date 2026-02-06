@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 import io
-import os
 import secrets
 import shutil
-import subprocess
-import sys
-import tempfile
 import zipfile
 from collections.abc import Iterable
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from shutil import which
 from uuid import UUID
 
 from ade_api.settings import Settings
@@ -29,7 +24,6 @@ from .exceptions import (
     ConfigEngineDependencyMissingError,
     ConfigImportError,
     ConfigPublishConflictError,
-    ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
     ConfigStorageNotFoundError,
 )
@@ -53,7 +47,6 @@ _IMPORT_MAX_ENTRIES = 5000
 _IMPORT_CODE_MAX_BYTES = 512 * 1024  # mirror per-file limits used by write_file
 _IMPORT_ASSET_MAX_BYTES = 5 * 1024 * 1024
 _TEMPLATE_DIR_NAME = "default_config"
-_VALIDATE_TIMEOUT_SECONDS = 300
 
 
 class ConfigStorage:
@@ -112,6 +105,7 @@ class ConfigStorage:
             copy_function=shutil.copyfile,
         )
         try:
+            self._ensure_engine_dependency(staging)
             if destination.exists():
                 raise ConfigPublishConflictError(f"Destination '{destination}' already exists")
             staging.replace(destination)
@@ -193,99 +187,21 @@ class ConfigStorage:
         self,
         path: Path,
     ) -> tuple[list[ConfigValidationIssue], str | None]:
-        if not has_engine_dependency(path):
-            raise ConfigEngineDependencyMissingError(
-                f"Configuration must declare {ENGINE_DEPENDENCY_NAME} in dependency manifests."
-            )
+        self._ensure_engine_dependency(path)
+        return [], self.compute_config_digest(path)
 
-        uv_bin = which("uv")
-        if not uv_bin:
-            issues = [ConfigValidationIssue(path=".", message="uv not found on PATH")]
-            return issues, None
-
-        with tempfile.TemporaryDirectory(
-            prefix=".validate-",
-            dir=str(path.parent),
-        ) as temp_dir:
-            venv_dir = Path(temp_dir) / ".venv"
-            python_bin = _python_in_venv(venv_dir)
-            env = self._install_env()
-
-            try:
-                venv_result = subprocess.run(
-                    [uv_bin, "venv", "--python", os.fspath(sys.executable), str(venv_dir)],
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=_VALIDATE_TIMEOUT_SECONDS,
-                )
-            except subprocess.TimeoutExpired:
-                return [ConfigValidationIssue(path=".", message="Config validation timed out")], None
-            if venv_result.returncode != 0:
-                message_src = venv_result.stderr.strip() or venv_result.stdout.strip()
-                message = message_src.splitlines()[0] if message_src else "Config validation failed"
-                return [ConfigValidationIssue(path=".", message=message)], None
-
-            try:
-                install_result = subprocess.run(
-                    [uv_bin, "pip", "install", "--python", str(python_bin), "-e", str(path)],
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=_VALIDATE_TIMEOUT_SECONDS,
-                )
-            except subprocess.TimeoutExpired:
-                return [ConfigValidationIssue(path=".", message="Config validation timed out")], None
-            if install_result.returncode != 0:
-                message_src = install_result.stderr.strip() or install_result.stdout.strip()
-                message = (
-                    message_src.splitlines()[0] if message_src else "Config dependency install failed"
-                )
-                return [ConfigValidationIssue(path=".", message=message)], None
-
-            command = [
-                str(python_bin),
-                "-m",
-                "ade_engine",
-                "config",
-                "validate",
-                "--config-package",
-                str(path),
-                "--log-format",
-                "text",
-            ]
-            try:
-                result = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    timeout=_VALIDATE_TIMEOUT_SECONDS,
-                )
-            except subprocess.TimeoutExpired:
-                return [ConfigValidationIssue(path=".", message="Config validation timed out")], None
-            issues: list[ConfigValidationIssue] = []
-            if result.returncode != 0:
-                message_src = result.stderr.strip() or result.stdout.strip()
-                message = message_src.splitlines()[0] if message_src else "Config validation failed"
-                issues.append(
-                    ConfigValidationIssue(
-                        path=".",
-                        message=message,
-                    )
-                )
-            digest = None if issues else _calculate_digest(path)
-            return issues, digest
+    def compute_config_digest(self, path: Path) -> str:
+        return _calculate_digest(path)
 
     def _template_root(self) -> Path:
         return Path(__file__).resolve().parents[2] / "templates" / _TEMPLATE_DIR_NAME
 
-    def _install_env(self) -> dict[str, str]:
-        env = dict(os.environ)
-        if self._settings is not None:
-            env["UV_CACHE_DIR"] = str(self._settings.pip_cache_dir)
-        env["PYTHONUNBUFFERED"] = "1"
-        return env
+    def _ensure_engine_dependency(self, path: Path) -> None:
+        if has_engine_dependency(path):
+            return
+        raise ConfigEngineDependencyMissingError(
+            f"Configuration must declare {ENGINE_DEPENDENCY_NAME} in dependency manifests."
+        )
 
     def _materialize_from_archive(
         self,
@@ -308,9 +224,7 @@ class ConfigStorage:
                 shutil.rmtree(staging, ignore_errors=True)
             staging.mkdir(parents=True, exist_ok=True)
             _extract_archive(archive, staging)
-            issues, digest = self.validate_path(staging)
-            if issues:
-                raise ConfigSourceInvalidError(issues)
+            self._ensure_engine_dependency(staging)
 
             if destination.exists():
                 if not replace:
@@ -319,7 +233,7 @@ class ConfigStorage:
                     )
                 shutil.rmtree(destination, ignore_errors=True)
             staging.replace(destination)
-            return digest
+            return None
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
@@ -344,9 +258,7 @@ class ConfigStorage:
             copy_function=shutil.copyfile,
         )
         try:
-            issues, _ = self.validate_path(staging)
-            if issues:
-                raise ConfigSourceInvalidError(issues)
+            self._ensure_engine_dependency(staging)
             if destination.exists():
                 raise ConfigPublishConflictError(f"Destination '{destination}' already exists")
             staging.replace(destination)
@@ -442,12 +354,6 @@ def _normalize_archive_member(name: str) -> PurePosixPath | None:
     if rel.suffix in CONFIG_EXCLUDED_SUFFIXES:
         return None
     return rel
-
-
-def _python_in_venv(venv_dir: Path) -> Path:
-    if os.name == "nt":
-        return venv_dir / "Scripts" / "python.exe"
-    return venv_dir / "bin" / "python"
 
 
 __all__ = ["ConfigStorage", "compute_config_digest"]

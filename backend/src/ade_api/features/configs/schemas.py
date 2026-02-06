@@ -78,16 +78,6 @@ class ConfigurationPage(CursorPage[ConfigurationRecord]):
     """Cursor-based configuration listing."""
 
 
-class ConfigurationValidateResponse(BaseSchema):
-    """Result of running validation."""
-
-    id: UUIDStr
-    workspace_id: UUIDStr
-    status: ConfigurationStatus
-    content_digest: str | None = None
-    issues: list[ConfigValidationIssue]
-
-
 class FileCapabilities(BaseSchema):
     editable: bool
     can_create: bool
@@ -193,7 +183,6 @@ __all__ = [
     "ConfigurationPage",
     "ConfigurationCreate",
     "ConfigurationRecord",
-    "ConfigurationValidateResponse",
     "FileCapabilities",
     "FileSizeLimits",
     "FileListingSummary",

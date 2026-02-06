@@ -13,9 +13,8 @@ from .file import (
     FileVersion,
     FileVersionOrigin,
 )
-from .environment import Environment, EnvironmentStatus
 from .rbac import Permission, Role, RolePermission, ScopeType, UserRoleAssignment
-from .run import Run, RunStatus
+from .run import Run, RunOperation, RunStatus
 from .run_field import RunField
 from .run_metrics import RunMetrics
 from .run_table_column import RunTableColumn
@@ -46,14 +45,13 @@ __all__ = [
     "FileComment",
     "FileCommentMention",
     "FileTag",
-    "Environment",
-    "EnvironmentStatus",
     "Permission",
     "Role",
     "RolePermission",
     "Run",
     "RunField",
     "RunMetrics",
+    "RunOperation",
     "RunStatus",
     "RunTableColumn",
     "ScopeType",

@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import os
 import sys
-from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 from ade_worker.paths import PathManager
-from ade_worker.worker import SubprocessResult, Worker
-import ade_worker.worker as worker_module
+from ade_worker.worker import EventLog, SubprocessResult, Worker
+from ade_worker import db as worker_db
 
 
 class _Layout:
@@ -42,7 +41,12 @@ class _Runner:
 
 def test_build_environment_installs_config_in_editable_mode(monkeypatch, tmp_path: Path) -> None:
     layout = _Layout(tmp_path)
-    paths = PathManager(layout=layout, pip_cache_root=tmp_path / "cache" / "pip")
+    paths = PathManager(
+        layout=layout,
+        worker_runs_root=layout.runs_dir,
+        worker_venvs_root=layout.venvs_dir,
+        worker_pip_cache_root=tmp_path / "cache" / "pip",
+    )
     runner = _Runner()
     settings = SimpleNamespace(
         worker_env_build_timeout_seconds=120,
@@ -61,35 +65,33 @@ def test_build_environment_installs_config_in_editable_mode(monkeypatch, tmp_pat
 
     workspace_id = "workspace-a"
     configuration_id = "config-a"
-    env_id = "env-a"
     config_dir = paths.config_package_dir(workspace_id, configuration_id)
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    @contextmanager
-    def _fake_session_scope(_session_factory):  # noqa: ANN001
-        yield object()
-
-    monkeypatch.setattr(worker_module, "session_scope", _fake_session_scope)
-    monkeypatch.setattr(worker_module.db, "ack_environment_success", lambda *args, **kwargs: True)
-    monkeypatch.setattr(worker_module.db, "record_environment_metadata", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        worker_module.subprocess,
-        "check_output",
-        lambda *args, **kwargs: "1.7.9\n",
-    )
     monkeypatch.setattr(Worker, "_uv_bin", lambda self: "uv")
+    monkeypatch.setattr(Worker, "_heartbeat_run", lambda self, *, run_id, now=None: True)
 
-    result = worker._build_environment(
-        env={
+    event_log = EventLog(tmp_path / "events.ndjson")
+    claim = worker_db.RunClaim(id="run-a", attempt_count=1, max_attempts=3)
+
+    result = worker._ensure_local_venv(
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
+        deps_digest="sha256:abcd",
+        run_claim=claim,
+        event_log=event_log,
+        ctx={
             "workspace_id": workspace_id,
             "configuration_id": configuration_id,
             "deps_digest": "sha256:abcd",
+            "environment_id": None,
         },
-        env_id=env_id,
-        run_claim=None,
     )
 
-    assert result.success is True
+    assert result.python_bin is not None
+    assert result.python_bin.exists()
+    assert result.run_lost is False
+    assert result.error_message is None
     scopes = [scope for scope, _cmd in runner.calls]
     assert scopes == ["environment.venv", "environment.config"]
     assert runner.calls[1][1][-2:] == ["-e", str(config_dir)]

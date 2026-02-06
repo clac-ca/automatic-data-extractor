@@ -29,6 +29,13 @@ class RunStatus(str, Enum):
     FAILED = "failed"
 
 
+class RunOperation(str, Enum):
+    """Operation type for the execution request."""
+
+    VALIDATE = "validate"
+    PROCESS = "process"
+
+
 class Run(UUIDPrimaryKeyMixin, Base):
     """Persistent record of an ADE engine execution."""
 
@@ -40,8 +47,8 @@ class Run(UUIDPrimaryKeyMixin, Base):
     workspace_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
-    input_file_version_id: Mapped[UUID] = mapped_column(
-        GUID(), ForeignKey("file_versions.id", ondelete="NO ACTION"), nullable=False
+    input_file_version_id: Mapped[UUID | None] = mapped_column(
+        GUID(), ForeignKey("file_versions.id", ondelete="NO ACTION"), nullable=True
     )
     run_options: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
@@ -56,6 +63,18 @@ class Run(UUIDPrimaryKeyMixin, Base):
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     claimed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     claim_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    operation: Mapped[RunOperation] = mapped_column(
+        SAEnum(
+            RunOperation,
+            name="run_operation",
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+        default=RunOperation.PROCESS,
+        server_default=RunOperation.PROCESS.value,
+    )
 
     status: Mapped[RunStatus] = mapped_column(
         SAEnum(
@@ -91,13 +110,16 @@ class Run(UUIDPrimaryKeyMixin, Base):
         Index("ix_runs_status_created_at", "status", "created_at"),
         Index("ix_runs_claim_expires", "status", "claim_expires_at"),
         Index("ix_runs_status_completed", "status", "completed_at"),
+        Index("ix_runs_operation", "operation"),
         Index(
             "uq_runs_active_job",
             "workspace_id",
             "input_file_version_id",
             "configuration_id",
             unique=True,
-            postgresql_where=text("status IN ('queued','running')"),
+            postgresql_where=text(
+                "status IN ('queued','running') AND operation = 'process'"
+            ),
         ),
         Index(
             "ix_runs_workspace_input_finished",
@@ -110,4 +132,4 @@ class Run(UUIDPrimaryKeyMixin, Base):
     )
 
 
-__all__ = ["Run", "RunStatus"]
+__all__ = ["Run", "RunOperation", "RunStatus"]

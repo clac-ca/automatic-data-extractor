@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { PageState } from "@/components/layout";
 
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
-import { exportConfiguration, validateConfiguration } from "@/api/configurations/api";
+import { ApiError } from "@/api/errors";
+import { exportConfiguration } from "@/api/configurations/api";
 import {
   useArchiveConfigurationMutation,
   useConfigurationsQuery,
@@ -31,6 +32,30 @@ const DEFAULT_TEMPLATE_LABEL = "Default template";
 
 const buildConfigDetailPath = (workspaceId: string, configId: string) =>
   `/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}`;
+
+function parseProblemCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) {
+    return null;
+  }
+  const detail = error.problem?.detail as unknown;
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (!detail || typeof detail !== "object") {
+    return null;
+  }
+  const payload = detail as Record<string, unknown>;
+  if (typeof payload.error === "string") {
+    return payload.error;
+  }
+  if (payload.error && typeof payload.error === "object") {
+    const nested = payload.error as Record<string, unknown>;
+    if (typeof nested.code === "string") {
+      return nested.code;
+    }
+  }
+  return null;
+}
 
 export default function ConfigBuilderScreen() {
   const { workspace } = useWorkspaceContext();
@@ -233,48 +258,19 @@ export default function ConfigBuilderScreen() {
   );
 
   type MakeActiveDialogState =
-    | { stage: "checking" }
     | { stage: "confirm" }
-    | { stage: "issues"; issues: readonly { path: string; message: string }[] }
-    | { stage: "error"; message: string };
+    | { stage: "error"; message: string; validationRequired?: boolean };
   const [makeActiveConfigId, setMakeActiveConfigId] = useState<string | null>(null);
   const makeActiveTarget = useMemo(
     () => (makeActiveConfigId ? configurations.find((config) => config.id === makeActiveConfigId) ?? null : null),
     [configurations, makeActiveConfigId],
   );
-  const makeActiveTargetId = makeActiveTarget?.id ?? null;
   const [makeActiveDialogState, setMakeActiveDialogState] = useState<MakeActiveDialogState | null>(null);
-
-  useEffect(() => {
-    if (!makeActiveTargetId) {
-      setMakeActiveDialogState(null);
-      return;
-    }
-    let cancelled = false;
-    setMakeActiveDialogState({ stage: "checking" });
-    void validateConfiguration(workspace.id, makeActiveTargetId)
-      .then((result) => {
-        if (cancelled) return;
-        if (Array.isArray(result.issues) && result.issues.length > 0) {
-          setMakeActiveDialogState({ stage: "issues", issues: result.issues });
-          return;
-        }
-        setMakeActiveDialogState({ stage: "confirm" });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unable to validate configuration.";
-        setMakeActiveDialogState({ stage: "error", message });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [makeActiveTargetId, workspace.id]);
 
   const handleOpenMakeActiveDialog = useCallback(
     (config: ConfigurationRecord) => {
       makeActiveConfig.reset();
-      setMakeActiveDialogState({ stage: "checking" });
+      setMakeActiveDialogState({ stage: "confirm" });
       setMakeActiveConfigId(config.id);
     },
     [makeActiveConfig],
@@ -311,6 +307,15 @@ export default function ConfigBuilderScreen() {
           void refetchConfigurations();
         },
         onError(error) {
+          const code = parseProblemCode(error);
+          if (code === "validation_required") {
+            setMakeActiveDialogState({
+              stage: "error",
+              message: "Validation is required. Run Validation in the Config Editor, then publish again.",
+              validationRequired: true,
+            });
+            return;
+          }
           notifyToast({
             title: error instanceof Error ? error.message : "Unable to make configuration active.",
             intent: "danger",
@@ -821,23 +826,17 @@ export default function ConfigBuilderScreen() {
       <ConfirmDialog
         open={Boolean(makeActiveTarget)}
         title={
-          makeActiveDialogState?.stage === "checking"
-            ? "Checking configuration…"
-            : makeActiveDialogState?.stage === "issues"
-              ? "Fix validation issues first"
-              : "Make configuration active?"
+          makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired
+            ? "Validation required before publish"
+            : "Make configuration active?"
         }
         description={
-          makeActiveDialogState?.stage === "checking"
-            ? "Running validation before activation."
-            : makeActiveDialogState?.stage === "issues"
-              ? "This configuration has validation issues and can’t be activated yet."
-              : activeConfiguration && makeActiveTarget
-                ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
-                : "This becomes the workspace’s live configuration for extraction runs."
+          activeConfiguration && makeActiveTarget
+            ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
+            : "This becomes the workspace’s live configuration for extraction runs."
         }
         confirmLabel={
-          makeActiveDialogState?.stage === "issues"
+          makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired
             ? "Open editor"
             : makeActiveDialogState?.stage === "error"
               ? "Close"
@@ -850,7 +849,7 @@ export default function ConfigBuilderScreen() {
             closeMakeActiveDialog();
             return;
           }
-          if (makeActiveDialogState?.stage === "issues") {
+          if (makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired) {
             closeMakeActiveDialog();
             handleOpenEditor(makeActiveTarget.id);
             return;
@@ -862,26 +861,9 @@ export default function ConfigBuilderScreen() {
           handleConfirmMakeActive();
         }}
         isConfirming={makeActiveConfig.isPending}
-        confirmDisabled={makeActiveDialogState?.stage === "checking" || makeActiveConfig.isPending}
+        confirmDisabled={makeActiveConfig.isPending}
       >
-        {makeActiveDialogState?.stage === "checking" ? (
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
-            <span>Validating…</span>
-          </div>
-        ) : makeActiveDialogState?.stage === "issues" ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground">Issues:</p>
-            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-background p-3 text-xs text-foreground">
-              {makeActiveDialogState.issues.map((issue) => (
-                <li key={`${issue.path}:${issue.message}`} className="space-y-1">
-                  <p className="font-semibold">{issue.path}</p>
-                  <p className="text-muted-foreground">{issue.message}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : makeActiveDialogState?.stage === "error" ? (
+        {makeActiveDialogState?.stage === "error" ? (
           <p className="text-sm font-medium text-destructive">{makeActiveDialogState.message}</p>
         ) : null}
       </ConfirmDialog>

@@ -1,7 +1,7 @@
 # ADE Worker (data plane / run processor)
 
-Background worker that processes queued runs, provisions environments, and
-records results.
+Background worker that processes queued runs, provisions per-config virtual
+environments in a local cache, and records results.
 
 ## Quickstart (dev from repo root)
 
@@ -31,6 +31,11 @@ uv run ade worker test
 
 - Run migrations before starting: `ade db migrate`.
 - The worker does not create tables.
+- Runtime cache defaults to local ephemeral storage: `/tmp/ade-worker-cache`.
+- Override cache root with `ADE_WORKER_CACHE_DIR`.
+- Garbage collection uses TTL-only policy:
+  - `ADE_WORKER_CACHE_TTL_DAYS` for local venv cache directories
+  - `ADE_WORKER_RUN_ARTIFACT_TTL_DAYS` for run temp/output artifact directories
 
 ## Links
 

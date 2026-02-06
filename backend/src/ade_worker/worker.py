@@ -25,13 +25,14 @@ import psycopg
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from ade_api.features.configs.storage import compute_config_digest
 from ade_db.engine import (
     assert_tables_exist,
     build_engine,
     build_psycopg_connect_kwargs,
     session_scope,
 )
-from ade_db.models import EnvironmentStatus, FileKind
+from ade_db.models import FileKind, RunOperation
 from . import db
 from .paths import PathManager
 from ade_db.schema import REQUIRED_TABLES
@@ -44,6 +45,7 @@ CHANNEL_RUN_QUEUED = "ade_run_queued"
 CLAIM_BATCH_SIZE = 5
 LISTEN_MAX_BACKOFF_SECONDS = 30.0
 NOTIFY_JITTER_MS = 200
+_CONFIG_DIGEST_SNAPSHOT_KEY = "__config_digest_snapshot"
 _STANDARD_LOG_ATTRS = {
     "name",
     "msg",
@@ -133,7 +135,10 @@ def _ensure_dir(path: Path) -> None:
 
 def _ensure_runtime_dirs(settings: Settings) -> None:
     ensure_storage_roots(settings)
-    _ensure_dir(settings.pip_cache_dir)
+    _ensure_dir(settings.worker_cache_dir)
+    _ensure_dir(settings.worker_runs_dir)
+    _ensure_dir(settings.worker_venvs_dir)
+    _ensure_dir(settings.worker_uv_cache_dir)
 
 
 # --- LISTEN / NOTIFY ---
@@ -721,7 +726,6 @@ def parse_run_table_columns(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 @dataclass(slots=True)
 class RunOptions:
-    validate_only: bool = False
     dry_run: bool = False
     log_level: str = "INFO"
     input_sheet_names: list[str] = None  # type: ignore[assignment]
@@ -767,7 +771,6 @@ def _as_str_list(v: Any) -> list[str]:
 def parse_run_options(raw: Any, *, default_log_level: str) -> RunOptions:
     opts = _json_loads_dict(raw)
     return RunOptions(
-        validate_only=bool(_as_bool(opts.get("validate_only") or opts.get("validation_only")) or False),
         dry_run=bool(_as_bool(opts.get("dry_run")) or False),
         log_level=(_as_str(opts.get("log_level")) or default_log_level).upper(),
         input_sheet_names=_as_str_list(opts.get("input_sheet_names")),
@@ -925,8 +928,8 @@ def _infer_output_path(output_dir: Path, *, run_dir: Path) -> str | None:
 # --- Worker ---
 
 @dataclass(slots=True)
-class EnvBuildResult:
-    success: bool
+class LocalVenvResult:
+    python_bin: Path | None
     run_lost: bool
     error_message: str | None
 
@@ -1010,54 +1013,96 @@ class Worker:
                 exc,
             )
 
+    @staticmethod
+    def _venv_marker_path(venv_root: Path) -> Path:
+        return venv_root / ".ready"
 
-    def _build_environment(
+    def _is_venv_ready(self, *, venv_root: Path, venv_dir: Path) -> bool:
+        marker_path = self._venv_marker_path(venv_root)
+        python_bin = self.paths.python_in_venv(venv_dir)
+        return marker_path.is_file() and python_bin.is_file()
+
+    def _touch_venv_marker(self, *, venv_root: Path) -> None:
+        marker_path = self._venv_marker_path(venv_root)
+        marker_path.parent.mkdir(parents=True, exist_ok=True)
+        marker_path.touch()
+
+    def _ensure_local_venv(
         self,
         *,
-        env: dict[str, Any],
-        env_id: str,
-        run_claim: db.RunClaim | None,
-    ) -> EnvBuildResult:
-        workspace_id = str(env["workspace_id"])
-        configuration_id = str(env["configuration_id"])
-        deps_digest = str(env["deps_digest"])
-        env_root = self.paths.environment_root(
-            workspace_id,
-            configuration_id,
-            deps_digest,
-            env_id,
-        )
-        venv_dir = self.paths.environment_venv_dir(
-            workspace_id,
-            configuration_id,
-            deps_digest,
-            env_id,
-        )
-        event_log = EventLog(
-            self.paths.environment_event_log_path(
-                workspace_id,
-                configuration_id,
-                deps_digest,
-                env_id,
+        workspace_id: str,
+        configuration_id: str,
+        deps_digest: str,
+        run_claim: db.RunClaim,
+        event_log: EventLog,
+        ctx: dict[str, Any],
+    ) -> LocalVenvResult:
+        venv_root = self.paths.environment_root(workspace_id, configuration_id, deps_digest)
+        venv_dir = self.paths.environment_venv_dir(workspace_id, configuration_id, deps_digest)
+        lock_path = venv_root / ".build.lock"
+        config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
+        if not config_dir.exists():
+            return LocalVenvResult(
+                python_bin=None,
+                run_lost=False,
+                error_message=f"Missing config package dir: {config_dir}",
             )
-        )
-        ctx = {
-            "environment_id": env_id,
-            "workspace_id": workspace_id,
-            "configuration_id": configuration_id,
-            "deps_digest": deps_digest,
-        }
 
-        if env_root.exists():
-            shutil.rmtree(env_root, ignore_errors=True)
-        _ensure_dir(env_root)
+        if self._is_venv_ready(venv_root=venv_root, venv_dir=venv_dir):
+            self._touch_venv_marker(venv_root=venv_root)
+            event_log.emit(event="environment.reuse", message="Reusing local environment", context=ctx)
+            return LocalVenvResult(
+                python_bin=self.paths.python_in_venv(venv_dir),
+                run_lost=False,
+                error_message=None,
+            )
 
-        event_log.emit(event="environment.start", message="Starting environment build", context=ctx)
+        _ensure_dir(venv_root.parent)
+        lock_fd: int | None = None
+        stale_after = max(60, int(self.settings.worker_env_build_timeout_seconds) * 2)
+        while lock_fd is None:
+            try:
+                _ensure_dir(venv_root)
+                lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if not self._heartbeat_run(run_id=run_claim.id):
+                    return LocalVenvResult(
+                        python_bin=None,
+                        run_lost=True,
+                        error_message="Lease expired while waiting for environment lock",
+                    )
+                if self._is_venv_ready(venv_root=venv_root, venv_dir=venv_dir):
+                    self._touch_venv_marker(venv_root=venv_root)
+                    event_log.emit(
+                        event="environment.reuse",
+                        message="Reusing local environment",
+                        context=ctx,
+                    )
+                    return LocalVenvResult(
+                        python_bin=self.paths.python_in_venv(venv_dir),
+                        run_lost=False,
+                        error_message=None,
+                    )
+                try:
+                    age_seconds = max(0.0, time.time() - lock_path.stat().st_mtime)
+                    if age_seconds > stale_after:
+                        lock_path.unlink(missing_ok=True)
+                        continue
+                except FileNotFoundError:
+                    continue
+                time.sleep(0.2 + random.random() * 0.8)
+            except Exception as exc:
+                return LocalVenvResult(
+                    python_bin=None,
+                    run_lost=False,
+                    error_message=f"Unable to acquire environment lock: {exc}",
+                )
 
-        deadline = time.monotonic() + float(self.settings.worker_env_build_timeout_seconds)
+        build_root = venv_root.parent / f".build-{uuid4().hex}"
+        build_venv_dir = build_root / ".venv"
         install_env = self._install_env()
         uv_bin = self._uv_bin()
-        last_exit_code: int | None = None
+        deadline = time.monotonic() + float(self.settings.worker_env_build_timeout_seconds)
         run_lost = False
 
         def remaining() -> float:
@@ -1065,17 +1110,33 @@ class Worker:
 
         def heartbeat() -> bool:
             nonlocal run_lost
-            if run_claim:
-                ok_run = self._heartbeat_run(run_id=run_claim.id)
-                if not ok_run:
-                    run_lost = True
-                    return False
+            ok_run = self._heartbeat_run(run_id=run_claim.id)
+            if not ok_run:
+                run_lost = True
+                return False
             return True
 
         try:
-            create_cmd = [uv_bin, "venv", "--python", os.fspath(sys.executable), str(venv_dir)]
+            if self._is_venv_ready(venv_root=venv_root, venv_dir=venv_dir):
+                self._touch_venv_marker(venv_root=venv_root)
+                event_log.emit(
+                    event="environment.reuse",
+                    message="Reusing local environment",
+                    context=ctx,
+                )
+                return LocalVenvResult(
+                    python_bin=self.paths.python_in_venv(venv_dir),
+                    run_lost=False,
+                    error_message=None,
+                )
+
+            if build_root.exists():
+                shutil.rmtree(build_root, ignore_errors=True)
+            _ensure_dir(build_root)
+            event_log.emit(event="environment.start", message="Starting environment build", context=ctx)
+
             res = self.runner.run(
-                create_cmd,
+                [uv_bin, "venv", "--python", os.fspath(sys.executable), str(build_venv_dir)],
                 event_log=event_log,
                 scope="environment.venv",
                 timeout_seconds=remaining(),
@@ -1085,17 +1146,12 @@ class Worker:
                 heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
             )
-            last_exit_code = res.exit_code
             if res.exit_code != 0:
                 raise RuntimeError(f"venv creation failed (exit {res.exit_code})")
 
-            python_bin = self.paths.python_in_venv(venv_dir)
+            python_bin = self.paths.python_in_venv(build_venv_dir)
             if not python_bin.exists():
                 raise RuntimeError(f"venv python missing: {python_bin}")
-
-            config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
-            if not config_dir.exists():
-                raise RuntimeError(f"config package dir missing: {config_dir}")
 
             res = self.runner.run(
                 [uv_bin, "pip", "install", "--python", str(python_bin), "-e", str(config_dir)],
@@ -1108,14 +1164,17 @@ class Worker:
                 heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
                 context=ctx,
             )
-            last_exit_code = res.exit_code
             if res.exit_code != 0:
                 raise RuntimeError(f"config install failed (exit {res.exit_code})")
 
             python_version = _run_capture_text([str(python_bin), "--version"])
             try:
                 engine_version = subprocess.check_output(
-                    [str(python_bin), "-c", "import ade_engine; print(getattr(ade_engine, '__version__', 'unknown'))"],
+                    [
+                        str(python_bin),
+                        "-c",
+                        "import ade_engine; print(getattr(ade_engine, '__version__', 'unknown'))",
+                    ],
                     text=True,
                 ).strip()
             except Exception:
@@ -1127,34 +1186,16 @@ class Worker:
                 context=ctx,
             )
 
-            finished_at = utcnow()
-            with session_scope(self.session_factory) as session:
-                ok = db.ack_environment_success(
-                    session,
-                    env_id=env_id,
-                    now=finished_at,
-                )
-                if not ok:
-                    event_log.emit(
-                        event="environment.lost_claim",
-                        level="warning",
-                        message="Environment status changed before completion",
-                        context=ctx,
-                    )
-                    return EnvBuildResult(False, False, "Environment status changed before completion")
-
-                db.record_environment_metadata(
-                    session,
-                    env_id=env_id,
-                    now=finished_at,
-                    python_interpreter=str(python_bin),
-                    python_version=python_version,
-                    engine_version=engine_version,
-                )
-
+            if venv_root.exists():
+                shutil.rmtree(venv_root, ignore_errors=True)
+            build_root.replace(venv_root)
+            self._touch_venv_marker(venv_root=venv_root)
             event_log.emit(event="environment.complete", message="Environment ready", context=ctx)
-            return EnvBuildResult(True, False, None)
-
+            return LocalVenvResult(
+                python_bin=self.paths.python_in_venv(venv_dir),
+                run_lost=False,
+                error_message=None,
+            )
         except HeartbeatLostError:
             event_log.emit(
                 event="environment.lost_claim",
@@ -1162,120 +1203,34 @@ class Worker:
                 message="Lease expired before environment build finished",
                 context=ctx,
             )
-            finished_at = utcnow()
-            with session_scope(self.session_factory) as session:
-                db.ack_environment_failure(
-                    session,
-                    env_id=env_id,
-                    now=finished_at,
-                    error_message="Environment build interrupted (run lease lost)",
-                )
-            return EnvBuildResult(False, run_lost, "Lease expired")
+            return LocalVenvResult(
+                python_bin=None,
+                run_lost=run_lost,
+                error_message="Environment build interrupted (run lease lost)",
+            )
         except Exception as exc:
             err = str(exc)
             logger.exception("environment build failed: %s", err)
-
-            finished_at = utcnow()
-            exit_code = last_exit_code or 1
-
-            with session_scope(self.session_factory) as session:
-                ok = db.ack_environment_failure(
-                    session,
-                    env_id=env_id,
-                    now=finished_at,
-                    error_message=err,
-                )
-                if not ok:
-                    event_log.emit(
-                        event="environment.lost_claim",
-                        level="warning",
-                        message="Environment status changed before failure ack",
-                        context=ctx,
-                    )
-                    return EnvBuildResult(False, False, err)
-
-                db.record_environment_metadata(
-                    session,
-                    env_id=env_id,
-                    now=finished_at,
-                    python_interpreter=None,
-                    python_version=None,
-                    engine_version=None,
-                )
-
             event_log.emit(
                 event="environment.failed",
                 level="error",
-                message=f"{err} (exit {exit_code})",
+                message=err,
                 context=ctx,
             )
-            return EnvBuildResult(False, False, err)
-
-    def _ensure_environment_ready(
-        self,
-        *,
-        run: dict[str, Any],
-        run_claim: db.RunClaim,
-        now: datetime,
-    ) -> tuple[dict[str, Any] | None, str | None, bool]:
-        with session_scope(self.session_factory) as session:
-            env = db.ensure_environment(session, run=run, now=now)
-        if not env:
-            return None, "Environment missing", False
-
-        status = env.get("status")
-        if status == EnvironmentStatus.READY:
-            return env, None, False
-        if status is None or not isinstance(status, EnvironmentStatus):
-            return None, f"Invalid environment status: {status!r}", False
-
-        env_id = str(env["id"])
-        lock_key = f"{env['workspace_id']}:{env['configuration_id']}:{env['deps_digest']}"
-
-        lock_conn = self.engine.connect()
-        got_lock = False
-        try:
-            while True:
-                got_lock = db.try_advisory_lock(lock_conn, key=lock_key)
-                if got_lock:
-                    break
-                if run_claim:
-                    ok = self._heartbeat_run(run_id=run_claim.id)
-                    if not ok:
-                        return None, None, True
-                time.sleep(0.2 + random.random() * 0.8)
-
-            with self.session_factory() as session:
-                env = db.load_environment(session, env_id)
-            if not env:
-                return None, "Environment missing", False
-            status = env.get("status")
-            if status == EnvironmentStatus.READY:
-                return env, None, False
-            if status is None or not isinstance(status, EnvironmentStatus):
-                return None, f"Invalid environment status: {status!r}", False
-
-            with session_scope(self.session_factory) as session:
-                db.mark_environment_building(session, env_id=env_id, now=now)
-
-            build = self._build_environment(env=env, env_id=env_id, run_claim=run_claim)
-
-            if build.run_lost:
-                return None, None, True
-
-            with self.session_factory() as session:
-                env = db.load_environment(session, env_id)
-            status = env.get("status") if env else None
-            if status == EnvironmentStatus.READY:
-                return env, None, False
-            if status is None or (env and not isinstance(status, EnvironmentStatus)):
-                return None, f"Invalid environment status: {status!r}", False
-
-            return None, build.error_message or "Environment build failed", False
+            return LocalVenvResult(
+                python_bin=None,
+                run_lost=False,
+                error_message=err,
+            )
         finally:
-            if got_lock:
-                db.advisory_unlock(lock_conn, key=lock_key)
-            lock_conn.close()
+            if build_root.exists():
+                shutil.rmtree(build_root, ignore_errors=True)
+            if lock_fd is not None:
+                try:
+                    os.close(lock_fd)
+                except Exception:
+                    pass
+            lock_path.unlink(missing_ok=True)
 
     def process_run(self, claim: db.RunClaim) -> None:
         now = utcnow()
@@ -1295,24 +1250,54 @@ class Worker:
     
             workspace_id = str(run["workspace_id"])
             configuration_id = str(run["configuration_id"])
-            input_file_version_id = str(run["input_file_version_id"])
-            document_id = input_file_version_id
+            deps_digest = str(run.get("deps_digest") or "")
+            input_file_version_id = _as_str(run.get("input_file_version_id"))
+            document_id = input_file_version_id or ""
+            operation_raw = run.get("operation")
+            if isinstance(operation_raw, RunOperation):
+                operation = operation_raw
+            else:
+                op_text = _as_str(operation_raw) or RunOperation.PROCESS.value
+                try:
+                    operation = RunOperation(op_text)
+                except ValueError:
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id or run_id,
+                        EventLog(self.paths.run_event_log_path(workspace_id, run_id)),
+                        {
+                            "job_id": run_id,
+                            "workspace_id": workspace_id,
+                            "configuration_id": configuration_id,
+                            "environment_id": None,
+                        },
+                        now,
+                        run_started_at,
+                        2,
+                        f"Invalid run operation: {operation_raw!r}",
+                    )
+                    return
     
             ctx = {
                 "job_id": run_id,
                 "workspace_id": workspace_id,
                 "configuration_id": configuration_id,
                 "environment_id": None,
+                "operation": operation.value,
             }
     
             event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
-    
-            env, env_error, lost_claim = self._ensure_environment_ready(
-                run=run,
+
+            venv_result = self._ensure_local_venv(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                deps_digest=deps_digest,
                 run_claim=claim,
-                now=now,
+                event_log=event_log,
+                ctx=ctx,
             )
-            if lost_claim:
+            if venv_result.run_lost:
                 event_log.emit(
                     event="run.lost_claim",
                     level="warning",
@@ -1320,46 +1305,30 @@ class Worker:
                     context=ctx,
                 )
                 return
-            if not env:
+            if venv_result.python_bin is None:
                 self._handle_run_failure(
                     claim,
                     run_id,
-                    document_id,
+                    document_id or run_id,
                     event_log,
                     ctx,
                     now,
                     run_started_at,
                     2,
-                    env_error or "Environment not ready",
+                    venv_result.error_message or "Environment not ready",
                 )
                 return
-    
-            environment_id = str(env["id"])
-            deps_digest = str(env["deps_digest"])
-            ctx["environment_id"] = environment_id
+            python_bin = venv_result.python_bin
+            ctx["environment_id"] = deps_digest
     
             event_log.emit(event="run.start", message="Starting run", context=ctx)
     
-            venv_dir = self.paths.environment_venv_dir(
-                workspace_id,
-                configuration_id,
-                deps_digest,
-                environment_id,
-            )
-            python_bin = self.paths.python_in_venv(venv_dir)
             if not python_bin.exists():
                 logger.warning("environment python missing: %s", python_bin)
-                with session_scope(self.session_factory) as session:
-                    db.mark_environment_queued(
-                        session,
-                        env_id=environment_id,
-                        now=now,
-                        error_message="Missing venv python; requeueing environment",
-                    )
                 self._handle_run_failure(
                     claim,
                     run_id,
-                    document_id,
+                    document_id or run_id,
                     event_log,
                     ctx,
                     now,
@@ -1374,7 +1343,7 @@ class Worker:
                 self._handle_run_failure(
                     claim,
                     run_id,
-                    document_id,
+                    document_id or run_id,
                     event_log,
                     ctx,
                     now,
@@ -1384,13 +1353,11 @@ class Worker:
                 )
                 return
     
-            with session_scope(self.session_factory) as session:
-                db.touch_environment_last_used(session, env_id=environment_id, now=now)
-    
             options = parse_run_options(
                 run.get("run_options"),
                 default_log_level=self.settings.effective_worker_log_level,
             )
+            run_options_payload = _json_loads_dict(run.get("run_options"))
             sheet_names = options.input_sheet_names or _parse_input_sheet_names(run.get("input_sheet_names"))
             run_dir = self.paths.run_dir(workspace_id, run_id)
             _ensure_dir(run_dir)
@@ -1432,7 +1399,7 @@ class Worker:
                 self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
                 return
     
-            if options.validate_only:
+            if operation is RunOperation.VALIDATE:
                 cmd = engine_config_validate_cmd(
                     python_bin=python_bin,
                     config_dir=config_dir,
@@ -1462,6 +1429,17 @@ class Worker:
                     return
                 finished_at = utcnow()
                 if res.exit_code == 0:
+                    validated_snapshot = _as_str(run_options_payload.get(_CONFIG_DIGEST_SNAPSHOT_KEY))
+                    current_config_digest: str | None = None
+                    if validated_snapshot:
+                        try:
+                            current_config_digest = compute_config_digest(config_dir)
+                        except Exception:
+                            logger.exception(
+                                "run.validate.digest_compute_failed run_id=%s config_dir=%s",
+                                run_id,
+                                config_dir,
+                            )
                     with session_scope(self.session_factory) as session:
                         ok = db.ack_run_success(
                             session,
@@ -1485,6 +1463,17 @@ class Worker:
                             output_file_version_id=None,
                             error_message=None,
                         )
+                        if (
+                            validated_snapshot
+                            and current_config_digest
+                            and validated_snapshot == current_config_digest
+                        ):
+                            db.record_configuration_validated_digest(
+                                session,
+                                configuration_id=configuration_id,
+                                content_digest=validated_snapshot,
+                                now=finished_at,
+                            )
                     _emit_run_complete(
                         event_log,
                         status="succeeded",
@@ -1507,6 +1496,20 @@ class Worker:
                         res.exit_code,
                         f"Validation failed (exit {res.exit_code})",
                     )
+                return
+
+            if not input_file_version_id:
+                self._handle_run_failure(
+                    claim,
+                    run_id,
+                    run_id,
+                    event_log,
+                    ctx,
+                    now,
+                    run_started_at,
+                    2,
+                    "Process operation requires input_file_version_id",
+                )
                 return
     
             with self.session_factory() as session:
@@ -2049,7 +2052,12 @@ def main() -> int:
 
     worker_id = settings.worker_id or _default_worker_id()
 
-    paths = PathManager(settings, settings.pip_cache_dir)
+    paths = PathManager(
+        layout=settings,
+        worker_runs_root=settings.worker_runs_dir,
+        worker_venvs_root=settings.worker_venvs_dir,
+        worker_pip_cache_root=settings.worker_uv_cache_dir,
+    )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     storage = build_storage_adapter(settings)
 

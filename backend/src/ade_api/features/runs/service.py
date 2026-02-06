@@ -52,6 +52,7 @@ from ade_db.models import (
     Run,
     RunField,
     RunMetrics,
+    RunOperation,
     RunStatus,
     RunTableColumn,
 )
@@ -59,6 +60,7 @@ from ade_api.settings import Settings
 
 from .exceptions import (
     RunDocumentMissingError,
+    RunInputDocumentRequiredForProcessError,
     RunInputMissingError,
     RunLogsFileMissingError,
     RunNotFoundError,
@@ -99,6 +101,7 @@ logger = logging.getLogger(__name__)
 _DEPS_DIGEST_CACHE_SIZE = 256
 _OUTPUT_FALLBACK_FILENAME = "output"
 _MAX_FILENAME_LENGTH = 255
+_CONFIG_DIGEST_SNAPSHOT_KEY = "__config_digest_snapshot"
 
 
 @lru_cache(maxsize=_DEPS_DIGEST_CACHE_SIZE)
@@ -183,46 +186,56 @@ class RunsService:
             "run.prepare.start",
             extra=log_context(
                 configuration_id=configuration_id,
-                validate_only=options.validate_only,
+                operation=options.operation.value,
                 dry_run=options.dry_run,
                 input_document_id=options.input_document_id,
             ),
         )
 
         configuration = self._resolve_configuration(configuration_id)
-
-        input_document_id = options.input_document_id
-        if not input_document_id:
-            raise RunInputMissingError("Input document is required to create a run")
-        self._require_document(
-            workspace_id=configuration.workspace_id,
-            document_id=input_document_id,
-        )
-
-        selected_sheet_names = self._select_input_sheet_names(options)
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
         deps_digest = self._resolve_deps_digest(configuration)
-        self._insert_runs_for_documents(
-            configuration=configuration,
-            document_ids=[input_document_id],
-            deps_digest=deps_digest,
-            input_sheet_names_by_document_id={
-                input_document_id: selected_sheet_names or None,
-            },
-            run_options_by_document_id={
-                input_document_id: run_options_payload,
-            },
-            existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
-        )
+        input_document_id = options.input_document_id
+        if options.operation is RunOperation.PROCESS:
+            if not input_document_id:
+                raise RunInputDocumentRequiredForProcessError(
+                    "input_document_required_for_process"
+                )
+            self._require_document(
+                workspace_id=configuration.workspace_id,
+                document_id=input_document_id,
+            )
+
+            selected_sheet_names = self._select_input_sheet_names(options)
+            self._insert_runs_for_documents(
+                configuration=configuration,
+                document_ids=[input_document_id],
+                deps_digest=deps_digest,
+                input_sheet_names_by_document_id={
+                    input_document_id: selected_sheet_names or None,
+                },
+                run_options_by_document_id={
+                    input_document_id: run_options_payload,
+                },
+                existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
+                operation=RunOperation.PROCESS,
+            )
+            run = self._require_active_run(
+                configuration_id=configuration.id,
+                document_id=input_document_id,
+            )
+        else:
+            config_digest_snapshot = self._resolve_config_digest_snapshot(configuration)
+            run_options_payload[_CONFIG_DIGEST_SNAPSHOT_KEY] = config_digest_snapshot
+            run = self._insert_validate_run(
+                configuration=configuration,
+                deps_digest=deps_digest,
+                run_options=run_options_payload,
+            )
 
         # Touch configuration usage timestamp.
         configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
         self._session.flush()
-
-        run = self._require_active_run(
-            configuration_id=configuration.id,
-            document_id=input_document_id,
-        )
 
         logger.info(
             "run.prepare.success",
@@ -230,8 +243,8 @@ class RunsService:
                 workspace_id=run.workspace_id,
                 configuration_id=run.configuration_id,
                 run_id=run.id,
+                operation=run.operation.value,
                 input_document_id=input_document_id,
-                validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
         )
@@ -241,7 +254,7 @@ class RunsService:
         self,
         *,
         workspace_id: UUID,
-        input_document_id: UUID,
+        input_document_id: UUID | None,
         configuration_id: UUID | None,
         options: RunCreateOptionsBase | None = None,
     ) -> Run:
@@ -277,13 +290,17 @@ class RunsService:
             extra=log_context(
                 configuration_id=configuration_id,
                 document_count=len(document_ids),
-                validate_only=options.validate_only,
+                operation=options.operation.value,
                 dry_run=options.dry_run,
             ),
         )
 
         if not document_ids:
             return []
+        if options.operation is not RunOperation.PROCESS:
+            raise RunInputDocumentRequiredForProcessError(
+                "input_document_required_for_process"
+            )
 
         configuration = self._resolve_configuration(configuration_id)
         self._require_documents(
@@ -293,7 +310,6 @@ class RunsService:
 
         batch_active_sheet_only = bool(getattr(options, "active_sheet_only", False))
         normalized_sheet_names: dict[UUID, list[str] | None] = {}
-        active_sheet_only_lookup: dict[UUID, bool] = {}
         run_options_by_document_id: dict[UUID, RunCreateOptions] = {}
 
         if skip_existing_check:
@@ -341,10 +357,9 @@ class RunsService:
                 if input_sheet_names:
                     active_sheet_only = False
                 normalized_sheet_names[document_id] = input_sheet_names
-                active_sheet_only_lookup[document_id] = active_sheet_only
                 run_options_by_document_id[document_id] = RunCreateOptions(
+                    operation=RunOperation.PROCESS,
                     dry_run=options.dry_run,
-                    validate_only=options.validate_only,
                     log_level=options.log_level,
                     input_document_id=document_id,
                     input_sheet_names=input_sheet_names,
@@ -363,6 +378,7 @@ class RunsService:
                     for doc_id, run_options in run_options_by_document_id.items()
                 },
                 existing_statuses=[RunStatus.QUEUED, RunStatus.RUNNING],
+                operation=RunOperation.PROCESS,
             )
 
         configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
@@ -408,6 +424,12 @@ class RunsService:
         """Rehydrate run options from the run row."""
 
         payload: dict[str, Any] = dict(run.run_options or {})
+        if "operation" not in payload:
+            payload["operation"] = (
+                run.operation.value
+                if isinstance(run.operation, RunOperation)
+                else str(run.operation or RunOperation.PROCESS.value)
+            )
 
         if "input_document_id" not in payload and run.input_file_version_id:
             document_id = self._resolve_document_id_for_version(run.input_file_version_id)
@@ -423,6 +445,11 @@ class RunsService:
                 "run.options.load.failed",
                 extra=log_context(run_id=run.id),
             )
+            fallback_operation = (
+                run.operation
+                if isinstance(run.operation, RunOperation)
+                else RunOperation.PROCESS
+            )
             fallback_document_id = (
                 self._resolve_document_id_for_version(run.input_file_version_id)
                 if run.input_file_version_id
@@ -431,9 +458,14 @@ class RunsService:
             fallback_value = (
                 str(fallback_document_id)
                 if fallback_document_id is not None
-                else (str(run.input_file_version_id) if run.input_file_version_id else "")
+                else (
+                    str(run.input_file_version_id)
+                    if fallback_operation is RunOperation.PROCESS and run.input_file_version_id
+                    else None
+                )
             )
             return RunCreateOptions(
+                operation=fallback_operation,
                 input_document_id=fallback_value,
                 input_sheet_names=list(run.input_sheet_names or []),
             )
@@ -591,6 +623,42 @@ class RunsService:
         cache_key = _deps_digest_cache_key(configuration)
         return _cached_deps_digest(str(config_path), cache_key)
 
+    def _resolve_config_digest_snapshot(self, configuration: Configuration) -> str:
+        try:
+            config_path = self._storage.ensure_config_path(
+                configuration.workspace_id,
+                configuration.id,
+            )
+        except ConfigStorageNotFoundError as exc:  # pragma: no cover - surface as run error
+            raise RunInputMissingError("Configuration files are missing") from exc
+        return self._storage.compute_config_digest(config_path)
+
+    def _insert_validate_run(
+        self,
+        *,
+        configuration: Configuration,
+        deps_digest: str,
+        run_options: dict[str, Any],
+    ) -> Run:
+        run = Run(
+            id=uuid4(),
+            configuration_id=configuration.id,
+            workspace_id=configuration.workspace_id,
+            input_file_version_id=None,
+            input_sheet_names=None,
+            run_options=run_options,
+            deps_digest=deps_digest,
+            operation=RunOperation.VALIDATE,
+            status=RunStatus.QUEUED,
+            available_at=utc_now(),
+            attempt_count=0,
+            max_attempts=self._run_max_attempts,
+        )
+        self._session.add(run)
+        self._session.flush()
+        self._session.refresh(run)
+        return run
+
     def _insert_runs_for_documents(
         self,
         *,
@@ -600,6 +668,7 @@ class RunsService:
         input_sheet_names_by_document_id: dict[UUID, list[str] | None] | None,
         run_options_by_document_id: dict[UUID, dict[str, Any] | None] | None,
         existing_statuses: Sequence[RunStatus] | None,
+        operation: RunOperation = RunOperation.PROCESS,
     ) -> None:
         if not document_ids:
             return
@@ -657,6 +726,7 @@ class RunsService:
                         else None
                     ),
                     "deps_digest": deps_digest,
+                    "operation": operation,
                     "status": RunStatus.QUEUED,
                     "available_at": now,
                     "attempt_count": 0,
@@ -871,6 +941,7 @@ class RunsService:
             id=run.id,
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
+            operation=run.operation,
             status=run.status,
             failure_code=failure_code,
             failure_stage=failure_stage,
@@ -1691,7 +1762,7 @@ class RunsService:
     @staticmethod
     def _merge_run_options(
         *,
-        input_document_id: UUID,
+        input_document_id: UUID | None,
         options: RunCreateOptionsBase | None,
     ) -> RunCreateOptions:
         payload = options.model_dump(exclude_none=True) if options else {}

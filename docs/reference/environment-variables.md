@@ -79,6 +79,7 @@ See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact m
 | `ADE_WORKER_BACKOFF_MAX_SECONDS` | worker | optional | `300` | retry backoff cap |
 | `ADE_WORKER_ENV_BUILD_TIMEOUT_SECONDS` | worker | optional | `600` | environment build timeout |
 | `ADE_WORKER_RUN_TIMEOUT_SECONDS` | worker | optional | none | run timeout override |
+| `ADE_WORKER_CACHE_DIR` | worker | optional | `/tmp/ade-worker-cache` | local worker cache root (venvs, uv cache, run temp dirs) |
 
 ## Logging
 
@@ -121,7 +122,7 @@ See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact m
 | `ADE_STORAGE_DOCUMENT_RETENTION_PERIOD` | API | optional | `30 days` | document retention |
 | `ADE_DOCUMENTS_UPLOAD_CONCURRENCY_LIMIT` | API | optional | `8` | upload concurrency cap |
 | `ADE_DOCUMENT_CHANGES_RETENTION_DAYS` | API | optional | `14` | change retention |
-| `ADE_WORKER_ENV_TTL_DAYS` | worker GC | optional | `30` | environment retention |
+| `ADE_WORKER_CACHE_TTL_DAYS` | worker GC | optional | `30` | local worker cache retention (venv directories) |
 | `ADE_WORKER_RUN_ARTIFACT_TTL_DAYS` | worker GC | optional | `30` | run artifact retention |
 
 ## Compose-Only Variables

@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
-from ade_db.models import RunStatus
+from ade_db.models import RunOperation, RunStatus
 
 RunObjectType = Literal["ade.run"]
 RunLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -39,8 +39,8 @@ __all__ = [
 class RunCreateOptionsBase(BaseSchema):
     """Optional execution toggles for ADE runs."""
 
+    operation: RunOperation = RunOperation.PROCESS
     dry_run: bool = False
-    validate_only: bool = False
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -68,8 +68,8 @@ class RunCreateOptionsBase(BaseSchema):
 class RunCreateOptions(RunCreateOptionsBase):
     """Execution toggles for a single ADE run."""
 
-    input_document_id: UUIDStr = Field(
-        ...,
+    input_document_id: UUIDStr | None = Field(
+        default=None,
         description="Document identifier to ingest.",
     )
 
@@ -83,8 +83,8 @@ class RunCreateRequest(BaseSchema):
 class RunWorkspaceCreateRequest(BaseSchema):
     """Payload accepted by the workspace run creation endpoint."""
 
-    input_document_id: UUIDStr = Field(
-        ...,
+    input_document_id: UUIDStr | None = Field(
+        default=None,
         description="Document identifier to ingest.",
     )
     configuration_id: UUIDStr | None = Field(
@@ -97,8 +97,8 @@ class RunWorkspaceCreateRequest(BaseSchema):
 class RunBatchCreateOptions(BaseSchema):
     """Execution toggles for batch ADE runs (per-document input)."""
 
+    operation: RunOperation = RunOperation.PROCESS
     dry_run: bool = False
-    validate_only: bool = False
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -268,6 +268,7 @@ class RunResource(BaseSchema):
     workspace_id: UUIDStr
     configuration_id: UUIDStr
 
+    operation: RunOperation
     status: RunStatus
     failure_code: str | None = None
     failure_stage: str | None = None

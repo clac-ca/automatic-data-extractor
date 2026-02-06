@@ -12,7 +12,6 @@ from sqlalchemy.orm import selectinload
 
 from ade_db.models import (
     Configuration,
-    Environment,
     File,
     FileComment,
     FileCommentMention,
@@ -206,9 +205,6 @@ class WorkspacesRepository:
         self._session.execute(delete(RunField).where(RunField.run_id.in_(run_ids)))
         self._session.execute(delete(RunMetrics).where(RunMetrics.run_id.in_(run_ids)))
         self._session.execute(delete(Run).where(Run.workspace_id == workspace_id))
-        self._session.execute(
-            delete(Environment).where(Environment.workspace_id == workspace_id)
-        )
 
         self._session.execute(
             delete(FileCommentMention).where(

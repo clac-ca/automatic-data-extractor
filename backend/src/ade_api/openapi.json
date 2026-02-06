@@ -72,7 +72,7 @@
           "meta"
         ],
         "summary": "Installed ADE versions",
-        "description": "Return installed backend, engine-parent marker/version, and web versions.",
+        "description": "Return installed backend/web versions and worker engine resolution mode.",
         "operationId": "read_versions_api_v1_meta_versions_get",
         "responses": {
           "200": {
@@ -8270,103 +8270,6 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/validate": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Validate the configuration on disk",
-        "operationId": "validate_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__validate_post",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configurationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Configuration identifier",
-              "title": "Configurationid"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationValidateResponse"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/publish": {
       "post": {
         "tags": [
@@ -12933,26 +12836,6 @@
         "title": "ConfigSourceTemplate",
         "description": "Request to scaffold a config from the engine's built-in template."
       },
-      "ConfigValidationIssue": {
-        "properties": {
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "path",
-          "message"
-        ],
-        "title": "ConfigValidationIssue",
-        "description": "Description of a validation issue found on disk."
-      },
       "ConfigurationCreate": {
         "properties": {
           "display_name": {
@@ -13100,53 +12983,6 @@
         ],
         "title": "ConfigurationStatus",
         "description": "Lifecycle states for workspace configuration packages."
-      },
-      "ConfigurationValidateResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "workspace_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Workspace Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "status": {
-            "$ref": "#/components/schemas/ConfigurationStatus"
-          },
-          "content_digest": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Digest"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/ConfigValidationIssue"
-            },
-            "type": "array",
-            "title": "Issues"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "workspace_id",
-          "status",
-          "issues"
-        ],
-        "title": "ConfigurationValidateResponse",
-        "description": "Result of running validation."
       },
       "CursorMeta": {
         "properties": {
@@ -15334,14 +15170,13 @@
       },
       "RunBatchCreateOptions": {
         "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/RunOperation",
+            "default": "process"
+          },
           "dry_run": {
             "type": "boolean",
             "title": "Dry Run",
-            "default": false
-          },
-          "validate_only": {
-            "type": "boolean",
-            "title": "Validate Only",
             "default": false
           },
           "log_level": {
@@ -15554,14 +15389,13 @@
       },
       "RunCreateOptions": {
         "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/RunOperation",
+            "default": "process"
+          },
           "dry_run": {
             "type": "boolean",
             "title": "Dry Run",
-            "default": false
-          },
-          "validate_only": {
-            "type": "boolean",
-            "title": "Validate Only",
             "default": false
           },
           "log_level": {
@@ -15619,30 +15453,34 @@
             "description": "Opaque metadata to propagate with run telemetry."
           },
           "input_document_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Input Document Id",
             "description": "Document identifier to ingest."
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "input_document_id"
-        ],
         "title": "RunCreateOptions",
         "description": "Execution toggles for a single ADE run."
       },
       "RunCreateOptionsBase": {
         "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/RunOperation",
+            "default": "process"
+          },
           "dry_run": {
             "type": "boolean",
             "title": "Dry Run",
-            "default": false
-          },
-          "validate_only": {
-            "type": "boolean",
-            "title": "Validate Only",
             "default": false
           },
           "log_level": {
@@ -16215,6 +16053,15 @@
         "title": "RunMetricsResource",
         "description": "Aggregate run metrics derived from engine.run.completed."
       },
+      "RunOperation": {
+        "type": "string",
+        "enum": [
+          "validate",
+          "process"
+        ],
+        "title": "RunOperation",
+        "description": "Operation type for the execution request."
+      },
       "RunOutput": {
         "properties": {
           "ready": {
@@ -16396,6 +16243,9 @@
             "title": "Configuration Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
+          "operation": {
+            "$ref": "#/components/schemas/RunOperation"
+          },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
           },
@@ -16510,6 +16360,7 @@
           "id",
           "workspace_id",
           "configuration_id",
+          "operation",
           "status",
           "created_at",
           "links"
@@ -16570,8 +16421,16 @@
       "RunWorkspaceCreateRequest": {
         "properties": {
           "input_document_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Input Document Id",
             "description": "Document identifier to ingest."
           },
@@ -16595,9 +16454,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "input_document_id"
-        ],
         "title": "RunWorkspaceCreateRequest",
         "description": "Payload accepted by the workspace run creation endpoint."
       },

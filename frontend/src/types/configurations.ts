@@ -2,7 +2,6 @@ import type { components } from "@/types";
 
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
-export type ConfigurationValidateResponse = components["schemas"]["ConfigurationValidateResponse"];
 
 export type FileEntry = components["schemas"]["FileEntry"];
 export type FileListing = components["schemas"]["FileListing"];

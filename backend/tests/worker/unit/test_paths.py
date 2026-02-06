@@ -17,7 +17,12 @@ class _Layout:
 
 def test_environment_path_is_stable(tmp_path: Path) -> None:
     layout = _Layout(tmp_path)
-    paths = PathManager(layout, layout.pip_cache_dir)
+    paths = PathManager(
+        layout=layout,
+        worker_runs_root=layout.runs_dir,
+        worker_venvs_root=layout.venvs_dir,
+        worker_pip_cache_root=layout.pip_cache_dir,
+    )
     path_a = paths.environment_root(
         workspace_id="ws-1",
         configuration_id="cfg-1",

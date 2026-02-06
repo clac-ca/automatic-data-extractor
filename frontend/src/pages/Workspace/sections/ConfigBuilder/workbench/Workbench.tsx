@@ -25,7 +25,6 @@ import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import type { WorkbenchDataSeed } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
-import { fetchRecentDocuments, type WorkbenchDocumentRow } from "./utils/runDocuments";
 import { decodeFileContent, describeError, formatRelative, formatWorkspaceLabel } from "./utils/workbenchHelpers";
 
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
@@ -33,7 +32,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageState } from "@/components/layout";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
-import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@/api/configurations/api";
+import { exportConfiguration, readConfigurationFileJson } from "@/api/configurations/api";
 import {
   configurationKeys,
   useConfigurationFilesQuery,
@@ -69,6 +68,30 @@ const MIN_WORKBENCH_SIDEBAR_WIDTH = 220;
 const MAX_WORKBENCH_SIDEBAR_WIDTH = 520;
 const CONSOLE_COLLAPSE_MESSAGE =
   "Panel closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
+
+function parseProblemCode(error: unknown): string | null {
+  if (!(error instanceof ApiError)) {
+    return null;
+  }
+  const detail = error.problem?.detail as unknown;
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (!detail || typeof detail !== "object") {
+    return null;
+  }
+  const payload = detail as Record<string, unknown>;
+  if (typeof payload.error === "string") {
+    return payload.error;
+  }
+  if (payload.error && typeof payload.error === "object") {
+    const nested = payload.error as Record<string, unknown>;
+    if (typeof nested.code === "string") {
+      return nested.code;
+    }
+  }
+  return null;
+}
 
 interface ConsolePanelPreferences {
   readonly version: 2;
@@ -156,10 +179,8 @@ export function Workbench({
 
   const [makeActiveDialogOpen, setMakeActiveDialogOpen] = useState(false);
   const [makeActiveDialogState, setMakeActiveDialogState] = useState<
-    | { stage: "checking" }
     | { stage: "confirm" }
-    | { stage: "issues"; issues: readonly { path: string; message: string }[] }
-    | { stage: "error"; message: string }
+    | { stage: "error"; message: string; validationRequired?: boolean }
     | null
   >(null);
 
@@ -188,31 +209,6 @@ export function Workbench({
     setDuplicateName(suggestDuplicateName(configDisplayName, existingConfigNames));
     setDuplicateDialogOpen(true);
   }, [configDisplayName, duplicateToEdit, existingConfigNames]);
-
-  useEffect(() => {
-    if (!makeActiveDialogOpen || !isDraftConfig || usingSeed) {
-      return;
-    }
-    let cancelled = false;
-    setMakeActiveDialogState({ stage: "checking" });
-    void validateConfiguration(workspaceId, configId)
-      .then((result) => {
-        if (cancelled) return;
-        if (Array.isArray(result.issues) && result.issues.length > 0) {
-          setMakeActiveDialogState({ stage: "issues", issues: result.issues });
-          return;
-        }
-        setMakeActiveDialogState({ stage: "confirm" });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unable to validate configuration.";
-        setMakeActiveDialogState({ stage: "error", message });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [configId, isDraftConfig, makeActiveDialogOpen, usingSeed, workspaceId]);
 
   const [pendingCompletion, setPendingCompletion] = useState<RunCompletionInfo | null>(null);
   const handleRunComplete = useCallback((info: RunCompletionInfo) => {
@@ -356,7 +352,7 @@ export function Workbench({
 
   const openMakeActiveDialog = useCallback(() => {
     makeActiveConfig.reset();
-    setMakeActiveDialogState({ stage: "checking" });
+    setMakeActiveDialogState({ stage: "confirm" });
     setMakeActiveDialogOpen(true);
   }, [makeActiveConfig]);
 
@@ -383,6 +379,15 @@ export function Workbench({
           ]);
         },
         onError(error) {
+          const code = parseProblemCode(error);
+          if (code === "validation_required") {
+            setMakeActiveDialogState({
+              stage: "error",
+              message: "Validation is required. Run Validation in this editor, then publish again.",
+              validationRequired: true,
+            });
+            return;
+          }
           const message = error instanceof Error ? error.message : "Unable to make configuration active.";
           setMakeActiveDialogState({ stage: "error", message });
         },
@@ -803,30 +808,9 @@ export function Workbench({
     if (!ready) {
       return;
     }
-    let document: WorkbenchDocumentRow | null = null;
-    try {
-      const documents = await fetchRecentDocuments(workspaceId);
-      document = documents[0] ?? null;
-    } catch (error) {
-      notifyToast({
-        title: "Unable to load documents for validation.",
-        description: describeError(error),
-        intent: "warning",
-        duration: 5000,
-      });
-      return;
-    }
-    if (!document) {
-      notifyToast({
-        title: "Upload a document to run validation.",
-        intent: "warning",
-        duration: 5000,
-      });
-      return;
-    }
     await startRun(
-      { validate_only: true, input_document_id: document.id },
-      { mode: "validation", documentId: document.id, documentName: document.name },
+      { operation: "validate" },
+      { mode: "validation" },
       { prepare: prepareRun },
     );
   }, [
@@ -837,8 +821,6 @@ export function Workbench({
     saveDirtyTabsBeforeRun,
     startRun,
     prepareRun,
-    workspaceId,
-    notifyToast,
   ]);
 
   const handleRunExtraction = useCallback(
@@ -854,6 +836,7 @@ export function Workbench({
       const worksheetList = Array.from(new Set((selection.sheetNames ?? []).filter(Boolean)));
       void startRun(
         {
+          operation: "process",
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
           log_level: selection.logLevel,
@@ -1467,24 +1450,18 @@ export function Workbench({
       <ConfirmDialog
         open={makeActiveDialogOpen}
         title={
-          makeActiveDialogState?.stage === "checking"
-            ? "Checking configuration…"
-            : makeActiveDialogState?.stage === "issues"
-              ? "Fix validation issues first"
-              : "Make configuration active?"
+          makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired
+            ? "Validation required before publish"
+            : "Make configuration active?"
         }
         description={
-          makeActiveDialogState?.stage === "checking"
-            ? "Running validation before activation."
-            : makeActiveDialogState?.stage === "issues"
-              ? "This configuration has validation issues and can’t be activated yet."
-              : activeConfiguration
-                ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
-                : "This becomes the workspace’s live configuration for extraction runs."
+          activeConfiguration
+            ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
+            : "This becomes the workspace’s live configuration for extraction runs."
         }
         confirmLabel={
-          makeActiveDialogState?.stage === "issues"
-            ? "Continue editing"
+          makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired
+            ? "Open editor"
             : makeActiveDialogState?.stage === "error"
               ? "Close"
               : "Make active"
@@ -1492,8 +1469,9 @@ export function Workbench({
         cancelLabel="Cancel"
         onCancel={closeMakeActiveDialog}
         onConfirm={() => {
-          if (makeActiveDialogState?.stage === "issues") {
+          if (makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired) {
             closeMakeActiveDialog();
+            navigate(`/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}/editor`);
             return;
           }
           if (makeActiveDialogState?.stage === "error") {
@@ -1503,26 +1481,9 @@ export function Workbench({
           handleConfirmMakeActive();
         }}
         isConfirming={makeActiveConfig.isPending}
-        confirmDisabled={makeActiveDialogState?.stage === "checking" || makeActiveConfig.isPending}
+        confirmDisabled={makeActiveConfig.isPending}
       >
-        {makeActiveDialogState?.stage === "checking" ? (
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
-            <span>Validating…</span>
-          </div>
-        ) : makeActiveDialogState?.stage === "issues" ? (
-          <div className="space-y-2">
-            <p className="text-sm text-foreground">Issues:</p>
-            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
-              {makeActiveDialogState.issues.map((issue) => (
-                <li key={`${issue.path}:${issue.message}`} className="space-y-1">
-                  <p className="font-semibold">{issue.path}</p>
-                  <p className="text-muted-foreground">{issue.message}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : makeActiveDialogState?.stage === "error" ? (
+        {makeActiveDialogState?.stage === "error" ? (
           <p className="text-sm font-medium text-destructive">{makeActiveDialogState.message}</p>
         ) : null}
       </ConfirmDialog>

@@ -38,7 +38,7 @@ class Settings(
     worker_log_level: str | None = None
 
     # ---- Garbage collection (run via scheduled job) -----------------------
-    worker_env_ttl_days: int = Field(30, ge=0)
+    worker_cache_ttl_days: int = Field(30, ge=0)
     worker_run_artifact_ttl_days: int | None = Field(30, ge=0)
 
     # ---- Queue leasing / retries ------------------------------------------
@@ -47,7 +47,7 @@ class Settings(
     worker_backoff_max_seconds: int = Field(300, ge=0)
 
     # ---- Runtime filesystem ------------------------------------------------
-    worker_runs_dir: Path = Field(default=Path("/tmp/ade-runs"))
+    worker_cache_dir: Path = Field(default=Path("/tmp/ade-worker-cache"))
 
     # ---- Timeouts ----------------------------------------------------------
     worker_env_build_timeout_seconds: int = Field(600, ge=1)
@@ -70,6 +70,18 @@ class Settings(
     @property
     def runs_dir(self) -> Path:
         return self.worker_runs_dir
+
+    @property
+    def worker_runs_dir(self) -> Path:
+        return self.worker_cache_dir / "runs"
+
+    @property
+    def worker_venvs_dir(self) -> Path:
+        return self.worker_cache_dir / "venvs"
+
+    @property
+    def worker_uv_cache_dir(self) -> Path:
+        return self.worker_cache_dir / "uv"
 
     def backoff_seconds(self, attempt_count: int) -> int:
         base = max(0, int(self.worker_backoff_base_seconds))

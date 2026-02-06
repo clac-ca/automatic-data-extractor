@@ -14,6 +14,7 @@ __all__ = [
     "RunOutputSheetUnsupportedError",
     "RunOutputSheetParseError",
     "RunInputMissingError",
+    "RunInputDocumentRequiredForProcessError",
 ]
 
 
@@ -60,3 +61,6 @@ class RunOutputSheetParseError(RuntimeError):
 class RunInputMissingError(RuntimeError):
     """Raised when a run input file cannot be located."""
 
+
+class RunInputDocumentRequiredForProcessError(RunInputMissingError):
+    """Raised when process operation is requested without an input document."""

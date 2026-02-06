@@ -14,7 +14,6 @@ import secrets
 import shutil
 import zipfile
 from collections import defaultdict
-from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from uuid import UUID
@@ -35,8 +34,8 @@ from .exceptions import (
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
     ConfigStateError,
+    ConfigValidationRequiredError,
     ConfigurationNotFoundError,
-    ConfigValidationFailedError,
 )
 from .filters import apply_config_filters
 from .repository import ConfigurationsRepository
@@ -46,7 +45,6 @@ from .schemas import (
     ConfigSourceTemplate,
     ConfigurationPage,
     ConfigurationRecord,
-    ConfigValidationIssue,
 )
 from .storage import ConfigStorage
 
@@ -54,15 +52,6 @@ logger = logging.getLogger(__name__)
 
 _MAX_FILE_SIZE = 512 * 1024  # 512 KiB
 _MAX_ASSET_FILE_SIZE = 5 * 1024 * 1024  # 5 MiB
-
-
-@dataclass(slots=True)
-class ValidationResult:
-    """Return value for validation requests."""
-
-    configuration: Configuration
-    issues: list[ConfigValidationIssue]
-    content_digest: str | None
 
 
 class ConfigurationsService:
@@ -266,7 +255,7 @@ class ConfigurationsService:
             ),
         )
         try:
-            digest = self._storage.import_archive(
+            self._storage.import_archive(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 archive=archive,
@@ -284,7 +273,7 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
-            content_digest=digest,
+            content_digest=None,
         )
         self._session.add(record)
         self._session.flush()
@@ -300,34 +289,6 @@ class ConfigurationsService:
             ),
         )
         return record
-
-    def validate_configuration(
-        self,
-        *,
-        workspace_id: UUID,
-        configuration_id: UUID,
-    ) -> ValidationResult:
-        logger.debug(
-            "config.validate.start",
-            extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
-        )
-        configuration = self._require_configuration(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-        config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
-        issues, digest = self._storage.validate_path(config_path)
-
-        logger.info(
-            "config.validate.completed",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                issue_count=len(issues),
-                has_digest=bool(digest),
-            ),
-        )
-        return ValidationResult(configuration=configuration, issues=issues, content_digest=digest)
 
     def make_active_configuration(
         self,
@@ -356,22 +317,22 @@ class ConfigurationsService:
             raise ConfigStateError("Configuration must be a draft before making it active")
 
         config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
-        issues, digest = self._storage.validate_path(config_path)
-        if issues:
+        _, current_digest = self._storage.validate_path(config_path)
+        if not current_digest or configuration.content_digest != current_digest:
             logger.warning(
-                "config.make_active.validation_failed",
+                "config.make_active.validation_required",
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
-                    issue_count=len(issues),
+                    has_validated_digest=bool(configuration.content_digest),
                 ),
             )
-            raise ConfigValidationFailedError(issues)
+            raise ConfigValidationRequiredError("validation_required")
 
         self._archive_active(workspace_id=workspace_id, exclude=configuration_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
-        configuration.content_digest = digest
+        configuration.content_digest = current_digest
         configuration.activated_at = utc_now()
         try:
             self._session.flush()
@@ -474,13 +435,12 @@ class ConfigurationsService:
         if current_fileset_hash and client_token != current_fileset_hash:
             raise PreconditionFailedError(current_fileset_hash)
 
-        digest = self._storage.replace_from_archive(
+        self._storage.replace_from_archive(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             archive=archive,
         )
-        configuration.content_digest = digest
-        configuration.updated_at = utc_now()
+        self._mark_configuration_content_changed(configuration)
         self._session.flush()
         self._session.refresh(configuration)
 
@@ -692,7 +652,7 @@ class ConfigurationsService:
             if_match,
             if_none_match,
         )
-        configuration.updated_at = utc_now()
+        self._mark_configuration_content_changed(configuration)
         self._session.flush()
         self._session.refresh(configuration)
 
@@ -735,7 +695,7 @@ class ConfigurationsService:
         )
 
         _delete_file_checked(file_path, if_match)
-        configuration.updated_at = utc_now()
+        self._mark_configuration_content_changed(configuration)
         self._session.flush()
         self._session.refresh(configuration)
 
@@ -776,7 +736,7 @@ class ConfigurationsService:
 
         dir_path.mkdir(mode=0o755, parents=True, exist_ok=True)
         if created:
-            configuration.updated_at = utc_now()
+            self._mark_configuration_content_changed(configuration)
             self._session.flush()
             self._session.refresh(configuration)
 
@@ -834,7 +794,7 @@ class ConfigurationsService:
         else:
             dir_path.rmdir()
 
-        configuration.updated_at = utc_now()
+        self._mark_configuration_content_changed(configuration)
         self._session.flush()
         self._session.refresh(configuration)
 
@@ -965,7 +925,7 @@ class ConfigurationsService:
         stat = dest_abs.stat()
         etag = _compute_file_etag(dest_abs) if dest_abs.is_file() else ""
 
-        configuration.updated_at = utc_now()
+        self._mark_configuration_content_changed(configuration)
         self._session.flush()
         self._session.refresh(configuration)
 
@@ -1074,6 +1034,11 @@ class ConfigurationsService:
         existing.status = ConfigurationStatus.ARCHIVED
         self._session.flush()
 
+    @staticmethod
+    def _mark_configuration_content_changed(configuration: Configuration) -> None:
+        configuration.content_digest = None
+        configuration.updated_at = utc_now()
+
     def _current_fileset_hash(self, config_path: Path) -> str:
         index = _build_file_index(config_path)
         return _compute_fileset_hash(index["entries"])
@@ -1100,7 +1065,7 @@ class ConfigurationsService:
         return configuration
 
 
-__all__ = ["ConfigurationsService", "ValidationResult"]
+__all__ = ["ConfigurationsService"]
 
 
 class InvalidPathError(Exception):

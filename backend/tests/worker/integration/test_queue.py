@@ -4,44 +4,55 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import insert, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import sessionmaker
 
-from ade_worker import db
 from ade_db.engine import session_scope
-from ade_db.schema import environments, runs
-from .helpers import seed_file_with_version
+from ade_db.schema import configurations, metadata, runs
+from ade_worker import db
 
 
 def _uuid() -> str:
     return str(uuid4())
 
 
-def _insert_environment(
+workspaces = metadata.tables["workspaces"]
+
+
+def _ensure_workspace_and_configuration(
     engine,
     *,
-    env_id: str,
     workspace_id: str,
     configuration_id: str,
-    deps_digest: str,
-    status: str,
     now: datetime,
 ) -> None:
     with engine.begin() as conn:
         conn.execute(
-            insert(environments).values(
-                id=env_id,
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                deps_digest=deps_digest,
-                status=status,
-                error_message=None,
-                created_at=now - timedelta(minutes=5),
-                updated_at=now - timedelta(minutes=5),
-                last_used_at=None,
-                python_version=None,
-                python_interpreter=None,
-                engine_version=None,
+            pg_insert(workspaces)
+            .values(
+                id=workspace_id,
+                name=f"Workspace {workspace_id[:8]}",
+                slug=f"ws-{workspace_id}",
+                settings={},
+                created_at=now,
+                updated_at=now,
             )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+        conn.execute(
+            pg_insert(configurations)
+            .values(
+                id=configuration_id,
+                workspace_id=workspace_id,
+                display_name="Config A",
+                status="draft",
+                content_digest=None,
+                last_used_at=None,
+                activated_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
         )
 
 
@@ -60,12 +71,12 @@ def _insert_run(
     claimed_by: str | None = None,
     input_file_version_id: str | None = None,
 ) -> None:
-    if not input_file_version_id:
-        _, input_file_version_id = seed_file_with_version(
-            engine,
-            workspace_id=workspace_id,
-            now=now,
-        )
+    _ensure_workspace_and_configuration(
+        engine,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
+        now=now,
+    )
     with engine.begin() as conn:
         conn.execute(
             insert(runs).values(
@@ -83,6 +94,7 @@ def _insert_run(
                 max_attempts=max_attempts,
                 claimed_by=claimed_by,
                 claim_expires_at=claim_expires_at,
+                operation="process",
                 exit_code=None,
                 error_message=None,
                 created_at=now - timedelta(minutes=10),
@@ -183,67 +195,86 @@ def test_run_lease_expire_requeues(engine) -> None:
     assert row.available_at is not None
 
 
-def test_environment_mark_building_sets_status(engine) -> None:
+def test_run_heartbeat_extends_lease(engine) -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    env_id = _uuid()
+    old_expiry = now + timedelta(minutes=1)
     workspace_id = _uuid()
     configuration_id = _uuid()
+    run_id = _uuid()
 
-    _insert_environment(
+    _insert_run(
         engine,
-        env_id=env_id,
+        run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
         deps_digest="sha256:ccc",
-        status="queued",
+        status="running",
         now=now,
+        attempt_count=1,
+        max_attempts=3,
+        claim_expires_at=old_expiry,
+        claimed_by="worker-1",
     )
 
     with session_scope(session_factory) as session:
-        ok = db.mark_environment_building(session, env_id=env_id, now=now)
+        ok = db.heartbeat_run(
+            session,
+            run_id=run_id,
+            worker_id="worker-1",
+            now=now,
+            lease_seconds=300,
+        )
     assert ok is True
 
     with engine.begin() as conn:
         row = conn.execute(
-            select(environments.c.status)
-            .where(environments.c.id == env_id)
+            select(runs.c.claim_expires_at)
+            .where(runs.c.id == run_id)
         ).first()
     assert row is not None
-    assert row.status == "building"
+    assert row.claim_expires_at is not None
+    assert row.claim_expires_at > old_expiry
 
 
-def test_environment_ack_success_clears_claim(engine) -> None:
+def test_run_ack_success_marks_succeeded(engine) -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
-    env_id = _uuid()
+    run_id = _uuid()
     workspace_id = _uuid()
     configuration_id = _uuid()
 
-    _insert_environment(
+    _insert_run(
         engine,
-        env_id=env_id,
+        run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
         deps_digest="sha256:ddd",
-        status="building",
+        status="running",
         now=now,
+        attempt_count=1,
+        max_attempts=3,
+        claim_expires_at=now + timedelta(minutes=5),
+        claimed_by="worker-2",
     )
 
     with session_scope(session_factory) as session:
-        ok = db.ack_environment_success(
+        ok = db.ack_run_success(
             session,
-            env_id=env_id,
+            run_id=run_id,
+            worker_id="worker-2",
             now=now,
         )
     assert ok is True
 
     with engine.begin() as conn:
         row = conn.execute(
-            select(environments.c.status).where(environments.c.id == env_id)
+            select(runs.c.status, runs.c.claimed_by, runs.c.completed_at).where(runs.c.id == run_id)
         ).first()
     assert row is not None
-    assert row.status == "ready"
+    assert row.status == "succeeded"
+    assert row.claimed_by is None
+    assert row.completed_at is not None
 
 
 def test_run_ack_failure_requeues(engine) -> None:

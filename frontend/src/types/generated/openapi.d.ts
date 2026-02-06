@@ -50,7 +50,7 @@ export type paths = {
         };
         /**
          * Installed ADE versions
-         * @description Return installed backend, engine-parent marker/version, and web versions.
+         * @description Return installed backend/web versions and worker engine resolution mode.
          */
         get: operations["read_versions_api_v1_meta_versions_get"];
         put?: never;
@@ -961,23 +961,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/validate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Validate the configuration on disk */
-        post: operations["validate_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__validate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/publish": {
         parameters: {
             query?: never;
@@ -1773,16 +1756,6 @@ export type components = {
             type: "template";
         };
         /**
-         * ConfigValidationIssue
-         * @description Description of a validation issue found on disk.
-         */
-        ConfigValidationIssue: {
-            /** Path */
-            path: string;
-            /** Message */
-            message: string;
-        };
-        /**
          * ConfigurationCreate
          * @description Payload for creating a configuration.
          */
@@ -1846,29 +1819,6 @@ export type components = {
          * @enum {string}
          */
         ConfigurationStatus: "draft" | "active" | "archived";
-        /**
-         * ConfigurationValidateResponse
-         * @description Result of running validation.
-         */
-        ConfigurationValidateResponse: {
-            /**
-             * Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            id: string;
-            /**
-             * Workspace Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            workspace_id: string;
-            status: components["schemas"]["ConfigurationStatus"];
-            /** Content Digest */
-            content_digest?: string | null;
-            /** Issues */
-            issues: components["schemas"]["ConfigValidationIssue"][];
-        };
         /** CursorMeta */
         CursorMeta: {
             /** Limit */
@@ -2867,16 +2817,13 @@ export type components = {
          * @description Execution toggles for batch ADE runs (per-document input).
          */
         RunBatchCreateOptions: {
+            /** @default process */
+            operation: components["schemas"]["RunOperation"];
             /**
              * Dry Run
              * @default false
              */
             dry_run: boolean;
-            /**
-             * Validate Only
-             * @default false
-             */
-            validate_only: boolean;
             /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
@@ -2958,16 +2905,13 @@ export type components = {
          * @description Execution toggles for a single ADE run.
          */
         RunCreateOptions: {
+            /** @default process */
+            operation: components["schemas"]["RunOperation"];
             /**
              * Dry Run
              * @default false
              */
             dry_run: boolean;
-            /**
-             * Validate Only
-             * @default false
-             */
-            validate_only: boolean;
             /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
@@ -2993,26 +2937,22 @@ export type components = {
             } | null;
             /**
              * Input Document Id
-             * Format: uuid
              * @description Document identifier to ingest.
              */
-            input_document_id: string;
+            input_document_id?: string | null;
         };
         /**
          * RunCreateOptionsBase
          * @description Optional execution toggles for ADE runs.
          */
         RunCreateOptionsBase: {
+            /** @default process */
+            operation: components["schemas"]["RunOperation"];
             /**
              * Dry Run
              * @default false
              */
             dry_run: boolean;
-            /**
-             * Validate Only
-             * @default false
-             */
-            validate_only: boolean;
             /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
@@ -3165,6 +3105,12 @@ export type components = {
             cell_count_non_empty?: number | null;
         };
         /**
+         * RunOperation
+         * @description Operation type for the execution request.
+         * @enum {string}
+         */
+        RunOperation: "validate" | "process";
+        /**
          * RunOutput
          * @description Output metadata captured for a run.
          */
@@ -3255,6 +3201,7 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
+            operation: components["schemas"]["RunOperation"];
             status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
@@ -3311,10 +3258,9 @@ export type components = {
         RunWorkspaceCreateRequest: {
             /**
              * Input Document Id
-             * Format: uuid
              * @description Document identifier to ingest.
              */
-            input_document_id: string;
+            input_document_id?: string | null;
             /**
              * Configuration Id
              * @description Optional configuration identifier (defaults to the active configuration).
@@ -7690,45 +7636,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    validate_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__validate_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Configuration identifier */
-                configurationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationValidateResponse"];
                 };
             };
             /** @description Validation Error */

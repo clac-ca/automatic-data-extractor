@@ -7,6 +7,10 @@ export type ProblemDetailsErrorMap = Record<string, string[]>;
 const ERROR_CODE_MESSAGES: Record<string, string> = {
   engine_dependency_missing:
     "Configuration must declare ade-engine in its dependency manifests before it can be validated, published, or run.",
+  validation_required:
+    "Validation is required before publishing. Run a validation job and try publishing again.",
+  input_document_required_for_process:
+    "A document is required when creating a process run.",
 };
 
 export function groupProblemDetailsErrors(

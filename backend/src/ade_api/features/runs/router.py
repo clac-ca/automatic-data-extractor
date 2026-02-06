@@ -48,6 +48,7 @@ from ade_db.models import RunStatus
 
 from .exceptions import (
     RunDocumentMissingError,
+    RunInputDocumentRequiredForProcessError,
     RunInputMissingError,
     RunLogsFileMissingError,
     RunNotFoundError,
@@ -162,6 +163,10 @@ def _engine_dependency_missing_detail(exc: ConfigEngineDependencyMissingError) -
     return detail
 
 
+def _input_document_required_detail() -> dict[str, str]:
+    return {"error": "input_document_required_for_process"}
+
+
 def _output_missing_detail(
     *,
     service: RunsService,
@@ -197,6 +202,11 @@ def create_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputDocumentRequiredForProcessError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_input_document_required_detail(),
+        ) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ConfigEngineDependencyMissingError as exc:
@@ -233,6 +243,11 @@ def create_runs_batch_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputDocumentRequiredForProcessError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_input_document_required_detail(),
+        ) from exc
     except ConfigEngineDependencyMissingError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -269,6 +284,11 @@ def create_workspace_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputDocumentRequiredForProcessError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_input_document_required_detail(),
+        ) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ConfigEngineDependencyMissingError as exc:
@@ -306,6 +326,11 @@ def create_workspace_runs_batch_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputDocumentRequiredForProcessError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_input_document_required_detail(),
+        ) from exc
     except ConfigEngineDependencyMissingError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
