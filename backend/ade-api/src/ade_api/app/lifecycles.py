@@ -10,6 +10,15 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
+import anyio.to_thread
+from ade_db.models import User
+from ade_storage import (
+    StorageError,
+    ensure_storage_roots,
+    get_storage_adapter,
+    init_storage,
+    shutdown_storage,
+)
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
 from sqlalchemy import text
@@ -24,18 +33,51 @@ from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
-from ade_storage import (
-    StorageError,
-    ensure_storage_roots,
-    get_storage_adapter,
-    init_storage,
-    shutdown_storage,
-)
 from ade_api.settings import Settings, get_settings
-from ade_db.models import User
 
 logger = logging.getLogger(__name__)
 MAINTENANCE_INTERVAL_SECONDS = 24 * 60 * 60
+
+
+def estimate_api_max_db_connections(settings: Settings) -> int:
+    """Estimate API-side DB connection demand across worker processes."""
+
+    process_count = int(settings.api_processes or 1)
+    pool_capacity = int(settings.database_pool_size + settings.database_max_overflow)
+    return process_count * pool_capacity
+
+
+def _configure_threadpool_tokens(*, tokens: int) -> tuple[int, int]:
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    previous = int(limiter.total_tokens)
+    limiter.total_tokens = int(tokens)
+    return previous, int(limiter.total_tokens)
+
+
+def log_db_capacity_estimate(settings: Settings) -> int:
+    estimated_connections = estimate_api_max_db_connections(settings)
+    logger.info(
+        "db.capacity.estimated",
+        extra={
+            "api_processes": int(settings.api_processes or 1),
+            "database_pool_size": int(settings.database_pool_size),
+            "database_max_overflow": int(settings.database_max_overflow),
+            "estimated_max_connections": estimated_connections,
+            "database_connection_budget": settings.database_connection_budget,
+        },
+    )
+    if (
+        settings.database_connection_budget is not None
+        and estimated_connections > settings.database_connection_budget
+    ):
+        logger.warning(
+            "db.capacity.budget_exceeded",
+            extra={
+                "estimated_max_connections": estimated_connections,
+                "database_connection_budget": settings.database_connection_budget,
+            },
+        )
+    return estimated_connections
 
 
 async def _document_changes_maintenance_loop(maintain_fn: Callable[[], int]) -> None:
@@ -131,6 +173,17 @@ def create_application_lifespan(
         app.state.settings = settings
         app.state.safe_mode = bool(settings.safe_mode)
         app.state.started_at = utc_now()
+        previous_tokens, configured_tokens = _configure_threadpool_tokens(
+            tokens=int(settings.api_threadpool_tokens)
+        )
+        logger.info(
+            "api.threadpool.configured",
+            extra={
+                "tokens": configured_tokens,
+                "previous_tokens": previous_tokens,
+            },
+        )
+        log_db_capacity_estimate(settings)
         if settings.documents_upload_concurrency_limit:
             app.state.documents_upload_semaphore = threading.BoundedSemaphore(
                 settings.documents_upload_concurrency_limit
@@ -272,7 +325,8 @@ def create_application_lifespan(
                     exc_info=True,
                 )
                 raise RuntimeError(
-                    "Database schema is not initialized. Run `ade db migrate` before starting the API."
+                    "Database schema is not initialized. "
+                    "Run `ade db migrate` before starting the API."
                 ) from exc
 
             await asyncio.to_thread(_sync_rbac_registry)
@@ -283,7 +337,9 @@ def create_application_lifespan(
             events_hub = DocumentChangesHub(settings=settings)
             events_hub.start(loop=asyncio.get_running_loop())
             app.state.document_changes_hub = events_hub
-            maintenance_task = asyncio.create_task(_document_changes_maintenance_loop(_maintain_document_changes))
+            maintenance_task = asyncio.create_task(
+                _document_changes_maintenance_loop(_maintain_document_changes)
+            )
             app.state.document_changes_maintenance_task = maintenance_task
 
             try:

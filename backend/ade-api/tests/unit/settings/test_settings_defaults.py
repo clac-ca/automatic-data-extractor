@@ -3,10 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from sqlalchemy.engine import make_url
-
 from ade_api.settings import Settings
+from sqlalchemy.engine import make_url
 
 REQUIRED_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
 
@@ -22,7 +20,13 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert isinstance(settings, Settings)
     assert settings.app_name == "Automatic Data Extractor API"
+    assert settings.app_version == "unknown"
+    assert settings.app_commit_sha == "unknown"
     assert settings.api_docs_enabled is False
+    assert settings.api_processes is None
+    assert settings.api_proxy_headers_enabled is True
+    assert settings.api_forwarded_allow_ips == "127.0.0.1"
+    assert settings.api_threadpool_tokens == 40
     assert settings.public_web_url == "http://localhost:8000"
     assert settings.server_cors_origins == []
     assert settings.server_cors_origin_regex is None
@@ -49,6 +53,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.blob_container == "ade-test"
     assert settings.blob_prefix == "workspaces"
     assert settings.blob_versioning_mode == "auto"
+    assert settings.database_connection_budget is None
 
 
 def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -71,3 +76,27 @@ def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.configs_dir == expected_workspaces
     assert settings.venvs_dir == expected_venvs
     assert settings.runs_dir == expected_workspaces
+
+
+def test_app_version_uses_explicit_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_APP_VERSION", "9.9.9")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_version == "9.9.9"
+
+
+def test_app_commit_sha_uses_explicit_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", REQUIRED_DATABASE_URL)
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_APP_COMMIT_SHA", "abc1234")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.app_commit_sha == "abc1234"

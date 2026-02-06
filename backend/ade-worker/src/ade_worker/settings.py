@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # ---- Worker identity & loop -------------------------------------------
     worker_id: str | None = None
-    worker_concurrency: int = Field(2, ge=1)
+    worker_run_concurrency: int = Field(2, ge=1)
     worker_listen_timeout_seconds: float = Field(60.0, gt=0)
     worker_cleanup_interval: float = Field(30.0, gt=0)
     log_format: str = "console"
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
         raise ValueError("ADE_BLOB_VERSIONING_MODE must be one of: auto, require, off.")
 
     @model_validator(mode="after")
-    def _finalize(self) -> "Settings":
+    def _finalize(self) -> Settings:
         allowed_levels = ", ".join(sorted(_ALLOWED_LOG_LEVELS))
         allowed_formats = ", ".join(sorted(_ALLOWED_LOG_FORMATS))
 

@@ -3,9 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from ade_worker.settings import Settings
+from pydantic import ValidationError
 
 
 def _set_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -88,6 +87,15 @@ def test_worker_data_dir_default_matches_api_layout(monkeypatch: pytest.MonkeyPa
     assert settings.venvs_dir == expected_root / "venvs"
     assert settings.pip_cache_dir == expected_root / "cache" / "pip"
     assert settings.blob_versioning_mode == "auto"
+
+
+def test_worker_run_concurrency_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_required_env(monkeypatch)
+    monkeypatch.setenv("ADE_WORKER_RUN_CONCURRENCY", "7")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.worker_run_concurrency == 7
 
 
 @pytest.mark.parametrize(

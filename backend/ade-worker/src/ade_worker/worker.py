@@ -1905,10 +1905,10 @@ class Worker:
         logger.info(
             "ade-worker starting worker_id=%s concurrency=%s",
             self.worker_id,
-            self.settings.worker_concurrency,
+            self.settings.worker_run_concurrency,
         )
 
-        max_workers = int(self.settings.worker_concurrency)
+        max_workers = int(self.settings.worker_run_concurrency)
         listen_timeout = float(self.settings.worker_listen_timeout_seconds)
         maintenance_interval = float(self.settings.worker_cleanup_interval)
         next_maintenance = time.monotonic() + maintenance_interval
@@ -2006,7 +2006,7 @@ class Worker:
         now: datetime,
     ) -> int:
         claimed_total = 0
-        capacity = max(0, int(self.settings.worker_concurrency) - len(futures))
+        capacity = max(0, int(self.settings.worker_run_concurrency) - len(futures))
         if capacity <= 0:
             return 0
 

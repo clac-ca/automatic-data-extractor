@@ -12,6 +12,12 @@ from ade_api.commands import common
 from ade_api.settings import Settings
 
 DEFAULT_API_BIND_PORT = 8001
+DEFAULT_DEV_PROCESSES = 1
+DEV_RELOAD_DIRS = (
+    "backend/ade-api",
+    "backend/ade-db",
+    "backend/ade-storage",
+)
 
 
 def _prepare_env() -> dict[str, str]:
@@ -24,20 +30,22 @@ def _prepare_env() -> dict[str, str]:
 def run_dev(
     *,
     host: str | None = None,
-    workers: int | None = None,
+    processes: int | None = None,
 ) -> None:
     """Run the API dev server (uvicorn --reload)."""
 
     settings = Settings()
     port = DEFAULT_API_BIND_PORT
     host = host or (settings.api_host or "0.0.0.0")
-    workers = int(workers if workers is not None else (settings.api_workers or 1))
+    # Keep dev mode reload-first by default. Multi-process dev is opt-in via --processes.
+    processes = int(processes if processes is not None else DEFAULT_DEV_PROCESSES)
 
     env = _prepare_env()
+    env["ADE_API_PROCESSES"] = str(processes)
     common.uvicorn_path()
 
-    if workers > 1:
-        typer.echo("Note: API workers > 1; disabling reload in dev.")
+    if processes > 1:
+        typer.echo("Note: API processes > 1; disabling reload in dev.")
 
     uvicorn_bin = common.uvicorn_path()
     api_cmd = [
@@ -52,10 +60,12 @@ def run_dev(
     ]
     if not settings.access_log_enabled:
         api_cmd.append("--no-access-log")
-    if workers == 1:
-        api_cmd.extend(["--reload", "--reload-dir", "backend/ade-api"])
+    if processes == 1:
+        api_cmd.append("--reload")
+        for reload_dir in DEV_RELOAD_DIRS:
+            api_cmd.extend(["--reload-dir", reload_dir])
     else:
-        api_cmd.extend(["--workers", str(workers)])
+        api_cmd.extend(["--workers", str(processes)])
 
     typer.echo(f"API dev server: http://{host}:{port}")
     common.run(api_cmd, cwd=common.REPO_ROOT, env=env)
@@ -64,16 +74,17 @@ def run_dev(
 def run_start(
     *,
     host: str | None = None,
-    workers: int | None = None,
+    processes: int | None = None,
 ) -> None:
     """Start the API server (requires migrations to be applied)."""
 
     settings = Settings()
     port = DEFAULT_API_BIND_PORT
     host = host or (settings.api_host or "0.0.0.0")
-    workers = int(workers if workers is not None else (settings.api_workers or 1))
+    processes = int(processes if processes is not None else (settings.api_processes or 1))
 
     env = _prepare_env()
+    env["ADE_API_PROCESSES"] = str(processes)
 
     uvicorn_bin = common.uvicorn_path()
     api_cmd = [
@@ -83,13 +94,22 @@ def run_start(
         host,
         "--port",
         str(port),
+        "--loop",
+        "uvloop",
+        "--http",
+        "httptools",
         "--log-level",
         settings.effective_api_log_level.lower(),
     ]
+    if settings.api_proxy_headers_enabled:
+        api_cmd.append("--proxy-headers")
+        api_cmd.extend(["--forwarded-allow-ips", settings.api_forwarded_allow_ips])
+    else:
+        api_cmd.append("--no-proxy-headers")
     if not settings.access_log_enabled:
         api_cmd.append("--no-access-log")
-    if workers and workers > 1:
-        api_cmd.extend(["--workers", str(workers)])
+    if processes and processes > 1:
+        api_cmd.extend(["--workers", str(processes)])
 
     typer.echo(f"Starting ADE API on http://{host}:{port}")
     common.run(api_cmd, cwd=common.REPO_ROOT, env=env)
@@ -107,15 +127,14 @@ def register(app: typer.Typer) -> None:
             help="Host/interface for the API dev server.",
             envvar="ADE_API_HOST",
         ),
-        workers: int = typer.Option(
+        processes: int = typer.Option(
             None,
-            "--workers",
-            help="Number of API worker processes.",
-            envvar="ADE_API_WORKERS",
+            "--processes",
+            help="Number of API processes (disables reload when > 1).",
             min=1,
         ),
     ) -> None:
-        run_dev(host=host, workers=workers)
+        run_dev(host=host, processes=processes)
 
     @app.command(
         name="start",
@@ -128,12 +147,12 @@ def register(app: typer.Typer) -> None:
             help="Host/interface for the API server.",
             envvar="ADE_API_HOST",
         ),
-        workers: int = typer.Option(
+        processes: int = typer.Option(
             None,
-            "--workers",
-            help="Number of API worker processes.",
-            envvar="ADE_API_WORKERS",
+            "--processes",
+            help="Number of API processes.",
+            envvar="ADE_API_PROCESSES",
             min=1,
         ),
     ) -> None:
-        run_start(host=host, workers=workers)
+        run_start(host=host, processes=processes)

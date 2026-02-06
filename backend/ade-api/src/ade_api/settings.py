@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import timedelta
 from functools import lru_cache
-import json
 from pathlib import Path
-import re
 from typing import Literal
 
 from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # Core
     app_name: str = "Automatic Data Extractor API"
-    app_version: str = "1.6.1"
+    app_version: str = "unknown"
     app_commit_sha: str = "unknown"
     api_docs_enabled: bool = False
     docs_url: str = "/docs"
@@ -65,7 +65,10 @@ class Settings(BaseSettings):
     # Server
     public_web_url: str = DEFAULT_PUBLIC_WEB_URL
     api_host: str | None = None
-    api_workers: int | None = Field(default=None, ge=1)
+    api_processes: int | None = Field(default=None, ge=1)
+    api_proxy_headers_enabled: bool = True
+    api_forwarded_allow_ips: str = "127.0.0.1"
+    api_threadpool_tokens: int = Field(40, ge=1)
     web_version_file: Path = Field(default=Path("/usr/share/nginx/html/version.json"))
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
     server_cors_origin_regex: str | None = Field(default=None)
@@ -98,6 +101,7 @@ class Settings(BaseSettings):
     database_pool_recycle: int = Field(1800, ge=0)
     database_connect_timeout_seconds: int | None = Field(default=10, ge=0)
     database_statement_timeout_ms: int | None = Field(default=30_000, ge=0)
+    database_connection_budget: int | None = Field(default=None, ge=1)
     database_auth_mode: Literal["password", "managed_identity"] = "password"
     database_sslrootcert: str | None = Field(default=None)
     document_changes_retention_days: int = Field(default=14, ge=1)
@@ -164,8 +168,18 @@ class Settings(BaseSettings):
             return raw
         raise ValueError("ADE_BLOB_VERSIONING_MODE must be one of: auto, require, off.")
 
+    @field_validator("api_forwarded_allow_ips", mode="before")
+    @classmethod
+    def _normalize_api_forwarded_allow_ips(cls, value: object) -> object:
+        if value is None:
+            return "127.0.0.1"
+        raw = str(value).strip()
+        if not raw:
+            raise ValueError("ADE_API_FORWARDED_ALLOW_IPS must not be empty.")
+        return raw
+
     @model_validator(mode="after")
-    def _finalize(self) -> "Settings":
+    def _finalize(self) -> Settings:
         allowed_levels = ", ".join(sorted(_ALLOWED_LOG_LEVELS))
         allowed_formats = ", ".join(sorted(_ALLOWED_LOG_FORMATS))
 

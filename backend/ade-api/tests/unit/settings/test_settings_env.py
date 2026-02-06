@@ -4,9 +4,8 @@ import re
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from ade_api.settings import Settings
+from pydantic import ValidationError
 
 
 def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,6 +59,47 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.public_web_url == "https://api.local"
     assert settings.server_cors_origins == ["http://example.com"]
     assert settings.server_cors_origin_regex == r"^https://.*\.example\.com$"
+
+
+def test_api_processes_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_API_PROCESSES", "3")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.api_processes == 3
+
+
+def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_API_PROXY_HEADERS_ENABLED", "false")
+    monkeypatch.setenv("ADE_API_FORWARDED_ALLOW_IPS", "10.0.0.1,10.0.0.2")
+    monkeypatch.setenv("ADE_API_THREADPOOL_TOKENS", "64")
+    monkeypatch.setenv("ADE_DATABASE_CONNECTION_BUDGET", "120")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.api_proxy_headers_enabled is False
+    assert settings.api_forwarded_allow_ips == "10.0.0.1,10.0.0.2"
+    assert settings.api_threadpool_tokens == 64
+    assert settings.database_connection_budget == 120
+
+
+def test_api_forwarded_allow_ips_must_not_be_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_API_FORWARDED_ALLOW_IPS", "   ")
+
+    with pytest.raises(ValidationError, match="ADE_API_FORWARDED_ALLOW_IPS"):
+        Settings(_env_file=None)
 
 
 def test_cors_accepts_comma_separated_values(monkeypatch: pytest.MonkeyPatch) -> None:
