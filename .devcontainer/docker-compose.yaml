@@ -19,7 +19,14 @@ services:
       ADE_DATA_DIR: /app/data
       ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
     volumes:
+      # Mount the repo into container.
       - ..:/app/src:cached
+      # Bind host ~/.codex into the container
+      - type: bind 
+        source: ${HOME}/.codex
+        target: /home/adeuser/.codex
+        bind:
+          create_host_path: true # create_host_path avoids failures on hosts that do not have ~/.codex yet.
 
   postgres:
     image: postgres:18-bookworm

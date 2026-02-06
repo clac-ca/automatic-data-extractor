@@ -30,7 +30,8 @@
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "openai.chatgpt"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/app/.venv/bin/python"
