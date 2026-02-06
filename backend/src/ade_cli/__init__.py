@@ -1,11 +1,5 @@
-"""Centralized CLI applications for ADE services."""
+"""ADE CLI package."""
 
-from .main import ade_api_app, ade_app, ade_db_app, ade_storage_app, ade_worker_app
+from .main import app
 
-__all__ = [
-    "ade_app",
-    "ade_api_app",
-    "ade_worker_app",
-    "ade_db_app",
-    "ade_storage_app",
-]
+__all__ = ["app"]

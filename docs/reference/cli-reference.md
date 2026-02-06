@@ -21,9 +21,6 @@ cd backend && uv run ade --help
 | Command | What it does |
 | --- | --- |
 | `ade start` | Start API + worker + web |
-| `ade stop` | Stop tracked ADE API/worker/web processes |
-| `ade restart` | Stop tracked services then start in one command |
-| `ade status` | Show tracked ADE process state |
 | `ade dev` | Start API + worker + web in dev mode |
 | `ade test` | Run API, worker, and web tests |
 | `ade reset` | Reset DB/storage/local state (destructive) |
@@ -39,16 +36,6 @@ Key options for `ade start`/`ade dev`:
 - `--migrate` / `--no-migrate`
 - `ADE_API_PROCESSES` applies to `ade start`; `ade dev` keeps API reload mode (single process)
 
-Key options for `ade stop`/`ade restart`:
-
-- `--timeout` (default: 15 seconds)
-- `ade restart` also supports `--services` and `--migrate`/`--no-migrate` like `ade start`
-
-Runtime scope for `ade stop`/`ade restart`:
-
-- Uses state tracking from `.ade/state.json`
-- Stops processes started by `ade` (does not scan/kill unrelated processes)
-
 ## API CLI: `ade-api`
 
 | Command | What it does |
@@ -59,7 +46,6 @@ Runtime scope for `ade stop`/`ade restart`:
 | `ade-api lint` | Run lint/type checks |
 | `ade-api routes` | Print route list |
 | `ade-api types` | Generate OpenAPI + TypeScript types |
-| `ade-api users ...` | User/role management commands |
 
 Common API options:
 
@@ -107,9 +93,7 @@ Common API options:
 
 ```bash
 cd backend && uv run ade dev
-cd backend && uv run ade status
-cd backend && uv run ade stop
-cd backend && uv run ade restart --services worker --no-migrate
+cd backend && uv run ade start --services worker --no-migrate
 cd backend && uv run ade db migrate
 cd backend && uv run ade api types
 ```

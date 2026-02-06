@@ -1,4 +1,4 @@
-"""ade-db: CLI for ADE database migrations."""
+"""`ade-db` command implementations."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import typer
 from alembic import command
 from sqlalchemy import text
 
-from ade_api.settings import get_settings
 from ade_db.engine import build_engine
 from ade_db.migrations_runner import alembic_config, run_migrations
+from ade_db.settings import get_settings
 
 app = typer.Typer(
     add_completion=False,
@@ -71,5 +71,5 @@ def reset(
     run_migrations()
 
 
-if __name__ == "__main__":
-    app()
+__all__ = ["app"]
+

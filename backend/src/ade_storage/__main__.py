@@ -1,6 +1,10 @@
 """Module entrypoint for ``python -m ade_storage`` CLI usage."""
 
-from ade_cli.main import ade_storage_app
+from ade_cli.storage import app as cli_app
+
+
+def main() -> None:
+    cli_app()
 
 if __name__ == "__main__":
-    ade_storage_app()
+    main()

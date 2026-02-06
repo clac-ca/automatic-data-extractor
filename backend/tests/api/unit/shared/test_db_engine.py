@@ -1,6 +1,7 @@
 import pytest
-from ade_db.engine import build_engine
+
 from ade_api.settings import Settings
+from ade_db.engine import build_engine
 
 
 def test_build_engine_allows_managed_identity_passwordless_url() -> None:

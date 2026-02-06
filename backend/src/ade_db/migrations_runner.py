@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from importlib import resources
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
-from ade_api.settings import Settings, get_settings
 
+from .engine import DatabaseSettings as EngineDatabaseSettings
 from .engine import build_engine
+from .settings import get_settings
 
 __all__ = [
     "alembic_config",
@@ -51,7 +53,7 @@ def migration_timeout_seconds(value: Any | None = None) -> float | None:
 
 
 @contextmanager
-def migration_lock(settings: Settings) -> Iterator[None]:
+def migration_lock(settings: EngineDatabaseSettings) -> Iterator[None]:
     engine = build_engine(settings)
     try:
         with engine.connect() as base_conn:
@@ -62,13 +64,16 @@ def migration_lock(settings: Settings) -> Iterator[None]:
                 yield
             finally:
                 with suppress(Exception):
-                    conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY})
+                    conn.execute(
+                        text("SELECT pg_advisory_unlock(:key)"),
+                        {"key": MIGRATION_LOCK_KEY},
+                    )
     finally:
         engine.dispose()
 
 
 @contextmanager
-def alembic_config(settings: Settings | None = None) -> Iterator[Config]:
+def alembic_config(settings: EngineDatabaseSettings | None = None) -> Iterator[Config]:
     alembic_ini_ref, migrations_ref = _alembic_resource_paths()
     with resources.as_file(alembic_ini_ref) as alembic_ini, resources.as_file(
         migrations_ref
@@ -90,7 +95,11 @@ def alembic_config(settings: Settings | None = None) -> Iterator[Config]:
         yield alembic_cfg
 
 
-def run_migrations(settings: Settings | None = None, *, revision: str = "head") -> None:
+def run_migrations(
+    settings: EngineDatabaseSettings | None = None,
+    *,
+    revision: str = "head",
+) -> None:
     resolved = settings or get_settings()
     with migration_lock(resolved):
         with alembic_config(resolved) as alembic_cfg:
@@ -98,7 +107,7 @@ def run_migrations(settings: Settings | None = None, *, revision: str = "head") 
 
 
 async def run_migrations_async(
-    settings: Settings | None = None,
+    settings: EngineDatabaseSettings | None = None,
     *,
     revision: str = "head",
     timeout_seconds: float | None = None,

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from logging.config import fileConfig
+from typing import Any, TypeGuard
 
 from alembic import context
+
+from ade_db.engine import DatabaseSettings as EngineDatabaseSettings
 from ade_db.engine import build_engine
 from ade_db.metadata import Base
-from ade_api.settings import Settings
+from ade_db.settings import Settings
 
 # Alembic Config object
 config = context.config
@@ -26,9 +29,25 @@ _import_models()
 target_metadata = Base.metadata
 
 
-def _build_settings() -> Settings:
+def _is_database_settings(value: Any) -> TypeGuard[EngineDatabaseSettings]:
+    required = (
+        "database_url",
+        "database_echo",
+        "database_auth_mode",
+        "database_sslrootcert",
+        "database_pool_size",
+        "database_max_overflow",
+        "database_pool_timeout",
+        "database_pool_recycle",
+        "database_connect_timeout_seconds",
+        "database_statement_timeout_ms",
+    )
+    return all(hasattr(value, key) for key in required)
+
+
+def _build_settings() -> EngineDatabaseSettings:
     provided = config.attributes.get("settings")
-    if isinstance(provided, Settings):
+    if _is_database_settings(provided):
         return provided
     override_url = config.get_main_option("sqlalchemy.url")
     if override_url:
@@ -37,7 +56,7 @@ def _build_settings() -> Settings:
     return Settings()
 
 
-def _normalized_url(settings: Settings) -> str:
+def _normalized_url(settings: EngineDatabaseSettings) -> str:
     engine = build_engine(settings)
     try:
         return engine.url.render_as_string(hide_password=False)
@@ -73,7 +92,6 @@ def run_migrations_online() -> None:
     settings = _build_settings()
     engine = build_engine(settings)
     try:
-        url = engine.url.render_as_string(hide_password=False)
         with engine.connect() as connection:
             context.configure(
                 connection=connection,

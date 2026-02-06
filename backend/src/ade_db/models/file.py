@@ -25,7 +25,6 @@ from ade_db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from .user import User
     from .workspace import Workspace
-    from .run import Run
 
 
 def _enum_values(enum_cls: type[Enum]) -> list[str]:

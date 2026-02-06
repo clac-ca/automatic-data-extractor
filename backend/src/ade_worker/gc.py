@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ade_db.engine import build_engine, session_scope
 from .paths import PathManager
-from ade_db.schema import environments, runs
+from ade_db.schema import environments
 from .settings import Settings, get_settings
 
 logger = logging.getLogger("ade_worker.gc")

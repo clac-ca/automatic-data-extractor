@@ -27,8 +27,9 @@ This documentation is written for people who operate ADE in production and contr
 
 1. [Run Local Dev Loop](how-to/run-local-dev-loop.md)
 2. [CLI Reference](reference/cli-reference.md)
-3. [System Architecture](explanation/system-architecture.md)
-4. [Documentation Maintenance](standards/documentation-maintenance.md)
+3. [Backend Service Module Contract](reference/backend-service-module-contract.md)
+4. [System Architecture](explanation/system-architecture.md)
+5. [Documentation Maintenance](standards/documentation-maintenance.md)
 
 ## I Need To
 
@@ -63,6 +64,7 @@ This documentation is written for people who operate ADE in production and contr
   - [Common Failures](troubleshooting/common-failures.md)
 - Reference
   - [CLI Reference](reference/cli-reference.md)
+  - [Backend Service Module Contract](reference/backend-service-module-contract.md)
   - [Environment Variables](reference/environment-variables.md)
   - [API Capability Map](reference/api-capability-map.md)
   - [Defaults Matrix](reference/defaults-matrix.md)
