@@ -5,43 +5,33 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type MouseEventHandler,
-  type ReactNode,
   type ChangeEvent,
 } from "react";
 import clsx from "clsx";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createPortal } from "react-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useNavigate } from "react-router-dom";
 
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
+import { RunExtractionDialog, type RunExtractionSelection } from "./components/RunExtractionDialog";
+import { WorkbenchChrome } from "./components/WorkbenchChrome";
+import { WorkbenchLayoutSync } from "./components/WorkbenchLayoutSync";
 import { WorkbenchSidebar } from "./components/WorkbenchSidebar";
+import { WorkbenchSidebarResizeHandle } from "./components/WorkbenchSidebarResizeHandle";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import type { WorkbenchDataSeed } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
+import { fetchRecentDocuments, type WorkbenchDocumentRow } from "./utils/runDocuments";
+import { decodeFileContent, describeError, formatRelative, formatWorkspaceLabel } from "./utils/workbenchHelpers";
 
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageState } from "@/components/layout";
-import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
-import {
-  ActionsIcon,
-  CloseIcon,
-  ConsoleIcon,
-  GridIcon,
-  MinimizeIcon,
-  RunIcon,
-  SaveIcon,
-  SidebarIcon,
-  SpinnerIcon,
-  WindowMaximizeIcon,
-  WindowRestoreIcon,
-} from "@/components/icons";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@/api/configurations/api";
 import {
@@ -53,25 +43,13 @@ import {
   useReplaceConfigurationMutation,
   useSaveConfigurationFileMutation,
 } from "@/pages/Workspace/hooks/configurations";
-import type { FileReadJson } from "@/types/configurations";
 import { createScopedStorage } from "@/lib/storage";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
 import { isDarkMode, useTheme } from "@/providers/theme";
-import type { WorkbenchConsoleState, WorkbenchPane } from "./state/workbenchSearchParams";
+import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@/api";
-import type { components } from "@/types";
-import { fetchDocumentSheets, type DocumentSheet } from "@/api/documents";
-import { client } from "@/api/client";
 import { useNotifications, type NotificationIntent } from "@/providers/notifications";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -99,15 +77,6 @@ interface ConsolePanelPreferences {
 }
 
 type WorkbenchWindowState = "restored" | "maximized";
-
-type DocumentRow = components["schemas"]["DocumentListRow"];
-type RunLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR";
-const RUN_LOG_LEVEL_OPTIONS: Array<{ value: RunLogLevel; label: string }> = [
-  { value: "DEBUG", label: "Debug" },
-  { value: "INFO", label: "Info" },
-  { value: "WARNING", label: "Warning" },
-  { value: "ERROR", label: "Error" },
-];
 
 interface WorkbenchProps {
   readonly workspaceId: string;
@@ -435,15 +404,12 @@ export function Workbench({
           ? payload.errorMessage.trim()
           : null;
     const errorMessage = failureMessage || payloadErrorMessage || "ADE run failed.";
-    const isCancelled = status === "cancelled";
     const notice =
       status === "succeeded"
         ? "ADE run completed successfully."
-        : isCancelled
-          ? "ADE run cancelled."
-          : errorMessage;
+        : errorMessage;
     const intent: NotificationIntent =
-      status === "succeeded" ? "success" : isCancelled ? "info" : "danger";
+      status === "succeeded" ? "success" : "danger";
     showConsoleBanner(notice, { intent });
 
     setPendingCompletion((current) => (current && current.runId === completedRunId ? null : current));
@@ -837,7 +803,7 @@ export function Workbench({
     if (!ready) {
       return;
     }
-    let document: DocumentRow | null = null;
+    let document: WorkbenchDocumentRow | null = null;
     try {
       const documents = await fetchRecentDocuments(workspaceId);
       document = documents[0] ?? null;
@@ -876,12 +842,7 @@ export function Workbench({
   ]);
 
   const handleRunExtraction = useCallback(
-    async (selection: {
-      documentId: string;
-      documentName: string;
-      sheetNames?: readonly string[];
-      logLevel: RunLogLevel;
-    }) => {
+    async (selection: RunExtractionSelection) => {
       setRunDialogOpen(false);
       if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
         return;
@@ -1170,10 +1131,10 @@ export function Workbench({
   const windowFrameClass = isMaximized
     ? "fixed inset-0 z-[90] flex flex-col bg-background text-foreground"
     : "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground";
-  const workbenchSidebarStyle: CSSProperties = {
+  const workbenchSidebarStyle = {
     "--sidebar-width": `${sidebarWidth}px`,
     "--sidebar-width-icon": "3.5rem",
-  };
+  } as CSSProperties;
   const collapsedConsoleTheme = {
     bar: "border-border bg-card text-foreground",
     hint: "text-muted-foreground",
@@ -1575,644 +1536,4 @@ export function Workbench({
       />
     </div>
   );
-}
-
-function WorkbenchLayoutSync({
-  outputCollapsed,
-  consoleFraction,
-  isMaximized,
-  pane,
-}: {
-  readonly outputCollapsed: boolean;
-  readonly consoleFraction: number | null;
-  readonly isMaximized: boolean;
-  readonly pane: WorkbenchPane;
-}) {
-  const { state, openMobile } = useSidebar();
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new Event("ade:workbench-layout"));
-    });
-  }, [state, openMobile, outputCollapsed, consoleFraction, isMaximized, pane]);
-
-  return null;
-}
-
-interface WorkbenchSidebarResizeHandleProps {
-  readonly width: number;
-  readonly minWidth: number;
-  readonly maxWidth: number;
-  readonly onResize: (width: number) => void;
-}
-
-function WorkbenchSidebarResizeHandle({
-  width,
-  minWidth,
-  maxWidth,
-  onResize,
-}: WorkbenchSidebarResizeHandleProps) {
-  const { isMobile } = useSidebar();
-
-  if (isMobile) {
-    return null;
-  }
-
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sidebar"
-      aria-valuemin={minWidth}
-      aria-valuemax={maxWidth}
-      aria-valuenow={Math.round(width)}
-      className="group relative hidden h-full w-2 cursor-col-resize select-none md:block"
-      onPointerDown={(event) => {
-        const startX = event.clientX;
-        const startWidth = width;
-        trackPointerDrag(event, {
-          cursor: "col-resize",
-          onMove: (moveEvent) => {
-            const delta = moveEvent.clientX - startX;
-            const nextWidth = clamp(startWidth + delta, minWidth, maxWidth);
-            onResize(nextWidth);
-          },
-        });
-      }}
-    >
-      <div className="absolute inset-y-0 left-1/2 w-px bg-border transition-colors group-hover:bg-ring/40" />
-      <span className="sr-only">Resize sidebar</span>
-    </div>
-  );
-}
-
-function WorkbenchChrome({
-  configName,
-  workspaceLabel,
-  validationLabel,
-  canSaveFiles,
-  isSavingFiles,
-  onSaveFile,
-  saveShortcutLabel,
-  onOpenActionsMenu,
-  canRunValidation,
-  isRunningValidation,
-  onRunValidation,
-  canRunExtraction,
-  isRunningExtraction,
-  onRunExtraction,
-  consoleOpen,
-  onToggleConsole,
-  appearance,
-  windowState,
-  onMinimizeWindow,
-  onToggleMaximize,
-  onCloseWindow,
-  actionsBusy = false,
-}: {
-  readonly configName: string;
-  readonly workspaceLabel: string;
-  readonly validationLabel?: string;
-  readonly canSaveFiles: boolean;
-  readonly isSavingFiles: boolean;
-  readonly onSaveFile: () => void;
-  readonly saveShortcutLabel: string;
-  readonly onOpenActionsMenu: (position: { x: number; y: number }) => void;
-  readonly canRunValidation: boolean;
-  readonly isRunningValidation: boolean;
-  readonly onRunValidation: () => void;
-  readonly canRunExtraction: boolean;
-  readonly isRunningExtraction: boolean;
-  readonly onRunExtraction: () => void;
-  readonly consoleOpen: boolean;
-  readonly onToggleConsole: () => void;
-  readonly appearance: "light" | "dark";
-  readonly windowState: WorkbenchWindowState;
-  readonly onMinimizeWindow: () => void;
-  readonly onToggleMaximize: () => void;
-  readonly onCloseWindow: () => void;
-  readonly actionsBusy?: boolean;
-}) {
-  const surfaceClass = "border-border bg-card text-foreground";
-  const metaTextClass = "text-muted-foreground";
-  const saveButtonClass =
-    "bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground";
-  const runButtonClass =
-    "bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground";
-  const isMaximized = windowState === "maximized";
-  const { state, openMobile, isMobile, toggleSidebar } = useSidebar();
-  const explorerVisible = isMobile ? openMobile : state === "expanded";
-  return (
-    <div className={clsx("flex items-center justify-between border-b px-4 py-2", surfaceClass)}>
-      <div className="flex min-w-0 items-center gap-3">
-        <WorkbenchBadgeIcon />
-        <div className="min-w-0 leading-tight">
-          <div className={clsx("text-[10px] font-semibold uppercase tracking-[0.35em]", metaTextClass)}>
-            Config Workbench
-          </div>
-          <div className="truncate text-sm font-semibold" title={configName}>
-            {configName}
-          </div>
-          <div className={clsx("text-[11px]", metaTextClass)} title={workspaceLabel}>
-            Workspace · {workspaceLabel}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        {validationLabel ? <span className={clsx("text-xs", metaTextClass)}>{validationLabel}</span> : null}
-        <button
-          type="button"
-          onClick={onSaveFile}
-          disabled={!canSaveFiles}
-          className={clsx(
-            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-            saveButtonClass,
-          )}
-          title={`Save (${saveShortcutLabel})`}
-        >
-          {isSavingFiles ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <SaveIcon className="h-4 w-4" />}
-          {isSavingFiles ? "Saving…" : "Save"}
-        </button>
-        <button
-          type="button"
-          onClick={onRunValidation}
-          disabled={!canRunValidation}
-          className={clsx(
-            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-            runButtonClass,
-          )}
-        >
-          {isRunningValidation ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
-          {isRunningValidation ? "Running…" : "Run validation"}
-        </button>
-        <button
-          type="button"
-          onClick={onRunExtraction}
-          disabled={!canRunExtraction}
-          className={clsx(
-            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
-            runButtonClass,
-          )}
-          title="Run test run"
-        >
-          {isRunningExtraction ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
-          {isRunningExtraction ? "Running…" : "Test run"}
-        </button>
-        <div className="flex items-center gap-1">
-          <ChromeIconButton
-            ariaLabel={explorerVisible ? "Hide sidebar" : "Show sidebar"}
-            onClick={toggleSidebar}
-            appearance={appearance}
-            active={explorerVisible}
-            icon={<SidebarIcon className={clsx("h-4 w-4", !explorerVisible && "opacity-60")} />}
-          />
-          <ChromeIconButton
-            ariaLabel={consoleOpen ? "Hide console" : "Show console"}
-            onClick={onToggleConsole}
-            appearance={appearance}
-            active={consoleOpen}
-            icon={<ConsoleIcon className="h-3.5 w-3.5" />}
-          />
-        </div>
-        <ChromeIconButton
-          ariaLabel="Configuration actions"
-          onClick={(event) => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            onOpenActionsMenu({ x: rect.right + 8, y: rect.bottom });
-          }}
-          appearance={appearance}
-          disabled={actionsBusy}
-          icon={<ActionsIcon className="h-4 w-4" />}
-        />
-        <div
-          className={clsx(
-            "flex items-center gap-2 border-l pl-3",
-            "border-border/70",
-          )}
-        >
-          <ChromeIconButton
-            ariaLabel="Minimize workbench"
-            onClick={onMinimizeWindow}
-            appearance={appearance}
-            icon={<MinimizeIcon className="h-3.5 w-3.5" />}
-          />
-          <ChromeIconButton
-            ariaLabel={isMaximized ? "Restore workbench" : "Maximize workbench"}
-            onClick={onToggleMaximize}
-            appearance={appearance}
-            active={isMaximized}
-            icon={
-              isMaximized ? <WindowRestoreIcon className="h-3.5 w-3.5" /> : <WindowMaximizeIcon className="h-3.5 w-3.5" />
-            }
-          />
-          <ChromeIconButton
-            ariaLabel="Close workbench"
-            onClick={onCloseWindow}
-            appearance={appearance}
-            icon={<CloseIcon className="h-3.5 w-3.5" />}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface RunExtractionDialogProps {
-  readonly open: boolean;
-  readonly workspaceId: string;
-  readonly onClose: () => void;
-  readonly onRun: (selection: {
-    documentId: string;
-    documentName: string;
-    sheetNames?: readonly string[];
-    logLevel: RunLogLevel;
-  }) => void;
-}
-
-function RunExtractionDialog({
-  open,
-  workspaceId,
-  onClose,
-  onRun,
-}: RunExtractionDialogProps) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const documentsQuery = useQuery<DocumentRow[]>({
-    queryKey: ["builder-documents", workspaceId],
-    queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
-    staleTime: 60_000,
-    enabled: open,
-  });
-  const documents = useMemo(
-    () => documentsQuery.data ?? [],
-    [documentsQuery.data],
-  );
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (!documents.length) {
-      setSelectedDocumentId("");
-      return;
-    }
-    setSelectedDocumentId((current) => {
-      if (current && documents.some((doc) => doc.id === current)) {
-        return current;
-      }
-      return documents[0]?.id ?? "";
-    });
-  }, [documents, open]);
-
-  const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId) ?? null;
-  const sheetQuery = useQuery<DocumentSheet[]>({
-    queryKey: ["builder-document-sheets", workspaceId, selectedDocumentId],
-    queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, selectedDocumentId, signal),
-    enabled: open && Boolean(selectedDocumentId),
-    staleTime: 60_000,
-  });
-  const sheetOptions = useMemo(
-    () => sheetQuery.data ?? [],
-    [sheetQuery.data],
-  );
-  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
-  const [logLevel, setLogLevel] = useState<RunLogLevel>("INFO");
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (!sheetOptions.length) {
-      setSelectedSheets([]);
-      return;
-    }
-    setSelectedSheets((current) =>
-      current.filter((name) => sheetOptions.some((sheet) => sheet.name === name)),
-    );
-  }, [open, sheetOptions]);
-
-  const normalizedSheetSelection = useMemo(
-    () =>
-      Array.from(
-        new Set(selectedSheets.filter((name) => sheetOptions.some((sheet) => sheet.name === name))),
-      ),
-    [selectedSheets, sheetOptions],
-  );
-
-  const toggleWorksheet = useCallback((name: string) => {
-    setSelectedSheets((current) =>
-      current.includes(name) ? current.filter((sheet) => sheet !== name) : [...current, name],
-    );
-  }, []);
-
-  if (!open) {
-    return null;
-  }
-
-  const runDisabled = !selectedDocument || documentsQuery.isLoading || documentsQuery.isError;
-  const sheetsAvailable = sheetOptions.length > 0;
-
-  const content = (
-    <div className="fixed inset-0 z-[var(--app-z-modal)] flex items-center justify-center bg-overlay-strong px-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
-      >
-        <header className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Select a document</h2>
-            <p className="text-sm text-muted-foreground">
-              Choose a workspace document and optional worksheet before running a test.
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </header>
-
-        {documentsQuery.isError ? (
-          <Alert tone="danger">Unable to load documents. Try again later.</Alert>
-        ) : documentsQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading documents…</p>
-        ) : documents.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Upload a document in the workspace to run the extractor.</p>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="builder-run-document-select">
-                Document
-              </label>
-              <Select
-                value={selectedDocumentId || undefined}
-                onValueChange={(value) => setSelectedDocumentId(value)}
-              >
-                <SelectTrigger id="builder-run-document-select" className="w-full">
-                  <SelectValue placeholder="Select a document" />
-                </SelectTrigger>
-                <SelectContent>
-                  {documents.map((document) => (
-                    <SelectItem key={document.id} value={document.id}>
-                      {document.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedDocument ? (
-                <p className="text-xs text-muted-foreground">
-                  Uploaded {formatDocumentTimestamp(selectedDocument.createdAt)} ·{" "}
-                  {(selectedDocument.byteSize ?? 0).toLocaleString()} bytes
-                </p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="builder-run-log-level-select">
-                Log level
-              </label>
-              <Select value={logLevel} onValueChange={(value) => setLogLevel(value as RunLogLevel)}>
-                <SelectTrigger id="builder-run-log-level-select" className="w-full">
-                  <SelectValue placeholder="Select a log level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {RUN_LOG_LEVEL_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Controls the engine runtime verbosity for this run.</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Worksheet</p>
-              {sheetQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading worksheets…</p>
-              ) : sheetQuery.isError ? (
-                <Alert tone="warning">
-                  <div className="space-y-2">
-                    <p className="text-sm text-foreground">
-                      Worksheet metadata is temporarily unavailable. The run will process the entire file unless you retry and
-                      pick specific sheets.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => sheetQuery.refetch()}
-                        disabled={sheetQuery.isFetching}
-                      >
-                        Retry loading
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedSheets([])}>
-                        Use all worksheets
-                      </Button>
-                    </div>
-                  </div>
-                </Alert>
-              ) : sheetsAvailable ? (
-                <div className="space-y-3 rounded-lg border border-border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-foreground">Worksheets</p>
-                      <p className="text-xs text-muted-foreground">
-                        {normalizedSheetSelection.length === 0
-                          ? "All worksheets will be processed by default. Select specific sheets to narrow the run."
-                          : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
-                              normalizedSheetSelection.length === 1 ? "" : "s"
-                            } selected.`}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedSheets([])}>
-                      Use all worksheets
-                    </Button>
-                  </div>
-
-                  <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-border p-2">
-                    {sheetOptions.map((sheet) => {
-                      const checked = normalizedSheetSelection.includes(sheet.name);
-                      return (
-                        <label
-                          key={`${sheet.index}-${sheet.name}`}
-                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-foreground hover:bg-muted"
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-                            checked={checked}
-                            onChange={() => toggleWorksheet(sheet.name)}
-                          />
-                          <span className="flex-1 truncate">
-                            {sheet.name}
-                            {sheet.is_active ? " (active)" : ""}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">This file will be ingested directly.</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <footer className="mt-6 flex items-center justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              if (!selectedDocument) {
-                return;
-              }
-              onRun({
-                documentId: selectedDocument.id,
-                documentName: selectedDocument.name,
-                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
-                logLevel,
-              });
-            }}
-            disabled={runDisabled}
-          >
-            Start test run
-          </Button>
-        </footer>
-      </div>
-    </div>
-  );
-
-  return typeof document === "undefined" ? null : createPortal(content, document.body);
-}
-
-async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRow[]> {
-  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/documents", {
-    params: {
-      path: { workspaceId },
-      query: { sort: '[{"id":"createdAt","desc":true}]', limit: 50 },
-    },
-    signal,
-  });
-  return data?.items ?? [];
-}
-
-function formatDocumentTimestamp(value: string | null | undefined): string {
-  if (!value) {
-    return "unknown";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
-}
-
-function ChromeIconButton({
-  ariaLabel,
-  onClick,
-  icon,
-  appearance: _appearance,
-  active = false,
-  disabled = false,
-}: {
-  readonly ariaLabel: string;
-  readonly onClick: MouseEventHandler<HTMLButtonElement>;
-  readonly icon: ReactNode;
-  readonly appearance: "light" | "dark";
-  readonly active?: boolean;
-  readonly disabled?: boolean;
-}) {
-  const baseClass =
-    "text-muted-foreground hover:text-foreground hover:bg-muted hover:border-ring/40 focus-visible:ring-ring/40";
-  const activeClass = "text-foreground border-ring bg-muted";
-  return (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      onClick={onClick}
-      disabled={disabled}
-      className={clsx(
-        "flex h-7 w-7 items-center justify-center rounded-[4px] border border-transparent text-sm transition focus-visible:outline-none focus-visible:ring-2",
-        baseClass,
-        active && activeClass,
-        disabled && "cursor-not-allowed opacity-50",
-      )}
-      title={ariaLabel}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function WorkbenchBadgeIcon() {
-  return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md">
-      <GridIcon className="h-4 w-4" />
-    </span>
-  );
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return "Operation cancelled.";
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
-function formatRelative(timestamp?: string): string {
-  if (!timestamp) {
-    return "";
-  }
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return timestamp;
-  }
-  return date.toLocaleString();
-}
-
-function formatWorkspaceLabel(workspaceId: string): string {
-  if (workspaceId.length <= 12) {
-    return workspaceId;
-  }
-  return `${workspaceId.slice(0, 6)}…${workspaceId.slice(-4)}`;
-}
-
-function decodeFileContent(payload: FileReadJson): string {
-  if (payload.encoding === "base64") {
-    // Preserve UTF-8 characters when decoding base64 payloads from the API.
-    const buffer = (globalThis as { Buffer?: { from: (data: string, encoding: string) => { toString: (encoding: string) => string } } }).Buffer;
-    if (buffer) {
-      return buffer.from(payload.content, "base64").toString("utf-8");
-    }
-    if (typeof atob === "function") {
-      try {
-        const binary = atob(payload.content);
-        const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index += 1) {
-          bytes[index] = binary.charCodeAt(index);
-        }
-        if (typeof TextDecoder !== "undefined") {
-          return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-        }
-        let fallback = "";
-        for (let index = 0; index < bytes.length; index += 1) {
-          fallback += String.fromCharCode(bytes[index]);
-        }
-        return fallback;
-      } catch {
-        // Swallow decode errors and fall through to the raw content.
-      }
-    }
-  }
-  return payload.content;
 }

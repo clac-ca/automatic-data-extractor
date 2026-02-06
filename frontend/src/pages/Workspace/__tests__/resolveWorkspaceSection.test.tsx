@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 
-import { resolveWorkspaceSection } from "../index";
+import { resolveWorkspaceSection } from "../sectionResolver";
 
 vi.mock("@/pages/Workspace/sections/Documents", () => ({
   default: () => <div>documents</div>,

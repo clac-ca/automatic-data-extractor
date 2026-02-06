@@ -388,15 +388,12 @@ function EmptyState({ title, description }: { readonly title: string; readonly d
 }
 
 function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] }) {
-  const cancelled = isCancelledStatus(status);
   const tone =
     status === "succeeded"
       ? "bg-success"
       : status === "running" || status === "queued"
         ? "bg-info/60"
-        : cancelled
-          ? "bg-muted-foreground"
-          : "bg-destructive";
+        : "bg-destructive";
 
   return <span className={clsx("inline-block h-2.5 w-2.5 rounded-full", tone)} aria-hidden />;
 }
@@ -425,10 +422,6 @@ function consoleLevelLabel(level: WorkbenchConsoleLine["level"]) {
     default:
       return "INFO";
   }
-}
-
-function isCancelledStatus(status?: WorkbenchRunSummary["status"]) {
-  return status === "cancelled";
 }
 
 function originLabel(origin?: WorkbenchConsoleLine["origin"]) {

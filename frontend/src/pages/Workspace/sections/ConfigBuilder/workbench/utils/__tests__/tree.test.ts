@@ -20,7 +20,7 @@ function createListing(): FileListing {
     summary: { files: 2, directories: 2 },
     limits: { code_max_bytes: 1024, asset_max_bytes: 2048 },
     count: 4,
-    next_token: null,
+    nextCursor: null,
     entries: [
       {
         path: "ade_config",

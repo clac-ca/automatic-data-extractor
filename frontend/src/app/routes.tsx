@@ -1,16 +1,29 @@
+import { Suspense, lazy, type ReactElement } from "react";
 import type { RouteObject } from "react-router-dom";
 
+import { LoadingState } from "@/components/layout";
 import { AppShell, ProtectedLayout } from "@/app/layouts/AppShell";
 import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
 import { PublicLayout } from "@/app/layouts/PublicLayout";
-import HomeScreen from "@/pages/Home";
-import LoginScreen from "@/pages/Login";
-import SetupScreen from "@/pages/Setup";
-import WorkspacesScreen from "@/pages/Workspaces";
-import WorkspaceCreateScreen from "@/pages/Workspaces/New";
-import WorkspaceScreen from "@/pages/Workspace";
-import LogoutScreen from "@/pages/Logout";
-import NotFoundScreen from "@/pages/NotFound";
+
+const HomeScreen = lazy(() => import("@/pages/Home"));
+const LoginScreen = lazy(() => import("@/pages/Login"));
+const LogoutScreen = lazy(() => import("@/pages/Logout"));
+const NotFoundScreen = lazy(() => import("@/pages/NotFound"));
+const SetupScreen = lazy(() => import("@/pages/Setup"));
+const WorkspaceScreen = lazy(() => import("@/pages/Workspace"));
+const WorkspaceCreateScreen = lazy(() => import("@/pages/Workspaces/New"));
+const WorkspacesScreen = lazy(() => import("@/pages/Workspaces"));
+
+function withRouteSuspense(element: ReactElement) {
+  return (
+    <Suspense
+      fallback={<LoadingState title="Loading page" className="min-h-full bg-background" />}
+    >
+      {element}
+    </Suspense>
+  );
+}
 
 export const appRoutes: RouteObject[] = [
   {
@@ -19,9 +32,9 @@ export const appRoutes: RouteObject[] = [
       {
         element: <PublicLayout />,
         children: [
-          { path: "login", element: <LoginScreen /> },
-          { path: "logout", element: <LogoutScreen /> },
-          { path: "setup", element: <SetupScreen /> },
+          { path: "login", element: withRouteSuspense(<LoginScreen />) },
+          { path: "logout", element: withRouteSuspense(<LogoutScreen />) },
+          { path: "setup", element: withRouteSuspense(<SetupScreen />) },
         ],
       },
       {
@@ -30,13 +43,13 @@ export const appRoutes: RouteObject[] = [
           {
             element: <AuthenticatedLayout />,
             children: [
-              { index: true, element: <HomeScreen /> },
-              { path: "workspaces", element: <WorkspacesScreen /> },
-              { path: "workspaces/new", element: <WorkspaceCreateScreen /> },
-              { path: "*", element: <NotFoundScreen /> },
+              { index: true, element: withRouteSuspense(<HomeScreen />) },
+              { path: "workspaces", element: withRouteSuspense(<WorkspacesScreen />) },
+              { path: "workspaces/new", element: withRouteSuspense(<WorkspaceCreateScreen />) },
+              { path: "*", element: withRouteSuspense(<NotFoundScreen />) },
             ],
           },
-          { path: "workspaces/:workspaceId/*", element: <WorkspaceScreen /> },
+          { path: "workspaces/:workspaceId/*", element: withRouteSuspense(<WorkspaceScreen />) },
         ],
       },
     ],

@@ -43,14 +43,14 @@ describe("App routes", () => {
   ];
 
   for (const { path, testId } of cases) {
-    it(`renders ${path}`, () => {
+    it(`renders ${path}`, async () => {
       renderAt(path);
-      expect(screen.getByTestId(testId)).toBeInTheDocument();
+      expect(await screen.findByTestId(testId)).toBeInTheDocument();
     });
   }
 
-  it("falls back to the not found screen", () => {
+  it("falls back to the not found screen", async () => {
     renderAt("/missing/path");
-    expect(screen.getByTestId("not-found-screen")).toBeInTheDocument();
+    expect(await screen.findByTestId("not-found-screen")).toBeInTheDocument();
   });
 });

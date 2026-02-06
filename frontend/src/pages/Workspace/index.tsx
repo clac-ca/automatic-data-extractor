@@ -1,36 +1,18 @@
-import { useEffect, useMemo, type ReactElement } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { LoadingState, PageState } from "@/components/layout";
 import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS } from "@/hooks/workspaces";
 import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
-import type { WorkspaceProfile } from "@/types/workspaces";
-import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
+import { WorkspaceLayout } from "@/pages/Workspace/WorkspaceLayout";
 import { WorkspaceDocumentsStreamProvider } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { WorkspacePresenceProvider, useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
+import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
 import { WorkbenchWindowProvider } from "@/pages/Workspace/context/WorkbenchWindowContext";
-import { PageState } from "@/components/layout";
-import { WorkspaceLayout } from "@/pages/Workspace/WorkspaceLayout";
-
-import DocumentsListPage, { DocumentsDetailPage } from "@/pages/Workspace/sections/Documents";
-import RunsScreen from "@/pages/Workspace/sections/Runs";
-import ConfigBuilderScreen from "@/pages/Workspace/sections/ConfigBuilder";
-import ConfigurationDetailScreen from "@/pages/Workspace/sections/ConfigBuilder/detail";
-import ConfigBuilderWorkbenchScreen from "@/pages/Workspace/sections/ConfigBuilder/workbench";
-import WorkspaceSettingsScreen from "@/pages/Workspace/sections/Settings";
-
-const DEFAULT_WORKSPACE_SECTION_PATH = "documents";
-
-type WorkspaceSectionRender =
-  | { readonly kind: "redirect"; readonly to: string }
-  | {
-      readonly kind: "content";
-      readonly key: string;
-      readonly element: ReactElement;
-      readonly fullHeight?: boolean;
-      readonly fullWidth?: boolean;
-    };
+import { DEFAULT_WORKSPACE_SECTION_PATH, resolveWorkspaceSection } from "@/pages/Workspace/sectionResolver";
+import type { WorkspaceProfile } from "@/types/workspaces";
 
 export default function WorkspaceScreen() {
   return <WorkspaceContent />;
@@ -91,13 +73,8 @@ function WorkspaceContent() {
     }
   }, [workspace]);
 
-
   if (workspacesQuery.isLoading) {
-    return (
-      <div className="flex min-h-full items-center justify-center bg-background px-6">
-        <PageState title="Loading workspace" variant="loading" />
-      </div>
-    );
+    return <LoadingState title="Loading workspace" className="min-h-full bg-background" />;
   }
 
   if (workspacesQuery.isError) {
@@ -170,7 +147,13 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     return null;
   }
 
-  return <WorkspaceLayout>{section.element}</WorkspaceLayout>;
+  return (
+    <WorkspaceLayout>
+      <Suspense fallback={<LoadingState title="Loading section" className="h-full min-h-0 flex-1 py-8" />}>
+        {section.element}
+      </Suspense>
+    </WorkspaceLayout>
+  );
 }
 
 function extractWorkspaceIdentifier(pathname: string) {
@@ -207,85 +190,4 @@ function buildCanonicalPath(pathname: string, search: string, resolvedId: string
   const trailing = pathname.startsWith(base) ? pathname.slice(base.length) : "";
   const normalized = trailing && trailing !== "/" ? trailing : `/${DEFAULT_WORKSPACE_SECTION_PATH}`;
   return `/workspaces/${resolvedId}${normalized}${search}`;
-}
-
-export function resolveWorkspaceSection(
-  workspaceId: string,
-  segments: string[],
-  search: string,
-  hash: string,
-): WorkspaceSectionRender | null {
-  const suffix = `${search}${hash}`;
-
-  if (segments.length === 0) {
-    return {
-      kind: "redirect",
-      to: `/workspaces/${workspaceId}/${DEFAULT_WORKSPACE_SECTION_PATH}${suffix}`,
-    };
-  }
-
-  const [first, second, third] = segments;
-  switch (first) {
-    case DEFAULT_WORKSPACE_SECTION_PATH:
-    {
-      if (second) {
-        const documentId = decodeURIComponent(second);
-        return {
-          kind: "content",
-          key: `documents:${documentId}`,
-          element: <DocumentsDetailPage documentId={documentId} />,
-          fullWidth: true,
-          fullHeight: true,
-        };
-      }
-      return {
-        kind: "content",
-        key: "documents",
-        element: <DocumentsListPage />,
-        fullWidth: true,
-        fullHeight: true,
-      };
-    }
-    case "runs":
-      return { kind: "content", key: "runs", element: <RunsScreen />, fullWidth: true };
-    case "config-builder": {
-      if (!second) {
-        return { kind: "content", key: "config-builder", element: <ConfigBuilderScreen /> };
-      }
-      if (third === "editor") {
-        return {
-          kind: "content",
-          key: `config-builder:${second}:editor`,
-          element: <ConfigBuilderWorkbenchScreenWithParams configId={decodeURIComponent(second)} />,
-          fullHeight: true,
-        };
-      }
-      return {
-        kind: "content",
-        key: `config-builder:${second}`,
-        element: <ConfigurationDetailScreen params={{ configId: decodeURIComponent(second) }} />,
-      };
-    }
-    case "settings": {
-      const remaining = segments.slice(1);
-      const normalized = remaining.length > 0 ? remaining : [];
-      const key = `settings:${normalized.length > 0 ? normalized.join(":") : "general"}`;
-      return { kind: "content", key, element: <WorkspaceSettingsScreen sectionSegments={normalized} /> };
-    }
-    default:
-      return {
-        kind: "content",
-        key: `not-found:${segments.join("/")}`,
-        element: (
-          <PageState
-            title="Section not found"
-            description="The requested workspace section could not be located."
-            variant="error"
-          />
-        ),
-      };
-  }
-}
-function ConfigBuilderWorkbenchScreenWithParams({ configId }: { readonly configId: string }) {
-  return <ConfigBuilderWorkbenchScreen params={{ configId }} />;
 }

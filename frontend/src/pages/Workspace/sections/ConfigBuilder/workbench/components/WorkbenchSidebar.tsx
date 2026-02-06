@@ -138,7 +138,6 @@ export function WorkbenchSidebar({
     );
 
     const buttonProps = {
-      type: "button" as const,
       onClick: () => handleToggleFolder(node.id),
       "aria-expanded": hasChildren ? isExpanded : undefined,
       "aria-controls": hasChildren ? listId : undefined,
@@ -149,7 +148,7 @@ export function WorkbenchSidebar({
       return (
         <SidebarMenuSubItem key={node.id}>
           <SidebarMenuSubButton asChild>
-            <button {...buttonProps}>{content}</button>
+            <button type="button" {...buttonProps}>{content}</button>
           </SidebarMenuSubButton>
           {hasChildren && isExpanded ? <SidebarMenuSub id={listId}>{renderChildren(children)}</SidebarMenuSub> : null}
         </SidebarMenuSubItem>

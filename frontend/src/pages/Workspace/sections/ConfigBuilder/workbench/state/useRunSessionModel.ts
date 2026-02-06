@@ -33,12 +33,12 @@ interface UseRunSessionModelOptions {
 }
 
 function isTerminal(status: JobStreamStatus) {
-  return status === "succeeded" || status === "failed" || status === "cancelled";
+  return status === "succeeded" || status === "failed";
 }
 
 function normalizeRunStatus(value?: string | null): RunStatus {
   const normalized = (value ?? "").toLowerCase();
-  if (normalized === "succeeded" || normalized === "failed" || normalized === "cancelled") {
+  if (normalized === "succeeded" || normalized === "failed") {
     return normalized;
   }
   if (normalized === "success") return "succeeded";
