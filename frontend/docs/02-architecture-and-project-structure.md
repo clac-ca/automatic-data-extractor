@@ -30,10 +30,10 @@ See `../CONTRIBUTING.md` for the quick version; the rest of this doc unpacks whe
 
 ## 2. Top‑level layout
 
-All relevant code lives under `frontend/ade-web/src`:
+All relevant code lives under `frontend/src`:
 
 ```text
-frontend/ade-web/
+frontend/
   src/
     main.tsx          # Vite entry point
     app/              # App shell: routes, router, layouts

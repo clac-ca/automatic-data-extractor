@@ -43,7 +43,7 @@ Browser support is strong across modern browsers (see caniuse). :contentReferenc
 ### Example: apply to each item
 
 ```css
-/* frontend/ade-web/src/styles/search.css (or wherever your global styles live) */
+/* frontend/src/styles/search.css (or wherever your global styles live) */
 
 @supports (content-visibility: auto) {
   /* Tune selector to your SearchItem markup. */

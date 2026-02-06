@@ -281,7 +281,7 @@ See: [`docs/05-auth-session-rbac-and-safe-mode.md`](./docs/05-auth-session-rbac-
 
 ADE Web is a React + TypeScript SPA built with Vite and React Query.
 
-High-level layout (under `frontend/ade-web/src`):
+High-level layout (under `frontend/src`):
 
 - `main.tsx` – Vite entry point.
 - `app/` – application shell (App.tsx, providers, navigation).
@@ -334,7 +334,7 @@ See: [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-ba
 
 ## 9. Reference: docs index
 
-The numbered docs under `frontend/ade-web/docs` are the **source of truth** for ADE Web’s behaviour:
+The numbered docs under `frontend/docs` are the **source of truth** for ADE Web’s behaviour:
 
 1. [`01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)  
    Domain concepts and naming contract (Workspace, Document, Run, Configuration, Environment, Artifact, etc.).

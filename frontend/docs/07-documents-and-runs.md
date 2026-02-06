@@ -498,7 +498,7 @@ Data hooks:
   * Uses standard SSE `event:` dispatch where each SSE message contains a JSON `EventRecord`.
   * Stream-level context is emitted once as `event: job.meta` (an `EventRecord` with identifiers in `data`).
   * Completion is indicated by `event: run.complete` (terminal worker event with status/exit info). Subprocess telemetry uses `run.engine.*`.
-  * For schema details, see `frontend/ade-web/docs/04-data-layer-and-backend-contracts.md` §6.
+  * For schema details, see `frontend/docs/04-data-layer-and-backend-contracts.md` §6.
 
 If a backend also exposes workspace‑scoped detail endpoints, we may add a `useWorkspaceRunQuery(workspaceId, runId)`; the global `useRunQuery(runId)` remains the canonical entry point.
 

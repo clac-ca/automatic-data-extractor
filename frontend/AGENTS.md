@@ -1,7 +1,7 @@
 ## Frontend Structure (React Router v7, Standard Vite Layout)
 
 ```
-frontend/ade-web/
+frontend/
 ├─ package.json
 ├─ package-lock.json
 ├─ vite.config.ts
@@ -39,7 +39,7 @@ frontend/ade-web/
 
 ```
 npm run dev        # Vite dev server
-npm run build      # Vite build output in frontend/ade-web/dist (serve via web server or reverse proxy)
+npm run build      # Vite build output in frontend/dist (serve via web server or reverse proxy)
 npm run test       # Vitest test suite
 npm run lint       # ESLint (frontend)
 ade api types      # regenerate TS types from the FastAPI schema
@@ -54,7 +54,7 @@ ade api types      # regenerate TS types from the FastAPI schema
 
 ---
 
-## Agent Guidelines (frontend/ade-web)
+## Agent Guidelines (frontend)
 
 This app is a **Vite + React + TypeScript SPA** built to be boringly predictable. Follow these guidelines to keep it easy to understand and extend.
 

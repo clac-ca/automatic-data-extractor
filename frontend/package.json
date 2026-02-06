@@ -1,8 +1,11 @@
 {
   "name": "ade-web",
-  "version": "1.6.4",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "vite",
     "build": "node scripts/write-version.mjs && vite build",
