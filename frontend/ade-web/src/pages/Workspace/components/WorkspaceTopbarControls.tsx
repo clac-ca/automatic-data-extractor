@@ -5,6 +5,7 @@ import { Moon, Palette, Sun } from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { BUILTIN_THEMES, useTheme } from "@/providers/theme";
+import { openReleaseNotes } from "@/config/release-notes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -120,6 +121,12 @@ function WorkspaceProfileMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={() => openReleaseNotes()} className="gap-2">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
+              R
+            </span>
+            <span>Release notes</span>
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenVersions} className="gap-2">
             <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
               i

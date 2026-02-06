@@ -21,7 +21,7 @@ def read_versions() -> VersionsResponse:
 
     settings = get_settings()
     return VersionsResponse(
-        backend=installed_version("automatic-data-extractor", "automatic_data_extractor", "ade"),
+        backend=settings.app_version,
         engine=installed_version("ade-engine", "ade_engine"),
         web=read_web_version(settings.web_version_file),
     )

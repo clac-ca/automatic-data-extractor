@@ -37,6 +37,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve app metadata
+        id: app-meta
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            app_version="${GITHUB_REF_NAME#v}"
+          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            app_version="main"
+          elif [ "${GITHUB_REF}" = "refs/heads/development" ]; then
+            app_version="development"
+          else
+            app_version="dev"
+          fi
+          echo "value=$app_version" >> "$GITHUB_OUTPUT"
+          echo "sha=$short_sha" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         if: github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v3
@@ -83,7 +99,8 @@ jobs:
             type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
             # Short SHA (e.g. sha-abc1234)
             type=sha,format=short,prefix=sha-
-            # Release tags from git tag vX.Y.Z -> docker tags 1.2.3, 1.2, 1 (+ latest auto)
+            # Release tags from git tag vX.Y.Z
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -93,6 +110,9 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          build-args: |
+            APP_VERSION=${{ steps.app-meta.outputs.value }}
+            APP_COMMIT_SHA=${{ steps.app-meta.outputs.sha }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

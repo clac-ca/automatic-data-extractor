@@ -1,17 +1,15 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = fileURLToPath(new URL(".", import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
-const packageJsonPath = path.join(projectRoot, "package.json");
 const publicDir = path.join(projectRoot, "public");
 const versionFile = path.join(publicDir, "version.json");
 
 async function main() {
-  const raw = await readFile(packageJsonPath, "utf-8");
-  const pkg = JSON.parse(raw);
-  const version = typeof pkg.version === "string" && pkg.version.trim() ? pkg.version.trim() : "unknown";
+  const envVersion = typeof process.env.ADE_APP_VERSION === "string" ? process.env.ADE_APP_VERSION.trim() : "";
+  const version = envVersion || "unknown";
 
   await mkdir(publicDir, { recursive: true });
   const payload = JSON.stringify({ version }, null, 2);

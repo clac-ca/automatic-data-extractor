@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AppearanceMenu } from "@/app/layouts/components/topbar/actions/AppearanceMenu";
 import { AboutVersionsModal } from "@/app/layouts/components/topbar/actions/AboutVersionsModal";
 import { ProfileDropdown } from "@/app/layouts/components/topbar/actions/ProfileDropdown";
+import { openReleaseNotes } from "@/config/release-notes";
 import { useSession } from "@/providers/auth/SessionContext";
 
 export function TopbarControls() {
@@ -21,6 +22,12 @@ export function TopbarControls() {
           email={email}
           tone="header"
           actions={[
+            {
+              id: "release-notes",
+              label: "Release notes",
+              description: "GitHub releases + changelog",
+              onSelect: openReleaseNotes,
+            },
             {
               id: "about-versions",
               label: "About / Versions",

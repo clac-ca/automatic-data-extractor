@@ -15,6 +15,8 @@
 ARG PYTHON_IMAGE=python:3.14.2-slim-bookworm
 ARG NODE_IMAGE=node:22-bookworm-slim
 ARG UV_VERSION=0.9.28
+ARG APP_VERSION=unknown
+ARG APP_COMMIT_SHA=unknown
 
 # ------------------------------------------------------------
 # Shared Python defaults.
@@ -61,13 +63,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ------------------------------------------------------------
 FROM ${NODE_IMAGE} AS web-builder
 WORKDIR /build/web
+ARG APP_VERSION
 
 COPY frontend/ade-web/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
 
 COPY frontend/ade-web/ ./
-RUN npm run build
+RUN ADE_APP_VERSION="$APP_VERSION" npm run build
 
 # ------------------------------------------------------------
 # runtime-base: runtime-only OS deps, nginx config, static assets.
@@ -78,6 +81,7 @@ WORKDIR /
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       gettext-base \
+      git \
       gosu \
       libpq5 \
       nginx \
@@ -114,9 +118,13 @@ RUN mkdir -p \
 # production: shipped image.
 # ------------------------------------------------------------
 FROM runtime-base AS production
+ARG APP_VERSION
+ARG APP_COMMIT_SHA
 COPY --from=backend-builder /opt/venv /opt/venv
 
 ENV VIRTUAL_ENV=/opt/venv \
+    ADE_APP_VERSION=${APP_VERSION} \
+    ADE_APP_COMMIT_SHA=${APP_COMMIT_SHA} \
     PATH="/opt/venv/bin:$PATH"
 
 EXPOSE 8000

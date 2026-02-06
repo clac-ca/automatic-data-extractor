@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,9 +8,8 @@ import react from "@vitejs/plugin-react";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const resolveSrc = (relativePath: string) => path.resolve(projectRoot, "src", relativePath);
-const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url));
-const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
-const appVersion = packageJson.version ?? "unknown";
+const envAppVersion = typeof process.env.ADE_APP_VERSION === "string" ? process.env.ADE_APP_VERSION.trim() : "";
+const appVersion = envAppVersion || "unknown";
 
 const internalApiRaw = process.env.ADE_INTERNAL_API_URL ?? "http://localhost:8001";
 const devPort = 8000;
