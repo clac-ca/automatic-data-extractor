@@ -34,6 +34,7 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
+from ade_api.features.documents.upload_metadata import parse_upload_run_options
 from ade_api.features.workspaces.repository import WorkspacesRepository
 from ade_api.features.workspaces.settings import read_processing_paused
 from ade_storage import StorageAdapter
@@ -148,8 +149,6 @@ class RunsService:
         storage: ConfigStorage | None = None,
         blob_storage: StorageAdapter,
     ) -> None:
-        from ade_api.features.documents.service import DocumentsService
-
         self._session = session
         self._settings = settings
         self._configs = ConfigurationsRepository(session)
@@ -160,11 +159,6 @@ class RunsService:
             settings=settings,
         )
         self._blob_storage = blob_storage
-        self._documents_service = DocumentsService(
-            session=session,
-            settings=settings,
-            storage=blob_storage,
-        )
 
         default_max = Run.__table__.c.max_attempts.default
         self._run_max_attempts = int(default_max.arg) if default_max is not None else 3
@@ -503,7 +497,7 @@ class RunsService:
             sheet_names_by_document_id: dict[UUID, list[str]] = {}
             active_sheet_only_by_document_id: dict[UUID, bool] = {}
             for document in documents:
-                run_options = self._documents_service.read_upload_run_options(document.attributes)
+                run_options = parse_upload_run_options(document.attributes)
                 if run_options and run_options.input_sheet_names is not None:
                     sheet_names_by_document_id[document.id] = list(run_options.input_sheet_names)
                 if run_options and run_options.active_sheet_only:

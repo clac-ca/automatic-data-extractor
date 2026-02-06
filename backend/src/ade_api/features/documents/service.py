@@ -17,7 +17,6 @@ from uuid import UUID
 
 import openpyxl
 from fastapi import UploadFile
-from pydantic import ValidationError
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
@@ -89,7 +88,6 @@ from .schemas import (
     DocumentRunSummary,
     DocumentSheet,
     DocumentUpdateRequest,
-    DocumentUploadRunOptions,
     TagCatalogItem,
     TagCatalogPage,
 )
@@ -101,8 +99,6 @@ from .tags import (
 )
 
 logger = logging.getLogger(__name__)
-
-UPLOAD_RUN_OPTIONS_KEY = "__ade_run_options"
 
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
@@ -161,30 +157,6 @@ class DocumentsService:
         self._settings = settings
         self._storage = storage
         self._repository = DocumentsRepository(session)
-
-    @staticmethod
-    def build_upload_metadata(
-        metadata: Mapping[str, Any] | None,
-        run_options: DocumentUploadRunOptions | None,
-    ) -> dict[str, Any]:
-        payload = dict(metadata or {})
-        if run_options is not None:
-            payload[UPLOAD_RUN_OPTIONS_KEY] = run_options.model_dump(exclude_none=True)
-        return payload
-
-    @staticmethod
-    def read_upload_run_options(
-        metadata: Mapping[str, Any] | None,
-    ) -> DocumentUploadRunOptions | None:
-        if not metadata:
-            return None
-        raw = metadata.get(UPLOAD_RUN_OPTIONS_KEY)
-        if raw is None:
-            return None
-        try:
-            return DocumentUploadRunOptions.model_validate(raw)
-        except ValidationError:
-            return None
 
     def plan_upload(
         self,
@@ -279,7 +251,6 @@ class DocumentsService:
         )
 
         metadata_payload = dict(metadata or {})
-        now = datetime.now(tz=UTC)
 
         owns_stage = staged is None
         staged_upload = staged or self.stage_upload(upload=upload, plan=plan)
@@ -1086,7 +1057,6 @@ class DocumentsService:
             workspace_id=workspace_id,
             document_ids=ordered_ids,
         )
-        document_by_id = {doc.id: doc for doc in documents}
 
         now = datetime.now(tz=UTC)
         for document in documents:

@@ -474,7 +474,12 @@ def _parse_cursor_values(
     for field in resolved.fields:
         segment = token.values[index : index + field.spec.arity]
         index += field.spec.arity
-        parsed_values = list(field.spec.parse(segment))
+        try:
+            parsed_values = list(field.spec.parse(segment))
+        except HTTPException:
+            raise
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="Invalid cursor value.") from exc
         if len(parsed_values) != field.spec.arity:
             raise HTTPException(status_code=422, detail="Cursor values are invalid.")
         parsed.extend(parsed_values)
@@ -541,6 +546,80 @@ def paginate_query_cursor(
     return CursorPage(items=items, meta=meta, facets=None)
 
 
+def _sequence_sort_key(
+    item: T,
+    *,
+    resolved_sort: ResolvedCursorSort[T],
+) -> tuple[Any, ...]:
+    values: list[Any] = []
+    for field in resolved_sort.fields:
+        values.extend(field.spec.key(item))
+    return tuple(values)
+
+
+def _sequence_sort_directions(
+    *,
+    resolved_sort: ResolvedCursorSort[T],
+) -> tuple[str, ...]:
+    directions: list[str] = []
+    for field in resolved_sort.fields:
+        directions.extend(field.directions)
+    return tuple(directions)
+
+
+def _compare_sequence_keys(
+    lhs: tuple[Any, ...],
+    rhs: tuple[Any, ...],
+    directions: Sequence[str],
+) -> int:
+    for (l_val, r_val, direction) in zip(lhs, rhs, directions, strict=False):
+        if l_val == r_val:
+            continue
+        if l_val is None and r_val is None:
+            continue
+        if l_val is None:
+            return 1
+        if r_val is None:
+            return -1
+        if direction == "desc":
+            return -1 if l_val > r_val else 1
+        return -1 if l_val < r_val else 1
+    return 0
+
+
+def _build_sequence_meta(
+    *,
+    limit: int,
+    has_more: bool,
+    next_cursor: str | None,
+    include_total: bool,
+    total: int,
+    changes_cursor: str | None,
+) -> CursorMeta:
+    return CursorMeta(
+        limit=limit,
+        has_more=has_more,
+        next_cursor=next_cursor,
+        total_included=include_total,
+        total_count=total if include_total else None,
+        changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+    )
+
+
+def _resolve_sequence_start_index(
+    *,
+    ordered_items: Sequence[T],
+    cursor_key: tuple[Any, ...],
+    resolved_sort: ResolvedCursorSort[T],
+    directions: Sequence[str],
+) -> int:
+    for index, item in enumerate(ordered_items):
+        item_key = _sequence_sort_key(item, resolved_sort=resolved_sort)
+        if _compare_sequence_keys(item_key, cursor_key, directions) == 1:
+            return index
+    return len(ordered_items)
+
+
 def paginate_sequence_cursor(
     items: Sequence[T],
     *,
@@ -552,54 +631,39 @@ def paginate_sequence_cursor(
 ) -> CursorPage[T]:
     total = len(items)
     if not items:
-        meta = CursorMeta(
+        meta = _build_sequence_meta(
             limit=limit,
             has_more=False,
             next_cursor=None,
-            total_included=include_total,
-            total_count=total if include_total else None,
-            changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+            include_total=include_total,
+            total=total,
+            changes_cursor=changes_cursor,
         )
         return CursorPage(items=[], meta=meta, facets=None)
 
-    def sort_key(item: T) -> tuple[Any, ...]:
-        values: list[Any] = []
-        for field in resolved_sort.fields:
-            values.extend(field.spec.key(item))
-        return tuple(values)
-
-    directions: list[str] = []
-    for field in resolved_sort.fields:
-        directions.extend(field.directions)
-
-    def compare(lhs: tuple[Any, ...], rhs: tuple[Any, ...]) -> int:
-        for (l_val, r_val, direction) in zip(lhs, rhs, directions):
-            if l_val == r_val:
-                continue
-            if l_val is None and r_val is None:
-                continue
-            if l_val is None:
-                return 1
-            if r_val is None:
-                return -1
-            if direction == "desc":
-                return -1 if l_val > r_val else 1
-            return -1 if l_val < r_val else 1
-        return 0
-
-    ordered = sorted(items, key=cmp_to_key(lambda left, right: compare(sort_key(left), sort_key(right))))
+    directions = _sequence_sort_directions(resolved_sort=resolved_sort)
+    ordered = sorted(
+        items,
+        key=cmp_to_key(
+            lambda left, right: _compare_sequence_keys(
+                _sequence_sort_key(left, resolved_sort=resolved_sort),
+                _sequence_sort_key(right, resolved_sort=resolved_sort),
+                directions,
+            )
+        ),
+    )
     start_index = 0
 
     if cursor:
         token = decode_cursor(cursor)
         values = _parse_cursor_values(token, resolved_sort)
         cursor_key = tuple(values)
-        for index, item in enumerate(ordered):
-            if compare(sort_key(item), cursor_key) == 1:
-                start_index = index
-                break
-        else:
-            start_index = len(ordered)
+        start_index = _resolve_sequence_start_index(
+            ordered_items=ordered,
+            cursor_key=cursor_key,
+            resolved_sort=resolved_sort,
+            directions=directions,
+        )
 
     page_items = ordered[start_index : start_index + limit + 1]
     has_more = len(page_items) > limit
@@ -607,16 +671,16 @@ def paginate_sequence_cursor(
 
     next_cursor = None
     if has_more and page_items:
-        cursor_values = list(sort_key(page_items[-1]))
+        cursor_values = list(_sequence_sort_key(page_items[-1], resolved_sort=resolved_sort))
         next_cursor = encode_cursor(sort=resolved_sort.tokens, values=cursor_values)
 
-    meta = CursorMeta(
+    meta = _build_sequence_meta(
         limit=limit,
         has_more=has_more,
         next_cursor=next_cursor,
-        total_included=include_total,
-        total_count=total if include_total else None,
-        changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+        include_total=include_total,
+        total=total,
+        changes_cursor=changes_cursor,
     )
 
     return CursorPage(items=page_items, meta=meta, facets=None)
@@ -644,8 +708,16 @@ def cursor_field_nulls_last(
         return [null_rank, value]
 
     def _parse(values: Sequence[Any]) -> list[Any]:
+        if not values:
+            raise HTTPException(status_code=422, detail="Invalid cursor value.")
         raw = values[1] if len(values) > 1 else None
-        return [int(values[0]), parse(raw)]
+        try:
+            null_rank = int(values[0])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="Invalid cursor value.") from exc
+        if null_rank not in {0, 1}:
+            raise HTTPException(status_code=422, detail="Invalid cursor value.")
+        return [null_rank, parse(raw)]
 
     return CursorFieldSpec(
         key=_values,

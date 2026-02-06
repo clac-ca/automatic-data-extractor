@@ -134,6 +134,36 @@ def get_run_column_filters(
     return filters
 
 
+def _output_not_ready_detail(message: str) -> dict[str, dict[str, str]]:
+    return {
+        "error": {
+            "code": "OUTPUT_NOT_READY",
+            "message": message,
+        }
+    }
+
+
+def _run_failed_no_output_detail(message: str) -> dict[str, dict[str, str]]:
+    return {
+        "error": {
+            "code": "RUN_FAILED_NO_OUTPUT",
+            "message": message,
+        }
+    }
+
+
+def _output_missing_detail(
+    *,
+    service: RunsService,
+    run_id: UUID,
+    message: str,
+) -> str | dict[str, dict[str, str]]:
+    run_record = service.get_run(run_id)  # type: ignore[arg-type]
+    if run_record and run_record.status is RunStatus.FAILED:
+        return _run_failed_no_output_detail(message)
+    return message
+
+
 @router.post(
     "/configurations/{configurationId}/runs",
     response_model=RunResource,
@@ -515,12 +545,7 @@ def upload_run_output_endpoint(
     except RunOutputNotReadyError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "OUTPUT_NOT_READY",
-                    "message": str(exc),
-                }
-            },
+            detail=_output_not_ready_detail(str(exc)),
         ) from exc
     except StorageLimitError as exc:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
@@ -553,24 +578,14 @@ def download_run_output_endpoint(
             except RunOutputNotReadyError as exc:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
-                    detail={
-                        "error": {
-                            "code": "OUTPUT_NOT_READY",
-                            "message": str(exc),
-                        }
-                    },
+                    detail=_output_not_ready_detail(str(exc)),
                 ) from exc
             except RunOutputMissingError as exc:
-                run_record = service.get_run(run_id)  # type: ignore[arg-type]
-                if run_record and run_record.status is RunStatus.FAILED:
-                    detail = {
-                        "error": {
-                            "code": "RUN_FAILED_NO_OUTPUT",
-                            "message": str(exc),
-                        }
-                    }
-                else:
-                    detail = str(exc)
+                detail = _output_missing_detail(
+                    service=service,
+                    run_id=run_id,
+                    message=str(exc),
+                )
                 raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -609,26 +624,15 @@ def list_run_output_sheets_endpoint(
     except RunOutputNotReadyError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "OUTPUT_NOT_READY",
-                    "message": str(exc),
-                }
-            },
+            detail=_output_not_ready_detail(str(exc)),
         ) from exc
     except RunOutputMissingError as exc:
-        status_code = status.HTTP_404_NOT_FOUND
-        run_record = service.get_run(run_id)  # type: ignore[arg-type]
-        if run_record and run_record.status is RunStatus.FAILED:
-            detail = {
-                "error": {
-                    "code": "RUN_FAILED_NO_OUTPUT",
-                    "message": str(exc),
-                }
-            }
-        else:
-            detail = str(exc)
-        raise HTTPException(status_code, detail=detail) from exc
+        detail = _output_missing_detail(
+            service=service,
+            run_id=run_id,
+            message=str(exc),
+        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunOutputSheetUnsupportedError as exc:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -736,26 +740,15 @@ def preview_run_output_endpoint(
     except RunOutputNotReadyError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "OUTPUT_NOT_READY",
-                    "message": str(exc),
-                }
-            },
+            detail=_output_not_ready_detail(str(exc)),
         ) from exc
     except RunOutputMissingError as exc:
-        status_code = status.HTTP_404_NOT_FOUND
-        run_record = service.get_run(run_id)  # type: ignore[arg-type]
-        if run_record and run_record.status is RunStatus.FAILED:
-            detail = {
-                "error": {
-                    "code": "RUN_FAILED_NO_OUTPUT",
-                    "message": str(exc),
-                }
-            }
-        else:
-            detail = str(exc)
-        raise HTTPException(status_code, detail=detail) from exc
+        detail = _output_missing_detail(
+            service=service,
+            run_id=run_id,
+            message=str(exc),
+        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunOutputPreviewUnsupportedError as exc:
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

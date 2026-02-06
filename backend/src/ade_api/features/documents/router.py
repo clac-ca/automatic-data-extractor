@@ -96,6 +96,7 @@ from .schemas import (
     DocumentUploadRunOptions,
     TagCatalogPage,
 )
+from .upload_metadata import build_upload_metadata
 from .service import DocumentsService
 from .sorting import (
     COMMENT_CURSOR_FIELDS,
@@ -295,7 +296,7 @@ def upload_document(
             )
     payload = _parse_metadata(metadata)
     upload_run_options = _parse_run_options(run_options)
-    metadata_payload = service.build_upload_metadata(payload, upload_run_options)
+    metadata_payload = build_upload_metadata(payload, upload_run_options)
     staged = None
     try:
         plan = service.plan_upload(
@@ -337,7 +338,10 @@ def upload_document(
             workspace_id=workspace_id,
             document_id=document.id,
         )
-        document.list_row = service._build_list_row(document)
+        document.list_row = service.get_document_list_row(
+            workspace_id=workspace_id,
+            document_id=document.id,
+        )
 
     return document
 
@@ -374,7 +378,7 @@ def upload_document_version(
     metadata: Annotated[str | None, Form()] = None,
 ) -> DocumentOut:
     payload = _parse_metadata(metadata)
-    metadata_payload = service.build_upload_metadata(payload, None)
+    metadata_payload = build_upload_metadata(payload, None)
     staged = None
     try:
         plan = service.plan_upload_for_version(
