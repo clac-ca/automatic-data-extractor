@@ -1,5 +1,11 @@
 # ADE Backend
 
-This directory contains the unified ADE backend distribution, including the API (`ade_api`), worker (`ade_worker`), and shared infrastructure packages (`ade_db`, `ade_storage`).
+Python backend project for ADE (`ade`, `ade-api`, `ade-worker`, `ade-db`, `ade-storage`).
 
-Use the root `ade` CLI (installed from this distribution) to run or test services.
+Quick start:
+
+```bash
+cd backend
+uv sync
+uv run ade --help
+```

@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "automatic-data-extractor"
-version = "1.6.5"
+dynamic = ["version"]
 description = "ADE backend services and shared infrastructure."
 readme = "README.md"
-requires-python = ">=3.14.2"
+requires-python = ">=3.13,<3.15"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
@@ -16,7 +16,7 @@ urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 # Union of API + worker dependencies.
 dependencies = [
   # ade-engine provides the CLI and runtime engine.
-  "ade-engine @ git+https://github.com/clac-ca/ade-engine@main",
+  "ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
 
   "fastapi==0.128.0",
   "uvicorn[standard]==0.40.0",
@@ -31,6 +31,7 @@ dependencies = [
   "python-multipart==0.0.21",
   "orjson==3.11.4",
   "httpx==0.28.1",
+  "python-dotenv==1.2.1",
   "pyjwt[crypto]==2.10.1",
   "email-validator==2.3.0",
   "openpyxl==3.1.5",
@@ -44,11 +45,11 @@ dependencies = [
 ]
 
 [project.scripts]
-ade = "cli:app"
-ade-api = "ade_api.cli:app"
-ade-worker = "ade_worker.cli:app"
-ade-db = "ade_db.cli:app"
-ade-storage = "ade_storage.cli:app"
+ade = "ade_cli.main:ade_app"
+ade-api = "ade_cli.main:ade_api_app"
+ade-worker = "ade_cli.main:ade_worker_app"
+ade-db = "ade_cli.main:ade_db_app"
+ade-storage = "ade_cli.main:ade_storage_app"
 
 [dependency-groups]
 dev = [
@@ -64,21 +65,19 @@ dev = [
 # ---- Packaging ----
 [tool.setuptools]
 include-package-data = true
-py-modules = ["cli"]
 
 [tool.setuptools.packages.find]
-where = [
-  "ade-api/src",
-  "ade-worker/src",
-  "ade-db/src",
-  "ade-storage/src",
-]
+where = ["src"]
 include = [
+  "ade*",
   "ade_api*",
   "ade_worker*",
   "ade_db*",
   "ade_storage*",
 ]
+
+[tool.setuptools.dynamic]
+version = { attr = "ade.version.__version__" }
 
 # Keep type markers + assets needed at runtime.
 [tool.setuptools.package-data]
@@ -96,19 +95,11 @@ include = [
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = [
-  "ade-api/tests",
-  "ade-worker/tests",
-  "ade-db/tests",
-  "ade-storage/tests",
+  "tests/api",
+  "tests/worker",
 ]
 asyncio_mode = "auto"
 addopts = "-ra"
-pythonpath = [
-  "ade-api/src",
-  "ade-worker/src",
-  "ade-db/src",
-  "ade-storage/src",
-]
 markers = [
   "unit: fast tests with no external dependencies",
   "integration: tests requiring external services (Postgres, etc.)",
@@ -117,7 +108,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -126,7 +117,7 @@ select = ["E", "F", "I", "B", "UP"]
 preview = true
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 disallow_untyped_defs = true
