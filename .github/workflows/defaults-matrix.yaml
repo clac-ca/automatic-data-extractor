@@ -1,0 +1,34 @@
+name: Defaults Matrix
+
+on:
+  pull_request:
+    paths:
+      - ".env.example"
+      - "docker-compose.yaml"
+      - "docker-compose.prod.yaml"
+      - "docker-compose.prod.split.yaml"
+      - "docs/reference/defaults-matrix.md"
+      - "scripts/ci/check-defaults-matrix.sh"
+      - ".github/workflows/defaults-matrix.yaml"
+  push:
+    branches: [main, development]
+    paths:
+      - ".env.example"
+      - "docker-compose.yaml"
+      - "docker-compose.prod.yaml"
+      - "docker-compose.prod.split.yaml"
+      - "docs/reference/defaults-matrix.md"
+      - "scripts/ci/check-defaults-matrix.sh"
+      - ".github/workflows/defaults-matrix.yaml"
+  workflow_dispatch:
+
+jobs:
+  defaults-matrix-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate defaults matrix
+        run: bash scripts/ci/check-defaults-matrix.sh
