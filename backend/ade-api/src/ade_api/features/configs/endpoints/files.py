@@ -6,6 +6,7 @@ import base64
 from datetime import datetime
 from typing import Annotated, Literal
 
+from ade_db.models import User
 from fastapi import (
     APIRouter,
     Body,
@@ -18,12 +19,11 @@ from fastapi import (
     Security,
     status,
 )
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ade_api.api.deps import get_configurations_service, get_configurations_service_read
+from ade_api.common.responses import JSONResponse
 from ade_api.core.http import require_csrf, require_workspace
-from ade_db.models import User
 
 from ..etag import canonicalize_etag, format_etag, format_weak_etag
 from ..exceptions import (

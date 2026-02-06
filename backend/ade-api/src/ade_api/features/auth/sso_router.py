@@ -1,6 +1,7 @@
 """OIDC SSO endpoints backed by database-managed provider config."""
 
 from __future__ import annotations
+
 import base64
 import hashlib
 import logging
@@ -10,20 +11,6 @@ from typing import Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
-from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi_users.password import PasswordHelper
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
-from ade_api.common.logging import log_context
-from ade_api.common.rate_limit import InMemoryRateLimiter, RateLimit
-from ade_api.common.time import utc_now
-from ade_api.common.urls import sanitize_return_to
-from ade_api.core.auth.users import get_cookie_transport, get_password_helper
-from ade_api.core.http.csrf import set_csrf_cookie
-from ade_api.db import get_db_write, get_db_read
 from ade_db.models import (
     AccessToken,
     SsoIdentity,
@@ -32,9 +19,21 @@ from ade_db.models import (
     SsoProviderStatus,
     User,
 )
-from ade_api.settings import Settings, get_settings
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
+from fastapi_users.password import PasswordHelper
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from ade_api.features.sso.schemas import PublicSsoProviderListResponse
+from ade_api.common.logging import log_context
+from ade_api.common.rate_limit import InMemoryRateLimiter, RateLimit
+from ade_api.common.responses import JSONResponse
+from ade_api.common.time import utc_now
+from ade_api.common.urls import sanitize_return_to
+from ade_api.core.auth.users import get_cookie_transport, get_password_helper
+from ade_api.core.http.csrf import set_csrf_cookie
+from ade_api.db import get_db_read, get_db_write
 from ade_api.features.sso.oidc import (
     OidcDiscoveryError,
     OidcJwksError,
@@ -44,7 +43,9 @@ from ade_api.features.sso.oidc import (
     exchange_code,
     validate_id_token,
 )
+from ade_api.features.sso.schemas import PublicSsoProviderListResponse
 from ade_api.features.sso.service import AuthStateError, SsoService
+from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -486,7 +487,12 @@ def callback_sso(
                 "sso.callback.upstream_error",
                 extra=log_context(provider_id=provider_id),
             )
-            return _error_response(request, settings, code="UPSTREAM_ERROR", provider_id=provider_id)
+            return _error_response(
+                request,
+                settings,
+                code="UPSTREAM_ERROR",
+                provider_id=provider_id,
+            )
 
         code = request.query_params.get("code")
         state = request.query_params.get("state")

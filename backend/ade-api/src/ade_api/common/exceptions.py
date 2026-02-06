@@ -6,7 +6,6 @@ import logging
 
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from starlette.responses import JSONResponse
 
 from ade_api.common.logging import log_context
 from ade_api.common.problem_details import (
@@ -16,6 +15,7 @@ from ade_api.common.problem_details import (
     error_items_from_pydantic,
     resolve_error_definition,
 )
+from ade_api.common.responses import JSONResponse
 
 _UNHANDLED_LOGGER = logging.getLogger("ade_api.errors")
 _HTTP_LOGGER = logging.getLogger("ade_api.http")
