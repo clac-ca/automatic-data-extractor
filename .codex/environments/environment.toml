@@ -3,7 +3,7 @@ version = 1
 name = "ADE Local Dev"
 
 [setup]
-script = "./setup.sh"
+script = "./setup.sh --with-infra --force"
 
 [[actions]]
 name = "ADE Dev"
