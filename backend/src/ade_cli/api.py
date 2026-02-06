@@ -118,7 +118,7 @@ def run_start(*, host: str | None = None, processes: int | None = None) -> None:
         api_cmd.extend(["--workers", str(processes)])
 
     typer.echo(f"Starting ADE API on http://{host}:{port}")
-    run(api_cmd, cwd=BACKEND_ROOT, env=env)
+    run(api_cmd, env=env)
 
 
 def run_tests(suite: TestSuite) -> None:
@@ -258,4 +258,3 @@ def types_() -> None:
 
 
 __all__ = ["app", "run_dev", "run_start", "run_tests", "run_lint", "run_routes", "run_types"]
-

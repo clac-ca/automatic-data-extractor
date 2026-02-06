@@ -89,7 +89,7 @@ def test_run_start_uses_uvicorn_production_profile(monkeypatch):
     monkeypatch.setattr(
         api,
         "run",
-        lambda command, *, cwd, env=None: captured.update(
+        lambda command, *, cwd=None, env=None: captured.update(
             {"command": list(command), "cwd": cwd, "env": env}
         ),
     )
@@ -104,6 +104,7 @@ def test_run_start_uses_uvicorn_production_profile(monkeypatch):
     assert command[command.index("--forwarded-allow-ips") + 1] == "127.0.0.1"
     assert command[command.index("--workers") + 1] == "2"
     assert "--no-proxy-headers" not in command
+    assert captured["cwd"] is None
     assert captured["env"]["ADE_API_PROCESSES"] == "2"
 
 
@@ -121,7 +122,7 @@ def test_run_start_supports_disabling_proxy_headers(monkeypatch):
     monkeypatch.setattr(
         api,
         "run",
-        lambda command, *, cwd, env=None: captured.update(
+        lambda command, *, cwd=None, env=None: captured.update(
             {"command": list(command), "cwd": cwd, "env": env}
         ),
     )
@@ -133,6 +134,7 @@ def test_run_start_supports_disabling_proxy_headers(monkeypatch):
     assert "--proxy-headers" not in command
     assert "--forwarded-allow-ips" not in command
     assert "--workers" not in command
+    assert captured["cwd"] is None
 
 
 def test_dev_command_ignores_ade_api_processes_env(monkeypatch):

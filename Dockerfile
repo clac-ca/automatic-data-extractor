@@ -97,7 +97,6 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 RUN mkdir -p \
-      /app/backend \
       /app/data \
       /var/cache/nginx \
       /var/run/nginx \
@@ -122,7 +121,6 @@ ARG APP_COMMIT_SHA
 COPY --link --from=backend-builder /app/.venv /app/.venv
 
 ENV VIRTUAL_ENV=/app/.venv \
-    ADE_REPO_ROOT=/app \
     ADE_APP_VERSION=${APP_VERSION} \
     ADE_APP_COMMIT_SHA=${APP_COMMIT_SHA} \
     PATH="/app/.venv/bin:$PATH"
