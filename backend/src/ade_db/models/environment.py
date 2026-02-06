@@ -34,7 +34,6 @@ class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "workspace_id",
             "configuration_id",
-            "engine_spec",
             "deps_digest",
             name="ux_environments_key",
         ),
@@ -51,7 +50,6 @@ class Environment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     configuration_id: Mapped[UUID] = mapped_column(
         GUID(), ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False
     )
-    engine_spec: Mapped[str] = mapped_column(String(255), nullable=False)
     deps_digest: Mapped[str] = mapped_column(String(128), nullable=False)
 
     status: Mapped[EnvironmentStatus] = mapped_column(

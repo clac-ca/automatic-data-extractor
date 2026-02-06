@@ -1097,25 +1097,6 @@ class Worker:
             if not config_dir.exists():
                 raise RuntimeError(f"config package dir missing: {config_dir}")
 
-            engine_spec = str(env.get("engine_spec") or self.settings.engine_spec).strip()
-            if not engine_spec:
-                raise RuntimeError("engine spec is empty")
-
-            res = self.runner.run(
-                [uv_bin, "pip", "install", "--python", str(python_bin), engine_spec],
-                event_log=event_log,
-                scope="environment.engine",
-                timeout_seconds=remaining(),
-                cwd=None,
-                env=install_env,
-                heartbeat=heartbeat,
-                heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
-                context=ctx,
-            )
-            last_exit_code = res.exit_code
-            if res.exit_code != 0:
-                raise RuntimeError(f"engine install failed (exit {res.exit_code})")
-
             res = self.runner.run(
                 [uv_bin, "pip", "install", "--python", str(python_bin), "-e", str(config_dir)],
                 event_log=event_log,
@@ -1249,9 +1230,7 @@ class Worker:
             return None, f"Invalid environment status: {status!r}", False
 
         env_id = str(env["id"])
-        lock_key = (
-            f"{env['workspace_id']}:{env['configuration_id']}:{env['engine_spec']}:{env['deps_digest']}"
-        )
+        lock_key = f"{env['workspace_id']}:{env['configuration_id']}:{env['deps_digest']}"
 
         lock_conn = self.engine.connect()
         got_lock = False

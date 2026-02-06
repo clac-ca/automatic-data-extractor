@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
 from sqlalchemy import select
 
+from ade_api.features.configs.exceptions import ConfigEngineDependencyMissingError
 from ade_api.features.runs.schemas import RunCreateOptions
 from ade_db.models import Run, RunStatus
 
@@ -18,7 +20,6 @@ def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
     run = service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.QUEUED
-    assert run.engine_spec == str(_settings.engine_spec)
     assert run.deps_digest.startswith("sha256:")
     assert run.input_file_version_id == document.current_version_id
     assert run.input_sheet_names is None
@@ -50,3 +51,22 @@ def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
         configuration_id=configuration.id,
     )
     assert second == 0
+
+
+def test_prepare_run_requires_engine_dependency_manifest(session, tmp_path: Path) -> None:
+    service, configuration, document, settings = build_runs_service(session, tmp_path)
+    pyproject_path = (
+        Path(settings.configs_dir)
+        / str(configuration.workspace_id)
+        / "config_packages"
+        / str(configuration.id)
+        / "pyproject.toml"
+    )
+    pyproject_path.write_text(
+        "[project]\nname = \"ade-config\"\nversion = \"0.0.0\"\n",
+        encoding="utf-8",
+    )
+
+    options = RunCreateOptions(input_document_id=str(document.id))
+    with pytest.raises(ConfigEngineDependencyMissingError):
+        service.prepare_run(configuration_id=configuration.id, options=options)

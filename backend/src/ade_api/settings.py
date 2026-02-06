@@ -79,9 +79,6 @@ class Settings(
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_upload_concurrency_limit: int | None = Field(8, ge=1)
 
-    # Engine
-    engine_spec: str = "ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9"
-
     # Database
     database_log_level: str | None = None
     database_connection_budget: int | None = Field(default=None, ge=1)

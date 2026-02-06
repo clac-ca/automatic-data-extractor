@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Automatic Data Extractor API",
-    "version": "1.6.1"
+    "version": "unknown"
   },
   "paths": {
     "/api/v1/health": {
@@ -72,7 +72,7 @@
           "meta"
         ],
         "summary": "Installed ADE versions",
-        "description": "Return installed backend, ade-engine, and web versions.",
+        "description": "Return installed backend, engine-parent marker/version, and web versions.",
         "operationId": "read_versions_api_v1_meta_versions_get",
         "responses": {
           "200": {
@@ -12838,7 +12838,7 @@
             ],
             "title": "Run Options"
           },
-          "conflict_mode": {
+          "conflictMode": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DocumentConflictMode"
@@ -17366,7 +17366,7 @@
           "engine": {
             "type": "string",
             "title": "Engine",
-            "description": "Installed ade-engine version."
+            "description": "Engine version in the parent environment, or 'per-config' when installed per config package."
           },
           "web": {
             "type": "string",

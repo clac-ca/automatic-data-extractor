@@ -39,7 +39,10 @@ from ade_api.common.workbook_preview import (
 from ade_api.core.auth import AuthenticatedPrincipal
 from ade_api.db import get_session_factory
 from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
-from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.features.configs.exceptions import (
+    ConfigEngineDependencyMissingError,
+    ConfigurationNotFoundError,
+)
 from ade_storage import StorageLimitError, get_storage_adapter
 from ade_db.models import RunStatus
 
@@ -152,6 +155,13 @@ def _run_failed_no_output_detail(message: str) -> dict[str, dict[str, str]]:
     }
 
 
+def _engine_dependency_missing_detail(exc: ConfigEngineDependencyMissingError) -> dict[str, str]:
+    detail = {"error": "engine_dependency_missing"}
+    if getattr(exc, "detail", None):
+        detail["detail"] = str(exc.detail)
+    return detail
+
+
 def _output_missing_detail(
     *,
     service: RunsService,
@@ -189,6 +199,11 @@ def create_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
 
     resource = service.to_resource(run)
     return resource
@@ -218,6 +233,11 @@ def create_runs_batch_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
 
     resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)
@@ -251,6 +271,11 @@ def create_workspace_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
 
     resource = service.to_resource(run)
     return resource
@@ -281,6 +306,11 @@ def create_workspace_runs_batch_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunDocumentMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
 
     resources = [service.to_resource(run) for run in runs]
     response_payload = RunBatchCreateResponse(runs=resources)

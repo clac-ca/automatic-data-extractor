@@ -50,7 +50,7 @@ export type paths = {
         };
         /**
          * Installed ADE versions
-        * @description Return installed backend, ade-engine, and web versions.
+         * @description Return installed backend, engine-parent marker/version, and web versions.
          */
         get: operations["read_versions_api_v1_meta_versions_get"];
         put?: never;
@@ -1724,7 +1724,7 @@ export type components = {
             metadata?: string | null;
             /** Run Options */
             run_options?: string | null;
-            conflict_mode?: components["schemas"]["DocumentConflictMode"] | null;
+            conflictMode?: components["schemas"]["DocumentConflictMode"] | null;
         };
         /** Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post */
         Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post: {
@@ -3688,7 +3688,7 @@ export type components = {
             backend: string;
             /**
              * Engine
-             * @description Installed ade-engine version.
+             * @description Engine version in the parent environment, or 'per-config' when installed per config package.
              */
             engine: string;
             /**

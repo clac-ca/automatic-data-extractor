@@ -14,6 +14,9 @@ CONFIG_DEP_FILES = (
 CONFIG_EXCLUDED_NAMES = {
     ".git",
     ".idea",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
     ".vscode",
     "__pycache__",
     ".venv",

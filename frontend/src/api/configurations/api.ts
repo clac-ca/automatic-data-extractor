@@ -1,6 +1,6 @@
 import { apiFetch, client } from "@/api/client";
 import { buildListQuery } from "@/api/listing";
-import { ApiError, tryParseProblemDetails } from "@/api/errors";
+import { ApiError, buildApiErrorMessage, tryParseProblemDetails } from "@/api/errors";
 
 import type {
   ConfigurationPage,
@@ -253,7 +253,7 @@ export async function upsertConfigurationFile(
 
   if (!response.ok) {
     const problem = await tryParseProblemDetails(response);
-    const message = problem?.title ?? `Request failed with status ${response.status}`;
+    const message = buildApiErrorMessage(problem, response.status);
     throw new ApiError(message, response.status, problem);
   }
 

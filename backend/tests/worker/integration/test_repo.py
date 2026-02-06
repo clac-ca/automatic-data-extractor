@@ -28,7 +28,6 @@ def _insert_run(
     run_id: str,
     workspace_id: str,
     configuration_id: str,
-    engine_spec: str,
     deps_digest: str,
     now: datetime,
     input_file_version_id: str | None = None,
@@ -49,7 +48,6 @@ def _insert_run(
                 output_file_version_id=None,
                 input_sheet_names=None,
                 run_options=None,
-                engine_spec=engine_spec,
                 deps_digest=deps_digest,
                 status="queued",
                 available_at=now - timedelta(minutes=1),
@@ -72,7 +70,6 @@ def _insert_environment(
     env_id: str,
     workspace_id: str,
     configuration_id: str,
-    engine_spec: str,
     deps_digest: str,
     status: str,
     now: datetime,
@@ -84,7 +81,6 @@ def _insert_environment(
                 id=env_id,
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                engine_spec=engine_spec,
                 deps_digest=deps_digest,
                 status=status,
                 error_message=error_message,
@@ -111,7 +107,6 @@ def test_get_or_create_environment_inserts_once(engine) -> None:
         run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:aaa",
         now=now,
     )
@@ -148,7 +143,6 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
         run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:xyz",
         now=now,
     )
@@ -157,7 +151,6 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
         env_id=env_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:xyz",
         status="failed",
         error_message="oops",
@@ -175,7 +168,7 @@ def test_get_or_create_environment_keeps_failed_status(engine) -> None:
     assert env["status"] == "failed"
 
 
-def test_get_or_create_environment_uses_engine_spec_in_cache_key(engine) -> None:
+def test_get_or_create_environment_uses_deps_digest_in_cache_key(engine) -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
 
@@ -189,7 +182,6 @@ def test_get_or_create_environment_uses_engine_spec_in_cache_key(engine) -> None
         run_id=run_a,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:shared",
         now=now,
     )
@@ -198,8 +190,7 @@ def test_get_or_create_environment_uses_engine_spec_in_cache_key(engine) -> None
         run_id=run_b,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.8.0",
-        deps_digest="sha256:shared",
+        deps_digest="sha256:different",
         now=now,
     )
 
@@ -236,7 +227,6 @@ def test_replace_run_metrics_overwrites(engine) -> None:
         run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:aaa",
         now=now,
     )
@@ -289,7 +279,6 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
         run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:bbb",
         now=now,
     )
@@ -355,7 +344,6 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
         run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
         deps_digest="sha256:ccc",
         now=now,
     )

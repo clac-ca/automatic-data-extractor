@@ -1,5 +1,10 @@
 import { buildApiHeaders, resolveApiUrl } from "@/api/client";
-import { ApiError, isProblemDetailsContentType, type ProblemDetails } from "@/api/errors";
+import {
+  ApiError,
+  buildApiErrorMessage,
+  isProblemDetailsContentType,
+  type ProblemDetails,
+} from "@/api/errors";
 
 export type UploadProgress = {
   readonly loaded: number;
@@ -65,10 +70,7 @@ export function uploadWithProgressXHR<T>(
       }
 
       const problem = parseProblem(responseText, contentType);
-      const message =
-        problem?.title ??
-        problem?.detail ??
-        `Request failed with status ${status}`;
+      const message = buildApiErrorMessage(problem, status);
       reject(new ApiError(message, status, problem));
     };
 

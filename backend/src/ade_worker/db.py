@@ -455,7 +455,6 @@ def ensure_environment(
         select(environments).where(
             environments.c.workspace_id == run["workspace_id"],
             environments.c.configuration_id == run["configuration_id"],
-            environments.c.engine_spec == run["engine_spec"],
             environments.c.deps_digest == run["deps_digest"],
         )
     ).mappings().first()
@@ -466,7 +465,6 @@ def ensure_environment(
         "id": uuid4(),
         "workspace_id": run["workspace_id"],
         "configuration_id": run["configuration_id"],
-        "engine_spec": run["engine_spec"],
         "deps_digest": run["deps_digest"],
         "status": "queued",
         "error_message": None,
@@ -484,7 +482,6 @@ def ensure_environment(
             index_elements=[
                 "workspace_id",
                 "configuration_id",
-                "engine_spec",
                 "deps_digest",
             ]
         )
@@ -495,7 +492,6 @@ def ensure_environment(
         select(environments).where(
             environments.c.workspace_id == run["workspace_id"],
             environments.c.configuration_id == run["configuration_id"],
-            environments.c.engine_spec == run["engine_spec"],
             environments.c.deps_digest == run["deps_digest"],
         )
     ).mappings().first()

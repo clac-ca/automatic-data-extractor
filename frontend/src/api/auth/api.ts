@@ -1,4 +1,4 @@
-import { ApiError, tryParseProblemDetails } from "@/api/errors";
+import { ApiError, buildApiErrorMessage, tryParseProblemDetails } from "@/api/errors";
 import { apiFetch, client } from "@/api/client";
 import type { components } from "@/types";
 
@@ -146,7 +146,7 @@ async function submitPasswordLogin(payload: LoginPayload, signal?: AbortSignal):
   }
 
   const problem = await tryParseProblemDetails(response);
-  const message = problem?.detail ?? problem?.title ?? `Request failed with status ${response.status}`;
+  const message = buildApiErrorMessage(problem, response.status);
   throw new ApiError(message, response.status, problem);
 }
 

@@ -15,9 +15,6 @@ urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 # Runtime deps — pinned for reproducible builds
 # Union of API + worker dependencies.
 dependencies = [
-  # ade-engine provides the CLI and runtime engine.
-  "ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
-
   "fastapi==0.128.0",
   "uvicorn[standard]==0.40.0",
   "sqlalchemy==2.0.46",
@@ -85,6 +82,7 @@ version = { attr = "ade_cli.version.__version__" }
 "ade_api" = [
   "py.typed",
   "openapi.json",
+  "templates/**/*",
   "web/**/*",
 ]
 "ade_db" = [

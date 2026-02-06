@@ -48,7 +48,6 @@ class Settings(
 
     # ---- Runtime filesystem ------------------------------------------------
     worker_runs_dir: Path = Field(default=Path("/tmp/ade-runs"))
-    engine_spec: str = "ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9"
 
     # ---- Timeouts ----------------------------------------------------------
     worker_env_build_timeout_seconds: int = Field(600, ge=1)

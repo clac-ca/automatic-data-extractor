@@ -29,8 +29,12 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
-from ade_api.features.configs.deps import compute_dependency_digest
-from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.features.configs.deps import compute_dependency_digest, has_engine_dependency
+from ade_api.features.configs.exceptions import (
+    ConfigEngineDependencyMissingError,
+    ConfigStorageNotFoundError,
+    ConfigurationNotFoundError,
+)
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
@@ -198,11 +202,9 @@ class RunsService:
         selected_sheet_names = self._select_input_sheet_names(options)
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
         deps_digest = self._resolve_deps_digest(configuration)
-        engine_spec = self._settings.engine_spec
         self._insert_runs_for_documents(
             configuration=configuration,
             document_ids=[input_document_id],
-            engine_spec=engine_spec,
             deps_digest=deps_digest,
             input_sheet_names_by_document_id={
                 input_document_id: selected_sheet_names or None,
@@ -351,11 +353,9 @@ class RunsService:
                 )
 
             deps_digest = self._resolve_deps_digest(configuration)
-            engine_spec = self._settings.engine_spec
             self._insert_runs_for_documents(
                 configuration=configuration,
                 document_ids=new_document_ids,
-                engine_spec=engine_spec,
                 deps_digest=deps_digest,
                 input_sheet_names_by_document_id=normalized_sheet_names,
                 run_options_by_document_id={
@@ -582,8 +582,12 @@ class RunsService:
                 configuration.workspace_id,
                 configuration.id,
             )
-        except Exception as exc:  # pragma: no cover - surface as run error
+        except ConfigStorageNotFoundError as exc:  # pragma: no cover - surface as run error
             raise RunInputMissingError("Configuration files are missing") from exc
+        if not has_engine_dependency(config_path):
+            raise ConfigEngineDependencyMissingError(
+                "Configuration must declare ade-engine in dependency manifests."
+            )
         cache_key = _deps_digest_cache_key(configuration)
         return _cached_deps_digest(str(config_path), cache_key)
 
@@ -592,7 +596,6 @@ class RunsService:
         *,
         configuration: Configuration,
         document_ids: Sequence[UUID],
-        engine_spec: str,
         deps_digest: str,
         input_sheet_names_by_document_id: dict[UUID, list[str] | None] | None,
         run_options_by_document_id: dict[UUID, dict[str, Any] | None] | None,
@@ -653,7 +656,6 @@ class RunsService:
                         if run_options_by_document_id
                         else None
                     ),
-                    "engine_spec": engine_spec,
                     "deps_digest": deps_digest,
                     "status": RunStatus.QUEUED,
                     "available_at": now,

@@ -40,14 +40,13 @@ class _Runner:
         return SubprocessResult(exit_code=0, timed_out=False, duration_seconds=0.01)
 
 
-def test_build_environment_installs_engine_before_config(monkeypatch, tmp_path: Path) -> None:
+def test_build_environment_installs_config_in_editable_mode(monkeypatch, tmp_path: Path) -> None:
     layout = _Layout(tmp_path)
     paths = PathManager(layout=layout, pip_cache_root=tmp_path / "cache" / "pip")
     runner = _Runner()
     settings = SimpleNamespace(
         worker_env_build_timeout_seconds=120,
         worker_lease_seconds=30,
-        engine_spec="ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9",
     )
 
     worker = Worker(
@@ -85,7 +84,6 @@ def test_build_environment_installs_engine_before_config(monkeypatch, tmp_path: 
             "workspace_id": workspace_id,
             "configuration_id": configuration_id,
             "deps_digest": "sha256:abcd",
-            "engine_spec": "ade-engine @ git+https://example.com/engine@v9.9.9",
         },
         env_id=env_id,
         run_claim=None,
@@ -93,5 +91,5 @@ def test_build_environment_installs_engine_before_config(monkeypatch, tmp_path: 
 
     assert result.success is True
     scopes = [scope for scope, _cmd in runner.calls]
-    assert scopes == ["environment.venv", "environment.engine", "environment.config"]
-    assert "ade-engine @ git+https://example.com/engine@v9.9.9" in runner.calls[1][1]
+    assert scopes == ["environment.venv", "environment.config"]
+    assert runner.calls[1][1][-2:] == ["-e", str(config_dir)]

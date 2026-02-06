@@ -46,7 +46,6 @@ def gc_environments(
             e.id,
             e.workspace_id,
             e.configuration_id,
-            e.engine_spec,
             e.deps_digest,
             e.status,
             e.last_used_at,
@@ -64,7 +63,6 @@ def gc_environments(
             FROM runs AS r
             WHERE r.workspace_id = e.workspace_id
               AND r.configuration_id = e.configuration_id
-              AND r.engine_spec = e.engine_spec
               AND r.deps_digest = e.deps_digest
               AND r.status IN ('queued', 'running')
           )

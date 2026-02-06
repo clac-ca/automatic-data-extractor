@@ -1,0 +1,11 @@
+# ADE engine runtime settings (optional)
+# The engine will load this file if present (otherwise it uses safe defaults).
+# If changed, ensure you force a rebuild so the package (and settings) are reinstalled in the venv.
+
+remove_unmapped_columns = false
+write_diagnostics_columns = false
+sort_tables_by_mapping_ratio = false   # Write tables in descending order of mapped-columns ratio
+merge_tables_in_sheet = false          # Merge all tables in a sheet into one table (after sorting)
+mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"
+detector_column_sample_size = 100     # Max number of values collected into `column_sample_non_empty_values` for each column detector
+merge_stacked_headers = true          # Merge contiguous header rows into a single header per column

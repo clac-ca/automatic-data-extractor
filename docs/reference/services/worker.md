@@ -26,7 +26,6 @@ uv run ade worker test
 - `ADE_DATABASE_URL`
 - `ADE_BLOB_CONNECTION_STRING` or `ADE_BLOB_ACCOUNT_URL`
 - `ADE_BLOB_CONTAINER` (optional but standard)
-- `ADE_ENGINE_SPEC` (optional override)
 
 ## Notes
 

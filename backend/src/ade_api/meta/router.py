@@ -17,12 +17,13 @@ router = APIRouter(prefix="/meta", tags=["meta"])
     summary="Installed ADE versions",
 )
 def read_versions() -> VersionsResponse:
-    """Return installed backend, ade-engine, and web versions."""
+    """Return installed backend, engine-parent marker/version, and web versions."""
 
     settings = get_settings()
+    engine_parent_version = installed_version("ade-engine", "ade_engine")
     return VersionsResponse(
         backend=settings.app_version,
-        engine=installed_version("ade-engine", "ade_engine"),
+        engine=engine_parent_version if engine_parent_version != "unknown" else "per-config",
         web=read_web_version(settings.web_version_file),
     )
 

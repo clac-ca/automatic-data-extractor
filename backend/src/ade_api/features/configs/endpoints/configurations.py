@@ -40,6 +40,7 @@ from ade_api.features.runs.service import RunsService
 from ade_db.models import User
 
 from ..exceptions import (
+    ConfigEngineDependencyMissingError,
     ConfigImportError,
     ConfigPublishConflictError,
     ConfigSourceInvalidError,
@@ -82,6 +83,13 @@ ConfigurationsServiceReadDep = Annotated[
     ConfigurationsService, Depends(get_configurations_service_read)
 ]
 RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
+
+
+def _engine_dependency_missing_detail(exc: ConfigEngineDependencyMissingError) -> dict[str, str]:
+    detail = {"error": "engine_dependency_missing"}
+    if exc.detail:
+        detail["detail"] = exc.detail
+    return detail
 
 
 @router.get(
@@ -193,6 +201,11 @@ def create_configuration(
             "issues": [issue.model_dump() for issue in exc.issues],
         }
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
     except ConfigPublishConflictError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -237,6 +250,11 @@ def import_configuration(
             "issues": [issue.model_dump() for issue in exc.issues],
         }
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
     except ConfigPublishConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
     except ConfigImportError as exc:
@@ -282,6 +300,11 @@ def validate_configuration(
     except ConfigStorageNotFoundError as exc:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, detail="configuration_storage_missing"
+        ) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
         ) from exc
 
     payload = ConfigurationValidateResponse(
@@ -334,6 +357,11 @@ def publish_configuration_endpoint(
             "issues": [issue.model_dump() for issue in exc.issues],
         }
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 

@@ -59,7 +59,16 @@ class ConfigImportError(Exception):
         self.limit = limit
 
 
+class ConfigEngineDependencyMissingError(Exception):
+    """Raised when a config package does not declare ade-engine."""
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__("engine_dependency_missing")
+        self.detail = detail
+
+
 __all__ = [
+    "ConfigEngineDependencyMissingError",
     "ConfigImportError",
     "ConfigPublishConflictError",
     "ConfigSourceInvalidError",

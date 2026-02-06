@@ -14,6 +14,7 @@ def test_templates_materialize_and_load(
     storage = ConfigStorage(configs_root=tmp_path / "configs")
     workspace_id = uuid4()
     configuration_id = uuid4()
+    storage.validate_path = lambda path: ([], "sha256:test")  # type: ignore[method-assign]
 
     storage.materialize_from_template(
         workspace_id=workspace_id,

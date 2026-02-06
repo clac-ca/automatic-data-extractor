@@ -25,18 +25,11 @@ def build_runs_service(
     safe_mode: bool = False,
 ) -> tuple[RunsService, Configuration, File, Settings]:
     data_root = tmp_path / "data"
-    engine_dir = tmp_path / "engine"
-    engine_dir.mkdir(parents=True, exist_ok=True)
-    (engine_dir / "pyproject.toml").write_text(
-        "[project]\nname = \"ade-engine\"\nversion = \"0.0.0\"\n",
-        encoding="utf-8",
-    )
 
     settings = Settings(
         _env_file=None,
         data_dir=data_root,
         safe_mode=safe_mode,
-        engine_spec=str(engine_dir),
         database_url="postgresql+psycopg://ade:ade@localhost:5432/ade?sslmode=disable",
         blob_versioning_mode="off",
         secret_key="test-secret-key-for-tests-please-change",
@@ -58,7 +51,12 @@ def build_runs_service(
     config_root = workspace_config_root(settings, workspace.id, configuration.id)
     config_root.mkdir(parents=True, exist_ok=True)
     (config_root / "pyproject.toml").write_text(
-        "[project]\nname = \"ade-config\"\nversion = \"0.0.0\"\n",
+        (
+            "[project]\n"
+            "name = \"ade-config\"\n"
+            "version = \"0.0.0\"\n"
+            "dependencies = [\"ade-engine\"]\n"
+        ),
         encoding="utf-8",
     )
 

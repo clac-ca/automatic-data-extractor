@@ -32,7 +32,6 @@ If one of these is missing, production startup will fail.
 | `ADE_BLOB_CONTAINER` | API, worker, storage | all environments | `ade` | blob container name |
 | `ADE_BLOB_CONNECTION_STRING` | API, worker, storage | one-of required | none | key-based blob auth |
 | `ADE_BLOB_ACCOUNT_URL` | API, worker, storage | one-of required | none | identity-based blob auth |
-| `ADE_ENGINE_SPEC` | API, worker | optional | `ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9` | engine package spec used for run environments |
 | `ADE_PUBLIC_WEB_URL` | API/web behavior | production | `http://localhost:8000` | must match real external URL |
 
 ## Service Selection and Startup

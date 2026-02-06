@@ -48,7 +48,6 @@ class Run(UUIDPrimaryKeyMixin, Base):
     output_file_version_id: Mapped[UUID | None] = mapped_column(
         GUID(), ForeignKey("file_versions.id", ondelete="NO ACTION"), nullable=True
     )
-    engine_spec: Mapped[str] = mapped_column(String(255), nullable=False)
     deps_digest: Mapped[str] = mapped_column(String(128), nullable=False)
     available_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=utc_now
