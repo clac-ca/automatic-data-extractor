@@ -18,6 +18,9 @@
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="${ROOT_DIR}/backend"
+
 # Check for uv, prompt to install if missing.
 if ! command -v uv >/dev/null 2>&1; then
   echo "Install uv from https://astral.sh/uv and re-run ./setup.sh." >&2
@@ -25,14 +28,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 # Install web dependencies.
-npm ci --prefix frontend/ade-web
+npm ci --prefix "${ROOT_DIR}/frontend/ade-web"
 
-# Sync Python dependencies using the unified backend project (creates backend/.venv).
-pushd backend >/dev/null
-uv sync
-
-# Smoke-check the CLIs.
-uv run ade --help
-uv run ade-api --help
-uv run ade-worker --help
-popd >/dev/null
+# Sync Python dependencies in backend/.venv.
+uv sync --project "${BACKEND_DIR}"

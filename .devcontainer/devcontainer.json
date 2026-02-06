@@ -11,6 +11,9 @@
   "remoteUser": "adeuser",
   "updateRemoteUserUID": true,
   "postCreateCommand": "./setup.sh",
+  "remoteEnv": {
+    "PATH": "/workspaces/automatic-data-extractor/backend/.venv/bin:${containerEnv:PATH}"
+  },
 
   "forwardPorts": [8000, 8001, 5432, 10000],
   "portsAttributes": {
