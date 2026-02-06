@@ -42,6 +42,15 @@ def test_json_response_serializes_schema_list() -> None:
     assert {item["name"] for item in data} == {"one", "two"}
 
 
+def test_json_response_content_length_matches_body() -> None:
+    """JSONResponse should keep Content-Length synchronized with rendered bytes."""
+
+    payload = {"status": True, "message": "ok"}
+    response = JSONResponse(payload)
+
+    assert response.headers.get("content-length") == str(len(response.body))
+
+
 def test_default_response_helpers() -> None:
     """DefaultResponse helpers should set status flags appropriately."""
 

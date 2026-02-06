@@ -27,12 +27,12 @@ class JSONResponse(Response):
         background: BackgroundTask | None = None,
     ) -> None:
         super().__init__(
+            content=content,
             status_code=status_code,
             headers=dict(headers or {}),
             media_type=media_type or self.media_type,
             background=background,
         )
-        self.body = self.render(content)
 
     def render(self, content: Any) -> bytes:  # noqa: D401 - standard Starlette signature
         if content is None:
