@@ -47,7 +47,7 @@ Key options for `ade stop`/`ade restart`:
 
 Runtime scope for `ade stop`/`ade restart`:
 
-- Uses process-signature matching for API/worker/web processes (`pgrep -f` style matching)
+- Uses process-signature matching for API/worker/web processes
 - Stops matching ADE service processes regardless of which shell/session started them
 
 ## API CLI: `ade-api`

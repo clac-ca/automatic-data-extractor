@@ -14,11 +14,15 @@ def _empty_service_map() -> dict[str, set[int]]:
     return {"api": set(), "worker": set(), "web": set()}
 
 
+def _disable_runtime_preflight(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "_assert_no_running_ade_services", lambda: None)
+
+
 def test_dev_warns_when_api_process_env_is_set(monkeypatch):
     captured: dict[str, object] = {}
 
+    _disable_runtime_preflight(monkeypatch)
     monkeypatch.setattr(cli, "_maybe_run_migrations", lambda selected, migrate: None)
-    monkeypatch.setattr(cli, "_list_ade_service_pids", lambda: _empty_service_map())
 
     def _fake_spawn(commands, *, cwd):
         captured["commands"] = commands
@@ -42,8 +46,8 @@ def test_dev_warns_when_api_process_env_is_set(monkeypatch):
 def test_start_banner_includes_effective_process_and_concurrency(monkeypatch):
     captured: dict[str, object] = {}
 
+    _disable_runtime_preflight(monkeypatch)
     monkeypatch.setattr(cli, "_maybe_run_migrations", lambda selected, migrate: None)
-    monkeypatch.setattr(cli, "_list_ade_service_pids", lambda: _empty_service_map())
 
     def _fake_spawn(commands, *, cwd):
         captured["commands"] = commands
@@ -70,8 +74,8 @@ def test_start_banner_includes_effective_process_and_concurrency(monkeypatch):
 
 
 def test_start_does_not_emit_legacy_env_warnings(monkeypatch):
+    _disable_runtime_preflight(monkeypatch)
     monkeypatch.setattr(cli, "_maybe_run_migrations", lambda selected, migrate: None)
-    monkeypatch.setattr(cli, "_list_ade_service_pids", lambda: _empty_service_map())
     monkeypatch.setattr(cli, "_spawn_processes", lambda commands, *, cwd: None)
 
     result = runner.invoke(
@@ -196,19 +200,16 @@ def test_start_and_dev_fail_fast_when_ade_processes_exist(monkeypatch, command):
 
 
 def test_process_discovery_deduplicates_and_handles_partial_matches(monkeypatch):
-    def _fake_pgrep(pattern: str) -> set[int]:
-        mapping = {
-            "ade_api.main:app": {1000},
-            "ade-worker start": {2000, 2001},
-            "ade_worker.worker": {2001, 2002},
-            "nginx -g daemon off;": set(),
-            f"npm --prefix {cli.FRONTEND_DIR} run dev": {3000},
-            f"{cli.FRONTEND_DIR}/node_modules/vite/bin/vite.js": set(),
-            f"{cli.FRONTEND_DIR}/node_modules/.bin/vite": {3000},
-        }
-        return mapping.get(pattern, set())
+    def _fake_find(patterns: tuple[str, ...]) -> set[int]:
+        if patterns == cli.API_PROCESS_PATTERNS:
+            return {1000}
+        if patterns == cli.WORKER_PROCESS_PATTERNS:
+            return {2000, 2001, 2002}
+        if patterns == cli.WEB_PROCESS_PATTERNS:
+            return {3000}
+        return set()
 
-    monkeypatch.setattr(cli, "_pgrep_pattern", _fake_pgrep)
+    monkeypatch.setattr(cli, "_find_matching_pids", _fake_find)
 
     service_pids = cli._list_ade_service_pids()
 

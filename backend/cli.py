@@ -56,7 +56,6 @@ def _find_repo_root() -> Path:
 
 REPO_ROOT = _find_repo_root()
 FRONTEND_DIR = REPO_ROOT / "frontend" / "ade-web"
-
 API_PROCESS_PATTERNS = ("ade_api.main:app",)
 WORKER_PROCESS_PATTERNS = ("ade-worker start", "ade_worker.worker")
 WEB_PROCESS_PATTERNS = (
@@ -96,55 +95,38 @@ def _remove_dir(path: Path) -> None:
     shutil.rmtree(path)
 
 
-def _ps_fallback_pattern(pattern: str) -> set[int]:
-    cmd = ["ps", "-eo", "pid=,args="]
-    completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if completed.returncode != 0:
-        return set()
-    matches: set[int] = set()
-    for raw_line in completed.stdout.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        parts = line.split(None, 1)
-        if len(parts) != 2:
-            continue
-        pid_token, args = parts
-        try:
-            pid = int(pid_token)
-        except ValueError:
-            continue
-        if pattern in args:
-            matches.add(pid)
-    return matches
-
-
-def _pgrep_pattern(pattern: str) -> set[int]:
-    cmd = ["pgrep", "-f", pattern]
+def _read_proc_cmdline(pid: int) -> str | None:
+    cmdline_path = Path("/proc") / str(pid) / "cmdline"
     try:
-        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    except FileNotFoundError:
-        return _ps_fallback_pattern(pattern)
-    if completed.returncode not in {0, 1}:
-        return set()
-    if completed.returncode == 1:
-        return set()
-    pids: set[int] = set()
-    for token in completed.stdout.split():
-        try:
-            pids.add(int(token))
-        except ValueError:
-            continue
-    return pids
+        raw_cmdline = cmdline_path.read_bytes()
+    except (FileNotFoundError, PermissionError, ProcessLookupError, OSError):
+        return None
+    if not raw_cmdline:
+        return None
+    return raw_cmdline.replace(b"\x00", b" ").decode("utf-8", errors="ignore").strip()
 
 
 def _find_matching_pids(patterns: Iterable[str]) -> set[int]:
-    pids: set[int] = set()
+    proc_root = Path("/proc")
+    if not proc_root.is_dir():
+        return set()
     current_pid = os.getpid()
-    for pattern in patterns:
-        pids.update(_pgrep_pattern(pattern))
-    pids.discard(current_pid)
-    return pids
+    matches: set[int] = set()
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            pid = int(entry.name)
+        except ValueError:
+            continue
+        if pid == current_pid:
+            continue
+        cmdline = _read_proc_cmdline(pid)
+        if not cmdline:
+            continue
+        if any(pattern in cmdline for pattern in patterns):
+            matches.add(pid)
+    return matches
 
 
 def _list_ade_service_pids() -> dict[str, set[int]]:
@@ -438,7 +420,10 @@ def _run_root_mode(*, mode: str, services: str | None, migrate: bool) -> None:
         and _env_value(base_env, "ADE_API_PROCESSES") is not None
     ):
         typer.echo(
-            "warning: ADE_API_PROCESSES is ignored by `ade dev`; use `ade api dev --processes N`.",
+            (
+                "warning: ADE_API_PROCESSES is ignored by `ade dev`; "
+                "use `ade api dev --processes N`."
+            ),
             err=True,
         )
     _print_effective_runtime_config(
