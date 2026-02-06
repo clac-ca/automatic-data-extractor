@@ -11,7 +11,7 @@ Deploy ADE to Azure Container Apps as one container app that runs `api`, `worker
 - one Azure Database for PostgreSQL Flexible Server
 - one Azure Storage account with:
   - blob container for ADE objects
-  - Azure Files share mounted to `/backend/data`
+  - Azure Files share mounted to `/app/data`
 
 ## Choose Your Network Profile
 
@@ -249,7 +249,7 @@ az containerapp create \
     ADE_SECRET_KEY=secretref:ade-secret-key \
     ADE_BLOB_ACCOUNT_URL="https://${STORAGE_ACCOUNT}.blob.core.windows.net" \
     ADE_BLOB_CONTAINER="$BLOB_CONTAINER" \
-    ADE_DATA_DIR=/backend/data \
+    ADE_DATA_DIR=/app/data \
     ADE_AUTH_DISABLED=false
 ```
 
@@ -316,7 +316,7 @@ Important:
 - ACA outbound IPs can change over time.
 - If you need stable egress IPs for strict allowlists, use a workload profiles environment with NAT gateway.
 
-## Step 10: Mount Persistent `/backend/data`
+## Step 10: Mount Persistent `/app/data`
 
 ```bash
 az containerapp show --name "$APP_NAME" --resource-group "$RG" -o yaml > app.yaml
@@ -330,7 +330,7 @@ template:
     - name: <your-container-name>
       volumeMounts:
         - volumeName: ade-data
-          mountPath: /backend/data
+          mountPath: /app/data
   volumes:
     - name: ade-data
       storageType: AzureFile

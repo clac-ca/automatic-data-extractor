@@ -66,7 +66,7 @@ Use when policy requires private-only data-plane access.
 - `ADE_PUBLIC_WEB_URL` matches real HTTPS URL
 - one chosen network profile is implemented end-to-end
 - managed identity and blob RBAC are configured
-- `/backend/data` is persisted on Azure Files
+- `/app/data` is persisted on Azure Files
 
 ## Safe Mode
 

@@ -42,9 +42,9 @@ If one of these is missing, production startup will fail.
 | `ADE_SERVICES` | root CLI/container | optional | `api,worker,web` | choose which services to run |
 | `ADE_DB_MIGRATE_ON_START` | root CLI | optional | `true` | auto-runs migrations with `ade start/dev` |
 | `ADE_INTERNAL_API_URL` | web/nginx/vite | optional | `http://localhost:8001` | must be origin only (no path/query) |
-| `ADE_DATA_DIR` | API, worker | optional | `backend/data` (repo) or `/backend/data` (container) | writable runtime data path; mount this path for persistence in ACA |
+| `ADE_DATA_DIR` | API, worker | optional | `backend/data` (repo) or `/app/data` (container) | writable runtime data path; mount this path for persistence in ACA |
 
-For Azure Container Apps with persistent data, mount Azure Files to `/backend/data`.
+For Azure Container Apps with persistent data, mount Azure Files to `/app/data`.
 See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact mount workflow.
 
 ## Auth and Security

@@ -20,6 +20,8 @@ ARG APP_COMMIT_SHA=unknown
 FROM ${PYTHON_IMAGE} AS python-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+# Keep APT artifacts cacheable with BuildKit cache mounts.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean
 
 # ------------------------------------------------------------
 # Toolchain sources.
@@ -29,30 +31,29 @@ FROM ${NODE_IMAGE} AS node-dev
 
 # ------------------------------------------------------------
 # backend-builder: install locked production Python environment.
-# Output: /opt/venv
+# Output: /app/.venv
 # ------------------------------------------------------------
 FROM python-base AS backend-builder
 WORKDIR /build/backend
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
-      git \
-      libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+      git
 
 COPY --from=uv-bin /uv /uvx /usr/local/bin/
 
-ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_LINK_MODE=copy
 
 COPY backend/pyproject.toml backend/uv.lock ./
 COPY VERSION /build/VERSION
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-install-project --no-dev
 
-COPY backend/src ./src
-RUN --mount=type=cache,target=/root/.cache/uv \
+COPY --link backend/src ./src
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --locked --no-dev --no-editable
 
 # ------------------------------------------------------------
@@ -60,14 +61,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ------------------------------------------------------------
 FROM ${NODE_IMAGE} AS web-builder
 WORKDIR /build/web
-ARG APP_VERSION
 
 COPY frontend/package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund
 
-COPY frontend/ ./
-RUN ADE_APP_VERSION="$APP_VERSION" npm run build
+COPY --link frontend/ ./
+RUN npm run build
 
 # ------------------------------------------------------------
 # runtime-base: runtime-only OS deps, nginx config, static assets.
@@ -75,34 +75,36 @@ RUN ADE_APP_VERSION="$APP_VERSION" npm run build
 FROM python-base AS runtime-base
 WORKDIR /
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       gettext-base \
       git \
       gosu \
       libpq5 \
       nginx \
-      tini \
-    && rm -rf /var/lib/apt/lists/*
+      tini
 
 RUN useradd -m -u 10001 -s /usr/sbin/nologin adeuser
 
-COPY --from=web-builder --chown=adeuser:adeuser /build/web/dist /usr/share/nginx/html
-COPY --chown=adeuser:adeuser frontend/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY --chown=adeuser:adeuser frontend/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
-COPY --chown=adeuser:adeuser docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY --link --from=web-builder --chown=10001:10001 /build/web/dist /usr/share/nginx/html
+COPY --link --chown=10001:10001 frontend/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY --link --chown=10001:10001 frontend/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
+COPY --link --chown=10001:10001 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 RUN mkdir -p \
-      /backend/data \
+      /app/backend \
+      /app/data \
       /var/cache/nginx \
       /var/run/nginx \
       /var/lib/nginx \
       /var/log/nginx \
     && chown -R adeuser:adeuser \
-      /backend \
+      /app \
       /etc/nginx/conf.d \
       /etc/nginx/templates \
       /usr/share/nginx/html \
@@ -117,12 +119,24 @@ RUN mkdir -p \
 FROM runtime-base AS production
 ARG APP_VERSION
 ARG APP_COMMIT_SHA
-COPY --from=backend-builder /opt/venv /opt/venv
+COPY --link --from=backend-builder /app/.venv /app/.venv
 
-ENV VIRTUAL_ENV=/opt/venv \
+ENV VIRTUAL_ENV=/app/.venv \
+    ADE_REPO_ROOT=/app \
     ADE_APP_VERSION=${APP_VERSION} \
     ADE_APP_COMMIT_SHA=${APP_COMMIT_SHA} \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH"
+
+# Stamp version.json here so APP_VERSION changes don't invalidate web-builder cache.
+RUN python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path("/usr/share/nginx/html/version.json")
+version = (os.environ.get("ADE_APP_VERSION") or "").strip() or "unknown"
+path.write_text(json.dumps({"version": version}, indent=2) + "\n", encoding="utf-8")
+PY
 
 EXPOSE 8000
 CMD ["ade", "start"]
@@ -134,16 +148,17 @@ CMD ["ade", "start"]
 # - interactive shell user with passwordless sudo
 # ------------------------------------------------------------
 FROM python-base AS devcontainer
-WORKDIR /workspaces/automatic-data-extractor
+WORKDIR /app/src
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
       ca-certificates \
       curl \
       git \
       libpq-dev \
-      sudo \
-    && rm -rf /var/lib/apt/lists/*
+      sudo
 
 COPY --from=uv-bin /uv /uvx /usr/local/bin/
 COPY --from=node-dev /usr/local/bin/node /usr/local/bin/node
@@ -154,6 +169,8 @@ RUN ln -sf ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
     && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 RUN useradd -m -u 10001 -s /bin/bash adeuser \
+    && mkdir -p /app/src /app/.venv /app/data \
+    && chown -R adeuser:adeuser /app \
     && usermod -aG sudo adeuser \
     && echo "adeuser ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/90-adeuser \
     && chmod 0440 /etc/sudoers.d/90-adeuser

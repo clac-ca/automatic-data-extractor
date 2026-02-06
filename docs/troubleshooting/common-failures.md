@@ -13,7 +13,7 @@ Use this table to map symptoms to fixes quickly.
 | Storage requests fail with `Deny` | Storage firewall default deny but missing IP/VNet rule | add required IP rule (operator/CI) and subnet rule (ACA) |
 | Storage access still too open | relying on IP rules only for same-region Azure traffic | enforce VNet rule + service endpoint for ACA subnet |
 | Private endpoint deployment cannot resolve storage host | private DNS zone/link is missing | validate private DNS zones and VNet links |
-| Data disappears after restart | `/backend/data` not mounted | verify ACA volumes + volumeMounts for Azure Files |
+| Data disappears after restart | `/app/data` not mounted | verify ACA volumes + volumeMounts for Azure Files |
 | Login behavior is incorrect | `ADE_PUBLIC_WEB_URL` or auth settings mismatch | correct values and redeploy |
 
 ## Fast Commands

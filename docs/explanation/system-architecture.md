@@ -39,7 +39,7 @@ Explain ADE components and how they interact.
 - one container app (`ade-app`)
 - services: `ADE_SERVICES=api,worker,web`
 - external ingress on port `8000`
-- persistent mount at `/backend/data`
+- persistent mount at `/app/data`
 
 ### Azure Container Apps Split (Advanced)
 

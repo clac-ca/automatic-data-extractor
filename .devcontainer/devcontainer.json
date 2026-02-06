@@ -5,14 +5,17 @@
   ],
   "service": "ade",
   "runServices": ["ade", "postgres", "azurite", "azurite-init"],
-  "workspaceFolder": "/workspaces/automatic-data-extractor",
+  "workspaceFolder": "/app/src",
   "shutdownAction": "stopCompose",
 
   "remoteUser": "adeuser",
   "updateRemoteUserUID": true,
   "postCreateCommand": "./setup.sh",
+  // Mirror production's canonical virtualenv location so container binaries always come from /app/.venv.
   "remoteEnv": {
-    "PATH": "/workspaces/automatic-data-extractor/backend/.venv/bin:${containerEnv:PATH}"
+    "UV_PROJECT_ENVIRONMENT": "/app/.venv",
+    "VIRTUAL_ENV": "/app/.venv",
+    "PATH": "/app/.venv/bin:${containerEnv:PATH}"
   },
 
   "forwardPorts": [8000, 8001, 5432, 10000],
@@ -30,7 +33,7 @@
         "ms-python.vscode-pylance"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/workspaces/automatic-data-extractor/backend/.venv/bin/python"
+        "python.defaultInterpreterPath": "/app/.venv/bin/python"
       }
     }
   }

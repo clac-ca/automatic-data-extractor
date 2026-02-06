@@ -16,10 +16,10 @@ services:
       ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
       ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
       ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto works with Azure versioning and degrades for Azurite
-      ADE_DATA_DIR: /workspaces/automatic-data-extractor/backend/data
+      ADE_DATA_DIR: /app/data
       ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
     volumes:
-      - ..:/workspaces/automatic-data-extractor:cached
+      - ..:/app/src:cached
 
   postgres:
     image: postgres:18-bookworm

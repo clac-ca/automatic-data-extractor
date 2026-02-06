@@ -30,7 +30,7 @@ services:
         required: false
     restart: unless-stopped
     volumes:
-      - app_data:/backend/data
+      - app_data:/app/data
     ports:
       - 8000:8000
     environment:
@@ -40,7 +40,7 @@ services:
       ADE_AUTH_DISABLED: "false"
       ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:?Set ADE_PUBLIC_WEB_URL to your external web URL}
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:?Set ADE_DATABASE_URL}
-      ADE_DATA_DIR: /backend/data
+      ADE_DATA_DIR: /app/data
       ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE-}
       ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT-}
       ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING-} # Alternatively set ADE_BLOB_ACCOUNT_URL in .env for managed identity auth.

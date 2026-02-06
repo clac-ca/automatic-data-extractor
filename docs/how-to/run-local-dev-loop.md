@@ -134,6 +134,7 @@ curl -sS http://localhost:8001/api/v1/health
 ## If Something Fails
 
 - Re-run `./setup.sh`.
+- In devcontainers, ADE now uses `/app/.venv` for Python tooling and `/app/data` for runtime state; rebuild/reopen the container after path-related config changes.
 - Check service state with `cd backend && uv run ade status`.
 - If startup errors mention migrations, use [Run Migrations and Resets](run-migrations-and-resets.md).
 - For runtime issues, use [Triage Playbook](../troubleshooting/triage-playbook.md).
