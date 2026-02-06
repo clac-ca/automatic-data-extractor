@@ -64,8 +64,10 @@ describe("api key client", () => {
 
     await revokeMyApiKey("key-1", { ifMatch: 'W/"key-1:etag"' });
     expect(client.DELETE).toHaveBeenCalledWith("/api/v1/users/me/apikeys/{apiKeyId}", {
-      params: { path: { apiKeyId: "key-1" } },
-      headers: { "If-Match": 'W/"key-1:etag"' },
+      params: {
+        path: { apiKeyId: "key-1" },
+        header: { "If-Match": 'W/"key-1:etag"' },
+      },
     });
   });
 
@@ -91,8 +93,10 @@ describe("api key client", () => {
 
     await revokeUserApiKey("user-1", "key-4", { ifMatch: 'W/"key-4:etag"' });
     expect(client.DELETE).toHaveBeenCalledWith("/api/v1/users/{userId}/apikeys/{apiKeyId}", {
-      params: { path: { userId: "user-1", apiKeyId: "key-4" } },
-      headers: { "If-Match": 'W/"key-4:etag"' },
+      params: {
+        path: { userId: "user-1", apiKeyId: "key-4" },
+        header: { "If-Match": 'W/"key-4:etag"' },
+      },
     });
   });
 });

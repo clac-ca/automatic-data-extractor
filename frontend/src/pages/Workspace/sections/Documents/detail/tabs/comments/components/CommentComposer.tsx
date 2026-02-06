@@ -10,8 +10,8 @@ import type { CommentDraft } from "../hooks/useDocumentComments";
 
 type CommentUser = {
   id: string;
-  name: string | null;
-  email: string | null;
+  name?: string | null;
+  email: string;
 };
 
 export function CommentComposer({
@@ -51,7 +51,7 @@ export function CommentComposer({
         id === currentUser.id
           ? currentUser.name || currentUser.email || name || fallback
           : name || fallback;
-      return { id, label, email: member.user?.email ?? null };
+      return { id, label, email: member.user?.email ?? `${id}@workspace.local` };
     });
   }, [currentUser.email, currentUser.id, currentUser.name, membersQuery.data?.items]);
 
@@ -61,7 +61,7 @@ export function CommentComposer({
       map.set(option.id, {
         id: option.id,
         name: option.label ?? null,
-        email: option.email ?? null,
+        email: option.email,
       });
     });
     return map;
@@ -74,7 +74,7 @@ export function CommentComposer({
         if (!inputValue.trim()) return;
         const mentions = selectedMentionIds
           .map((id) => mentionsById.get(id))
-          .filter(Boolean) as CommentUser[];
+          .filter((mention): mention is CommentUser => Boolean(mention));
         onSubmit({ body: inputValue.trim(), mentions });
         setInputValue("");
         setSelectedMentionIds([]);
@@ -128,7 +128,7 @@ export function CommentComposer({
               if (!canSubmit) return;
               const mentions = selectedMentionIds
                 .map((id) => mentionsById.get(id))
-                .filter(Boolean) as CommentUser[];
+                .filter((mention): mention is CommentUser => Boolean(mention));
               onSubmit({ body: inputValue.trim(), mentions });
               setInputValue("");
               setSelectedMentionIds([]);

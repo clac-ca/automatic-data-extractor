@@ -40,8 +40,10 @@ export async function createMyApiKey(
 
 export async function revokeMyApiKey(apiKeyId: string, options: { ifMatch?: string | null } = {}): Promise<void> {
   await client.DELETE("/api/v1/users/me/apikeys/{apiKeyId}", {
-    params: { path: { apiKeyId: apiKeyId } },
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
+    params: {
+      path: { apiKeyId: apiKeyId },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
   });
 }
 
@@ -77,8 +79,10 @@ export async function revokeUserApiKey(
   options: { ifMatch?: string | null } = {},
 ): Promise<void> {
   await client.DELETE("/api/v1/users/{userId}/apikeys/{apiKeyId}", {
-    params: { path: { userId, apiKeyId } },
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
+    params: {
+      path: { userId, apiKeyId },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
   });
 }
 

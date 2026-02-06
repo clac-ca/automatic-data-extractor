@@ -22,7 +22,7 @@ function buildInitials(name: string) {
 
 function renderCommentBody(
   body: string,
-  mentions: Array<{ name: string | null; email: string | null }>,
+  mentions: Array<{ name?: string | null; email: string }>,
 ) {
   const tokens = body.split(/(\s+)/);
   const mentionTokens = new Set<string>();
@@ -62,7 +62,7 @@ export function DocumentsCommentsPanel({
     () => ({
       id: session.user.id,
       name: session.user.display_name || session.user.email || null,
-      email: session.user.email ?? null,
+      email: session.user.email ?? "",
     }),
     [session.user.display_name, session.user.email, session.user.id],
   );

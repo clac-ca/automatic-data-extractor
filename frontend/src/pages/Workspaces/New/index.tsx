@@ -162,7 +162,7 @@ function WorkspaceCreateContent() {
                 id="workspaceName"
                 placeholder="Finance Operations"
                 {...register("name")}
-                invalid={Boolean(errors.name)}
+                aria-invalid={Boolean(errors.name)}
                 disabled={isSubmitting}
               />
             </FormField>
@@ -177,7 +177,7 @@ function WorkspaceCreateContent() {
                 id="workspaceSlug"
                 placeholder="finance-ops"
                 {...register("slug")}
-                invalid={Boolean(errors.slug)}
+                aria-invalid={Boolean(errors.slug)}
                 disabled={isSubmitting}
               />
             </FormField>

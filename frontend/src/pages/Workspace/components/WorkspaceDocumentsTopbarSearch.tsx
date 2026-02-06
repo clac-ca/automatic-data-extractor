@@ -322,7 +322,7 @@ function useWorkspaceDocumentsSearchController({
         sort: null,
         q: nextQuery,
         filters: null,
-        joinOperator: null,
+        joinOperator: undefined,
         includeTotal: false,
       },
       controller.signal,

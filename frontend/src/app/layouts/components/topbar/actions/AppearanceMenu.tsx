@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
 
 import { BUILTIN_THEMES, MODE_OPTIONS, useTheme } from "@/providers/theme";
@@ -24,6 +24,14 @@ export function AppearanceMenu({
   const [open, setOpen] = useState(false);
   const isHeaderTone = tone === "header";
 
+  type AppearanceItem = {
+    id: string;
+    label: string;
+    onSelect: () => void;
+    onHover?: () => void;
+    icon: ReactNode;
+  };
+
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen);
@@ -34,8 +42,8 @@ export function AppearanceMenu({
     [setPreviewTheme],
   );
 
-  const items = useMemo(() => {
-    const modeItems = MODE_OPTIONS.map((option) => ({
+  const items = useMemo<AppearanceItem[]>(() => {
+    const modeItems: AppearanceItem[] = MODE_OPTIONS.map((option) => ({
       id: `mode-${option.value}`,
       label: `${option.label} mode`,
       onSelect: () => {
@@ -44,7 +52,7 @@ export function AppearanceMenu({
       icon: modePreference === option.value ? <CheckIcon className="h-4 w-4 text-foreground" /> : null,
     }));
 
-    const themeItems = BUILTIN_THEMES.map((entry) => ({
+    const themeItems: AppearanceItem[] = BUILTIN_THEMES.map((entry) => ({
       id: `theme-${entry.id}`,
       label: entry.label,
       onSelect: () => {

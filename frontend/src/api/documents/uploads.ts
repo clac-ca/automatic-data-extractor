@@ -2,7 +2,7 @@ import type { components } from "@/types";
 import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@/lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
-export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];
+export type DocumentUploadRunOptions = components["schemas"]["RunCreateOptionsBase"];
 export type DocumentConflictMode = components["schemas"]["DocumentConflictMode"];
 
 interface UploadDocumentOptions {

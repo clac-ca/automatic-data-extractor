@@ -51,7 +51,7 @@ export function useDocumentsView({
     [workspaceId, page, perPage, sort, qKey, filtersKey, joinOperator],
   );
 
-  const cursorPager = useCursorPager<DocumentListRow>({
+  const cursorPager = useCursorPager<DocumentPageResult>({
     page,
     limit: perPage,
     includeTotal: true,

@@ -57,7 +57,7 @@ export function SettingsDrawer({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={onClose}
               aria-label="Close drawer"
               className="text-muted-foreground"

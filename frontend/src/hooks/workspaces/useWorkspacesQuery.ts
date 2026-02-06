@@ -45,7 +45,7 @@ export function useWorkspacesQuery(options: WorkspacesQueryOptions = {}) {
     [pageSize, sort, q, filtersKey, joinOperator, includeTotal],
   );
 
-  const cursorPager = useCursorPager({
+  const cursorPager = useCursorPager<WorkspaceListPage>({
     page,
     limit: pageSize,
     includeTotal,

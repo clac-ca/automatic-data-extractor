@@ -90,7 +90,7 @@ export function RolesSettingsPage() {
 
   const handleUpdateRole = async (roleId: string, values: RoleFormValues) => {
     setFeedbackMessage(null);
-    const ifMatch = buildWeakEtag(roleId, selectedRole?.updatedAt ?? selectedRole?.createdAt ?? null);
+    const ifMatch = buildWeakEtag(roleId, selectedRole?.updated_at ?? selectedRole?.created_at ?? null);
     await updateRole.mutateAsync({
       roleId,
       payload: {
@@ -106,7 +106,7 @@ export function RolesSettingsPage() {
 
   const handleDeleteRole = async (role: RoleDefinition) => {
     setFeedbackMessage(null);
-    const ifMatch = buildWeakEtag(role.id, role.updatedAt ?? role.createdAt ?? null);
+    const ifMatch = buildWeakEtag(role.id, role.updated_at ?? role.created_at ?? null);
     await deleteRole.mutateAsync({ roleId: role.id, ifMatch });
     setFeedbackMessage({ tone: "success", message: `Deleted role "${role.name}".` });
     closeDrawer();

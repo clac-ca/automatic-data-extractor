@@ -29,7 +29,7 @@ export function RunsTable({
     pageCount,
     initialState: {
       sorting: [{ id: "createdAt", desc: true }],
-      pagination: { pageSize: DEFAULT_PAGE_SIZE },
+      pagination: { pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE },
       columnVisibility: {
         id: false,
         startedAt: false,

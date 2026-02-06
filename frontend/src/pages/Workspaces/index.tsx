@@ -145,7 +145,7 @@ function WorkspacesIndexContent() {
         : 1,
     initialState: {
       sorting: [{ id: "name", desc: false }],
-      pagination: { pageSize: DEFAULT_WORKSPACE_PAGE_SIZE },
+      pagination: { pageIndex: 0, pageSize: DEFAULT_WORKSPACE_PAGE_SIZE },
     },
     enableAdvancedFilter: true,
     clearOnDefault: true,

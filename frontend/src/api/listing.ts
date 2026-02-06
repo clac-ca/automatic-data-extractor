@@ -45,7 +45,7 @@ export type ListQueryParams = {
   includeFacets?: boolean;
 };
 
-export function encodeFilters(filters?: readonly FilterItem[]): string | undefined {
+export function encodeFilters(filters?: readonly FilterItem[] | null): string | undefined {
   if (!filters || filters.length === 0) {
     return undefined;
   }

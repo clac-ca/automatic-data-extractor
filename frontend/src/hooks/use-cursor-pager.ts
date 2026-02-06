@@ -9,23 +9,25 @@ type CursorFetchOptions = {
   signal?: AbortSignal;
 };
 
-type CursorFetcher<T> = (options: CursorFetchOptions) => Promise<CursorPage<T>>;
+type CursorFetcher<TPage extends CursorPage<unknown>> = (
+  options: CursorFetchOptions,
+) => Promise<TPage>;
 
-type UseCursorPagerOptions<T> = {
+type UseCursorPagerOptions<TPage extends CursorPage<unknown>> = {
   page: number;
   limit: number;
   includeTotal: boolean;
   resetKey: string;
-  fetchPage: CursorFetcher<T>;
+  fetchPage: CursorFetcher<TPage>;
 };
 
-export function useCursorPager<T>({
+export function useCursorPager<TPage extends CursorPage<unknown>>({
   page,
   limit,
   includeTotal,
   resetKey,
   fetchPage,
-}: UseCursorPagerOptions<T>) {
+}: UseCursorPagerOptions<TPage>) {
   const cursorByPageRef = useRef<Map<number, string | null>>(new Map([[1, null]]));
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export function useCursorPager<T>({
         .sort((left, right) => right - left);
       let currentPage = knownPages[0] ?? 1;
       let cursor = cursorByPage.get(currentPage) ?? null;
-      let lastData: CursorPage<T> | null = null;
+      let lastData: TPage | null = null;
 
       while (currentPage < targetPage) {
         lastData = await fetchPage({

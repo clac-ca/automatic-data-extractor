@@ -1,15 +1,16 @@
-import type { ColumnSort, Row, RowData } from "@tanstack/react-table";
+import type { ColumnSort, Row } from "@tanstack/react-table";
+import type { RowData } from "@tanstack/table-core";
 import type { DataTableConfig } from "@/config/data-table";
 import type { FilterItemSchema } from "@/lib/parsers";
 
-declare module "@tanstack/react-table" {
-  // biome-ignore lint/correctness/noUnusedVariables: _TData is used by consumers via declaration merging
-  interface TableMeta<_TData extends RowData> {
+declare module "@tanstack/table-core" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface TableMeta<TData extends RowData> {
     queryKeys?: QueryKeys;
   }
 
-  // biome-ignore lint/correctness/noUnusedVariables: _TData/_TValue are used by consumers via declaration merging
-  interface ColumnMeta<_TData extends RowData, _TValue> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
     label?: string;
     placeholder?: string;
     variant?: FilterVariant;

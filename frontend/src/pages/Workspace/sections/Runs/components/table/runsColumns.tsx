@@ -7,7 +7,7 @@ import { RunActionsCell } from "./cells/RunActionsCell";
 import { RunInputCell } from "./cells/RunInputCell";
 import { RunStatusCell } from "./cells/RunStatusCell";
 import { fileTypeLabel, formatTimestamp } from "../../utils";
-import type { RunRecord, RunStatus } from "../../types";
+import type { RunRecord } from "../../types";
 
 export type RunsColumnContext = {
   activeRunId: string | null;
@@ -17,7 +17,7 @@ export type RunsColumnContext = {
 export function useRunsColumns({ activeRunId, onTogglePreview }: RunsColumnContext) {
   const statusOptions = useMemo(
     () =>
-      (["queued", "running", "succeeded", "failed"] as RunStatus[]).map((value) => ({
+      (["queued", "running", "succeeded", "failed"] as RunRecord["status"][]).map((value) => ({
         value,
         label: value[0]?.toUpperCase() + value.slice(1),
       })),

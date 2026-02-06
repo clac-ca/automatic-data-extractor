@@ -1,7 +1,14 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchRunColumns, fetchRunFields, fetchRunMetrics, fetchWorkspaceRuns } from "@/api/runs/api";
+import {
+  fetchRunColumns,
+  fetchRunFields,
+  fetchRunMetrics,
+  fetchWorkspaceRuns,
+  type RunPage,
+  type RunsQuery,
+} from "@/api/runs/api";
 import { runsKeys } from "./keys";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
 
@@ -32,7 +39,7 @@ export function useRunsView({
     [workspaceId, perPage, sort, filters, joinOperator],
   );
 
-  const cursorPager = useCursorPager({
+  const cursorPager = useCursorPager<RunPage>({
     page,
     limit: perPage,
     includeTotal: true,
@@ -67,7 +74,7 @@ export function useRunsView({
     [page, perPage, sort, filtersKey, joinOperator],
   );
 
-  const runsQuery = useQuery({
+  const runsQuery = useQuery<RunPage>({
     queryKey: runsKeys.list(workspaceId, listKey),
     queryFn: ({ signal }) => cursorPager.fetchCurrentPage(signal),
     enabled: enabled && Boolean(workspaceId),

@@ -4,9 +4,7 @@ import type { components } from "@/types";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"];
 export type DocumentListRow = components["schemas"]["DocumentListRow"];
-export type DocumentListPage = Omit<components["schemas"]["DocumentListPage"], "items"> & {
-  items?: DocumentListRow[] | null;
-};
+export type DocumentListPage = components["schemas"]["DocumentListPage"];
 export type DocumentPageResult = DocumentListPage;
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
@@ -239,7 +237,10 @@ export async function fetchWorkspaceDocumentRowsByIdFilter(
   const byId = new Map<string, DocumentListRow>();
   for (const batch of batches) {
     // Use the list endpoint with `id in [...]` so membership respects the same server-side filters.
-    const filters = [...filtersBase, { id: "id", operator: "in", value: batch }];
+    const filters: FilterItem[] = [
+      ...filtersBase,
+      { id: "id", operator: "in", value: batch },
+    ];
     const page = await fetchWorkspaceDocuments(
       workspaceId,
       {

@@ -133,6 +133,7 @@ export function buildRunRecord(run: RunResource): RunRecord {
     id: run.id,
     configurationId: run.configuration_id,
     status: run.status,
+    createdAt: run.created_at,
     inputName,
     outputName,
     configLabel,

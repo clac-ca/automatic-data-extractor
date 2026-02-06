@@ -8,13 +8,11 @@ import { resolveApiUrl } from "@/api/client";
 import {
   deleteWorkspaceDocument,
   fetchWorkspaceDocumentRowsByIdFilter,
-  fetchWorkspaceDocumentsDelta,
   patchWorkspaceDocument,
   type DocumentChangeNotification,
   type DocumentRecord,
   type DocumentUploadResponse,
 } from "@/api/documents";
-import { ApiError } from "@/api/errors";
 import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
@@ -35,15 +33,16 @@ import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/lis
 
 import { DocumentsPresenceIndicator } from "../../shared/presence/DocumentsPresenceIndicator";
 import { shortId } from "../../shared/utils";
+import { partitionDocumentChanges } from "../../shared/documentChanges";
 import type { DocumentRow, WorkspacePerson } from "../../shared/types";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
 import { useDocumentsView } from "../hooks/useDocumentsView";
+import { useDocumentsDeltaSync } from "../../shared/hooks/useDocumentsDeltaSync";
 import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
-import { useWorkspaceDocumentsChanges } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 
 type CurrentUser = {
   id: string;
@@ -151,11 +150,6 @@ export function DocumentsTableView({
     setUploadProgress,
   } = documentsView;
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
-  const deltaTokenRef = useRef<string | null>(null);
-  const deltaPullInFlightRef = useRef(false);
-  const deltaPullQueuedRef = useRef(false);
-  const pendingNotifyRef = useRef(false);
-  const debounceTimerRef = useRef<number | null>(null);
 
   const openDocument = useCallback(
     (documentId: string, tab?: "data" | "comments") => {
@@ -171,25 +165,8 @@ export function DocumentsTableView({
   }, [filterFlag, setFilterFlag]);
 
   useEffect(() => {
-    deltaTokenRef.current = null;
-    pendingNotifyRef.current = false;
     setUpdatesAvailable(false);
   }, [viewKey]);
-
-  useEffect(() => {
-    if (changesCursor) {
-      deltaTokenRef.current = changesCursor;
-    }
-  }, [changesCursor]);
-
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current !== null) {
-        window.clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
-    };
-  }, []);
 
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
@@ -536,22 +513,7 @@ export function DocumentsTableView({
     async (changes: DocumentChangeNotification[]) => {
       if (!changes.length) return;
       let needsRefresh = false;
-      const opById = new Map<string, DocumentChangeNotification["op"]>();
-      changes.forEach((change) => {
-        if (change.documentId && change.op) {
-          opById.set(change.documentId, change.op);
-        }
-      });
-
-      const deleteIds: string[] = [];
-      const upsertIds: string[] = [];
-      opById.forEach((op, documentId) => {
-        if (op === "delete") {
-          deleteIds.push(documentId);
-        } else {
-          upsertIds.push(documentId);
-        }
-      });
+      const { deleteIds, upsertIds } = partitionDocumentChanges(changes);
 
       if (deleteIds.length > 0) {
         deleteIds.forEach((documentId) => {
@@ -624,86 +586,15 @@ export function DocumentsTableView({
     ],
   );
 
-  const pullDelta = useCallback(async () => {
-    if (deltaPullInFlightRef.current) {
-      deltaPullQueuedRef.current = true;
-      return;
-    }
-    const since = deltaTokenRef.current;
-    if (!since) {
-      pendingNotifyRef.current = true;
-      return;
-    }
-    deltaPullInFlightRef.current = true;
-    deltaPullQueuedRef.current = false;
-    try {
-      let nextSince = since;
-      const collected: DocumentChangeNotification[] = [];
-      while (true) {
-        const delta = await fetchWorkspaceDocumentsDelta(workspaceId, {
-          since: nextSince,
-        });
-        collected.push(...(delta.changes ?? []));
-        if (delta.nextSince) {
-          nextSince = delta.nextSince;
-        }
-        if (!delta.hasMore) {
-          break;
-        }
-      }
-      deltaTokenRef.current = nextSince;
-      if (collected.length > 0) {
-        await applyChangeEntries(collected);
-      }
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 410) {
-        refreshSnapshot();
-      }
-    } finally {
-      deltaPullInFlightRef.current = false;
-      if (deltaPullQueuedRef.current) {
-        deltaPullQueuedRef.current = false;
-        void pullDelta();
-      }
-    }
-  }, [applyChangeEntries, refreshSnapshot, workspaceId]);
-
-  const scheduleDeltaPull = useCallback(
-    (change?: DocumentChangeNotification) => {
-      if (!deltaTokenRef.current && change?.id) {
-        deltaTokenRef.current = change.id;
-        void applyChangeEntries([change]);
-        return;
-      }
-      pendingNotifyRef.current = true;
-      if (debounceTimerRef.current !== null) {
-        return;
-      }
-      debounceTimerRef.current = window.setTimeout(() => {
-        debounceTimerRef.current = null;
-        if (!pendingNotifyRef.current) return;
-        pendingNotifyRef.current = false;
-        void pullDelta();
-      }, 250);
+  useDocumentsDeltaSync({
+    workspaceId,
+    changesCursor,
+    resetKey: viewKey,
+    onApplyChanges: applyChangeEntries,
+    onSnapshotStale: () => {
+      void refreshSnapshot();
     },
-    [applyChangeEntries, pullDelta],
-  );
-
-  useEffect(() => {
-    if (!changesCursor) return;
-    if (!pendingNotifyRef.current) return;
-    pendingNotifyRef.current = false;
-    void pullDelta();
-  }, [changesCursor, pullDelta]);
-
-  useWorkspaceDocumentsChanges(
-    useCallback(
-      (change) => {
-        scheduleDeltaPull(change);
-      },
-      [scheduleDeltaPull],
-    ),
-  );
+  });
 
   const columns = useDocumentsColumns({
     filterMode,

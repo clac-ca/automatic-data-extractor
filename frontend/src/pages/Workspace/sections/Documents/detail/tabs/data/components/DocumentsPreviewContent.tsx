@@ -95,32 +95,21 @@ export function DocumentsPreviewContent({
     staleTime: 30_000,
   });
 
-  const previewHeaders = useMemo(
-    () => previewQuery.data?.headers ?? [],
-    [previewQuery.data],
-  );
-
   const previewRows = useMemo(
     () => previewQuery.data?.rows ?? [],
     [previewQuery.data],
   );
 
   const headerLabels = useMemo(() => {
-    if (previewHeaders.length > 0) {
-      return previewHeaders.map((header, index) =>
-        header?.trim() ? header : columnLabel(index),
-      );
-    }
-
-    const fallbackColumnCount = previewRows.reduce((max, row) => {
-      if (!Array.isArray(row)) return max;
-      return Math.max(max, row.length);
-    }, 0);
+    const fallbackColumnCount =
+      typeof previewQuery.data?.totalColumns === "number"
+        ? previewQuery.data.totalColumns
+        : previewRows.reduce((max, row) => Math.max(max, row.length), 0);
 
     return Array.from({ length: fallbackColumnCount }, (_, index) =>
       columnLabel(index),
     );
-  }, [previewHeaders, previewRows]);
+  }, [previewQuery.data?.totalColumns, previewRows]);
 
   const previewMeta = useMemo(() => {
     if (!previewQuery.data) return null;

@@ -94,7 +94,6 @@ export function RunsTableView({ workspaceId }: { workspaceId: string }) {
         <AlertTriangle
           className="h-4 w-4 text-destructive"
           aria-label="Run list refresh failed"
-          title="Run list refresh failed"
         />
       ) : null}
     </div>

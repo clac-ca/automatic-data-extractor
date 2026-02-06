@@ -29,6 +29,7 @@ export interface RunRecord {
   readonly id: string;
   readonly configurationId: string;
   readonly status: RunStatus;
+  readonly createdAt: string;
   readonly inputName: string;
   readonly outputName: string | null;
   readonly configLabel: string;

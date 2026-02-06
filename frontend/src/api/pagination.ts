@@ -13,14 +13,14 @@ export function clampPageSize(size?: number): number | undefined {
 export type CursorMeta = {
   readonly limit: number;
   readonly hasMore: boolean;
-  readonly nextCursor: string | null;
+  readonly nextCursor?: string | null;
   readonly totalIncluded: boolean;
-  readonly totalCount: number | null;
+  readonly totalCount?: number | null;
   readonly changesCursor?: string | null;
 };
 
 export type CursorPage<T> = {
-  readonly items?: readonly T[] | null;
+  readonly items: T[];
   readonly meta: CursorMeta;
   readonly facets?: Record<string, unknown> | null;
 };
@@ -37,7 +37,7 @@ export async function collectAllPages<T>(
   for (let page = 0; page < maxPages; page += 1) {
     const pageData = await fetchPage(cursor);
     pages.push(pageData);
-    combined = combined.concat(pageData.items ?? []);
+    combined = combined.concat(pageData.items);
     if (!pageData.meta.hasMore) {
       break;
     }
@@ -65,7 +65,7 @@ export async function collectAllPages<T>(
 }
 
 type PageWithItems<T> = {
-  readonly items?: readonly T[] | null;
+  readonly items: readonly T[];
 };
 
 export function useFlattenedPages<T>(
@@ -81,8 +81,7 @@ export function useFlattenedPages<T>(
     const indexByKey = new Map<string, number>();
 
     for (const page of pages) {
-      const pageItems = Array.isArray(page.items) ? (page.items as readonly T[]) : [];
-      for (const item of pageItems) {
+      for (const item of page.items) {
         const key = getKey(item);
         const existingIndex = indexByKey.get(key);
 

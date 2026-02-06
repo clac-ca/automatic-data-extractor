@@ -1,6 +1,6 @@
 "use client";
 
-import type { Column, ColumnMeta, Table } from "@tanstack/react-table";
+import type { Column, Table } from "@tanstack/react-table";
 import {
   CalendarIcon,
   Check,
@@ -66,7 +66,14 @@ import type {
   ExtendedColumnFilter,
   FilterOperator,
   JoinOperator,
+  Option,
 } from "@/types/data-table";
+
+type FilterColumnMeta = {
+  label?: string;
+  placeholder?: string;
+  options?: Option[];
+};
 
 const DEBOUNCE_MS = 300;
 const THROTTLE_MS = 50;
@@ -567,7 +574,7 @@ function onFilterInputRender<TData>({
   filter: ExtendedColumnFilter<TData>;
   inputId: string;
   column: Column<TData>;
-  columnMeta?: ColumnMeta<TData, unknown>;
+  columnMeta?: FilterColumnMeta;
   onFilterUpdate: (
     filterId: string,
     updates: Partial<Omit<ExtendedColumnFilter<TData>, "filterId">>,
