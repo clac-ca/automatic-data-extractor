@@ -25,11 +25,12 @@ This documentation is written for people who operate ADE in production and contr
 
 ### Contributor Path
 
-1. [Run Local Dev Loop](how-to/run-local-dev-loop.md)
-2. [CLI Reference](reference/cli-reference.md)
-3. [Backend Service Module Contract](reference/backend-service-module-contract.md)
-4. [System Architecture](explanation/system-architecture.md)
-5. [Documentation Maintenance](standards/documentation-maintenance.md)
+1. [Developer Setup (Fast Path)](tutorials/developer-setup.md)
+2. [Run Local Dev Loop](how-to/run-local-dev-loop.md)
+3. [CLI Reference](reference/cli-reference.md)
+4. [Backend Service Module Contract](reference/backend-service-module-contract.md)
+5. [System Architecture](explanation/system-architecture.md)
+6. [Documentation Maintenance](standards/documentation-maintenance.md)
 
 ## I Need To
 
@@ -50,6 +51,7 @@ This documentation is written for people who operate ADE in production and contr
 ## Navigation
 
 - Tutorials
+  - [Developer Setup (Fast Path)](tutorials/developer-setup.md)
   - [Local Quickstart](tutorials/local-quickstart.md)
   - [Production Bootstrap](tutorials/production-bootstrap.md)
 - How-to

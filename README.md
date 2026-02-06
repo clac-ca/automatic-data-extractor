@@ -84,6 +84,7 @@ Top-level docs index: [`docs/index.md`](docs/index.md)
 
 Primary operator pages:
 
+- [`docs/tutorials/developer-setup.md`](docs/tutorials/developer-setup.md)
 - [`docs/tutorials/local-quickstart.md`](docs/tutorials/local-quickstart.md)
 - [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
 - [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
