@@ -11,14 +11,44 @@ icon = "run"
 command = "cd backend && uv run ade dev"
 
 [[actions]]
-name = "Infra Up"
+name = "Infra Up [-d --wait]"
 icon = "run"
 command = "cd backend && uv run ade infra up -d --wait"
 
 [[actions]]
-name = "Infra Down"
+name = "Infra Up [--force -d --wait]"
+icon = "run"
+command = "cd backend && uv run ade infra up --force -d --wait"
+
+[[actions]]
+name = "Infra Status [ps]"
+icon = "run"
+command = "cd backend && uv run ade infra ps"
+
+[[actions]]
+name = "Infra Logs [-f]"
+icon = "run"
+command = "cd backend && uv run ade infra logs -f"
+
+[[actions]]
+name = "Infra Down [default]"
 icon = "run"
 command = "cd backend && uv run ade infra down"
+
+[[actions]]
+name = "Infra Clean [-v --remove-orphans]"
+icon = "run"
+command = "cd backend && uv run ade infra down -v --remove-orphans"
+
+[[actions]]
+name = "Infra Nuke [-v --rmi all --remove-orphans]"
+icon = "run"
+command = "cd backend && uv run ade infra down -v --rmi all --remove-orphans"
+
+[[actions]]
+name = "Infra Info [ports]"
+icon = "run"
+command = "cd backend && uv run ade infra info"
 
 [[actions]]
 name = "ADE Test"
