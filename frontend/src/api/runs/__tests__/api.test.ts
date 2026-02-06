@@ -19,10 +19,12 @@ const sampleRunResource = {
   object: "ade.run",
   workspace_id: "ws-1",
   configuration_id: "config-123",
+  operation: "process",
   status: "queued",
   created_at: "2025-01-01T00:00:00Z",
   links: {
     self: "/api/v1/runs/run-123",
+    events_stream: "/api/v1/runs/run-123/events/stream",
     events_download: "/api/v1/runs/run-123/events/download",
     logs: "/api/v1/runs/run-123/events/download",
     input: "/api/v1/runs/run-123/input",
@@ -147,7 +149,8 @@ describe("createRun", () => {
 describe("runEventsUrl helpers", () => {
   it("builds event download URLs", () => {
     const url = runEventsUrl(sampleRunResource, { afterSequence: 42 });
-    expect(url).toContain("/api/v1/runs/run-123/events/download");
+    expect(url).toContain("/api/v1/runs/run-123/events/stream");
+    expect(url).toContain("cursor=42");
   });
 
   it("streams events for a completed run resource", async () => {
@@ -160,7 +163,7 @@ describe("runEventsUrl helpers", () => {
     const result = await iterator.next();
 
     const [url] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/api/v1/runs/run-123/events/download");
+    expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
     expect(result.value).toMatchObject(runEvent);
     await iterator.return?.(undefined);
   });

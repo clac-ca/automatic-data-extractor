@@ -12,7 +12,7 @@ from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_storage import build_storage_adapter
 from ade_db.models import RunStatus
-from tests.integration.documents.helpers import (
+from tests.api.integration.documents.helpers import (
     build_documents_fixture,
     seed_failed_run,
 )

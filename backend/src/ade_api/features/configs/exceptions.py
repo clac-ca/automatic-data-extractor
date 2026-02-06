@@ -39,10 +39,6 @@ class ConfigValidationFailedError(Exception):
         self.issues = list(issues)
 
 
-class ConfigValidationRequiredError(Exception):
-    """Raised when publish is attempted without a matching validated digest."""
-
-
 class ConfigStateError(Exception):
     """Raised when lifecycle transitions are not permitted."""
 
@@ -80,6 +76,5 @@ __all__ = [
     "ConfigStateError",
     "ConfigStorageNotFoundError",
     "ConfigValidationFailedError",
-    "ConfigValidationRequiredError",
     "ConfigurationNotFoundError",
 ]

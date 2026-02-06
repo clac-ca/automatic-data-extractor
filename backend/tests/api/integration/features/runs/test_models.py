@@ -29,7 +29,7 @@ def _create_configuration(session: Session) -> tuple[Workspace, Configuration]:
         workspace_id=workspace.id,
         display_name="Config",  # minimal metadata for FK relations
         status=ConfigurationStatus.ACTIVE,
-        content_digest="digest",
+        published_digest="digest",
     )
     session.add(configuration)
     session.flush()

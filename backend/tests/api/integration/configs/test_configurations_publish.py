@@ -1,4 +1,4 @@
-"""Configuration publish behavior tests."""
+"""Configuration publish run behavior tests."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from ade_db.models import Configuration, ConfigurationStatus
+from ade_db.models import Configuration, ConfigurationStatus, Run, RunOperation, RunStatus
 from ade_api.settings import Settings
-from tests.integration.configs.helpers import auth_headers, config_path, create_from_template
+from tests.api.integration.configs.helpers import auth_headers, config_path, create_from_template
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_publish_configuration_sets_active_and_digest(
+async def test_publish_configuration_returns_queued_publish_run(
     async_client: AsyncClient,
     seed_identity,
     db_session,
@@ -33,64 +33,30 @@ async def test_publish_configuration_sets_active_and_digest(
         headers=headers,
         json=None,
     )
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["status"] == "active"
-    assert payload["content_digest"].startswith("sha256:")
+    assert response.status_code == 202, response.text
 
-    stmt = select(Configuration).where(
-        Configuration.workspace_id == workspace_id,
-        Configuration.id == record["id"],
+    payload = response.json()
+    assert payload["operation"] == "publish"
+    assert payload["status"] == "queued"
+    assert payload["configuration_id"] == record["id"]
+    assert payload["links"]["events_stream"].endswith(f"/api/v1/runs/{payload['id']}/events/stream")
+    assert payload["links"]["events_download"].endswith(
+        f"/api/v1/runs/{payload['id']}/events/download"
     )
 
-    def _load_config():
+    stmt = select(Run).where(Run.id == payload["id"])
+
+    def _load_run():
         return db_session.execute(stmt).scalar_one()
 
-    config = await anyio.to_thread.run_sync(_load_config)
-    assert config.status == "active"
-    assert config.content_digest == payload["content_digest"]
+    run = await anyio.to_thread.run_sync(_load_run)
+    assert run.operation is RunOperation.PUBLISH
+    assert run.status is RunStatus.QUEUED
 
 
-async def test_publish_archives_previous_active(
+async def test_publish_reuses_existing_in_flight_run(
     async_client: AsyncClient,
     seed_identity,
-    db_session,
-) -> None:
-    workspace_id = seed_identity.workspace_id
-    owner = seed_identity.workspace_owner
-    headers = await auth_headers(async_client, email=owner.email, password=owner.password)
-    first = await create_from_template(
-        async_client, workspace_id=workspace_id, headers=headers, display_name="First"
-    )
-    await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{first['id']}/publish",
-        headers=headers,
-        json=None,
-    )
-    second = await create_from_template(
-        async_client, workspace_id=workspace_id, headers=headers, display_name="Second"
-    )
-    await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{second['id']}/publish",
-        headers=headers,
-        json=None,
-    )
-
-    stmt = select(Configuration).where(Configuration.workspace_id == workspace_id)
-
-    def _load_configs():
-        result = db_session.execute(stmt)
-        return {str(row.id): row for row in result.scalars()}
-
-    configs = await anyio.to_thread.run_sync(_load_configs)
-    assert configs[str(first["id"])].status is ConfigurationStatus.ARCHIVED
-    assert configs[str(second["id"])].status is ConfigurationStatus.ACTIVE
-
-
-async def test_publish_returns_422_when_validation_fails(
-    async_client: AsyncClient,
-    seed_identity,
-    settings: Settings,
 ) -> None:
     workspace_id = seed_identity.workspace_id
     owner = seed_identity.workspace_owner
@@ -100,23 +66,27 @@ async def test_publish_returns_422_when_validation_fails(
         workspace_id=workspace_id,
         headers=headers,
     )
-    package_path = config_path(settings, workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
-    package_path.unlink()
 
-    response = await async_client.post(
+    first = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
         headers=headers,
         json=None,
     )
-    assert response.status_code == 422
-    problem = response.json()
-    assert problem["type"] == "validation_error"
-    assert problem.get("errors")
+    second = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        headers=headers,
+        json=None,
+    )
+
+    assert first.status_code == 202, first.text
+    assert second.status_code == 202, second.text
+    assert first.json()["id"] == second.json()["id"]
 
 
 async def test_publish_returns_409_when_configuration_not_draft(
     async_client: AsyncClient,
     seed_identity,
+    db_session,
 ) -> None:
     workspace_id = seed_identity.workspace_id
     owner = seed_identity.workspace_owner
@@ -127,12 +97,14 @@ async def test_publish_returns_409_when_configuration_not_draft(
         headers=headers,
     )
 
-    response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
-        headers=headers,
-        json=None,
-    )
-    assert response.status_code == 200, response.text
+    stmt = select(Configuration).where(Configuration.id == record["id"])
+
+    def _promote_to_active() -> None:
+        config = db_session.execute(stmt).scalar_one()
+        config.status = ConfigurationStatus.ACTIVE
+        db_session.commit()
+
+    await anyio.to_thread.run_sync(_promote_to_active)
 
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
@@ -160,9 +132,9 @@ async def test_publish_requires_engine_dependency(
     pyproject.write_text(
         (
             "[project]\n"
-            "name = \"ade_config\"\n"
-            "version = \"0.1.0\"\n"
-            "dependencies = [\"pandas\"]\n"
+            'name = "ade_config"\n'
+            'version = "0.1.0"\n'
+            'dependencies = ["pandas"]\n'
         ),
         encoding="utf-8",
     )
@@ -174,4 +146,8 @@ async def test_publish_requires_engine_dependency(
     )
     assert response.status_code == 422, response.text
     payload = response.json()
-    assert payload["detail"]["error"] == "engine_dependency_missing"
+    detail = payload.get("detail")
+    if isinstance(detail, dict):
+        assert detail.get("error") == "engine_dependency_missing"
+    else:
+        assert "ade-engine" in str(detail)

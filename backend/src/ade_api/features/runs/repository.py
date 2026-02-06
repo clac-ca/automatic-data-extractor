@@ -95,6 +95,20 @@ class RunsRepository:
         result = self._session.execute(stmt)
         return list(result.scalars().all())
 
+    def get_active_publish_run(self, *, configuration_id: UUID) -> Run | None:
+        stmt = (
+            select(Run)
+            .where(
+                Run.configuration_id == configuration_id,
+                Run.operation == RunOperation.PUBLISH,
+                Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]),
+            )
+            .order_by(Run.created_at.desc())
+            .limit(1)
+        )
+        result = self._session.execute(stmt)
+        return result.scalars().first()
+
     def get_metrics(self, run_id: UUID) -> RunMetrics | None:
         return self._session.get(RunMetrics, run_id)
 

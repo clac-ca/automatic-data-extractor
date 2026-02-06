@@ -7,7 +7,7 @@ from ade_api.features.configs.exceptions import ConfigEngineDependencyMissingErr
 from ade_api.features.runs.schemas import RunCreateOptions
 from ade_db.models import Run, RunStatus
 
-from tests.integration.features.runs.helpers import build_runs_service
+from tests.api.integration.features.runs.helpers import build_runs_service
 
 
 def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:

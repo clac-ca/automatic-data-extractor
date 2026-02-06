@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.features.system_settings.service import SAFE_MODE_DEFAULT_DETAIL
-from tests.utils import login
+from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
 

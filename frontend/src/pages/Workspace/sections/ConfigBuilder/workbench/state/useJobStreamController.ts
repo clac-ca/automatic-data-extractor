@@ -3,13 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkbenchConsoleStore } from "./consoleStore";
 import type { WorkbenchConsoleLine } from "../types";
 
+import { publishConfiguration } from "@/api/configurations/api";
 import { createRun, streamRunEventsForRun, type RunStreamOptions } from "@/api/runs/api";
 import { eventName, eventPayload, eventTimestamp, type RunStreamEvent } from "@/types/runs";
 
 export type JobStreamStatus = "idle" | "running" | "succeeded" | "failed";
 
 export interface JobStreamMetadata {
-  readonly mode: "validation" | "extraction";
+  readonly mode: "validation" | "extraction" | "publish";
   readonly documentId?: string;
   readonly documentName?: string;
   readonly sheetNames?: readonly string[];
@@ -201,11 +202,15 @@ export function useJobStreamController({
 
       let resolvedJobId: string | null = null;
       try {
-        const run = await createRun(
-          workspaceId,
-          { ...options, configuration_id: configId },
-          controller.signal,
-        );
+        const operation = options.operation ?? "process";
+        const run =
+          operation === "publish"
+            ? await publishConfiguration(workspaceId, configId)
+            : await createRun(
+                workspaceId,
+                { ...options, configuration_id: configId },
+                controller.signal,
+              );
         resolvedJobId = run.id;
         setJobId(run.id);
         onJobIdChange?.(run.id);

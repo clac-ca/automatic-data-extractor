@@ -10,14 +10,12 @@ import { PageState } from "@/components/layout";
 
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 
-import { ApiError } from "@/api/errors";
 import { exportConfiguration } from "@/api/configurations/api";
 import {
   useArchiveConfigurationMutation,
   useConfigurationQuery,
   useConfigurationsQuery,
   useDuplicateConfigurationMutation,
-  useMakeActiveConfigurationMutation,
 } from "@/pages/Workspace/hooks/configurations";
 import { useNotifications } from "@/providers/notifications";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";
@@ -26,30 +24,6 @@ import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
 
 interface ConfigurationDetailScreenProps {
   readonly params?: { readonly configId?: string };
-}
-
-function parseProblemCode(error: unknown): string | null {
-  if (!(error instanceof ApiError)) {
-    return null;
-  }
-  const detail = error.problem?.detail as unknown;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (!detail || typeof detail !== "object") {
-    return null;
-  }
-  const payload = detail as Record<string, unknown>;
-  if (typeof payload.error === "string") {
-    return payload.error;
-  }
-  if (payload.error && typeof payload.error === "object") {
-    const nested = payload.error as Record<string, unknown>;
-    if (typeof nested.code === "string") {
-      return nested.code;
-    }
-  }
-  return null;
 }
 
 export default function ConfigurationDetailScreen({ params }: ConfigurationDetailScreenProps = {}) {
@@ -84,16 +58,6 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
     }
     navigate(`${detailPath}/editor`);
   }, [detailPath, navigate]);
-
-  const activeConfiguration = useMemo(() => {
-    const items = configurationsQuery.data?.items ?? [];
-    for (const item of items) {
-      if (normalizeConfigStatus(item.status) === "active") {
-        return item;
-      }
-    }
-    return null;
-  }, [configurationsQuery.data?.items]);
 
   const existingNames = useMemo(() => {
     const items = configurationsQuery.data?.items ?? [];
@@ -131,22 +95,8 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
     }
   }, [config, notifyToast, workspace.id]);
 
-  const makeActiveConfig = useMakeActiveConfigurationMutation(workspace.id);
   const archiveConfig = useArchiveConfigurationMutation(workspace.id);
   const duplicateConfig = useDuplicateConfigurationMutation(workspace.id);
-
-  type MakeActiveDialogState =
-    | { stage: "confirm" }
-    | { stage: "error"; message: string; validationRequired?: boolean };
-
-  const [makeActiveOpen, setMakeActiveOpen] = useState(false);
-  const [makeActiveState, setMakeActiveState] = useState<MakeActiveDialogState | null>(null);
-
-  const openMakeActiveDialog = useCallback(() => {
-    makeActiveConfig.reset();
-    setMakeActiveState({ stage: "confirm" });
-    setMakeActiveOpen(true);
-  }, [makeActiveConfig]);
 
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [duplicateName, setDuplicateName] = useState("");
@@ -218,40 +168,6 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
       },
     );
   }, [config, duplicateConfig, duplicateName, navigate, notifyToast, workspace.id]);
-
-  const handleConfirmMakeActive = useCallback(() => {
-    if (!config) {
-      return;
-    }
-    makeActiveConfig.mutate(
-      { configurationId: config.id },
-      {
-        onSuccess() {
-          notifyToast({ title: "Configuration is now active.", intent: "success", duration: 4000 });
-          setMakeActiveOpen(false);
-          setMakeActiveState(null);
-          void refetchConfigurations();
-          void refetchConfig();
-        },
-        onError(error) {
-          const code = parseProblemCode(error);
-          if (code === "validation_required") {
-            setMakeActiveState({
-              stage: "error",
-              message: "Validation is required. Run Validation in the editor, then publish again.",
-              validationRequired: true,
-            });
-            return;
-          }
-          notifyToast({
-            title: error instanceof Error ? error.message : "Unable to make configuration active.",
-            intent: "danger",
-            duration: 6000,
-          });
-        },
-      },
-    );
-  }, [config, makeActiveConfig, notifyToast, refetchConfig, refetchConfigurations]);
 
   const handleConfirmArchive = useCallback(() => {
     if (!config) {
@@ -330,15 +246,17 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
           </div>
             <div className="flex flex-wrap items-center gap-2">
             {isDraft ? (
-              <Button variant="secondary" onClick={openMakeActiveDialog}>
-                Make active
+              <Button variant="secondary" onClick={openEditor}>
+                Open editor to publish
               </Button>
             ) : (
               <Button onClick={openDuplicateDialog}>Duplicate to edit</Button>
             )}
-            <Button variant="ghost" onClick={openEditor}>
-              Open editor
-            </Button>
+            {!isDraft ? (
+              <Button variant="ghost" onClick={openEditor}>
+                Open editor
+              </Button>
+            ) : null}
             <Button variant="ghost" size="sm" onClick={openContextMenu} aria-label="More actions">
               ⋯
             </Button>
@@ -397,54 +315,9 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
       />
 
       <ConfirmDialog
-        open={makeActiveOpen}
-        title={
-          makeActiveState?.stage === "error" && makeActiveState.validationRequired
-            ? "Validation required before publish"
-            : "Make configuration active?"
-        }
-        description={
-          activeConfiguration
-            ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
-            : "This becomes the workspace’s live configuration for extraction runs."
-        }
-        confirmLabel={
-          makeActiveState?.stage === "error" && makeActiveState.validationRequired
-            ? "Open editor"
-            : makeActiveState?.stage === "error"
-              ? "Close"
-              : "Make active"
-        }
-        cancelLabel="Cancel"
-        onCancel={() => {
-          setMakeActiveOpen(false);
-          setMakeActiveState(null);
-        }}
-        onConfirm={() => {
-          if (makeActiveState?.stage === "error" && makeActiveState.validationRequired) {
-            setMakeActiveOpen(false);
-            openEditor();
-            return;
-          }
-          if (makeActiveState?.stage === "error") {
-            setMakeActiveOpen(false);
-            setMakeActiveState(null);
-            return;
-          }
-          handleConfirmMakeActive();
-        }}
-        isConfirming={makeActiveConfig.isPending}
-        confirmDisabled={makeActiveConfig.isPending}
-      >
-        {makeActiveState?.stage === "error" ? (
-          <p className="text-sm font-medium text-destructive">{makeActiveState.message}</p>
-        ) : null}
-      </ConfirmDialog>
-
-      <ConfirmDialog
         open={archiveOpen}
         title="Archive active configuration?"
-        description="This will leave the workspace with no active configuration. Extraction runs will be blocked until you make a draft active."
+        description="This will leave the workspace with no active configuration. Extraction runs will be blocked until you publish a draft from the editor."
         confirmLabel="Archive"
         cancelLabel="Cancel"
         tone="danger"

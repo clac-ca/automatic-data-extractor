@@ -61,5 +61,16 @@ class StorageAdapter(ABC):
         """Yield the bytes stored at ``uri`` (optionally pinned by version_id)."""
 
     @abstractmethod
+    def stream_range(
+        self,
+        uri: str,
+        *,
+        start_offset: int = 0,
+        version_id: str | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
+        """Yield bytes stored at ``uri`` starting at ``start_offset``."""
+
+    @abstractmethod
     def delete(self, uri: str, *, version_id: str | None = None) -> None:
         """Remove ``uri`` from storage if it exists."""

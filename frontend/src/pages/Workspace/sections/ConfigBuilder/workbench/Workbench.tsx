@@ -38,7 +38,6 @@ import {
   useConfigurationFilesQuery,
   useConfigurationsQuery,
   useDuplicateConfigurationMutation,
-  useMakeActiveConfigurationMutation,
   useReplaceConfigurationMutation,
   useSaveConfigurationFileMutation,
 } from "@/pages/Workspace/hooks/configurations";
@@ -68,30 +67,6 @@ const MIN_WORKBENCH_SIDEBAR_WIDTH = 220;
 const MAX_WORKBENCH_SIDEBAR_WIDTH = 520;
 const CONSOLE_COLLAPSE_MESSAGE =
   "Panel closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
-
-function parseProblemCode(error: unknown): string | null {
-  if (!(error instanceof ApiError)) {
-    return null;
-  }
-  const detail = error.problem?.detail as unknown;
-  if (typeof detail === "string") {
-    return detail;
-  }
-  if (!detail || typeof detail !== "object") {
-    return null;
-  }
-  const payload = detail as Record<string, unknown>;
-  if (typeof payload.error === "string") {
-    return payload.error;
-  }
-  if (payload.error && typeof payload.error === "object") {
-    const nested = payload.error as Record<string, unknown>;
-    if (typeof nested.code === "string") {
-      return nested.code;
-    }
-  }
-  return null;
-}
 
 interface ConsolePanelPreferences {
   readonly version: 2;
@@ -171,18 +146,10 @@ export function Workbench({
     return null;
   }, [configurationsQuery.data?.items]);
   const duplicateToEdit = useDuplicateConfigurationMutation(workspaceId);
-  const makeActiveConfig = useMakeActiveConfigurationMutation(workspaceId);
 
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateName, setDuplicateName] = useState("");
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
-
-  const [makeActiveDialogOpen, setMakeActiveDialogOpen] = useState(false);
-  const [makeActiveDialogState, setMakeActiveDialogState] = useState<
-    | { stage: "confirm" }
-    | { stage: "error"; message: string; validationRequired?: boolean }
-    | null
-  >(null);
 
   const tree = useMemo(() => {
     if (seed) {
@@ -350,56 +317,11 @@ export function Workbench({
     );
   }, [closeDuplicateDialog, configId, duplicateName, duplicateToEdit, navigate, notifyToast, workspaceId]);
 
-  const openMakeActiveDialog = useCallback(() => {
-    makeActiveConfig.reset();
-    setMakeActiveDialogState({ stage: "confirm" });
-    setMakeActiveDialogOpen(true);
-  }, [makeActiveConfig]);
-
-  const closeMakeActiveDialog = useCallback(() => {
-    setMakeActiveDialogOpen(false);
-    setMakeActiveDialogState(null);
-  }, []);
-
-  const handleConfirmMakeActive = useCallback(() => {
-    makeActiveConfig.mutate(
-      { configurationId: configId },
-      {
-        async onSuccess() {
-          notifyToast({
-            title: "Configuration is now active and locked.",
-            description: "Duplicate it to make further edits.",
-            intent: "success",
-            duration: 5000,
-          });
-          closeMakeActiveDialog();
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
-            queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) }),
-          ]);
-        },
-        onError(error) {
-          const code = parseProblemCode(error);
-          if (code === "validation_required") {
-            setMakeActiveDialogState({
-              stage: "error",
-              message: "Validation is required. Run Validation in this editor, then publish again.",
-              validationRequired: true,
-            });
-            return;
-          }
-          const message = error instanceof Error ? error.message : "Unable to make configuration active.";
-          setMakeActiveDialogState({ stage: "error", message });
-        },
-      },
-    );
-  }, [closeMakeActiveDialog, configId, makeActiveConfig, notifyToast, queryClient, workspaceId]);
-
   useEffect(() => {
     if (!pendingCompletion) {
       return;
     }
-    const { runId: completedRunId, status, payload } = pendingCompletion;
+    const { runId: completedRunId, status, mode, payload } = pendingCompletion;
     const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const payloadErrorMessage =
@@ -411,14 +333,28 @@ export function Workbench({
     const errorMessage = failureMessage || payloadErrorMessage || "ADE run failed.";
     const notice =
       status === "succeeded"
-        ? "ADE run completed successfully."
+        ? mode === "publish"
+          ? "Configuration published successfully."
+          : "ADE run completed successfully."
         : errorMessage;
     const intent: NotificationIntent =
       status === "succeeded" ? "success" : "danger";
     showConsoleBanner(notice, { intent });
+    if (status === "succeeded" && mode === "publish") {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
+        queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) }),
+      ]);
+      notifyToast({
+        title: "Configuration published.",
+        description: "This configuration is now active for extraction runs.",
+        intent: "success",
+        duration: 5000,
+      });
+    }
 
     setPendingCompletion((current) => (current && current.runId === completedRunId ? null : current));
-  }, [pendingCompletion, showConsoleBanner, setPendingCompletion]);
+  }, [configId, notifyToast, pendingCompletion, queryClient, setPendingCompletion, showConsoleBanner, workspaceId]);
 
   const isMaximized = windowState === "maximized";
   const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;
@@ -823,6 +759,29 @@ export function Workbench({
     prepareRun,
   ]);
 
+  const handlePublish = useCallback(async () => {
+    if (usingSeed || !isDraftConfig || filesQuery.isLoading || filesQuery.isError) {
+      return;
+    }
+    const ready = await saveDirtyTabsBeforeRun();
+    if (!ready) {
+      return;
+    }
+    await startRun(
+      { operation: "publish" },
+      { mode: "publish" },
+      { prepare: prepareRun },
+    );
+  }, [
+    filesQuery.isError,
+    filesQuery.isLoading,
+    isDraftConfig,
+    prepareRun,
+    saveDirtyTabsBeforeRun,
+    startRun,
+    usingSeed,
+  ]);
+
   const handleRunExtraction = useCallback(
     async (selection: RunExtractionSelection) => {
       setRunDialogOpen(false);
@@ -903,12 +862,19 @@ export function Workbench({
     !runBusy &&
     validationState.status !== "running";
 
-  const isRunningExtraction = runBusy && activeRunMode !== "validation";
+  const isRunningPublish = runBusy && activeRunMode === "publish";
+  const canPublish =
+    isDraftConfig &&
+    !usingSeed &&
+    !filesQuery.isLoading &&
+    !filesQuery.isError &&
+    !runBusy &&
+    !replaceConfig.isPending;
+  const isRunningExtraction = runBusy && activeRunMode === "extraction";
   const canRunExtraction =
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !runBusy;
   const canReplaceFromArchive =
     isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
-  const canMakeActive = isDraftConfig && !usingSeed && !files.isDirty && !makeActiveConfig.isPending;
 
   const handleOpenActionsMenu = useCallback((position: { x: number; y: number }) => {
     setActionsMenu(position);
@@ -1016,12 +982,12 @@ export function Workbench({
 
     if (isDraftConfig) {
       items.push({
-        id: "make-active",
-        label: "Make active",
-        disabled: !canMakeActive,
+        id: "publish",
+        label: "Publish",
+        disabled: !canPublish,
         onSelect: () => {
           setActionsMenu(null);
-          openMakeActiveDialog();
+          void handlePublish();
         },
       });
     }
@@ -1056,14 +1022,14 @@ export function Workbench({
 
     return items;
   }, [
-    canMakeActive,
+    canPublish,
     canReplaceFromArchive,
+    handlePublish,
     handleExportConfig,
     handleReplaceArchiveRequest,
     isDraftConfig,
     isExporting,
     openDuplicateDialog,
-    openMakeActiveDialog,
   ]);
 
   useEffect(() => {
@@ -1166,6 +1132,11 @@ export function Workbench({
               canRunValidation={canRunValidation}
               isRunningValidation={isRunningValidation}
               onRunValidation={handleRunValidation}
+              canPublish={canPublish}
+              isPublishing={isRunningPublish}
+              onPublish={() => {
+                void handlePublish();
+              }}
               canRunExtraction={canRunExtraction}
               isRunningExtraction={isRunningExtraction}
               onRunExtraction={() => {
@@ -1206,21 +1177,23 @@ export function Workbench({
                     <div className="space-y-0.5">
                       <p className="text-sm font-semibold">Draft configuration</p>
                       <p className="text-xs text-muted-foreground">
-                        Make this draft active to use it for extraction runs.
+                        Publish this draft to use it for extraction runs.
                         {activeConfiguration ? ` The current active configuration “${activeConfiguration.display_name}” will be archived.` : ""}
                       </p>
-                      {!canMakeActive && files.isDirty ? (
-                        <p className="text-xs font-medium text-accent-foreground">Save changes before making active.</p>
+                      {files.isDirty ? (
+                        <p className="text-xs font-medium text-accent-foreground">Unsaved changes will be saved before publish.</p>
                       ) : null}
                     </div>
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={openMakeActiveDialog}
-                      disabled={!canMakeActive}
-                      title={!canMakeActive && files.isDirty ? "Save changes before making active." : undefined}
+                      onClick={() => {
+                        void handlePublish();
+                      }}
+                      disabled={!canPublish}
+                      title={!canPublish ? "Publish is unavailable while another run is in progress." : undefined}
                     >
-                      Make active
+                      {isRunningPublish ? "Publishing…" : "Publish"}
                     </Button>
                   </div>
                 )}
@@ -1445,47 +1418,6 @@ export function Workbench({
           />
         </FormField>
         {duplicateError ? <p className="text-sm font-medium text-destructive">{duplicateError}</p> : null}
-      </ConfirmDialog>
-
-      <ConfirmDialog
-        open={makeActiveDialogOpen}
-        title={
-          makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired
-            ? "Validation required before publish"
-            : "Make configuration active?"
-        }
-        description={
-          activeConfiguration
-            ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
-            : "This becomes the workspace’s live configuration for extraction runs."
-        }
-        confirmLabel={
-          makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired
-            ? "Open editor"
-            : makeActiveDialogState?.stage === "error"
-              ? "Close"
-              : "Make active"
-        }
-        cancelLabel="Cancel"
-        onCancel={closeMakeActiveDialog}
-        onConfirm={() => {
-          if (makeActiveDialogState?.stage === "error" && makeActiveDialogState.validationRequired) {
-            closeMakeActiveDialog();
-            navigate(`/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}/editor`);
-            return;
-          }
-          if (makeActiveDialogState?.stage === "error") {
-            closeMakeActiveDialog();
-            return;
-          }
-          handleConfirmMakeActive();
-        }}
-        isConfirming={makeActiveConfig.isPending}
-        confirmDisabled={makeActiveConfig.isPending}
-      >
-        {makeActiveDialogState?.stage === "error" ? (
-          <p className="text-sm font-medium text-destructive">{makeActiveDialogState.message}</p>
-        ) : null}
       </ConfirmDialog>
 
       <ContextMenu

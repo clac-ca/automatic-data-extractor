@@ -158,6 +158,7 @@ def engine(base_settings: Settings, _database_lifecycle: None):
 @pytest.fixture(autouse=True)
 def _truncate_tables(engine) -> Iterator[None]:
     with engine.begin() as conn:
-        for table in reversed(metadata.sorted_tables):
-            conn.execute(table.delete())
+        # Use unsorted table metadata; TRUNCATE ... CASCADE resolves FK dependency cycles.
+        table_names = ", ".join(f'"{table.name}"' for table in metadata.tables.values())
+        conn.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
     yield

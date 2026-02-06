@@ -9,7 +9,7 @@ from uuid import UUID
 from httpx import AsyncClient
 
 from ade_api.settings import Settings
-from tests.utils import login
+from tests.api.utils import login
 
 
 async def auth_headers(

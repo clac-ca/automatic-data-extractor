@@ -384,17 +384,36 @@ def record_run_result(
     )
 
 
-def record_configuration_validated_digest(
+def activate_configuration_publish(
     session: Session,
     *,
+    workspace_id: str,
     configuration_id: str,
-    content_digest: str,
+    published_digest: str,
     now: datetime,
 ) -> bool:
+    session.execute(
+        update(configurations)
+        .where(
+            configurations.c.workspace_id == workspace_id,
+            configurations.c.status == "active",
+            configurations.c.id != configuration_id,
+        )
+        .values(status="archived", updated_at=now)
+    )
     result = session.execute(
         update(configurations)
-        .where(configurations.c.id == configuration_id)
-        .values(content_digest=content_digest, updated_at=now)
+        .where(
+            configurations.c.id == configuration_id,
+            configurations.c.workspace_id == workspace_id,
+            configurations.c.status == "draft",
+        )
+        .values(
+            status="active",
+            published_digest=published_digest,
+            activated_at=now,
+            updated_at=now,
+        )
     )
     return bool((result.rowcount or 0) == 1)
 
@@ -456,7 +475,7 @@ __all__ = [
     "ensure_output_file",
     "create_output_file_version",
     "record_run_result",
-    "record_configuration_validated_digest",
+    "activate_configuration_publish",
     "replace_run_metrics",
     "replace_run_fields",
     "replace_run_table_columns",

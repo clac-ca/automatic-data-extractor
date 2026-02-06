@@ -34,7 +34,6 @@ from .exceptions import (
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
     ConfigStateError,
-    ConfigValidationRequiredError,
     ConfigurationNotFoundError,
 )
 from .filters import apply_config_filters
@@ -273,7 +272,7 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
-            content_digest=None,
+            published_digest=None,
         )
         self._session.add(record)
         self._session.flush()
@@ -318,21 +317,13 @@ class ConfigurationsService:
 
         config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
         _, current_digest = self._storage.validate_path(config_path)
-        if not current_digest or configuration.content_digest != current_digest:
-            logger.warning(
-                "config.make_active.validation_required",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    has_validated_digest=bool(configuration.content_digest),
-                ),
-            )
-            raise ConfigValidationRequiredError("validation_required")
+        if not current_digest:
+            raise ConfigStateError("Configuration digest could not be resolved")
 
         self._archive_active(workspace_id=workspace_id, exclude=configuration_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
-        configuration.content_digest = current_digest
+        configuration.published_digest = current_digest
         configuration.activated_at = utc_now()
         try:
             self._session.flush()
@@ -1036,7 +1027,7 @@ class ConfigurationsService:
 
     @staticmethod
     def _mark_configuration_content_changed(configuration: Configuration) -> None:
-        configuration.content_digest = None
+        configuration.published_digest = None
         configuration.updated_at = utc_now()
 
     def _current_fileset_hash(self, config_path: Path) -> str:

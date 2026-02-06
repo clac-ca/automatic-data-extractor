@@ -22,7 +22,7 @@ from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_db.models import User, Workspace, WorkspaceMembership
 from ade_api.settings import get_settings
-from tests.utils import login
+from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
 

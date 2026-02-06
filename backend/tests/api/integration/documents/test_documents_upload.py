@@ -12,7 +12,7 @@ from httpx import AsyncClient
 
 from ade_api.common.encoding import json_dumps
 from ade_db.models import File
-from tests.utils import login
+from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
 

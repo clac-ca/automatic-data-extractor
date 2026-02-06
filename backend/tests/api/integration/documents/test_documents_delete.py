@@ -10,7 +10,7 @@ from httpx import AsyncClient
 
 from ade_db.models import File
 from ade_api.settings import Settings
-from tests.utils import login
+from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
 

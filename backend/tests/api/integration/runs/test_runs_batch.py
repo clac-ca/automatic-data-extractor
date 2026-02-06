@@ -6,7 +6,7 @@ from sqlalchemy import select
 from ade_storage import workspace_config_root
 from ade_db.models import Run
 
-from tests.integration.runs.helpers import auth_headers, make_configuration, make_document
+from tests.api.integration.runs.helpers import auth_headers, make_configuration, make_document
 
 pytestmark = pytest.mark.asyncio
 

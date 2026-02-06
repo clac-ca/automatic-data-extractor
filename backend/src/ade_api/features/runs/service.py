@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import tempfile
-from collections.abc import Iterator, Sequence
+import time
+from collections.abc import AsyncIterator, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -23,6 +26,7 @@ from sqlalchemy.orm import Session
 from ade_api.common.cursor_listing import ResolvedCursorSort
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
+from ade_api.common.sse import sse_text
 from ade_api.common.time import utc_now
 from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
@@ -32,6 +36,7 @@ from ade_api.common.workbook_preview import (
 from ade_api.features.configs.deps import compute_dependency_digest, has_engine_dependency
 from ade_api.features.configs.exceptions import (
     ConfigEngineDependencyMissingError,
+    ConfigStateError,
     ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
 )
@@ -102,16 +107,18 @@ _DEPS_DIGEST_CACHE_SIZE = 256
 _OUTPUT_FALLBACK_FILENAME = "output"
 _MAX_FILENAME_LENGTH = 255
 _CONFIG_DIGEST_SNAPSHOT_KEY = "__config_digest_snapshot"
+_RUN_EVENTS_STREAM_POLL_SECONDS = 0.25
+_RUN_EVENTS_STREAM_KEEPALIVE_SECONDS = 15.0
 
 
 @lru_cache(maxsize=_DEPS_DIGEST_CACHE_SIZE)
-def _cached_deps_digest(config_path: str, content_digest: str) -> str:
+def _cached_deps_digest(config_path: str, config_cache_key: str) -> str:
     return compute_dependency_digest(Path(config_path))
 
 
 def _deps_digest_cache_key(configuration: Configuration) -> str:
-    if configuration.content_digest:
-        return configuration.content_digest
+    if configuration.published_digest:
+        return configuration.published_digest
     if configuration.updated_at:
         return configuration.updated_at.isoformat()
     return "unknown"
@@ -193,6 +200,12 @@ class RunsService:
         )
 
         configuration = self._resolve_configuration(configuration_id)
+        if options.operation is RunOperation.PUBLISH:
+            return self.prepare_publish_run(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+            )
+
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
         deps_digest = self._resolve_deps_digest(configuration)
         input_document_id = options.input_document_id
@@ -246,6 +259,84 @@ class RunsService:
                 operation=run.operation.value,
                 input_document_id=input_document_id,
                 dry_run=options.dry_run,
+            ),
+        )
+        return run
+
+    def prepare_publish_run(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+    ) -> Run:
+        """Create (or reuse) a queued publish run for a draft configuration."""
+
+        logger.debug(
+            "run.prepare.publish.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+            ),
+        )
+
+        configuration = self._resolve_configuration(configuration_id)
+        if configuration.workspace_id != workspace_id:
+            raise ConfigurationNotFoundError("configuration_not_found")
+        if configuration.status is not ConfigurationStatus.DRAFT:
+            raise ConfigStateError("Configuration must be a draft before publishing")
+
+        existing = self._runs.get_active_publish_run(configuration_id=configuration.id)
+        if existing is not None:
+            logger.info(
+                "run.prepare.publish.reuse",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                    run_id=existing.id,
+                ),
+            )
+            return existing
+
+        try:
+            deps_digest = self._resolve_deps_digest(configuration)
+            config_digest_snapshot = self._resolve_config_digest_snapshot(configuration)
+        except RunInputMissingError as exc:
+            raise ConfigStorageNotFoundError("configuration_storage_missing") from exc
+        run_options_payload: dict[str, Any] = {
+            "operation": RunOperation.PUBLISH.value,
+            _CONFIG_DIGEST_SNAPSHOT_KEY: config_digest_snapshot,
+        }
+
+        try:
+            with self._session.begin_nested():
+                run = self._insert_publish_run(
+                    configuration=configuration,
+                    deps_digest=deps_digest,
+                    run_options=run_options_payload,
+                )
+        except IntegrityError:
+            existing = self._runs.get_active_publish_run(configuration_id=configuration.id)
+            if existing is not None:
+                logger.info(
+                    "run.prepare.publish.reuse_after_conflict",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        configuration_id=configuration_id,
+                        run_id=existing.id,
+                    ),
+                )
+                return existing
+            raise
+
+        configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
+        self._session.flush()
+
+        logger.info(
+            "run.prepare.publish.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                run_id=run.id,
             ),
         )
         return run
@@ -659,6 +750,32 @@ class RunsService:
         self._session.refresh(run)
         return run
 
+    def _insert_publish_run(
+        self,
+        *,
+        configuration: Configuration,
+        deps_digest: str,
+        run_options: dict[str, Any],
+    ) -> Run:
+        run = Run(
+            id=uuid4(),
+            configuration_id=configuration.id,
+            workspace_id=configuration.workspace_id,
+            input_file_version_id=None,
+            input_sheet_names=None,
+            run_options=run_options,
+            deps_digest=deps_digest,
+            operation=RunOperation.PUBLISH,
+            status=RunStatus.QUEUED,
+            available_at=utc_now(),
+            attempt_count=0,
+            max_attempts=self._run_max_attempts,
+        )
+        self._session.add(run)
+        self._session.flush()
+        self._session.refresh(run)
+        return run
+
     def _insert_runs_for_documents(
         self,
         *,
@@ -1051,6 +1168,7 @@ class RunsService:
     @staticmethod
     def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
+        events_stream = f"{base}/events/stream"
         events_download = f"{base}/events/download"
         output_metadata = f"{base}/output"
         output_download = f"{output_metadata}/download"
@@ -1059,6 +1177,7 @@ class RunsService:
 
         return RunLinks(
             self=base,
+            events_stream=events_stream,
             events_download=events_download,
             logs=events_download,
             input=input_metadata,
@@ -1434,9 +1553,81 @@ class RunsService:
 
         return _guarded()
 
+    async def stream_run_events(
+        self,
+        *,
+        run_id: UUID,
+        cursor: int = 0,
+    ) -> AsyncIterator[dict[str, str]]:
+        """Tail run NDJSON logs from blob storage and yield SSE event messages."""
+
+        run = self._require_run(run_id)
+        blob_name = self._run_log_blob_name(workspace_id=run.workspace_id, run_id=run.id)
+        offset = max(0, int(cursor))
+        buffer = b""
+        last_keepalive_at = time.monotonic()
+        terminal_statuses = {RunStatus.SUCCEEDED, RunStatus.FAILED}
+
+        while True:
+            saw_bytes = False
+            try:
+                stream = self._blob_storage.stream_range(
+                    blob_name,
+                    start_offset=offset,
+                    chunk_size=self._settings.blob_download_chunk_size_bytes,
+                )
+                for chunk in stream:
+                    if not chunk:
+                        continue
+                    saw_bytes = True
+                    buffer += chunk
+                    lines = buffer.splitlines(keepends=True)
+                    buffer = b""
+                    for line in lines:
+                        if not line.endswith(b"\n"):
+                            buffer = line
+                            break
+                        offset += len(line)
+                        raw = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                        event_name = self._extract_event_name(raw)
+                        if not event_name:
+                            continue
+                        yield sse_text(event_name, raw, event_id=offset)
+                        if event_name == "run.complete":
+                            return
+            except FileNotFoundError:
+                # A stream client may connect before the worker writes the first log chunk.
+                pass
+
+            now = time.monotonic()
+            if now - last_keepalive_at >= _RUN_EVENTS_STREAM_KEEPALIVE_SECONDS:
+                yield sse_text("keepalive", "{}")
+                last_keepalive_at = now
+
+            run = self._require_run(run_id)
+            if run.status in terminal_statuses and not saw_bytes and not buffer:
+                return
+
+            await asyncio.sleep(_RUN_EVENTS_STREAM_POLL_SECONDS)
+
     @staticmethod
     def _run_log_blob_name(*, workspace_id: UUID, run_id: UUID) -> str:
         return f"{workspace_id}/runs/{run_id}/logs/events.ndjson"
+
+    @staticmethod
+    def _extract_event_name(raw: str) -> str | None:
+        if not raw.strip():
+            return None
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        event_name = payload.get("event")
+        if not isinstance(event_name, str) or not event_name.strip():
+            return None
+        return event_name
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:

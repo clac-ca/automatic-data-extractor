@@ -28,6 +28,9 @@ interface WorkbenchChromeProps {
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
+  readonly canPublish: boolean;
+  readonly isPublishing: boolean;
+  readonly onPublish: () => void;
   readonly canRunExtraction: boolean;
   readonly isRunningExtraction: boolean;
   readonly onRunExtraction: () => void;
@@ -53,6 +56,9 @@ export function WorkbenchChrome({
   canRunValidation,
   isRunningValidation,
   onRunValidation,
+  canPublish,
+  isPublishing,
+  onPublish,
   canRunExtraction,
   isRunningExtraction,
   onRunExtraction,
@@ -116,6 +122,18 @@ export function WorkbenchChrome({
         >
           {isRunningValidation ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
           {isRunningValidation ? "Running…" : "Run validation"}
+        </button>
+        <button
+          type="button"
+          onClick={onPublish}
+          disabled={!canPublish}
+          className={clsx(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0",
+            runButtonClass,
+          )}
+        >
+          {isPublishing ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <RunIcon className="h-4 w-4" />}
+          {isPublishing ? "Publishing…" : "Publish"}
         </button>
         <button
           type="button"

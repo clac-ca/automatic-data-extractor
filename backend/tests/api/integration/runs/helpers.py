@@ -16,7 +16,7 @@ from ade_db.models import (
     Run,
     RunStatus,
 )
-from tests.utils import login
+from tests.api.utils import login
 
 
 async def auth_headers(client: AsyncClient, account) -> dict[str, str]:

@@ -20,6 +20,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import SettingsDep, get_runs_service, get_runs_service_read
 from ade_api.common.downloads import build_content_disposition
@@ -41,6 +42,8 @@ from ade_api.db import get_session_factory
 from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import (
     ConfigEngineDependencyMissingError,
+    ConfigStateError,
+    ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
 )
 from ade_storage import StorageLimitError, get_storage_adapter
@@ -209,6 +212,10 @@ def create_run_endpoint(
         ) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ConfigStorageNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConfigStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ConfigEngineDependencyMissingError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -291,6 +298,10 @@ def create_workspace_run_endpoint(
         ) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ConfigStorageNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ConfigStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ConfigEngineDependencyMissingError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -516,6 +527,43 @@ def download_run_input_endpoint(
     response = StreamingResponse(stream, media_type=media_type)
     response.headers["Content-Disposition"] = build_content_disposition(filename)
     return response
+
+
+@router.get(
+    "/runs/{runId}/events/stream",
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Run not found"}},
+    summary="Stream run events (SSE)",
+)
+async def stream_run_events_endpoint(
+    run_id: RunPath,
+    request: Request,
+    service: RunsServiceReadDep,
+    *,
+    cursor: Annotated[
+        int,
+        Query(
+            ge=0,
+            description="Byte offset cursor for resuming from a prior stream position.",
+        ),
+    ] = 0,
+) -> EventSourceResponse:
+    run = service.get_run(run_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    async def event_stream():
+        async for message in service.stream_run_events(run_id=run.id, cursor=cursor):
+            if await request.is_disconnected():
+                return
+            yield message
+
+    return EventSourceResponse(
+        event_stream(),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

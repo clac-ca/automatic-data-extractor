@@ -1,4 +1,4 @@
-"""Configuration publish gating tests."""
+"""Configuration publish endpoint validation contract tests."""
 
 from __future__ import annotations
 
@@ -6,13 +6,12 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.ids import generate_uuid7
-from ade_api.settings import Settings
-from tests.integration.configs.helpers import auth_headers, config_path, create_from_template
+from tests.api.integration.configs.helpers import auth_headers, create_from_template
 
 pytestmark = pytest.mark.asyncio
 
 
-async def test_publish_requires_validation_digest(
+async def test_publish_does_not_require_prior_validation_digest(
     async_client: AsyncClient,
     seed_identity,
 ) -> None:
@@ -31,9 +30,9 @@ async def test_publish_requires_validation_digest(
         headers=headers,
         json=None,
     )
-    assert response.status_code == 422, response.text
+    assert response.status_code == 202, response.text
     payload = response.json()
-    assert payload["detail"]["error"] == "validation_required"
+    assert payload["operation"] == "publish"
 
 
 async def test_publish_missing_config_returns_not_found(
@@ -52,37 +51,3 @@ async def test_publish_missing_config_returns_not_found(
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "configuration_not_found"
-
-
-async def test_publish_requires_engine_dependency(
-    async_client: AsyncClient,
-    seed_identity,
-    settings: Settings,
-) -> None:
-    workspace_id = seed_identity.workspace_id
-    owner = seed_identity.workspace_owner
-    headers = await auth_headers(async_client, email=owner.email, password=owner.password)
-    record = await create_from_template(
-        async_client,
-        workspace_id=workspace_id,
-        headers=headers,
-    )
-    pyproject = config_path(settings, workspace_id, record["id"]) / "pyproject.toml"
-    pyproject.write_text(
-        (
-            "[project]\n"
-            "name = \"ade_config\"\n"
-            "version = \"0.1.0\"\n"
-            "dependencies = [\"pandas\"]\n"
-        ),
-        encoding="utf-8",
-    )
-
-    response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
-        headers=headers,
-        json=None,
-    )
-    assert response.status_code == 422, response.text
-    payload = response.json()
-    assert payload["detail"]["error"] == "engine_dependency_missing"

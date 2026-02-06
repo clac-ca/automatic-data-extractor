@@ -8,7 +8,7 @@ from ade_storage import build_storage_adapter
 from ade_db.models import File, FileKind, FileVersion, FileVersionOrigin, RunStatus
 from ade_api.settings import Settings
 
-from tests.integration.runs.helpers import auth_headers, make_configuration, make_document, make_run
+from tests.api.integration.runs.helpers import auth_headers, make_configuration, make_document, make_run
 
 pytestmark = pytest.mark.asyncio
 

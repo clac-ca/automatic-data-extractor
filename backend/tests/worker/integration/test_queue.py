@@ -46,7 +46,7 @@ def _ensure_workspace_and_configuration(
                 workspace_id=workspace_id,
                 display_name="Config A",
                 status="draft",
-                content_digest=None,
+                published_digest=None,
                 last_used_at=None,
                 activated_at=None,
                 created_at=now,
@@ -234,7 +234,7 @@ def test_run_heartbeat_extends_lease(engine) -> None:
         ).first()
     assert row is not None
     assert row.claim_expires_at is not None
-    assert row.claim_expires_at > old_expiry
+    assert row.claim_expires_at.replace(tzinfo=None) > old_expiry.replace(tzinfo=None)
 
 
 def test_run_ack_success_marks_succeeded(engine) -> None:

@@ -149,10 +149,26 @@ class AzureBlobStorage(StorageAdapter):
         version_id: str | None = None,
         chunk_size: int = 1024 * 1024,
     ) -> Iterator[bytes]:
+        return self.stream_range(
+            uri,
+            start_offset=0,
+            version_id=version_id,
+            chunk_size=chunk_size,
+        )
+
+    def stream_range(
+        self,
+        uri: str,
+        *,
+        start_offset: int = 0,
+        version_id: str | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
         blob_name = self._blob_name(uri)
         blob = self._container_client.get_blob_client(blob_name, version_id=version_id)
         try:
             downloader = blob.download_blob(
+                offset=max(0, int(start_offset)),
                 max_concurrency=self._config.max_concurrency,
                 timeout=self._config.request_timeout_seconds,
             )

@@ -15,7 +15,7 @@ import type { RunStatus } from "@/types/runs";
 export type RunCompletionInfo = {
   readonly runId: string;
   readonly status: RunStatus;
-  readonly mode: "validation" | "extraction";
+  readonly mode: "validation" | "extraction" | "publish";
   readonly startedAt?: string | null;
   readonly completedAt?: string | null;
   readonly durationMs?: number | null;
@@ -100,7 +100,7 @@ export function useRunSessionModel({
     lastCompletedRunRef.current = resolvedRunId;
 
     const status = normalizeRunStatus(typeof completedDetails?.status === "string" ? completedDetails.status : null);
-    const mode: "validation" | "extraction" = runMode ?? "extraction";
+    const mode: "validation" | "extraction" | "publish" = runMode ?? "extraction";
 
     const execution = (completedDetails?.execution as Record<string, unknown> | undefined) ?? {};
     const startedAt = typeof execution.started_at === "string" ? execution.started_at : null;
@@ -117,7 +117,7 @@ export function useRunSessionModel({
       payload: completedDetails,
     });
 
-    if (mode === "validation") {
+    if (mode !== "extraction") {
       return;
     }
 

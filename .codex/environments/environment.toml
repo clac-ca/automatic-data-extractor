@@ -26,6 +26,11 @@ icon = "run"
 command = "cd backend && uv run ade infra down"
 
 [[actions]]
+name = "open ade web [open ADE Web from .env ADE_WEB_PORT]"
+icon = "run"
+command = 'bash -lc "ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); cd \"$ROOT\"; PORT=${ADE_WEB_PORT:-8000}; if [ -f .env ]; then V=$(grep -E \"^ADE_WEB_PORT=\" .env | tail -n 1 | cut -d= -f2-); if [ -n \"$V\" ]; then PORT=$V; fi; fi; URL=\"http://127.0.0.1:${PORT}\"; echo \"$URL\"; if command -v open >/dev/null 2>&1; then open \"$URL\"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open \"$URL\"; else echo \"Open manually: $URL\"; fi"'
+
+[[actions]]
 name = "ade test [run backend + frontend test suites]"
 icon = "run"
 command = "cd backend && uv run ade test"

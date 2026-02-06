@@ -9,7 +9,7 @@ from ade_api.common.cursor_listing import resolve_cursor_sort
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_storage import build_storage_adapter
-from tests.integration.documents.helpers import build_documents_fixture
+from tests.api.integration.documents.helpers import build_documents_fixture
 
 pytestmark = pytest.mark.asyncio
 

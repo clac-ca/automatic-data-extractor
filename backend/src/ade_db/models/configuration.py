@@ -48,7 +48,7 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=ConfigurationStatus.DRAFT,
         server_default=ConfigurationStatus.DRAFT.value,
     )
-    content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    published_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     activated_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(),

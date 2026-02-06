@@ -8275,7 +8275,7 @@
         "tags": [
           "configurations"
         ],
-        "summary": "Make a draft configuration active",
+        "summary": "Start a publish run for a draft configuration",
         "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__publish_post",
         "parameters": [
           {
@@ -8331,12 +8331,12 @@
           }
         },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
+                  "$ref": "#/components/schemas/RunResource"
                 }
               }
             },
@@ -10954,6 +10954,94 @@
         ]
       }
     },
+    "/api/v1/runs/{runId}/events/stream": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Stream run events (SSE)",
+        "operationId": "stream_run_events_endpoint_api_v1_runs__runId__events_stream_get",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Runid"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Byte offset cursor for resuming from a prior stream position.",
+              "default": 0,
+              "title": "Cursor"
+            },
+            "description": "Byte offset cursor for resuming from a prior stream position."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{runId}/events/download": {
       "get": {
         "tags": [
@@ -12927,7 +13015,7 @@
           "status": {
             "$ref": "#/components/schemas/ConfigurationStatus"
           },
-          "content_digest": {
+          "published_digest": {
             "anyOf": [
               {
                 "type": "string"
@@ -12936,7 +13024,7 @@
                 "type": "null"
               }
             ],
-            "title": "Content Digest"
+            "title": "Published Digest"
           },
           "created_at": {
             "type": "string",
@@ -15737,6 +15825,10 @@
             "type": "string",
             "title": "Self"
           },
+          "events_stream": {
+            "type": "string",
+            "title": "Events Stream"
+          },
           "events_download": {
             "type": "string",
             "title": "Events Download"
@@ -15770,6 +15862,7 @@
         "type": "object",
         "required": [
           "self",
+          "events_stream",
           "events_download",
           "logs",
           "input",
@@ -16057,7 +16150,8 @@
         "type": "string",
         "enum": [
           "validate",
-          "process"
+          "process",
+          "publish"
         ],
         "title": "RunOperation",
         "description": "Operation type for the execution request."
@@ -17763,7 +17857,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8000"
+      "url": "http://127.0.0.1:30017"
     }
   ],
   "security": [

@@ -52,6 +52,7 @@ class Settings(
     # ---- Timeouts ----------------------------------------------------------
     worker_env_build_timeout_seconds: int = Field(600, ge=1)
     worker_run_timeout_seconds: int | None = None
+    worker_log_upload_interval_seconds: float = Field(1.0, gt=0)
 
     @model_validator(mode="after")
     def _finalize(self) -> Settings:

@@ -4,6 +4,8 @@ Notes:
 - UUID primary keys use Postgres uuidv7() defaults.
 - Enums use VARCHAR + CHECK constraints (native_enum=False).
 - JSON payloads are stored as JSONB.
+- Includes publish-era schema primitives (``RunOperation.PUBLISH``,
+  ``configurations.published_digest``, and active publish run index).
 - Installs run queue and document change feed triggers.
 """
 

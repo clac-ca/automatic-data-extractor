@@ -8,7 +8,7 @@ from httpx import AsyncClient
 
 from ade_api.common.ids import generate_uuid7
 from ade_db.models import File, FileKind, FileVersion, FileVersionOrigin
-from tests.utils import login
+from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
 

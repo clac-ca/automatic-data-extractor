@@ -970,7 +970,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Make a draft configuration active */
+        /** Start a publish run for a draft configuration */
         post: operations["publish_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__publish_post"];
         delete?: never;
         options?: never;
@@ -1261,6 +1261,23 @@ export type paths = {
         };
         /** Download run input file */
         get: operations["download_run_input_endpoint_api_v1_runs__runId__input_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{runId}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream run events (SSE) */
+        get: operations["stream_run_events_endpoint_api_v1_runs__runId__events_stream_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1798,8 +1815,8 @@ export type components = {
             /** Display Name */
             display_name: string;
             status: components["schemas"]["ConfigurationStatus"];
-            /** Content Digest */
-            content_digest?: string | null;
+            /** Published Digest */
+            published_digest?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3035,6 +3052,8 @@ export type components = {
         RunLinks: {
             /** Self */
             self: string;
+            /** Events Stream */
+            events_stream: string;
             /** Events Download */
             events_download: string;
             /** Logs */
@@ -3109,7 +3128,7 @@ export type components = {
          * @description Operation type for the execution request.
          * @enum {string}
          */
-        RunOperation: "validate" | "process";
+        RunOperation: "validate" | "process" | "publish";
         /**
          * RunOutput
          * @description Output metadata captured for a run.
@@ -7672,13 +7691,13 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
+                    "application/json": components["schemas"]["RunResource"];
                 };
             };
             /** @description Validation Error */
@@ -8657,6 +8676,52 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    stream_run_events_endpoint_api_v1_runs__runId__events_stream_get: {
+        parameters: {
+            query?: {
+                /** @description Byte offset cursor for resuming from a prior stream position. */
+                cursor?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Run not found */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

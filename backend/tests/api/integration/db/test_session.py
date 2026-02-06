@@ -63,7 +63,7 @@ async def test_session_dependency_commits_and_populates_context(
             "workspace_id": workspace_id_str,
             "display_name": "Session Configuration",
             "status": "draft",
-            "content_digest": None,
+            "published_digest": None,
             "activated_at": None,
             "created_at": now_iso,
             "updated_at": now_iso,
@@ -76,7 +76,7 @@ async def test_session_dependency_commits_and_populates_context(
                     workspace_id,
                     display_name,
                     status,
-                    content_digest,
+                    published_digest,
                     activated_at,
                     created_at,
                     updated_at
@@ -85,7 +85,7 @@ async def test_session_dependency_commits_and_populates_context(
                     :workspace_id,
                     :display_name,
                     :status,
-                    :content_digest,
+                    :published_digest,
                     :activated_at,
                     :created_at,
                     :updated_at
@@ -158,7 +158,7 @@ async def test_session_dependency_rolls_back_on_error(
             "workspace_id": workspace_id_str,
             "display_name": "Session Configuration",
             "status": "draft",
-            "content_digest": None,
+            "published_digest": None,
             "activated_at": None,
             "created_at": now_iso,
             "updated_at": now_iso,
@@ -171,7 +171,7 @@ async def test_session_dependency_rolls_back_on_error(
                     workspace_id,
                     display_name,
                     status,
-                    content_digest,
+                    published_digest,
                     activated_at,
                     created_at,
                     updated_at
@@ -180,7 +180,7 @@ async def test_session_dependency_rolls_back_on_error(
                     :workspace_id,
                     :display_name,
                     :status,
-                    :content_digest,
+                    :published_digest,
                     :activated_at,
                     :created_at,
                     :updated_at

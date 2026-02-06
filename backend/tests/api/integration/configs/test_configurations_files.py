@@ -8,7 +8,7 @@ import zipfile
 import pytest
 from httpx import AsyncClient
 
-from tests.integration.configs.helpers import auth_headers, create_from_template
+from tests.api.integration.configs.helpers import auth_headers, create_from_template
 
 pytestmark = pytest.mark.asyncio
 

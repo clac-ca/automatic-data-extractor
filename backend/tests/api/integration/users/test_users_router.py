@@ -7,7 +7,7 @@ import json
 import pytest
 from httpx import AsyncClient
 
-from tests.utils import login
+from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
 

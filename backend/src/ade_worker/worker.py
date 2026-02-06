@@ -992,6 +992,39 @@ class Worker:
         except Exception as exc:
             logger.warning("run.logs.upload_failed run_id=%s error=%s", run_id, exc)
 
+    def _start_run_log_uploader(
+        self,
+        *,
+        workspace_id: str,
+        run_id: str,
+    ) -> tuple[threading.Event, threading.Thread]:
+        stop_event = threading.Event()
+        interval = max(0.1, float(self.settings.worker_log_upload_interval_seconds))
+
+        def _loop() -> None:
+            while not stop_event.wait(interval):
+                self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
+
+        thread = threading.Thread(
+            target=_loop,
+            name=f"run-log-uploader-{run_id}",
+            daemon=True,
+        )
+        thread.start()
+        return stop_event, thread
+
+    def _stop_run_log_uploader(
+        self,
+        *,
+        workspace_id: str,
+        run_id: str,
+        uploader: tuple[threading.Event, threading.Thread],
+    ) -> None:
+        stop_event, thread = uploader
+        stop_event.set()
+        thread.join(timeout=2.0)
+        self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
+
     def _cleanup_run_dir(self, *, run_dir: Path, workspace_id: str, run_id: str) -> None:
         try:
             run_root = self.paths.runs_root(workspace_id).resolve()
@@ -1238,6 +1271,7 @@ class Worker:
 
         workspace_id = None
         run_dir: Path | None = None
+        log_uploader: tuple[threading.Event, threading.Thread] | None = None
         try:
     
             with self.session_factory() as session:
@@ -1288,6 +1322,10 @@ class Worker:
             }
     
             event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
+            log_uploader = self._start_run_log_uploader(
+                workspace_id=workspace_id,
+                run_id=run_id,
+            )
 
             venv_result = self._ensure_local_venv(
                 workspace_id=workspace_id,
@@ -1429,17 +1467,6 @@ class Worker:
                     return
                 finished_at = utcnow()
                 if res.exit_code == 0:
-                    validated_snapshot = _as_str(run_options_payload.get(_CONFIG_DIGEST_SNAPSHOT_KEY))
-                    current_config_digest: str | None = None
-                    if validated_snapshot:
-                        try:
-                            current_config_digest = compute_config_digest(config_dir)
-                        except Exception:
-                            logger.exception(
-                                "run.validate.digest_compute_failed run_id=%s config_dir=%s",
-                                run_id,
-                                config_dir,
-                            )
                     with session_scope(self.session_factory) as session:
                         ok = db.ack_run_success(
                             session,
@@ -1463,17 +1490,6 @@ class Worker:
                             output_file_version_id=None,
                             error_message=None,
                         )
-                        if (
-                            validated_snapshot
-                            and current_config_digest
-                            and validated_snapshot == current_config_digest
-                        ):
-                            db.record_configuration_validated_digest(
-                                session,
-                                configuration_id=configuration_id,
-                                content_digest=validated_snapshot,
-                                now=finished_at,
-                            )
                     _emit_run_complete(
                         event_log,
                         status="succeeded",
@@ -1496,6 +1512,171 @@ class Worker:
                         res.exit_code,
                         f"Validation failed (exit {res.exit_code})",
                     )
+                return
+
+            if operation is RunOperation.PUBLISH:
+                event_log.emit(
+                    event="publish.start",
+                    message="Starting publish run",
+                    context=ctx,
+                )
+                cmd = engine_config_validate_cmd(
+                    python_bin=python_bin,
+                    config_dir=config_dir,
+                    log_level=options.log_level,
+                )
+                try:
+                    res = self.runner.run(
+                        cmd,
+                        event_log=event_log,
+                        scope="run.publish.validate",
+                        timeout_seconds=float(self.settings.worker_run_timeout_seconds)
+                        if self.settings.worker_run_timeout_seconds
+                        else None,
+                        cwd=None,
+                        env=self._pip_env(),
+                        heartbeat=lambda: self._heartbeat_run(run_id=claim.id),
+                        heartbeat_interval=max(1.0, self.settings.worker_lease_seconds / 3),
+                        context=ctx,
+                    )
+                except HeartbeatLostError:
+                    event_log.emit(
+                        event="run.lost_claim",
+                        level="warning",
+                        message="Lease expired during publish validation",
+                        context=ctx,
+                    )
+                    return
+
+                finished_at = utcnow()
+                if res.exit_code != 0:
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id,
+                        event_log,
+                        ctx,
+                        finished_at,
+                        run_started_at,
+                        res.exit_code,
+                        f"Validation failed (exit {res.exit_code})",
+                    )
+                    return
+
+                stale_snapshot_message = "publish_stale_snapshot"
+                digest_snapshot = _as_str(run_options_payload.get(_CONFIG_DIGEST_SNAPSHOT_KEY))
+                try:
+                    current_config_digest = compute_config_digest(config_dir)
+                except Exception:
+                    logger.exception(
+                        "run.publish.digest_compute_failed run_id=%s config_dir=%s",
+                        run_id,
+                        config_dir,
+                    )
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id,
+                        event_log,
+                        ctx,
+                        finished_at,
+                        run_started_at,
+                        2,
+                        stale_snapshot_message,
+                    )
+                    return
+
+                if not digest_snapshot or digest_snapshot != current_config_digest:
+                    event_log.emit(
+                        event="publish.stale_snapshot",
+                        level="error",
+                        message=stale_snapshot_message,
+                        data={
+                            "snapshot_digest": digest_snapshot,
+                            "current_digest": current_config_digest,
+                        },
+                        context=ctx,
+                    )
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id,
+                        event_log,
+                        ctx,
+                        finished_at,
+                        run_started_at,
+                        2,
+                        stale_snapshot_message,
+                    )
+                    return
+
+                event_log.emit(
+                    event="publish.activate.start",
+                    message="Activating published configuration",
+                    context=ctx,
+                )
+                try:
+                    with session_scope(self.session_factory) as session:
+                        ok = db.ack_run_success(
+                            session,
+                            run_id=run_id,
+                            worker_id=self.worker_id,
+                            now=finished_at,
+                        )
+                        if not ok:
+                            event_log.emit(
+                                event="run.lost_claim",
+                                level="warning",
+                                message="Lost run claim before ack",
+                                context=ctx,
+                            )
+                            return
+                        activated = db.activate_configuration_publish(
+                            session,
+                            workspace_id=workspace_id,
+                            configuration_id=configuration_id,
+                            published_digest=digest_snapshot,
+                            now=finished_at,
+                        )
+                        if not activated:
+                            raise RuntimeError(stale_snapshot_message)
+                        db.record_run_result(
+                            session,
+                            run_id=run_id,
+                            completed_at=finished_at,
+                            exit_code=0,
+                            output_file_version_id=None,
+                            error_message=None,
+                        )
+                except RuntimeError as exc:
+                    self._handle_run_failure(
+                        claim,
+                        run_id,
+                        document_id,
+                        event_log,
+                        ctx,
+                        finished_at,
+                        run_started_at,
+                        2,
+                        str(exc),
+                    )
+                    return
+
+                event_log.emit(
+                    event="publish.activate.complete",
+                    message="Configuration activated",
+                    context=ctx,
+                )
+                _emit_run_complete(
+                    event_log,
+                    status="succeeded",
+                    message="Publish succeeded",
+                    context=ctx,
+                    started_at=run_started_at,
+                    completed_at=finished_at,
+                    exit_code=0,
+                )
+                self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
                 return
 
             if not input_file_version_id:
@@ -1822,6 +2003,12 @@ class Worker:
             )
     
         finally:
+            if workspace_id and log_uploader is not None:
+                self._stop_run_log_uploader(
+                    workspace_id=workspace_id,
+                    run_id=run_id,
+                    uploader=log_uploader,
+                )
             if run_dir and workspace_id:
                 self._cleanup_run_dir(run_dir=run_dir, workspace_id=workspace_id, run_id=run_id)
 

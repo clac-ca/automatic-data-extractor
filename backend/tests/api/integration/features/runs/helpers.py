@@ -43,7 +43,7 @@ def build_runs_service(
         workspace_id=workspace.id,
         display_name="Demo Config",
         status=ConfigurationStatus.ACTIVE,
-        content_digest="digest",
+        published_digest="digest",
     )
     session.add(configuration)
     session.flush()

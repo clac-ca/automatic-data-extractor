@@ -61,7 +61,7 @@ class ConfigurationRecord(BaseSchema):
     workspace_id: UUIDStr
     display_name: str
     status: ConfigurationStatus
-    content_digest: str | None = None
+    published_digest: str | None = None
     created_at: datetime
     updated_at: datetime
     activated_at: datetime | None = None

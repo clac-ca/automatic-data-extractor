@@ -53,7 +53,7 @@ def _ensure_workspace_and_configuration(
                 workspace_id=workspace_id,
                 display_name="Config A",
                 status="draft",
-                content_digest=None,
+                published_digest=None,
                 last_used_at=None,
                 activated_at=None,
                 created_at=now,
@@ -106,46 +106,74 @@ def _insert_run(
         )
 
 
-def test_record_configuration_validated_digest_updates_row(engine) -> None:
+def test_activate_configuration_publish_updates_target_and_archives_previous_active(engine) -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
     workspace_id = _uuid()
-    configuration_id = _uuid()
+    draft_configuration_id = _uuid()
+    active_configuration_id = _uuid()
     _ensure_workspace_and_configuration(
         engine,
         workspace_id=workspace_id,
-        configuration_id=configuration_id,
+        configuration_id=draft_configuration_id,
         now=now,
     )
+    with engine.begin() as conn:
+        conn.execute(
+            pg_insert(configurations)
+            .values(
+                id=active_configuration_id,
+                workspace_id=workspace_id,
+                display_name="Config B",
+                status="active",
+                published_digest="sha256:old",
+                last_used_at=None,
+                activated_at=now - timedelta(days=1),
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
 
     with session_scope(session_factory) as session:
-        updated = db.record_configuration_validated_digest(
+        updated = db.activate_configuration_publish(
             session,
-            configuration_id=configuration_id,
-            content_digest="sha256:newdigest",
+            workspace_id=workspace_id,
+            configuration_id=draft_configuration_id,
+            published_digest="sha256:newdigest",
             now=now,
         )
 
     assert updated is True
 
     with engine.begin() as conn:
-        row = conn.execute(
-            select(configurations.c.content_digest).where(configurations.c.id == configuration_id)
-        ).first()
-    assert row is not None
-    assert row.content_digest == "sha256:newdigest"
+        rows = conn.execute(
+            select(
+                configurations.c.id,
+                configurations.c.status,
+                configurations.c.published_digest,
+            ).where(
+                configurations.c.id.in_([draft_configuration_id, active_configuration_id])
+            )
+        ).all()
+    by_id = {str(row.id): row for row in rows}
+    assert by_id[draft_configuration_id].status == "active"
+    assert by_id[draft_configuration_id].published_digest == "sha256:newdigest"
+    assert by_id[active_configuration_id].status == "archived"
 
 
-def test_record_configuration_validated_digest_returns_false_when_missing(engine) -> None:
+def test_activate_configuration_publish_returns_false_when_missing(engine) -> None:
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime(2025, 1, 10, 12, 0, 0)
+    workspace_id = _uuid()
     missing_configuration_id = _uuid()
 
     with session_scope(session_factory) as session:
-        updated = db.record_configuration_validated_digest(
+        updated = db.activate_configuration_publish(
             session,
+            workspace_id=workspace_id,
             configuration_id=missing_configuration_id,
-            content_digest="sha256:newdigest",
+            published_digest="sha256:newdigest",
             now=now,
         )
     assert updated is False

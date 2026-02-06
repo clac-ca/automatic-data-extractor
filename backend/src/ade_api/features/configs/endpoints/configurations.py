@@ -37,6 +37,7 @@ from ade_api.common.etag import build_etag_token, format_etag, format_weak_etag
 from ade_api.core.http import require_csrf, require_workspace
 from ade_api.db import get_session_factory
 from ade_api.features.runs.service import RunsService
+from ade_api.features.runs.schemas import RunResource
 from ade_db.models import User
 
 from ..exceptions import (
@@ -48,7 +49,6 @@ from ..exceptions import (
     ConfigStateError,
     ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
-    ConfigValidationRequiredError,
 )
 from ..http import ConfigurationIdPath, WorkspaceIdPath, raise_problem
 from ..schemas import (
@@ -273,14 +273,14 @@ def import_configuration(
 @router.post(
     "/configurations/{configurationId}/publish",
     dependencies=[Security(require_csrf)],
-    response_model=ConfigurationRecord,
-    summary="Make a draft configuration active",
+    response_model=RunResource,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start a publish run for a draft configuration",
     response_model_exclude_none=True,
 )
 def publish_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
-    service: ConfigurationsServiceDep,
     runs_service: RunsServiceDep,
     _actor: Annotated[
         User,
@@ -290,10 +290,10 @@ def publish_configuration_endpoint(
         ),
     ],
     payload: None = MAKE_ACTIVE_BODY,
-) -> ConfigurationRecord:
+) -> RunResource:
     del payload
     try:
-        record = service.make_active_configuration(
+        run = runs_service.prepare_publish_run(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -304,11 +304,6 @@ def publish_configuration_endpoint(
             status.HTTP_404_NOT_FOUND,
             detail="configuration_storage_missing",
         ) from exc
-    except ConfigValidationRequiredError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={"error": "validation_required"},
-        ) from exc
     except ConfigEngineDependencyMissingError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -317,11 +312,7 @@ def publish_configuration_endpoint(
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    runs_service.enqueue_pending_runs_for_configuration(
-        configuration_id=record.id,
-    )
-
-    return ConfigurationRecord.model_validate(record)
+    return runs_service.to_resource(run)
 
 
 @router.post(

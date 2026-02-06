@@ -4,7 +4,7 @@ import pytest
 
 from ade_db.models import ConfigurationStatus, RunStatus
 
-from tests.integration.runs.helpers import (
+from tests.api.integration.runs.helpers import (
     auth_headers,
     make_configuration,
     make_document,

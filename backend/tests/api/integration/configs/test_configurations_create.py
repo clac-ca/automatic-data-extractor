@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.settings import Settings
-from tests.integration.configs.helpers import auth_headers, config_path, create_from_template
+from tests.api.integration.configs.helpers import auth_headers, config_path, create_from_template
 
 pytestmark = pytest.mark.asyncio
 

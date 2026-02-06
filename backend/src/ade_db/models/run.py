@@ -34,6 +34,7 @@ class RunOperation(str, Enum):
 
     VALIDATE = "validate"
     PROCESS = "process"
+    PUBLISH = "publish"
 
 
 class Run(UUIDPrimaryKeyMixin, Base):
@@ -119,6 +120,14 @@ class Run(UUIDPrimaryKeyMixin, Base):
             unique=True,
             postgresql_where=text(
                 "status IN ('queued','running') AND operation = 'process'"
+            ),
+        ),
+        Index(
+            "uq_runs_active_publish",
+            "configuration_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('queued','running') AND operation = 'publish'"
             ),
         ),
         Index(
