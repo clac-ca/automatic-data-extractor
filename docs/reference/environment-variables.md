@@ -32,6 +32,7 @@ If one of these is missing, production startup will fail.
 | `ADE_BLOB_CONTAINER` | API, worker, storage | all environments | `ade` | blob container name |
 | `ADE_BLOB_CONNECTION_STRING` | API, worker, storage | one-of required | none | key-based blob auth |
 | `ADE_BLOB_ACCOUNT_URL` | API, worker, storage | one-of required | none | identity-based blob auth |
+| `ADE_ENGINE_SPEC` | API, worker | optional | `ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9` | engine package spec used for run environments |
 | `ADE_PUBLIC_WEB_URL` | API/web behavior | production | `http://localhost:8000` | must match real external URL |
 
 ## Service Selection and Startup
@@ -41,9 +42,9 @@ If one of these is missing, production startup will fail.
 | `ADE_SERVICES` | root CLI/container | optional | `api,worker,web` | choose which services to run |
 | `ADE_DB_MIGRATE_ON_START` | root CLI | optional | `true` | auto-runs migrations with `ade start/dev` |
 | `ADE_INTERNAL_API_URL` | web/nginx/vite | optional | `http://localhost:8001` | must be origin only (no path/query) |
-| `ADE_DATA_DIR` | API, worker | optional | `backend/data` (repo) or `/var/lib/ade/data` (container) | writable runtime data path; mount this path for persistence in ACA |
+| `ADE_DATA_DIR` | API, worker | optional | `backend/data` (repo) or `/backend/data` (container) | writable runtime data path; mount this path for persistence in ACA |
 
-For Azure Container Apps with persistent data, mount Azure Files to `/var/lib/ade/data`.
+For Azure Container Apps with persistent data, mount Azure Files to `/backend/data`.
 See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact mount workflow.
 
 ## Auth and Security

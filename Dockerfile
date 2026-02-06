@@ -7,10 +7,6 @@
 ## - production   : runtime image for API + worker + web
 ## - devcontainer : development image used by VS Code devcontainers
 ##
-## Principles
-## - Keep production lean and deterministic.
-## - Keep development ergonomic without mutating containers at startup.
-##
 
 ARG PYTHON_IMAGE=python:3.14.2-slim-bookworm
 ARG NODE_IMAGE=node:22-bookworm-slim
@@ -51,10 +47,11 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_LINK_MODE=copy
 
 COPY backend/pyproject.toml backend/uv.lock ./
+COPY VERSION /build/VERSION
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev
 
-COPY backend/ ./
+COPY backend/src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
@@ -65,11 +62,11 @@ FROM ${NODE_IMAGE} AS web-builder
 WORKDIR /build/web
 ARG APP_VERSION
 
-COPY frontend/ade-web/package*.json ./
+COPY frontend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
 
-COPY frontend/ade-web/ ./
+COPY frontend/ ./
 RUN ADE_APP_VERSION="$APP_VERSION" npm run build
 
 # ------------------------------------------------------------
@@ -91,21 +88,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -u 10001 -s /usr/sbin/nologin adeuser
 
 COPY --from=web-builder --chown=adeuser:adeuser /build/web/dist /usr/share/nginx/html
-COPY --chown=adeuser:adeuser frontend/ade-web/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY --chown=adeuser:adeuser frontend/ade-web/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
+COPY --chown=adeuser:adeuser frontend/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY --chown=adeuser:adeuser frontend/nginx/default.conf.tmpl /etc/nginx/templates/default.conf.tmpl
 COPY --chown=adeuser:adeuser docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 
 RUN mkdir -p \
-      /var/lib/ade/data \
+      /backend/data \
       /var/cache/nginx \
       /var/run/nginx \
       /var/lib/nginx \
       /var/log/nginx \
     && chown -R adeuser:adeuser \
-      /var/lib/ade \
+      /backend \
       /etc/nginx/conf.d \
       /etc/nginx/templates \
       /usr/share/nginx/html \

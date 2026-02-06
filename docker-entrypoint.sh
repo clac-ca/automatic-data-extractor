@@ -6,7 +6,7 @@ set -eu
 # 2) Fix data directory ownership if running as root.
 # 3) Drop to the unprivileged runtime user and exec the real process.
 
-DATA_DIR="${ADE_DATA_DIR:-/var/lib/ade/data}"
+DATA_DIR="${ADE_DATA_DIR:-/backend/data}"
 APP_USER="${APP_USER:-adeuser}"
 DEFAULT_INTERNAL_API_URL="http://localhost:8001"
 

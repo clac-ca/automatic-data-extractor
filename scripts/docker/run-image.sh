@@ -29,7 +29,7 @@ echo "==> Running ${IMAGE}"
 docker run \
   --rm -it \
   --env-file .env \
-  -e ADE_DATA_DIR=/var/lib/ade/data \
+  -e ADE_DATA_DIR=/backend/data \
   -p 8000:8000 \
-  -v "${ROOT_DIR}/backend/data:/var/lib/ade/data" \
+  -v "${ROOT_DIR}/backend/data:/backend/data" \
   "${IMAGE}"

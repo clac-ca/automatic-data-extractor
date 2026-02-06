@@ -35,7 +35,7 @@ For reference pages:
 ## Command Rules
 
 - use fenced `bash` blocks
-- include directory context (`cd backend`) when required
+- include directory context (`cd <repo-root>`) when required
 - label destructive commands clearly
 
 ## Accuracy Rules

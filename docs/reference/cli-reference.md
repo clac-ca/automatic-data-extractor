@@ -5,15 +5,13 @@
 Use this pattern locally inside this repository:
 
 ```bash
-cd backend
-uv run <command>
+cd backend && uv run <command>
 ```
 
 Example:
 
 ```bash
-cd backend
-uv run ade --help
+cd backend && uv run ade --help
 ```
 
 `uv run` ensures commands use the repo's Python environment.
@@ -23,8 +21,9 @@ uv run ade --help
 | Command | What it does |
 | --- | --- |
 | `ade start` | Start API + worker + web |
-| `ade stop` | Stop matching ADE API/worker/web processes |
-| `ade restart` | Stop then start ADE services in one command |
+| `ade stop` | Stop tracked ADE API/worker/web processes |
+| `ade restart` | Stop tracked services then start in one command |
+| `ade status` | Show tracked ADE process state |
 | `ade dev` | Start API + worker + web in dev mode |
 | `ade test` | Run API, worker, and web tests |
 | `ade reset` | Reset DB/storage/local state (destructive) |
@@ -47,8 +46,8 @@ Key options for `ade stop`/`ade restart`:
 
 Runtime scope for `ade stop`/`ade restart`:
 
-- Uses process-signature matching for API/worker/web processes
-- Stops matching ADE service processes regardless of which shell/session started them
+- Uses state tracking from `.ade/state.json`
+- Stops processes started by `ade` (does not scan/kill unrelated processes)
 
 ## API CLI: `ade-api`
 
@@ -107,10 +106,10 @@ Common API options:
 ## Quick Recipes
 
 ```bash
-cd backend
-uv run ade dev
-uv run ade stop
-uv run ade restart --services worker --no-migrate
-uv run ade db migrate
-uv run ade api types
+cd backend && uv run ade dev
+cd backend && uv run ade status
+cd backend && uv run ade stop
+cd backend && uv run ade restart --services worker --no-migrate
+cd backend && uv run ade db migrate
+cd backend && uv run ade api types
 ```

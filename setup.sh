@@ -1,34 +1,30 @@
 #!/usr/bin/env bash
-# -----------------------------------------------------------------------------
-# ADE local setup
-#
-# Recommended: use the devcontainer (preconfigured, reproducible).
-# This script is only needed when working outside the devcontainer.
-# Or you wish to reinstall dependencies in an existing devcontainer.
-#
-# Local setup steps:
-# 1) Install Python 3.14+
-# 2) Install Node.js 22+
-# 3) Run:
-#
-#    bash ./setup.sh
-#
-# Notes:
-# - You'll be prompted to install 'uv' if it's missing.
-# -----------------------------------------------------------------------------
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
+FRONTEND_DIR="${ROOT_DIR}/frontend"
 
-# Check for uv, prompt to install if missing.
-if ! command -v uv >/dev/null 2>&1; then
-  echo "Install uv from https://astral.sh/uv and re-run ./setup.sh." >&2
+command -v uv >/dev/null 2>&1 || {
+  echo "error: uv is required: https://astral.sh/uv" >&2
   exit 1
-fi
+}
+command -v npm >/dev/null 2>&1 || {
+  echo "error: npm is required (Node.js >=20,<23)." >&2
+  exit 1
+}
 
-# Install web dependencies.
-npm ci --prefix "${ROOT_DIR}/frontend/ade-web"
+echo "Installing web dependencies (frontend/node_modules)..."
+npm ci --prefix "${FRONTEND_DIR}"
 
-# Sync Python dependencies in backend/.venv.
-uv sync --project "${BACKEND_DIR}"
+echo "Installing backend dependencies (backend/.venv)..."
+(cd "${BACKEND_DIR}" && uv sync)
+
+cat <<'EOF'
+
+Setup complete.
+Try:
+  cd backend
+  uv run ade --help
+  uv run ade dev
+EOF

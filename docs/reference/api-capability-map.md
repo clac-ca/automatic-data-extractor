@@ -9,9 +9,8 @@ Use OpenAPI output for exact request/response schemas.
 ## How to Discover Current Routes
 
 ```bash
-cd backend
-uv run ade-api routes
-uv run ade-api types
+cd backend && uv run ade-api routes
+cd backend && uv run ade-api types
 ```
 
 ## Capability Areas

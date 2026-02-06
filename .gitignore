@@ -1,5 +1,7 @@
 # Python
 .venv/
+backend/.venv/
+.ade/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -10,10 +12,10 @@ __pycache__/
 coverage.xml
 
 # Node / web
-frontend/ade-web/node_modules/
-frontend/ade-web/dist/
-frontend/ade-web/.vite/
-frontend/ade-web/public/version.json
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/public/version.json
 
 # Local env / secrets
 .env

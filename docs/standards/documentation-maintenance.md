@@ -27,7 +27,7 @@ Update docs whenever these change:
 ```bash
 npx --yes markdownlint-cli2 "docs/**/*.md" "README.md" "CONTRIBUTING.md" "backend/**/README.md"
 FILES="$(find docs -type f -name '*.md' -print) README.md CONTRIBUTING.md $(find backend -mindepth 2 -maxdepth 2 -name README.md -print)"
-lychee --config .lychee.toml --no-progress $FILES
+lychee --no-progress $FILES
 ```
 
 ## Done Criteria

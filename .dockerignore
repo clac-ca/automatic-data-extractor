@@ -22,13 +22,13 @@ npm-debug.log*
 yarn-error.log*
 .pnpm-store/
 frontend/**/node_modules
-frontend/ade-web/.vite/
-frontend/ade-web/coverage/
+frontend/.vite/
+frontend/coverage/
 
 # Build outputs
 dist/
 build/
-frontend/ade-web/dist/
+frontend/dist/
 
 # Local data & misc
 data/
@@ -42,4 +42,4 @@ workpackages/
 # Env files (avoid baking secrets into images)
 .env
 .env.*
-frontend/ade-web/.env*
+frontend/.env*

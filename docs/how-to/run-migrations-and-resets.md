@@ -36,9 +36,8 @@ az containerapp exec \
 ## Local/Repo Migration Commands
 
 ```bash
-cd backend
-uv run ade db migrate
-uv run ade db current
+cd backend && uv run ade db migrate
+cd backend && uv run ade db current
 ```
 
 ## Reset Commands (Destructive)
@@ -46,22 +45,19 @@ uv run ade db current
 Combined reset:
 
 ```bash
-cd backend
-uv run ade reset --yes
+cd backend && uv run ade reset --yes
 ```
 
 DB-only reset:
 
 ```bash
-cd backend
-uv run ade db reset --yes
+cd backend && uv run ade db reset --yes
 ```
 
 Storage reset:
 
 ```bash
-cd backend
-uv run ade storage reset --yes --mode prefix
+cd backend && uv run ade storage reset --yes --mode prefix
 ```
 
 ## Important Warning

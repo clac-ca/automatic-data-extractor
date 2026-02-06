@@ -7,7 +7,7 @@ Deploy ADE on Azure Container Apps with one of two validated network patterns:
 - **Guide A (recommended):** public endpoints + strict allowlists
 - **Guide B (more isolated):** private-only endpoints
 
-Both guides run ADE in one container app (`api,worker,web`) and keep `/var/lib/ade/data` persisted.
+Both guides run ADE in one container app (`api,worker,web`) and keep `/backend/data` persisted.
 
 ## Choose One Guide
 
@@ -22,7 +22,7 @@ Important: PostgreSQL networking mode (public vs private) is effectively a build
 
 - Azure Container App already running ADE (`ADE_SERVICES=api,worker,web`)
 - managed identity configured on the app
-- Azure Files mounted to `/var/lib/ade/data`
+- Azure Files mounted to `/backend/data`
 - `ADE_DATABASE_URL` set with `sslmode=require`
 - `ADE_BLOB_ACCOUNT_URL` + `ADE_BLOB_CONTAINER` configured
 

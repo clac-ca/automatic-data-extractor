@@ -1,10 +1,8 @@
 {
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": [
-    "apps/ade-api/tests",
-    "apps/ade-worker/tests",
-    "apps/ade-cli/tests"
+    "backend/tests/api",
+    "backend/tests/worker"
   ],
-
-  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv",
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python"
 }
