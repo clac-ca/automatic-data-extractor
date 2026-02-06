@@ -10,7 +10,7 @@ def _resolve_repo_root() -> Path:
     override = os.getenv("ADE_REPO_ROOT")
     if override:
         return Path(override).expanduser().resolve()
-    return Path(__file__).resolve().parents[3]
+    return Path(__file__).resolve().parents[2]
 
 
 REPO_ROOT = _resolve_repo_root()

@@ -45,11 +45,11 @@ dependencies = [
 ]
 
 [project.scripts]
-ade = "ade_cli.main:ade_app"
-ade-api = "ade_cli.main:ade_api_app"
-ade-worker = "ade_cli.main:ade_worker_app"
-ade-db = "ade_cli.main:ade_db_app"
-ade-storage = "ade_cli.main:ade_storage_app"
+ade = "ade_cli.__main__:main"
+ade-api = "ade_api.__main__:main"
+ade-worker = "ade_worker.__main__:main"
+ade-db = "ade_db.__main__:main"
+ade-storage = "ade_storage.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -65,6 +65,7 @@ dev = [
 # ---- Packaging ----
 [tool.setuptools]
 include-package-data = true
+py-modules = ["paths", "settings"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -77,7 +78,7 @@ include = [
 ]
 
 [tool.setuptools.dynamic]
-version = { attr = "ade.version.__version__" }
+version = { attr = "ade_cli.version.__version__" }
 
 # Keep type markers + assets needed at runtime.
 [tool.setuptools.package-data]

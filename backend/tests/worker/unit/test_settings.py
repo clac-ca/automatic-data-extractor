@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-from ade_worker.settings import Settings
 from pydantic import ValidationError
+
+from ade_worker.settings import Settings
+from paths import REPO_ROOT
 
 
 def _set_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -81,7 +81,7 @@ def test_worker_data_dir_default_matches_api_layout(monkeypatch: pytest.MonkeyPa
 
     settings = Settings(_env_file=None)
 
-    expected_root = Path("backend/data")
+    expected_root = REPO_ROOT / "backend" / "data"
     assert settings.data_dir == expected_root
     assert settings.workspaces_dir == expected_root / "workspaces"
     assert settings.venvs_dir == expected_root / "venvs"

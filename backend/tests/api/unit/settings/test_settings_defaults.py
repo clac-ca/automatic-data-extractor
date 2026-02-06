@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
-from ade_api.settings import Settings
 from sqlalchemy.engine import make_url
+
+from ade_api.settings import Settings
+from paths import REPO_ROOT
 
 REQUIRED_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
 
@@ -39,7 +39,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert url.password == "ade"
     assert url.query.get("sslmode") == "disable"
     assert settings.access_token_expire_minutes == 30
-    expected_root = Path("backend/data")
+    expected_root = REPO_ROOT / "backend" / "data"
     expected_workspaces = expected_root / "workspaces"
     expected_venvs = expected_root / "venvs"
     assert settings.data_dir == expected_root
@@ -67,7 +67,7 @@ def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
     settings = Settings(_env_file=None)
 
-    expected_root = Path("custom/data-root")
+    expected_root = REPO_ROOT / "custom" / "data-root"
     expected_workspaces = expected_root / "workspaces"
     expected_venvs = expected_root / "venvs"
     assert settings.data_dir == expected_root

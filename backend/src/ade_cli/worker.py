@@ -1,17 +1,16 @@
-"""ade-worker: CLI for ADE worker."""
+"""`ade-worker` command implementations."""
 
 from __future__ import annotations
 
-import subprocess
 import sys
-from enum import Enum
-from pathlib import Path
 
 import typer
 
-from ade_common.paths import BACKEND_ROOT
 from ade_worker.gc import run_gc
 from ade_worker.worker import main as worker_main
+from paths import BACKEND_ROOT
+
+from .common import TestSuite, parse_test_suite, run
 
 app = typer.Typer(
     add_completion=False,
@@ -19,49 +18,6 @@ app = typer.Typer(
     help="ADE worker CLI (start, dev, test, gc).",
 )
 WORKER_TEST_DIR = "tests/worker"
-
-
-class TestSuite(str, Enum):
-    UNIT = "unit"
-    INTEGRATION = "integration"
-    ALL = "all"
-
-
-def parse_suite(value: str | None) -> TestSuite:
-    if value is None:
-        return TestSuite.UNIT
-    normalized = value.strip().lower()
-    if normalized in {"unit", "u"}:
-        return TestSuite.UNIT
-    if normalized in {"integration", "int", "i"}:
-        return TestSuite.INTEGRATION
-    if normalized in {"all", "a"}:
-        return TestSuite.ALL
-    typer.echo("error: unknown test suite (use unit, integration, or all).", err=True)
-    raise typer.Exit(code=1)
-
-
-def _run(command: list[str], *, cwd: Path) -> None:
-    typer.echo(f"-> {' '.join(command)}", err=True)
-    completed = subprocess.run(command, cwd=cwd, check=False)
-    if completed.returncode != 0:
-        raise typer.Exit(code=completed.returncode)
-
-
-def run_tests(suite: TestSuite) -> None:
-    if not (BACKEND_ROOT / WORKER_TEST_DIR).is_dir():
-        typer.echo(
-            "error: worker tests require the backend checkout (tests/worker).",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-
-    cmd = [sys.executable, "-m", "pytest", WORKER_TEST_DIR]
-    if suite is not TestSuite.ALL:
-        cmd.extend(["-m", suite.value])
-    if suite is TestSuite.UNIT:
-        cmd.extend(["--ignore", f"{WORKER_TEST_DIR}/integration"])
-    _run(cmd, cwd=BACKEND_ROOT)
 
 
 @app.callback()
@@ -87,7 +43,20 @@ def test(
         help="Suite to run: unit, integration, or all (default: unit).",
     ),
 ) -> None:
-    run_tests(parse_suite(suite))
+    resolved = parse_test_suite(suite)
+    if not (BACKEND_ROOT / WORKER_TEST_DIR).is_dir():
+        typer.echo(
+            "error: worker tests require the backend checkout (tests/worker).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    cmd = [sys.executable, "-m", "pytest", WORKER_TEST_DIR]
+    if resolved is not TestSuite.ALL:
+        cmd.extend(["-m", resolved.value])
+    if resolved is TestSuite.UNIT:
+        cmd.extend(["--ignore", f"{WORKER_TEST_DIR}/integration"])
+    run(cmd, cwd=BACKEND_ROOT)
 
 
 @app.command(name="gc", help="Run garbage collection once.")
@@ -95,5 +64,5 @@ def gc() -> None:
     run_gc()
 
 
-if __name__ == "__main__":
-    app()
+__all__ = ["app"]
+

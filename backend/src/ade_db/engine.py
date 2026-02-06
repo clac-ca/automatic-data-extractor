@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 import re
-from typing import Any, Iterator, Protocol
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 
 from sqlalchemy import create_engine, event, inspect
-from sqlalchemy.engine import Engine, URL, make_url
+from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
+
+from settings import DatabaseSettingsProtocol
 
 # Optional dependency (Managed Identity)
 try:
@@ -17,19 +20,7 @@ except ModuleNotFoundError:
     DefaultAzureCredential = None  # type: ignore[assignment]
 
 DEFAULT_AZURE_PG_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
-
-
-class DatabaseSettings(Protocol):
-    database_url: str | URL
-    database_echo: bool
-    database_auth_mode: str
-    database_sslrootcert: str | None
-    database_pool_size: int
-    database_max_overflow: int
-    database_pool_timeout: int
-    database_pool_recycle: int
-    database_connect_timeout_seconds: int | None
-    database_statement_timeout_ms: int | None
+DatabaseSettings = DatabaseSettingsProtocol
 
 
 def _apply_sslrootcert(url: URL, sslrootcert: str | None) -> URL:
@@ -57,7 +48,9 @@ def _apply_postgres_timeouts(url: URL, settings: DatabaseSettings) -> URL:
         query["connect_timeout"] = str(int(settings.database_connect_timeout_seconds))
     if settings.database_statement_timeout_ms is not None:
         options = str(query.get("options", "")).strip()
-        query["options"] = _append_statement_timeout(options, settings.database_statement_timeout_ms)
+        query["options"] = _append_statement_timeout(
+            options, settings.database_statement_timeout_ms
+        )
     return url.set(query=query)
 
 

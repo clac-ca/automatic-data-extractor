@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ade_common.paths import SRC_ROOT
+from paths import SRC_ROOT
 
 DISALLOWED_PATTERNS = (
     "sqlalchemy.ext.asyncio",

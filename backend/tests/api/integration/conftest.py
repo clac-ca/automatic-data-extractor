@@ -1,32 +1,38 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-import os
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+from asgi_lifespan import LifespanManager
+from dotenv import dotenv_values
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from asgi_lifespan import LifespanManager
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
-from ade_db.engine import build_engine
-from ade_api.db import get_db_read, get_db_write, get_session_factory
-from ade_db.migrations_runner import run_migrations
+from ade_api.db import get_db_read, get_db_write
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
-from ade_db.models import Role, User, Workspace, WorkspaceMembership
 from ade_api.settings import Settings, get_settings
-from ade_cli.api.shared import REPO_ROOT, load_dotenv
+from ade_db.engine import build_engine
+from ade_db.migrations_runner import run_migrations
+from ade_db.models import User, Workspace, WorkspaceMembership
+from paths import REPO_ROOT
 
-_DOTENV = load_dotenv(REPO_ROOT / ".env")
+_DOTENV = {
+    key: value
+    for key, value in dotenv_values(Path(REPO_ROOT) / ".env").items()
+    if key and value not in {None, ""}
+}
 
 
 @dataclass(frozen=True, slots=True)

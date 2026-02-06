@@ -1,29 +1,36 @@
-"""Protocol definitions for shared storage settings."""
+"""Storage settings and structural typing helpers."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Literal, Protocol
+from pydantic_settings import BaseSettings
+
+from settings import (
+    BlobStorageSettingsMixin,
+    BlobStorageSettingsProtocol,
+    StorageLayoutSettingsProtocol,
+    ade_settings_config,
+    create_settings_accessors,
+)
+
+BlobStorageSettings = BlobStorageSettingsProtocol
+StorageLayoutSettings = StorageLayoutSettingsProtocol
 
 
-class BlobStorageSettings(Protocol):
-    blob_account_url: str | None
-    blob_connection_string: str | None
-    blob_container: str | None
-    blob_prefix: str
-    blob_versioning_mode: Literal["auto", "require", "off"]
-    blob_request_timeout_seconds: float
-    blob_max_concurrency: int
-    blob_upload_chunk_size_bytes: int
-    blob_download_chunk_size_bytes: int
+class Settings(BlobStorageSettingsMixin, BaseSettings):
+    """Shared storage configuration loaded from ADE_* env vars."""
+
+    model_config = ade_settings_config()
 
 
-class StorageLayoutSettings(Protocol):
-    workspaces_dir: Path
-    configs_dir: Path
-    runs_dir: Path
-    documents_dir: Path
-    venvs_dir: Path
+StorageSettings = Settings
+get_settings, reload_settings = create_settings_accessors(Settings)
 
 
-__all__ = ["BlobStorageSettings", "StorageLayoutSettings"]
+__all__ = [
+    "BlobStorageSettings",
+    "StorageLayoutSettings",
+    "Settings",
+    "StorageSettings",
+    "get_settings",
+    "reload_settings",
+]

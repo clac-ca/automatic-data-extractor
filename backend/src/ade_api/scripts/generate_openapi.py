@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from ade_common.paths import REPO_ROOT
+from paths import REPO_ROOT
 
 from ..main import create_app
 

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import typer
 from typer.testing import CliRunner
 
-from ade_cli.api import shared
-from ade_cli.api.commands import dev, start
+from ade_cli import api
+from paths import BACKEND_ROOT
 
 
 def _stub_settings(
@@ -30,20 +29,19 @@ def _stub_settings(
 def test_run_dev_defaults_to_single_process_reload(monkeypatch):
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(dev, "Settings", lambda: _stub_settings(api_processes=9))
-    monkeypatch.setattr(dev, "_prepare_env", lambda: {"PATH": "test"})
-    monkeypatch.setattr(shared, "uvicorn_path", lambda: "uvicorn")
+    monkeypatch.setattr(api, "Settings", lambda: _stub_settings(api_processes=9))
 
-    def _fake_run(command, *, cwd, env):
+    def _fake_run(command, *, cwd, env=None):
         captured["command"] = list(command)
         captured["cwd"] = cwd
         captured["env"] = env
 
-    monkeypatch.setattr(shared, "run", _fake_run)
+    monkeypatch.setattr(api, "run", _fake_run)
 
-    dev.run_dev()
+    api.run_dev()
 
     command = captured["command"]
+    assert command[:3] == [api.sys.executable, "-m", "uvicorn"]
     assert "--reload" in command
     assert "--workers" not in command
 
@@ -51,38 +49,36 @@ def test_run_dev_defaults_to_single_process_reload(monkeypatch):
     for idx, token in enumerate(command):
         if token == "--reload-dir":
             reload_dirs.append(command[idx + 1])
-    assert reload_dirs == list(dev.DEV_RELOAD_DIRS)
-    assert captured["cwd"] == shared.REPO_ROOT / "backend"
-    assert captured["env"] == {"PATH": "test", "ADE_API_PROCESSES": "1"}
+    assert reload_dirs == list(api.DEV_RELOAD_DIRS)
+    assert captured["cwd"] == BACKEND_ROOT
+    assert captured["env"]["ADE_API_PROCESSES"] == "1"
 
 
 def test_run_dev_processes_flag_disables_reload(monkeypatch):
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(dev, "Settings", lambda: _stub_settings(api_processes=1))
-    monkeypatch.setattr(dev, "_prepare_env", lambda: {"PATH": "test"})
-    monkeypatch.setattr(shared, "uvicorn_path", lambda: "uvicorn")
+    monkeypatch.setattr(api, "Settings", lambda: _stub_settings(api_processes=1))
     monkeypatch.setattr(
-        shared,
+        api,
         "run",
-        lambda command, *, cwd, env: captured.update(
+        lambda command, *, cwd, env=None: captured.update(
             {"command": list(command), "cwd": cwd, "env": env}
         ),
     )
 
-    dev.run_dev(processes=3)
+    api.run_dev(processes=3)
 
     command = captured["command"]
     assert "--reload" not in command
     assert command[command.index("--workers") + 1] == "3"
-    assert captured["env"] == {"PATH": "test", "ADE_API_PROCESSES": "3"}
+    assert captured["env"]["ADE_API_PROCESSES"] == "3"
 
 
 def test_run_start_uses_uvicorn_production_profile(monkeypatch):
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
-        start,
+        api,
         "Settings",
         lambda: _stub_settings(
             api_processes=2,
@@ -90,50 +86,47 @@ def test_run_start_uses_uvicorn_production_profile(monkeypatch):
             api_forwarded_allow_ips="127.0.0.1",
         ),
     )
-    monkeypatch.setattr(start, "_prepare_env", lambda: {"PATH": "test"})
-    monkeypatch.setattr(shared, "uvicorn_path", lambda: "uvicorn")
     monkeypatch.setattr(
-        shared,
+        api,
         "run",
-        lambda command, *, cwd, env: captured.update(
+        lambda command, *, cwd, env=None: captured.update(
             {"command": list(command), "cwd": cwd, "env": env}
         ),
     )
 
-    start.run_start()
+    api.run_start()
 
     command = captured["command"]
+    assert command[:3] == [api.sys.executable, "-m", "uvicorn"]
     assert command[command.index("--loop") + 1] == "uvloop"
     assert command[command.index("--http") + 1] == "httptools"
     assert "--proxy-headers" in command
     assert command[command.index("--forwarded-allow-ips") + 1] == "127.0.0.1"
     assert command[command.index("--workers") + 1] == "2"
     assert "--no-proxy-headers" not in command
-    assert captured["env"] == {"PATH": "test", "ADE_API_PROCESSES": "2"}
+    assert captured["env"]["ADE_API_PROCESSES"] == "2"
 
 
 def test_run_start_supports_disabling_proxy_headers(monkeypatch):
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
-        start,
+        api,
         "Settings",
         lambda: _stub_settings(
             api_processes=1,
             api_proxy_headers_enabled=False,
         ),
     )
-    monkeypatch.setattr(start, "_prepare_env", lambda: {"PATH": "test"})
-    monkeypatch.setattr(shared, "uvicorn_path", lambda: "uvicorn")
     monkeypatch.setattr(
-        shared,
+        api,
         "run",
-        lambda command, *, cwd, env: captured.update(
+        lambda command, *, cwd, env=None: captured.update(
             {"command": list(command), "cwd": cwd, "env": env}
         ),
     )
 
-    start.run_start(processes=1)
+    api.run_start(processes=1)
 
     command = captured["command"]
     assert "--no-proxy-headers" in command
@@ -144,21 +137,18 @@ def test_run_start_supports_disabling_proxy_headers(monkeypatch):
 
 def test_dev_command_ignores_ade_api_processes_env(monkeypatch):
     captured: dict[str, object] = {}
-    app = typer.Typer(add_completion=False)
-    dev.register(app)
-    start.register(app)
+    runner = CliRunner()
 
     monkeypatch.setattr(
-        dev,
+        api,
         "run_dev",
         lambda *, host=None, processes=None: captured.update(
             {"host": host, "processes": processes}
         ),
     )
 
-    runner = CliRunner()
     result = runner.invoke(
-        app,
+        api.app,
         ["dev"],
         env={"ADE_API_PROCESSES": "7"},
     )
@@ -169,21 +159,18 @@ def test_dev_command_ignores_ade_api_processes_env(monkeypatch):
 
 def test_start_command_still_reads_ade_api_processes_env(monkeypatch):
     captured: dict[str, object] = {}
-    app = typer.Typer(add_completion=False)
-    dev.register(app)
-    start.register(app)
+    runner = CliRunner()
 
     monkeypatch.setattr(
-        start,
+        api,
         "run_start",
         lambda *, host=None, processes=None: captured.update(
             {"host": host, "processes": processes}
         ),
     )
 
-    runner = CliRunner()
     result = runner.invoke(
-        app,
+        api.app,
         ["start"],
         env={"ADE_API_PROCESSES": "6"},
     )

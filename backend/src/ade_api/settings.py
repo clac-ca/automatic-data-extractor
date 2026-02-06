@@ -5,14 +5,20 @@ from __future__ import annotations
 import json
 import re
 from datetime import timedelta
-from functools import lru_cache
 from pathlib import Path
-from typing import Literal
 
-from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings
 
-from ade_common.paths import REPO_ROOT
+from settings import (
+    BlobStorageSettingsMixin,
+    DatabaseSettingsMixin,
+    DataPathsSettingsMixin,
+    ade_settings_config,
+    create_settings_accessors,
+    normalize_log_format,
+    normalize_log_level,
+)
 
 # ---- Defaults ---------------------------------------------------------------
 
@@ -26,27 +32,20 @@ MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
 MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
-_ALLOWED_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
-_ALLOWED_LOG_FORMATS = frozenset({"console", "json"})
 
 
 # ---- Settings ---------------------------------------------------------------
 
 
-class Settings(BaseSettings):
+class Settings(
+    DataPathsSettingsMixin,
+    BlobStorageSettingsMixin,
+    DatabaseSettingsMixin,
+    BaseSettings,
+):
     """FastAPI settings loaded from ADE_* environment variables."""
 
-    model_config = SettingsConfigDict(
-        env_file=str(REPO_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        env_prefix="ADE_",
-        case_sensitive=False,
-        extra="ignore",
-        env_ignore_empty=True,
-        enable_decoding=False,
-        populate_by_name=True,
-        str_strip_whitespace=True,
-    )
+    model_config = ade_settings_config(enable_decoding=False, populate_by_name=True)
 
     # Core
     app_name: str = "Automatic Data Extractor API"
@@ -76,16 +75,6 @@ class Settings(BaseSettings):
     server_cors_origin_regex: str | None = Field(default=None)
 
     # Storage
-    data_dir: Path = Field(default=Path("backend/data"))
-    blob_account_url: str | None = Field(default=None)
-    blob_connection_string: str | None = Field(default=None)
-    blob_container: str = Field(default="ade")
-    blob_prefix: str = Field(default="workspaces")
-    blob_versioning_mode: Literal["auto", "require", "off"] = Field(default="auto")
-    blob_request_timeout_seconds: float = Field(default=30.0, gt=0)
-    blob_max_concurrency: int = Field(default=4, ge=1)
-    blob_upload_chunk_size_bytes: int = Field(default=4 * 1024 * 1024, ge=1)
-    blob_download_chunk_size_bytes: int = Field(default=1024 * 1024, ge=1)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_upload_concurrency_limit: int | None = Field(8, ge=1)
@@ -94,18 +83,8 @@ class Settings(BaseSettings):
     engine_spec: str = "ade-engine @ git+https://github.com/clac-ca/ade-engine@v1.7.9"
 
     # Database
-    database_url: PostgresDsn = Field(..., description="Postgres database URL.")
-    database_echo: bool = False
     database_log_level: str | None = None
-    database_pool_size: int = Field(5, ge=1)
-    database_max_overflow: int = Field(10, ge=0)
-    database_pool_timeout: int = Field(30, gt=0)
-    database_pool_recycle: int = Field(1800, ge=0)
-    database_connect_timeout_seconds: int | None = Field(default=10, ge=0)
-    database_statement_timeout_ms: int | None = Field(default=30_000, ge=0)
     database_connection_budget: int | None = Field(default=None, ge=1)
-    database_auth_mode: Literal["password", "managed_identity"] = "password"
-    database_sslrootcert: str | None = Field(default=None)
     document_changes_retention_days: int = Field(default=14, ge=1)
 
     # JWT
@@ -160,16 +139,6 @@ class Settings(BaseSettings):
             return list(value)
         return value
 
-    @field_validator("blob_versioning_mode", mode="before")
-    @classmethod
-    def _normalize_blob_versioning_mode(cls, value: object) -> object:
-        if value is None:
-            return "auto"
-        raw = str(value).strip().lower()
-        if raw in {"auto", "require", "off"}:
-            return raw
-        raise ValueError("ADE_BLOB_VERSIONING_MODE must be one of: auto, require, off.")
-
     @field_validator("api_forwarded_allow_ips", mode="before")
     @classmethod
     def _normalize_api_forwarded_allow_ips(cls, value: object) -> object:
@@ -182,86 +151,44 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _finalize(self) -> Settings:
-        allowed_levels = ", ".join(sorted(_ALLOWED_LOG_LEVELS))
-        allowed_formats = ", ".join(sorted(_ALLOWED_LOG_FORMATS))
+        self.log_format = normalize_log_format(self.log_format, env_var="ADE_LOG_FORMAT")
 
-        self.log_format = self.log_format.strip().lower()
-        if self.log_format not in _ALLOWED_LOG_FORMATS:
-            raise ValueError(f"ADE_LOG_FORMAT must be one of: {allowed_formats}.")
+        normalized_log_level = normalize_log_level(self.log_level, env_var="ADE_LOG_LEVEL")
+        if normalized_log_level is None:
+            raise ValueError("ADE_LOG_LEVEL must not be empty.")
+        self.log_level = normalized_log_level
 
-        self.log_level = self.log_level.strip().upper()
-        if self.log_level not in _ALLOWED_LOG_LEVELS:
-            raise ValueError(f"ADE_LOG_LEVEL must be one of: {allowed_levels}.")
-
-        if self.api_log_level is not None:
-            self.api_log_level = self.api_log_level.strip().upper()
-            if self.api_log_level not in _ALLOWED_LOG_LEVELS:
-                raise ValueError(f"ADE_API_LOG_LEVEL must be one of: {allowed_levels}.")
-
-        if self.request_log_level is not None:
-            self.request_log_level = self.request_log_level.strip().upper()
-            if self.request_log_level not in _ALLOWED_LOG_LEVELS:
-                raise ValueError(f"ADE_REQUEST_LOG_LEVEL must be one of: {allowed_levels}.")
-
-        if self.access_log_level is not None:
-            self.access_log_level = self.access_log_level.strip().upper()
-            if self.access_log_level not in _ALLOWED_LOG_LEVELS:
-                raise ValueError(f"ADE_ACCESS_LOG_LEVEL must be one of: {allowed_levels}.")
-
-        if self.database_log_level is not None:
-            self.database_log_level = self.database_log_level.strip().upper()
-            if self.database_log_level not in _ALLOWED_LOG_LEVELS:
-                raise ValueError(f"ADE_DATABASE_LOG_LEVEL must be one of: {allowed_levels}.")
+        self.api_log_level = normalize_log_level(self.api_log_level, env_var="ADE_API_LOG_LEVEL")
+        self.request_log_level = normalize_log_level(
+            self.request_log_level,
+            env_var="ADE_REQUEST_LOG_LEVEL",
+        )
+        self.access_log_level = normalize_log_level(
+            self.access_log_level,
+            env_var="ADE_ACCESS_LOG_LEVEL",
+        )
+        self.database_log_level = normalize_log_level(
+            self.database_log_level,
+            env_var="ADE_DATABASE_LOG_LEVEL",
+        )
 
         if self.algorithm != "HS256":
             raise ValueError("ADE_ALGORITHM must be HS256.")
         if len(self.secret_key.get_secret_value().encode("utf-8")) < 32:
             raise ValueError("ADE_SECRET_KEY must be at least 32 bytes (recommend 64+).")
-        if self.blob_connection_string and self.blob_account_url:
-            raise ValueError(
-                "ADE_BLOB_ACCOUNT_URL must be unset when ADE_BLOB_CONNECTION_STRING is provided."
-            )
-        if not self.blob_connection_string and not self.blob_account_url:
-            raise ValueError(
-                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
-            )
-        if self.blob_account_url:
-            self.blob_account_url = self.blob_account_url.rstrip("/")
-        if self.blob_prefix:
-            self.blob_prefix = self.blob_prefix.strip("/")
         if self.server_cors_origin_regex:
             re.compile(self.server_cors_origin_regex)
         return self
-
-    @property
-    def workspaces_dir(self) -> Path:
-        return self.data_dir / "workspaces"
-
-    @property
-    def documents_dir(self) -> Path:
-        return self.workspaces_dir
-
-    @property
-    def configs_dir(self) -> Path:
-        return self.workspaces_dir
-
-    @property
-    def runs_dir(self) -> Path:
-        return self.workspaces_dir
-
-    @property
-    def venvs_dir(self) -> Path:
-        return self.data_dir / "venvs"
-
-    @property
-    def pip_cache_dir(self) -> Path:
-        return self.data_dir / "cache" / "pip"
 
     # ---- Convenience ----
 
     @property
     def effective_api_log_level(self) -> str:
         return self.api_log_level or self.log_level
+
+    @property
+    def runs_dir(self) -> Path:
+        return self.workspaces_dir
 
     @property
     def effective_request_log_level(self) -> str:
@@ -275,18 +202,8 @@ class Settings(BaseSettings):
     def secret_key_value(self) -> str:
         return self.secret_key.get_secret_value()
 
-@lru_cache(maxsize=1)
-def _build_settings() -> Settings:
-    return Settings()
 
-
-def get_settings() -> Settings:
-    return _build_settings()
-
-
-def reload_settings() -> Settings:
-    _build_settings.cache_clear()
-    return _build_settings()
+get_settings, reload_settings = create_settings_accessors(Settings)
 
 
 __all__ = [

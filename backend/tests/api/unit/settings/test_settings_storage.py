@@ -6,6 +6,7 @@ import pytest
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.settings import Settings
+from paths import REPO_ROOT
 
 REQUIRED_DATABASE_URL = "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable"
 
@@ -20,20 +21,21 @@ def _set_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_storage_directories_accept_relative_env_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ADE_DATA_DIR should accept relative paths without resolution."""
+    """ADE_DATA_DIR relative values are resolved from the repository root."""
 
     monkeypatch.chdir(tmp_path)
     _set_required_env(monkeypatch)
     monkeypatch.setenv("ADE_DATA_DIR", "./store")
     settings = Settings(_env_file=None)
 
-    assert settings.data_dir == Path("store")
-    assert settings.workspaces_dir == Path("store/workspaces")
-    assert settings.documents_dir == Path("store/workspaces")
-    assert settings.configs_dir == Path("store/workspaces")
-    assert settings.venvs_dir == Path("store/venvs")
-    assert settings.runs_dir == Path("store/workspaces")
-    assert settings.pip_cache_dir == Path("store/cache/pip")
+    expected_root = REPO_ROOT / "store"
+    assert settings.data_dir == expected_root
+    assert settings.workspaces_dir == expected_root / "workspaces"
+    assert settings.documents_dir == expected_root / "workspaces"
+    assert settings.configs_dir == expected_root / "workspaces"
+    assert settings.venvs_dir == expected_root / "venvs"
+    assert settings.runs_dir == expected_root / "workspaces"
+    assert settings.pip_cache_dir == expected_root / "cache" / "pip"
 
 
 def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -11,10 +11,10 @@ from dotenv import dotenv_values
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
-from ade_common.paths import REPO_ROOT
 from ade_db.engine import build_engine
 from ade_db.schema import metadata
 from ade_worker.settings import Settings
+from paths import REPO_ROOT
 
 
 def _load_dotenv(path: Path | None = None) -> dict[str, str]:
