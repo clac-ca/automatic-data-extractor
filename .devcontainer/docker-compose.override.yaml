@@ -10,6 +10,13 @@ services:
       context: .
       dockerfile: Dockerfile
       target: devcontainer
+    depends_on:
+      db:
+        condition: service_healthy
+      blob:
+        condition: service_started
+      blob-init:
+        condition: service_completed_successfully
     env_file:
       - path: ./.env
         required: false
@@ -18,6 +25,7 @@ services:
       ADE_SERVICES: ${ADE_SERVICES:-api,worker,web}
       ADE_API_PROCESSES: ${ADE_API_PROCESSES:-2}
       ADE_WORKER_RUN_CONCURRENCY: ${ADE_WORKER_RUN_CONCURRENCY:-8}
+      ADE_LOCAL_PROFILE_ID: "" # Prevent native localhost infra preflight from .env in devcontainer sessions.
       ADE_AUTH_DISABLED: ${ADE_AUTH_DISABLED:-true} # Auth disabled by default in devcontainer; override in .env when needed.
       ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:-http://localhost:8000}
       ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@db:5432/ade?sslmode=disable}
