@@ -4,7 +4,7 @@
     "docker-compose.yaml"
   ],
   "service": "ade",
-  "runServices": ["ade"],
+  "runServices": ["ade", "postgres", "azurite", "azurite-init"],
   "workspaceFolder": "/workspaces/automatic-data-extractor",
   "shutdownAction": "stopCompose",
 
