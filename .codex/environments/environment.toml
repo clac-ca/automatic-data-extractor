@@ -6,56 +6,26 @@ name = "ADE Local Dev"
 script = "./setup.sh --with-infra --force"
 
 [[actions]]
-name = "ADE Dev"
+name = "ade dev [run api + worker + web in dev mode]"
 icon = "run"
 command = "cd backend && uv run ade dev"
 
 [[actions]]
-name = "Infra Up [-d --wait]"
+name = "ade infra up -d --wait [start infra detached and wait for health]"
 icon = "run"
 command = "cd backend && uv run ade infra up -d --wait"
 
 [[actions]]
-name = "Infra Up [--force -d --wait]"
-icon = "run"
-command = "cd backend && uv run ade infra up --force -d --wait"
-
-[[actions]]
-name = "Infra Status [ps]"
-icon = "run"
-command = "cd backend && uv run ade infra ps"
-
-[[actions]]
-name = "Infra Logs [-f]"
+name = "ade infra logs -f [follow infra logs]"
 icon = "run"
 command = "cd backend && uv run ade infra logs -f"
 
 [[actions]]
-name = "Infra Down [default]"
+name = "ade infra down [stop and remove infra resources]"
 icon = "run"
 command = "cd backend && uv run ade infra down"
 
 [[actions]]
-name = "Infra Clean [-v --remove-orphans]"
-icon = "run"
-command = "cd backend && uv run ade infra down -v --remove-orphans"
-
-[[actions]]
-name = "Infra Nuke [-v --rmi all --remove-orphans]"
-icon = "run"
-command = "cd backend && uv run ade infra down -v --rmi all --remove-orphans"
-
-[[actions]]
-name = "Infra Info [ports]"
-icon = "run"
-command = "cd backend && uv run ade infra info"
-
-[[actions]]
-name = "ADE Test"
+name = "ade test [run backend + frontend test suites]"
 icon = "run"
 command = "cd backend && uv run ade test"
-
-[[actions]]
-name = "API Types"
-icon = "run"
-command = "cd backend && uv run ade api types"
