@@ -29,6 +29,7 @@ cd backend && uv run ade --help
 | `ade db ...` | Run DB subcommands |
 | `ade storage ...` | Run storage subcommands |
 | `ade web ...` | Run web/frontend subcommands |
+| `ade infra ...` | Manage local infra stack (Postgres + Azurite) |
 
 Key options for `ade start`/`ade dev`:
 
@@ -92,6 +93,9 @@ Common API options:
 ## Quick Recipes
 
 ```bash
+cd backend && uv run ade infra up
+cd backend && uv run ade infra info
+cd backend && uv run ade infra down -v --rmi all
 cd backend && uv run ade dev
 cd backend && uv run ade start --services worker --no-migrate
 cd backend && uv run ade db migrate

@@ -4,6 +4,44 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
+WITH_INFRA=false
+FORCE_INFRA=false
+
+print_usage() {
+  cat <<'EOF'
+Usage: ./setup.sh [--with-infra] [--force]
+
+Options:
+  --with-infra   Run `uv run ade infra up -d` after dependency installation.
+  --force        Pass `--force` to `ade infra up` (requires --with-infra).
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-infra)
+      WITH_INFRA=true
+      ;;
+    --force)
+      FORCE_INFRA=true
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown option: $1" >&2
+      print_usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [[ "${FORCE_INFRA}" == true && "${WITH_INFRA}" != true ]]; then
+  echo "error: --force requires --with-infra" >&2
+  exit 1
+fi
 
 command -v uv >/dev/null 2>&1 || {
   echo "error: uv is required: https://astral.sh/uv" >&2
@@ -19,6 +57,15 @@ npm ci --prefix "${FRONTEND_DIR}"
 
 echo "Installing backend dependencies (backend/.venv)..."
 (cd "${BACKEND_DIR}" && uv sync)
+
+if [[ "${WITH_INFRA}" == true ]]; then
+  echo "Starting local infrastructure..."
+  infra_cmd=(uv run ade infra up -d)
+  if [[ "${FORCE_INFRA}" == true ]]; then
+    infra_cmd+=(--force)
+  fi
+  (cd "${BACKEND_DIR}" && "${infra_cmd[@]}")
+fi
 
 cat <<'EOF'
 

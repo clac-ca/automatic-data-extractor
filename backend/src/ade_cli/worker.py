@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 import typer
@@ -56,7 +57,12 @@ def test(
         cmd.extend(["-m", resolved.value])
     if resolved is TestSuite.UNIT:
         cmd.extend(["--ignore", f"{WORKER_TEST_DIR}/integration"])
-    run(cmd, cwd=BACKEND_ROOT)
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("ADE_")
+    }
+    run(cmd, cwd=BACKEND_ROOT, env=env)
 
 
 @app.command(name="gc", help="Run garbage collection once.")
@@ -65,4 +71,3 @@ def gc() -> None:
 
 
 __all__ = ["app"]
-

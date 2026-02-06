@@ -45,9 +45,14 @@ def _ensure_node_modules(frontend_dir: Path | None = None) -> None:
         raise typer.Exit(code=1)
 
 
-def run_dev(*, host: str | None = None, processes: int | None = None) -> None:
+def run_dev(
+    *,
+    host: str | None = None,
+    processes: int | None = None,
+    port: int | None = None,
+) -> None:
     settings = Settings()
-    port = DEFAULT_API_BIND_PORT
+    port = int(port if port is not None else os.getenv("ADE_API_PORT", DEFAULT_API_BIND_PORT))
     host = host or (settings.api_host or "0.0.0.0")
     processes = int(processes if processes is not None else DEFAULT_DEV_PROCESSES)
 
@@ -82,9 +87,14 @@ def run_dev(*, host: str | None = None, processes: int | None = None) -> None:
     run(api_cmd, cwd=BACKEND_ROOT, env=env)
 
 
-def run_start(*, host: str | None = None, processes: int | None = None) -> None:
+def run_start(
+    *,
+    host: str | None = None,
+    processes: int | None = None,
+    port: int | None = None,
+) -> None:
     settings = Settings()
-    port = DEFAULT_API_BIND_PORT
+    port = int(port if port is not None else os.getenv("ADE_API_PORT", DEFAULT_API_BIND_PORT))
     host = host or (settings.api_host or "0.0.0.0")
     processes = int(processes if processes is not None else (settings.api_processes or 1))
 
@@ -128,7 +138,12 @@ def run_tests(suite: TestSuite) -> None:
         cmd.extend(["-m", suite.value])
     if suite is TestSuite.UNIT:
         cmd.extend(["--ignore", f"{api_tests}/integration"])
-    run(cmd, cwd=BACKEND_ROOT)
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("ADE_")
+    }
+    run(cmd, cwd=BACKEND_ROOT, env=env)
 
 
 def run_lint(fix: bool = False) -> None:
@@ -207,8 +222,16 @@ def dev(
         help="Number of API processes (disables reload when > 1).",
         min=1,
     ),
+    port: int | None = typer.Option(
+        None,
+        "--port",
+        help="Port for the API dev server.",
+        envvar="ADE_API_PORT",
+        min=1,
+        max=65535,
+    ),
 ) -> None:
-    run_dev(host=host, processes=processes)
+    run_dev(host=host, processes=processes, port=port)
 
 
 @app.command(name="start", help="Start the API server (requires migrations).")
@@ -226,8 +249,16 @@ def start(
         envvar="ADE_API_PROCESSES",
         min=1,
     ),
+    port: int | None = typer.Option(
+        None,
+        "--port",
+        help="Port for the API server.",
+        envvar="ADE_API_PORT",
+        min=1,
+        max=65535,
+    ),
 ) -> None:
-    run_start(host=host, processes=processes)
+    run_start(host=host, processes=processes, port=port)
 
 
 @app.command(name="test", help="Run ADE API tests (unit by default).")

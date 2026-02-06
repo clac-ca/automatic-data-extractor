@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
+import { DEFAULT_WEB_PORT, parsePortFromEnv } from "./src/config/ports";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const resolveSrc = (relativePath: string) => path.resolve(projectRoot, "src", relativePath);
@@ -12,7 +13,10 @@ const envAppVersion = typeof process.env.ADE_APP_VERSION === "string" ? process.
 const appVersion = envAppVersion || "unknown";
 
 const internalApiRaw = process.env.ADE_INTERNAL_API_URL ?? "http://localhost:8001";
-const devPort = 8000;
+const devPort = parsePortFromEnv(process.env.ADE_WEB_PORT, {
+  envVar: "ADE_WEB_PORT",
+  fallback: DEFAULT_WEB_PORT,
+});
 
 const normalizeInternalApiUrl = (value: string): string => {
   const trimmed = value.replace(/\/+$/, "");

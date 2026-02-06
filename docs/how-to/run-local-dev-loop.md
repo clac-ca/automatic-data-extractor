@@ -18,24 +18,36 @@ You need:
 From repo root:
 
 ```bash
-./setup.sh
+./setup.sh --with-infra
 ```
 
 This installs:
 
 - backend dependencies in `backend/.venv`
 - frontend dependencies in `frontend/node_modules`
+- local infra profile keys in `.env`
 
-Start infrastructure services:
+`setup.sh --with-infra` starts infrastructure automatically.
+
+If you already ran setup and only want to manage infrastructure:
 
 ```bash
-docker compose -f docker-compose.infra.yaml up -d
+cd backend && uv run ade infra up -d --wait
 ```
+`ade infra up` accepts the same runtime flags as `docker compose up`, including `-d` and `--wait`.
 
 Stop infrastructure when done:
 
 ```bash
-docker compose -f docker-compose.infra.yaml down
+cd backend && uv run ade infra down
+```
+
+Force-regenerate deterministic local defaults:
+
+```bash
+./setup.sh --with-infra --force
+# or
+cd backend && uv run ade infra up --force
 ```
 
 ## Start Services
@@ -126,6 +138,14 @@ cd backend && uv run ade web test
 
 ## Verify
 
+Show resolved local URLs first:
+
+```bash
+cd backend && uv run ade infra info
+```
+
+Then call health endpoints using the reported web/API ports, for example:
+
 ```bash
 curl -sS http://localhost:8000/api/v1/health
 curl -sS http://localhost:8001/api/v1/health
@@ -134,6 +154,7 @@ curl -sS http://localhost:8001/api/v1/health
 ## If Something Fails
 
 - Re-run `./setup.sh`.
+- If `ade dev` reports missing local runtime settings or unreachable local infra, run `cd backend && uv run ade infra up`.
 - In devcontainers, ADE now uses `/app/.venv` for Python tooling and `/app/data` for runtime state; rebuild/reopen the container after path-related config changes.
 - Check service state with `cd backend && uv run ade status`.
 - If startup errors mention migrations, use [Run Migrations and Resets](run-migrations-and-resets.md).

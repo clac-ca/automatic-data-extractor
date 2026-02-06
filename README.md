@@ -29,6 +29,25 @@ Full local reset:
 docker compose down -v
 ```
 
+## Native Dev Loop (Isolated Per Worktree)
+
+```bash
+./setup.sh --with-infra
+cd backend && uv run ade dev
+```
+
+This flow uses a generated local profile in `.env` and keeps each worktree isolated.
+
+Useful commands:
+
+```bash
+cd backend && uv run ade infra info
+cd backend && uv run ade infra up -d --wait
+cd backend && uv run ade infra down
+cd backend && uv run ade infra down -v --rmi all
+./setup.sh --with-infra --force
+```
+
 ## Production Start Points
 
 Primary production path: Azure Container Apps.

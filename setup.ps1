@@ -1,3 +1,28 @@
+$WithInfra = $false
+$Force = $false
+
+foreach ($arg in $args) {
+    switch ($arg) {
+        "--with-infra" { $WithInfra = $true }
+        "--force" { $Force = $true }
+        "-h" {
+            Write-Host "Usage: ./setup.ps1 [--with-infra] [--force]  # --with-infra runs `ade infra up -d`"
+            exit 0
+        }
+        "--help" {
+            Write-Host "Usage: ./setup.ps1 [--with-infra] [--force]  # --with-infra runs `ade infra up -d`"
+            exit 0
+        }
+        default {
+            throw "Unknown option: $arg"
+        }
+    }
+}
+
+if ($Force -and -not $WithInfra) {
+    throw "--force requires --with-infra"
+}
+
 $ErrorActionPreference = "Stop"
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -22,6 +47,22 @@ try {
 }
 finally {
     Pop-Location
+}
+
+if ($WithInfra) {
+    Write-Host "Starting local infrastructure..."
+    Push-Location $BackendDir
+    try {
+        if ($Force) {
+            uv run ade infra up --force -d
+        }
+        else {
+            uv run ade infra up -d
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 Write-Host ""

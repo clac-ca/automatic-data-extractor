@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 import shutil
+import socket
 import sys
 from enum import Enum
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse
 
 import typer
 
@@ -16,6 +18,8 @@ from paths import BACKEND_ROOT, REPO_ROOT
 from .api import app as api_app
 from .common import ManagedProcess, run, run_many
 from .db import app as db_app
+from .infra import app as infra_app
+from .local_dev import missing_core_runtime_env
 from .storage import app as storage_app
 from .web import app as web_app
 from .worker import app as worker_app
@@ -91,6 +95,60 @@ def _maybe_run_migrations(selected: list[str], migrate: bool) -> None:
     run([sys.executable, "-m", "ade_db", "migrate"], cwd=REPO_ROOT)
 
 
+def _is_port_open(host: str, port: int, *, timeout_seconds: float = 0.6) -> bool:
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout_seconds):
+            return True
+    except OSError:
+        return False
+
+
+def _exit_with_local_infra_hint(reason: str) -> None:
+    typer.echo(f"error: {reason}", err=True)
+    typer.echo("hint: run `cd backend && uv run ade infra up`.", err=True)
+    raise typer.Exit(code=1)
+
+
+def _preflight_runtime(selected: list[str]) -> None:
+    if not any(service in {"api", "worker"} for service in selected):
+        return
+
+    missing = missing_core_runtime_env()
+    if missing:
+        _exit_with_local_infra_hint(
+            f"missing required runtime settings: {', '.join(missing)}"
+        )
+
+    if not os.getenv("ADE_LOCAL_PROFILE_ID"):
+        return
+
+    database_url = os.getenv("ADE_DATABASE_URL", "")
+    parsed = urlparse(database_url)
+    db_host = parsed.hostname
+    db_port = parsed.port
+    if db_host and db_port and db_host in {"127.0.0.1", "localhost"}:
+        if not _is_port_open(db_host, db_port):
+            _exit_with_local_infra_hint(
+                f"local Postgres is not reachable at {db_host}:{db_port}"
+            )
+
+    blob_port_raw = os.getenv("ADE_LOCAL_BLOB_PORT")
+    if blob_port_raw and blob_port_raw.isdigit():
+        blob_port = int(blob_port_raw)
+        if not _is_port_open("127.0.0.1", blob_port):
+            _exit_with_local_infra_hint(
+                f"local Azurite blob service is not reachable at 127.0.0.1:{blob_port}"
+            )
+
+
+def _clean_test_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in tuple(env.keys()):
+        if key.startswith("ADE_"):
+            env.pop(key, None)
+    return env
+
+
 def _is_current_venv(path: Path) -> bool:
     try:
         return Path(sys.prefix).resolve().is_relative_to(path.resolve())
@@ -129,6 +187,7 @@ def start(
     ),
 ) -> None:
     selected = _parse_services(services)
+    _preflight_runtime(selected)
     _maybe_run_migrations(selected, migrate)
     run_many(_build_processes(mode="start", selected=selected), cwd=REPO_ROOT)
 
@@ -149,15 +208,17 @@ def dev(
     ),
 ) -> None:
     selected = _parse_services(services)
+    _preflight_runtime(selected)
     _maybe_run_migrations(selected, migrate)
     run_many(_build_processes(mode="dev", selected=selected), cwd=REPO_ROOT)
 
 
 @app.command(name="test", help="Run API, worker, and web tests.")
 def test() -> None:
-    run([sys.executable, "-m", "ade_api", "test"], cwd=REPO_ROOT)
-    run([sys.executable, "-m", "ade_worker", "test"], cwd=REPO_ROOT)
-    run([sys.executable, "-m", "ade_cli", "web", "test"], cwd=REPO_ROOT)
+    env = _clean_test_env()
+    run([sys.executable, "-m", "ade_api", "test"], cwd=REPO_ROOT, env=env)
+    run([sys.executable, "-m", "ade_worker", "test"], cwd=REPO_ROOT, env=env)
+    run([sys.executable, "-m", "ade_cli", "web", "test"], cwd=REPO_ROOT, env=env)
 
 
 @app.command(name="reset", help="Reset DB, storage, and local state (destructive).")
@@ -209,6 +270,7 @@ app.add_typer(worker_app, name="worker")
 app.add_typer(db_app, name="db")
 app.add_typer(storage_app, name="storage")
 app.add_typer(web_app, name="web")
+app.add_typer(infra_app, name="infra")
 
 __all__ = ["app"]
 

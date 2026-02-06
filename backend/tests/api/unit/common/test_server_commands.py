@@ -74,6 +74,25 @@ def test_run_dev_processes_flag_disables_reload(monkeypatch):
     assert captured["env"]["ADE_API_PROCESSES"] == "3"
 
 
+def test_run_dev_reads_api_port_env(monkeypatch):
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(api, "Settings", lambda: _stub_settings(api_processes=1))
+    monkeypatch.setenv("ADE_API_PORT", "8765")
+    monkeypatch.setattr(
+        api,
+        "run",
+        lambda command, *, cwd, env=None: captured.update(
+            {"command": list(command), "cwd": cwd, "env": env}
+        ),
+    )
+
+    api.run_dev()
+
+    command = captured["command"]
+    assert command[command.index("--port") + 1] == "8765"
+
+
 def test_run_start_uses_uvicorn_production_profile(monkeypatch):
     captured: dict[str, object] = {}
 
@@ -144,8 +163,8 @@ def test_dev_command_ignores_ade_api_processes_env(monkeypatch):
     monkeypatch.setattr(
         api,
         "run_dev",
-        lambda *, host=None, processes=None: captured.update(
-            {"host": host, "processes": processes}
+        lambda *, host=None, processes=None, port=None: captured.update(
+            {"host": host, "processes": processes, "port": port}
         ),
     )
 
@@ -159,6 +178,28 @@ def test_dev_command_ignores_ade_api_processes_env(monkeypatch):
     assert captured["processes"] is None
 
 
+def test_dev_command_reads_ade_api_port_env(monkeypatch):
+    captured: dict[str, object] = {}
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        api,
+        "run_dev",
+        lambda *, host=None, processes=None, port=None: captured.update(
+            {"host": host, "processes": processes, "port": port}
+        ),
+    )
+
+    result = runner.invoke(
+        api.app,
+        ["dev"],
+        env={"ADE_API_PORT": "8201"},
+    )
+
+    assert result.exit_code == 0
+    assert captured["port"] == 8201
+
+
 def test_start_command_still_reads_ade_api_processes_env(monkeypatch):
     captured: dict[str, object] = {}
     runner = CliRunner()
@@ -166,8 +207,8 @@ def test_start_command_still_reads_ade_api_processes_env(monkeypatch):
     monkeypatch.setattr(
         api,
         "run_start",
-        lambda *, host=None, processes=None: captured.update(
-            {"host": host, "processes": processes}
+        lambda *, host=None, processes=None, port=None: captured.update(
+            {"host": host, "processes": processes, "port": port}
         ),
     )
 
@@ -179,3 +220,25 @@ def test_start_command_still_reads_ade_api_processes_env(monkeypatch):
 
     assert result.exit_code == 0
     assert captured["processes"] == 6
+
+
+def test_start_command_reads_ade_api_port_env(monkeypatch):
+    captured: dict[str, object] = {}
+    runner = CliRunner()
+
+    monkeypatch.setattr(
+        api,
+        "run_start",
+        lambda *, host=None, processes=None, port=None: captured.update(
+            {"host": host, "processes": processes, "port": port}
+        ),
+    )
+
+    result = runner.invoke(
+        api.app,
+        ["start"],
+        env={"ADE_API_PORT": "8202"},
+    )
+
+    assert result.exit_code == 0
+    assert captured["port"] == 8202

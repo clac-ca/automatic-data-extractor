@@ -11,6 +11,7 @@ runner = CliRunner()
 def test_dev_runs_selected_services(monkeypatch):
     calls: dict[str, object] = {}
 
+    monkeypatch.setattr(cli, "_preflight_runtime", lambda selected: None)
     monkeypatch.setattr(
         cli,
         "_maybe_run_migrations",
@@ -37,6 +38,7 @@ def test_dev_runs_selected_services(monkeypatch):
 def test_start_defaults_to_all_services(monkeypatch):
     calls: dict[str, object] = {}
 
+    monkeypatch.setattr(cli, "_preflight_runtime", lambda selected: None)
     monkeypatch.setattr(
         cli,
         "_maybe_run_migrations",
@@ -72,3 +74,15 @@ def test_reset_requires_yes_flag():
 
     assert result.exit_code == 1
     assert "reset requires --yes" in result.output
+
+
+def test_dev_shows_infra_hint_when_runtime_env_missing(monkeypatch):
+    monkeypatch.delenv("ADE_DATABASE_URL", raising=False)
+    monkeypatch.delenv("ADE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("ADE_BLOB_CONNECTION_STRING", raising=False)
+    monkeypatch.delenv("ADE_BLOB_ACCOUNT_URL", raising=False)
+
+    result = runner.invoke(app, ["dev", "--services", "api"])
+
+    assert result.exit_code == 1
+    assert "hint: run `cd backend && uv run ade infra up`." in result.output
