@@ -1,0 +1,37 @@
+# Devcontainer overrides layered onto ../docker-compose.yaml.
+# Keep infra services (db/blob/blob-init) from root compose unchanged.
+# Paths here are root-relative because ../docker-compose.yaml is the first
+# compose file listed in .devcontainer/devcontainer.json.
+
+services:
+  ade:
+    image: automatic-data-extractor:devcontainer
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: devcontainer
+    env_file:
+      - path: ./.env
+        required: false
+    command: ["sleep", "infinity"]
+    environment:
+      ADE_SERVICES: ${ADE_SERVICES:-api,worker,web}
+      ADE_API_PROCESSES: ${ADE_API_PROCESSES:-2}
+      ADE_WORKER_RUN_CONCURRENCY: ${ADE_WORKER_RUN_CONCURRENCY:-8}
+      ADE_AUTH_DISABLED: ${ADE_AUTH_DISABLED:-true} # Auth disabled by default in devcontainer; override in .env when needed.
+      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:-http://localhost:8000}
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@db:5432/ade?sslmode=disable}
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://blob:10000/devstoreaccount1;}
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
+      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto works with Azure versioning and degrades for Azurite
+      ADE_DATA_DIR: /app/data
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
+    volumes:
+      - app_data:/app/data
+      - .:/app/src:cached
+      - type: bind
+        source: ${HOME}/.codex
+        target: /home/adeuser/.codex
+        bind:
+          create_host_path: true # create_host_path avoids failures on hosts that do not have ~/.codex yet.

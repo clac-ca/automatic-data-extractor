@@ -1,10 +1,11 @@
 {
   "name": "ADE Dev",
   "dockerComposeFile": [
-    "docker-compose.yaml"
+    "../docker-compose.yaml",
+    "docker-compose.override.yaml"
   ],
   "service": "ade",
-  "runServices": ["ade", "postgres", "azurite", "azurite-init"],
+  "runServices": ["ade", "db", "blob", "blob-init"],
   "workspaceFolder": "/app/src",
   "shutdownAction": "stopCompose",
 
