@@ -12,6 +12,7 @@ from paths import FRONTEND_DIR, REPO_ROOT
 from .common import require_command, run
 
 DEFAULT_INTERNAL_API_URL = "http://localhost:8001"
+DEFAULT_PUBLIC_WEB_URL = "http://127.0.0.1:8000"
 
 app = typer.Typer(
     add_completion=False,
@@ -40,6 +41,34 @@ def _resolve_internal_api_url(env: dict[str, str]) -> str:
         )
         raise typer.Exit(code=1)
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _resolve_public_web_url(env: dict[str, str]) -> str:
+    raw_public = env.get("ADE_PUBLIC_WEB_URL", "").strip().rstrip("/")
+    if raw_public:
+        parsed = urlparse(raw_public)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
+                typer.echo(
+                    "warning: ADE_PUBLIC_WEB_URL includes a path/query/fragment; ignoring it.",
+                    err=True,
+                )
+            return f"{parsed.scheme}://{parsed.netloc}"
+        typer.echo(
+            "warning: ADE_PUBLIC_WEB_URL must be a full origin "
+            "(for example http://127.0.0.1:8000); "
+            "falling back to ADE_WEB_PORT.",
+            err=True,
+        )
+
+    raw_port = env.get("ADE_WEB_PORT", "").strip()
+    if raw_port:
+        if raw_port.isdigit() and 1 <= int(raw_port) <= 65535:
+            return f"http://127.0.0.1:{raw_port}"
+        typer.echo("error: ADE_WEB_PORT must be an integer between 1 and 65535.", err=True)
+        raise typer.Exit(code=1)
+
+    return DEFAULT_PUBLIC_WEB_URL
 
 
 @app.callback()
@@ -102,5 +131,17 @@ def preview() -> None:
     run(_npm_cmd("run", "preview"), cwd=REPO_ROOT)
 
 
-__all__ = ["app"]
+@app.command(name="open", help="Open web UI in the default browser.")
+def open_web() -> None:
+    url = _resolve_public_web_url(os.environ)
+    typer.echo(url)
+    status = typer.launch(url)
+    if status != 0:
+        typer.echo(
+            f"warning: failed to open browser automatically (exit code {status}).",
+            err=True,
+        )
+        typer.echo(f"Open manually: {url}", err=True)
 
+
+__all__ = ["app"]
