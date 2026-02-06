@@ -36,4 +36,5 @@ ade db reset
 ## Links
 
 - `src/ade_db/migrations/README.md`
-- `../../docs/reference/cli.md`
+- `../../docs/reference/cli-reference.md`
+- `../../docs/how-to/run-migrations-and-resets.md`

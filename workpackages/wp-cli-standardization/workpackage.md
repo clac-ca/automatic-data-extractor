@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
 3.0 Validation and docs
   3.1 Update CLI reference
-    - [x] Update `docs/reference/cli.md` with any new or changed commands (no changes required).
+    - [x] Update `docs/reference/cli-reference.md` with any new or changed commands (no changes required).
   3.2 Validate command matrix
     - [x] Verify `--help` output for root and each service CLI.
     - [x] Verify running `ade`, `ade-api`, `ade-worker`, `ade-db`, `ade-storage` with no subcommand shows help.

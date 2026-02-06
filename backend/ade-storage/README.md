@@ -35,5 +35,6 @@ ade storage check
 
 ## Links
 
-- `../../docs/getting-started/first-run.md`
-- `../../docs/reference/cli.md`
+- `../../docs/how-to/deploy-production.md`
+- `../../docs/reference/cli-reference.md`
+- `../../docs/reference/environment-variables.md`

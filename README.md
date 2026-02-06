@@ -1,31 +1,13 @@
 # Automatic Data Extractor (ADE)
 
-Self-hostable document extraction service with an **API**, **Web UI**, and background **worker**.
+ADE is a self-hosted document normalization platform with:
 
-- Local dev: runs with **Docker Compose** (includes local Postgres + Azurite).
-- Production: uses **external Postgres** + **external Azure Blob Storage**.
+- FastAPI control plane (`ade-api`)
+- Background run processor (`ade-worker`)
+- React web UI (`ade-web`)
+- Shared DB/storage packages (`ade-db`, `ade-storage`)
 
----
-
-## Table of contents
-
-- [Quickstart (local)](#quickstart-local)
-- [Production deployment](#production-deployment)
-- [Configuration](#configuration)
-- [Development (Dev Container)](#development-dev-container)
-- [Operations](#operations)
-- [Troubleshooting](#troubleshooting)
-- [Docs](#docs)
-
----
-
-## Quickstart (local)
-
-### Requirements
-- Docker (with Docker Compose)
-- Git
-
-### Run
+## Quickstart (Local)
 
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor
@@ -33,12 +15,7 @@ cd automatic-data-extractor
 docker compose up --build -d
 ```
 
-Optional: copy `.env.example` to `.env` only when you want to override defaults.
-Local compose defaults set `ADE_AUTH_DISABLED=true` for fastest startup.
-
-Open:
-
-* [http://localhost:8000](http://localhost:8000)
+Open `http://localhost:8000`.
 
 Stop:
 
@@ -46,164 +23,87 @@ Stop:
 docker compose down
 ```
 
-Reset local data (database + storage + ADE data):
+Full local reset:
 
 ```bash
 docker compose down -v
 ```
 
----
+## Production Start Points
 
-## Production deployment
+Primary production path: Azure Container Apps.
 
-Production uses external services:
+- Bootstrap tutorial: [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
+- Deployment runbook: [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
+- Scaling guide: [`docs/how-to/scale-and-tune-throughput.md`](docs/how-to/scale-and-tune-throughput.md)
 
-* **Postgres**
-* **Azure Blob Storage**
+Self-hosted compose production is still supported, but not the default path.
 
-`docker-compose.prod.yaml` is optimized for the common case: one `app` container running `api + worker + web`.
+## Default Performance Settings
 
-```bash
-docker compose -f docker-compose.prod.yaml up -d
+Benchmark-backed defaults are now set directly in compose:
 
-# Scale-out alternative (app + worker split)
-docker compose -f docker-compose.prod.split.yaml up -d
-docker compose -f docker-compose.prod.split.yaml up -d --scale worker=3
+- Local (`docker-compose.yaml`)
+  - `ADE_API_PROCESSES=2`
+  - `ADE_WORKER_RUN_CONCURRENCY=8`
+- Self-hosted production (`docker-compose.prod.yaml`, `docker-compose.prod.split.yaml`)
+  - `ADE_API_PROCESSES=2`
+  - `ADE_WORKER_RUN_CONCURRENCY=4`
 
-# Optional: choose published image tag for this deploy command (default is main)
-ADE_DOCKER_TAG=development docker compose -f docker-compose.prod.yaml up -d
-```
+These are safe starting points with better out-of-box throughput than app-level defaults.
 
-`ADE_DOCKER_TAG` is compose-only (image selection), not ADE runtime config.
-Keep runtime settings in `.env`; set tag overrides in shell/CI per deploy command.
-Changing tags takes effect only when containers are recreated (and typically after `docker compose pull`).
+API runtime hardening defaults (app-level) are also enabled by default:
 
-Scaling guidance (start simple, then split):
+- `ADE_API_PROXY_HEADERS_ENABLED=true`
+- `ADE_API_FORWARDED_ALLOW_IPS=127.0.0.1`
+- `ADE_API_THREADPOOL_TOKENS=40`
+- `ADE_DATABASE_CONNECTION_BUDGET` unset (warn-only if configured)
 
-- In single-container mode, first tune in-container concurrency:
-  - `ADE_WORKER_CONCURRENCY` = max concurrent run slots per container (default `2`)
-  - `ADE_API_WORKERS` = API process count per container (default `1`)
-- If queue latency is still high or you need better fault isolation, move to split mode and scale `worker` containers.
-- In split mode, keep `ADE_WORKER_CONCURRENCY` moderate (for example `2`-`4`) and scale container count with `--scale worker=N`.
+## Documentation
 
-Examples:
+Top-level docs index: [`docs/index.md`](docs/index.md)
 
-```bash
-# Single-container tuning
-ADE_WORKER_CONCURRENCY=4 ADE_API_WORKERS=2 \
-docker compose -f docker-compose.prod.yaml up -d
+Primary operator pages:
 
-# Split deployment + horizontal worker scaling
-ADE_WORKER_CONCURRENCY=2 \
-docker compose -f docker-compose.prod.split.yaml up -d --scale worker=3
-```
-
----
-
-## Configuration
-
-Create a `.env` file **next to the compose file you run** when you need to override ADE runtime settings.
-The compose examples in this repo read `.env` for interpolation and pass it to ADE containers at runtime.
-Use shell/CI overrides for compose-only controls (for example `ADE_DOCKER_TAG`) instead of storing them in `.env`.
-Local dependency variables (`POSTGRES_*`, `AZURITE_ACCOUNTS`) are also compose-only and not ADE runtime config.
-
-### Minimum required (example)
-
-```env
-# Database (external)
-ADE_DATABASE_URL=postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
-
-# Public web URL (required in production compose)
-ADE_PUBLIC_WEB_URL=https://ade.example.com
-
-# Azure Blob (set exactly one auth method; do not set both)
-# ADE_BLOB_ACCOUNT_URL=https://<account>.blob.core.windows.net
-# ADE_BLOB_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
-ADE_BLOB_CONTAINER=ade
-
-# App secret (required)
-ADE_SECRET_KEY=<long-random-secret>
-```
-
-See `.env.example` for the full set of supported environment variables.
-
-### Service selection (optional)
-
-To run only a subset of in-container services:
-
-```bash
-ADE_SERVICES=api,web docker compose up -d app
-```
-
----
-
-## Development (Dev Container)
-
-Fastest contributor setup:
-
-1. Install Docker + VS Code + Dev Containers extension
-2. Open the repo in VS Code
-3. Run **“Dev Containers: Reopen in Container”**
-
-Note: nginx config is rendered when the container starts from the template baked into the image. If you change nginx templates or need a different `ADE_INTERNAL_API_URL` for nginx, rebuild or restart the container.
-
----
-
-## Operations
-
-### View logs
-
-```bash
-docker compose logs -f
-```
-
-### Start fresh
-
-```bash
-docker compose down -v
-```
-
----
-
-## Troubleshooting
-
-* Check logs:
-
-  * `docker compose logs -f`
-* Full reset:
-
-  * `docker compose down -v`
-
----
-
-## Docs
-
-Full documentation lives in `docs/index.md`.
+- [`docs/tutorials/local-quickstart.md`](docs/tutorials/local-quickstart.md)
+- [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
+- [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
+- [`docs/troubleshooting/triage-playbook.md`](docs/troubleshooting/triage-playbook.md)
 
 ## Contributing
 
-PRs welcome. If you’re making a change, please include:
+- Use Conventional Commits (`feat:`, `fix:`, `deps:`, `chore:`).
+- Run relevant tests/lint before merging.
+- Update docs in the same PR when behavior changes.
 
-* What changed
-* How to run/test it locally
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/standards/documentation-maintenance.md`](docs/standards/documentation-maintenance.md).
 
----
+## Security Notes
 
-## Security
-
-* Treat `ADE_SECRET_KEY` like a password.
-* For production, run behind HTTPS and restrict network access to Postgres/Blob where possible.
-
----
+- Treat `ADE_SECRET_KEY` like a password.
+- Do not enable `ADE_AUTH_DISABLED=true` in production.
+- Restrict network access to Postgres and blob storage endpoints.
 
 ## License
- 
+
 The MIT License (MIT)
 
 Copyright (c) 2015 Chris Kibble
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

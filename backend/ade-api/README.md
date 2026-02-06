@@ -40,6 +40,6 @@ ade api lint
 
 ## Links
 
-- `../../docs/getting-started/first-run.md`
-- `../../docs/reference/cli.md`
-- `../../docs/guides/developer.md`
+- `../../docs/how-to/run-local-dev-loop.md`
+- `../../docs/reference/cli-reference.md`
+- `../../docs/explanation/system-architecture.md`
