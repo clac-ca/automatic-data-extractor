@@ -134,6 +134,14 @@ ade-engine process batch \
 - Use `deps:` for dependency updates that should trigger a patch release.
 - Stage only task-related files; avoid bundling unrelated changes.
 - Versions/changelog are managed by Release Please; do not bump `VERSION` or `CHANGELOG.md` manually unless requested.
+- Official releases are created from `main`; `development` and `main` are branch channels for image tags.
+- SemVer mapping:
+  - `fix:` / `deps:` -> patch release
+  - `feat:` -> minor release
+  - `feat!:` or `BREAKING CHANGE:` footer -> major release
+- If a specific version must be forced, use a `Release-As: X.Y.Z` footer in the commit body.
+- Runtime version metadata (`ADE_APP_VERSION`, `ADE_APP_COMMIT_SHA`) is CI-managed; do not ask users to set these in `.env` for normal deployments.
+- Production deployments should pin immutable release tags via `ADE_DOCKER_TAG=vX.Y.Z`.
 - See `CONTRIBUTING.md` for the full collaboration and release flow.
 
 ## 🤖 Agent rules

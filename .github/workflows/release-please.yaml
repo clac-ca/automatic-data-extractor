@@ -2,7 +2,7 @@ name: Release Please (manifest releases)
 
 on:
   push:
-    branches: [development]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,9 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Release Please
+        id: release
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: .github/release-please/release-please-config.json
           manifest-file: .github/release-please/.release-please-manifest.json
-          target-branch: development
+          target-branch: main
+
+      - name: Auto-merge release PRs
+        if: ${{ steps.release.outputs.prs != '' && steps.release.outputs.prs != '[]' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          echo "$RELEASE_PRS" | jq -r '.[]?.number' | while read -r pr_number; do
+            [ -z "$pr_number" ] && continue
+            gh pr review "$pr_number" --repo "$GH_REPO" --approve || true
+            gh pr merge "$pr_number" --repo "$GH_REPO" --auto --squash --delete-branch || true
+          done
