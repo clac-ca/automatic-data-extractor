@@ -6,31 +6,26 @@ name = "ADE Local Dev"
 script = "./setup.sh --with-infra --force"
 
 [[actions]]
-name = "ade dev [run api + worker + web in dev mode]"
+name = "🚀 Dev: API + Worker + Web (hot reload)"
 icon = "run"
 command = "cd backend && uv run ade dev"
 
 [[actions]]
-name = "ade infra up -d --wait [start infra detached and wait for health]"
+name = "🟢 Infra: Start (detached + health wait)"
 icon = "tool"
 command = "cd backend && uv run ade infra up -d --wait"
 
 [[actions]]
-name = "ade infra logs -f [follow infra logs]"
-icon = "debug"
-command = "cd backend && uv run ade infra logs -f"
-
-[[actions]]
-name = "ade infra down [stop and remove infra resources]"
+name = "🛑 Infra: Stop and remove"
 icon = "tool"
 command = "cd backend && uv run ade infra down"
 
 [[actions]]
-name = "open ade web in browser"
+name = "🌐 Web: Open in browser"
 icon = "tool"
 command = "uv run --project backend ade web open"
 
 [[actions]]
-name = "ade test [run backend + frontend test suites]"
+name = "✅ Test: Full suite (backend + frontend)"
 icon = "test"
 command = "cd backend && uv run ade test"
