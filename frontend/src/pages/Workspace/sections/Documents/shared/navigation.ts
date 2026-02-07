@@ -9,29 +9,19 @@ type DocumentDetailOptions = {
   sheet?: string | null;
 };
 
-type LegacyTab = "data" | "comments" | "timeline";
-
 const VALID_ACTIVITY_FILTERS = new Set<DocumentActivityFilter>([
   "all",
   "comments",
   "events",
 ]);
 
-function isLegacyTab(value: string | null): value is LegacyTab {
-  return value === "data" || value === "comments" || value === "timeline";
-}
-
 export function parseDocumentDetailTab(value: string | null): DocumentDetailTab {
-  if (value === "preview" || value === "data") return "preview";
-  return "activity";
+  return value === "preview" ? "preview" : "activity";
 }
 
 export function parseDocumentActivityFilter(
   value: string | null,
-  rawTab: string | null = null,
 ): DocumentActivityFilter {
-  if (rawTab === "comments") return "comments";
-  if (rawTab === "timeline") return "events";
   if (value && VALID_ACTIVITY_FILTERS.has(value as DocumentActivityFilter)) {
     return value as DocumentActivityFilter;
   }
@@ -49,44 +39,18 @@ export function getDocumentDetailState(searchParams: URLSearchParams): {
   activityFilter: DocumentActivityFilter;
   source: DocumentPreviewSource;
   sheet: string | null;
-  usesLegacyTab: boolean;
 } {
   const rawTab = searchParams.get("tab");
   const rawFilter = searchParams.get("activityFilter");
   const rawSource = searchParams.get("source");
   const rawSheet = searchParams.get("sheet");
+
   return {
     tab: parseDocumentDetailTab(rawTab),
-    activityFilter: parseDocumentActivityFilter(rawFilter, rawTab),
+    activityFilter: parseDocumentActivityFilter(rawFilter),
     source: parseDocumentPreviewSource(rawSource),
     sheet: rawSheet && rawSheet.trim().length > 0 ? rawSheet : null,
-    usesLegacyTab: isLegacyTab(rawTab),
   };
-}
-
-export function normalizeLegacyDocumentDetailSearch(
-  searchParams: URLSearchParams,
-): URLSearchParams | null {
-  const rawTab = searchParams.get("tab");
-  if (!isLegacyTab(rawTab)) {
-    return null;
-  }
-
-  const next = new URLSearchParams(searchParams);
-  const state = getDocumentDetailState(searchParams);
-  next.set("tab", state.tab);
-
-  if (state.tab === "activity") {
-    if (state.activityFilter === "all") {
-      next.delete("activityFilter");
-    } else {
-      next.set("activityFilter", state.activityFilter);
-    }
-  } else {
-    next.delete("activityFilter");
-  }
-
-  return next;
 }
 
 export function buildDocumentDetailUrl(

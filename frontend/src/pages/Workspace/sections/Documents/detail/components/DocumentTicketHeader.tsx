@@ -65,7 +65,7 @@ export function DocumentTicketHeader({
   const runStatus = document.lastRun?.status ?? null;
 
   return (
-    <div className="border-b bg-background px-4 py-3">
+    <div className="sticky top-0 z-20 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90">
       <div className="flex flex-wrap items-start gap-3">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
           <ChevronLeft className="h-4 w-4" />

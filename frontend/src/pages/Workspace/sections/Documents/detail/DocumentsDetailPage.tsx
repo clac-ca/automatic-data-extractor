@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchWorkspaceDocumentRowById } from "@/api/documents";
@@ -8,15 +8,10 @@ import { PageState } from "@/components/layout";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
-import {
-  getDocumentDetailState,
-  normalizeLegacyDocumentDetailSearch,
-  type DocumentActivityFilter,
-  type DocumentDetailTab,
-  type DocumentPreviewSource,
-} from "@/pages/Workspace/sections/Documents/shared/navigation";
+import type { DocumentDetailTab } from "@/pages/Workspace/sections/Documents/shared/navigation";
 
 import { DocumentTicketHeader } from "./components/DocumentTicketHeader";
+import { useDocumentDetailUrlState } from "./hooks/useDocumentDetailUrlState";
 import { DocumentActivityTab } from "./tabs/activity/DocumentActivityTab";
 import { DocumentPreviewTab } from "./tabs/preview/DocumentPreviewTab";
 
@@ -24,11 +19,14 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   const navigate = useNavigate();
   const { workspace } = useWorkspaceContext();
   const { sendSelection } = useWorkspacePresence();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const detailState = useMemo(
-    () => getDocumentDetailState(searchParams),
-    [searchParams],
-  );
+
+  const {
+    state: detailState,
+    setTab,
+    setActivityFilter,
+    setPreviewSource,
+    setPreviewSheet,
+  } = useDocumentDetailUrlState();
 
   const documentQuery = useQuery({
     queryKey: ["documents-detail", workspace.id, documentId],
@@ -56,52 +54,8 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
     };
   }, [documentId, sendSelection]);
 
-  useEffect(() => {
-    const normalized = normalizeLegacyDocumentDetailSearch(searchParams);
-    if (!normalized) return;
-    setSearchParams(normalized, { replace: true });
-  }, [searchParams, setSearchParams]);
-
   const onBack = () => {
     navigate(`/workspaces/${workspace.id}/documents`);
-  };
-
-  const onTabChange = (nextValue: DocumentDetailTab) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("tab", nextValue);
-    if (nextValue === "preview") {
-      params.delete("activityFilter");
-    }
-    setSearchParams(params, { replace: true });
-  };
-
-  const onActivityFilterChange = (nextFilter: DocumentActivityFilter) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("tab", "activity");
-    if (nextFilter === "all") {
-      params.delete("activityFilter");
-    } else {
-      params.set("activityFilter", nextFilter);
-    }
-    setSearchParams(params, { replace: true });
-  };
-
-  const onPreviewSourceChange = (nextSource: DocumentPreviewSource) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("tab", "preview");
-    params.delete("activityFilter");
-    params.set("source", nextSource);
-    setSearchParams(params, { replace: true });
-  };
-
-  const onPreviewSheetChange = (nextSheet: string | null) => {
-    const params = new URLSearchParams(searchParams);
-    if (!nextSheet) {
-      params.delete("sheet");
-    } else {
-      params.set("sheet", nextSheet);
-    }
-    setSearchParams(params, { replace: true });
   };
 
   if (documentQuery.isLoading) {
@@ -156,10 +110,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
         onBack={onBack}
       />
 
-      <TabsRoot
-        value={detailState.tab}
-        onValueChange={(value) => onTabChange(value as DocumentDetailTab)}
-      >
+      <TabsRoot value={detailState.tab} onValueChange={(value) => setTab(value as DocumentDetailTab)}>
         <TabsList className="flex gap-1 border-b bg-background px-4 py-2">
           <TabsTrigger
             value="activity"
@@ -191,7 +142,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
               workspaceId={workspace.id}
               document={documentRow}
               filter={detailState.activityFilter}
-              onFilterChange={onActivityFilterChange}
+              onFilterChange={setActivityFilter}
             />
           </TabsContent>
           <TabsContent value="preview" className="min-h-0 flex h-full flex-col">
@@ -200,8 +151,8 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
               document={documentRow}
               source={detailState.source}
               sheet={detailState.sheet}
-              onSourceChange={onPreviewSourceChange}
-              onSheetChange={onPreviewSheetChange}
+              onSourceChange={setPreviewSource}
+              onSheetChange={setPreviewSheet}
             />
           </TabsContent>
         </div>

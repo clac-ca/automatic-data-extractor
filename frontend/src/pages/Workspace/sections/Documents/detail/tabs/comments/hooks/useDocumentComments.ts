@@ -24,7 +24,7 @@ export type CommentDraft = {
   mentions: CommentAuthor[];
 };
 
-type CommentItem = DocumentComment & { optimistic?: boolean };
+export type DocumentCommentItem = DocumentComment & { optimistic?: boolean };
 
 export function useDocumentComments({
   workspaceId,
@@ -70,7 +70,7 @@ export function useDocumentComments({
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<InfiniteData<DocumentCommentPage>>(queryKey);
 
-      const optimistic: CommentItem = {
+      const optimistic: DocumentCommentItem = {
         id: stableId(),
         workspaceId,
         documentId,
@@ -124,7 +124,7 @@ export function useDocumentComments({
   });
 
   const pages = query.data?.pages ?? [];
-  const comments = useFlattenedPages(pages, (comment) => comment.id) as CommentItem[];
+  const comments = useFlattenedPages(pages, (comment) => comment.id) as DocumentCommentItem[];
 
   const submitComment = useCallback(
     (draft: CommentDraft) => mutation.mutateAsync(draft),

@@ -243,20 +243,21 @@ Preview behavior:
 * Normalized preview **never auto-falls back** to original.
 * When normalized output is unavailable (no run, running, failed), the UI shows an explicit unavailable state and the user can switch to `source=original`.
 
-Legacy tab mappings:
+Interaction model:
 
-* `tab=data` -> `tab=preview`
-* `tab=comments` -> `tab=activity&activityFilter=comments`
-* `tab=timeline` -> `tab=activity&activityFilter=events`
+* Header is sticky and always keeps document identity + download actions visible.
+* Activity is collaboration-first with a pinned comment composer.
+* Preview uses a spreadsheet mental model with bottom sheet tabs.
 
 Rules:
 
 * All filter changes must be reflected in the URL via `setSearchParams`.
 * For small toggles (e.g. clicking a phase pill), use `setSearchParams(..., { replace: true })` to avoid filling history with near‑duplicate entries.
-* The parameter names above are **canonical** for Documents. Add or change them only via the helper functions:
+* Only the detail keys above are supported for document-detail state. Legacy aliases are not mapped.
+* Keep detail URL handling in one place:
 
-  * `parseDocumentFilters(searchParams)`
-  * `buildDocumentSearchParams(filters)`
+  * `useDocumentDetailUrlState`
+  * `shared/navigation.ts`
 
 This keeps deep links, docs, and components aligned.
 
