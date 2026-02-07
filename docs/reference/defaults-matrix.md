@@ -36,13 +36,7 @@ Azure Container Apps production deployments should set values explicitly in app 
 
 ## Keep This Matrix Accurate
 
-Run:
-
-```bash
-bash scripts/ci/check-defaults-matrix.sh
-```
-
-That check validates compose defaults, `.env.example`, and this matrix stay aligned.
+When updating defaults in app code, `.env.example`, or compose files, update this matrix in the same change.
 
 ## Benchmarking Helpers
 
