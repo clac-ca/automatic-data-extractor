@@ -1,12 +1,18 @@
 import type { ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 
-import { TopbarControls } from "@/app/layouts/components/topbar/TopbarControls";
+import {
+  AuthenticatedTopbarProvider,
+  useAuthenticatedTopbarConfig,
+} from "@/app/layouts/components/topbar/AuthenticatedTopbarContext";
+import { UnifiedTopbarControls } from "@/app/layouts/components/topbar/UnifiedTopbarControls";
 import {
   Topbar,
+  TopbarCenter,
   TopbarContent,
   TopbarEnd,
   TopbarProvider,
+  TopbarStart,
 } from "@/components/ui/topbar";
 
 const DEFAULT_MAIN_ID = "main-content";
@@ -42,24 +48,42 @@ export function TopbarFrame({
 }
 
 export function AuthenticatedLayout() {
+  return (
+    <TopbarProvider>
+      <AuthenticatedTopbarProvider>
+        <AuthenticatedLayoutInner />
+      </AuthenticatedTopbarProvider>
+    </TopbarProvider>
+  );
+}
+
+function AuthenticatedLayoutInner() {
+  const topbarConfig = useAuthenticatedTopbarConfig();
+
   const topbar = (
-    <Topbar position="static">
+    <Topbar className="shadow-sm">
       <SkipToContent />
-      <TopbarContent className="px-4 sm:px-6 lg:px-10">
+      <TopbarContent maxWidth="full" className="px-4 sm:px-6 lg:px-8">
+        {topbarConfig?.mobileAction ? (
+          <TopbarStart className="relative z-10">
+            <div className="md:hidden">{topbarConfig.mobileAction}</div>
+          </TopbarStart>
+        ) : null}
+        <TopbarCenter className="hidden md:flex">
+          {topbarConfig?.desktopCenter ?? null}
+        </TopbarCenter>
         <TopbarEnd>
-          <TopbarControls />
+          <UnifiedTopbarControls />
         </TopbarEnd>
       </TopbarContent>
     </Topbar>
   );
 
   return (
-    <TopbarProvider>
-      <div className="flex min-h-svh w-full flex-col bg-background text-foreground">
-        <TopbarFrame topbar={topbar}>
-          <Outlet />
-        </TopbarFrame>
-      </div>
-    </TopbarProvider>
+    <div className="flex min-h-svh w-full flex-col bg-background text-foreground">
+      <TopbarFrame topbar={topbar}>
+        <Outlet />
+      </TopbarFrame>
+    </div>
   );
 }

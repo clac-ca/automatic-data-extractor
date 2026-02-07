@@ -2,14 +2,18 @@ import { useMemo } from "react";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 
 import { generatePath, Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, Search } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 
+import { useConfigureAuthenticatedTopbar } from "@/app/layouts/components/topbar/AuthenticatedTopbarContext";
 import { useSession } from "@/providers/auth/SessionContext";
 import { useWorkspacesQuery } from "@/hooks/workspaces";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PageState } from "@/components/layout";
+import {
+  WorkspacesTopbarSearch,
+  WorkspacesTopbarSearchButton,
+} from "@/pages/Workspaces/components/WorkspacesTopbarSearch";
 
 export default function WorkspacesScreen() {
   return <WorkspacesIndexContent />;
@@ -21,6 +25,15 @@ const WORKSPACE_SORT = JSON.stringify([{ id: "name", desc: false }]);
 function WorkspacesIndexContent() {
   const navigate = useNavigate();
   const session = useSession();
+
+  const topbarConfig = useMemo(
+    () => ({
+      desktopCenter: <WorkspacesTopbarSearch className="w-full max-w-xl" />,
+      mobileAction: <WorkspacesTopbarSearchButton />,
+    }),
+    [],
+  );
+  useConfigureAuthenticatedTopbar(topbarConfig);
 
   const normalizedPermissions = useMemo(
     () => (session.user.permissions ?? []).map((key) => key.toLowerCase()),
@@ -74,13 +87,6 @@ function WorkspacesIndexContent() {
       </div>
     );
   }
-
-  const handleSearchChange = (value: string) => {
-    if (page > 1) {
-      void setPage(1);
-    }
-    void setSearchValue(value.length > 0 ? value : null);
-  };
 
   const handlePreviousPage = () => {
     if (!canPreviousPage) {
@@ -147,18 +153,6 @@ function WorkspacesIndexContent() {
             </Button>
           ) : null}
         </header>
-
-        <div className="relative max-w-md">
-          <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
-          <Input
-            type="search"
-            aria-label="Search workspaces"
-            placeholder="Search workspaces"
-            className="pl-9"
-            value={searchValue ?? ""}
-            onChange={(event) => handleSearchChange(event.target.value)}
-          />
-        </div>
 
         <ul className="overflow-hidden rounded-xl border border-border divide-y divide-border">
           {workspaces.map((workspace) => {

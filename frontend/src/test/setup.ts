@@ -114,6 +114,25 @@ if (typeof window !== "undefined") {
       dispatchEvent: vi.fn(),
     });
   }
+
+  if (typeof window.ResizeObserver !== "function") {
+    class ResizeObserverMock implements ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    Object.defineProperty(window, "ResizeObserver", {
+      value: ResizeObserverMock,
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(globalThis, "ResizeObserver", {
+      value: ResizeObserverMock,
+      configurable: true,
+      writable: true,
+    });
+  }
 }
 
 afterEach(() => {
