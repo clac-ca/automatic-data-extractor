@@ -25,6 +25,7 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useDocumentSearchRecents } from "@/pages/Workspace/hooks/useDocumentSearchRecents";
+import { buildDocumentDetailUrl } from "@/pages/Workspace/sections/Documents/shared/navigation";
 
 const SEARCH_DEBOUNCE_MS = 200;
 const SEARCH_MIN_LENGTH = 2;
@@ -342,11 +343,11 @@ function useWorkspaceDocumentsSearchController({
   const handleSelect = useCallback(
     (documentId: string, label: string) => {
       pushRecent({ id: documentId, label });
-      navigate(`${documentsLink}/${encodeURIComponent(documentId)}`);
+      navigate(buildDocumentDetailUrl(workspace.id, documentId, { tab: "activity" }));
       reset();
       setOpen(false);
     },
-    [documentsLink, navigate, pushRecent, reset],
+    [navigate, pushRecent, reset, workspace.id],
   );
 
   const handleViewAllDocuments = useCallback(() => {

@@ -15,7 +15,7 @@ import type { DocumentRow } from "../../../shared/types";
 export function ActionsCell({
   document,
   onOpenDocument,
-  onOpenComments,
+  onOpenActivity,
   isBusy,
   onDeleteRequest,
   onDownloadOutput,
@@ -24,7 +24,7 @@ export function ActionsCell({
 }: {
   document: DocumentRow;
   onOpenDocument: () => void;
-  onOpenComments: () => void;
+  onOpenActivity: () => void;
   isBusy: boolean;
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
@@ -42,15 +42,15 @@ export function ActionsCell({
   return (
     <div className="flex items-center justify-end gap-2" data-ignore-row-click>
       <IconButton
-        label="Open document"
+        label="Open preview"
         onClick={onOpenDocument}
         variant="ghost"
       >
         <EyeIcon className="h-4 w-4" />
       </IconButton>
       <IconButton
-        label="Open comments"
-        onClick={onOpenComments}
+        label="Open activity"
+        onClick={onOpenActivity}
         variant="ghost"
         className="relative"
       >

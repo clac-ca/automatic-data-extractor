@@ -38,6 +38,7 @@ import type { DocumentRow, WorkspacePerson } from "../../shared/types";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
 import { useDocumentsView } from "../hooks/useDocumentsView";
 import { useDocumentsDeltaSync } from "../../shared/hooks/useDocumentsDeltaSync";
+import { buildDocumentDetailUrl } from "../../shared/navigation";
 import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
@@ -152,10 +153,16 @@ export function DocumentsTableView({
   const [updatesAvailable, setUpdatesAvailable] = useState(false);
 
   const openDocument = useCallback(
-    (documentId: string, tab?: "data" | "comments") => {
-      const encoded = encodeURIComponent(documentId);
-      const search = tab === "comments" ? "?tab=comments" : "";
-      navigate(`/workspaces/${workspaceId}/documents/${encoded}${search}`);
+    (
+      documentId: string,
+      target: "activity" | "preview" = "activity",
+      options: { activityFilter?: "comments" | "events" } = {},
+    ) => {
+      const url = buildDocumentDetailUrl(workspaceId, documentId, {
+        tab: target,
+        activityFilter: options.activityFilter ?? "all",
+      });
+      navigate(url);
     },
     [navigate, workspaceId],
   );
@@ -601,8 +608,10 @@ export function DocumentsTableView({
     people,
     tagOptions,
     rowPresence,
-    onOpenDocument: (documentId) => openDocument(documentId, "data"),
-    onOpenComments: (documentId) => openDocument(documentId, "comments"),
+    onOpenDocument: (documentId) => openDocument(documentId, "activity"),
+    onOpenPreview: (documentId) => openDocument(documentId, "preview"),
+    onOpenActivity: (documentId) =>
+      openDocument(documentId, "activity", { activityFilter: "comments" }),
     onAssign,
     onToggleTag,
     onTagOptionsChange: handleTagOptionsChange,

@@ -18,6 +18,7 @@ import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenc
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { partitionDocumentChanges } from "@/pages/Workspace/sections/Documents/shared/documentChanges";
 import { useDocumentsDeltaSync } from "@/pages/Workspace/sections/Documents/shared/hooks/useDocumentsDeltaSync";
+import { buildDocumentDetailUrl } from "@/pages/Workspace/sections/Documents/shared/navigation";
 import {
   Search,
   SearchEmpty,
@@ -96,14 +97,12 @@ type AssignedDocumentsSectionProps = {
   isLoading: boolean;
   isError: boolean;
   onUploadDocuments: () => void;
-  documentsLink: string;
 };
 
 type AssignedDocumentItemProps = {
   document: DocumentListRow;
   documentsPresenceById: Map<string, PresenceParticipant[]>;
   isActive: boolean;
-  documentsLink: string;
 };
 
 export function WorkspaceSidebar() {
@@ -300,7 +299,6 @@ export function WorkspaceSidebar() {
           isLoading={assignedDocumentsQuery.isLoading}
           isError={assignedDocumentsQuery.isError}
           onUploadDocuments={handleUploadDocuments}
-          documentsLink={links.documents}
         />
       </SidebarContent>
       <SidebarSeparator />
@@ -475,7 +473,6 @@ function AssignedDocumentsSection({
   isLoading,
   isError,
   onUploadDocuments,
-  documentsLink,
 }: AssignedDocumentsSectionProps) {
   return (
     <Collapsible defaultOpen className="group/collapsible group-data-[collapsible=icon]:hidden">
@@ -516,7 +513,6 @@ function AssignedDocumentsSection({
                     document={document}
                     documentsPresenceById={documentsPresenceById}
                     isActive={document.id === activeDocId}
-                    documentsLink={documentsLink}
                   />
                 ))}
               </SidebarMenu>
@@ -532,7 +528,6 @@ function AssignedDocumentItem({
   document,
   documentsPresenceById,
   isActive,
-  documentsLink,
 }: AssignedDocumentItemProps) {
   const documentParticipants = documentsPresenceById.get(document.id) ?? [];
   const documentAvatars = buildAvatarItems(documentParticipants);
@@ -542,7 +537,11 @@ function AssignedDocumentItem({
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <NavLink
-          to={`${documentsLink}/${encodeURIComponent(document.id)}`}
+          to={buildDocumentDetailUrl(
+            document.workspaceId,
+            document.id,
+            { tab: "activity" },
+          )}
         >
           <FileText />
           <span className="min-w-0 flex-1 truncate">{document.name}</span>

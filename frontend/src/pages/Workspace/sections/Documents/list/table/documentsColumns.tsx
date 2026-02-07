@@ -22,7 +22,8 @@ export type DocumentsColumnContext = {
   onCreateTag?: (tag: string) => void | Promise<void>;
   rowPresence?: Map<string, PresenceParticipant[]>;
   onOpenDocument?: (documentId: string) => void;
-  onOpenComments?: (documentId: string) => void;
+  onOpenPreview?: (documentId: string) => void;
+  onOpenActivity?: (documentId: string) => void;
   onAssign: (documentId: string, assigneeId: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
   onDeleteRequest: (document: DocumentRow) => void;
@@ -40,7 +41,8 @@ export function useDocumentsColumns({
   onCreateTag,
   rowPresence,
   onOpenDocument,
-  onOpenComments,
+  onOpenPreview,
+  onOpenActivity,
   onAssign,
   onToggleTag,
   onDeleteRequest,
@@ -308,8 +310,10 @@ export function useDocumentsColumns({
         cell: ({ row }) => (
           <ActionsCell
             document={row.original}
-            onOpenDocument={() => onOpenDocument?.(row.original.id)}
-            onOpenComments={() => onOpenComments?.(row.original.id)}
+            onOpenDocument={() =>
+              (onOpenPreview ?? onOpenDocument)?.(row.original.id)
+            }
+            onOpenActivity={() => onOpenActivity?.(row.original.id)}
             isBusy={isRowActionPending?.(row.original.id) ?? false}
             onDeleteRequest={onDeleteRequest}
             onDownloadOutput={onDownloadOutput}
@@ -328,8 +332,9 @@ export function useDocumentsColumns({
       isRowActionPending,
       memberOptions,
       onCreateTag,
-      onOpenComments,
+      onOpenActivity,
       onOpenDocument,
+      onOpenPreview,
       onAssign,
       onDeleteRequest,
       onDownloadLatest,

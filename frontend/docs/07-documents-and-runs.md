@@ -219,6 +219,36 @@ Documents URL state is encoded in query parameters:
   * `-lastRunAt` (most recently run first)
 * `view` – optional preset (e.g. `all`, `mine`, `attention`, `recent`).
 
+### 3.3 Document detail ("ticket") view
+
+Route:
+
+* `/workspaces/:workspaceId/documents/:documentId`
+
+Navigation model:
+
+* `tab=activity` (default) – first-class collaboration thread.
+* `tab=preview` – spreadsheet preview workspace.
+
+Detail query keys:
+
+* `tab` – `activity | preview`
+* `activityFilter` – `all | comments | events` (only relevant when `tab=activity`)
+* `source` – `normalized | original` (only relevant when `tab=preview`)
+* `sheet` – selected sheet name (only relevant when `tab=preview`)
+
+Preview behavior:
+
+* `source=normalized` is the default.
+* Normalized preview **never auto-falls back** to original.
+* When normalized output is unavailable (no run, running, failed), the UI shows an explicit unavailable state and the user can switch to `source=original`.
+
+Legacy tab mappings:
+
+* `tab=data` -> `tab=preview`
+* `tab=comments` -> `tab=activity&activityFilter=comments`
+* `tab=timeline` -> `tab=activity&activityFilter=events`
+
 Rules:
 
 * All filter changes must be reflected in the URL via `setSearchParams`.
