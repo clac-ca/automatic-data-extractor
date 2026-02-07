@@ -12,6 +12,55 @@ body,
   overflow-x: hidden;
 }
 
+:root[data-mode-transition^="reveal"]::view-transition-old(root),
+:root[data-mode-transition^="reveal"]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root[data-mode-transition] {
+  isolation: isolate;
+}
+
+:root[data-mode-transition="reveal-expand"]::view-transition-old(root),
+:root[data-mode-transition="reveal-collapse"]::view-transition-new(root) {
+  z-index: 1;
+}
+
+:root[data-mode-transition="reveal-expand"]::view-transition-new(root),
+:root[data-mode-transition="reveal-collapse"]::view-transition-old(root) {
+  z-index: 2;
+}
+
+:root[data-mode-transition^="fallback"]::view-transition-old(root),
+:root[data-mode-transition^="fallback"]::view-transition-new(root) {
+  animation: none;
+}
+
+@keyframes theme-toggle-press {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes theme-icon-drift {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-0.5px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
 /*
   shadcn/ui theme tokens
   - Theme: document.documentElement.dataset.theme =

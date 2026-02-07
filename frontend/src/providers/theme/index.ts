@@ -6,11 +6,13 @@ import {
   type ThemeId,
 } from "./themes";
 import type { ModePreference } from "./themeStorage";
+import type { SetModePreferenceOptions } from "./modeTransition";
 
 export type ResolvedMode = "light" | "dark";
 
 export type { ModePreference };
 export type { ThemeId };
+export type { SetModePreferenceOptions };
 
 export const DEFAULT_THEME_ID: ThemeId = "default";
 export const BUILTIN_THEME_IDS = THEME_IDS satisfies readonly ThemeId[];
@@ -64,3 +66,8 @@ export function applyThemeToDocument(theme: ThemeId, mode: ResolvedMode): void {
 
 export { ThemeProvider } from "./ThemeProvider";
 export { useTheme } from "./useTheme";
+export {
+  DEFAULT_MODE_TRANSITION_DURATION_MS,
+  THEME_MODE_ANCHOR_ATTR,
+  WORKSPACE_THEME_MODE_ANCHOR,
+} from "./modeTransition";

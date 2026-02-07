@@ -1,6 +1,7 @@
-import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { applyThemeToDocument, normalizeThemeId, resolveMode, DEFAULT_THEME_ID, type ResolvedMode, type ThemeId } from "./index";
+import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
 import {
   MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -11,6 +12,11 @@ import {
   writeThemePreference,
   type ModePreference,
 } from "./themeStorage";
+import {
+  findModeTransitionOrigin,
+  runModeTransition,
+  type SetModePreferenceOptions,
+} from "./modeTransition";
 
 interface ThemeContextValue {
   readonly theme: ThemeId;
@@ -19,7 +25,7 @@ interface ThemeContextValue {
   readonly systemPrefersDark: boolean;
   readonly setTheme: (next: ThemeId) => void;
   readonly setPreviewTheme: (next: ThemeId | null) => void;
-  readonly setModePreference: (next: ModePreference) => void;
+  readonly setModePreference: (next: ModePreference, options?: SetModePreferenceOptions) => void;
 }
 
 export const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -36,6 +42,16 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
     }
     return window.matchMedia(DARK_MODE_QUERY).matches;
   });
+  const modePreferenceRef = useRef(modePreference);
+  const systemPrefersDarkRef = useRef(systemPrefersDark);
+
+  useEffect(() => {
+    modePreferenceRef.current = modePreference;
+  }, [modePreference]);
+
+  useEffect(() => {
+    systemPrefersDarkRef.current = systemPrefersDark;
+  }, [systemPrefersDark]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -43,7 +59,28 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
     }
     const media = window.matchMedia(DARK_MODE_QUERY);
     const handleChange = (event: MediaQueryListEvent) => {
-      setSystemPrefersDark(event.matches);
+      const currentModePreference = modePreferenceRef.current;
+      const currentSystemPrefersDark = systemPrefersDarkRef.current;
+      const nextSystemPrefersDark = event.matches;
+      const previousResolved = resolveMode(currentModePreference, currentSystemPrefersDark);
+      const nextResolved = resolveMode(currentModePreference, nextSystemPrefersDark);
+
+      if (currentModePreference !== "system" || previousResolved === nextResolved) {
+        systemPrefersDarkRef.current = nextSystemPrefersDark;
+        setSystemPrefersDark(nextSystemPrefersDark);
+        return;
+      }
+
+      systemPrefersDarkRef.current = nextSystemPrefersDark;
+      void runModeTransition({
+        from: previousResolved,
+        to: nextResolved,
+        apply: () => {
+          setSystemPrefersDark(nextSystemPrefersDark);
+        },
+        animate: true,
+        origin: findModeTransitionOrigin(),
+      });
     };
 
     if (typeof media.addEventListener === "function") {
@@ -70,7 +107,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
 
   const effectiveTheme = previewTheme ?? theme;
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     applyThemeToDocument(effectiveTheme, resolvedMode);
   }, [effectiveTheme, resolvedMode]);
 
@@ -121,8 +158,30 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
     setPreviewThemeState(next);
   }, []);
 
-  const setModePreference = useCallback((next: ModePreference) => {
-    setModePreferenceState(next);
+  const setModePreference = useCallback((next: ModePreference, options?: SetModePreferenceOptions) => {
+    const currentModePreference = modePreferenceRef.current;
+    const currentSystemPrefersDark = systemPrefersDarkRef.current;
+    const previousResolved = resolveMode(currentModePreference, currentSystemPrefersDark);
+    const nextResolved = resolveMode(next, currentSystemPrefersDark);
+    const shouldAnimate = Boolean(options?.animate && previousResolved !== nextResolved);
+
+    if (!shouldAnimate) {
+      modePreferenceRef.current = next;
+      setModePreferenceState(next);
+      return;
+    }
+
+    modePreferenceRef.current = next;
+    const origin = options?.origin ?? (options?.source === "system" ? findModeTransitionOrigin() : undefined);
+    void runModeTransition({
+      from: previousResolved,
+      to: nextResolved,
+      apply: () => {
+        setModePreferenceState(next);
+      },
+      animate: true,
+      origin,
+    });
   }, []);
 
   const value = useMemo(
