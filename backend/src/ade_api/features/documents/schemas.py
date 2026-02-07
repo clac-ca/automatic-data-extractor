@@ -179,8 +179,12 @@ class DocumentTagsPatch(BaseSchema):
 
 
 class DocumentUpdateRequest(BaseSchema):
-    """Payload for updating document metadata or assignment."""
+    """Payload for updating document name, metadata, or assignment."""
 
+    name: str | None = Field(
+        default=None,
+        description="Rename the document within the workspace (extension changes are rejected).",
+    )
     assignee_user_id: UUIDStr | None = Field(
         default=None,
         alias="assigneeId",
@@ -191,11 +195,23 @@ class DocumentUpdateRequest(BaseSchema):
         description="Replace the document metadata payload.",
     )
 
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value.strip():
+            raise ValueError("name is required")
+        return value
+
     @model_validator(mode="after")
     def _ensure_changes(self) -> DocumentUpdateRequest:
+        name_set = "name" in self.model_fields_set
         assignee_set = "assignee_user_id" in self.model_fields_set
-        if not assignee_set and self.metadata is None:
-            raise ValueError("assigneeId or metadata is required")
+        if name_set and self.name is None:
+            raise ValueError("name cannot be null")
+        if not name_set and not assignee_set and self.metadata is None:
+            raise ValueError("name, assigneeId, or metadata is required")
         return self
 
 

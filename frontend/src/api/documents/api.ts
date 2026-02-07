@@ -165,12 +165,20 @@ export async function fetchWorkspaceDocumentRowById(
 export async function patchWorkspaceDocument(
   workspaceId: string,
   documentId: string,
-  payload: { assigneeId?: string | null; metadata?: Record<string, unknown> | null },
+  payload: {
+    name?: string;
+    assigneeId?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
 ): Promise<DocumentRecord> {
   const body: {
+    name?: string;
     assigneeId?: string | null;
     metadata?: Record<string, unknown> | null;
   } = {};
+  if ("name" in payload) {
+    body.name = payload.name;
+  }
   if ("assigneeId" in payload) {
     body.assigneeId = payload.assigneeId ?? null;
   }

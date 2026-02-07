@@ -32,13 +32,15 @@ import type { components } from "@/types";
 import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/list/upload/useUploadManager";
 
 import { DocumentsPresenceIndicator } from "../../shared/presence/DocumentsPresenceIndicator";
-import { shortId } from "../../shared/utils";
+import { inferFileType, shortId } from "../../shared/utils";
 import { partitionDocumentChanges } from "../../shared/documentChanges";
 import type { DocumentRow, WorkspacePerson } from "../../shared/types";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
 import { useDocumentsView } from "../hooks/useDocumentsView";
 import { useDocumentsDeltaSync } from "../../shared/hooks/useDocumentsDeltaSync";
+import { getRenameDocumentErrorMessage, useRenameDocumentMutation } from "../../shared/hooks/useRenameDocumentMutation";
 import { buildDocumentDetailUrl } from "../../shared/navigation";
+import { RenameDocumentDialog } from "../../shared/ui/RenameDocumentDialog";
 import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
@@ -54,7 +56,7 @@ type CurrentUser = {
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
-type RowMutation = "delete" | "assign" | "tags";
+type RowMutation = "delete" | "assign" | "rename" | "tags";
 
 function tagKey(value: string) {
   return value.trim().toLowerCase();
@@ -93,6 +95,10 @@ function isSameStringArray(a: readonly string[], b: readonly string[]) {
   return true;
 }
 
+function deriveFileType(name: string): DocumentRow["fileType"] {
+  return inferFileType(name);
+}
+
 export function DocumentsTableView({
   workspaceId,
   currentUser,
@@ -112,7 +118,10 @@ export function DocumentsTableView({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
+  const [renameTarget, setRenameTarget] = useState<DocumentRow | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
+  const renameMutation = useRenameDocumentMutation({ workspaceId });
 
   const [filterFlag, setFilterFlag] = useQueryState(
     "filterFlag",
@@ -287,6 +296,8 @@ export function DocumentsTableView({
     (documentId: string, updated: DocumentRecord) => {
       const activityAt = updated.activityAt ?? updated.updatedAt;
       const updates: Partial<DocumentRow> = {
+        name: updated.name,
+        fileType: deriveFileType(updated.name),
         updatedAt: updated.updatedAt,
         activityAt,
         tags: updated.tags,
@@ -484,6 +495,59 @@ export function DocumentsTableView({
     ],
   );
 
+  const onRenameRequest = useCallback((document: DocumentRow) => {
+    setRenameTarget(document);
+    setRenameError(null);
+  }, []);
+
+  const onRenameCancel = useCallback(() => {
+    setRenameTarget(null);
+    setRenameError(null);
+    renameMutation.reset();
+  }, [renameMutation]);
+
+  const onRenameConfirm = useCallback(async (nextName: string) => {
+    if (!renameTarget) return;
+    const current = documentsById[renameTarget.id] ?? renameTarget;
+    markRowPending(current.id, "rename");
+    setRenameError(null);
+    try {
+      const result = await renameMutation.renameDocument({
+        documentId: current.id,
+        currentName: current.name,
+        nextName,
+      });
+      if (!result) {
+        onRenameCancel();
+        return;
+      }
+      notifyToast({
+        title: "Document renamed.",
+        intent: "success",
+        duration: 4000,
+      });
+      onRenameCancel();
+    } catch (error) {
+      const description = getRenameDocumentErrorMessage(error);
+      setRenameError(description);
+      notifyToast({
+        title: "Unable to rename document",
+        description,
+        intent: "danger",
+      });
+    } finally {
+      clearRowPending(current.id, "rename");
+    }
+  }, [
+    clearRowPending,
+    documentsById,
+    markRowPending,
+    notifyToast,
+    onRenameCancel,
+    renameMutation,
+    renameTarget,
+  ]);
+
   const onDeleteRequest = useCallback((document: DocumentRow) => {
     setDeleteTarget(document);
   }, []);
@@ -615,6 +679,7 @@ export function DocumentsTableView({
     onAssign,
     onToggleTag,
     onTagOptionsChange: handleTagOptionsChange,
+    onRenameRequest,
     onDeleteRequest,
     onDownloadOutput: handleDownloadOutput,
     onDownloadLatest: handleDownloadLatest,
@@ -706,6 +771,8 @@ export function DocumentsTableView({
 
   const deletePending =
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
+  const renamePending =
+    renameTarget ? pendingMutations[renameTarget.id]?.has("rename") ?? false : false;
 
   const tableContent = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -729,6 +796,19 @@ export function DocumentsTableView({
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {tableContent}
       </div>
+      <RenameDocumentDialog
+        open={Boolean(renameTarget)}
+        documentName={renameTarget?.name ?? ""}
+        isPending={renamePending}
+        errorMessage={renameError}
+        onOpenChange={(open) => {
+          if (!open) onRenameCancel();
+        }}
+        onClearError={() => {
+          if (renameError) setRenameError(null);
+        }}
+        onSubmit={onRenameConfirm}
+      />
       <Dialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => (!open ? onDeleteCancel() : undefined)}

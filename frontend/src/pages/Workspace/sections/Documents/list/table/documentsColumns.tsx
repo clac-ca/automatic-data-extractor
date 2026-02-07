@@ -26,6 +26,7 @@ export type DocumentsColumnContext = {
   onOpenActivity?: (documentId: string) => void;
   onAssign: (documentId: string, assigneeId: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
+  onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
@@ -45,6 +46,7 @@ export function useDocumentsColumns({
   onOpenActivity,
   onAssign,
   onToggleTag,
+  onRenameRequest,
   onDeleteRequest,
   onDownloadOutput,
   onDownloadLatest,
@@ -315,6 +317,7 @@ export function useDocumentsColumns({
             }
             onOpenActivity={() => onOpenActivity?.(row.original.id)}
             isBusy={isRowActionPending?.(row.original.id) ?? false}
+            onRenameRequest={onRenameRequest}
             onDeleteRequest={onDeleteRequest}
             onDownloadOutput={onDownloadOutput}
             onDownloadLatest={onDownloadLatest}
@@ -336,6 +339,7 @@ export function useDocumentsColumns({
       onOpenDocument,
       onOpenPreview,
       onAssign,
+      onRenameRequest,
       onDeleteRequest,
       onDownloadLatest,
       onDownloadVersion,

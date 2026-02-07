@@ -17,6 +17,7 @@ export function ActionsCell({
   onOpenDocument,
   onOpenActivity,
   isBusy,
+  onRenameRequest,
   onDeleteRequest,
   onDownloadOutput,
   onDownloadLatest,
@@ -26,6 +27,7 @@ export function ActionsCell({
   onOpenDocument: () => void;
   onOpenActivity: () => void;
   isBusy: boolean;
+  onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
@@ -91,6 +93,9 @@ export function ActionsCell({
               Download original (v1)
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuItem onSelect={() => onRenameRequest(document)} disabled={isBusy}>
+            Rename
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => onDeleteRequest(document)}
             disabled={isBusy}

@@ -750,7 +750,7 @@ export type paths = {
         delete: operations["delete_document_api_v1_workspaces__workspaceId__documents__documentId__delete"];
         options?: never;
         head?: never;
-        /** Update document metadata or assignment */
+        /** Update document metadata, assignment, or name */
         patch: operations["update_document_api_v1_workspaces__workspaceId__documents__documentId__patch"];
         trace?: never;
     };
@@ -2254,9 +2254,14 @@ export type components = {
         };
         /**
          * DocumentUpdateRequest
-         * @description Payload for updating document metadata or assignment.
+         * @description Payload for updating document name, metadata, or assignment.
          */
         DocumentUpdateRequest: {
+            /**
+             * Name
+             * @description Rename the document within the workspace (extension changes are rejected).
+             */
+            name?: string | null;
             /**
              * Assigneeid
              * @description Assign the document to a user (null clears assignment).
@@ -6789,15 +6794,21 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Document name already exists. */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rename input is invalid. */
             422: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
             default: components["responses"]["ProblemDetails"];
         };

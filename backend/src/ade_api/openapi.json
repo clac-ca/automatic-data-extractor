@@ -5971,7 +5971,7 @@
         "tags": [
           "documents"
         ],
-        "summary": "Update document metadata or assignment",
+        "summary": "Update document metadata, assignment, or name",
         "operationId": "update_document_api_v1_workspaces__workspaceId__documents__documentId__patch",
         "parameters": [
           {
@@ -6065,15 +6065,16 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+          "409": {
+            "description": "Document name already exists.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
               }
-            },
+            }
+          },
+          "422": {
+            "description": "Rename input is invalid.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -14043,6 +14044,18 @@
       },
       "DocumentUpdateRequest": {
         "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Rename the document within the workspace (extension changes are rejected)."
+          },
           "assigneeId": {
             "anyOf": [
               {
@@ -14074,7 +14087,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "DocumentUpdateRequest",
-        "description": "Payload for updating document metadata or assignment."
+        "description": "Payload for updating document name, metadata, or assignment."
       },
       "EffectivePermissions": {
         "properties": {

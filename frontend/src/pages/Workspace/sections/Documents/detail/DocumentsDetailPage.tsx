@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
@@ -9,16 +9,23 @@ import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/ta
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import type { DocumentDetailTab } from "@/pages/Workspace/sections/Documents/shared/navigation";
+import { useNotifications } from "@/providers/notifications";
 
 import { DocumentTicketHeader } from "./components/DocumentTicketHeader";
 import { useDocumentDetailUrlState } from "./hooks/useDocumentDetailUrlState";
 import { DocumentActivityTab } from "./tabs/activity/DocumentActivityTab";
 import { DocumentPreviewTab } from "./tabs/preview/DocumentPreviewTab";
+import { getRenameDocumentErrorMessage, useRenameDocumentMutation } from "../shared/hooks/useRenameDocumentMutation";
+import { RenameDocumentDialog } from "../shared/ui/RenameDocumentDialog";
 
 export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   const navigate = useNavigate();
   const { workspace } = useWorkspaceContext();
   const { sendSelection } = useWorkspacePresence();
+  const { notifyToast } = useNotifications();
+  const renameMutation = useRenameDocumentMutation({ workspaceId: workspace.id });
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const {
     state: detailState,
@@ -57,6 +64,39 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   const onBack = () => {
     navigate(`/workspaces/${workspace.id}/documents`);
   };
+
+  const onRenameConfirm = useCallback(
+    async (nextName: string) => {
+      if (!documentRow) return;
+      setRenameError(null);
+      try {
+        const result = await renameMutation.renameDocument({
+          documentId: documentRow.id,
+          currentName: documentRow.name,
+          nextName,
+        });
+        if (!result) {
+          setRenameOpen(false);
+          return;
+        }
+        notifyToast({
+          title: "Document renamed.",
+          intent: "success",
+          duration: 4000,
+        });
+        setRenameOpen(false);
+      } catch (error) {
+        const description = getRenameDocumentErrorMessage(error);
+        setRenameError(description);
+        notifyToast({
+          title: "Unable to rename document",
+          description,
+          intent: "danger",
+        });
+      }
+    },
+    [documentRow, notifyToast, renameMutation],
+  );
 
   if (documentQuery.isLoading) {
     return (
@@ -108,6 +148,10 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
         workspaceId={workspace.id}
         document={documentRow}
         onBack={onBack}
+        onRenameRequest={() => {
+          setRenameError(null);
+          setRenameOpen(true);
+        }}
       />
 
       <TabsRoot value={detailState.tab} onValueChange={(value) => setTab(value as DocumentDetailTab)}>
@@ -157,6 +201,23 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
           </TabsContent>
         </div>
       </TabsRoot>
+      <RenameDocumentDialog
+        open={renameOpen}
+        documentName={documentRow.name}
+        isPending={renameMutation.isRenaming}
+        errorMessage={renameError}
+        onOpenChange={(open) => {
+          setRenameOpen(open);
+          if (!open) {
+            setRenameError(null);
+            renameMutation.reset();
+          }
+        }}
+        onClearError={() => {
+          if (renameError) setRenameError(null);
+        }}
+        onSubmit={onRenameConfirm}
+      />
     </div>
   );
 }

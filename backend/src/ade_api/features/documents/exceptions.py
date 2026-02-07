@@ -123,6 +123,13 @@ class DocumentNameConflictError(Exception):
         self.name = name
 
 
+class InvalidDocumentRenameError(Exception):
+    """Raised when a rename request violates filename rules."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class DocumentVersionNotFoundError(Exception):
     """Raised when a requested document version does not exist."""
 
@@ -157,6 +164,7 @@ __all__ = [
     "DocumentPreviewSheetNotFoundError",
     "DocumentPreviewParseError",
     "DocumentNameConflictError",
+    "InvalidDocumentRenameError",
     "DocumentVersionNotFoundError",
     "InvalidDocumentTagsError",
     "InvalidDocumentCommentMentionsError",

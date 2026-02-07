@@ -18,6 +18,7 @@ from uuid import UUID
 import openpyxl
 from fastapi import UploadFile
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
@@ -72,6 +73,7 @@ from .exceptions import (
     DocumentPreviewUnsupportedError,
     DocumentVersionNotFoundError,
     DocumentWorksheetParseError,
+    InvalidDocumentRenameError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentTagsError,
 )
@@ -102,6 +104,7 @@ logger = logging.getLogger(__name__)
 
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
+_FILES_NAME_KEY_CONSTRAINT = "files_workspace_kind_name_key"
 
 
 def _run_with_timeout(func, *, timeout: float, **kwargs):
@@ -637,10 +640,33 @@ class DocumentsService:
     ) -> DocumentOut:
         document = self._get_document(workspace_id, document_id)
         changed = False
+        assignee_changed = False
+
+        if "name" in payload.model_fields_set:
+            if payload.name is None:
+                raise ValueError("name cannot be null")
+            next_name, next_name_key = self._prepare_rename(
+                current_name=document.name,
+                candidate_name=payload.name,
+            )
+            existing = self._find_by_name_key(
+                workspace_id=workspace_id,
+                name_key=next_name_key,
+            )
+            if existing is not None and existing.id != document.id:
+                raise DocumentNameConflictError(
+                    document_id=existing.id,
+                    name=existing.name,
+                )
+            if document.name != next_name or document.name_key != next_name_key:
+                document.name = next_name
+                document.name_key = next_name_key
+                changed = True
 
         if "assignee_user_id" in payload.model_fields_set:
             if document.assignee_user_id != payload.assignee_user_id:
                 document.assignee_user_id = payload.assignee_user_id
+                assignee_changed = True
                 changed = True
         if "metadata" in payload.model_fields_set and payload.metadata is not None:
             next_metadata = dict(payload.metadata)
@@ -649,13 +675,45 @@ class DocumentsService:
                 changed = True
 
         if changed:
-            self._session.flush()
-            self._session.refresh(document, attribute_names=["assignee_user"])
+            try:
+                self._session.flush()
+            except IntegrityError as exc:
+                constraint_name = self._extract_constraint_name(exc)
+                if constraint_name != _FILES_NAME_KEY_CONSTRAINT:
+                    raise
+                raise DocumentNameConflictError(
+                    document_id=document.id,
+                    name=document.name,
+                ) from exc
+            if assignee_changed:
+                self._session.refresh(document, attribute_names=["assignee_user"])
 
         updated = DocumentOut.model_validate(document)
         self._attach_last_runs(workspace_id, [updated])
         self._apply_derived_fields(updated)
         return updated
+
+    def _prepare_rename(
+        self,
+        *,
+        current_name: str,
+        candidate_name: str,
+    ) -> tuple[str, str]:
+        normalized_name = self._normalise_filename(candidate_name)
+        current_extension = Path(current_name).suffix.casefold()
+        candidate_extension = Path(normalized_name).suffix.casefold()
+        if current_extension != candidate_extension:
+            raise InvalidDocumentRenameError("File extension cannot be changed.")
+        return normalized_name, self._build_name_key(normalized_name)
+
+    @staticmethod
+    def _extract_constraint_name(exc: IntegrityError) -> str | None:
+        original = getattr(exc, "orig", None)
+        diagnostics = getattr(original, "diag", None)
+        constraint_name = getattr(diagnostics, "constraint_name", None)
+        if isinstance(constraint_name, str) and constraint_name:
+            return constraint_name
+        return None
 
     def list_document_sheets(
         self,

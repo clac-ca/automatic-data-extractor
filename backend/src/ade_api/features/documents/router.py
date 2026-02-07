@@ -73,6 +73,7 @@ from .exceptions import (
     DocumentVersionNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentCommentMentionsError,
+    InvalidDocumentRenameError,
     InvalidDocumentTagsError,
 )
 from .schemas import (
@@ -587,7 +588,7 @@ def list_document_changes_delta(
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
-    summary="Update document metadata or assignment",
+    summary="Update document metadata, assignment, or name",
     response_model_exclude_none=True,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -598,6 +599,12 @@ def list_document_changes_delta(
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Document name already exists.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Rename input is invalid.",
         },
     },
 )
@@ -615,6 +622,10 @@ def update_document(
             payload=payload,
         )
         return updated
+    except DocumentNameConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InvalidDocumentRenameError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

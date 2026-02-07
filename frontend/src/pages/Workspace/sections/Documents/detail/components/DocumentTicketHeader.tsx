@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, PencilLine } from "lucide-react";
 
 import { resolveApiUrl } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -50,10 +50,12 @@ export function DocumentTicketHeader({
   workspaceId,
   document,
   onBack,
+  onRenameRequest,
 }: {
   workspaceId: string;
   document: DocumentRow;
   onBack: () => void;
+  onRenameRequest: () => void;
 }) {
   const normalizedDownload = useMemo(
     () => resolveNormalizedDownloadState(document),
@@ -98,6 +100,10 @@ export function DocumentTicketHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="ghost" className="gap-1.5" onClick={onRenameRequest}>
+            <PencilLine className="h-4 w-4" />
+            Rename
+          </Button>
           {normalizedDownload.href ? (
             <Button asChild size="sm" variant="secondary">
               <a href={normalizedDownload.href} target="_blank" rel="noreferrer">
