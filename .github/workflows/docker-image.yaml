@@ -69,7 +69,7 @@ jobs:
           ADE_BLOB_CONTAINER: ade
           ADE_SECRET_KEY: ci-only-unsafe-secret-key-000000000000000000000000
         run: |
-          docker compose -f .devcontainer/docker-compose.yaml config >/dev/null
+          docker compose -f docker-compose.yaml -f .devcontainer/docker-compose.override.yaml config >/dev/null
           docker compose -f docker-compose.yaml config >/dev/null
           docker compose -f docker-compose.prod.yaml config >/dev/null
           docker compose -f docker-compose.prod.split.yaml config >/dev/null
