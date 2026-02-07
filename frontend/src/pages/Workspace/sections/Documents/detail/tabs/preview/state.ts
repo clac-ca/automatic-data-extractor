@@ -26,6 +26,13 @@ export function getNormalizedPreviewState(
     };
   }
 
+  if (lastRun.status === "cancelled") {
+    return {
+      available: false,
+      reason: "The latest run was cancelled. Normalized output is unavailable until a run succeeds.",
+    };
+  }
+
   return {
     available: false,
     reason:

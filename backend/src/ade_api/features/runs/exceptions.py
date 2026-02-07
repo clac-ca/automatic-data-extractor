@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __all__ = [
     "RunNotFoundError",
+    "RunNotCancellableError",
     "RunDocumentMissingError",
     "RunLogsFileMissingError",
     "RunOutputMissingError",
@@ -20,6 +21,10 @@ __all__ = [
 
 class RunNotFoundError(RuntimeError):
     """Raised when a requested run row cannot be located."""
+
+
+class RunNotCancellableError(RuntimeError):
+    """Raised when a run cannot be cancelled in its current lifecycle state."""
 
 
 class RunDocumentMissingError(RuntimeError):

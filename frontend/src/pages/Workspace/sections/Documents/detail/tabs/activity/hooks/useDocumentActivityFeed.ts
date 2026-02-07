@@ -63,11 +63,16 @@ export function useDocumentActivityFeed({
   });
 
   const runsQuery = useQuery({
-    queryKey: ["document-activity-runs", workspaceId, document.id],
+    queryKey: ["document-activity-runs", workspaceId, document.id, document.lastRun?.id ?? null],
     queryFn: ({ signal }) =>
       fetchWorkspaceRunsForDocument(workspaceId, document.id, signal),
     enabled: Boolean(workspaceId && document.id),
     staleTime: 30_000,
+    refetchInterval: () =>
+      document.lastRun?.status === "running" || document.lastRun?.status === "queued"
+        ? 1_000
+        : false,
+    refetchIntervalInBackground: true,
   });
 
   const allItems = useMemo(

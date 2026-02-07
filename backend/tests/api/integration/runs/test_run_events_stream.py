@@ -131,3 +131,44 @@ async def test_run_events_stream_endpoint_honors_cursor_offset(
     joined = "\n".join(lines)
     assert "event: run.start" not in joined
     assert "event: run.complete" in joined
+
+
+async def test_run_events_stream_endpoint_exits_for_cancelled_run_without_logs(
+    async_client,
+    seed_identity,
+    db_session,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    configuration = make_configuration(
+        workspace_id=workspace_id,
+        name="SSE Cancelled Config",
+    )
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    document = make_document(workspace_id=workspace_id, filename="input.csv")
+    db_session.add(document)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    run = make_run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        file_version_id=document.current_version_id,
+        status=RunStatus.CANCELLED,
+    )
+    run.completed_at = utc_now()
+    run.error_message = "Run cancelled by user"
+    db_session.add(run)
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    headers = await auth_headers(async_client, seed_identity.workspace_owner)
+    with anyio.fail_after(5):
+        async with async_client.stream(
+            "GET",
+            f"/api/v1/runs/{run.id}/events/stream",
+            headers=headers,
+        ) as response:
+            assert response.status_code == 200
+            lines = [line async for line in response.aiter_lines() if line]
+
+    assert lines == []

@@ -63,4 +63,12 @@ export const RUN_STATUS_META: Record<
     textClass: "text-destructive",
     surfaceClass: "bg-destructive/10 dark:bg-destructive/20",
   },
+  cancelled: {
+    label: "Cancelled",
+    badgeClass: "bg-muted text-muted-foreground",
+    dotClass: "bg-muted-foreground",
+    ringClass: "ring-border",
+    textClass: "text-muted-foreground",
+    surfaceClass: "bg-muted",
+  },
 };

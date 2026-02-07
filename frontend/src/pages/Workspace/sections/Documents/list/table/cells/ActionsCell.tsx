@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Ellipsis } from "lucide-react";
 
-import { ChatIcon, DownloadIcon, EyeIcon, OutputIcon } from "@/components/icons";
+import { ChatIcon, CloseIcon, DownloadIcon, EyeIcon, OutputIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,6 +22,8 @@ export function ActionsCell({
   onDownloadOutput,
   onDownloadLatest,
   onDownloadVersion,
+  onReprocessRequest,
+  onCancelRunRequest,
 }: {
   document: DocumentRow;
   onOpenDocument: () => void;
@@ -32,8 +34,12 @@ export function ActionsCell({
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
   onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
+  onReprocessRequest: (document: DocumentRow) => void;
+  onCancelRunRequest: (document: DocumentRow) => void;
 }) {
+  const isRunActive = document.lastRun?.status === "queued" || document.lastRun?.status === "running";
   const canDownloadOutput = document.lastRun?.status === "succeeded";
+  const runActionLabel = isRunActive ? "Cancel run" : "Reprocess";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
   const latestLabel = document.currentVersionNo
@@ -65,6 +71,15 @@ export function ActionsCell({
         ) : null}
       </IconButton>
       <IconButton
+        label={runActionLabel}
+        onClick={() => (isRunActive ? onCancelRunRequest(document) : onReprocessRequest(document))}
+        variant={isRunActive ? "secondary" : "ghost"}
+        disabled={isBusy}
+        className="shrink-0"
+      >
+        {isRunActive ? <CloseIcon className="h-4 w-4" /> : <RefreshIcon className="h-4 w-4" />}
+      </IconButton>
+      <IconButton
         label={canDownloadOutput ? "Download normalized output" : "Output not ready"}
         onClick={() => onDownloadOutput(document)}
         disabled={!canDownloadOutput}
@@ -91,6 +106,12 @@ export function ActionsCell({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onSelect={() => (isRunActive ? onCancelRunRequest(document) : onReprocessRequest(document))}
+            disabled={isBusy}
+          >
+            {runActionLabel}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => onDownloadOutput(document)}
             disabled={!canDownloadOutput}

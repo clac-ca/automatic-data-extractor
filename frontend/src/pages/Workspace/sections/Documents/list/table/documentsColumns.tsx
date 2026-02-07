@@ -31,6 +31,8 @@ export type DocumentsColumnContext = {
   onDownloadOutput: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
   onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
+  onReprocessRequest: (document: DocumentRow) => void;
+  onCancelRunRequest: (document: DocumentRow) => void;
   isRowActionPending?: (documentId: string) => boolean;
 };
 
@@ -51,11 +53,13 @@ export function useDocumentsColumns({
   onDownloadOutput,
   onDownloadLatest,
   onDownloadVersion,
+  onReprocessRequest,
+  onCancelRunRequest,
   isRowActionPending,
 }: DocumentsColumnContext) {
   const enableAdvancedOnly = filterMode === "advanced";
   const runStatusOptions = useMemo(() => {
-    const statuses = (["queued", "running", "succeeded", "failed"] as RunStatus[]).map((value) => ({
+    const statuses = (["queued", "running", "succeeded", "failed", "cancelled"] as RunStatus[]).map((value) => ({
       value,
       label: value[0]?.toUpperCase() + value.slice(1),
     }));
@@ -322,6 +326,8 @@ export function useDocumentsColumns({
             onDownloadOutput={onDownloadOutput}
             onDownloadLatest={onDownloadLatest}
             onDownloadVersion={onDownloadVersion}
+            onReprocessRequest={onReprocessRequest}
+            onCancelRunRequest={onCancelRunRequest}
           />
         ),
         size: 192,
@@ -344,6 +350,8 @@ export function useDocumentsColumns({
       onDownloadLatest,
       onDownloadVersion,
       onDownloadOutput,
+      onReprocessRequest,
+      onCancelRunRequest,
       onTagOptionsChange,
       onToggleTag,
       people,

@@ -1184,6 +1184,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run Endpoint */
+        post: operations["cancel_run_endpoint_api_v1_runs__runId__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{runId}/metrics": {
         parameters: {
             query?: never;
@@ -3257,7 +3274,7 @@ export type components = {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "running" | "succeeded" | "failed";
+        RunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
          * RunWorkspaceBatchCreateRequest
          * @description Payload accepted by the workspace batch run creation endpoint.
@@ -8489,6 +8506,43 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                /** @description Run identifier */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    cancel_run_endpoint_api_v1_runs__runId__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Run identifier */
                 runId: string;

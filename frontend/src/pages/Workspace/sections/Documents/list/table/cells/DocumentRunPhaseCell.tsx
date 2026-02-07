@@ -8,6 +8,7 @@ const STATUS_BADGE_STYLES: Record<RunStatus, string> = {
   running: "border-info/30 bg-info/10 text-info dark:bg-info/20",
   succeeded: "border-success/30 bg-success/10 text-success dark:bg-success/20",
   failed: "border-destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20",
+  cancelled: "border-border/60 bg-muted text-muted-foreground",
 };
 
 export function DocumentRunPhaseCell({

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ChevronLeft, PencilLine } from "lucide-react";
 
 import { resolveApiUrl } from "@/api/client";
+import { CloseIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ const RUN_STATUS_BADGE_STYLES: Record<RunStatus, string> = {
   running: "border-info/30 bg-info/10 text-info dark:bg-info/20",
   succeeded: "border-success/30 bg-success/10 text-success dark:bg-success/20",
   failed: "border-destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20",
+  cancelled: "border-border/60 bg-muted text-muted-foreground",
 };
 
 function formatRunStatus(value: RunStatus) {
@@ -39,6 +41,10 @@ function resolveNormalizedDownloadState(document: DocumentRow): {
     return { href: null, label: "Latest run failed; output unavailable" };
   }
 
+  if (status === "cancelled") {
+    return { href: null, label: "Latest run was cancelled; output unavailable" };
+  }
+
   if (status === "running" || status === "queued") {
     return { href: null, label: "Output not ready yet" };
   }
@@ -51,11 +57,17 @@ export function DocumentTicketHeader({
   document,
   onBack,
   onRenameRequest,
+  onReprocessRequest,
+  onCancelRunRequest,
+  isRunActionPending = false,
 }: {
   workspaceId: string;
   document: DocumentRow;
   onBack: () => void;
   onRenameRequest: () => void;
+  onReprocessRequest: () => void;
+  onCancelRunRequest: () => void;
+  isRunActionPending?: boolean;
 }) {
   const normalizedDownload = useMemo(
     () => resolveNormalizedDownloadState(document),
@@ -65,6 +77,8 @@ export function DocumentTicketHeader({
     `/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`,
   );
   const runStatus = document.lastRun?.status ?? null;
+  const isRunActive = runStatus === "queued" || runStatus === "running";
+  const runActionLabel = isRunActive ? "Cancel run" : "Reprocess";
 
   return (
     <div className="sticky top-0 z-20 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90">
@@ -100,6 +114,16 @@ export function DocumentTicketHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant={isRunActive ? "secondary" : "outline"}
+            className="gap-1.5"
+            onClick={isRunActive ? onCancelRunRequest : onReprocessRequest}
+            disabled={isRunActionPending}
+          >
+            {isRunActive ? <CloseIcon className="h-4 w-4" /> : <RefreshIcon className="h-4 w-4" />}
+            {runActionLabel}
+          </Button>
           <Button size="sm" variant="ghost" className="gap-1.5" onClick={onRenameRequest}>
             <PencilLine className="h-4 w-4" />
             Rename

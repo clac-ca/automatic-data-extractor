@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { client } from "@/api/client";
-import { createRun, runEventsUrl, streamRunEvents, streamRunEventsForRun } from "@/api/runs/api";
+import {
+  cancelRun,
+  createRun,
+  createRunsBatch,
+  runEventsUrl,
+  streamRunEvents,
+  streamRunEventsForRun,
+} from "@/api/runs/api";
 import type { RunResource } from "@/api/runs/api";
 import type { RunStreamEvent } from "@/types/runs";
 
@@ -38,6 +45,7 @@ const sampleRunResource = {
 type CreateRunPostResponse = Awaited<
   ReturnType<typeof client.POST>
 >;
+type FetchRunResponse = Awaited<ReturnType<typeof client.GET>>;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -146,6 +154,77 @@ describe("createRun", () => {
   });
 });
 
+describe("createRunsBatch", () => {
+  it("posts deduped document ids and returns created run resources", async () => {
+    const batchResource = { ...sampleRunResource, id: "run-batch-1" } satisfies RunResource;
+    const postResponse = {
+      data: { runs: [batchResource] },
+      response: new Response(JSON.stringify({ runs: [batchResource] }), { status: 200 }),
+    } as unknown as CreateRunPostResponse;
+    const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
+
+    const runs = await createRunsBatch(
+      "workspace-123",
+      ["doc-1", "doc-1", "doc-2"],
+      { active_sheet_only: true, configuration_id: "config-123" },
+      undefined,
+    );
+
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs/batch", {
+      params: { path: { workspaceId: "workspace-123" } },
+      body: {
+        document_ids: ["doc-1", "doc-2"],
+        configuration_id: "config-123",
+        options: {
+          operation: "process",
+          dry_run: false,
+          log_level: "INFO",
+          active_sheet_only: true,
+        },
+      },
+      signal: undefined,
+    });
+    expect(runs).toEqual([batchResource]);
+  });
+
+  it("returns an empty array without calling the API when no document ids are provided", async () => {
+    const postSpy = vi.spyOn(client, "POST");
+
+    const runs = await createRunsBatch("workspace-123", [], {});
+
+    expect(runs).toEqual([]);
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelRun", () => {
+  it("posts cancel and returns the updated run", async () => {
+    const cancelled = { ...sampleRunResource, status: "cancelled" } satisfies RunResource;
+    const postResponse = {
+      data: cancelled,
+      response: new Response(JSON.stringify(cancelled), { status: 200 }),
+    } as unknown as CreateRunPostResponse;
+    const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
+
+    const run = await cancelRun("run-123");
+
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/runs/{runId}/cancel", {
+      params: { path: { runId: "run-123" } },
+    });
+    expect(run).toEqual(cancelled);
+  });
+
+  it("throws when cancellation does not return data", async () => {
+    const postResponse = {
+      error: {},
+      response: new Response(null, { status: 200 }),
+    } as unknown as CreateRunPostResponse;
+    vi.spyOn(client, "POST").mockResolvedValue(postResponse);
+
+    await expect(cancelRun("run-123")).rejects.toThrow("Expected run cancellation response.");
+  });
+});
+
 describe("runEventsUrl helpers", () => {
   it("builds event download URLs", () => {
     const url = runEventsUrl(sampleRunResource, { afterSequence: 42 });
@@ -165,6 +244,33 @@ describe("runEventsUrl helpers", () => {
     const [url] = fetchMock.mock.calls[0] ?? [];
     expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
     expect(result.value).toMatchObject(runEvent);
+    await iterator.return?.(undefined);
+  });
+
+  it("emits a completion event when fallback polling resolves to cancelled", async () => {
+    const runWithoutStream = {
+      ...sampleRunResource,
+      links: {
+        ...sampleRunResource.links,
+        events_stream: "",
+        events_download: "",
+      },
+    } satisfies RunResource;
+    const cancelledRun = { ...runWithoutStream, status: "cancelled" } satisfies RunResource;
+    const getResponse = {
+      data: cancelledRun,
+      response: new Response(JSON.stringify(cancelledRun), { status: 200 }),
+    } as unknown as FetchRunResponse;
+    vi.spyOn(client, "GET").mockResolvedValue(getResponse);
+
+    const iterator = streamRunEventsForRun(runWithoutStream);
+    const result = await iterator.next();
+
+    expect(result.value).toMatchObject({
+      event: "run.complete",
+      data: { status: "cancelled" },
+      level: "info",
+    });
     await iterator.return?.(undefined);
   });
 });

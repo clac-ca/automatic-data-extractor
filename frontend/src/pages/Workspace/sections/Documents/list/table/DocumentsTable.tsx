@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/data-table/data-table";
@@ -26,6 +26,9 @@ interface DocumentsTableProps {
   filterMode: "simple" | "advanced";
   onToggleFilterMode?: () => void;
   toolbarActions?: ReactNode;
+  onBulkReprocessRequest?: (documents: DocumentRow[]) => void;
+  onBulkCancelRequest?: (documents: DocumentRow[]) => void;
+  selectionResetToken?: number;
 }
 
 export function DocumentsTable({
@@ -35,6 +38,9 @@ export function DocumentsTable({
   filterMode,
   onToggleFilterMode,
   toolbarActions,
+  onBulkReprocessRequest,
+  onBulkCancelRequest,
+  selectionResetToken = 0,
 }: DocumentsTableProps) {
   const isAdvanced = filterMode === "advanced";
   const { table, debounceMs, throttleMs, shallow } = useDataTable({
@@ -66,6 +72,18 @@ export function DocumentsTable({
     clearOnDefault: true,
   });
 
+  useEffect(() => {
+    table.toggleAllRowsSelected(false);
+  }, [selectionResetToken, table]);
+
+  const selectedRows = table.getFilteredSelectedRowModel().rows;
+  const selectedDocuments = selectedRows.map((row) => row.original);
+  const cancellableDocuments = selectedDocuments.filter(
+    (document) => document.lastRun?.status === "queued" || document.lastRun?.status === "running",
+  );
+  const reprocessableDocuments = selectedDocuments.filter(
+    (document) => document.lastRun?.status !== "queued" && document.lastRun?.status !== "running",
+  );
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
   const actionBar = (
     <ActionBar
@@ -79,6 +97,24 @@ export function DocumentsTable({
       <ActionBarSelection>{selectedCount} selected</ActionBarSelection>
       <ActionBarSeparator />
       <ActionBarGroup>
+        {cancellableDocuments.length > 0 && onBulkCancelRequest ? (
+          <ActionBarItem
+            variant="secondary"
+            size="sm"
+            onSelect={() => onBulkCancelRequest(cancellableDocuments)}
+          >
+            Cancel runs ({cancellableDocuments.length})
+          </ActionBarItem>
+        ) : null}
+        {reprocessableDocuments.length > 0 && onBulkReprocessRequest ? (
+          <ActionBarItem
+            variant="outline"
+            size="sm"
+            onSelect={() => onBulkReprocessRequest(reprocessableDocuments)}
+          >
+            Reprocess ({reprocessableDocuments.length})
+          </ActionBarItem>
+        ) : null}
         <ActionBarItem variant="outline" size="sm" onSelect={() => table.toggleAllRowsSelected(false)}>
           Clear selection
         </ActionBarItem>

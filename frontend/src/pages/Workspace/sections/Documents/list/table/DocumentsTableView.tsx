@@ -14,6 +14,8 @@ import {
   type DocumentUploadResponse,
 } from "@/api/documents";
 import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
+import { ApiError } from "@/api/errors";
+import { cancelRun, createRun, createRunsBatch } from "@/api/runs/api";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
 import { SpinnerIcon } from "@/components/icons";
@@ -46,6 +48,10 @@ import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
 import { useDocumentsColumns } from "./documentsColumns";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
+import {
+  ReprocessPreflightDialog,
+  type ReprocessTargetDocument,
+} from "../upload/ReprocessPreflightDialog";
 
 type CurrentUser = {
   id: string;
@@ -56,7 +62,7 @@ type CurrentUser = {
 type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
-type RowMutation = "delete" | "assign" | "rename" | "tags";
+type RowMutation = "delete" | "assign" | "rename" | "tags" | "run";
 
 function tagKey(value: string) {
   return value.trim().toLowerCase();
@@ -99,6 +105,18 @@ function deriveFileType(name: string): DocumentRow["fileType"] {
   return inferFileType(name);
 }
 
+function isRunActive(document: DocumentRow) {
+  return document.lastRun?.status === "queued" || document.lastRun?.status === "running";
+}
+
+function toReprocessTargetDocument(document: DocumentRow): ReprocessTargetDocument {
+  return {
+    id: document.id,
+    name: document.name,
+    fileType: document.fileType,
+  };
+}
+
 export function DocumentsTableView({
   workspaceId,
   currentUser,
@@ -121,6 +139,9 @@ export function DocumentsTableView({
   const [renameTarget, setRenameTarget] = useState<DocumentRow | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
+  const [reprocessTargets, setReprocessTargets] = useState<ReprocessTargetDocument[]>([]);
+  const [isReprocessSubmitting, setIsReprocessSubmitting] = useState(false);
+  const [selectionResetToken, setSelectionResetToken] = useState(0);
   const renameMutation = useRenameDocumentMutation({ workspaceId });
 
   const [filterFlag, setFilterFlag] = useQueryState(
@@ -188,6 +209,9 @@ export function DocumentsTableView({
     setRenameTarget(null);
     setRenameError(null);
     setPendingMutations({});
+    setReprocessTargets([]);
+    setIsReprocessSubmitting(false);
+    setSelectionResetToken(0);
     setUpdatesAvailable(false);
     handledUploadsRef.current.clear();
     completedUploadsRef.current.clear();
@@ -420,6 +444,208 @@ export function DocumentsTableView({
       openDownload(url);
     },
     [openDownload, workspaceId],
+  );
+
+  const onReprocessRequest = useCallback((document: DocumentRow) => {
+    setReprocessTargets([toReprocessTargetDocument(document)]);
+  }, []);
+
+  const onBulkReprocessRequest = useCallback((selected: DocumentRow[]) => {
+    if (selected.length === 0) return;
+    setReprocessTargets(selected.map((document) => toReprocessTargetDocument(document)));
+  }, []);
+
+  const onCancelRunRequest = useCallback(
+    async (document: DocumentRow) => {
+      const runId = isRunActive(document) ? document.lastRun?.id : null;
+      if (!runId) {
+        notifyToast({
+          title: "Run is no longer active",
+          description: "Only queued or running runs can be cancelled.",
+          intent: "warning",
+        });
+        return;
+      }
+
+      markRowPending(document.id, "run");
+      try {
+        const cancelled = await cancelRun(runId);
+        const fallbackCreatedAt = document.lastRun?.createdAt ?? new Date().toISOString();
+        updateRow(document.id, {
+          lastRun: {
+            id: cancelled.id,
+            status: "cancelled",
+            createdAt: cancelled.created_at ?? fallbackCreatedAt,
+            startedAt: cancelled.started_at ?? null,
+            completedAt: cancelled.completed_at ?? new Date().toISOString(),
+            errorMessage: cancelled.failure_message ?? "Run cancelled by user",
+          },
+        });
+        notifyToast({
+          title: "Run cancelled",
+          description: `${document.name} was cancelled.`,
+          intent: "success",
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          notifyToast({
+            title: "Run already finished",
+            description: `${document.name} is already in a terminal state.`,
+            intent: "warning",
+          });
+          void refreshSnapshot();
+          return;
+        }
+        notifyToast({
+          title: "Unable to cancel run",
+          description: error instanceof Error ? error.message : "Please try again.",
+          intent: "danger",
+        });
+        void refreshSnapshot();
+      } finally {
+        clearRowPending(document.id, "run");
+      }
+    },
+    [clearRowPending, markRowPending, notifyToast, refreshSnapshot, updateRow],
+  );
+
+  const onBulkCancelRequest = useCallback(
+    async (selected: DocumentRow[]) => {
+      const cancellable = selected
+        .filter((document) => isRunActive(document) && Boolean(document.lastRun?.id))
+        .map((document) => ({
+          document,
+          runId: document.lastRun?.id as string,
+        }));
+      if (cancellable.length === 0) {
+        notifyToast({
+          title: "No active runs selected",
+          description: "Select queued or running rows to cancel.",
+          intent: "warning",
+        });
+        return;
+      }
+
+      cancellable.forEach(({ document }) => markRowPending(document.id, "run"));
+      try {
+        const settled = await Promise.allSettled(
+          cancellable.map(({ runId }) => cancelRun(runId)),
+        );
+
+        let cancelledCount = 0;
+        let skippedCount = 0;
+        let failedCount = 0;
+
+        settled.forEach((result, index) => {
+          const target = cancellable[index];
+          if (!target) return;
+          if (result.status === "fulfilled") {
+            cancelledCount += 1;
+            const fallbackCreatedAt = target.document.lastRun?.createdAt ?? new Date().toISOString();
+            updateRow(target.document.id, {
+              lastRun: {
+                id: result.value.id,
+                status: "cancelled",
+                createdAt: result.value.created_at ?? fallbackCreatedAt,
+                startedAt: result.value.started_at ?? null,
+                completedAt: result.value.completed_at ?? new Date().toISOString(),
+                errorMessage: result.value.failure_message ?? "Run cancelled by user",
+              },
+            });
+            return;
+          }
+          if (result.reason instanceof ApiError && result.reason.status === 409) {
+            skippedCount += 1;
+            return;
+          }
+          failedCount += 1;
+        });
+
+        const summaryParts = [`${cancelledCount} cancelled`];
+        if (skippedCount > 0) summaryParts.push(`${skippedCount} skipped`);
+        if (failedCount > 0) summaryParts.push(`${failedCount} failed`);
+        notifyToast({
+          title: "Cancel runs complete",
+          description: summaryParts.join(", "),
+          intent: failedCount > 0 ? "warning" : "success",
+        });
+        if (failedCount > 0 || skippedCount > 0) {
+          void refreshSnapshot();
+        }
+      } finally {
+        cancellable.forEach(({ document }) => clearRowPending(document.id, "run"));
+      }
+    },
+    [clearRowPending, markRowPending, notifyToast, refreshSnapshot, updateRow],
+  );
+
+  const onReprocessCancel = useCallback(() => {
+    if (isReprocessSubmitting) return;
+    setReprocessTargets([]);
+  }, [isReprocessSubmitting]);
+
+  const onReprocessConfirm = useCallback(
+    async (runOptions: { active_sheet_only?: boolean; input_sheet_names?: string[] }) => {
+      if (reprocessTargets.length === 0) return;
+
+      const requestedCount = reprocessTargets.length;
+      const targets = [...reprocessTargets];
+      targets.forEach((target) => markRowPending(target.id, "run"));
+      setIsReprocessSubmitting(true);
+      try {
+        if (requestedCount === 1) {
+          const target = targets[0]!;
+          await createRun(workspaceId, {
+            input_document_id: target.id,
+            active_sheet_only: runOptions.active_sheet_only,
+            input_sheet_names: runOptions.input_sheet_names,
+          });
+          notifyToast({
+            title: "Reprocess queued",
+            description: `${target.name} was queued for processing.`,
+            intent: "success",
+          });
+        } else {
+          const runs = await createRunsBatch(
+            workspaceId,
+            targets.map((target) => target.id),
+            {
+              active_sheet_only: runOptions.active_sheet_only,
+            },
+          );
+          const queuedCount = runs.length;
+          const skippedCount = Math.max(0, requestedCount - queuedCount);
+          const summaryParts = [`${queuedCount} queued`];
+          if (skippedCount > 0) summaryParts.push(`${skippedCount} skipped`);
+          notifyToast({
+            title: "Reprocess queued",
+            description: summaryParts.join(", "),
+            intent: "success",
+          });
+        }
+
+        setSelectionResetToken((value) => value + 1);
+        setReprocessTargets([]);
+      } catch (error) {
+        notifyToast({
+          title: "Unable to reprocess documents",
+          description: error instanceof Error ? error.message : "Please try again.",
+          intent: "danger",
+        });
+        void refreshSnapshot();
+      } finally {
+        targets.forEach((target) => clearRowPending(target.id, "run"));
+        setIsReprocessSubmitting(false);
+      }
+    },
+    [
+      clearRowPending,
+      markRowPending,
+      notifyToast,
+      refreshSnapshot,
+      reprocessTargets,
+      workspaceId,
+    ],
   );
 
   const onAssign = useCallback(
@@ -730,6 +956,8 @@ export function DocumentsTableView({
     onTagOptionsChange: handleTagOptionsChange,
     onRenameRequest,
     onDeleteRequest,
+    onReprocessRequest,
+    onCancelRunRequest,
     onDownloadOutput: handleDownloadOutput,
     onDownloadLatest: handleDownloadLatest,
     onDownloadVersion: handleDownloadVersion,
@@ -835,6 +1063,9 @@ export function DocumentsTableView({
           filterMode={filterMode}
           onToggleFilterMode={onToggleFilterMode}
           toolbarActions={toolbarContent}
+          onBulkReprocessRequest={onBulkReprocessRequest}
+          onBulkCancelRequest={onBulkCancelRequest}
+          selectionResetToken={selectionResetToken}
         />
       </div>
     </div>
@@ -857,6 +1088,16 @@ export function DocumentsTableView({
           if (renameError) setRenameError(null);
         }}
         onSubmit={onRenameConfirm}
+      />
+      <ReprocessPreflightDialog
+        open={reprocessTargets.length > 0}
+        workspaceId={workspaceId}
+        documents={reprocessTargets}
+        onConfirm={onReprocessConfirm}
+        onCancel={onReprocessCancel}
+        processingPaused={processingPaused}
+        configMissing={configMissing}
+        isSubmitting={isReprocessSubmitting}
       />
       <Dialog
         open={Boolean(deleteTarget)}
