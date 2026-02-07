@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, Security, status
 
 from ade_api.api.deps import get_api_keys_service, get_api_keys_service_read
 from ade_api.common.concurrency import require_if_match
@@ -39,6 +39,13 @@ ApiKeyPath = Annotated[
     Path(
         description="API key identifier",
         alias="apiKeyId",
+    ),
+]
+TenantUserIdQuery = Annotated[
+    UUID | None,
+    Query(
+        alias="userId",
+        description="Optional user identifier filter.",
     ),
 ]
 ApiKeysServiceDep = Annotated[ApiKeyService, Depends(get_api_keys_service)]
@@ -82,6 +89,47 @@ def _map_page(page: CursorPage[ApiKey]) -> ApiKeyPage:
 
 def _api_key_etag_token(record: ApiKey) -> str:
     return build_etag_token(record.id, record.revoked_at or record.created_at)
+
+
+# ---------------------------------------------------------------------------
+# Tenant admin: /apikeys
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/apikeys",
+    response_model=ApiKeyPage,
+    summary="List API keys across the tenant (admin)",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
+        status.HTTP_403_FORBIDDEN: {"description": "Requires api_keys.read_all global permission."},
+    },
+)
+def list_api_keys(
+    _: Annotated[None, Security(require_global("api_keys.read_all"))],
+    service: ApiKeysServiceReadDep,
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard(allowed_extra={"userId"}))],
+    user_id: TenantUserIdQuery = None,
+) -> ApiKeyPage:
+    resolved_sort = resolve_cursor_sort(
+        list_query.sort,
+        allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
+    )
+    result_page = service.list_all(
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
+        resolved_sort=resolved_sort,
+        user_id=user_id,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
+    )
+    return _map_page(result_page)
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import timedelta
 from uuid import UUID
 
@@ -129,6 +130,72 @@ class UsersService:
             ),
         )
         return result
+
+    def create_user(
+        self,
+        *,
+        email: str,
+        display_name: str | None = None,
+    ) -> UserOut:
+        """Create an active pre-provisioned user account."""
+
+        canonical_email = email.strip().lower()
+        cleaned_display_name = display_name.strip() if display_name else None
+        email_domain: str | None = None
+        if "@" in canonical_email:
+            _, email_domain = canonical_email.rsplit("@", 1)
+
+        logger.debug(
+            "users.create.start",
+            extra=log_context(
+                email_domain=email_domain,
+                has_display_name=bool(cleaned_display_name),
+            ),
+        )
+
+        existing = self._repo.get_by_email(canonical_email)
+        if existing is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Email already in use",
+            )
+
+        password_hash = hash_password(secrets.token_urlsafe(48))
+        try:
+            user = self._repo.create(
+                email=canonical_email,
+                hashed_password=password_hash,
+                display_name=cleaned_display_name,
+                is_active=True,
+                is_service_account=False,
+                is_superuser=False,
+                is_verified=True,
+            )
+        except IntegrityError as exc:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Email already in use",
+            ) from exc
+
+        rbac = RbacService(session=self._session)
+        global_user_role = rbac.get_role_by_slug(slug="global-user")
+        if global_user_role is not None:
+            rbac.assign_role_if_missing(
+                user_id=user.id,
+                role_id=global_user_role.id,
+                workspace_id=None,
+            )
+
+        self._session.flush()
+        logger.info(
+            "users.create.success",
+            extra=log_context(
+                user_id=str(user.id),
+                email_domain=email_domain,
+                has_display_name=bool(cleaned_display_name),
+            ),
+        )
+        return self._serialize_user(user)
 
     def update_user(
         self,

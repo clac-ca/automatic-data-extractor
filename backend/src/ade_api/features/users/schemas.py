@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
@@ -62,8 +62,30 @@ class UserUpdate(BaseSchema):
         return self
 
 
+class UserCreate(BaseSchema):
+    """Payload for pre-provisioning a user account."""
+
+    email: EmailStr = Field(
+        ...,
+        description="User email.",
+    )
+    display_name: str | None = Field(
+        default=None,
+        description="Optional display name for the user.",
+        max_length=255,
+    )
+
+    @field_validator("display_name")
+    @classmethod
+    def _normalize_create_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class UserPage(CursorPage[UserOut]):
     """Cursor-based collection of users."""
 
 
-__all__ = ["UserOut", "UserPage", "UserProfile", "UserUpdate"]
+__all__ = ["UserCreate", "UserOut", "UserPage", "UserProfile", "UserUpdate"]

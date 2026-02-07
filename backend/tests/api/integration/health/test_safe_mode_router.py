@@ -49,3 +49,19 @@ async def test_safe_mode_toggle_persists_state(
     assert safe_mode_component is not None
     assert safe_mode_component["status"] == "degraded"
     assert safe_mode_component["detail"] == "Maintenance window"
+
+
+async def test_safe_mode_read_requires_system_settings_permission(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    """Non-admins should be denied when reading safe mode status."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+
+    response = await async_client.get(
+        "/api/v1/system/safemode",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403

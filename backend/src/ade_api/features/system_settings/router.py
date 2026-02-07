@@ -27,6 +27,7 @@ router = APIRouter(
 )
 def read_safe_mode(
     service: Annotated[SafeModeService, Depends(get_safe_mode_service_read)],
+    _actor: Annotated[object, Security(require_global("system.settings.read"))],
 ) -> SafeModeStatus:
     """Return the current ADE safe mode status."""
 

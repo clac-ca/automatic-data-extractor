@@ -12,6 +12,7 @@ import {
 } from "@/api/documents";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarGroup } from "@/components/ui/avatar-group";
+import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 import { useSession } from "@/providers/auth/SessionContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
@@ -107,6 +108,7 @@ type AssignedDocumentItemProps = {
 
 export function WorkspaceSidebar() {
   const session = useSession();
+  const { canAccessOrganizationSettings } = useGlobalPermissions();
   const queryClient = useQueryClient();
   const { workspace, workspaces } = useWorkspaceContext();
   const presence = useWorkspacePresence();
@@ -122,6 +124,7 @@ export function WorkspaceSidebar() {
     runs: `${base}/runs`,
     configBuilder: `${base}/config-builder`,
     settings: `${base}/settings`,
+    organizationSettings: "/organization/settings",
   } as const;
 
   const navItems = useMemo<WorkspaceNavItem[]>(
@@ -312,6 +315,16 @@ export function WorkspaceSidebar() {
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {canAccessOrganizationSettings ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive(links.organizationSettings)}>
+                <NavLink to={links.organizationSettings}>
+                  <LayoutGrid />
+                  <span>Organization Settings</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
