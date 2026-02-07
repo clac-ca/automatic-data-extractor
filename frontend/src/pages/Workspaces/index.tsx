@@ -1,36 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { parseAsInteger, parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
+import { useMemo } from "react";
+import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 
-import { generatePath, useNavigate } from "react-router-dom";
+import { generatePath, Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Plus, Search } from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
-import { useSetDefaultWorkspaceMutation, useWorkspacesQuery } from "@/hooks/workspaces";
-import { writePreferredWorkspaceId } from "@/lib/workspacePreferences";
+import { useWorkspacesQuery } from "@/hooks/workspaces";
 import type { WorkspaceProfile } from "@/types/workspaces";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageState } from "@/components/layout";
-import { Alert } from "@/components/ui/alert";
-import { useDataTable } from "@/hooks/use-data-table";
-import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
-import { DataTablePagination } from "@/components/data-table/data-table-pagination";
-import { DataTableAdvancedToolbar } from "@/components/data-table/data-table-advanced-toolbar";
-import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
-import type { ColumnDef } from "@tanstack/react-table";
-import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
-import { DEFAULT_WORKSPACE_PAGE_SIZE } from "@/hooks/workspaces";
-import { getValidFilters } from "@/lib/data-table";
-import type { FilterJoinOperator } from "@/api/listing";
 
 export default function WorkspacesScreen() {
   return <WorkspacesIndexContent />;
 }
 
+const WORKSPACE_PAGE_SIZE = 25;
+const WORKSPACE_SORT = JSON.stringify([{ id: "name", desc: false }]);
+
 function WorkspacesIndexContent() {
   const navigate = useNavigate();
   const session = useSession();
-  const setDefaultWorkspaceMutation = useSetDefaultWorkspaceMutation();
-  const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
-  const [setDefaultError, setSetDefaultError] = useState<string | null>(null);
+
   const normalizedPermissions = useMemo(
     () => (session.user.permissions ?? []).map((key) => key.toLowerCase()),
     [session.user.permissions],
@@ -38,122 +29,26 @@ function WorkspacesIndexContent() {
   const canCreateWorkspace =
     normalizedPermissions.includes("workspaces.create") ||
     normalizedPermissions.includes("workspaces.manage_all");
-  const [filtersValue, setFiltersValue] = useQueryState("filters", parseAsString);
-  const [joinOperator] = useQueryState(
-    "joinOperator",
-    parseAsStringEnum(["and", "or"]).withDefault("and"),
-  );
-  const [page] = useQueryState("page", parseAsInteger.withDefault(1));
-  const [perPage] = useQueryState(
-    "perPage",
-    parseAsInteger.withDefault(DEFAULT_WORKSPACE_PAGE_SIZE),
-  );
-  const columns = useMemo<ColumnDef<WorkspaceProfile>[]>(() => {
-    return [
-      {
-        id: "name",
-        accessorKey: "name",
-        enableSorting: true,
-        enableColumnFilter: true,
-        meta: { label: "Name", variant: "text" },
-      },
-      {
-        id: "slug",
-        accessorKey: "slug",
-        enableSorting: true,
-        enableColumnFilter: true,
-        meta: { label: "Slug", variant: "text" },
-      },
-      {
-        id: "isDefault",
-        accessorKey: "is_default",
-        enableSorting: true,
-        enableColumnFilter: true,
-        meta: { label: "Default", variant: "boolean" },
-      },
-      {
-        id: "processingPaused",
-        accessorKey: "processing_paused",
-        enableSorting: true,
-        enableColumnFilter: true,
-        meta: { label: "Processing paused", variant: "boolean" },
-      },
-    ];
-  }, []);
-  const columnIds = useMemo(
-    () => new Set(columns.map((column) => column.id).filter(Boolean) as string[]),
-    [columns],
-  );
-  const [sorting] = useQueryState(
-    "sort",
-    getSortingStateParser<WorkspaceProfile>(columnIds).withDefault([
-      { id: "name", desc: false },
-    ]),
-  );
-  const normalizedFilters = useMemo(() => {
-    if (!filtersValue) return [];
-    const parsed =
-      getFiltersStateParser<WorkspaceProfile>(columnIds).parse(filtersValue) ?? [];
-    return getValidFilters(parsed);
-  }, [filtersValue, columnIds]);
-  const effectiveSort = sorting?.length ? JSON.stringify(sorting) : null;
+  const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+  const [searchValue, setSearchValue] = useQueryState("q", parseAsString);
+  const searchQuery = (searchValue ?? "").trim();
   const workspacesQuery = useWorkspacesQuery({
     page,
-    pageSize: perPage,
-    sort: effectiveSort,
-    filters: normalizedFilters.length > 0 ? normalizedFilters : undefined,
-    joinOperator: joinOperator as FilterJoinOperator,
+    pageSize: WORKSPACE_PAGE_SIZE,
+    sort: WORKSPACE_SORT,
+    q: searchQuery.length > 0 ? searchQuery : null,
+    includeTotal: true,
   });
   const workspacesPage = workspacesQuery.data;
   const workspaces: WorkspaceProfile[] = useMemo(
     () => workspacesPage?.items ?? [],
     [workspacesPage?.items],
   );
-  const goToWorkspace = useCallback(
-    (workspaceId: string) =>
-      navigate(generatePath("/workspaces/:workspaceId/documents", { workspaceId })),
-    [navigate],
-  );
-
-  const handleResetFilters = useCallback(() => {
-    setFiltersValue(null);
-  }, [setFiltersValue]);
-
-  const handleSetDefaultWorkspace = useCallback(
-    async (workspace: WorkspaceProfile) => {
-      setSetDefaultError(null);
-      setPendingWorkspaceId(workspace.id);
-      try {
-        await setDefaultWorkspaceMutation.mutateAsync(workspace.id);
-        writePreferredWorkspaceId(workspace.id);
-      } catch (error) {
-        console.warn("workspaces.set_default.failed", error);
-        setSetDefaultError("Unable to set the default workspace. Please try again.");
-      } finally {
-        setPendingWorkspaceId(null);
-      }
-    },
-    [setDefaultWorkspaceMutation],
-  );
-
-  const { table } = useDataTable({
-    data: workspaces,
-    columns,
-    pageCount:
-      typeof workspacesPage?.meta.totalCount === "number"
-        ? Math.max(1, Math.ceil(workspacesPage.meta.totalCount / perPage))
-        : 1,
-    initialState: {
-      sorting: [{ id: "name", desc: false }],
-      pagination: { pageIndex: 0, pageSize: DEFAULT_WORKSPACE_PAGE_SIZE },
-    },
-    enableAdvancedFilter: true,
-    clearOnDefault: true,
-  });
-
-  useEffect(() => {
-    table.setPageIndex(0);
-  }, [filtersValue, table]);
+  const totalCount =
+    typeof workspacesPage?.meta.totalCount === "number" ? workspacesPage.meta.totalCount : workspaces.length;
+  const pageCount = Math.max(1, Math.ceil(totalCount / WORKSPACE_PAGE_SIZE));
+  const canPreviousPage = page > 1;
+  const canNextPage = page < pageCount;
 
   if (workspacesQuery.isLoading) {
     return (
@@ -180,19 +75,45 @@ function WorkspacesIndexContent() {
     );
   }
 
+  const handleSearchChange = (value: string) => {
+    if (page > 1) {
+      void setPage(1);
+    }
+    void setSearchValue(value.length > 0 ? value : null);
+  };
+
+  const handlePreviousPage = () => {
+    if (!canPreviousPage) {
+      return;
+    }
+    void setPage(page - 1);
+  };
+
+  const handleNextPage = () => {
+    if (!canNextPage) {
+      return;
+    }
+    void setPage(page + 1);
+  };
+
+  const clearSearch = () => {
+    if (page > 1) {
+      void setPage(1);
+    }
+    void setSearchValue(null);
+  };
+
   const mainContent =
-    workspaces.length === 0 && normalizedFilters.length > 0 ? (
-      <div className="space-y-4">
-        <PageState
-          title="No workspaces matching your filters"
-          description="Try adjusting or clearing the filters."
-          action={
-            <Button variant="secondary" onClick={handleResetFilters}>
-              Clear filters
-            </Button>
-          }
-        />
-      </div>
+    workspaces.length === 0 && searchQuery.length > 0 ? (
+      <PageState
+        title="No workspaces found"
+        description="Try a different name or slug."
+        action={
+          <Button variant="secondary" onClick={clearSearch}>
+            Clear search
+          </Button>
+        }
+      />
     ) : workspaces.length === 0 ? (
       canCreateWorkspace ? (
         <EmptyStateCreate onCreate={() => navigate("/workspaces/new")} />
@@ -209,132 +130,93 @@ function WorkspacesIndexContent() {
         </div>
       )
     ) : (
-      <div className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-soft">
-        <header>
-          <h1 id="page-title" className="text-2xl font-semibold text-foreground">
-            Workspaces
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Select a workspace to jump straight into documents.</p>
-        </header>
-        {setDefaultError ? (
-          <Alert tone="danger" heading="We couldn't update your default workspace">
-            {setDefaultError}
-          </Alert>
-        ) : null}
-        <DataTableAdvancedToolbar table={table}>
-          <DataTableSortList table={table} align="start" />
-          <DataTableFilterList table={table} align="start" />
-          <div className="ml-auto">
-            <Button size="sm" variant="ghost" onClick={handleResetFilters}>
-              Reset
-            </Button>
+      <div className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-soft">
+        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 id="page-title" className="text-2xl font-semibold text-foreground">
+              Workspaces
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Select a workspace to jump straight into documents.
+            </p>
           </div>
-        </DataTableAdvancedToolbar>
-        <section className="grid gap-5 lg:grid-cols-2">
+          {canCreateWorkspace ? (
+            <Button onClick={() => navigate("/workspaces/new")} className="w-full md:w-auto">
+              <Plus className="size-4" />
+              New workspace
+            </Button>
+          ) : null}
+        </header>
+
+        <div className="relative max-w-md">
+          <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+          <Input
+            type="search"
+            aria-label="Search workspaces"
+            placeholder="Search workspaces"
+            className="pl-9"
+            value={searchValue ?? ""}
+            onChange={(event) => handleSearchChange(event.target.value)}
+          />
+        </div>
+
+        <ul className="overflow-hidden rounded-xl border border-border divide-y divide-border">
           {workspaces.map((workspace) => {
-            const isUpdatingDefault =
-              setDefaultWorkspaceMutation.isPending && pendingWorkspaceId === workspace.id;
+            const workspacePath = generatePath("/workspaces/:workspaceId/documents", {
+              workspaceId: workspace.id,
+            });
+
             return (
-              <div
+              <li
                 key={workspace.id}
-                className="group relative rounded-xl border border-border bg-card p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background"
+                className="bg-background transition-colors hover:bg-muted/30"
               >
-                <button
-                  type="button"
-                  onClick={() => goToWorkspace(workspace.id)}
-                  className="w-full text-left focus-visible:outline-none"
+                <Link
+                  to={workspacePath}
                   aria-label={`Open workspace ${workspace.name}`}
+                  className="group flex items-center justify-between gap-4 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1 pr-24">
-                      <h2 className="text-lg font-semibold text-foreground">{workspace.name}</h2>
-                      <p className="text-sm text-muted-foreground">Slug: {workspace.slug}</p>
-                    </div>
+                  <div className="min-w-0">
+                    <h2 className="truncate font-semibold text-foreground">{workspace.name}</h2>
+                    <p className="mt-0.5 text-sm text-muted-foreground">Slug: {workspace.slug}</p>
                   </div>
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">Permissions</p>
-                  <p className="text-sm text-muted-foreground">
-                    {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
-                  </p>
-                </button>
-                <div className="absolute right-5 top-5">
-                  {workspace.is_default ? (
-                    <span className="rounded-full bg-muted px-2 py-1 text-xs font-semibold text-foreground">Default</span>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      isLoading={isUpdatingDefault}
-                      disabled={isUpdatingDefault}
-                      onClick={() => void handleSetDefaultWorkspace(workspace)}
-                    >
-                      Set as default
-                    </Button>
-                  )}
-                </div>
-              </div>
+                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                </Link>
+              </li>
             );
           })}
-        </section>
-        <div className="pt-2">
-          <DataTablePagination table={table} />
-        </div>
+        </ul>
+
+        {pageCount > 1 ? (
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={!canPreviousPage}>
+              Previous
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Page {page} of {pageCount}
+            </p>
+            <Button variant="outline" size="sm" onClick={handleNextPage} disabled={!canNextPage}>
+              Next
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
 
-  return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div>{mainContent}</div>
-        <aside className="space-y-6">
-          <DirectorySidebar canCreate={canCreateWorkspace} onCreate={() => navigate("/workspaces/new")} />
-        </aside>
-      </div>
-    </div>
-  );
+  return <div className="mx-auto w-full max-w-6xl px-4 py-8">{mainContent}</div>;
 }
-
-function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
-  return (
-    <div className="space-y-6">
-      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspace tips</p>
-          <h2 className="text-sm font-semibold text-foreground">Why multiple workspaces?</h2>
-        </header>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Segment teams by business unit or client, control access with roles, and tailor extraction settings per
-          workspace. Everything stays organised and secure.
-        </p>
-        {canCreate ? (
-          <Button variant="secondary" onClick={onCreate} className="w-full">
-            New workspace
-          </Button>
-        ) : null}
-      </section>
-      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Need a hand?</p>
-          <h2 className="text-sm font-semibold text-foreground">Workspace setup checklist</h2>
-        </header>
-        <ul className="space-y-2 text-xs text-muted-foreground">
-          <li>Add at least one additional administrator.</li>
-          <li>Review configurations before uploading production files.</li>
-          <li>Review workspace permissions for external collaborators.</li>
-        </ul>
-      </section>
-    </div>
-  );
-}
-
 
 function EmptyStateCreate({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-border bg-card p-10 text-center shadow-soft">
-      <h1 id="page-title" className="text-2xl font-semibold text-foreground">No workspaces yet</h1>
+      <h1 id="page-title" className="text-2xl font-semibold text-foreground">
+        No workspaces yet
+      </h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Create your first workspace to start uploading configuration sets and documents.
       </p>
       <Button onClick={onCreate} className="mt-6">
+        <Plus className="size-4" />
         Create workspace
       </Button>
     </div>

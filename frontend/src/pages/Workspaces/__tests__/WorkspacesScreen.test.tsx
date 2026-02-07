@@ -1,11 +1,9 @@
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { render, screen } from "@/test/test-utils";
 import WorkspacesScreen from "..";
 
 const mockUseWorkspacesQuery = vi.fn();
-const mockUseSetDefaultWorkspaceMutation = vi.fn();
 
 vi.mock("@/providers/auth/SessionContext", () => ({
   useSession: () => ({
@@ -15,51 +13,38 @@ vi.mock("@/providers/auth/SessionContext", () => ({
 
 vi.mock("@/hooks/workspaces", () => ({
   useWorkspacesQuery: (...args: unknown[]) => mockUseWorkspacesQuery(...args),
-  useSetDefaultWorkspaceMutation: () => mockUseSetDefaultWorkspaceMutation(),
-  DEFAULT_WORKSPACE_PAGE_SIZE: 200,
-}));
-
-vi.mock("@/lib/workspacePreferences", () => ({
-  writePreferredWorkspaceId: () => undefined,
 }));
 
 describe("WorkspacesScreen", () => {
   beforeEach(() => {
     mockUseWorkspacesQuery.mockReset();
-    mockUseSetDefaultWorkspaceMutation.mockReset();
   });
 
-  it("calls the default workspace mutation for a non-default workspace", async () => {
-    const mutateAsync = vi.fn().mockResolvedValue(undefined);
-    mockUseSetDefaultWorkspaceMutation.mockReturnValue({
-      mutateAsync,
-      isPending: false,
-    });
-
-    const workspaces = [
-      {
-        id: "alpha",
-        name: "Alpha",
-        slug: "alpha",
-        roles: [],
-        permissions: [],
-        is_default: false,
-      },
-      {
-        id: "beta",
-        name: "Beta",
-        slug: "beta",
-        roles: [],
-        permissions: [],
-        is_default: true,
-      },
-    ];
-
+  it("renders a minimal workspace selector with search and simple rows", () => {
     mockUseWorkspacesQuery.mockReturnValue({
       data: {
-        items: workspaces,
+        items: [
+          {
+            id: "alpha",
+            name: "Alpha",
+            slug: "alpha",
+            roles: [],
+            permissions: ["workspace.documents.read"],
+            is_default: false,
+            processing_paused: false,
+          },
+          {
+            id: "beta",
+            name: "Beta",
+            slug: "beta",
+            roles: [],
+            permissions: ["workspace.documents.manage"],
+            is_default: true,
+            processing_paused: true,
+          },
+        ],
         meta: {
-          limit: 2,
+          limit: 25,
           hasMore: false,
           nextCursor: null,
           totalIncluded: true,
@@ -75,10 +60,40 @@ describe("WorkspacesScreen", () => {
 
     render(<WorkspacesScreen />);
 
-    const setDefaultButton = screen.getByRole("button", { name: "Set as default" });
+    expect(screen.getByRole("searchbox", { name: "Search workspaces" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open workspace Alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open workspace Beta" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sort" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Filter" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Set as default" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Permissions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Processing active")).not.toBeInTheDocument();
+    expect(screen.queryByText("Processing paused")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "New workspace" })).toHaveLength(1);
+  });
 
-    await userEvent.click(setDefaultButton);
+  it("shows a no-results message for a search query", () => {
+    mockUseWorkspacesQuery.mockReturnValue({
+      data: {
+        items: [],
+        meta: {
+          limit: 25,
+          hasMore: false,
+          nextCursor: null,
+          totalIncluded: true,
+          totalCount: 0,
+          changesCursor: "0",
+        },
+        facets: null,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
 
-    expect(mutateAsync).toHaveBeenCalledWith("alpha");
+    render(<WorkspacesScreen />, { route: "/workspaces?q=nomatch" });
+
+    expect(screen.getByText("No workspaces found")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear search" })).toBeInTheDocument();
   });
 });
