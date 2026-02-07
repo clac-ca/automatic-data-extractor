@@ -24,6 +24,11 @@ def test_templates_materialize_and_load(
     config_path = storage.config_path(workspace_id, configuration_id)
     assert (config_path / "src" / "ade_config" / "__init__.py").is_file()
     assert config_path.exists()
+    pyproject = (config_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert "\"ade-engine\"," in pyproject
+    assert "[tool.uv.sources]" in pyproject
+    assert "ade-engine = { git = " in pyproject
+    assert "ade-engine @" not in pyproject
 
 
 def test_import_archive_does_not_mutate_pyproject_dependencies(tmp_path: Path) -> None:
