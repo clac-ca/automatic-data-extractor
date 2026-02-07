@@ -185,6 +185,8 @@ export function DocumentsTableView({
 
   useEffect(() => {
     setDeleteTarget(null);
+    setRenameTarget(null);
+    setRenameError(null);
     setPendingMutations({});
     setUpdatesAvailable(false);
     handledUploadsRef.current.clear();
