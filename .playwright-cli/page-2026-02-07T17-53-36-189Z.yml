@@ -1,0 +1,469 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - list:
+                  - listitem:
+                    - button:
+                      - generic:
+                        - generic: D
+            - generic:
+              - generic:
+                - generic:
+                  - generic: Workspace
+                  - generic:
+                    - generic:
+                      - generic: DU
+                - generic:
+                  - list:
+                    - listitem:
+                      - link:
+                        - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/documents
+                        - img
+                    - listitem:
+                      - link:
+                        - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/runs
+                        - img
+                    - listitem:
+                      - link:
+                        - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/config-builder
+                        - img
+            - generic:
+              - list:
+                - listitem:
+                  - link:
+                    - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/settings
+                    - img
+            - button
+      - generic:
+        - banner:
+          - generic:
+            - generic:
+              - button:
+                - img
+                - generic: Toggle Sidebar
+            - generic:
+              - generic:
+                - generic: Search documents
+                - generic:
+                  - generic:
+                    - img
+                    - combobox [expanded]
+                  - generic: ⌘ K
+            - generic:
+              - generic:
+                - generic:
+                  - button:
+                    - img
+                  - button:
+                    - img
+                    - img
+                    - generic: Theme
+                - button:
+                  - generic:
+                    - generic: DU
+        - main:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - toolbar:
+                          - generic:
+                            - button:
+                              - img
+                              - text: Assignee
+                            - button:
+                              - img
+                              - text: Tags
+                            - button:
+                              - img
+                              - text: Run status
+                            - button:
+                              - img
+                              - generic:
+                                - generic: Created
+                            - button:
+                              - img
+                              - text: Type
+                            - button:
+                              - img
+                              - text: Uploader
+                          - generic:
+                            - button:
+                              - img
+                              - text: Sort
+                              - generic: "1"
+                            - status
+                            - generic:
+                              - button: Advanced filters
+                              - generic:
+                                - generic:
+                                  - generic: Live
+                                  - generic: Just you
+                                - button:
+                                  - img
+                                  - text: Upload
+                            - combobox:
+                              - img
+                              - text: View
+                        - generic:
+                          - generic:
+                            - generic:
+                              - table:
+                                - rowgroup:
+                                  - row:
+                                    - columnheader:
+                                      - generic:
+                                        - checkbox
+                                    - columnheader:
+                                      - button:
+                                        - text: Document
+                                        - img
+                                    - columnheader:
+                                      - generic: Assignee
+                                    - columnheader:
+                                      - button: Tags
+                                    - columnheader:
+                                      - button:
+                                        - text: Run status
+                                        - img
+                                    - columnheader:
+                                      - button:
+                                        - text: Last Run
+                                        - img
+                                    - columnheader:
+                                      - button:
+                                        - text: Updated
+                                        - img
+                                    - columnheader:
+                                      - button:
+                                        - text: Created
+                                        - img
+                                    - columnheader
+                                - rowgroup:
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - checkbox
+                                    - cell:
+                                      - button:
+                                        - generic:
+                                          - generic:
+                                            - generic: AdvantageEle_251031__ORIGINAL.xls
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                            - generic: Unassigned
+                                          - img
+                                    - cell:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - img
+                                            - generic:
+                                              - generic: Add tags
+                                    - cell:
+                                      - generic:
+                                        - generic: No runs
+                                    - cell: "-"
+                                    - cell: 07/02/2026, 09:49:21
+                                    - cell: 07/02/2026, 09:49:21
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button [disabled]:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - checkbox
+                                    - cell:
+                                      - button:
+                                        - generic:
+                                          - generic:
+                                            - generic: ACTSS_251031__ORIGINAL.xlsx
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                            - generic: Unassigned
+                                          - img
+                                    - cell:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - img
+                                            - generic:
+                                              - generic: Add tags
+                                    - cell:
+                                      - generic:
+                                        - generic: No runs
+                                    - cell: "-"
+                                    - cell: 07/02/2026, 09:49:21
+                                    - cell: 07/02/2026, 09:49:21
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button [disabled]:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - checkbox
+                                    - cell:
+                                      - button:
+                                        - generic:
+                                          - generic:
+                                            - generic: A&RMetalIndu_251201-H&W__ORIGINAL.xlsx
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                            - generic: Unassigned
+                                          - img
+                                    - cell:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - img
+                                            - generic:
+                                              - generic: Add tags
+                                    - cell:
+                                      - generic:
+                                        - generic: No runs
+                                    - cell: "-"
+                                    - cell: 07/02/2026, 09:37:21
+                                    - cell: 07/02/2026, 09:37:21
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button [disabled]:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - checkbox
+                                    - cell:
+                                      - button:
+                                        - generic:
+                                          - generic:
+                                            - generic: ACTSS_250831__ORIGINAL.xlsx
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                            - generic: Unassigned
+                                          - img
+                                    - cell:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - img
+                                            - generic:
+                                              - generic: Add tags
+                                    - cell:
+                                      - generic:
+                                        - generic: No runs
+                                    - cell: "-"
+                                    - cell: 07/02/2026, 09:36:27
+                                    - cell: 07/02/2026, 09:36:27
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button [disabled]:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - checkbox
+                                    - cell:
+                                      - button:
+                                        - generic:
+                                          - generic:
+                                            - generic: A&RMetal_250320_01.BENE-APR 2025__ORIGINAL.xlsx
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                            - generic: Unassigned
+                                          - img
+                                    - cell:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - img
+                                            - generic:
+                                              - generic: Add tags
+                                    - cell:
+                                      - generic:
+                                        - generic: No runs
+                                    - cell: "-"
+                                    - cell: 07/02/2026, 09:35:15
+                                    - cell: 07/02/2026, 09:35:15
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button [disabled]:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                  - row:
+                                    - cell:
+                                      - generic:
+                                        - checkbox
+                                    - cell:
+                                      - button:
+                                        - generic:
+                                          - generic:
+                                            - generic: 1811965Ontar_251031__ORIGINAL.xlsx
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - generic:
+                                            - img
+                                            - generic: Unassigned
+                                          - img
+                                    - cell:
+                                      - generic:
+                                        - generic:
+                                          - button:
+                                            - img
+                                            - generic:
+                                              - generic: Add tags
+                                    - cell:
+                                      - generic:
+                                        - generic: No runs
+                                    - cell: "-"
+                                    - cell: 07/02/2026, 09:49:02
+                                    - cell: 07/02/2026, 09:35:00
+                                    - cell:
+                                      - generic:
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button [disabled]:
+                                          - img
+                                        - button:
+                                          - img
+                                        - button:
+                                          - img
+                          - generic:
+                            - generic:
+                              - generic: 0 of 6 row(s) selected.
+                              - generic:
+                                - generic:
+                                  - paragraph: Rows per page
+                                  - combobox:
+                                    - generic: "20"
+                                    - img
+                                - generic: Page 1 of 1
+                                - generic:
+                                  - button [disabled]:
+                                    - img
+                                  - button [disabled]:
+                                    - img
+                                  - button [disabled]:
+                                    - img
+                                  - button [disabled]:
+                                    - img
+  - dialog "Upload documents" [ref=e390]:
+    - generic [ref=e391]:
+      - heading "Upload documents" [level=2] [ref=e392]
+      - paragraph [ref=e393]: upload.xlsx
+    - generic [ref=e394]:
+      - generic [ref=e395]:
+        - generic [ref=e396]:
+          - paragraph [ref=e397]: Worksheet processing
+          - paragraph [ref=e398]: Choose how worksheets should be processed after upload.
+        - paragraph [ref=e399]: Applies to this upload.
+      - generic [ref=e400]:
+        - generic [ref=e401]:
+          - radio "Active sheet only" [checked] [active] [ref=e402]
+          - generic [ref=e403]:
+            - generic [ref=e404]: Active sheet only
+            - generic [ref=e405]: Default. Processes the workbook active sheet when applicable.
+        - generic [ref=e406]:
+          - radio "All sheets" [ref=e407]
+          - generic [ref=e408]:
+            - generic [ref=e409]: All sheets
+            - generic [ref=e410]: Processes every worksheet in each workbook.
+        - generic [ref=e411]:
+          - radio "Specific sheets" [ref=e412]
+          - generic [ref=e413]:
+            - generic [ref=e414]: Specific sheets
+            - generic [ref=e415]: Choose one or more worksheets from this file.
+      - generic [ref=e417]:
+        - generic [ref=e418]:
+          - paragraph [ref=e419]: Worksheets (2)
+          - generic [ref=e420]:
+            - button "Select all" [disabled]
+            - button "Clear" [disabled]
+        - generic [ref=e421]:
+          - generic [ref=e422]:
+            - checkbox "S1" [disabled] [ref=e423]
+            - generic [ref=e424]: S1
+          - generic [ref=e425]:
+            - checkbox "S2" [disabled] [ref=e426]
+            - generic [ref=e427]: S2
+        - paragraph [ref=e428]: Switch to Specific sheets to choose worksheets manually.
+    - generic [ref=e430]:
+      - generic [ref=e431]:
+        - paragraph [ref=e432]: upload.xlsx
+        - paragraph [ref=e433]: XLSX · 16 KB
+      - button "Remove file" [ref=e434]:
+        - img
+    - generic [ref=e435]:
+      - button "Cancel" [ref=e436]
+      - button "Upload" [ref=e437]:
+        - img
+        - text: Upload
+    - button "Close" [ref=e438]:
+      - img
+      - generic [ref=e439]: Close

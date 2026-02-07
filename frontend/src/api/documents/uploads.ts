@@ -2,7 +2,10 @@ import type { components } from "@/types";
 import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@/lib/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
-export type DocumentUploadRunOptions = components["schemas"]["RunCreateOptionsBase"];
+export interface DocumentUploadRunOptions {
+  readonly input_sheet_names?: string[] | null;
+  readonly active_sheet_only?: boolean;
+}
 export type DocumentConflictMode = components["schemas"]["DocumentConflictMode"];
 
 interface UploadDocumentOptions {

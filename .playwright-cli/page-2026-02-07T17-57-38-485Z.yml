@@ -1,0 +1,390 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e37]:
+    - generic [ref=e40]:
+      - list [ref=e43]:
+        - listitem [ref=e44]:
+          - button "D" [ref=e45]:
+            - generic [ref=e47]: D
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - generic [ref=e51]: Workspace
+          - generic [ref=e54]: DU
+        - list [ref=e56]:
+          - listitem [ref=e57]:
+            - link "Documents" [ref=e58] [cursor=pointer]:
+              - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/documents
+              - img [ref=e59]
+              - generic: Documents
+          - listitem [ref=e65]:
+            - link "Runs" [ref=e66] [cursor=pointer]:
+              - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/runs
+              - img [ref=e67]
+              - generic: Runs
+          - listitem [ref=e70]:
+            - link "Config Builder" [ref=e71] [cursor=pointer]:
+              - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/config-builder
+              - img [ref=e72]
+              - generic: Config Builder
+      - list [ref=e75]:
+        - listitem [ref=e76]:
+          - link "Workspace Settings" [ref=e77] [cursor=pointer]:
+            - /url: /workspaces/019c3929-726c-7dbc-8bdd-5b7efccd86dc/settings
+            - img [ref=e78]
+            - generic: Workspace Settings
+      - button "Toggle Sidebar" [ref=e81]
+    - generic [ref=e82]:
+      - banner [ref=e83]:
+        - generic [ref=e84]:
+          - button "Toggle Sidebar" [ref=e86]:
+            - img
+            - generic [ref=e87]: Toggle Sidebar
+          - generic [ref=e89]:
+            - generic [ref=e90]: Search documents
+            - generic [ref=e91]:
+              - generic [ref=e92]:
+                - img [ref=e93]
+                - combobox "Search documents" [expanded] [ref=e96]
+              - generic: ⌘ K
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - button "Toggle color mode" [ref=e100]:
+                - img [ref=e101]
+              - button "Select theme" [ref=e104]:
+                - img [ref=e105]
+                - img [ref=e111]
+                - generic [ref=e113]: Theme
+            - button "Open profile menu" [ref=e114]:
+              - generic [ref=e116]: DU
+      - main [ref=e117]:
+        - generic [ref=e124]:
+          - toolbar [ref=e125]:
+            - generic [ref=e126]:
+              - button "Assignee" [ref=e127]:
+                - img
+                - text: Assignee
+              - button "Tags" [ref=e128]:
+                - img
+                - text: Tags
+              - button "Run status" [ref=e129]:
+                - img
+                - text: Run status
+              - button "Created" [ref=e130]:
+                - img
+                - generic [ref=e132]: Created
+              - button "Type" [ref=e133]:
+                - img
+                - text: Type
+              - button "Uploader" [ref=e134]:
+                - img
+                - text: Uploader
+            - generic [ref=e135]:
+              - button "Sort 1" [ref=e136]:
+                - img
+                - text: Sort
+                - generic [ref=e137]: "1"
+              - status [ref=e138]
+              - generic [ref=e139]:
+                - button "Advanced filters" [ref=e140]
+                - generic [ref=e141]:
+                  - generic [ref=e142]:
+                    - generic [ref=e143]: Live
+                    - generic [ref=e145]: Just you
+                  - button "1 conflict 1" [ref=e472]:
+                    - img
+                    - text: 1 conflict
+                    - generic [ref=e473]: "1"
+                  - button "Upload" [ref=e146]:
+                    - img
+                    - text: Upload
+              - combobox "Toggle columns" [ref=e148]:
+                - img
+                - text: View
+          - generic [ref=e149]:
+            - table [ref=e152]:
+              - rowgroup [ref=e153]:
+                - row "Select all rows Document Assignee Tags Run status Last Run Updated Created" [ref=e154]:
+                  - columnheader "Select all rows" [ref=e155]:
+                    - checkbox "Select all rows" [ref=e475]
+                  - columnheader "Document" [ref=e158]:
+                    - button "Document" [ref=e476]:
+                      - text: Document
+                      - img [ref=e477]
+                  - columnheader "Assignee" [ref=e163]:
+                    - generic [ref=e480]: Assignee
+                  - columnheader "Tags" [ref=e165]:
+                    - button "Tags" [ref=e481]
+                  - columnheader "Run status" [ref=e167]:
+                    - button "Run status" [ref=e482]:
+                      - text: Run status
+                      - img [ref=e483]
+                  - columnheader "Last Run" [ref=e172]:
+                    - button "Last Run" [ref=e486]:
+                      - text: Last Run
+                      - img [ref=e487]
+                  - columnheader "Updated" [ref=e177]:
+                    - button "Updated" [ref=e490]:
+                      - text: Updated
+                      - img [ref=e491]
+                  - columnheader "Created" [ref=e182]:
+                    - button "Created" [ref=e494]:
+                      - text: Created
+                      - img [ref=e495]
+                  - columnheader [ref=e186]
+              - rowgroup [ref=e187]:
+                - row "Select row upload.xlsx Unassigned Edit tags No runs - 07/02/2026, 09:53:36 07/02/2026, 09:53:36 Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e188]:
+                  - cell "Select row" [ref=e189]:
+                    - checkbox "Select row" [ref=e498]
+                  - cell "upload.xlsx" [ref=e192]:
+                    - button "upload.xlsx" [ref=e499]:
+                      - generic "upload.xlsx" [ref=e502]
+                  - cell "Unassigned" [ref=e197]:
+                    - button "Unassigned" [ref=e504]:
+                      - generic [ref=e505]:
+                        - img
+                        - generic [ref=e506]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e202]:
+                    - button "Edit tags" [ref=e509]:
+                      - img
+                      - generic [ref=e511]: Add tags
+                  - cell "No runs" [ref=e208]:
+                    - generic [ref=e513]: No runs
+                  - cell "-" [ref=e211]
+                  - cell "07/02/2026, 09:53:36" [ref=e212]
+                  - cell "07/02/2026, 09:53:36" [ref=e213]
+                  - cell "Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e214]:
+                    - generic [ref=e514]:
+                      - button "Open preview" [ref=e515]:
+                        - img
+                      - button "Open activity" [ref=e516]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v1)" [ref=e517]:
+                        - img
+                      - button "More actions" [ref=e518]:
+                        - img
+                - row "Select row AdvantageEle_251031__ORIGINAL.xls Unassigned Edit tags No runs - 07/02/2026, 09:49:21 07/02/2026, 09:49:21 Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e220]:
+                  - cell "Select row" [ref=e221]:
+                    - checkbox "Select row" [ref=e520]
+                  - cell "AdvantageEle_251031__ORIGINAL.xls" [ref=e224]:
+                    - button "AdvantageEle_251031__ORIGINAL.xls" [ref=e521]:
+                      - generic "AdvantageEle_251031__ORIGINAL.xls" [ref=e524]
+                  - cell "Unassigned" [ref=e229]:
+                    - button "Unassigned" [ref=e526]:
+                      - generic [ref=e527]:
+                        - img
+                        - generic [ref=e528]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e234]:
+                    - button "Edit tags" [ref=e531]:
+                      - img
+                      - generic [ref=e533]: Add tags
+                  - cell "No runs" [ref=e240]:
+                    - generic [ref=e535]: No runs
+                  - cell "-" [ref=e243]
+                  - cell "07/02/2026, 09:49:21" [ref=e244]
+                  - cell "07/02/2026, 09:49:21" [ref=e245]
+                  - cell "Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e246]:
+                    - generic [ref=e536]:
+                      - button "Open preview" [ref=e537]:
+                        - img
+                      - button "Open activity" [ref=e538]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v1)" [ref=e539]:
+                        - img
+                      - button "More actions" [ref=e540]:
+                        - img
+                - row "Select row ACTSS_251031__ORIGINAL.xlsx Unassigned Edit tags No runs - 07/02/2026, 09:49:21 07/02/2026, 09:49:21 Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e252]:
+                  - cell "Select row" [ref=e253]:
+                    - checkbox "Select row" [ref=e542]
+                  - cell "ACTSS_251031__ORIGINAL.xlsx" [ref=e256]:
+                    - button "ACTSS_251031__ORIGINAL.xlsx" [ref=e543]:
+                      - generic "ACTSS_251031__ORIGINAL.xlsx" [ref=e546]
+                  - cell "Unassigned" [ref=e261]:
+                    - button "Unassigned" [ref=e548]:
+                      - generic [ref=e549]:
+                        - img
+                        - generic [ref=e550]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e266]:
+                    - button "Edit tags" [ref=e553]:
+                      - img
+                      - generic [ref=e555]: Add tags
+                  - cell "No runs" [ref=e272]:
+                    - generic [ref=e557]: No runs
+                  - cell "-" [ref=e275]
+                  - cell "07/02/2026, 09:49:21" [ref=e276]
+                  - cell "07/02/2026, 09:49:21" [ref=e277]
+                  - cell "Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e278]:
+                    - generic [ref=e558]:
+                      - button "Open preview" [ref=e559]:
+                        - img
+                      - button "Open activity" [ref=e560]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v1)" [ref=e561]:
+                        - img
+                      - button "More actions" [ref=e562]:
+                        - img
+                - row "Select row A&RMetalIndu_251201-H&W__ORIGINAL.xlsx Unassigned Edit tags No runs - 07/02/2026, 09:37:21 07/02/2026, 09:37:21 Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e284]:
+                  - cell "Select row" [ref=e285]:
+                    - checkbox "Select row" [ref=e564]
+                  - cell "A&RMetalIndu_251201-H&W__ORIGINAL.xlsx" [ref=e288]:
+                    - button "A&RMetalIndu_251201-H&W__ORIGINAL.xlsx" [ref=e565]:
+                      - generic "A&RMetalIndu_251201-H&W__ORIGINAL.xlsx" [ref=e568]
+                  - cell "Unassigned" [ref=e293]:
+                    - button "Unassigned" [ref=e570]:
+                      - generic [ref=e571]:
+                        - img
+                        - generic [ref=e572]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e298]:
+                    - button "Edit tags" [ref=e575]:
+                      - img
+                      - generic [ref=e577]: Add tags
+                  - cell "No runs" [ref=e304]:
+                    - generic [ref=e579]: No runs
+                  - cell "-" [ref=e307]
+                  - cell "07/02/2026, 09:37:21" [ref=e308]
+                  - cell "07/02/2026, 09:37:21" [ref=e309]
+                  - cell "Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e310]:
+                    - generic [ref=e580]:
+                      - button "Open preview" [ref=e581]:
+                        - img
+                      - button "Open activity" [ref=e582]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v1)" [ref=e583]:
+                        - img
+                      - button "More actions" [ref=e584]:
+                        - img
+                - row "Select row ACTSS_250831__ORIGINAL.xlsx Unassigned Edit tags No runs - 07/02/2026, 09:36:27 07/02/2026, 09:36:27 Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e316]:
+                  - cell "Select row" [ref=e317]:
+                    - checkbox "Select row" [ref=e586]
+                  - cell "ACTSS_250831__ORIGINAL.xlsx" [ref=e320]:
+                    - button "ACTSS_250831__ORIGINAL.xlsx" [ref=e587]:
+                      - generic "ACTSS_250831__ORIGINAL.xlsx" [ref=e590]
+                  - cell "Unassigned" [ref=e325]:
+                    - button "Unassigned" [ref=e592]:
+                      - generic [ref=e593]:
+                        - img
+                        - generic [ref=e594]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e330]:
+                    - button "Edit tags" [ref=e597]:
+                      - img
+                      - generic [ref=e599]: Add tags
+                  - cell "No runs" [ref=e336]:
+                    - generic [ref=e601]: No runs
+                  - cell "-" [ref=e339]
+                  - cell "07/02/2026, 09:36:27" [ref=e340]
+                  - cell "07/02/2026, 09:36:27" [ref=e341]
+                  - cell "Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e342]:
+                    - generic [ref=e602]:
+                      - button "Open preview" [ref=e603]:
+                        - img
+                      - button "Open activity" [ref=e604]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v1)" [ref=e605]:
+                        - img
+                      - button "More actions" [ref=e606]:
+                        - img
+                - row "Select row A&RMetal_250320_01.BENE-APR 2025__ORIGINAL.xlsx Unassigned Edit tags No runs - 07/02/2026, 09:35:15 07/02/2026, 09:35:15 Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e348]:
+                  - cell "Select row" [ref=e349]:
+                    - checkbox "Select row" [ref=e608]
+                  - cell "A&RMetal_250320_01.BENE-APR 2025__ORIGINAL.xlsx" [ref=e352]:
+                    - button "A&RMetal_250320_01.BENE-APR 2025__ORIGINAL.xlsx" [ref=e609]:
+                      - generic "A&RMetal_250320_01.BENE-APR 2025__ORIGINAL.xlsx" [ref=e612]
+                  - cell "Unassigned" [ref=e357]:
+                    - button "Unassigned" [ref=e614]:
+                      - generic [ref=e615]:
+                        - img
+                        - generic [ref=e616]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e362]:
+                    - button "Edit tags" [ref=e619]:
+                      - img
+                      - generic [ref=e621]: Add tags
+                  - cell "No runs" [ref=e368]:
+                    - generic [ref=e623]: No runs
+                  - cell "-" [ref=e371]
+                  - cell "07/02/2026, 09:35:15" [ref=e372]
+                  - cell "07/02/2026, 09:35:15" [ref=e373]
+                  - cell "Open preview Open activity Output not ready Download latest (v1) More actions" [ref=e374]:
+                    - generic [ref=e624]:
+                      - button "Open preview" [ref=e625]:
+                        - img
+                      - button "Open activity" [ref=e626]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v1)" [ref=e627]:
+                        - img
+                      - button "More actions" [ref=e628]:
+                        - img
+                - row "Select row 1811965Ontar_251031__ORIGINAL.xlsx Unassigned Edit tags No runs - 07/02/2026, 09:49:02 07/02/2026, 09:35:00 Open preview Open activity Output not ready Download latest (v2) More actions" [ref=e380]:
+                  - cell "Select row" [ref=e381]:
+                    - checkbox "Select row" [ref=e630]
+                  - cell "1811965Ontar_251031__ORIGINAL.xlsx" [ref=e384]:
+                    - button "1811965Ontar_251031__ORIGINAL.xlsx" [ref=e631]:
+                      - generic "1811965Ontar_251031__ORIGINAL.xlsx" [ref=e634]
+                  - cell "Unassigned" [ref=e389]:
+                    - button "Unassigned" [ref=e636]:
+                      - generic [ref=e637]:
+                        - img
+                        - generic [ref=e638]: Unassigned
+                      - img
+                  - cell "Edit tags" [ref=e394]:
+                    - button "Edit tags" [ref=e641]:
+                      - img
+                      - generic [ref=e643]: Add tags
+                  - cell "No runs" [ref=e400]:
+                    - generic [ref=e645]: No runs
+                  - cell "-" [ref=e403]
+                  - cell "07/02/2026, 09:49:02" [ref=e404]
+                  - cell "07/02/2026, 09:35:00" [ref=e405]
+                  - cell "Open preview Open activity Output not ready Download latest (v2) More actions" [ref=e406]:
+                    - generic [ref=e646]:
+                      - button "Open preview" [ref=e647]:
+                        - img
+                      - button "Open activity" [ref=e648]:
+                        - img
+                      - button "Output not ready" [disabled]:
+                        - img
+                      - button "Download latest (v2)" [ref=e649]:
+                        - img
+                      - button "More actions" [ref=e650]:
+                        - img
+            - generic [ref=e413]:
+              - generic [ref=e414]: 0 of 7 row(s) selected.
+              - generic [ref=e415]:
+                - generic [ref=e416]:
+                  - paragraph [ref=e417]: Rows per page
+                  - combobox [ref=e418]:
+                    - generic: "20"
+                    - img
+                - generic [ref=e419]: Page 1 of 1
+                - generic [ref=e420]:
+                  - button "Go to first page" [disabled]:
+                    - img
+                  - button "Go to previous page" [disabled]:
+                    - img
+                  - button "Go to next page" [disabled]:
+                    - img
+                  - button "Go to last page" [disabled]:
+                    - img
+  - generic [ref=e651]:
+    - generic:
+      - img [ref=e653]
+      - generic:
+        - paragraph: 1 file added
+        - paragraph: Processing will begin automatically.
+      - button "Dismiss notification" [ref=e656]:
+        - img [ref=e657]

@@ -139,6 +139,12 @@ def _run_with_timeout(func, *, timeout: float, **kwargs):
         return future.result(timeout=timeout)
 
 
+def _normalize_run_operation(value: RunOperation | str) -> RunOperation:
+    if isinstance(value, RunOperation):
+        return value
+    return RunOperation(str(value))
+
+
 
 # --------------------------------------------------------------------------- #
 # Main service
@@ -188,28 +194,30 @@ class RunsService:
         options: RunCreateOptions,
     ) -> Run:
         """Create the queued run row and enqueue execution."""
+        operation = _normalize_run_operation(options.operation)
 
         logger.debug(
             "run.prepare.start",
             extra=log_context(
                 configuration_id=configuration_id,
-                operation=options.operation.value,
+                operation=operation.value,
                 dry_run=options.dry_run,
                 input_document_id=options.input_document_id,
             ),
         )
 
         configuration = self._resolve_configuration(configuration_id)
-        if options.operation is RunOperation.PUBLISH:
+        if operation is RunOperation.PUBLISH:
             return self.prepare_publish_run(
                 workspace_id=configuration.workspace_id,
                 configuration_id=configuration.id,
             )
 
         run_options_payload = options.model_dump(mode="json", exclude_none=True)
+        run_options_payload["operation"] = operation.value
         deps_digest = self._resolve_deps_digest(configuration)
         input_document_id = options.input_document_id
-        if options.operation is RunOperation.PROCESS:
+        if operation is RunOperation.PROCESS:
             if not input_document_id:
                 raise RunInputDocumentRequiredForProcessError(
                     "input_document_required_for_process"
@@ -375,20 +383,21 @@ class RunsService:
         skip_existing_check: bool = False,
     ) -> list[Run]:
         """Create queued runs for each document id, enforcing all-or-nothing semantics."""
+        operation = _normalize_run_operation(options.operation)
 
         logger.debug(
             "run.prepare.batch.start",
             extra=log_context(
                 configuration_id=configuration_id,
                 document_count=len(document_ids),
-                operation=options.operation.value,
+                operation=operation.value,
                 dry_run=options.dry_run,
             ),
         )
 
         if not document_ids:
             return []
-        if options.operation is not RunOperation.PROCESS:
+        if operation is not RunOperation.PROCESS:
             raise RunInputDocumentRequiredForProcessError(
                 "input_document_required_for_process"
             )
