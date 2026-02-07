@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 from sqlalchemy.engine import Engine
@@ -446,6 +446,8 @@ def _as_dict(value: Any) -> dict[str, Any] | None:
 
 
 def _as_str(value: Any) -> str | None:
+    if isinstance(value, UUID):
+        return str(value)
     if isinstance(value, str):
         candidate = value.strip()
         return candidate or None

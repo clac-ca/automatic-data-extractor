@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from ade_worker.worker import (
+    _as_str,
     parse_run_fields,
     parse_run_metrics,
     parse_run_table_columns,
@@ -118,3 +121,8 @@ def test_parse_run_table_columns() -> None:
     assert row["sheet_name"] == "Sheet1"
     assert row["mapping_status"] == "mapped"
     assert row["mapped_field"] == "email"
+
+
+def test_as_str_accepts_uuid_values() -> None:
+    value = uuid4()
+    assert _as_str(value) == str(value)
