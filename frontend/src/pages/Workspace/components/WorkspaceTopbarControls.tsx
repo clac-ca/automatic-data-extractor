@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
-import { Moon, Palette, Sun } from "lucide-react";
+import { Laptop, Moon, Palette, Sun } from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
-import { BUILTIN_THEMES, useTheme } from "@/providers/theme";
+import { BUILTIN_THEMES, MODE_OPTIONS, WORKSPACE_THEME_MODE_ANCHOR, useTheme } from "@/providers/theme";
+import { MOTION_PROFILE } from "@/providers/theme/modeTransition";
 import { openReleaseNotes } from "@/config/release-notes";
 import {
   DropdownMenu,
@@ -29,34 +30,16 @@ const WEB_VERSION_FALLBACK =
 
 export function WorkspaceTopbarControls() {
   const session = useSession();
-  const { resolvedMode, setModePreference } = useTheme();
   const [versionsOpen, setVersionsOpen] = useState(false);
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
-  const isDark = resolvedMode === "dark";
-
-  const handleToggleTheme = () => {
-    setModePreference(isDark ? "light" : "dark");
-  };
 
   return (
     <>
       <WorkspaceVersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
         <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-0.5 shadow-sm backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={handleToggleTheme}
-            aria-label="Toggle color mode"
-            className={clsx(
-              "inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground transition",
-              "hover:bg-accent hover:text-accent-foreground",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              "[&>svg]:h-4 [&>svg]:w-4",
-            )}
-          >
-            {isDark ? <Sun /> : <Moon />}
-          </button>
+          <WorkspaceModeControl />
           <span className="h-5 w-px bg-border/70" aria-hidden />
           <WorkspaceThemeMenu />
         </div>
@@ -67,6 +50,188 @@ export function WorkspaceTopbarControls() {
         />
       </div>
     </>
+  );
+}
+
+function WorkspaceModeControl() {
+  const { modePreference, resolvedMode, setModePreference } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [isPressing, setIsPressing] = useState(false);
+  const [iconDrift, setIconDrift] = useState<"to-dark" | "to-light" | null>(null);
+  const toggleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const applyTimeoutRef = useRef<number | null>(null);
+  const pressTimeoutRef = useRef<number | null>(null);
+  const isDark = resolvedMode === "dark";
+
+  const clearButtonTimers = () => {
+    if (applyTimeoutRef.current !== null) {
+      window.clearTimeout(applyTimeoutRef.current);
+      applyTimeoutRef.current = null;
+    }
+    if (pressTimeoutRef.current !== null) {
+      window.clearTimeout(pressTimeoutRef.current);
+      pressTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (applyTimeoutRef.current !== null) {
+        window.clearTimeout(applyTimeoutRef.current);
+      }
+      if (pressTimeoutRef.current !== null) {
+        window.clearTimeout(pressTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const resolveOrigin = () => {
+    if (!toggleButtonRef.current) {
+      return undefined;
+    }
+    const rect = toggleButtonRef.current.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+  };
+
+  const setAnimatedMode = (next: "light" | "dark" | "system") => {
+    setModePreference(next, {
+      animate: true,
+      origin: resolveOrigin(),
+      source: "user",
+    });
+  };
+
+  const handlePrimaryToggle = () => {
+    const next = isDark ? "light" : "dark";
+    clearButtonTimers();
+    setIsPressing(true);
+    setIconDrift(next === "dark" ? "to-dark" : "to-light");
+
+    applyTimeoutRef.current = window.setTimeout(() => {
+      setAnimatedMode(next);
+      applyTimeoutRef.current = null;
+    }, MOTION_PROFILE.buttonPress.leadInMs);
+
+    pressTimeoutRef.current = window.setTimeout(() => {
+      setIsPressing(false);
+      setIconDrift(null);
+      pressTimeoutRef.current = null;
+    }, MOTION_PROFILE.buttonPress.durationMs);
+  };
+
+  const getModeIcon = (mode: "light" | "dark" | "system") => {
+    if (mode === "light") {
+      return Sun;
+    }
+    if (mode === "dark") {
+      return Moon;
+    }
+    return Laptop;
+  };
+
+  return (
+    <div className="inline-flex items-center">
+      <button
+        ref={toggleButtonRef}
+        type="button"
+        data-theme-mode-anchor={WORKSPACE_THEME_MODE_ANCHOR}
+        data-pressing={isPressing}
+        onClick={handlePrimaryToggle}
+        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        className={clsx(
+          "inline-flex h-8 w-8 items-center justify-center rounded-l-full rounded-r-sm text-foreground transition",
+          "data-[pressing=true]:animate-[theme-toggle-press_120ms_ease-out]",
+          "hover:bg-foreground/10 hover:text-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        )}
+      >
+        <span
+          data-mode-icon
+          className={clsx(
+            "inline-flex items-center justify-center transition-transform duration-150",
+            iconDrift === "to-dark" && "rotate-[8deg]",
+            iconDrift === "to-light" && "-rotate-[8deg]",
+          )}
+        >
+          <span
+            data-mode-icon-drift
+            data-drift={iconDrift ?? "idle"}
+            className={clsx(
+              "inline-flex items-center justify-center",
+              "data-[drift=to-dark]:animate-[theme-icon-drift_80ms_ease-out]",
+              "data-[drift=to-light]:animate-[theme-icon-drift_80ms_ease-out]",
+            )}
+          >
+            {isDark ? <Sun className="h-[15px] w-[15px]" /> : <Moon className="h-[15px] w-[15px]" />}
+          </span>
+        </span>
+      </button>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label="Select color mode"
+            className={clsx(
+              "inline-flex h-8 w-5 items-center justify-center rounded-l-sm rounded-r-full text-foreground/95 transition",
+              "hover:bg-foreground/10 hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              open && "bg-foreground/12 text-foreground",
+            )}
+          >
+            <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
+            <span className="sr-only">Color mode options</span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          sideOffset={8}
+          className="w-56 rounded-xl border-border/70 bg-popover/95 p-1.5 shadow-lg backdrop-blur-sm"
+        >
+          <DropdownMenuLabel className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/90">
+            Color mode
+          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            {MODE_OPTIONS.map((option) => {
+              const ModeIcon = getModeIcon(option.value);
+              const isSelected = modePreference === option.value;
+              return (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => setAnimatedMode(option.value)}
+                  className={clsx(
+                    "group gap-3 rounded-lg px-2.5 py-2 transition-colors",
+                    isSelected && "bg-accent/70 text-accent-foreground",
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      "inline-flex h-4 w-4 items-center justify-center text-muted-foreground transition-colors",
+                      isSelected && "text-foreground",
+                    )}
+                  >
+                    <ModeIcon className="h-[15px] w-[15px]" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span className="text-[0.95rem] font-medium">{option.label}</span>
+                    <span className="text-[11px] text-muted-foreground group-focus:text-accent-foreground/85">
+                      {option.description}
+                    </span>
+                  </span>
+                  <span className="inline-flex h-4 w-4 items-center justify-center">
+                    {isSelected ? <CheckIcon className="h-3.5 w-3.5 text-foreground" /> : null}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -175,7 +340,7 @@ function WorkspaceThemeMenu() {
             open && "bg-accent text-accent-foreground",
           )}
         >
-          <Palette className="h-4 w-4 text-current" aria-hidden />
+          <Palette className="h-[15px] w-[15px] text-current" aria-hidden />
           <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
           <span className="sr-only">Theme</span>
         </button>
