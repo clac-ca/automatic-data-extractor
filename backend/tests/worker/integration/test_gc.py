@@ -5,7 +5,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from ade_worker.gc import gc_local_venv_cache
+from sqlalchemy import insert
+from sqlalchemy.orm import sessionmaker
+
+from ade_db.schema import configurations, metadata, runs
+from ade_worker.gc import gc_local_venv_cache, gc_run_artifacts
 from ade_worker.paths import PathManager
 
 
@@ -123,3 +127,111 @@ def test_gc_local_cache_idempotent(tmp_path: Path) -> None:
 
     assert first.deleted == 1
     assert second.deleted == 0
+
+
+def test_gc_run_artifacts_includes_cancelled_runs(tmp_path: Path, engine) -> None:
+    now = datetime(2025, 1, 10, 12, 0, 0)
+    cutoff = now - timedelta(days=45)
+    paths = _make_paths(tmp_path)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    workspace_id = _uuid()
+    configuration_id = _uuid()
+    cancelled_run_id = _uuid()
+    active_run_id = _uuid()
+
+    workspaces = metadata.tables["workspaces"]
+
+    with engine.begin() as conn:
+        conn.execute(
+            insert(workspaces).values(
+                id=workspace_id,
+                name=f"Workspace {workspace_id[:8]}",
+                slug=f"ws-{workspace_id}",
+                settings={},
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        conn.execute(
+            insert(configurations).values(
+                id=configuration_id,
+                workspace_id=workspace_id,
+                display_name="Config A",
+                status="draft",
+                published_digest=None,
+                last_used_at=None,
+                activated_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        conn.execute(
+            insert(runs),
+            [
+                {
+                    "id": cancelled_run_id,
+                    "workspace_id": workspace_id,
+                    "configuration_id": configuration_id,
+                    "input_file_version_id": None,
+                    "output_file_version_id": None,
+                    "input_sheet_names": None,
+                    "run_options": None,
+                    "deps_digest": "sha256:aaa",
+                    "status": "cancelled",
+                    "available_at": now,
+                    "attempt_count": 1,
+                    "max_attempts": 3,
+                    "claimed_by": None,
+                    "claim_expires_at": None,
+                    "operation": "process",
+                    "exit_code": None,
+                    "error_message": "Run cancelled by user",
+                    "created_at": cutoff,
+                    "started_at": cutoff,
+                    "completed_at": cutoff,
+                },
+                {
+                    "id": active_run_id,
+                    "workspace_id": workspace_id,
+                    "configuration_id": configuration_id,
+                    "input_file_version_id": None,
+                    "output_file_version_id": None,
+                    "input_sheet_names": None,
+                    "run_options": None,
+                    "deps_digest": "sha256:bbb",
+                    "status": "running",
+                    "available_at": now,
+                    "attempt_count": 1,
+                    "max_attempts": 3,
+                    "claimed_by": "worker-1",
+                    "claim_expires_at": now + timedelta(minutes=1),
+                    "operation": "process",
+                    "exit_code": None,
+                    "error_message": None,
+                    "created_at": cutoff,
+                    "started_at": cutoff,
+                    "completed_at": cutoff,
+                },
+            ],
+        )
+
+    cancelled_path = paths.run_dir(workspace_id, cancelled_run_id)
+    cancelled_path.mkdir(parents=True, exist_ok=True)
+    (cancelled_path / "artifact.txt").write_text("cancelled artifact")
+
+    active_path = paths.run_dir(workspace_id, active_run_id)
+    active_path.mkdir(parents=True, exist_ok=True)
+    (active_path / "artifact.txt").write_text("active artifact")
+
+    result = gc_run_artifacts(
+        session_factory=session_factory,
+        paths=paths,
+        now=now,
+        run_ttl_days=30,
+    )
+
+    assert result.deleted == 1
+    assert result.scanned == 1
+    assert not cancelled_path.exists()
+    assert active_path.exists()

@@ -54,6 +54,7 @@ from .exceptions import (
     RunInputDocumentRequiredForProcessError,
     RunInputMissingError,
     RunLogsFileMissingError,
+    RunNotCancellableError,
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
@@ -159,6 +160,15 @@ def _run_failed_no_output_detail(message: str) -> dict[str, dict[str, str]]:
     }
 
 
+def _run_cancelled_no_output_detail(message: str) -> dict[str, dict[str, str]]:
+    return {
+        "error": {
+            "code": "RUN_CANCELLED_NO_OUTPUT",
+            "message": message,
+        }
+    }
+
+
 def _engine_dependency_missing_detail(exc: ConfigEngineDependencyMissingError) -> dict[str, str]:
     detail = {"error": "engine_dependency_missing"}
     if getattr(exc, "detail", None):
@@ -179,6 +189,8 @@ def _output_missing_detail(
     run_record = service.get_run(run_id)  # type: ignore[arg-type]
     if run_record and run_record.status is RunStatus.FAILED:
         return _run_failed_no_output_detail(message)
+    if run_record and run_record.status is RunStatus.CANCELLED:
+        return _run_cancelled_no_output_detail(message)
     return message
 
 
@@ -424,6 +436,24 @@ def get_run_endpoint(
     run = service.get_run(run_id)
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+    return service.to_resource(run)
+
+
+@router.post(
+    "/runs/{runId}/cancel",
+    response_model=RunResource,
+    dependencies=[Security(require_csrf)],
+)
+def cancel_run_endpoint(
+    run_id: RunPath,
+    service: RunsServiceDep,
+) -> RunResource:
+    try:
+        run = service.cancel_run(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunNotCancellableError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return service.to_resource(run)
 
 

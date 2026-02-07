@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchWorkspaceDocumentRowById } from "@/api/documents";
 import { ApiError } from "@/api/errors";
+import { cancelRun, createRun } from "@/api/runs/api";
 import { PageState } from "@/components/layout";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
@@ -13,10 +14,12 @@ import { useNotifications } from "@/providers/notifications";
 
 import { DocumentTicketHeader } from "./components/DocumentTicketHeader";
 import { useDocumentDetailUrlState } from "./hooks/useDocumentDetailUrlState";
+import { useDocumentDetailLiveSync } from "./hooks/useDocumentDetailLiveSync";
 import { DocumentActivityTab } from "./tabs/activity/DocumentActivityTab";
 import { DocumentPreviewTab } from "./tabs/preview/DocumentPreviewTab";
 import { getRenameDocumentErrorMessage, useRenameDocumentMutation } from "../shared/hooks/useRenameDocumentMutation";
 import { RenameDocumentDialog } from "../shared/ui/RenameDocumentDialog";
+import { ReprocessPreflightDialog } from "../list/upload/ReprocessPreflightDialog";
 
 export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   const navigate = useNavigate();
@@ -26,6 +29,8 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   const renameMutation = useRenameDocumentMutation({ workspaceId: workspace.id });
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [reprocessOpen, setReprocessOpen] = useState(false);
+  const [isRunActionPending, setIsRunActionPending] = useState(false);
 
   const {
     state: detailState,
@@ -50,9 +55,22 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
       ),
     enabled: Boolean(workspace.id && documentId),
     staleTime: 30_000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const status = data?.lastRun?.status ?? null;
+      return status === "queued" || status === "running" ? 1_000 : false;
+    },
+    refetchIntervalInBackground: true,
   });
 
   const documentRow = documentQuery.data ?? null;
+  const isRunActive = documentRow?.lastRun?.status === "queued" || documentRow?.lastRun?.status === "running";
+
+  useDocumentDetailLiveSync({
+    workspaceId: workspace.id,
+    documentId,
+    enabled: Boolean(workspace.id && documentId),
+  });
 
   useEffect(() => {
     sendSelection({ documentId });
@@ -96,6 +114,76 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
       }
     },
     [documentRow, notifyToast, renameMutation],
+  );
+
+  const onCancelRunRequest = useCallback(async () => {
+    if (!documentRow) return;
+    const runId = isRunActive ? documentRow.lastRun?.id : null;
+    if (!runId) {
+      notifyToast({
+        title: "Run is no longer active",
+        description: "Only queued or running runs can be cancelled.",
+        intent: "warning",
+      });
+      return;
+    }
+
+    setIsRunActionPending(true);
+    try {
+      await cancelRun(runId);
+      notifyToast({
+        title: "Run cancelled",
+        description: `${documentRow.name} was cancelled.`,
+        intent: "success",
+      });
+      await documentQuery.refetch();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        notifyToast({
+          title: "Run already finished",
+          description: `${documentRow.name} is already in a terminal state.`,
+          intent: "warning",
+        });
+        return;
+      }
+      notifyToast({
+        title: "Unable to cancel run",
+        description: error instanceof Error ? error.message : "Please try again.",
+        intent: "danger",
+      });
+    } finally {
+      setIsRunActionPending(false);
+    }
+  }, [documentQuery, documentRow, isRunActive, notifyToast]);
+
+  const onReprocessConfirm = useCallback(
+    async (runOptions: { active_sheet_only?: boolean; input_sheet_names?: string[] }) => {
+      if (!documentRow) return;
+      setIsRunActionPending(true);
+      try {
+        await createRun(workspace.id, {
+          input_document_id: documentRow.id,
+          active_sheet_only: runOptions.active_sheet_only,
+          input_sheet_names: runOptions.input_sheet_names,
+        });
+        notifyToast({
+          title: "Reprocess queued",
+          description: `${documentRow.name} was queued for processing.`,
+          intent: "success",
+        });
+        setReprocessOpen(false);
+        await documentQuery.refetch();
+      } catch (error) {
+        notifyToast({
+          title: "Unable to reprocess document",
+          description: error instanceof Error ? error.message : "Please try again.",
+          intent: "danger",
+        });
+      } finally {
+        setIsRunActionPending(false);
+      }
+    },
+    [documentQuery, documentRow, notifyToast, workspace.id],
   );
 
   if (documentQuery.isLoading) {
@@ -152,6 +240,9 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
           setRenameError(null);
           setRenameOpen(true);
         }}
+        onReprocessRequest={() => setReprocessOpen(true)}
+        onCancelRunRequest={onCancelRunRequest}
+        isRunActionPending={isRunActionPending}
       />
 
       <TabsRoot value={detailState.tab} onValueChange={(value) => setTab(value as DocumentDetailTab)}>
@@ -217,6 +308,25 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
           if (renameError) setRenameError(null);
         }}
         onSubmit={onRenameConfirm}
+      />
+      <ReprocessPreflightDialog
+        open={reprocessOpen}
+        workspaceId={workspace.id}
+        documents={[
+          {
+            id: documentRow.id,
+            name: documentRow.name,
+            fileType: documentRow.fileType,
+          },
+        ]}
+        onConfirm={onReprocessConfirm}
+        onCancel={() => {
+          if (isRunActionPending) return;
+          setReprocessOpen(false);
+        }}
+        processingPaused={workspace.processing_paused}
+        configMissing={false}
+        isSubmitting={isRunActionPending}
       />
     </div>
   );

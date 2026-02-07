@@ -17,7 +17,7 @@ export type RunsColumnContext = {
 export function useRunsColumns({ activeRunId, onTogglePreview }: RunsColumnContext) {
   const statusOptions = useMemo(
     () =>
-      (["queued", "running", "succeeded", "failed"] as RunRecord["status"][]).map((value) => ({
+      (["queued", "running", "succeeded", "failed", "cancelled"] as RunRecord["status"][]).map((value) => ({
         value,
         label: value[0]?.toUpperCase() + value.slice(1),
       })),

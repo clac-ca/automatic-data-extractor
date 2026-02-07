@@ -29,13 +29,26 @@ export type RunCreateOptions = components["schemas"]["RunCreateOptionsBase"];
 type RunCreateRequest = components["schemas"]["RunWorkspaceCreateRequest"];
 type RunCreatePathParams =
   paths["/api/v1/workspaces/{workspaceId}/runs"]["post"]["parameters"]["path"];
+export type RunBatchCreateOptions = components["schemas"]["RunBatchCreateOptions"];
+type RunBatchCreateRequest = components["schemas"]["RunWorkspaceBatchCreateRequest"];
+type RunBatchCreatePathParams =
+  paths["/api/v1/workspaces/{workspaceId}/runs/batch"]["post"]["parameters"]["path"];
 
 export type RunStreamOptions = Partial<RunCreateOptions> & {
   input_document_id?: RunCreateRequest["input_document_id"];
   configuration_id?: RunCreateRequest["configuration_id"];
 };
+export type RunBatchStreamOptions = Partial<RunBatchCreateOptions> & {
+  configuration_id?: RunBatchCreateRequest["configuration_id"];
+};
 export const RUNS_PAGE_SIZE = 50;
 const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
+  operation: "process",
+  dry_run: false,
+  log_level: "INFO",
+  active_sheet_only: false,
+};
+const DEFAULT_BATCH_RUN_OPTIONS: RunBatchCreateOptions = {
   operation: "process",
   dry_run: false,
   log_level: "INFO",
@@ -239,6 +252,47 @@ export async function createRun(
   return data as RunResource;
 }
 
+export async function createRunsBatch(
+  workspaceId: string,
+  documentIds: string[],
+  options: RunBatchStreamOptions = {},
+  signal?: AbortSignal,
+): Promise<RunResource[]> {
+  const pathParams: RunBatchCreatePathParams = { workspaceId };
+  const dedupedDocumentIds = Array.from(new Set(documentIds.filter(Boolean)));
+  if (dedupedDocumentIds.length === 0) {
+    return [];
+  }
+
+  const { configuration_id, ...optionOverrides } = options;
+  const mergedOptions: RunBatchCreateOptions = { ...DEFAULT_BATCH_RUN_OPTIONS, ...optionOverrides };
+  const body: RunBatchCreateRequest = {
+    document_ids: dedupedDocumentIds,
+    configuration_id: configuration_id ?? undefined,
+    options: mergedOptions,
+  };
+
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/runs/batch", {
+    params: { path: pathParams },
+    body,
+    signal,
+  });
+  if (!data) {
+    throw new Error("Expected run batch creation response.");
+  }
+  return data.runs ?? [];
+}
+
+export async function cancelRun(runId: string): Promise<RunResource> {
+  const { data } = await client.POST("/api/v1/runs/{runId}/cancel", {
+    params: { path: { runId } },
+  });
+  if (!data) {
+    throw new Error("Expected run cancellation response.");
+  }
+  return data;
+}
+
 export async function* streamRunEvents(
   url: string,
   signal?: AbortSignal,
@@ -409,7 +463,11 @@ export async function* streamRunEventsForRun(
 
   if (!sawCompletion) {
     let current = await fetchRun(runResource.id, signal);
-    while (current.status !== "succeeded" && current.status !== "failed") {
+    while (
+      current.status !== "succeeded"
+      && current.status !== "failed"
+      && current.status !== "cancelled"
+    ) {
       await sleep(1000, signal);
       current = await fetchRun(runResource.id, signal);
     }

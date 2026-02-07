@@ -65,4 +65,19 @@ describe("getNormalizedPreviewState", () => {
     expect(state.available).toBe(false);
     expect(state.reason).toContain("Engine crashed");
   });
+
+  it("is unavailable with cancelled message when latest run was cancelled", () => {
+    const state = getNormalizedPreviewState(
+      makeDocument({
+        id: "run_1",
+        status: "cancelled",
+        createdAt: "2026-01-01T00:00:00Z",
+        startedAt: null,
+        completedAt: null,
+        errorMessage: "Run cancelled by user",
+      }),
+    );
+    expect(state.available).toBe(false);
+    expect(state.reason).toContain("cancelled");
+  });
 });

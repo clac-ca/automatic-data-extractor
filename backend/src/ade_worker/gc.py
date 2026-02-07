@@ -89,7 +89,7 @@ def gc_run_artifacts(
         """
         SELECT id, workspace_id, completed_at
         FROM runs
-        WHERE status IN ('succeeded', 'failed')
+        WHERE status IN ('succeeded', 'failed', 'cancelled')
           AND completed_at IS NOT NULL
           AND completed_at < :cutoff
         """

@@ -60,6 +60,11 @@ export const RUN_TONE: Record<
     badge: "border-destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20",
     Icon: XCircle,
   },
+  cancelled: {
+    dot: "border-border/60 bg-muted text-muted-foreground",
+    badge: "border-border/60 bg-muted text-muted-foreground",
+    Icon: XCircle,
+  },
 };
 
 function toEpoch(value: string) {

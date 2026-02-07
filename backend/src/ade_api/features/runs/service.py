@@ -68,6 +68,7 @@ from .exceptions import (
     RunInputDocumentRequiredForProcessError,
     RunInputMissingError,
     RunLogsFileMissingError,
+    RunNotCancellableError,
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
@@ -931,6 +932,40 @@ class RunsService:
             )
         return run
 
+    def cancel_run(self, *, run_id: UUID) -> Run:
+        """Cancel a queued/running run and return the updated row.
+
+        Cancellation is idempotent for runs already marked as cancelled.
+        """
+
+        run = self._require_run(run_id)
+        if run.status is RunStatus.CANCELLED:
+            return run
+        if run.status not in {RunStatus.QUEUED, RunStatus.RUNNING}:
+            raise RunNotCancellableError(
+                f"Run {run_id} cannot be cancelled from status {run.status.value}."
+            )
+
+        now = utc_now()
+        run.status = RunStatus.CANCELLED
+        run.completed_at = now
+        run.claimed_by = None
+        run.claim_expires_at = None
+        run.error_message = "Run cancelled by user"
+        self._session.flush()
+        self._session.refresh(run)
+
+        logger.info(
+            "run.cancelled",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                operation=run.operation.value,
+            ),
+        )
+        return run
+
     def get_run_metrics(self, *, run_id: UUID) -> RunMetrics | None:
         """Return persisted run metrics for ``run_id`` when available."""
 
@@ -1340,6 +1375,10 @@ class RunsService:
                 raise RunOutputMissingError(
                     "Run failed and no output is available",
                 ) from err
+            if run.status is RunStatus.CANCELLED:
+                raise RunOutputMissingError(
+                    "Run was cancelled and no output is available",
+                ) from err
             raise
         return run, output_file, output_version
 
@@ -1575,7 +1614,11 @@ class RunsService:
         offset = max(0, int(cursor))
         buffer = b""
         last_keepalive_at = time.monotonic()
-        terminal_statuses = {RunStatus.SUCCEEDED, RunStatus.FAILED}
+        terminal_statuses = {
+            RunStatus.SUCCEEDED,
+            RunStatus.FAILED,
+            RunStatus.CANCELLED,
+        }
 
         while True:
             saw_bytes = False
