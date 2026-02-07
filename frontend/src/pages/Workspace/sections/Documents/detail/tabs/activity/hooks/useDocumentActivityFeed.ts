@@ -88,7 +88,7 @@ export function useDocumentActivityFeed({
     counts,
     hasNextPage: Boolean(commentsModel.hasNextPage),
     isFetchingNextPage: commentsModel.isFetchingNextPage,
-    isLoading: (runsQuery.isLoading || commentsModel.isLoading) && allItems.length === 0,
+    isLoading: runsQuery.isLoading || commentsModel.isLoading,
     hasError: Boolean(runsQuery.error || commentsModel.error),
     submitError: commentsModel.submitError,
     isSubmitting: commentsModel.isSubmitting,
