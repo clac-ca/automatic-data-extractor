@@ -40,12 +40,12 @@ export function SettingsDrawer({
         <DialogPrimitive.Content
           aria-label={title}
           className={clsx(
-            "fixed inset-y-0 right-0 left-auto top-0 z-[var(--app-z-modal)] flex h-full w-full flex-col gap-0 rounded-none border-l bg-card p-0 shadow-2xl",
+            "fixed inset-y-0 right-0 left-auto top-0 z-[var(--app-z-modal)] flex h-full w-full min-h-0 flex-col gap-0 overflow-hidden rounded-none border-l bg-card p-0 shadow-2xl",
             "data-[state=closed]:slide-out-to-right-2 data-[state=open]:slide-in-from-right-2 data-[state=closed]:animate-out data-[state=open]:animate-in",
             widthClassName,
           )}
         >
-          <div className="flex items-start justify-between gap-4 px-6 py-4">
+          <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card/95 px-4 py-4 backdrop-blur sm:px-6">
             <div className="space-y-1">
               <DialogTitle className="text-lg font-semibold text-foreground">{title}</DialogTitle>
               {description ? (
@@ -66,13 +66,12 @@ export function SettingsDrawer({
             </Button>
           </div>
 
-          <Separator />
-          <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">{children}</div>
 
           {footer ? (
             <>
               <Separator />
-              <div className="px-6 py-4">{footer}</div>
+              <div className="sticky bottom-0 z-10 bg-card/95 px-4 py-4 backdrop-blur sm:px-6">{footer}</div>
             </>
           ) : null}
         </DialogPrimitive.Content>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -63,6 +64,63 @@ async def test_list_users_admin_success(
         seed_identity.orphan.email,
     }
     assert expected.issubset(emails)
+
+
+async def test_create_user_requires_admin(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    """Non-admins should receive a 403 when creating users."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+
+    response = await async_client.post(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "new-user@example.com", "display_name": "New User"},
+    )
+    assert response.status_code == 403
+
+
+async def test_create_user_admin_success(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    """Administrators should be able to pre-provision users."""
+
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    response = await async_client.post(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "new-user@example.com", "display_name": " New User "},
+    )
+    assert response.status_code == 201, response.text
+    data = response.json()
+    assert data["email"] == "new-user@example.com"
+    assert data["display_name"] == "New User"
+    assert data["is_active"] is True
+    assert data["is_service_account"] is False
+    assert "global-user" in data["roles"]
+
+
+async def test_create_user_conflict(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    """Creating a duplicate user should return HTTP 409."""
+
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    response = await async_client.post(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": seed_identity.member.email},
+    )
+    assert response.status_code == 409
 
 
 async def test_get_user_requires_admin(

@@ -232,6 +232,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apikeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List API keys across the tenant (admin) */
+        get: operations["list_api_keys_api_v1_apikeys_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/apikeys": {
         parameters: {
             query?: never;
@@ -314,7 +331,8 @@ export type paths = {
         /** List all users (administrator only) */
         get: operations["list_users_api_v1_users_get"];
         put?: never;
-        post?: never;
+        /** Create a user (administrator only) */
+        post: operations["create_user_api_v1_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3474,31 +3492,21 @@ export type components = {
                 [key: string]: unknown;
             } | null;
         };
-        /** UserCreate */
+        /**
+         * UserCreate
+         * @description Payload for pre-provisioning a user account.
+         */
         UserCreate: {
             /**
              * Email
              * Format: email
+             * @description User email.
              */
             email: string;
-            /** Password */
-            password: string;
             /**
-             * Is Active
-             * @default true
+             * Display Name
+             * @description Optional display name for the user.
              */
-            is_active: boolean | null;
-            /**
-             * Is Superuser
-             * @default false
-             */
-            is_superuser: boolean | null;
-            /**
-             * Is Verified
-             * @default false
-             */
-            is_verified: boolean | null;
-            /** Display Name */
             display_name?: string | null;
         };
         /**
@@ -3840,6 +3848,33 @@ export type components = {
              * @description Optional processing pause state for the workspace.
              */
             processing_paused?: boolean | null;
+        };
+        /** UserCreate */
+        ade_api__core__auth__users__UserCreate: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean | null;
+            /**
+             * Is Superuser
+             * @default false
+             */
+            is_superuser: boolean | null;
+            /**
+             * Is Verified
+             * @default false
+             */
+            is_verified: boolean | null;
+            /** Display Name */
+            display_name?: string | null;
         };
         ProblemDetailsErrorItem: {
             path?: string | null;
@@ -4248,7 +4283,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UserCreate"];
+                "application/json": components["schemas"]["ade_api__core__auth__users__UserCreate"];
             };
         };
         responses: {
@@ -4358,6 +4393,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthProviderListResponse"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_api_keys_api_v1_apikeys_get: {
+        parameters: {
+            query?: {
+                /** @description Optional user identifier filter. */
+                userId?: string | null;
+                /** @description Items per page (max 200) */
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
+                /** @description JSON array of {id, desc}. */
+                sort?: string | null;
+                /** @description URL-encoded JSON array of filter objects. */
+                filters?: string | null;
+                /** @description Logical operator to join filters (and/or). */
+                joinOperator?: components["schemas"]["FilterJoinOperator"];
+                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
+                q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyPage"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.read_all global permission. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             default: components["responses"]["ProblemDetails"];
@@ -4888,6 +4990,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UserPage"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_user_api_v1_users_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Authentication required to create users. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global users.manage_all permission required. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email already in use. */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

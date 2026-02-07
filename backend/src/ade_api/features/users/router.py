@@ -17,7 +17,7 @@ from ade_api.common.cursor_listing import (
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 from ade_db.models import User
 
-from .schemas import UserOut, UserPage, UserUpdate
+from .schemas import UserCreate, UserOut, UserPage, UserUpdate
 from .service import UsersService
 from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -27,6 +27,10 @@ router = APIRouter(tags=["users"], dependencies=[Security(require_authenticated)
 USER_UPDATE_BODY = Body(
     ...,
     description="Fields to update on the user record.",
+)
+USER_CREATE_BODY = Body(
+    ...,
+    description="Fields to pre-provision a user account.",
 )
 USER_ID_PARAM = Annotated[
     UUID,
@@ -65,6 +69,36 @@ def list_users(
         filters=list_query.filters,
         join_operator=list_query.join_operator,
         q=list_query.q,
+    )
+
+
+@router.post(
+    "/users",
+    dependencies=[Security(require_csrf)],
+    response_model=UserOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a user (administrator only)",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to create users.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Global users.manage_all permission required.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Email already in use.",
+        },
+    },
+)
+def create_user(
+    _: Annotated[User, Security(require_global("users.manage_all"))],
+    service: Annotated[UsersService, Depends(get_users_service)],
+    payload: UserCreate = USER_CREATE_BODY,
+) -> UserOut:
+    return service.create_user(
+        email=str(payload.email),
+        display_name=payload.display_name,
     )
 
 
