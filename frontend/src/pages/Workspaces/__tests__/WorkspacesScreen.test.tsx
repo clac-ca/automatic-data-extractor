@@ -20,7 +20,7 @@ describe("WorkspacesScreen", () => {
     mockUseWorkspacesQuery.mockReset();
   });
 
-  it("renders a minimal workspace selector with search and simple rows", () => {
+  it("renders a minimal workspace selector with simple rows", () => {
     mockUseWorkspacesQuery.mockReturnValue({
       data: {
         items: [
@@ -60,7 +60,7 @@ describe("WorkspacesScreen", () => {
 
     render(<WorkspacesScreen />);
 
-    expect(screen.getByRole("searchbox", { name: "Search workspaces" })).toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: "Search workspaces" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open workspace Alpha" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open workspace Beta" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sort" })).not.toBeInTheDocument();

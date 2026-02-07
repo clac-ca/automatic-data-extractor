@@ -1,4 +1,5 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { UnifiedTopbarControls } from "@/app/layouts/components/topbar/UnifiedTopbarControls";
 import {
   Topbar,
   TopbarCenter,
@@ -10,7 +11,6 @@ import {
   WorkspaceDocumentsTopbarSearch,
   WorkspaceDocumentsTopbarSearchButton,
 } from "@/pages/Workspace/components/WorkspaceDocumentsTopbarSearch";
-import { WorkspaceTopbarControls } from "@/pages/Workspace/components/WorkspaceTopbarControls";
 
 export function WorkspaceTopbar() {
   return (
@@ -27,7 +27,7 @@ export function WorkspaceTopbar() {
           <WorkspaceDocumentsTopbarSearch className="w-full max-w-xl" />
         </TopbarCenter>
         <TopbarEnd>
-          <WorkspaceTopbarControls />
+          <UnifiedTopbarControls />
         </TopbarEnd>
       </TopbarContent>
     </Topbar>
