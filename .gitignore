@@ -27,6 +27,10 @@ backend/data/**
 # OS
 .DS_Store
 
+# Local automation artifacts
+.playwright-cli/
+tmp/playwright/
+
 # Workpackages
 workpackages/**
 !workpackages/**/
