@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult } from "@/api/documents";
@@ -6,14 +6,6 @@ import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 import type { DocumentRow } from "../../shared/types";
-
-function mergeRow(existing: DocumentRow | undefined, next: DocumentListRow, uploadProgress?: number | null) {
-  return {
-    ...existing,
-    ...next,
-    uploadProgress: uploadProgress ?? existing?.uploadProgress ?? null,
-  };
-}
 
 export function useDocumentsView({
   workspaceId,
@@ -36,6 +28,10 @@ export function useDocumentsView({
 }) {
   const queryClient = useQueryClient();
   const [uploadProgressById, setUploadProgressById] = useState<Record<string, number | null>>({});
+
+  useEffect(() => {
+    setUploadProgressById({});
+  }, [workspaceId]);
 
   const filtersKey = useMemo(
     () => (filters?.length ? JSON.stringify(filters) : ""),
@@ -84,11 +80,10 @@ export function useDocumentsView({
   const rows = useMemo(
     () =>
       items.map((item) =>
-        mergeRow(
-          undefined,
-          item,
-          uploadProgressById[item.id] ?? null,
-        ),
+        ({
+          ...item,
+          uploadProgress: uploadProgressById[item.id] ?? null,
+        }) satisfies DocumentRow,
       ),
     [items, uploadProgressById],
   );

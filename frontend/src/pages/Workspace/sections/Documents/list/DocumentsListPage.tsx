@@ -15,13 +15,19 @@ import {
 import { UploadManager } from "@/pages/Workspace/sections/Documents/list/upload/UploadManager";
 import { UploadPreflightDialog } from "@/pages/Workspace/sections/Documents/list/upload/UploadPreflightDialog";
 import { DocumentsTableView } from "@/pages/Workspace/sections/Documents/list/table/DocumentsTableView";
+import { inferFileType } from "@/pages/Workspace/sections/Documents/shared/utils";
+import type { FileType } from "@/pages/Workspace/sections/Documents/shared/types";
 
 import "../documents.css";
 
-const XLSX_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const SUPPORTED_FILE_TYPES = new Set<FileType>(["xlsx", "xls", "csv", "pdf"]);
+const DOCUMENT_ACCEPT =
+  ".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/csv,application/pdf";
+const SUPPORTED_FILE_TYPE_LABEL = ".xlsx, .xls, .csv, and .pdf";
 
-function isXlsxFile(file: File) {
-  return file.name.toLowerCase().endsWith(".xlsx");
+function isSupportedDocumentFile(file: File) {
+  const fileType = inferFileType(file.name, file.type);
+  return SUPPORTED_FILE_TYPES.has(fileType);
 }
 
 export default function DocumentsListPage() {
@@ -62,8 +68,8 @@ export default function DocumentsListPage() {
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const selected = Array.from(event.target.files ?? []);
-      const accepted = selected.filter(isXlsxFile);
-      const rejected = selected.filter((file) => !isXlsxFile(file));
+      const accepted = selected.filter(isSupportedDocumentFile);
+      const rejected = selected.filter((file) => !isSupportedDocumentFile(file));
 
       if (rejected.length > 0) {
         const skippedLabel =
@@ -72,7 +78,7 @@ export default function DocumentsListPage() {
             : `Skipped ${rejected.length} files.`;
 
         notifyToast({
-          title: "Only .xlsx files are supported.",
+          title: `Only ${SUPPORTED_FILE_TYPE_LABEL} files are supported.`,
           description: skippedLabel,
           intent: "warning",
           duration: 6000,
@@ -144,6 +150,7 @@ export default function DocumentsListPage() {
         onResume={uploadManager.resume}
         onRetry={uploadManager.retry}
         onResolveConflict={uploadManager.resolveConflict}
+        onResolveAllConflicts={uploadManager.resolveAllConflicts}
         onCancel={uploadManager.cancel}
         onRemove={uploadManager.remove}
         onClearCompleted={uploadManager.clearCompleted}
@@ -155,7 +162,7 @@ export default function DocumentsListPage() {
       <input
         ref={fileInputRef}
         type="file"
-        accept={XLSX_ACCEPT}
+        accept={DOCUMENT_ACCEPT}
         multiple
         className="hidden"
         onChange={handleFileInputChange}
@@ -165,7 +172,7 @@ export default function DocumentsListPage() {
 
   return (
     <div className="documents flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden py-4">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden py-3 sm:py-4">
         <DocumentsTableView
           workspaceId={workspace.id}
           currentUser={currentUser}

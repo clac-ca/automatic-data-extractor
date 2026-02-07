@@ -36,7 +36,7 @@ function uploadStatusLabel(status: UploadItem["status"], percent: number) {
     case "paused":
       return "Upload paused";
     case "conflict":
-      return "Name conflict";
+      return "Conflict needs action";
     case "failed":
       return "Upload failed";
     case "cancelled":
@@ -55,7 +55,7 @@ function uploadProgressClass(status: UploadItem["status"]) {
     case "paused":
       return "bg-accent-foreground/60";
     case "conflict":
-      return "bg-destructive";
+      return "bg-warning";
     case "cancelled":
       return "bg-muted-foreground/60";
     case "succeeded":

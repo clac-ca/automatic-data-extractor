@@ -324,7 +324,7 @@ export function useDocumentsColumns({
             onDownloadVersion={onDownloadVersion}
           />
         ),
-        size: 140,
+        size: 192,
         enableSorting: false,
         enableHiding: false,
       },

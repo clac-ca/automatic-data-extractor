@@ -13,8 +13,6 @@ export function TagsCell({
   onToggle,
   disabled = false,
   className,
-
-  // Optional: allows fixing bug #2 (shared options update + persistence)
   onTagOptionsChange,
   onCreateTag,
 }: {
@@ -23,14 +21,12 @@ export function TagsCell({
   onToggle: (tag: string) => void;
   disabled?: boolean;
   className?: string;
-
   onTagOptionsChange?: (nextOptions: string[]) => void;
   onCreateTag?: (tag: string) => void | Promise<void>;
 }) {
   const primaryTag = selected[0] ?? "";
   const overflowCount = Math.max(selected.length - 1, 0);
 
-  // Adapter: TagSelector works with the full array, but your table cell API toggles one tag.
   const handleValueChange = React.useCallback(
     (next: string[]) => {
       const removed = selected.find((t) => !next.includes(t));
@@ -38,7 +34,7 @@ export function TagsCell({
       const changed = added ?? removed;
       if (changed) onToggle(changed);
     },
-    [onToggle, selected]
+    [onToggle, selected],
   );
 
   return (

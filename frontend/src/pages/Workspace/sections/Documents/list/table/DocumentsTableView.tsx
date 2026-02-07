@@ -132,8 +132,8 @@ export function DocumentsTableView({
   const { page, perPage, sort, q, filters, joinOperator } = useDocumentsListParams({ filterMode });
   const filtersKey = useMemo(() => (filters?.length ? JSON.stringify(filters) : ""), [filters]);
   const viewKey = useMemo(
-    () => [page, perPage, sort ?? "", q ?? "", filtersKey, joinOperator ?? ""].join("|"),
-    [filtersKey, joinOperator, page, perPage, q, sort],
+    () => [workspaceId, page, perPage, sort ?? "", q ?? "", filtersKey, joinOperator ?? ""].join("|"),
+    [filtersKey, joinOperator, page, perPage, q, sort, workspaceId],
   );
   const documentsView = useDocumentsView({
     workspaceId,
@@ -180,12 +180,20 @@ export function DocumentsTableView({
     setFilterFlag(filterFlag === "advancedFilters" ? null : "advancedFilters");
   }, [filterFlag, setFilterFlag]);
 
+  const handledUploadsRef = useRef(new Set<string>());
+  const completedUploadsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setDeleteTarget(null);
+    setPendingMutations({});
+    setUpdatesAvailable(false);
+    handledUploadsRef.current.clear();
+    completedUploadsRef.current.clear();
+  }, [workspaceId]);
+
   useEffect(() => {
     setUpdatesAvailable(false);
   }, [viewKey]);
-
-  const handledUploadsRef = useRef(new Set<string>());
-  const completedUploadsRef = useRef(new Set<string>());
 
   const documentsParticipants = useMemo(
     () => filterParticipantsByPage(presence.participants, "documents"),
@@ -210,25 +218,48 @@ export function DocumentsTableView({
   });
 
   const people = useMemo<WorkspacePerson[]>(() => {
-    const set = new Map<string, WorkspacePerson>();
-    set.set(currentUser.id, {
-      id: currentUser.id,
-      label: currentUser.label,
-      email: currentUser.email,
+    const peopleById = new Map<string, WorkspacePerson>();
+
+    const upsertPerson = (id: string, label: string, email: string | null) => {
+      const existing = peopleById.get(id);
+      if (!existing) {
+        peopleById.set(id, { id, label, email });
+        return;
+      }
+      peopleById.set(id, {
+        id,
+        label: existing.label || label,
+        email: existing.email ?? email,
+      });
+    };
+
+    upsertPerson(currentUser.id, currentUser.label, currentUser.email);
+
+    documents.forEach((document) => {
+      [document.assignee, document.uploader].forEach((user) => {
+        if (!user?.id) return;
+        const label = user.name?.trim() || user.email || `Member ${shortId(user.id)}`;
+        upsertPerson(user.id, label, user.email);
+      });
     });
 
     const members = membersQuery.data?.items ?? [];
     members.forEach((member) => {
       const id = member.user_id;
       if (!id) return;
-      const label = id === currentUser.id ? currentUser.label : `Member ${shortId(id)}`;
-      if (!set.has(id)) {
-        set.set(id, { id, label, email: null });
-      }
+
+      const memberUser = member.user;
+      const email = memberUser?.email ?? peopleById.get(id)?.email ?? null;
+      const label =
+        id === currentUser.id
+          ? currentUser.label
+          : memberUser?.display_name?.trim() || email || peopleById.get(id)?.label || `Member ${shortId(id)}`;
+
+      upsertPerson(id, label, email);
     });
 
-    return Array.from(set.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [currentUser.email, currentUser.id, currentUser.label, membersQuery.data?.items]);
+    return Array.from(peopleById.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [currentUser.email, currentUser.id, currentUser.label, documents, membersQuery.data?.items]);
 
   const tagsQuery = useQuery({
     queryKey: ["documents-tags", workspaceId],
@@ -402,14 +433,20 @@ export function DocumentsTableView({
       }
 
       const person = assigneeId ? people.find((entry) => entry.id === assigneeId) : null;
-      const fallbackEmail = assigneeId ? `${assigneeId}@workspace.local` : "unknown@workspace.local";
-      const optimisticAssignee = assigneeId
-        ? { id: assigneeId, name: person?.label ?? null, email: person?.email ?? fallbackEmail }
-        : null;
-
       const snapshot = current.assignee ?? null;
+      const shouldApplyOptimistic =
+        assigneeId === null || (Boolean(person?.email) && Boolean(person?.label));
+      const optimisticAssignee =
+        assigneeId === null
+          ? null
+          : shouldApplyOptimistic && person?.email
+            ? { id: assigneeId, name: person.label, email: person.email }
+            : null;
+
       markRowPending(documentId, "assign");
-      updateRow(documentId, { assignee: optimisticAssignee });
+      if (shouldApplyOptimistic) {
+        updateRow(documentId, { assignee: optimisticAssignee });
+      }
       try {
         const updated = await patchWorkspaceDocument(
           workspaceId,
@@ -418,7 +455,9 @@ export function DocumentsTableView({
         );
         applyDocumentUpdate(documentId, updated);
       } catch (error) {
-        updateRow(documentId, { assignee: snapshot });
+        if (shouldApplyOptimistic) {
+          updateRow(documentId, { assignee: snapshot });
+        }
         notifyToast({
           title: "Unable to update assignee",
           description: error instanceof Error ? error.message : "Please try again.",
@@ -435,16 +474,23 @@ export function DocumentsTableView({
     async (documentId: string, tag: string) => {
       const current = documentsById[documentId];
       if (!current) return;
+      const normalizedTag = tag.trim();
+      const normalizedTagKey = tagKey(normalizedTag);
+      if (!normalizedTagKey) return;
+
       const tags = current.tags ?? [];
-      const hasTag = tags.includes(tag);
-      const nextTags = hasTag ? tags.filter((t) => t !== tag) : [...tags, tag];
-      const isNewOption = !hasTag && !hasTagOption(tagOptions, tag);
+      const existingTag = tags.find((value) => tagKey(value) === normalizedTagKey);
+      const hasTag = Boolean(existingTag);
+      const nextTags = hasTag
+        ? tags.filter((value) => tagKey(value) !== normalizedTagKey)
+        : [...tags, normalizedTag];
+      const isNewOption = !hasTag && !hasTagOption(tagOptions, normalizedTag);
 
       markRowPending(documentId, "tags");
       updateRow(documentId, { tags: nextTags });
       if (isNewOption) {
         setTagOptions((currentOptions) => {
-          const merged = mergeTagOptions(currentOptions, [tag]);
+          const merged = mergeTagOptions(currentOptions, [normalizedTag]);
           return isSameStringArray(merged, currentOptions) ? currentOptions : merged;
         });
       }
@@ -452,7 +498,7 @@ export function DocumentsTableView({
         const updated = await patchDocumentTags(
           workspaceId,
           documentId,
-          hasTag ? { remove: [tag] } : { add: [tag] },
+          hasTag ? { remove: [existingTag ?? normalizedTag] } : { add: [normalizedTag] },
           undefined,
         );
         applyDocumentUpdate(documentId, updated);
@@ -461,11 +507,11 @@ export function DocumentsTableView({
             ["documents-tags", workspaceId],
             (currentCatalog) => {
               if (!currentCatalog) return currentCatalog;
-              const exists = currentCatalog.items.some((item) => tagKey(item.tag) === tagKey(tag));
+              const exists = currentCatalog.items.some((item) => tagKey(item.tag) === normalizedTagKey);
               if (exists) return currentCatalog;
               return {
                 ...currentCatalog,
-                items: [...currentCatalog.items, { tag, document_count: 1 }],
+                items: [...currentCatalog.items, { tag: normalizedTag, document_count: 1 }],
               };
             },
           );
@@ -562,6 +608,7 @@ export function DocumentsTableView({
     try {
       await deleteWorkspaceDocument(workspaceId, deleteTarget.id);
       removeRow(deleteTarget.id);
+      void refreshSnapshot();
       notifyToast({ title: "Document deleted.", intent: "success", duration: 4000 });
       setDeleteTarget(null);
     } catch (error) {
@@ -572,7 +619,7 @@ export function DocumentsTableView({
     } finally {
       clearRowPending(deleteTarget.id, "delete");
     }
-  }, [clearRowPending, deleteTarget, markRowPending, notifyToast, removeRow, workspaceId]);
+  }, [clearRowPending, deleteTarget, markRowPending, notifyToast, refreshSnapshot, removeRow, workspaceId]);
 
   const markStale = useCallback(() => {
     if (page > 1) {
@@ -692,7 +739,7 @@ export function DocumentsTableView({
   const showInitialError = Boolean(error) && !hasDocuments;
   const handleUpdatesRefresh = useCallback(() => {
     setUpdatesAvailable(false);
-    refreshSnapshot();
+    void refreshSnapshot();
   }, [refreshSnapshot]);
 
   const toolbarStatus = (
@@ -776,7 +823,7 @@ export function DocumentsTableView({
 
   const tableContent = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 pb-6 pt-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 pb-4 pt-2 sm:px-4 sm:pb-6 lg:px-6">
         {configBanner}
         {updatesBanner}
         <DocumentsTable
@@ -867,7 +914,7 @@ function rankParticipant(participant: PresenceParticipant) {
 }
 
 function sortParticipants(participants: PresenceParticipant[]) {
-  return participants.sort((a, b) => {
+  return [...participants].sort((a, b) => {
     const aPriority = a.status === "active" ? 0 : 1;
     const bPriority = b.status === "active" ? 0 : 1;
     if (aPriority !== bPriority) return aPriority - bPriority;

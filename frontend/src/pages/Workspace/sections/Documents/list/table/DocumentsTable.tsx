@@ -106,7 +106,7 @@ export function DocumentsTable({
       {isAdvanced ? (
         <DataTableAdvancedToolbar table={table} className={toolbarShellClassName}>
           <div className="flex w-full flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex flex-wrap items-center gap-2">
               <DataTableSortList table={table} align="start" />
               <DataTableFilterList
                 table={table}
@@ -117,7 +117,7 @@ export function DocumentsTable({
               />
             </div>
             {toolbarTail ? (
-              <div className="ml-auto flex flex-wrap items-center gap-2">
+              <div className="ml-auto min-w-0 flex flex-wrap items-center justify-end gap-2">
                 {toolbarTail}
               </div>
             ) : null}
@@ -126,7 +126,7 @@ export function DocumentsTable({
       ) : (
         <DataTableToolbar table={table} className={toolbarShellClassName}>
           <DataTableSortList table={table} align="start" />
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex flex-wrap items-center justify-end gap-2">
             {filterToggle}
             {toolbarActions}
           </div>

@@ -42,11 +42,12 @@ export function ActionsCell({
   const showOriginal = typeof document.currentVersionNo === "number" && document.currentVersionNo > 1;
 
   return (
-    <div className="flex items-center justify-end gap-2" data-ignore-row-click>
+    <div className="flex min-w-0 items-center justify-end gap-1" data-ignore-row-click>
       <IconButton
         label="Open preview"
         onClick={onOpenDocument}
         variant="ghost"
+        className="shrink-0"
       >
         <EyeIcon className="h-4 w-4" />
       </IconButton>
@@ -54,7 +55,7 @@ export function ActionsCell({
         label="Open activity"
         onClick={onOpenActivity}
         variant="ghost"
-        className="relative"
+        className="relative shrink-0"
       >
         <ChatIcon className="h-4 w-4" />
         {commentCount > 0 ? (
@@ -67,12 +68,14 @@ export function ActionsCell({
         label={canDownloadOutput ? "Download normalized output" : "Output not ready"}
         onClick={() => onDownloadOutput(document)}
         disabled={!canDownloadOutput}
+        className="hidden shrink-0 sm:inline-flex"
       >
         <OutputIcon className="h-4 w-4" />
       </IconButton>
       <IconButton
         label={latestLabel}
         onClick={() => onDownloadLatest(document)}
+        className="hidden shrink-0 sm:inline-flex"
       >
         <DownloadIcon className="h-4 w-4" />
       </IconButton>
@@ -82,12 +85,21 @@ export function ActionsCell({
             aria-label="More actions"
             variant="ghost"
             type="button"
-            className="flex size-8 p-0"
+            className="flex size-8 shrink-0 p-0"
           >
             <Ellipsis className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onSelect={() => onDownloadOutput(document)}
+            disabled={!canDownloadOutput}
+          >
+            Download normalized output
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onDownloadLatest(document)}>
+            {latestLabel}
+          </DropdownMenuItem>
           {showOriginal && onDownloadVersion ? (
             <DropdownMenuItem onSelect={() => onDownloadVersion(document, 1)}>
               Download original (v1)
@@ -129,7 +141,7 @@ function IconButton({
       type="button"
       variant={variant}
       size="icon"
-      className={["h-8 w-8", className].filter(Boolean).join(" ")}
+      className={["h-8 w-8 shrink-0", className].filter(Boolean).join(" ")}
       onClick={onClick}
       aria-label={label}
       title={label}

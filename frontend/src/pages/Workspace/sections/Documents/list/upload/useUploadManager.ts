@@ -45,6 +45,7 @@ export type UploadManagerSummary = {
   readonly queuedCount: number;
   readonly uploadingCount: number;
   readonly pausedCount: number;
+  readonly conflictCount: number;
   readonly succeededCount: number;
   readonly failedCount: number;
   readonly cancelledCount: number;
@@ -67,6 +68,7 @@ export function useUploadManager({
   concurrency = DEFAULT_CONCURRENCY,
 }: UseUploadManagerOptions) {
   const [items, setItems] = useState<UploadManagerItem<DocumentUploadResponse>[]>([]);
+  const workspaceIdRef = useRef(workspaceId);
   const inFlightRef = useRef(new Set<string>());
   const abortHandlesRef = useRef(new Map<string, () => void>());
   const abortReasonsRef = useRef(new Map<string, "pause" | "cancel">());
@@ -155,6 +157,24 @@ export function useUploadManager({
     );
   }, []);
 
+  const resolveAllConflicts = useCallback((mode: DocumentConflictMode) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.status === "conflict"
+          ? {
+              ...item,
+              status: "queued",
+              progress: resetProgress(item.file),
+              conflictMode: mode,
+              conflict: undefined,
+              error: undefined,
+              response: undefined,
+            }
+          : item,
+      ),
+    );
+  }, []);
+
   const cancel = useCallback(
     (itemId: string) => {
       abortReasonsRef.current.set(itemId, "cancel");
@@ -220,13 +240,31 @@ export function useUploadManager({
     [flushProgress],
   );
 
-  useEffect(() => {
-    return () => {
-      if (progressTimerRef.current !== null) {
-        window.clearTimeout(progressTimerRef.current);
-      }
-    };
+  const cancelActiveUploads = useCallback((reason: "pause" | "cancel" = "cancel") => {
+    abortHandlesRef.current.forEach((abort, itemId) => {
+      abortReasonsRef.current.set(itemId, reason);
+      abort();
+    });
+    inFlightRef.current.clear();
+    abortHandlesRef.current.clear();
+    abortReasonsRef.current.clear();
+    progressBufferRef.current.clear();
+    if (progressTimerRef.current !== null) {
+      window.clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
   }, []);
+
+  useEffect(() => {
+    if (workspaceIdRef.current === workspaceId) {
+      return;
+    }
+    workspaceIdRef.current = workspaceId;
+    cancelActiveUploads("cancel");
+    setItems([]);
+  }, [cancelActiveUploads, workspaceId]);
+
+  useEffect(() => () => cancelActiveUploads("cancel"), [cancelActiveUploads]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -298,7 +336,7 @@ export function useUploadManager({
                       status: "conflict",
                       conflictMode: undefined,
                       conflict: { message },
-                      error: message,
+                      error: undefined,
                     }
                   : entry,
               ),
@@ -332,6 +370,7 @@ export function useUploadManager({
     let queuedCount = 0;
     let uploadingCount = 0;
     let pausedCount = 0;
+    let conflictCount = 0;
     let succeededCount = 0;
     let failedCount = 0;
     let cancelledCount = 0;
@@ -349,6 +388,9 @@ export function useUploadManager({
         case "paused":
           pausedCount += 1;
           break;
+        case "conflict":
+          conflictCount += 1;
+          break;
         case "succeeded":
           succeededCount += 1;
           break;
@@ -356,18 +398,15 @@ export function useUploadManager({
           failedCount += 1;
           break;
         case "cancelled":
-      cancelledCount += 1;
-      break;
-      case "conflict":
-        pausedCount += 1;
-        break;
-      default:
-        break;
-    }
+          cancelledCount += 1;
+          break;
+        default:
+          break;
+      }
     }
 
     const completedCount = succeededCount + failedCount + cancelledCount;
-    const inFlightCount = queuedCount + uploadingCount + pausedCount;
+    const inFlightCount = queuedCount + uploadingCount + pausedCount + conflictCount;
     const percent = totalBytes > 0 ? Math.min(100, Math.round((uploadedBytes / totalBytes) * 100)) : 0;
 
     return {
@@ -375,6 +414,7 @@ export function useUploadManager({
       queuedCount,
       uploadingCount,
       pausedCount,
+      conflictCount,
       succeededCount,
       failedCount,
       cancelledCount,
@@ -394,6 +434,7 @@ export function useUploadManager({
     resume,
     retry,
     resolveConflict,
+    resolveAllConflicts,
     cancel,
     remove,
     clearCompleted,

@@ -212,19 +212,14 @@ export function TagSelector({
     const createdK = keyOf(created);
     if (!createdK) return;
 
-    // Update local options so the tag remains selectable even if parent doesn't update options.
     setCreatedLocal((prev) => uniqByKey([...prev, created]));
 
-    // Update shared options if parent provides it (THIS is what fixes bug #2 across documents).
     if (onOptionsChange) {
       onOptionsChange(uniqByKey([...options, created]));
     }
 
-    // Fire create side-effect (persist).
-    // Intentionally not awaited; parent can handle async + errors as desired.
     onCreate?.(created);
 
-    // Select it.
     onValueChange([...value, created]);
 
     setSearch("");
@@ -310,8 +305,6 @@ export function TagSelector({
                   className="min-w-[6ch] flex-1 bg-transparent py-1 text-[11px] outline-none placeholder:text-muted-foreground"
                   onKeyDown={(e) => {
                     if (e.key === "Backspace") {
-                      // Bug #3: remove last tag but keep dropdown open.
-                      // We never close on value changes.
                       if (search.length === 0) {
                         e.preventDefault();
                         handleBackspace();
@@ -319,8 +312,6 @@ export function TagSelector({
                     }
 
                     if (e.key === "Enter") {
-                      // If there are no matches and it's creatable, Enter creates.
-                      // This avoids the "I typed a new tag but got stuck on empty state" UX.
                       if (createOnEnterWhenEmpty && canCreate && filteredOptions.length === 0) {
                         e.preventDefault();
                         e.stopPropagation();
@@ -339,7 +330,6 @@ export function TagSelector({
             </div>
 
             <CommandList className="max-h-64 overflow-auto">
-              {/* Bug #1 fix: empty state only when there are no visible options AND we are not showing Create. */}
               {filteredOptions.length === 0 && !canCreate ? (
                 <div className="px-3 py-6 text-center text-[11px] text-muted-foreground">
                   {resolvedEmptyText}
