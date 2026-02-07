@@ -7,7 +7,7 @@ import { WorkspaceTopbar } from "@/pages/Workspace/components/WorkspaceTopbar"
 
 export function WorkspaceLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <SidebarProvider className="flex h-svh w-full overflow-hidden">
+    <SidebarProvider defaultOpen={false} className="flex h-svh w-full overflow-hidden">
       {/* Column 1: pinned sidebar */}
       <WorkspaceSidebar />
 
