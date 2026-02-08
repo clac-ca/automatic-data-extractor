@@ -124,7 +124,7 @@ export function WorkspaceSidebar() {
     runs: `${base}/runs`,
     configBuilder: `${base}/config-builder`,
     settings: `${base}/settings`,
-    organizationSettings: "/organization/settings",
+    organizationSettings: "/organization",
   } as const;
 
   const navItems = useMemo<WorkspaceNavItem[]>(

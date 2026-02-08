@@ -45,7 +45,7 @@ export const appRoutes: RouteObject[] = [
             element: <AuthenticatedLayout />,
             children: [
               { index: true, element: withRouteSuspense(<HomeScreen />) },
-              { path: "organization/settings/*", element: withRouteSuspense(<OrganizationSettingsScreen />) },
+              { path: "organization/*", element: withRouteSuspense(<OrganizationSettingsScreen />) },
               { path: "workspaces", element: withRouteSuspense(<WorkspacesScreen />) },
               { path: "workspaces/new", element: withRouteSuspense(<WorkspaceCreateScreen />) },
               { path: "*", element: withRouteSuspense(<NotFoundScreen />) },

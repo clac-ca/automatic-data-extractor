@@ -96,7 +96,7 @@ export function RolesSettingsPage() {
   const selectedRoleId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
   const selectedRole = roles.find((role) => role.id === selectedRoleId);
 
-  const basePath = "/organization/settings/roles";
+  const basePath = "/organization/roles";
   const suffix = `${location.search}${location.hash}`;
   const closeDrawer = () => navigate(`${basePath}${suffix}`, { replace: true });
   const openCreateDrawer = () => navigate(`${basePath}/new${suffix}`);

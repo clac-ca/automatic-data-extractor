@@ -51,7 +51,7 @@ export function UnifiedTopbarControls() {
           displayName={displayName}
           email={email}
           canAccessOrganizationSettings={canAccessOrganizationSettings}
-          onOpenOrganizationSettings={() => navigate("/organization/settings")}
+          onOpenOrganizationSettings={() => navigate("/organization")}
           onOpenVersions={() => setVersionsOpen(true)}
         />
       </div>
