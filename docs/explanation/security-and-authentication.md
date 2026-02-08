@@ -31,12 +31,19 @@ Runtime authorization is role/permission driven. Do not rely on legacy `is_super
 - When `enforceSso=true`, non-global-admin local login is blocked.
 - Global-admin local login remains available for emergency operational access and requires MFA enrollment.
 
+## Local MFA Enforcement Model
+
+- `ADE_AUTH_ENFORCE_LOCAL_MFA=true` enforces MFA onboarding for password-authenticated sessions.
+- When enabled, users signed in with built-in auth must complete TOTP enrollment before most protected endpoints are accessible.
+- SSO and API key sessions are not forced by this setting.
+
 ## Core Security Settings
 
 - `ADE_SECRET_KEY`
 - `ADE_PUBLIC_WEB_URL`
 - `ADE_AUTH_DISABLED`
 - `ADE_AUTH_FORCE_SSO`
+- `ADE_AUTH_ENFORCE_LOCAL_MFA`
 - `ADE_SSO_ENCRYPTION_KEY`
 - `ADE_BLOB_ACCOUNT_URL` or `ADE_BLOB_CONNECTION_STRING`
 - `ADE_DATABASE_AUTH_MODE`

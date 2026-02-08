@@ -3,6 +3,7 @@ import { useEffect } from "react";
 
 import { createSearchParams, type Location, useLocation, useNavigate } from "react-router-dom";
 
+import { useMfaStatusQuery } from "@/hooks/auth/useMfaStatusQuery";
 import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ export function RequireSession({ children }: RequireSessionProps) {
   const navigate = useNavigate();
   const sessionQuery = useSessionQuery();
   const { session, isLoading, isError, refetch } = sessionQuery;
+  const mfaStatusQuery = useMfaStatusQuery({ enabled: Boolean(session) });
   const shouldCheckSetup = !session && !isLoading && !isError;
   const {
     data: setupStatus,
@@ -87,6 +89,20 @@ export function RequireSession({ children }: RequireSessionProps) {
     setupStatus?.setup_required,
     shouldCheckSetup,
   ]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    if (location.pathname === "/mfa/setup") {
+      return;
+    }
+    if (mfaStatusQuery.data?.onboardingRequired !== true) {
+      return;
+    }
+    const next = getReturnToFromLocation(location);
+    navigate(buildRedirectPath("/mfa/setup", next), { replace: true });
+  }, [location, mfaStatusQuery.data?.onboardingRequired, navigate, session]);
 
   if (isLoading) {
     return (

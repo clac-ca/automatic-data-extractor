@@ -632,6 +632,104 @@
         ]
       }
     },
+    "/api/v1/auth/mfa/totp": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Read TOTP MFA status for the current user",
+        "operationId": "mfa_status_api_v1_auth_mfa_totp_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMfaStatusResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Disable TOTP for the current user",
+        "operationId": "mfa_disable_api_v1_auth_mfa_totp_delete",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/mfa/totp/enroll/confirm": {
       "post": {
         "tags": [
@@ -663,6 +761,86 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AuthMfaEnrollConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMfaEnrollConfirmResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/totp/recovery/regenerate": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Regenerate recovery codes for current user",
+        "operationId": "mfa_regenerate_recovery_codes_api_v1_auth_mfa_totp_recovery_regenerate_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthMfaRecoveryRegenerateRequest"
               }
             }
           }
@@ -765,69 +943,6 @@
           }
         },
         "security": []
-      }
-    },
-    "/api/v1/auth/mfa/totp": {
-      "delete": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Disable TOTP for the current user",
-        "operationId": "mfa_disable_api_v1_auth_mfa_totp_delete",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
       }
     },
     "/api/v1/apikeys": {
@@ -1218,6 +1333,14 @@
               }
             }
           },
+          "403": {
+            "description": "Requires api_keys.manage_all global permission.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1298,6 +1421,14 @@
           },
           "401": {
             "description": "Authentication required.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Requires api_keys.manage_all global permission.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -1389,16 +1520,16 @@
               }
             }
           },
-          "404": {
-            "description": "API key not found.",
+          "403": {
+            "description": "Requires api_keys.manage_all global permission.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
               }
             }
           },
-          "403": {
-            "description": "API key not owned by caller.",
+          "404": {
+            "description": "API key not found.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -1489,16 +1620,16 @@
               }
             }
           },
-          "404": {
-            "description": "API key not found.",
+          "403": {
+            "description": "Requires api_keys.manage_all global permission.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
               }
             }
           },
-          "403": {
-            "description": "API key not owned by caller.",
+          "404": {
+            "description": "API key not found.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -3895,6 +4026,94 @@
           },
           "404": {
             "description": "User record not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Update editable fields on the authenticated user's profile",
+        "description": "Patch mutable fields for the current principal.",
+        "operationId": "patch_me_api_v1_me_patch",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeProfileUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeProfile"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update the profile.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Service account principals cannot access this endpoint.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "No editable fields provided or payload validation failed.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -12349,6 +12568,16 @@
             "type": "boolean",
             "title": "Mfa Required",
             "default": false
+          },
+          "mfaSetupRecommended": {
+            "type": "boolean",
+            "title": "Mfasetuprecommended",
+            "default": false
+          },
+          "mfaSetupRequired": {
+            "type": "boolean",
+            "title": "Mfasetuprequired",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -12433,6 +12662,75 @@
           "accountName"
         ],
         "title": "AuthMfaEnrollStartResponse"
+      },
+      "AuthMfaRecoveryRegenerateRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 9,
+            "minLength": 6,
+            "pattern": "^(?:\\d{6}|[A-Za-z0-9]{8}|[A-Za-z0-9]{4}-[A-Za-z0-9]{4})$",
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "AuthMfaRecoveryRegenerateRequest"
+      },
+      "AuthMfaStatusResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "enrolledAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolledat"
+          },
+          "recoveryCodesRemaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recoverycodesremaining"
+          },
+          "onboardingRecommended": {
+            "type": "boolean",
+            "title": "Onboardingrecommended",
+            "default": false
+          },
+          "onboardingRequired": {
+            "type": "boolean",
+            "title": "Onboardingrequired",
+            "default": false
+          },
+          "skipAllowed": {
+            "type": "boolean",
+            "title": "Skipallowed",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "AuthMfaStatusResponse"
       },
       "AuthPasswordForgotRequest": {
         "properties": {
@@ -14579,6 +14877,26 @@
         ],
         "title": "MeProfile",
         "description": "Profile for the authenticated principal."
+      },
+      "MeProfileUpdateRequest": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Optional display name shown in the ADE user interface."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MeProfileUpdateRequest",
+        "description": "Payload for updating editable fields on the caller profile."
       },
       "MeWorkspaceSummary": {
         "properties": {
@@ -17465,7 +17783,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8000"
+      "url": "http://127.0.0.1:30267"
     }
   ],
   "security": [

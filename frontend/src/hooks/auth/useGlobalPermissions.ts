@@ -37,11 +37,15 @@ export function useGlobalPermissions() {
   );
 
   const canAccessOrganizationSettings = hasAnyPermission(ORG_SETTINGS_PERMISSIONS);
+  const canManageApiKeys = hasPermission("api_keys.manage_all");
+  const canReadApiKeys = canManageApiKeys || hasPermission("api_keys.read_all");
 
   return {
     permissions: permissionSet,
     hasPermission,
     hasAnyPermission,
     canAccessOrganizationSettings,
+    canManageApiKeys,
+    canReadApiKeys,
   };
 }

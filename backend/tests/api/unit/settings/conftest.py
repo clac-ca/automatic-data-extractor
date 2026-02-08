@@ -72,6 +72,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_WORKER_MEM_MB",
         "ADE_WORKER_FSIZE_MB",
         "ADE_AUTH_FORCE_SSO",
+        "ADE_AUTH_ENFORCE_LOCAL_MFA",
         "ADE_AUTH_SSO_AUTO_PROVISION",
         "ADE_SSO_ENCRYPTION_KEY",
     ):

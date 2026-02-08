@@ -51,6 +51,7 @@ export function UnifiedTopbarControls() {
           displayName={displayName}
           email={email}
           canAccessOrganizationSettings={canAccessOrganizationSettings}
+          onOpenAccountSettings={() => navigate("/account")}
           onOpenOrganizationSettings={() => navigate("/organization")}
           onOpenVersions={() => setVersionsOpen(true)}
         />
@@ -245,12 +246,14 @@ function ProfileMenu({
   displayName,
   email,
   canAccessOrganizationSettings,
+  onOpenAccountSettings,
   onOpenOrganizationSettings,
   onOpenVersions,
 }: {
   readonly displayName: string;
   readonly email: string;
   readonly canAccessOrganizationSettings: boolean;
+  readonly onOpenAccountSettings: () => void;
   readonly onOpenOrganizationSettings: () => void;
   readonly onOpenVersions: () => void;
 }) {
@@ -296,6 +299,12 @@ function ProfileMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={onOpenAccountSettings} className="gap-2">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
+              A
+            </span>
+            <span>Account Settings</span>
+          </DropdownMenuItem>
           {canAccessOrganizationSettings ? (
             <DropdownMenuItem onSelect={onOpenOrganizationSettings} className="gap-2">
               <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">

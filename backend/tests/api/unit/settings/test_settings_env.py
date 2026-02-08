@@ -82,6 +82,7 @@ def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("ADE_API_FORWARDED_ALLOW_IPS", "10.0.0.1,10.0.0.2")
     monkeypatch.setenv("ADE_API_THREADPOOL_TOKENS", "64")
     monkeypatch.setenv("ADE_DATABASE_CONNECTION_BUDGET", "120")
+    monkeypatch.setenv("ADE_AUTH_ENFORCE_LOCAL_MFA", "true")
 
     settings = Settings(_env_file=None)
 
@@ -89,6 +90,7 @@ def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.api_forwarded_allow_ips == "10.0.0.1,10.0.0.2"
     assert settings.api_threadpool_tokens == 64
     assert settings.database_connection_budget == 120
+    assert settings.auth_enforce_local_mfa is True
 
 
 def test_api_forwarded_allow_ips_must_not_be_empty(monkeypatch: pytest.MonkeyPatch) -> None:

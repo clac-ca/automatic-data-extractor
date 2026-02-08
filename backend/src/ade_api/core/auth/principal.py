@@ -31,3 +31,4 @@ class AuthenticatedPrincipal:
     auth_via: AuthVia
     api_key_id: UUID | None = None
     email: str | None = None
+    session_auth_method: str | None = None

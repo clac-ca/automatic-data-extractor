@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
+from ade_api.core.auth.principal import AuthVia
 from ade_api.core.security import hash_opaque_token, hash_password, mint_opaque_token, verify_password
 from ade_api.core.security.secrets import decrypt_secret, encrypt_secret
 from ade_api.features.rbac import RbacService
@@ -59,6 +61,18 @@ class MfaRequiredError(RuntimeError):
     def __init__(self, challenge_token: str) -> None:
         super().__init__("mfa_required")
         self.challenge_token = challenge_token
+
+
+SessionAuthMethod = Literal["password", "sso", "unknown"]
+
+
+@dataclass(frozen=True, slots=True)
+class LocalLoginSuccess:
+    """Result payload for successful local logins."""
+
+    session_token: str
+    mfa_setup_recommended: bool
+    mfa_setup_required: bool
 
 
 @dataclass(slots=True)
@@ -184,7 +198,7 @@ class AuthnService:
     # Sessions / Login
     # ------------------------------------------------------------------
 
-    def login_local(self, *, email: str, password: str) -> str:
+    def login_local(self, *, email: str, password: str) -> LocalLoginSuccess:
         user = self._find_user_by_email(email)
         if user is None:
             raise LoginError("Invalid email or password.")
@@ -197,24 +211,61 @@ class AuthnService:
 
         self._register_successful_login(user)
 
-        if self.has_mfa_enabled(user_id=user.id):
+        has_mfa_enabled = self.has_mfa_enabled(user_id=user.id)
+        if has_mfa_enabled:
             challenge = self._create_mfa_challenge(user_id=user.id)
             raise MfaRequiredError(challenge)
 
-        return self.create_session(user_id=user.id)
+        mfa_setup_recommended, mfa_setup_required = self.local_login_onboarding_flags(
+            has_mfa_enabled=has_mfa_enabled
+        )
+        return LocalLoginSuccess(
+            session_token=self.create_session(user_id=user.id, auth_method="password"),
+            mfa_setup_recommended=mfa_setup_recommended,
+            mfa_setup_required=mfa_setup_required,
+        )
 
-    def create_session(self, *, user_id: UUID) -> str:
+    def create_session(
+        self, *, user_id: UUID, auth_method: SessionAuthMethod = "unknown"
+    ) -> str:
         token = mint_opaque_token()
         expires_at = utc_now() + self.settings.session_access_ttl
         self.session.add(
             AuthSession(
                 user_id=user_id,
                 token_hash=hash_opaque_token(token),
+                auth_method=auth_method,
                 expires_at=expires_at,
                 revoked_at=None,
             )
         )
         return token
+
+    def local_login_onboarding_flags(
+        self, *, has_mfa_enabled: bool
+    ) -> tuple[bool, bool]:
+        if has_mfa_enabled:
+            return False, False
+        if self.settings.auth_enforce_local_mfa:
+            return False, True
+        return True, False
+
+    def totp_onboarding_flags(
+        self,
+        *,
+        has_mfa_enabled: bool,
+        auth_via: AuthVia,
+        session_auth_method: str | None,
+    ) -> tuple[bool, bool, bool]:
+        if has_mfa_enabled:
+            return False, False, False
+
+        if auth_via is not AuthVia.SESSION or (session_auth_method or "").strip() != "password":
+            return False, False, False
+
+        if self.settings.auth_enforce_local_mfa:
+            return False, True, False
+        return True, False, True
 
     def revoke_session(self, *, session_id: UUID) -> None:
         self.session.execute(
@@ -286,6 +337,16 @@ class AuthnService:
         mfa = self.session.get(UserMfaTotp, user_id)
         return mfa is not None and mfa.verified_at is not None
 
+    def get_totp_status(
+        self,
+        *,
+        user: User,
+    ) -> tuple[bool, datetime | None, int | None]:
+        mfa = self.session.get(UserMfaTotp, user.id)
+        if mfa is None or mfa.verified_at is None:
+            return False, None, None
+        return True, mfa.enrolled_at, len(mfa.recovery_code_hashes)
+
     def start_totp_enrollment(self, *, user: User) -> tuple[str, str, str]:
         secret = generate_totp_secret()
         encrypted = encrypt_secret(secret, self.settings)
@@ -326,6 +387,23 @@ class AuthnService:
         recovery = generate_recovery_codes()
         mfa.enrolled_at = now
         mfa.verified_at = now
+        mfa.recovery_code_hashes = hash_recovery_codes(recovery)
+        return recovery
+
+    def regenerate_recovery_codes(self, *, user: User, code: str) -> list[str]:
+        mfa = self.session.get(UserMfaTotp, user.id)
+        if mfa is None or mfa.verified_at is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="MFA is not enabled.")
+
+        secret = decrypt_secret(mfa.secret_enc, self.settings)
+        valid = verify_totp(secret, code)
+        if not valid:
+            normalized_recovery_code = normalize_recovery_code(code)
+            valid = verify_recovery_code(normalized_recovery_code, mfa.recovery_code_hashes)
+        if not valid:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid one-time password.")
+
+        recovery = generate_recovery_codes()
         mfa.recovery_code_hashes = hash_recovery_codes(recovery)
         return recovery
 
@@ -381,7 +459,7 @@ class AuthnService:
 
         challenge.consumed_at = now
         self._register_successful_login(user)
-        return self.create_session(user_id=user.id)
+        return self.create_session(user_id=user.id, auth_method="password")
 
     def _create_mfa_challenge(self, *, user_id: UUID) -> str:
         raw = mint_opaque_token()

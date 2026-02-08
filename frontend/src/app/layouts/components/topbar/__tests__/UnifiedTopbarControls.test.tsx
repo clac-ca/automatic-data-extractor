@@ -8,6 +8,7 @@ const mockSetModePreference = vi.fn();
 const mockSetPreviewTheme = vi.fn();
 const mockSetTheme = vi.fn();
 const mockUseTheme = vi.fn();
+const mockNavigate = vi.fn();
 
 vi.mock("@/providers/auth/SessionContext", () => ({
   useSession: () => ({
@@ -28,7 +29,7 @@ vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useNavigate: () => vi.fn(),
+    useNavigate: () => mockNavigate,
   };
 });
 
@@ -64,6 +65,7 @@ vi.mock("@/hooks/system", () => ({
 describe("UnifiedTopbarControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockReset();
     mockUseTheme.mockReturnValue({
       theme: "default",
       modePreference: "light",
@@ -188,5 +190,15 @@ describe("UnifiedTopbarControls", () => {
         origin: { x: 40, y: 55 },
       }),
     );
+  });
+
+  it("navigates to account settings from the profile menu", async () => {
+    const user = userEvent.setup();
+    render(<UnifiedTopbarControls />);
+
+    await user.click(screen.getByRole("button", { name: "Open profile menu" }));
+    await user.click(screen.getByRole("menuitem", { name: /Account Settings/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/account");
   });
 });
