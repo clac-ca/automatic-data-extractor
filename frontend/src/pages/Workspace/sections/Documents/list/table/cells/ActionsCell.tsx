@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Ellipsis } from "lucide-react";
 
-import { ChatIcon, CloseIcon, DownloadIcon, EyeIcon, OutputIcon, RefreshIcon } from "@/components/icons";
+import { ChatIcon, CloseIcon, DownloadIcon, EyeIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,9 +19,8 @@ export function ActionsCell({
   isBusy,
   onRenameRequest,
   onDeleteRequest,
-  onDownloadOutput,
-  onDownloadLatest,
-  onDownloadVersion,
+  onDownload,
+  onDownloadOriginal,
   onReprocessRequest,
   onCancelRunRequest,
 }: {
@@ -31,21 +30,16 @@ export function ActionsCell({
   isBusy: boolean;
   onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
-  onDownloadOutput: (document: DocumentRow) => void;
-  onDownloadLatest: (document: DocumentRow) => void;
-  onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
+  onDownload: (document: DocumentRow) => void;
+  onDownloadOriginal: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
 }) {
   const isRunActive = document.lastRun?.status === "queued" || document.lastRun?.status === "running";
-  const canDownloadOutput = document.lastRun?.status === "succeeded";
+  const canDownloadNormalizedOutput = document.lastRun?.status === "succeeded";
   const runActionLabel = isRunActive ? "Cancel run" : "Reprocess";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
-  const latestLabel = document.currentVersionNo
-    ? `Download latest (v${document.currentVersionNo})`
-    : "Download latest";
-  const showOriginal = typeof document.currentVersionNo === "number" && document.currentVersionNo > 1;
 
   return (
     <div className="flex min-w-0 items-center justify-end gap-1" data-ignore-row-click>
@@ -80,16 +74,9 @@ export function ActionsCell({
         {isRunActive ? <CloseIcon className="h-4 w-4" /> : <RefreshIcon className="h-4 w-4" />}
       </IconButton>
       <IconButton
-        label={canDownloadOutput ? "Download normalized output" : "Output not ready"}
-        onClick={() => onDownloadOutput(document)}
-        disabled={!canDownloadOutput}
-        className="hidden shrink-0 sm:inline-flex"
-      >
-        <OutputIcon className="h-4 w-4" />
-      </IconButton>
-      <IconButton
-        label={latestLabel}
-        onClick={() => onDownloadLatest(document)}
+        label={canDownloadNormalizedOutput ? "Download normalized output" : "Output not ready"}
+        onClick={() => onDownload(document)}
+        disabled={!canDownloadNormalizedOutput}
         className="hidden shrink-0 sm:inline-flex"
       >
         <DownloadIcon className="h-4 w-4" />
@@ -113,19 +100,14 @@ export function ActionsCell({
             {runActionLabel}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => onDownloadOutput(document)}
-            disabled={!canDownloadOutput}
+            onSelect={() => onDownload(document)}
+            disabled={!canDownloadNormalizedOutput}
           >
-            Download normalized output
+            Download
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onDownloadLatest(document)}>
-            {latestLabel}
+          <DropdownMenuItem onSelect={() => onDownloadOriginal(document)}>
+            Download original
           </DropdownMenuItem>
-          {showOriginal && onDownloadVersion ? (
-            <DropdownMenuItem onSelect={() => onDownloadVersion(document, 1)}>
-              Download original (v1)
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuItem onSelect={() => onRenameRequest(document)} disabled={isBusy}>
             Rename
           </DropdownMenuItem>
