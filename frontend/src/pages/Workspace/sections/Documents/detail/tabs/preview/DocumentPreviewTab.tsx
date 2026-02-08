@@ -41,7 +41,7 @@ export function DocumentPreviewTab({
 
       {!model.canLoadSelectedSource ? (
         <DocumentPreviewUnavailableState
-          reason={model.normalizedState.reason}
+          reason={model.normalizedState.reason ?? "Normalized output is unavailable for this document."}
           onSwitchToOriginal={() => onSourceChange("original")}
         />
       ) : (

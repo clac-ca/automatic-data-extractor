@@ -23,7 +23,7 @@ function formatRunStatus(value: RunStatus) {
   return normalized[0]?.toUpperCase() + normalized.slice(1);
 }
 
-function resolveNormalizedDownloadState(document: DocumentRow): {
+function resolveNormalizedDownloadState(workspaceId: string, document: DocumentRow): {
   href: string | null;
   label: string;
 } {
@@ -32,7 +32,7 @@ function resolveNormalizedDownloadState(document: DocumentRow): {
 
   if (status === "succeeded" && runId) {
     return {
-      href: resolveApiUrl(`/api/v1/runs/${runId}/output/download`),
+      href: resolveApiUrl(`/api/v1/workspaces/${workspaceId}/runs/${runId}/output/download`),
       label: "Download normalized output",
     };
   }
@@ -70,8 +70,8 @@ export function DocumentTicketHeader({
   isRunActionPending?: boolean;
 }) {
   const normalizedDownload = useMemo(
-    () => resolveNormalizedDownloadState(document),
-    [document],
+    () => resolveNormalizedDownloadState(workspaceId, document),
+    [document, workspaceId],
   );
   const originalHref = resolveApiUrl(
     `/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`,

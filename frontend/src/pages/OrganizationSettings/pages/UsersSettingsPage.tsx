@@ -75,7 +75,7 @@ export function UsersSettingsPage() {
   const providers = authProvidersQuery.data?.providers ?? [];
   const ssoEnabled = providers.some((provider) => provider.type === "oidc");
 
-  const basePath = "/organization/settings/users";
+  const basePath = "/organization/users";
   const suffix = `${location.search}${location.hash}`;
   const closeDrawer = () => navigate(`${basePath}${suffix}`, { replace: true });
   const openCreateDrawer = () => navigate(`${basePath}/new${suffix}`);

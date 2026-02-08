@@ -16,6 +16,7 @@ import {
 import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
 import { ApiError } from "@/api/errors";
 import { cancelRun, createRun, createRunsBatch } from "@/api/runs/api";
+import type { RunStreamOptions } from "@/api/runs/api";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
 import { SpinnerIcon } from "@/components/icons";
@@ -422,7 +423,7 @@ export function DocumentsTableView({
         });
         return;
       }
-      const url = resolveApiUrl(`/api/v1/runs/${runId}/output/download`);
+      const url = resolveApiUrl(`/api/v1/workspaces/${workspaceId}/runs/${runId}/output/download`);
       openDownload(url);
     },
     [notifyToast, openDownload],
@@ -469,7 +470,7 @@ export function DocumentsTableView({
 
       markRowPending(document.id, "run");
       try {
-        const cancelled = await cancelRun(runId);
+        const cancelled = await cancelRun(workspaceId, runId);
         const fallbackCreatedAt = document.lastRun?.createdAt ?? new Date().toISOString();
         updateRow(document.id, {
           lastRun: {
@@ -529,7 +530,7 @@ export function DocumentsTableView({
       cancellable.forEach(({ document }) => markRowPending(document.id, "run"));
       try {
         const settled = await Promise.allSettled(
-          cancellable.map(({ runId }) => cancelRun(runId)),
+          cancellable.map(({ runId }) => cancelRun(workspaceId, runId)),
         );
 
         let cancelledCount = 0;
@@ -585,7 +586,7 @@ export function DocumentsTableView({
   }, [isReprocessSubmitting]);
 
   const onReprocessConfirm = useCallback(
-    async (runOptions: { active_sheet_only?: boolean; input_sheet_names?: string[] }) => {
+    async (runOptions: Pick<RunStreamOptions, "active_sheet_only" | "input_sheet_names">) => {
       if (reprocessTargets.length === 0) return;
 
       const requestedCount = reprocessTargets.length;

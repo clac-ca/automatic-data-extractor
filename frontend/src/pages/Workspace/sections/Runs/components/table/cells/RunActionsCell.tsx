@@ -14,10 +14,8 @@ export function RunActionsCell({
   isActive: boolean;
   onTogglePreview: () => void;
 }) {
-  const logsHref = run.raw.links?.logs ?? null;
-  const outputHref = run.raw.output?.ready
-    ? run.raw.links?.output_download ?? run.raw.links?.output ?? null
-    : null;
+  const logsHref = run.raw.links?.events_download ?? null;
+  const outputHref = run.raw.output?.ready ? run.raw.links?.output_download ?? null : null;
 
   return (
     <div className="flex items-center justify-end gap-2">

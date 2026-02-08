@@ -1,8 +1,13 @@
 import { useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useConfigureAuthenticatedTopbar } from "@/app/layouts/components/topbar/AuthenticatedTopbarContext";
 import { PageState } from "@/components/layout";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
+import {
+  OrganizationSettingsTopbarSearch,
+  OrganizationSettingsTopbarSearchButton,
+} from "./components/OrganizationSettingsTopbarSearch";
 import { OrganizationSettingsShell } from "./components/OrganizationSettingsShell";
 import { OrganizationSettingsSectionProvider } from "./sectionContext";
 import {
@@ -34,6 +39,16 @@ export default function OrganizationSettingsScreen({ sectionSegments = [] }: Org
   }, [routeParams, sectionSegments]);
 
   const defaultSection = useMemo(() => getDefaultOrganizationSettingsSection(hasPermission), [hasPermission]);
+  const navGroups = useMemo(() => buildOrganizationSettingsNav(hasPermission), [hasPermission]);
+  const topbarConfig = useMemo(
+    () => ({
+      desktopCenter: <OrganizationSettingsTopbarSearch navGroups={navGroups} className="w-full max-w-xl" />,
+      mobileAction: <OrganizationSettingsTopbarSearchButton navGroups={navGroups} />,
+    }),
+    [navGroups],
+  );
+
+  useConfigureAuthenticatedTopbar(canAccessOrganizationSettings ? topbarConfig : null);
 
   const { effectiveSegments, redirectTo } = useMemo(
     () => normalizeSectionSegments(effectiveInputSegments, location.search, location.hash, defaultSection.path),
@@ -60,7 +75,6 @@ export default function OrganizationSettingsScreen({ sectionSegments = [] }: Org
 
   const activeSection = resolveOrganizationSectionByPath(effectiveSegments) ?? defaultSection;
 
-  const navGroups = buildOrganizationSettingsNav(hasPermission);
   const flatNavItems = navGroups.flatMap((group) => group.items);
   const activeNavItem = flatNavItems.find((item) => item.id === activeSection.id);
   const activeAccess = getOrganizationSectionAccessState(activeSection, hasPermission);
@@ -107,6 +121,6 @@ function normalizeSectionSegments(
 
   return {
     effectiveSegments: isKnownPath ? initialSegments : defaultPath.split("/"),
-    redirectTo: needsDefaultRedirect || !isKnownPath ? `/organization/settings/${defaultPath}${search}${hash}` : null,
+    redirectTo: needsDefaultRedirect || !isKnownPath ? `/organization/${defaultPath}${search}${hash}` : null,
   };
 }

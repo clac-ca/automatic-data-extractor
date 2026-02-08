@@ -87,9 +87,9 @@ export function DocumentPreviewGrid({
                     <TableCell
                       key={`cell-${rowIndex}-${colIndex}`}
                       className={cn("max-w-64 truncate")}
-                      title={String(cells[colIndex] ?? "")}
+                      title={renderPreviewCell(cells[colIndex])}
                     >
-                      {cells[colIndex] ?? ""}
+                      {renderPreviewCell(cells[colIndex])}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -115,4 +115,25 @@ function LoadingState() {
       ))}
     </div>
   );
+}
+
+function renderPreviewCell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (
+    typeof value === "number"
+    || typeof value === "boolean"
+    || typeof value === "bigint"
+  ) {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }

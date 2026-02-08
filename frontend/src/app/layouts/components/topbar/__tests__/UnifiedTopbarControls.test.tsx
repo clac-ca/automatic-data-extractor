@@ -2,7 +2,7 @@ import userEvent from "@testing-library/user-event";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-import { WorkspaceTopbarControls } from "@/pages/Workspace/components/WorkspaceTopbarControls";
+import { UnifiedTopbarControls } from "@/app/layouts/components/topbar/UnifiedTopbarControls";
 
 const mockSetModePreference = vi.fn();
 const mockSetPreviewTheme = vi.fn();
@@ -15,6 +15,12 @@ vi.mock("@/providers/auth/SessionContext", () => ({
       display_name: "Test User",
       email: "test@example.com",
     },
+  }),
+}));
+
+vi.mock("@/hooks/auth/useGlobalPermissions", () => ({
+  useGlobalPermissions: () => ({
+    canAccessOrganizationSettings: true,
   }),
 }));
 
@@ -55,7 +61,7 @@ vi.mock("@/hooks/system", () => ({
   }),
 }));
 
-describe("WorkspaceTopbarControls", () => {
+describe("UnifiedTopbarControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseTheme.mockReturnValue({
@@ -74,7 +80,7 @@ describe("WorkspaceTopbarControls", () => {
 
   it("toggles between light and dark from the primary mode button", async () => {
     vi.useFakeTimers();
-    render(<WorkspaceTopbarControls />);
+    render(<UnifiedTopbarControls />);
 
     const toggleButton = screen.getByRole("button", { name: "Switch to dark mode" });
     vi.spyOn(toggleButton, "getBoundingClientRect").mockReturnValue({
@@ -123,7 +129,7 @@ describe("WorkspaceTopbarControls", () => {
 
   it("exposes Light, Dark, and System options in the mode menu", async () => {
     const user = userEvent.setup();
-    render(<WorkspaceTopbarControls />);
+    render(<UnifiedTopbarControls />);
 
     await user.click(screen.getByRole("button", { name: "Select color mode" }));
 
@@ -146,7 +152,7 @@ describe("WorkspaceTopbarControls", () => {
       setTheme: mockSetTheme,
     });
 
-    render(<WorkspaceTopbarControls />);
+    render(<UnifiedTopbarControls />);
     const toggleButton = screen.getByRole("button", { name: "Switch to light mode" });
     await user.click(toggleButton);
     const iconDrift = toggleButton.querySelector<HTMLElement>("[data-mode-icon-drift]");
@@ -156,7 +162,7 @@ describe("WorkspaceTopbarControls", () => {
 
   it("sends animated mode options with origin coordinates when selecting from menu", async () => {
     const user = userEvent.setup();
-    render(<WorkspaceTopbarControls />);
+    render(<UnifiedTopbarControls />);
 
     const toggleButton = screen.getByRole("button", { name: "Switch to dark mode" });
     vi.spyOn(toggleButton, "getBoundingClientRect").mockReturnValue({

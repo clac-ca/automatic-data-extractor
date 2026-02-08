@@ -26,6 +26,7 @@ export default function ConfigBuilderWorkbenchScreen({ params }: ConfigBuilderWo
   } = useWorkbenchWindow();
   const configId = params?.configId;
   const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configurationId: configId });
+  const awaitingFreshConfigSnapshot = Boolean(configId) && !configQuery.isError && !configQuery.isFetchedAfterMount;
 
   useEffect(() => {
     if (configId) {
@@ -38,7 +39,7 @@ export default function ConfigBuilderWorkbenchScreen({ params }: ConfigBuilderWo
     if (!configId) {
       return;
     }
-    if (configQuery.isError) {
+    if (configQuery.isError || awaitingFreshConfigSnapshot) {
       return;
     }
     const resolvedName = configQuery.data?.display_name ?? configId;
@@ -48,16 +49,27 @@ export default function ConfigBuilderWorkbenchScreen({ params }: ConfigBuilderWo
       configName: `${workspace.name} · ${resolvedName}`,
       configDisplayName: resolvedName,
     });
-  }, [configId, configQuery.data?.display_name, configQuery.isError, workspace.id, workspace.name, openSession]);
+  }, [
+    configId,
+    configQuery.data?.display_name,
+    configQuery.isError,
+    awaitingFreshConfigSnapshot,
+    workspace.id,
+    workspace.name,
+    openSession,
+  ]);
 
   useEffect(() => {
     if (!configId) {
       return;
     }
+    if (awaitingFreshConfigSnapshot) {
+      return;
+    }
     if (configQuery.isError || (configQuery.isSuccess && !configQuery.data)) {
       closeSession();
     }
-  }, [closeSession, configId, configQuery.data, configQuery.isError, configQuery.isSuccess]);
+  }, [awaitingFreshConfigSnapshot, closeSession, configId, configQuery.data, configQuery.isError, configQuery.isSuccess]);
 
   if (!configId) {
     return (
@@ -69,12 +81,12 @@ export default function ConfigBuilderWorkbenchScreen({ params }: ConfigBuilderWo
     );
   }
 
-  if (configQuery.isLoading) {
+  if (configQuery.isLoading || awaitingFreshConfigSnapshot) {
     return (
       <PageState
         variant="loading"
-        title="Loading configuration"
-        description="Fetching configuration details before opening the workbench."
+        title="Refreshing configuration"
+        description="Checking the latest configuration status before opening the workbench."
       />
     );
   }

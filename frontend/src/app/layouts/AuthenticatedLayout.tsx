@@ -1,12 +1,20 @@
 import type { ReactNode } from "react";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
-import { TopbarControls } from "@/app/layouts/components/topbar/TopbarControls";
+import {
+  AuthenticatedTopbarProvider,
+  useAuthenticatedTopbarConfig,
+} from "@/app/layouts/components/topbar/AuthenticatedTopbarContext";
+import { UnifiedTopbarControls } from "@/app/layouts/components/topbar/UnifiedTopbarControls";
+import { Button } from "@/components/ui/button";
 import {
   Topbar,
+  TopbarCenter,
   TopbarContent,
   TopbarEnd,
   TopbarProvider,
+  TopbarStart,
 } from "@/components/ui/topbar";
 
 const DEFAULT_MAIN_ID = "main-content";
@@ -42,24 +50,56 @@ export function TopbarFrame({
 }
 
 export function AuthenticatedLayout() {
+  return (
+    <TopbarProvider>
+      <AuthenticatedTopbarProvider>
+        <AuthenticatedLayoutInner />
+      </AuthenticatedTopbarProvider>
+    </TopbarProvider>
+  );
+}
+
+function AuthenticatedLayoutInner() {
+  const topbarConfig = useAuthenticatedTopbarConfig();
+  const location = useLocation();
+  const isOrganizationRoute =
+    location.pathname === "/organization" || location.pathname.startsWith("/organization/");
+  const shouldRenderTopbarStart = isOrganizationRoute || Boolean(topbarConfig?.mobileAction);
+
   const topbar = (
-    <Topbar position="static">
+    <Topbar className="shadow-sm">
       <SkipToContent />
-      <TopbarContent className="px-4 sm:px-6 lg:px-10">
+      <TopbarContent maxWidth="full" className="px-4 sm:px-6 lg:px-8">
+        {shouldRenderTopbarStart ? (
+          <TopbarStart className="relative z-10">
+            {isOrganizationRoute ? (
+              <Button asChild variant="outline" size="sm" className="h-9">
+                <Link to="/workspaces">
+                  <ArrowLeft className="size-4" />
+                  <span>Go back to workspace</span>
+                </Link>
+              </Button>
+            ) : null}
+            {topbarConfig?.mobileAction ? (
+              <div className="md:hidden">{topbarConfig.mobileAction}</div>
+            ) : null}
+          </TopbarStart>
+        ) : null}
+        <TopbarCenter className="hidden md:flex">
+          {topbarConfig?.desktopCenter ?? null}
+        </TopbarCenter>
         <TopbarEnd>
-          <TopbarControls />
+          <UnifiedTopbarControls />
         </TopbarEnd>
       </TopbarContent>
     </Topbar>
   );
 
   return (
-    <TopbarProvider>
-      <div className="flex min-h-svh w-full flex-col bg-background text-foreground">
-        <TopbarFrame topbar={topbar}>
-          <Outlet />
-        </TopbarFrame>
-      </div>
-    </TopbarProvider>
+    <div className="flex min-h-svh w-full flex-col bg-background text-foreground">
+      <TopbarFrame topbar={topbar}>
+        <Outlet />
+      </TopbarFrame>
+    </div>
   );
 }

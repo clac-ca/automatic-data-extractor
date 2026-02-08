@@ -15,11 +15,11 @@ describe("organization settings nav", () => {
     const links = navGroups.flatMap((group) => group.items.map((item) => item.href));
 
     expect(links).toEqual([
-      "/organization/settings/users",
-      "/organization/settings/roles",
-      "/organization/settings/api-keys",
-      "/organization/settings/system/sso",
-      "/organization/settings/system/safe-mode",
+      "/organization/users",
+      "/organization/roles",
+      "/organization/api-keys",
+      "/organization/system/sso",
+      "/organization/system/safe-mode",
     ]);
     expect(defaultOrganizationSettingsSection.path).toBe("users");
   });

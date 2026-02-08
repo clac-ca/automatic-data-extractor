@@ -35,10 +35,11 @@ docker compose logs -f worker
 
 ## Useful Run Endpoints
 
-- `GET /api/v1/runs/{runId}`
-- `GET /api/v1/runs/{runId}/events/download`
-- `GET /api/v1/runs/{runId}/output`
-- `GET /api/v1/runs/{runId}/output/download`
+- `GET /api/v1/workspaces/{workspaceId}/runs/{runId}`
+- `GET /api/v1/workspaces/{workspaceId}/runs/{runId}/events/stream`
+- `GET /api/v1/workspaces/{workspaceId}/runs/{runId}/events/download`
+- `GET /api/v1/workspaces/{workspaceId}/runs/{runId}/output`
+- `GET /api/v1/workspaces/{workspaceId}/runs/{runId}/output/download`
 
 ## Event Log Location
 

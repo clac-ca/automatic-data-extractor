@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
 import { Laptop, Moon, Palette, Sun } from "lucide-react";
@@ -23,13 +23,14 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useSystemVersions } from "@/hooks/system";
 import { CheckIcon, ChevronDownIcon } from "@/components/icons";
+import { getInitials } from "@/lib/format";
 
 const WEB_VERSION_FALLBACK =
   (typeof import.meta.env.VITE_APP_VERSION === "string" ? import.meta.env.VITE_APP_VERSION : "") ||
   (typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "") ||
   "unknown";
 
-export function WorkspaceTopbarControls() {
+export function UnifiedTopbarControls() {
   const session = useSession();
   const navigate = useNavigate();
   const { canAccessOrganizationSettings } = useGlobalPermissions();
@@ -39,18 +40,18 @@ export function WorkspaceTopbarControls() {
 
   return (
     <>
-      <WorkspaceVersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
+      <VersionsDialog open={versionsOpen} onOpenChange={setVersionsOpen} />
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
         <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-0.5 shadow-sm backdrop-blur-sm">
-          <WorkspaceModeControl />
+          <ModeControl />
           <span className="h-5 w-px bg-border/70" aria-hidden />
-          <WorkspaceThemeMenu />
+          <ThemeMenu />
         </div>
-        <WorkspaceProfileMenu
+        <ProfileMenu
           displayName={displayName}
           email={email}
           canAccessOrganizationSettings={canAccessOrganizationSettings}
-          onOpenOrganizationSettings={() => navigate("/organization/settings")}
+          onOpenOrganizationSettings={() => navigate("/organization")}
           onOpenVersions={() => setVersionsOpen(true)}
         />
       </div>
@@ -58,7 +59,7 @@ export function WorkspaceTopbarControls() {
   );
 }
 
-function WorkspaceModeControl() {
+function ModeControl() {
   const { modePreference, resolvedMode, setModePreference } = useTheme();
   const [open, setOpen] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
@@ -240,7 +241,7 @@ function WorkspaceModeControl() {
   );
 }
 
-function WorkspaceProfileMenu({
+function ProfileMenu({
   displayName,
   email,
   canAccessOrganizationSettings,
@@ -256,7 +257,7 @@ function WorkspaceProfileMenu({
   const [open, setOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const navigate = useNavigate();
-  const initials = useMemo(() => deriveInitials(displayName || email), [displayName, email]);
+  const initials = getInitials(displayName, email);
 
   const handleSignOut = () => {
     if (isSigningOut) return;
@@ -331,7 +332,7 @@ function WorkspaceProfileMenu({
   );
 }
 
-function WorkspaceThemeMenu() {
+function ThemeMenu() {
   const { theme, setPreviewTheme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -391,7 +392,7 @@ function WorkspaceThemeMenu() {
   );
 }
 
-function WorkspaceVersionsDialog({
+function VersionsDialog({
   open,
   onOpenChange,
 }: {
@@ -450,15 +451,4 @@ function VersionRow({
       </code>
     </div>
   );
-}
-
-function deriveInitials(source: string) {
-  const parts = source
-    .split(" ")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length === 0) return "*";
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
 }
