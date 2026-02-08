@@ -146,6 +146,12 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         description="Upload, update, delete, or restore workspace documents.",
     ),
     _permission(
+        key="workspace.documents.views.public.manage",
+        scope=ScopeType.WORKSPACE,
+        label="Manage public document views",
+        description="Create, edit, and delete public document views in the workspace.",
+    ),
+    _permission(
         key="workspace.configurations.read",
         scope=ScopeType.WORKSPACE,
         label="Read configurations",

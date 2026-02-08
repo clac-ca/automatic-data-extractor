@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Ellipsis } from "lucide-react";
+import { Ellipsis, RotateCcw } from "lucide-react";
 
 import { ChatIcon, CloseIcon, DownloadIcon, EyeIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -14,30 +14,35 @@ import type { DocumentRow } from "../../../shared/types";
 
 export function ActionsCell({
   document,
+  lifecycle,
   onOpenDocument,
   onOpenActivity,
   isBusy,
   onRenameRequest,
   onDeleteRequest,
+  onRestoreRequest,
   onDownload,
   onDownloadOriginal,
   onReprocessRequest,
   onCancelRunRequest,
 }: {
   document: DocumentRow;
+  lifecycle: "active" | "deleted";
   onOpenDocument: () => void;
   onOpenActivity: () => void;
   isBusy: boolean;
   onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
+  onRestoreRequest: (document: DocumentRow) => void;
   onDownload: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
 }) {
+  const isDeletedLifecycle = lifecycle === "deleted";
   const isRunActive = document.lastRun?.status === "queued" || document.lastRun?.status === "running";
   const canDownloadNormalizedOutput = document.lastRun?.status === "succeeded";
-  const runActionLabel = isRunActive ? "Cancel run" : "Reprocess";
+  const runActionLabel = isDeletedLifecycle ? "Restore" : isRunActive ? "Cancel run" : "Reprocess";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
 
@@ -66,12 +71,24 @@ export function ActionsCell({
       </IconButton>
       <IconButton
         label={runActionLabel}
-        onClick={() => (isRunActive ? onCancelRunRequest(document) : onReprocessRequest(document))}
-        variant={isRunActive ? "secondary" : "ghost"}
+        onClick={() =>
+          isDeletedLifecycle
+            ? onRestoreRequest(document)
+            : isRunActive
+              ? onCancelRunRequest(document)
+              : onReprocessRequest(document)
+        }
+        variant={isDeletedLifecycle || isRunActive ? "secondary" : "ghost"}
         disabled={isBusy}
         className="shrink-0"
       >
-        {isRunActive ? <CloseIcon className="h-4 w-4" /> : <RefreshIcon className="h-4 w-4" />}
+        {isDeletedLifecycle ? (
+          <RotateCcw className="h-4 w-4" />
+        ) : isRunActive ? (
+          <CloseIcon className="h-4 w-4" />
+        ) : (
+          <RefreshIcon className="h-4 w-4" />
+        )}
       </IconButton>
       <IconButton
         label={canDownloadNormalizedOutput ? "Download normalized output" : "Output not ready"}
@@ -94,7 +111,13 @@ export function ActionsCell({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
-            onSelect={() => (isRunActive ? onCancelRunRequest(document) : onReprocessRequest(document))}
+            onSelect={() =>
+              isDeletedLifecycle
+                ? onRestoreRequest(document)
+                : isRunActive
+                  ? onCancelRunRequest(document)
+                  : onReprocessRequest(document)
+            }
             disabled={isBusy}
           >
             {runActionLabel}
@@ -108,16 +131,20 @@ export function ActionsCell({
           <DropdownMenuItem onSelect={() => onDownloadOriginal(document)}>
             Download original
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onRenameRequest(document)} disabled={isBusy}>
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => onDeleteRequest(document)}
-            disabled={isBusy}
-            className="text-destructive focus:text-destructive"
-          >
-            Delete
-          </DropdownMenuItem>
+          {!isDeletedLifecycle ? (
+            <DropdownMenuItem onSelect={() => onRenameRequest(document)} disabled={isBusy}>
+              Rename
+            </DropdownMenuItem>
+          ) : null}
+          {!isDeletedLifecycle ? (
+            <DropdownMenuItem
+              onSelect={() => onDeleteRequest(document)}
+              disabled={isBusy}
+              className="text-destructive focus:text-destructive"
+            >
+              Delete
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

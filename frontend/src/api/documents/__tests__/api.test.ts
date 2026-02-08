@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { client } from "@/api/client";
-import { patchWorkspaceDocument } from "@/api/documents/api";
+import {
+  fetchWorkspaceDocuments,
+  patchWorkspaceDocument,
+  restoreWorkspaceDocument,
+  restoreWorkspaceDocumentsBatch,
+} from "@/api/documents/api";
 
 type PatchResponse = Awaited<ReturnType<(typeof client)["PATCH"]>>;
+type GetResponse = Awaited<ReturnType<(typeof client)["GET"]>>;
+type PostResponse = Awaited<ReturnType<(typeof client)["POST"]>>;
 
 describe("documents api helpers", () => {
   afterEach(() => {
@@ -47,5 +54,74 @@ describe("documents api helpers", () => {
     await expect(
       patchWorkspaceDocument("ws-1", "doc-1", { name: "Renamed.xlsx" }),
     ).rejects.toThrow("Expected updated document record.");
+  });
+
+  it("passes lifecycle through list document queries", async () => {
+    const responsePayload = {
+      items: [],
+      meta: {
+        limit: 20,
+        hasMore: false,
+      },
+    };
+    const spy = vi.spyOn(client, "GET").mockResolvedValue(
+      { data: responsePayload } as unknown as GetResponse,
+    );
+
+    await fetchWorkspaceDocuments("ws-1", {
+      limit: 20,
+      sort: null,
+      lifecycle: "deleted",
+    });
+
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents", {
+      params: {
+        path: { workspaceId: "ws-1" },
+        query: {
+          limit: 20,
+          lifecycle: "deleted",
+        },
+      },
+      signal: undefined,
+    });
+  });
+
+  it("calls the single restore endpoint", async () => {
+    const responsePayload = {
+      id: "doc-1",
+      workspaceId: "ws-1",
+      name: "Quarterly Intake.xlsx",
+      byteSize: 123,
+      metadata: {},
+      tags: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      activityAt: "2026-01-01T00:00:00Z",
+      fileType: "xlsx",
+    };
+    const spy = vi.spyOn(client, "POST").mockResolvedValue(
+      { data: responsePayload } as unknown as PostResponse,
+    );
+
+    const result = await restoreWorkspaceDocument("ws-1", "doc-1");
+
+    expect(result).toEqual(responsePayload);
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
+      params: { path: { workspaceId: "ws-1", documentId: "doc-1" } },
+    });
+  });
+
+  it("calls the batch restore endpoint", async () => {
+    const spy = vi.spyOn(client, "POST").mockResolvedValue(
+      { data: { documentIds: ["doc-1", "doc-2"] } } as unknown as PostResponse,
+    );
+
+    const result = await restoreWorkspaceDocumentsBatch("ws-1", ["doc-1", "doc-2"]);
+
+    expect(result).toEqual(["doc-1", "doc-2"]);
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
+      params: { path: { workspaceId: "ws-1" } },
+      body: { documentIds: ["doc-1", "doc-2"] },
+    });
   });
 });

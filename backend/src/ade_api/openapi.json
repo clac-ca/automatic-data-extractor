@@ -5860,6 +5860,15 @@
             "description": "Workspace identifier"
           },
           {
+            "name": "lifecycle",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DocumentListLifecycle",
+              "default": "active"
+            }
+          },
+          {
             "name": "includeRunMetrics",
             "in": "query",
             "required": false,
@@ -6178,6 +6187,351 @@
           },
           "413": {
             "description": "Uploaded file exceeds the configured size limit.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/views": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List saved document views",
+        "operationId": "list_document_views_api_v1_workspaces__workspaceId__documents_views_get",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentViewListResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Create a saved document view",
+        "operationId": "create_document_view_api_v1_workspaces__workspaceId__documents_views_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentViewCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentViewOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/views/{viewId}": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update a saved document view",
+        "operationId": "update_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__patch",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "viewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document view identifier",
+              "title": "Viewid"
+            },
+            "description": "Document view identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentViewUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentViewOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Delete a saved document view",
+        "operationId": "delete_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__delete",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "viewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document view identifier",
+              "title": "Viewid"
+            },
+            "description": "Document view identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -8080,6 +8434,124 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Restore a soft-deleted document",
+        "operationId": "restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to restore documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document restoration.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/documents/batch/delete": {
       "post": {
         "tags": [
@@ -8153,6 +8625,122 @@
           },
           "403": {
             "description": "Workspace permissions do not allow document deletion.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/batch/restore": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Restore multiple soft-deleted documents",
+        "operationId": "restore_documents_batch_api_v1_workspaces__workspaceId__documents_batch_restore_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchRestoreRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchRestoreResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to restore documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document restoration.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -14065,6 +14653,45 @@
         "title": "DocumentBatchDeleteResponse",
         "description": "Response envelope for batch deletions."
       },
+      "DocumentBatchRestoreRequest": {
+        "properties": {
+          "documentIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Documentids",
+            "description": "Documents to restore (all-or-nothing)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "documentIds"
+        ],
+        "title": "DocumentBatchRestoreRequest",
+        "description": "Payload for restoring multiple soft-deleted documents."
+      },
+      "DocumentBatchRestoreResponse": {
+        "properties": {
+          "documentIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "title": "Documentids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentBatchRestoreResponse",
+        "description": "Response envelope for batch restores."
+      },
       "DocumentBatchTagsRequest": {
         "properties": {
           "documentIds": {
@@ -14346,6 +14973,15 @@
         "title": "DocumentFileType",
         "description": "Normalized file types for documents."
       },
+      "DocumentListLifecycle": {
+        "type": "string",
+        "enum": [
+          "active",
+          "deleted"
+        ],
+        "title": "DocumentListLifecycle",
+        "description": "Visibility scope for list queries."
+      },
       "DocumentListPage": {
         "properties": {
           "items": {
@@ -14463,6 +15099,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Activityat"
+          },
+          "deletedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletedat"
           },
           "lastRun": {
             "anyOf": [
@@ -14965,6 +15613,358 @@
         "type": "object",
         "title": "DocumentUpdateRequest",
         "description": "Payload for updating document name, metadata, or assignment."
+      },
+      "DocumentViewCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ],
+            "title": "Visibility",
+            "default": "private"
+          },
+          "queryState": {
+            "$ref": "#/components/schemas/DocumentViewQueryState"
+          },
+          "tableState": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentViewTableState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "queryState"
+        ],
+        "title": "DocumentViewCreate",
+        "description": "Payload for creating a saved document view."
+      },
+      "DocumentViewListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentViewOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DocumentViewListResponse",
+        "description": "Collection of visible document views."
+      },
+      "DocumentViewOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspaceid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/DocumentViewVisibility"
+          },
+          "systemKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Systemkey"
+          },
+          "ownerUserId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owneruserid"
+          },
+          "queryState": {
+            "$ref": "#/components/schemas/DocumentViewQueryState"
+          },
+          "tableState": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentViewTableState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "name",
+          "visibility",
+          "queryState",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "DocumentViewOut",
+        "description": "Saved document view resource."
+      },
+      "DocumentViewQueryState": {
+        "properties": {
+          "lifecycle": {
+            "$ref": "#/components/schemas/DocumentListLifecycle",
+            "default": "active"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "sort": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Sort"
+          },
+          "filters": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Filters"
+          },
+          "joinOperator": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "and",
+                  "or"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joinoperator",
+            "default": "and"
+          },
+          "filterFlag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filterflag"
+          },
+          "simpleFilters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simplefilters"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentViewQueryState",
+        "description": "Serializable list query state persisted for a saved view."
+      },
+      "DocumentViewTableState": {
+        "properties": {
+          "columnVisibility": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columnvisibility"
+          },
+          "columnSizing": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columnsizing"
+          },
+          "columnOrder": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columnorder"
+          },
+          "columnPinning": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columnpinning"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentViewTableState",
+        "description": "Serializable table layout state persisted for a saved view."
+      },
+      "DocumentViewUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          },
+          "queryState": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentViewQueryState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tableState": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentViewTableState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentViewUpdate",
+        "description": "Payload for updating a saved document view."
+      },
+      "DocumentViewVisibility": {
+        "type": "string",
+        "enum": [
+          "system",
+          "private",
+          "public"
+        ],
+        "title": "DocumentViewVisibility",
+        "description": "Visibility scope for saved document views."
       },
       "EffectivePermissions": {
         "properties": {
@@ -18501,7 +19501,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:30645"
+      "url": "http://127.0.0.1:30169"
     }
   ],
   "security": [

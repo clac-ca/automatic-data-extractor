@@ -16,6 +16,7 @@ WORKSPACE_IMPLICATIONS: dict[str, tuple[str, ...]] = {
     "workspace.settings.manage": ("workspace.read",),
     "workspace.members.manage": ("workspace.members.read", "workspace.read"),
     "workspace.documents.manage": ("workspace.documents.read", "workspace.read"),
+    "workspace.documents.views.public.manage": ("workspace.documents.read", "workspace.read"),
     "workspace.configurations.manage": ("workspace.configurations.read", "workspace.read"),
     "workspace.runs.manage": ("workspace.runs.read", "workspace.read"),
     "workspace.roles.manage": ("workspace.roles.read", "workspace.read"),

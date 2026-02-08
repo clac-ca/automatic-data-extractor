@@ -2,17 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult } from "@/api/documents";
+import type { DocumentLifecycle } from "@/api/documents";
 import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 import type { DocumentRow } from "../../shared/types";
 
-export function useDocumentsView({
+export function useDocumentsListData({
   workspaceId,
   page,
   perPage,
   sort,
   q,
+  lifecycle,
   filters,
   joinOperator,
   enabled = true,
@@ -22,6 +24,7 @@ export function useDocumentsView({
   perPage: number;
   sort: string | null;
   q: string | null;
+  lifecycle: DocumentLifecycle;
   filters: FilterItem[] | null;
   joinOperator: FilterJoinOperator | null;
   enabled?: boolean;
@@ -39,12 +42,23 @@ export function useDocumentsView({
   );
   const qKey = useMemo(() => q ?? "", [q]);
   const cursorKey = useMemo(
-    () => [workspaceId, perPage, sort ?? "", qKey, filtersKey, joinOperator ?? ""].join("|"),
-    [workspaceId, perPage, sort, qKey, filtersKey, joinOperator],
+    () =>
+      [workspaceId, perPage, sort ?? "", qKey, lifecycle, filtersKey, joinOperator ?? ""].join("|"),
+    [workspaceId, perPage, sort, qKey, lifecycle, filtersKey, joinOperator],
   );
   const queryKey = useMemo(
-    () => ["documents", workspaceId, page, perPage, sort ?? "", qKey, filtersKey, joinOperator ?? ""],
-    [workspaceId, page, perPage, sort, qKey, filtersKey, joinOperator],
+    () => [
+      "documents",
+      workspaceId,
+      page,
+      perPage,
+      sort ?? "",
+      qKey,
+      lifecycle,
+      filtersKey,
+      joinOperator ?? "",
+    ],
+    [workspaceId, page, perPage, sort, qKey, lifecycle, filtersKey, joinOperator],
   );
 
   const cursorPager = useCursorPager<DocumentPageResult>({
@@ -60,6 +74,7 @@ export function useDocumentsView({
           cursor,
           sort,
           q,
+          lifecycle,
           filters,
           joinOperator: joinOperator ?? undefined,
           includeTotal,

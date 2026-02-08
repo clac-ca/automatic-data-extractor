@@ -70,6 +70,10 @@ SORT_FIELDS = {
     "id": (File.id.asc(), File.id.desc()),
     "createdAt": (File.created_at.asc(), File.created_at.desc()),
     "updatedAt": (File.updated_at.asc(), File.updated_at.desc()),
+    "deletedAt": (
+        tuple(nulls_last(File.deleted_at.asc())),
+        tuple(nulls_last(File.deleted_at.desc())),
+    ),
     "lastRunAt": (
         tuple(nulls_last(_last_run_at_expr().asc())),
         tuple(nulls_last(_last_run_at_expr().desc())),
@@ -93,6 +97,7 @@ CURSOR_FIELDS: dict[str, CursorFieldSpec[File]] = {
     "id": cursor_field(lambda doc: doc.id, parse_uuid),
     "createdAt": cursor_field(lambda doc: doc.created_at, parse_datetime),
     "updatedAt": cursor_field(lambda doc: doc.updated_at, parse_datetime),
+    "deletedAt": cursor_field_nulls_last(lambda doc: doc.deleted_at, parse_datetime),
     "lastRunAt": cursor_field_nulls_last(
         lambda doc: getattr(doc, "_last_run_at", None),
         parse_datetime,

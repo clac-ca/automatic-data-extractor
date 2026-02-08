@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
 import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
@@ -17,7 +18,7 @@ from uuid import UUID
 
 import openpyxl
 from fastapi import UploadFile
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
@@ -43,6 +44,8 @@ from ade_db.models import (
     File,
     FileComment,
     FileCommentMention,
+    DocumentView,
+    DocumentViewVisibility,
     FileKind,
     FileTag,
     FileVersion,
@@ -72,6 +75,9 @@ from .exceptions import (
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
     DocumentVersionNotFoundError,
+    DocumentViewConflictError,
+    DocumentViewImmutableError,
+    DocumentViewNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentRenameError,
     InvalidDocumentCommentMentionsError,
@@ -83,12 +89,19 @@ from .schemas import (
     DocumentCommentOut,
     DocumentCommentPage,
     DocumentConflictMode,
+    DocumentListLifecycle,
     DocumentFileType,
     DocumentListPage,
     DocumentListRow,
     DocumentOut,
     DocumentRunSummary,
     DocumentSheet,
+    DocumentViewCreate,
+    DocumentViewListResponse,
+    DocumentViewOut,
+    DocumentViewQueryState,
+    DocumentViewTableState,
+    DocumentViewUpdate,
     DocumentUpdateRequest,
     TagCatalogItem,
     TagCatalogPage,
@@ -99,12 +112,21 @@ from .tags import (
     normalize_tag_list,
     normalize_tag_query,
 )
+from .view_presets import (
+    SYSTEM_DOCUMENT_VIEW_PRESETS,
+    is_system_view_id,
+    reserved_system_name_keys,
+    system_view_id,
+)
 
 logger = logging.getLogger(__name__)
 
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 _FILES_NAME_KEY_CONSTRAINT = "files_workspace_kind_name_key"
+_PUBLIC_VIEW_MANAGE_PERMISSION = "workspace.documents.views.public.manage"
+_VIEW_NAME_PATTERN = re.compile(r"[^a-z0-9]+")
+_VIRTUAL_VIEW_TIMESTAMP = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 def _run_with_timeout(func, *, timeout: float, **kwargs):
@@ -377,6 +399,7 @@ class DocumentsService:
         q: str | None,
         include_total: bool,
         include_facets: bool,
+        lifecycle: DocumentListLifecycle = DocumentListLifecycle.ACTIVE,
         include_run_metrics: bool = False,
         include_run_table_columns: bool = False,
         include_run_fields: bool = False,
@@ -389,11 +412,16 @@ class DocumentsService:
                 workspace_id=workspace_id,
                 limit=limit,
                 cursor=cursor,
+                lifecycle=lifecycle.value,
                 order_by=str(resolved_sort.order_by),
             ),
         )
 
-        stmt = self._repository.base_query(workspace_id).where(File.deleted_at.is_(None))
+        stmt = self._repository.base_query(workspace_id)
+        if lifecycle == DocumentListLifecycle.DELETED:
+            stmt = stmt.where(File.deleted_at.is_not(None))
+        else:
+            stmt = stmt.where(File.deleted_at.is_(None))
         stmt = apply_document_filters(
             stmt,
             filters,
@@ -446,12 +474,187 @@ class DocumentsService:
                 limit=page_result.meta.limit,
                 count=len(items),
                 has_more=page_result.meta.has_more,
+                lifecycle=lifecycle.value,
             ),
         )
 
         rows = [self._build_list_row(item) for item in items]
 
         return DocumentListPage(items=rows, meta=page_result.meta, facets=facets)
+
+    def list_document_views(
+        self,
+        *,
+        workspace_id: UUID,
+        actor: User,
+    ) -> DocumentViewListResponse:
+        """List virtual system, public, and owned private views."""
+
+        stmt = (
+            select(DocumentView)
+            .where(DocumentView.workspace_id == workspace_id)
+            .where(
+                or_(
+                    DocumentView.visibility == DocumentViewVisibility.PUBLIC,
+                    DocumentView.owner_user_id == actor.id,
+                )
+            )
+            .order_by(
+                case(
+                    (DocumentView.visibility == DocumentViewVisibility.PUBLIC, 0),
+                    else_=1,
+                ),
+                func.lower(DocumentView.name).asc(),
+                DocumentView.id.asc(),
+            )
+        )
+        persisted_views = list(self._session.execute(stmt).scalars())
+
+        virtual_views = [
+            DocumentViewOut(
+                id=system_view_id(workspace_id=workspace_id, system_key=preset.system_key),
+                workspace_id=workspace_id,
+                name=preset.name,
+                visibility="system",
+                system_key=preset.system_key,
+                owner_user_id=None,
+                query_state=DocumentViewQueryState.model_validate(preset.query_state),
+                table_state=None,
+                created_at=_VIRTUAL_VIEW_TIMESTAMP,
+                updated_at=_VIRTUAL_VIEW_TIMESTAMP,
+            )
+            for preset in SYSTEM_DOCUMENT_VIEW_PRESETS
+        ]
+        persisted_payload = [self._serialize_document_view(view) for view in persisted_views]
+        return DocumentViewListResponse(items=[*virtual_views, *persisted_payload])
+
+    def can_manage_public_document_views(
+        self,
+        *,
+        actor: User,
+        workspace_id: UUID,
+    ) -> bool:
+        """Return whether ``actor`` can manage public document views."""
+
+        from ade_api.features.rbac.service import AuthorizationError, RbacService
+
+        try:
+            decision = RbacService(session=self._session).authorize(
+                user=actor,
+                permission_key=_PUBLIC_VIEW_MANAGE_PERMISSION,
+                workspace_id=workspace_id,
+            )
+            return not decision.missing
+        except AuthorizationError:
+            return False
+
+    def create_document_view(
+        self,
+        *,
+        workspace_id: UUID,
+        payload: DocumentViewCreate,
+        actor: User,
+        can_manage_public_views: bool,
+    ) -> DocumentViewOut:
+        """Create a user-defined saved document view."""
+
+        visibility = DocumentViewVisibility(payload.visibility)
+        if visibility == DocumentViewVisibility.PUBLIC and not can_manage_public_views:
+            raise PermissionError("You do not have permission to create public views.")
+
+        name = payload.name.strip()
+        name_key = self._validated_view_name_key(name)
+        owner_user_id = actor.id if visibility == DocumentViewVisibility.PRIVATE else None
+        query_state = payload.query_state.model_dump(by_alias=True, exclude_none=True)
+        table_state = (
+            payload.table_state.model_dump(by_alias=True, exclude_none=True)
+            if payload.table_state is not None
+            else {}
+        )
+        view = DocumentView(
+            workspace_id=workspace_id,
+            name=name,
+            name_key=name_key,
+            visibility=visibility,
+            owner_user_id=owner_user_id,
+            query_state=query_state,
+            table_state=table_state,
+        )
+        self._session.add(view)
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            raise DocumentViewConflictError("A view with this name already exists.") from exc
+
+        return self._serialize_document_view(view)
+
+    def update_document_view(
+        self,
+        *,
+        workspace_id: UUID,
+        view_id: UUID,
+        payload: DocumentViewUpdate,
+        actor: User,
+        can_manage_public_views: bool,
+    ) -> DocumentViewOut:
+        """Update an existing saved document view."""
+
+        view = self._load_document_view_for_mutation(
+            workspace_id=workspace_id,
+            view_id=view_id,
+            actor=actor,
+            can_manage_public_views=can_manage_public_views,
+        )
+
+        if "name" in payload.model_fields_set and payload.name is not None:
+            next_name = payload.name.strip()
+            view.name = next_name
+            view.name_key = self._validated_view_name_key(next_name)
+
+        if "visibility" in payload.model_fields_set and payload.visibility is not None:
+            next_visibility = DocumentViewVisibility(payload.visibility)
+            if next_visibility == DocumentViewVisibility.PUBLIC and not can_manage_public_views:
+                raise PermissionError("You do not have permission to create public views.")
+            view.visibility = next_visibility
+            view.owner_user_id = actor.id if next_visibility == DocumentViewVisibility.PRIVATE else None
+
+        if "query_state" in payload.model_fields_set:
+            if payload.query_state is None:
+                view.query_state = {}
+            else:
+                view.query_state = payload.query_state.model_dump(by_alias=True, exclude_none=True)
+
+        if "table_state" in payload.model_fields_set:
+            if payload.table_state is None:
+                view.table_state = {}
+            else:
+                view.table_state = payload.table_state.model_dump(by_alias=True, exclude_none=True)
+
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            raise DocumentViewConflictError("A view with this name already exists.") from exc
+
+        return self._serialize_document_view(view)
+
+    def delete_document_view(
+        self,
+        *,
+        workspace_id: UUID,
+        view_id: UUID,
+        actor: User,
+        can_manage_public_views: bool,
+    ) -> None:
+        """Delete a saved document view."""
+
+        view = self._load_document_view_for_mutation(
+            workspace_id=workspace_id,
+            view_id=view_id,
+            actor=actor,
+            can_manage_public_views=can_manage_public_views,
+        )
+        self._session.delete(view)
+        self._session.flush()
 
     def get_document_change_delta(
         self,
@@ -1066,7 +1269,7 @@ class DocumentsService:
         document_id: UUID,
         actor: User | None = None,
     ) -> None:
-        """Soft delete ``document_id`` and remove the stored file."""
+        """Soft delete ``document_id`` while retaining blob storage."""
 
         actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
@@ -1085,8 +1288,6 @@ class DocumentsService:
             document.deleted_by_user_id = actor_id
         self._session.flush()
 
-        self._storage.delete(document.blob_name)
-
         logger.info(
             "document.delete.success",
             extra=log_context(
@@ -1104,7 +1305,7 @@ class DocumentsService:
         document_ids: Sequence[UUID],
         actor: User | None = None,
     ) -> list[UUID]:
-        """Soft delete multiple documents and remove stored files."""
+        """Soft delete multiple documents while retaining blob storage."""
 
         ordered_ids = list(dict.fromkeys(document_ids))
         if not ordered_ids:
@@ -1124,9 +1325,57 @@ class DocumentsService:
 
         self._session.flush()
 
-        for document in documents:
-            self._storage.delete(document.blob_name)
+        return ordered_ids
 
+    def restore_document(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+    ) -> DocumentOut:
+        """Restore a soft-deleted document."""
+
+        document = self._get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            include_deleted=True,
+        )
+        if document.deleted_at is not None or document.deleted_by_user_id is not None:
+            document.deleted_at = None
+            document.deleted_by_user_id = None
+            self._session.flush()
+
+        restored = DocumentOut.model_validate(document)
+        self._attach_last_runs(workspace_id, [restored])
+        self._apply_derived_fields(restored)
+        restored.list_row = self._build_list_row(restored)
+        return restored
+
+    def restore_documents_batch(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+    ) -> list[UUID]:
+        """Restore multiple soft-deleted documents."""
+
+        ordered_ids = list(dict.fromkeys(document_ids))
+        if not ordered_ids:
+            return []
+        documents = self._require_documents(
+            workspace_id=workspace_id,
+            document_ids=ordered_ids,
+            include_deleted=True,
+        )
+        changed = False
+        for document in documents:
+            if document.deleted_at is None and document.deleted_by_user_id is None:
+                continue
+            document.deleted_at = None
+            document.deleted_by_user_id = None
+            changed = True
+        if changed:
+            self._session.flush()
         return ordered_ids
 
     def replace_document_tags(
@@ -1307,10 +1556,17 @@ class DocumentsService:
 
         return TagCatalogPage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
 
-    def _get_document(self, workspace_id: UUID, document_id: UUID) -> File:
+    def _get_document(
+        self,
+        workspace_id: UUID,
+        document_id: UUID,
+        *,
+        include_deleted: bool = False,
+    ) -> File:
         document = self._repository.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
+            include_deleted=include_deleted,
         )
         if document is None:
             logger.warning(
@@ -1370,15 +1626,14 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
+        include_deleted: bool = False,
     ) -> list[File]:
         if not document_ids:
             return []
 
-        stmt = (
-            self._repository.base_query(workspace_id)
-            .where(File.deleted_at.is_(None))
-            .where(File.id.in_(document_ids))
-        )
+        stmt = self._repository.base_query(workspace_id).where(File.id.in_(document_ids))
+        if not include_deleted:
+            stmt = stmt.where(File.deleted_at.is_(None))
         result = self._session.execute(stmt)
         documents = list(result.scalars())
         found = {doc.id for doc in documents}
@@ -1395,6 +1650,54 @@ class DocumentsService:
             raise DocumentNotFoundError(missing[0])
 
         return documents
+
+    def _load_document_view_for_mutation(
+        self,
+        *,
+        workspace_id: UUID,
+        view_id: UUID,
+        actor: User,
+        can_manage_public_views: bool,
+    ) -> DocumentView:
+        if is_system_view_id(workspace_id=workspace_id, view_id=view_id):
+            raise DocumentViewImmutableError()
+
+        stmt = select(DocumentView).where(
+            DocumentView.workspace_id == workspace_id,
+            DocumentView.id == view_id,
+        )
+        view = self._session.execute(stmt).scalar_one_or_none()
+        if view is None:
+            raise DocumentViewNotFoundError(view_id)
+        if view.visibility == DocumentViewVisibility.PRIVATE and view.owner_user_id != actor.id:
+            raise DocumentViewNotFoundError(view_id)
+        if view.visibility == DocumentViewVisibility.PUBLIC and not can_manage_public_views:
+            raise PermissionError("You do not have permission to manage public views.")
+        return view
+
+    def _serialize_document_view(self, view: DocumentView) -> DocumentViewOut:
+        query_state = (
+            DocumentViewQueryState.model_validate(view.query_state)
+            if isinstance(view.query_state, dict) and view.query_state
+            else DocumentViewQueryState()
+        )
+        table_state = (
+            DocumentViewTableState.model_validate(view.table_state)
+            if isinstance(view.table_state, dict) and view.table_state
+            else None
+        )
+        return DocumentViewOut(
+            id=view.id,
+            workspace_id=view.workspace_id,
+            name=view.name,
+            visibility=view.visibility.value,
+            system_key=None,
+            owner_user_id=view.owner_user_id,
+            query_state=query_state,
+            table_state=table_state,
+            created_at=view.created_at,
+            updated_at=view.updated_at,
+        )
 
     def _attach_last_runs(
         self,
@@ -1461,6 +1764,7 @@ class DocumentsService:
             created_at=document.created_at,
             updated_at=document.updated_at,
             activity_at=activity_at,
+            deleted_at=document.deleted_at,
             last_run=document.last_run,
             last_run_metrics=document.last_run_metrics,
             last_run_table_columns=document.last_run_table_columns,
@@ -1739,6 +2043,18 @@ class DocumentsService:
         normalized = unicodedata.normalize("NFKC", name)
         collapsed = " ".join(normalized.split())
         return collapsed.casefold()
+
+    def _build_view_name_key(self, name: str) -> str:
+        normalized = unicodedata.normalize("NFKC", name).casefold()
+        candidate = _VIEW_NAME_PATTERN.sub("-", normalized).strip("-")
+        candidate = re.sub("-{2,}", "-", candidate)
+        return candidate or "view"
+
+    def _validated_view_name_key(self, name: str) -> str:
+        name_key = self._build_view_name_key(name)
+        if name_key in reserved_system_name_keys():
+            raise DocumentViewConflictError("This view name is reserved by a system view.")
+        return name_key
 
     def _find_by_name_key(self, *, workspace_id: UUID, name_key: str) -> File | None:
         stmt = (

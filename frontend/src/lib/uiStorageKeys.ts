@@ -6,6 +6,7 @@ export const uiStorageKeys = {
   themeName: `${UI_STORAGE_PREFIX}.theme.name`,
   workspaceLastActive: `${UI_STORAGE_PREFIX}.workspace.lastActive`,
   documentsCursor: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.cursor`,
+  documentsLastView: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.lastView`,
   documentsTableColumnSizing: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.table.columnSizing`,
   documentsPreviewPaneHeight: (workspaceId: string) =>

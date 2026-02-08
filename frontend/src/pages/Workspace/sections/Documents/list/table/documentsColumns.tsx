@@ -16,6 +16,7 @@ import { TagsCell } from "./cells/TagsCell";
 
 export type DocumentsColumnContext = {
   filterMode: "simple" | "advanced";
+  lifecycle: "active" | "deleted";
   people: WorkspacePerson[];
   tagOptions: string[];
   onTagOptionsChange?: (nextOptions: string[]) => void;
@@ -28,6 +29,7 @@ export type DocumentsColumnContext = {
   onToggleTag: (documentId: string, tag: string) => void;
   onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
+  onRestoreRequest: (document: DocumentRow) => void;
   onDownload: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
@@ -37,6 +39,7 @@ export type DocumentsColumnContext = {
 
 export function useDocumentsColumns({
   filterMode,
+  lifecycle,
   people,
   tagOptions,
   onTagOptionsChange,
@@ -49,6 +52,7 @@ export function useDocumentsColumns({
   onToggleTag,
   onRenameRequest,
   onDeleteRequest,
+  onRestoreRequest,
   onDownload,
   onDownloadOriginal,
   onReprocessRequest,
@@ -56,6 +60,7 @@ export function useDocumentsColumns({
   isRowActionPending,
 }: DocumentsColumnContext) {
   const enableAdvancedOnly = filterMode === "advanced";
+  const isDeletedLifecycle = lifecycle === "deleted";
   const runStatusOptions = useMemo(() => {
     const statuses = (["queued", "running", "succeeded", "failed", "cancelled"] as RunStatus[]).map((value) => ({
       value,
@@ -77,6 +82,10 @@ export function useDocumentsColumns({
     () => people.map((person) => ({ label: person.label, value: person.id })),
     [people],
   );
+  const assigneeFilterOptions = useMemo(() => {
+    const options = [{ label: "Me", value: "me" }, ...memberOptions];
+    return Array.from(new Map(options.map((option) => [option.value, option])).values());
+  }, [memberOptions]);
 
   const tagFilterOptions = useMemo(
     () => tagOptions.map((tag) => ({ label: tag, value: tag })),
@@ -144,13 +153,13 @@ export function useDocumentsColumns({
             assigneeId={row.original.assignee?.id ?? null}
             people={people}
             onAssign={(assigneeId) => onAssign(row.original.id, assigneeId)}
-            disabled={isRowActionPending?.(row.original.id) ?? false}
+            disabled={isDeletedLifecycle || (isRowActionPending?.(row.original.id) ?? false)}
           />
         ),
         meta: {
           label: "Assignee",
           variant: "multiSelect",
-          options: memberOptions,
+          options: assigneeFilterOptions,
         },
         size: 160,
         enableColumnFilter: true,
@@ -168,7 +177,7 @@ export function useDocumentsColumns({
             onToggle={(tag) => onToggleTag(row.original.id, tag)}
             onTagOptionsChange={onTagOptionsChange}
             onCreateTag={onCreateTag}
-            disabled={isRowActionPending?.(row.original.id) ?? false}
+            disabled={isDeletedLifecycle || (isRowActionPending?.(row.original.id) ?? false)}
           />
         ),
         meta: {
@@ -236,6 +245,21 @@ export function useDocumentsColumns({
         },
         size: 150,
         enableColumnFilter: true,
+        enableHiding: true,
+      },
+      {
+        id: "deletedAt",
+        accessorKey: "deletedAt",
+        header: ({ column }) => <DataTableColumnHeader column={column} label="Deleted" />,
+        cell: ({ row }) => {
+          const value = row.getValue<string | null>("deletedAt");
+          return value ? formatTimestamp(value) : <span className="text-muted-foreground">-</span>;
+        },
+        meta: {
+          label: "Deleted",
+        },
+        size: 150,
+        enableColumnFilter: false,
         enableHiding: true,
       },
       {
@@ -314,6 +338,7 @@ export function useDocumentsColumns({
         cell: ({ row }) => (
           <ActionsCell
             document={row.original}
+            lifecycle={lifecycle}
             onOpenDocument={() =>
               (onOpenPreview ?? onOpenDocument)?.(row.original.id)
             }
@@ -321,6 +346,7 @@ export function useDocumentsColumns({
             isBusy={isRowActionPending?.(row.original.id) ?? false}
             onRenameRequest={onRenameRequest}
             onDeleteRequest={onDeleteRequest}
+            onRestoreRequest={onRestoreRequest}
             onDownload={onDownload}
             onDownloadOriginal={onDownloadOriginal}
             onReprocessRequest={onReprocessRequest}
@@ -334,8 +360,11 @@ export function useDocumentsColumns({
     ],
     [
       enableAdvancedOnly,
+      lifecycle,
       fileTypeOptions,
+      isDeletedLifecycle,
       isRowActionPending,
+      assigneeFilterOptions,
       memberOptions,
       onCreateTag,
       onOpenActivity,
@@ -344,6 +373,7 @@ export function useDocumentsColumns({
       onAssign,
       onRenameRequest,
       onDeleteRequest,
+      onRestoreRequest,
       onDownload,
       onDownloadOriginal,
       onReprocessRequest,

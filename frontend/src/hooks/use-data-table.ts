@@ -42,6 +42,19 @@ const ARRAY_SEPARATOR = ",";
 const DEBOUNCE_MS = 300;
 const THROTTLE_MS = 50;
 
+function coerceSortingState<TData>(value: unknown): ExtendedColumnSort<TData>[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (item): item is ExtendedColumnSort<TData> =>
+        Boolean(item) &&
+        typeof item === "object" &&
+        typeof (item as { id?: unknown }).id === "string" &&
+        typeof (item as { desc?: unknown }).desc === "boolean",
+    )
+    .map((item) => ({ id: item.id, desc: item.desc }));
+}
+
 interface UseDataTableProps<TData>
   extends Omit<
       TableOptions<TData>,
@@ -163,16 +176,26 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
       .withDefault(initialState?.sorting ?? []),
   );
 
+  const sortingState = React.useMemo(() => {
+    if (Array.isArray(sorting)) {
+      return coerceSortingState<TData>(sorting);
+    }
+    if (sorting == null) {
+      return initialState?.sorting ?? [];
+    }
+    return [];
+  }, [initialState?.sorting, sorting]);
+
   const onSortingChange = React.useCallback(
     (updaterOrValue: Updater<SortingState>) => {
       if (typeof updaterOrValue === "function") {
-        const newSorting = updaterOrValue(sorting);
-        setSorting(newSorting as ExtendedColumnSort<TData>[]);
+        const newSorting = updaterOrValue(sortingState);
+        setSorting(coerceSortingState<TData>(newSorting));
       } else {
-        setSorting(updaterOrValue as ExtendedColumnSort<TData>[]);
+        setSorting(coerceSortingState<TData>(updaterOrValue));
       }
     },
-    [sorting, setSorting],
+    [setSorting, sortingState],
   );
 
   const filterableColumns = React.useMemo(() => {
@@ -274,7 +297,7 @@ export function useDataTable<TData>(props: UseDataTableProps<TData>) {
     pageCount,
     state: {
       pagination,
-      sorting,
+      sorting: sortingState,
       columnVisibility,
       rowSelection,
       columnFilters,

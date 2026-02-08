@@ -155,6 +155,29 @@ class InvalidDocumentCommentMentionsError(Exception):
         super().__init__(message)
 
 
+class DocumentViewNotFoundError(Exception):
+    """Raised when a document view cannot be found or is not visible."""
+
+    def __init__(self, view_id: UUID | str) -> None:
+        identifier = str(view_id)
+        super().__init__(f"Document view {identifier!r} not found")
+        self.view_id = identifier
+
+
+class DocumentViewConflictError(Exception):
+    """Raised when a document view collides with an existing name or key."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class DocumentViewImmutableError(Exception):
+    """Raised when attempting to mutate a system document view."""
+
+    def __init__(self, message: str = "System views cannot be modified.") -> None:
+        super().__init__(message)
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
@@ -168,4 +191,7 @@ __all__ = [
     "DocumentVersionNotFoundError",
     "InvalidDocumentTagsError",
     "InvalidDocumentCommentMentionsError",
+    "DocumentViewNotFoundError",
+    "DocumentViewConflictError",
+    "DocumentViewImmutableError",
 ]

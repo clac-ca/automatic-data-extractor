@@ -13,6 +13,7 @@ export const DOCUMENTS_SORT_IDS = new Set([
   "name",
   "createdAt",
   "updatedAt",
+  "deletedAt",
   "activityAt",
   "lastRunAt",
   "byteSize",
