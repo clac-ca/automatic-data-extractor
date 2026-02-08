@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import enum
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterable
 
 import sqlalchemy as sa
 from fastapi import HTTPException, status
@@ -13,17 +14,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ade_api.common.logging import log_context
-from ade_api.common.problem_details import ApiError, ProblemDetailsErrorItem, resolve_error_definition
+from ade_api.common.problem_details import (
+    ApiError,
+    ProblemDetailsErrorItem,
+    resolve_error_definition,
+)
 from ade_api.common.time import utc_now
 from ade_api.core.security.secrets import decrypt_secret, encrypt_secret
 from ade_api.features.system_settings.service import SystemSettingsService
+from ade_api.settings import Settings
 from ade_db.models import (
     SsoAuthState,
     SsoProvider,
     SsoProviderDomain,
     SsoProviderStatus,
 )
-from ade_api.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +71,12 @@ def _normalize_domains(values: Iterable[str]) -> list[str]:
             seen.add(domain)
             normalized.append(domain)
     return normalized
+
+
+def _enum_value(raw: object) -> str:
+    if isinstance(raw, enum.Enum):
+        return str(raw.value)
+    return str(raw)
 
 
 @dataclass(slots=True)
@@ -128,7 +139,7 @@ class SsoService:
 
         logger.info(
             "sso.providers.create.success",
-            extra=log_context(provider_id=provider_id, status=provider.status.value),
+            extra=log_context(provider_id=provider_id, status=_enum_value(provider.status)),
         )
         return provider
 
@@ -177,7 +188,7 @@ class SsoService:
 
         logger.info(
             "sso.providers.update.success",
-            extra=log_context(provider_id=provider_id, status=provider.status.value),
+            extra=log_context(provider_id=provider_id, status=_enum_value(provider.status)),
         )
         return provider
 

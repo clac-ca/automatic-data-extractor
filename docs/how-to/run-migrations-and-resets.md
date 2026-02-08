@@ -40,6 +40,17 @@ cd backend && uv run ade db migrate
 cd backend && uv run ade db current
 ```
 
+## Baseline Rewrite Note
+
+Auth migration history was rewritten into a deterministic baseline (`0001` + historical placeholders).
+
+If your database is stamped to removed historical revisions (for example `0006_*` from older chains), do not attempt partial upgrade in place for local/dev environments. Reset and reseed instead:
+
+```bash
+cd backend && uv run ade db reset --yes
+cd backend && uv run ade db migrate
+```
+
 ## Reset Commands (Destructive)
 
 Combined reset:
