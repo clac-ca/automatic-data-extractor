@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import EmailStr, Field, SecretStr
 
 from ade_api.common.schema import BaseSchema
@@ -15,6 +17,8 @@ class AuthLoginRequest(BaseSchema):
 class AuthLoginSuccess(BaseSchema):
     ok: bool = True
     mfa_required: bool = False
+    mfa_setup_recommended: bool = Field(default=False, alias="mfaSetupRecommended")
+    mfa_setup_required: bool = Field(default=False, alias="mfaSetupRequired")
 
 
 class AuthLoginMfaRequired(BaseSchema):
@@ -46,6 +50,24 @@ class AuthMfaEnrollConfirmResponse(BaseSchema):
     recovery_codes: list[str] = Field(..., alias="recoveryCodes")
 
 
+class AuthMfaStatusResponse(BaseSchema):
+    enabled: bool
+    enrolled_at: datetime | None = Field(default=None, alias="enrolledAt")
+    recovery_codes_remaining: int | None = Field(
+        default=None,
+        alias="recoveryCodesRemaining",
+    )
+    onboarding_recommended: bool = Field(
+        default=False,
+        alias="onboardingRecommended",
+    )
+    onboarding_required: bool = Field(
+        default=False,
+        alias="onboardingRequired",
+    )
+    skip_allowed: bool = Field(default=False, alias="skipAllowed")
+
+
 class AuthMfaChallengeVerifyRequest(BaseSchema):
     challenge_token: str = Field(..., alias="challengeToken")
     code: str = Field(
@@ -67,6 +89,14 @@ class AuthPolicyUpdateRequest(BaseSchema):
     allow_jit_provisioning: bool = Field(alias="allowJitProvisioning")
 
 
+class AuthMfaRecoveryRegenerateRequest(BaseSchema):
+    code: str = Field(
+        min_length=6,
+        max_length=9,
+        pattern=r"^(?:\d{6}|[A-Za-z0-9]{8}|[A-Za-z0-9]{4}-[A-Za-z0-9]{4})$",
+    )
+
+
 __all__ = [
     "AuthLoginMfaRequired",
     "AuthLoginRequest",
@@ -74,6 +104,8 @@ __all__ = [
     "AuthMfaChallengeVerifyRequest",
     "AuthMfaEnrollConfirmRequest",
     "AuthMfaEnrollConfirmResponse",
+    "AuthMfaRecoveryRegenerateRequest",
+    "AuthMfaStatusResponse",
     "AuthMfaEnrollStartResponse",
     "AuthPasswordForgotRequest",
     "AuthPasswordResetRequest",

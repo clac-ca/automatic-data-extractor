@@ -5,7 +5,17 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, Security, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    Security,
+    status,
+)
 
 from ade_api.api.deps import get_api_keys_service, get_api_keys_service_read
 from ade_api.common.concurrency import require_if_match
@@ -143,9 +153,13 @@ def list_api_keys(
     summary="List API keys for the current user",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Requires api_keys.manage_all global permission."
+        },
     },
 )
 def list_my_api_keys(
+    _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: ApiKeysServiceReadDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
@@ -180,11 +194,15 @@ def list_my_api_keys(
     summary="Create an API key for the current user",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Requires api_keys.manage_all global permission."
+        },
         status.HTTP_400_BAD_REQUEST: {"description": "Invalid API key payload."},
     },
 )
 def create_my_api_key(
     payload: ApiKeyCreateRequest,
+    _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: ApiKeysServiceDep,
 ) -> ApiKeyCreateResponse:
@@ -209,12 +227,15 @@ def create_my_api_key(
     summary="Retrieve one of the current user's API keys",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Requires api_keys.manage_all global permission."
+        },
         status.HTTP_404_NOT_FOUND: {"description": "API key not found."},
-        status.HTTP_403_FORBIDDEN: {"description": "API key not owned by caller."},
     },
 )
 def read_my_api_key(
     api_key_id: ApiKeyPath,
+    _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: ApiKeysServiceReadDep,
     response: Response,
@@ -239,12 +260,15 @@ def read_my_api_key(
     summary="Revoke one of the current user's API keys",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Requires api_keys.manage_all global permission."
+        },
         status.HTTP_404_NOT_FOUND: {"description": "API key not found."},
-        status.HTTP_403_FORBIDDEN: {"description": "API key not owned by caller."},
     },
 )
 def revoke_my_api_key(
     api_key_id: ApiKeyPath,
+    _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: ApiKeysServiceDep,
     request: Request,

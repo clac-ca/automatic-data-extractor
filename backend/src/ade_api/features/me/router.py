@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, Security, status
 
-from ade_api.api.deps import ReadSessionDep, SettingsDep
+from ade_api.api.deps import ReadSessionDep, SettingsDep, WriteSessionDep
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, get_rbac_service, require_csrf
 from ade_api.core.http.csrf import set_csrf_cookie
@@ -14,6 +14,7 @@ from .schemas import (
     EffectivePermissions,
     MeContext,
     MeProfile,
+    MeProfileUpdateRequest,
     PermissionCheckRequest,
     PermissionCheckResponse,
 )
@@ -30,6 +31,15 @@ def get_me_service(
     rbac: Annotated[RbacService, Depends(get_rbac_service)],
 ) -> MeService:
     """Per-request MeService factory."""
+
+    return MeService(session=session, rbac=rbac)
+
+
+def get_me_service_write(
+    session: WriteSessionDep,
+    rbac: Annotated[RbacService, Depends(get_rbac_service)],
+) -> MeService:
+    """Per-request MeService factory backed by a write session."""
 
     return MeService(session=session, rbac=rbac)
 
@@ -59,6 +69,35 @@ def get_me(
     """Return the current principal's profile."""
 
     return service.get_profile(principal)
+
+
+@router.patch(
+    "",
+    response_model=MeProfile,
+    status_code=status.HTTP_200_OK,
+    summary="Update editable fields on the authenticated user's profile",
+    dependencies=[Depends(require_csrf)],
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update the profile."
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Service account principals cannot access this endpoint."
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "No editable fields provided or payload validation failed.",
+        },
+    },
+)
+def patch_me(
+    payload: MeProfileUpdateRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+    service: Annotated[MeService, Depends(get_me_service_write)],
+) -> MeProfile:
+    """Patch mutable fields for the current principal."""
+
+    return service.update_profile(principal=principal, payload=payload)
 
 
 @router.get(

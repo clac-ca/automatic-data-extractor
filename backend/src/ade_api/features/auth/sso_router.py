@@ -502,7 +502,10 @@ def callback_sso(
             extra=log_context(provider_id=provider.id, user_id=str(user.id)),
         )
 
-        session_token = AuthnService(session=db, settings=settings).create_session(user_id=user.id)
+        session_token = AuthnService(session=db, settings=settings).create_session(
+            user_id=user.id,
+            auth_method="sso",
+        )
         db.commit()
 
         response = _success_response(request, settings, return_to=sanitized_return_to)

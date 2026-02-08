@@ -241,7 +241,12 @@ export default function LoginScreen() {
         return;
       }
       queryClient.setQueryData(sessionKeys.detail(), result.session);
-      navigate(pickReturnTo(result.session.return_to, destination), { replace: true });
+      const nextPath = pickReturnTo(result.session.return_to, destination);
+      if (result.mfaSetupRequired || result.mfaSetupRecommended) {
+        navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
+        return;
+      }
+      navigate(nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";

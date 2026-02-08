@@ -1,7 +1,13 @@
 """Central exports for ADE SQLAlchemy models."""
 
 from .api_key import ApiKey
-from .authn import AuthSession, MfaChallenge, PasswordResetToken, UserMfaTotp
+from .authn import (
+    AUTH_SESSION_AUTH_METHOD_VALUES,
+    AuthSession,
+    MfaChallenge,
+    PasswordResetToken,
+    UserMfaTotp,
+)
 from .configuration import Configuration, ConfigurationStatus
 from .file import (
     FILE_KIND_VALUES,
@@ -34,6 +40,7 @@ from .workspace import Workspace, WorkspaceMembership
 
 __all__ = [
     "ApiKey",
+    "AUTH_SESSION_AUTH_METHOD_VALUES",
     "AuthSession",
     "Configuration",
     "ConfigurationStatus",

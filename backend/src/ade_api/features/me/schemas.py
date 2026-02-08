@@ -42,6 +42,16 @@ class MeProfile(BaseSchema):
     )
 
 
+class MeProfileUpdateRequest(BaseSchema):
+    """Payload for updating editable fields on the caller profile."""
+
+    display_name: str | None = Field(
+        default=None,
+        alias="display_name",
+        description="Optional display name shown in the ADE user interface.",
+    )
+
+
 class MeWorkspaceSummary(BaseSchema):
     """Lightweight view of a workspace visible to the current principal."""
 
@@ -121,6 +131,7 @@ __all__ = [
     "EffectivePermissions",
     "MeContext",
     "MeProfile",
+    "MeProfileUpdateRequest",
     "MeWorkspaceSummary",
     "PermissionCheckRequest",
     "PermissionCheckResponse",
