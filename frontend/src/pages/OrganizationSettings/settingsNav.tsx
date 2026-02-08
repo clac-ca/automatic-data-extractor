@@ -182,7 +182,7 @@ export function buildOrganizationSettingsNav(
         shortLabel: section.shortLabel,
         description: section.description,
         icon: section.icon,
-        href: `/organization/settings/${section.path}`,
+        href: `/organization/${section.path}`,
         canView: accessState.canView,
         canEdit: accessState.canEdit,
         disabled: !accessState.canAccess,

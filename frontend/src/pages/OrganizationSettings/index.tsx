@@ -121,6 +121,6 @@ function normalizeSectionSegments(
 
   return {
     effectiveSegments: isKnownPath ? initialSegments : defaultPath.split("/"),
-    redirectTo: needsDefaultRedirect || !isKnownPath ? `/organization/settings/${defaultPath}${search}${hash}` : null,
+    redirectTo: needsDefaultRedirect || !isKnownPath ? `/organization/${defaultPath}${search}${hash}` : null,
   };
 }
