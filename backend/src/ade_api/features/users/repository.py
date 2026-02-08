@@ -61,7 +61,6 @@ class UsersRepository:
         display_name: str | None = None,
         is_active: bool = True,
         is_service_account: bool = False,
-        is_superuser: bool = False,
         is_verified: bool = True,
     ) -> User:
         user = User(
@@ -70,7 +69,6 @@ class UsersRepository:
             display_name=display_name,
             is_active=is_active,
             is_service_account=is_service_account,
-            is_superuser=is_superuser,
             is_verified=is_verified,
             failed_login_count=0,
         )

@@ -54,6 +54,8 @@ export function SystemSsoSettingsPage() {
 
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
   const [settingsEnabled, setSettingsEnabled] = useState(false);
+  const [settingsEnforceSso, setSettingsEnforceSso] = useState(false);
+  const [settingsAllowJitProvisioning, setSettingsAllowJitProvisioning] = useState(true);
   const [drawerMode, setDrawerMode] = useState<"create" | "edit" | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
 
@@ -61,7 +63,17 @@ export function SystemSsoSettingsPage() {
     if (typeof settingsQuery.data?.enabled === "boolean") {
       setSettingsEnabled(settingsQuery.data.enabled);
     }
-  }, [settingsQuery.data?.enabled]);
+    if (typeof settingsQuery.data?.enforceSso === "boolean") {
+      setSettingsEnforceSso(settingsQuery.data.enforceSso);
+    }
+    if (typeof settingsQuery.data?.allowJitProvisioning === "boolean") {
+      setSettingsAllowJitProvisioning(settingsQuery.data.allowJitProvisioning);
+    }
+  }, [
+    settingsQuery.data?.allowJitProvisioning,
+    settingsQuery.data?.enabled,
+    settingsQuery.data?.enforceSso,
+  ]);
 
   const providers = providersQuery.data?.items ?? [];
   const selectedProvider = useMemo(
@@ -70,7 +82,14 @@ export function SystemSsoSettingsPage() {
   );
 
   const hasUnsavedSsoSetting =
-    typeof settingsQuery.data?.enabled === "boolean" && settingsEnabled !== settingsQuery.data.enabled;
+    typeof settingsQuery.data?.enabled === "boolean" &&
+    typeof settingsQuery.data?.enforceSso === "boolean" &&
+    typeof settingsQuery.data?.allowJitProvisioning === "boolean" &&
+    (
+      settingsEnabled !== settingsQuery.data.enabled ||
+      settingsEnforceSso !== settingsQuery.data.enforceSso ||
+      settingsAllowJitProvisioning !== settingsQuery.data.allowJitProvisioning
+    );
 
   if (!canRead) {
     return <Alert tone="danger">You do not have permission to access SSO settings.</Alert>;
@@ -100,7 +119,11 @@ export function SystemSsoSettingsPage() {
             onClick={async () => {
               setFeedback(null);
               try {
-                await updateSettings.mutateAsync({ enabled: settingsEnabled });
+                await updateSettings.mutateAsync({
+                  enabled: settingsEnabled,
+                  enforceSso: settingsEnforceSso,
+                  allowJitProvisioning: settingsAllowJitProvisioning,
+                });
                 setFeedback({ tone: "success", message: "SSO settings updated." });
               } catch (error) {
                 const mapped = mapUiError(error, {
@@ -123,6 +146,28 @@ export function SystemSsoSettingsPage() {
             disabled={!canManage || updateSettings.isPending || settingsQuery.isLoading}
           />
           Enable SSO
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-border"
+            checked={settingsEnforceSso}
+            onChange={(event) => setSettingsEnforceSso(event.target.checked)}
+            disabled={!canManage || updateSettings.isPending || settingsQuery.isLoading}
+          />
+          Enforce SSO for non-admin users
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-border"
+            checked={settingsAllowJitProvisioning}
+            onChange={(event) => setSettingsAllowJitProvisioning(event.target.checked)}
+            disabled={!canManage || updateSettings.isPending || settingsQuery.isLoading}
+          />
+          Allow just-in-time user provisioning
         </label>
 
         {hasUnsavedSsoSetting ? (

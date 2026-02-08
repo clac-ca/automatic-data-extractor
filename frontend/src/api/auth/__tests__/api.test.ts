@@ -27,9 +27,12 @@ const meBootstrap = {
 };
 
 beforeEach(() => {
+  mockClient.POST.mockReset();
+  mockClient.GET.mockReset();
+  mockApiFetch.mockReset();
   mockClient.POST.mockResolvedValue({ data: null });
   mockClient.GET.mockResolvedValue({ data: meBootstrap });
-  mockApiFetch.mockResolvedValue(new Response(null, { status: 204 }));
+  mockApiFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true, mfa_required: false }), { status: 200 }));
 });
 
 afterEach(() => {
@@ -40,31 +43,49 @@ describe("auth api", () => {
   it("creates a cookie session and bootstraps profile data", async () => {
     const { createSession } = await import("../api");
 
-    const session = await createSession({ email: "user@example.com", password: "pass" });
+    const result = await createSession({ email: "user@example.com", password: "pass" });
 
     expect(mockApiFetch).toHaveBeenCalledWith(
-      "/api/v1/auth/cookie/login",
-      expect.objectContaining({ method: "POST" }),
+      "/api/v1/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "user@example.com", password: "pass" }),
+      }),
     );
 
-    const loginCall = mockApiFetch.mock.calls[0]?.[1];
-    const body = loginCall?.body as URLSearchParams | undefined;
-    expect(body?.get("username")).toBe("user@example.com");
-    expect(body?.get("password")).toBe("pass");
-
     expect(mockClient.GET).toHaveBeenCalledWith("/api/v1/me/bootstrap", { signal: undefined });
-
-    expect(session.user.email).toBe("user@example.com");
+    expect(result.kind).toBe("session");
+    if (result.kind === "session") {
+      expect(result.session.user.email).toBe("user@example.com");
+    }
   });
 
-  it("logs out using the cookie logout route", async () => {
+  it("returns challenge token when MFA is required", async () => {
+    mockApiFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ok: true, mfa_required: true, challengeToken: "challenge-123" }),
+        { status: 200 },
+      ),
+    );
+
+    const { createSession } = await import("../api");
+    const result = await createSession({ email: "user@example.com", password: "pass" });
+
+    expect(result).toEqual({
+      kind: "mfa_required",
+      challengeToken: "challenge-123",
+    });
+    expect(mockClient.GET).not.toHaveBeenCalled();
+  });
+
+  it("logs out using the auth logout route", async () => {
     const { performLogout } = await import("../api");
 
     await performLogout();
 
-    expect(mockClient.POST).toHaveBeenCalledWith("/api/v1/auth/cookie/logout", {
-      body: undefined,
-      signal: undefined,
-    });
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      "/api/v1/auth/logout",
+      expect.objectContaining({ method: "POST", signal: undefined }),
+    );
   });
 });

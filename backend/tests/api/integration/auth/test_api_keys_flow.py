@@ -14,7 +14,7 @@ async def test_create_list_revoke_api_key(
 ) -> None:
     admin = seed_identity.admin
     token, _ = await login(async_client, email=admin.email, password=admin.password)
-    auth_header = {"Authorization": f"Bearer {token}"}
+    auth_header = {"X-API-Key": token}
 
     create = await async_client.post(
         "/api/v1/users/me/apikeys",
@@ -58,7 +58,7 @@ async def test_list_tenant_api_keys_requires_permission(
 
     response = await async_client.get(
         "/api/v1/apikeys",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert response.status_code == 403
 
@@ -71,7 +71,7 @@ async def test_list_tenant_api_keys_admin_supports_user_filter(
     member = seed_identity.member
     owner = seed_identity.workspace_owner
     token, _ = await login(async_client, email=admin.email, password=admin.password)
-    auth_header = {"Authorization": f"Bearer {token}"}
+    auth_header = {"X-API-Key": token}
 
     create_member_key = await async_client.post(
         f"/api/v1/users/{member.id}/apikeys",
@@ -102,3 +102,18 @@ async def test_list_tenant_api_keys_admin_supports_user_filter(
     filtered_keys = filtered_response.json()["items"]
     assert filtered_keys
     assert all(item["user_id"] == str(member.id) for item in filtered_keys)
+
+
+async def test_api_key_bearer_header_is_rejected(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+    async_client.cookies.clear()
+
+    response = await async_client.get(
+        "/api/v1/me/bootstrap",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401

@@ -7,8 +7,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from ade_db.models import Configuration, ConfigurationStatus, Run, RunOperation, RunStatus
 from ade_api.settings import Settings
+from ade_db.models import Configuration, ConfigurationStatus, Run, RunOperation, RunStatus
 from tests.api.integration.configs.helpers import auth_headers, config_path, create_from_template
 
 pytestmark = pytest.mark.asyncio
@@ -29,19 +29,26 @@ async def test_publish_configuration_returns_queued_publish_run(
     )
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json={
+            "configuration_id": record["id"],
+            "options": {
+                "operation": "publish",
+            },
+        },
     )
-    assert response.status_code == 202, response.text
+    assert response.status_code == 201, response.text
 
     payload = response.json()
     assert payload["operation"] == "publish"
     assert payload["status"] == "queued"
     assert payload["configuration_id"] == record["id"]
-    assert payload["links"]["events_stream"].endswith(f"/api/v1/runs/{payload['id']}/events/stream")
+    assert payload["links"]["events_stream"].endswith(
+        f"/api/v1/workspaces/{workspace_id}/runs/{payload['id']}/events/stream"
+    )
     assert payload["links"]["events_download"].endswith(
-        f"/api/v1/runs/{payload['id']}/events/download"
+        f"/api/v1/workspaces/{workspace_id}/runs/{payload['id']}/events/download"
     )
 
     stmt = select(Run).where(Run.id == payload["id"])
@@ -67,19 +74,25 @@ async def test_publish_reuses_existing_in_flight_run(
         headers=headers,
     )
 
+    publish_payload = {
+        "configuration_id": record["id"],
+        "options": {
+            "operation": "publish",
+        },
+    }
     first = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json=publish_payload,
     )
     second = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json=publish_payload,
     )
 
-    assert first.status_code == 202, first.text
-    assert second.status_code == 202, second.text
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
     assert first.json()["id"] == second.json()["id"]
 
 
@@ -107,9 +120,14 @@ async def test_publish_returns_409_when_configuration_not_draft(
     await anyio.to_thread.run_sync(_promote_to_active)
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json={
+            "configuration_id": record["id"],
+            "options": {
+                "operation": "publish",
+            },
+        },
     )
     assert response.status_code == 409
     assert "draft" in (response.json().get("detail") or "").lower()
@@ -140,9 +158,14 @@ async def test_publish_requires_engine_dependency(
     )
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json={
+            "configuration_id": record["id"],
+            "options": {
+                "operation": "publish",
+            },
+        },
     )
     assert response.status_code == 422, response.text
     payload = response.json()

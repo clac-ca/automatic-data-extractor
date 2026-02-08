@@ -8,8 +8,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ade_api.core.auth.principal import AuthenticatedPrincipal, PrincipalType
-from ade_api.core.rbac.registry import PERMISSION_REGISTRY
+from ade_api.common.time import utc_now
+from ade_api.core.auth.principal import AuthVia, AuthenticatedPrincipal, PrincipalType
+from ade_api.core.rbac.registry import PERMISSION_REGISTRY, SYSTEM_ROLE_BY_SLUG
 from ade_api.core.rbac.service_interface import RbacService
 from ade_api.core.rbac.types import ScopeType
 from ade_db.models import User, UserRoleAssignment, Workspace, WorkspaceMembership
@@ -165,11 +166,39 @@ class MeService:
                 detail="Service account principals cannot access /me.",
             )
 
+        if principal.auth_via is AuthVia.DEV:
+            return self._load_dev_principal_state(principal)
+
         user = self._get_user_or_404(principal.user_id)
         roles = sorted(self.rbac.get_global_role_slugs(principal=principal))
         permissions = sorted(self.rbac.get_global_permissions(principal=principal))
         access = self._resolve_workspace_access(principal)
         return user, roles, permissions, access
+
+    def _load_dev_principal_state(
+        self,
+        principal: AuthenticatedPrincipal,
+    ) -> tuple[User, list[str], list[str], WorkspaceAccess]:
+        now = utc_now()
+        email = principal.email or "developer@example.com"
+        user = User(
+            email=email,
+            hashed_password="",
+            display_name="Developer",
+            is_service_account=False,
+            is_active=True,
+            is_verified=True,
+            last_login_at=now,
+            failed_login_count=0,
+            locked_until=None,
+        )
+        user.id = principal.user_id
+        user.created_at = now
+        user.updated_at = now
+
+        role = SYSTEM_ROLE_BY_SLUG["global-admin"]
+        access = WorkspaceAccess(workspaces=[], memberships={}, default_workspace_id=None)
+        return user, [role.slug], sorted(role.permissions), access
 
     def _get_user_or_404(self, user_id: UUID) -> User:
         user = self.session.get(User, user_id)

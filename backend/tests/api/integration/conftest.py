@@ -274,20 +274,19 @@ def override_app_settings(app: FastAPI) -> Iterator[Callable[..., None]]:
 
 @pytest.fixture()
 def seeded_identity(db_session: Session) -> SeededIdentity:
-    def _create_user(email: str, password: str, *, is_superuser: bool = False) -> SeededUser:
+    def _create_user(email: str, password: str) -> SeededUser:
         user = User(
             email=email,
             email_normalized=email.lower(),
             hashed_password=hash_password(password),
             is_active=True,
             is_verified=True,
-            is_superuser=is_superuser,
         )
         db_session.add(user)
         db_session.flush()
         return SeededUser(id=user.id, email=email, password=password)
 
-    admin = _create_user("admin@example.com", "admin_pass", is_superuser=True)
+    admin = _create_user("admin@example.com", "admin_pass")
     owner = _create_user("owner@example.com", "owner_pass")
     member = _create_user("member@example.com", "member_pass")
     member_with_manage = _create_user("manage@example.com", "manage_pass")
@@ -423,7 +422,6 @@ def seeded_workspace_with_user(db_session: Session) -> SeededIdentity:
         email=admin.email,
         email_normalized=admin.email,
         hashed_password=hash_password(admin.password),
-        is_superuser=True,
     )
     regular_user = User(
         id=user.id,

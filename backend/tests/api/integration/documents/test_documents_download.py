@@ -27,7 +27,7 @@ async def test_download_missing_file_returns_404(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",

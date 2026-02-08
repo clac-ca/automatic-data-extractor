@@ -5,7 +5,6 @@ import pytest
 from sqlalchemy import select
 
 from ade_db.models import Run, RunStatus
-
 from tests.api.integration.runs.helpers import (
     auth_headers,
     make_configuration,
@@ -41,7 +40,7 @@ async def test_cancel_queued_run(
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
-        f"/api/v1/runs/{run.id}/cancel",
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/cancel",
         headers=headers,
     )
     assert response.status_code == 200, response.text
@@ -90,7 +89,7 @@ async def test_cancel_running_run(
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
-        f"/api/v1/runs/{run.id}/cancel",
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/cancel",
         headers=headers,
     )
     assert response.status_code == 200, response.text
@@ -138,7 +137,7 @@ async def test_cancel_terminal_run_conflicts(
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
-        f"/api/v1/runs/{run.id}/cancel",
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/cancel",
         headers=headers,
     )
     assert response.status_code == 409, response.text
@@ -169,7 +168,7 @@ async def test_cancel_already_cancelled_is_idempotent(
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
-        f"/api/v1/runs/{run.id}/cancel",
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/cancel",
         headers=headers,
     )
     assert response.status_code == 200, response.text

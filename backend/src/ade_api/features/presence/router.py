@@ -15,7 +15,6 @@ from ade_api.core.auth import AuthenticationError, authenticate_websocket
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia
 from ade_api.core.http.dependencies import (
     get_api_key_authenticator_websocket,
-    get_bearer_authenticator,
     get_cookie_authenticator,
     get_rbac_service,
 )
@@ -148,7 +147,6 @@ async def presence_ws(
             settings,
             api_keys,
             get_cookie_authenticator(session, settings, session_factory=SessionLocal),
-            get_bearer_authenticator(session, settings),
         )
         user = session.get(User, principal.user_id)
         return principal, user

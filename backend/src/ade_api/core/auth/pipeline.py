@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
@@ -31,12 +30,6 @@ class CookieAuthenticator(Protocol):
     def authenticate(self, token: str) -> AuthenticatedPrincipal | None: ...
 
 
-class BearerAuthenticator(Protocol):
-    """Interface for authenticating bearer JWTs."""
-
-    def authenticate(self, token: str) -> AuthenticatedPrincipal | None: ...
-
-
 def dev_principal(settings: Settings) -> AuthenticatedPrincipal:
     """Return a synthetic principal for AUTH_DISABLED mode."""
 
@@ -46,25 +39,18 @@ def dev_principal(settings: Settings) -> AuthenticatedPrincipal:
         user_id=synthetic_id,
         principal_type=PrincipalType.USER,
         auth_via=AuthVia.DEV,
+        email=seed,
     )
 
 
 def _extract_api_key(request: Request) -> str | None:
-    """Parse API key from standard headers."""
+    """Parse API key from ``X-API-Key`` only."""
 
-    header = request.headers.get("authorization") or ""
-    match = re.match(r"^api-key\s+(?P<token>.+)$", header, flags=re.IGNORECASE)
-    if match:
-        return match.group("token").strip() or None
     candidate = request.headers.get("x-api-key")
     return candidate.strip() if candidate else None
 
 
 def _extract_api_key_from_headers(headers: Mapping[str, str]) -> str | None:
-    header = headers.get("authorization") or ""
-    match = re.match(r"^api-key\s+(?P<token>.+)$", header, flags=re.IGNORECASE)
-    if match:
-        return match.group("token").strip() or None
     candidate = headers.get("x-api-key")
     return candidate.strip() if candidate else None
 
@@ -96,7 +82,6 @@ def authenticate_request(
     settings: Settings,
     api_key_service: ApiKeyAuthenticator,
     cookie_service: CookieAuthenticator,
-    bearer_service: BearerAuthenticator | None,
 ) -> AuthenticatedPrincipal:
     """Authenticate an incoming request to a principal.
 
@@ -106,9 +91,7 @@ def authenticate_request(
     """
 
     if settings.auth_disabled:
-        principal = dev_principal(settings)
-        _ensure_active_principal(principal=principal, session=_db)
-        return principal
+        return dev_principal(settings)
 
     raw_api_key = _extract_api_key(request)
     if raw_api_key:
@@ -124,15 +107,6 @@ def authenticate_request(
             _ensure_active_principal(principal=principal, session=_db)
             return principal
 
-    auth_header = request.headers.get("authorization") or ""
-    scheme, _, token = auth_header.partition(" ")
-    candidate = token.strip() if scheme.lower() == "bearer" else ""
-    if candidate and bearer_service is not None:
-        principal = bearer_service.authenticate(candidate)
-        if principal is not None:
-            _ensure_active_principal(principal=principal, session=_db)
-            return principal
-
     raise AuthenticationError("Authentication required")
 
 
@@ -142,27 +116,15 @@ def authenticate_websocket(
     settings: Settings,
     api_key_service: ApiKeyAuthenticator,
     cookie_service: CookieAuthenticator,
-    bearer_service: BearerAuthenticator | None,
 ) -> AuthenticatedPrincipal:
     """Authenticate a WebSocket connection to a principal."""
 
     if settings.auth_disabled:
-        principal = dev_principal(settings)
-        _ensure_active_principal(principal=principal, session=_db)
-        return principal
+        return dev_principal(settings)
 
     raw_api_key = _extract_api_key_from_headers(websocket.headers)
     if raw_api_key:
         principal = api_key_service.authenticate(raw_api_key)
-        if principal is not None:
-            _ensure_active_principal(principal=principal, session=_db)
-            return principal
-
-    auth_header = websocket.headers.get("authorization") or ""
-    scheme, _, token = auth_header.partition(" ")
-    candidate = token.strip() if scheme.lower() == "bearer" else ""
-    if candidate and bearer_service is not None:
-        principal = bearer_service.authenticate(candidate)
         if principal is not None:
             _ensure_active_principal(principal=principal, session=_db)
             return principal
@@ -176,11 +138,6 @@ def authenticate_websocket(
 
     query_token = (websocket.query_params.get("access_token") or "").strip()
     if query_token:
-        if bearer_service is not None:
-            principal = bearer_service.authenticate(query_token)
-            if principal is not None:
-                _ensure_active_principal(principal=principal, session=_db)
-                return principal
         principal = cookie_service.authenticate(query_token)
         if principal is not None:
             _ensure_active_principal(principal=principal, session=_db)

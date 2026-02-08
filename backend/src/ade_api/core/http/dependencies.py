@@ -8,12 +8,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.common.time import utc_now
 from ade_api.db import get_db_read, get_session_factory
-from ade_db.models import AccessToken, ApiKey, User
+from ade_db.models import ApiKey, AuthSession, User
 from ade_api.settings import Settings, get_settings
 
 from ..auth import (
@@ -22,10 +22,10 @@ from ..auth import (
     PermissionDeniedError,
     authenticate_request,
 )
-from ..auth.pipeline import ApiKeyAuthenticator, BearerAuthenticator, CookieAuthenticator
+from ..auth.pipeline import ApiKeyAuthenticator, CookieAuthenticator
 from ..auth.principal import AuthVia, PrincipalType
 from ..rbac.service_interface import RbacService as RbacServiceInterface
-from ..security.tokens import decode_token
+from ..security.tokens import hash_opaque_token
 
 ReadSessionDep = Annotated[Session, Depends(get_db_read)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -167,15 +167,9 @@ def get_api_key_authenticator(
                 raise AuthenticationError(str(exc)) from exc
 
             api_key = result.api_key
-            owner = getattr(api_key, "user", None)
-            principal_type = (
-                PrincipalType.SERVICE_ACCOUNT
-                if getattr(owner, "is_service_account", False)
-                else PrincipalType.USER
-            )
             principal = AuthenticatedPrincipal(
                 user_id=result.user_id,
-                principal_type=principal_type,
+                principal_type=PrincipalType.USER,
                 auth_via=AuthVia.API_KEY,
                 api_key_id=api_key.id,
             )
@@ -201,12 +195,17 @@ def get_cookie_authenticator(
     settings: SettingsDep,
     session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
 ) -> CookieAuthenticator:
-    """Authenticate cookie session tokens against the access_tokens table."""
+    """Authenticate cookie session tokens against the auth_sessions table."""
 
     class _CookieAuthenticator:
-        def _expire_token(self, token_id: UUID) -> None:
+        def _expire_token(self, session_id: UUID) -> None:
             with session_factory() as session:
-                session.execute(delete(AccessToken).where(AccessToken.id == token_id))
+                session.execute(
+                    update(AuthSession)
+                    .where(AuthSession.id == session_id)
+                    .where(AuthSession.revoked_at.is_(None))
+                    .values(revoked_at=utc_now())
+                )
                 session.commit()
 
         def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
@@ -214,83 +213,36 @@ def get_cookie_authenticator(
             if not candidate:
                 return None
 
-            stmt = select(AccessToken).where(AccessToken.token == candidate).limit(1)
+            token_hash = hash_opaque_token(candidate)
+            stmt = (
+                select(AuthSession)
+                .where(AuthSession.token_hash == token_hash)
+                .where(AuthSession.revoked_at.is_(None))
+                .limit(1)
+            )
             result = db.execute(stmt)
-            access_token = result.scalar_one_or_none()
-            if access_token is None:
+            auth_session = result.scalar_one_or_none()
+            if auth_session is None:
                 return None
 
             now = utc_now()
-            expires_at = access_token.expires_at
-            if expires_at is None:
-                expires_at = access_token.created_at + settings.session_access_ttl
-            if expires_at <= now:
-                self._expire_token(access_token.id)
+            expires_at = auth_session.expires_at
+            if expires_at is not None and expires_at <= now:
+                self._expire_token(auth_session.id)
                 return None
 
-            user = db.get(User, access_token.user_id)
+            user = db.get(User, auth_session.user_id)
             if user is None:
                 return None
 
-            principal_type = (
-                PrincipalType.SERVICE_ACCOUNT if user.is_service_account else PrincipalType.USER
-            )
             return AuthenticatedPrincipal(
                 user_id=user.id,
-                principal_type=principal_type,
+                principal_type=PrincipalType.USER,
                 auth_via=AuthVia.SESSION,
                 api_key_id=None,
             )
 
     return _CookieAuthenticator()
-
-
-def get_bearer_authenticator(
-    db: ReadSessionDep,
-    settings: SettingsDep,
-) -> BearerAuthenticator:
-    """Authenticate JWT bearer tokens for non-browser clients."""
-
-    class _BearerAuthenticator:
-        def authenticate(self, token: str) -> AuthenticatedPrincipal | None:
-            candidate = (token or "").strip()
-            if not candidate:
-                return None
-
-            try:
-                payload = decode_token(
-                    token=candidate,
-                    secret=settings.secret_key_value,
-                    algorithms=[settings.algorithm],
-                    audience=["fastapi-users:auth"],
-                )
-            except Exception:
-                return None
-
-            subject = str(payload.get("sub") or "").strip()
-            if not subject:
-                return None
-
-            try:
-                user_id = UUID(subject)
-            except ValueError:
-                return None
-
-            user = db.get(User, user_id)
-            if user is None:
-                return None
-
-            principal_type = (
-                PrincipalType.SERVICE_ACCOUNT if user.is_service_account else PrincipalType.USER
-            )
-            return AuthenticatedPrincipal(
-                user_id=user.id,
-                principal_type=principal_type,
-                auth_via=AuthVia.BEARER,
-                api_key_id=None,
-            )
-
-    return _BearerAuthenticator()
 
 
 def get_rbac_service(
@@ -313,10 +265,6 @@ def get_current_principal(
         CookieAuthenticator,
         Depends(get_cookie_authenticator),
     ],
-    bearer_service: Annotated[
-        BearerAuthenticator,
-        Depends(get_bearer_authenticator),
-    ],
 ) -> AuthenticatedPrincipal:
     """Authenticate the incoming request and return the current principal."""
 
@@ -326,7 +274,6 @@ def get_current_principal(
         settings=settings,
         api_key_service=api_key_service,
         cookie_service=cookie_service,
-        bearer_service=bearer_service,
     )
 
 
@@ -408,13 +355,13 @@ def require_csrf(
     """Enforce double-submit CSRF protection for cookie-authenticated requests.
 
     CSRF is required when the browser automatically attaches the session cookie.
-    Requests authenticated via bearer tokens or API keys skip this guard.
+    Requests authenticated via API keys skip this guard.
     """
 
     if request.method.upper() in _SAFE_METHODS:
         return
 
-    if principal.auth_via in {AuthVia.API_KEY, AuthVia.BEARER, AuthVia.DEV}:
+    if principal.auth_via in {AuthVia.API_KEY, AuthVia.DEV}:
         return
 
     cookie_csrf = (request.cookies.get(settings.session_csrf_cookie_name) or "").strip()

@@ -60,7 +60,7 @@ async def test_list_document_comments_empty(
     )
 
     token, _ = await login(async_client, email=member.email, password=member.password)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     response = await async_client.get(
         f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/comments",
@@ -87,7 +87,7 @@ async def test_create_comment_and_list(
     )
 
     token, _ = await login(async_client, email=member.email, password=member.password)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     payload = {
         "body": "Hello @you",
@@ -130,7 +130,7 @@ async def test_create_comment_rejects_non_member_mentions(
     )
 
     token, _ = await login(async_client, email=member.email, password=member.password)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     payload = {
         "body": "Hello @orphan",

@@ -21,7 +21,7 @@ from tests.api.utils import login
 
 async def auth_headers(client: AsyncClient, account) -> dict[str, str]:
     token, _ = await login(client, email=account.email, password=account.password)
-    return {"Authorization": f"Bearer {token}"}
+    return {"X-API-Key": token}
 
 
 def make_configuration(

@@ -744,11 +744,6 @@ class RbacService:
     def get_global_permissions_for_user(self, *, user: User) -> frozenset[str]:
         if user.is_service_account:
             return frozenset()
-        if user.is_superuser:
-            return _expand_implications(
-                _all_permissions_for_scope(ScopeType.GLOBAL),
-                scope=ScopeType.GLOBAL,
-            )
 
         cache_key = ("global_permissions", str(user.id))
         cached = self._get_cached(cache_key)
@@ -781,11 +776,6 @@ class RbacService:
     ) -> frozenset[str]:
         if user.is_service_account:
             return frozenset()
-        if user.is_superuser:
-            return _expand_implications(
-                _all_permissions_for_scope(ScopeType.WORKSPACE),
-                scope=ScopeType.WORKSPACE,
-            )
 
         cache_key = ("workspace_permissions", str(user.id), str(workspace_id))
         cached = self._get_cached(cache_key)
@@ -834,10 +824,6 @@ class RbacService:
         normalized = _normalize_permission_key(permission_key)
         definition = PERMISSION_REGISTRY[normalized]
         required = (normalized,)
-
-        if user.is_superuser:
-            granted = _all_permissions_for_scope(definition.scope_type)
-            return AuthorizationDecision(granted=granted, required=required, missing=())
 
         if definition.scope_type == ScopeType.GLOBAL:
             granted = self.get_global_permissions_for_user(user=user)

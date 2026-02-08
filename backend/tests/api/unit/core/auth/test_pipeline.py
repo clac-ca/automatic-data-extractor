@@ -55,16 +55,13 @@ def _user(user_id: UUID) -> object:
 
 def test_authenticate_websocket_prefers_api_key() -> None:
     api_user_id = uuid4()
-    bearer_user_id = uuid4()
     cookie_user_id = uuid4()
 
     api_service = StubAuthenticator(_principal(api_user_id, AuthVia.API_KEY))
-    bearer_service = StubAuthenticator(_principal(bearer_user_id, AuthVia.BEARER))
     cookie_service = StubAuthenticator(_principal(cookie_user_id, AuthVia.SESSION))
 
     websocket = FakeWebSocket(
         headers={
-            "authorization": "Bearer bearer-token",
             "x-api-key": "prefix.secret",
         },
         cookies={"ade_session": "cookie-token"},
@@ -79,7 +76,6 @@ def test_authenticate_websocket_prefers_api_key() -> None:
     session = FakeSession(
         {
             api_user_id: _user(api_user_id),
-            bearer_user_id: _user(bearer_user_id),
             cookie_user_id: _user(cookie_user_id),
         }
     )
@@ -90,21 +86,17 @@ def test_authenticate_websocket_prefers_api_key() -> None:
         settings,
         api_service,
         cookie_service,
-        bearer_service,
     )
 
     assert principal.user_id == api_user_id
     assert principal.auth_via is AuthVia.API_KEY
-    assert bearer_service.calls == []
     assert cookie_service.calls == []
 
 
-def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
-    bearer_user_id = uuid4()
+def test_authenticate_websocket_ignores_authorization_header_and_uses_cookie() -> None:
     cookie_user_id = uuid4()
 
     api_service = StubAuthenticator(None)
-    bearer_service = StubAuthenticator(_principal(bearer_user_id, AuthVia.BEARER))
     cookie_service = StubAuthenticator(_principal(cookie_user_id, AuthVia.SESSION))
 
     websocket = FakeWebSocket(
@@ -120,7 +112,6 @@ def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
     )
     session = FakeSession(
         {
-            bearer_user_id: _user(bearer_user_id),
             cookie_user_id: _user(cookie_user_id),
         }
     )
@@ -131,12 +122,10 @@ def test_authenticate_websocket_prefers_bearer_over_cookie() -> None:
         settings,
         api_service,
         cookie_service,
-        bearer_service,
     )
 
-    assert principal.user_id == bearer_user_id
-    assert principal.auth_via is AuthVia.BEARER
-    assert cookie_service.calls == []
+    assert principal.user_id == cookie_user_id
+    assert principal.auth_via is AuthVia.SESSION
 
 
 def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
@@ -144,7 +133,6 @@ def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
     query_user_id = uuid4()
 
     api_service = StubAuthenticator(None)
-    bearer_service = StubAuthenticator(None)
     cookie_service = StubAuthenticator(_principal(cookie_user_id, AuthVia.SESSION))
 
     websocket = FakeWebSocket(
@@ -171,20 +159,17 @@ def test_authenticate_websocket_prefers_cookie_over_query_param() -> None:
         settings,
         api_service,
         cookie_service,
-        bearer_service,
     )
 
     assert principal.user_id == cookie_user_id
     assert principal.auth_via is AuthVia.SESSION
-    assert bearer_service.calls == []
 
 
 def test_authenticate_websocket_falls_back_to_query_param() -> None:
     query_user_id = uuid4()
 
     api_service = StubAuthenticator(None)
-    bearer_service = StubAuthenticator(_principal(query_user_id, AuthVia.BEARER))
-    cookie_service = StubAuthenticator(None)
+    cookie_service = StubAuthenticator(_principal(query_user_id, AuthVia.SESSION))
 
     websocket = FakeWebSocket(query_params={"access_token": "query-token"})
     settings = Settings(
@@ -202,8 +187,7 @@ def test_authenticate_websocket_falls_back_to_query_param() -> None:
         settings,
         api_service,
         cookie_service,
-        bearer_service,
     )
 
     assert principal.user_id == query_user_id
-    assert principal.auth_via is AuthVia.BEARER
+    assert principal.auth_via is AuthVia.SESSION

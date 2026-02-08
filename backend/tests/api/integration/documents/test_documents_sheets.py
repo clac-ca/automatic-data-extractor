@@ -23,7 +23,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     file_id = generate_uuid7()
     version_id = generate_uuid7()
@@ -82,7 +82,7 @@ async def test_list_document_sheets_reports_parse_failures(
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
-        "Authorization": f"Bearer {token}",
+        "X-API-Key": token,
     }
 
     upload = await async_client.post(

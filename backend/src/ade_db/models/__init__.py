@@ -1,6 +1,7 @@
 """Central exports for ADE SQLAlchemy models."""
 
 from .api_key import ApiKey
+from .authn import AuthSession, MfaChallenge, PasswordResetToken, UserMfaTotp
 from .configuration import Configuration, ConfigurationStatus
 from .file import (
     FILE_KIND_VALUES,
@@ -28,12 +29,12 @@ from .sso import (
     SsoProviderType,
 )
 from .system_setting import SystemSetting
-from .user import AccessToken, OAuthAccount, User
+from .user import OAuthAccount, User
 from .workspace import Workspace, WorkspaceMembership
 
 __all__ = [
     "ApiKey",
-    "AccessToken",
+    "AuthSession",
     "Configuration",
     "ConfigurationStatus",
     "FILE_KIND_VALUES",
@@ -64,6 +65,9 @@ __all__ = [
     "SsoProviderType",
     "SystemSetting",
     "User",
+    "UserMfaTotp",
+    "MfaChallenge",
+    "PasswordResetToken",
     "OAuthAccount",
     "UserRoleAssignment",
     "Workspace",

@@ -21,7 +21,7 @@ async def test_update_document_rename_success(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -66,7 +66,7 @@ async def test_update_document_rename_conflict_returns_409(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     first_upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -115,7 +115,7 @@ async def test_update_document_rename_extension_change_returns_422(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -151,7 +151,7 @@ async def test_update_document_rename_whitespace_only_returns_422(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",

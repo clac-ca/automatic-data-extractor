@@ -18,7 +18,6 @@ class AuthVia(str, enum.Enum):
     """Transport used to authenticate the request."""
 
     SESSION = "session"
-    BEARER = "bearer"
     API_KEY = "api_key"
     DEV = "dev"
 
@@ -31,3 +30,4 @@ class AuthenticatedPrincipal:
     principal_type: PrincipalType
     auth_via: AuthVia
     api_key_id: UUID | None = None
+    email: str | None = None

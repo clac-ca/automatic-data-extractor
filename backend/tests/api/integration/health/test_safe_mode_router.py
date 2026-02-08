@@ -18,7 +18,7 @@ async def test_safe_mode_toggle_persists_state(
 
     admin = seed_identity.admin
     token, _ = await login(async_client, email=admin.email, password=admin.password)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     initial = await async_client.get("/api/v1/system/safemode", headers=headers)
     assert initial.status_code == 200
@@ -62,6 +62,6 @@ async def test_safe_mode_read_requires_system_settings_permission(
 
     response = await async_client.get(
         "/api/v1/system/safemode",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert response.status_code == 403

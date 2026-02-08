@@ -44,3 +44,43 @@ async def test_editing_non_draft_rejected(
         content=b"forbidden",
     )
     assert resp.status_code == 409
+
+
+async def test_file_listing_capabilities_follow_configuration_status(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    owner = seed_identity.workspace_owner
+    headers = await auth_headers(async_client, email=owner.email, password=owner.password)
+    record = await create_from_template(
+        async_client,
+        workspace_id=workspace_id,
+        headers=headers,
+    )
+    base_url = f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}"
+    stmt = select(Configuration).where(Configuration.id == record["id"])
+
+    response = await async_client.get(f"{base_url}/files", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["capabilities"]["editable"] is True
+    baseline_etag = response.headers.get("ETag")
+    assert baseline_etag
+
+    def _set_status(status: ConfigurationStatus) -> None:
+        config = db_session.execute(stmt).scalar_one()
+        config.status = status
+        db_session.commit()
+
+    await anyio.to_thread.run_sync(_set_status, ConfigurationStatus.ACTIVE)
+    conditional_headers = dict(headers)
+    conditional_headers["If-None-Match"] = baseline_etag
+    response = await async_client.get(f"{base_url}/files", headers=conditional_headers)
+    assert response.status_code == 200
+    assert response.json()["capabilities"]["editable"] is False
+
+    await anyio.to_thread.run_sync(_set_status, ConfigurationStatus.ARCHIVED)
+    response = await async_client.get(f"{base_url}/files", headers=conditional_headers)
+    assert response.status_code == 200
+    assert response.json()["capabilities"]["editable"] is False

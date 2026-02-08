@@ -33,7 +33,7 @@ async def test_permission_catalog_requires_global_permission(
                 [{"id": "scopeType", "operator": "eq", "value": "workspace"}]
             )
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
 
     assert response.status_code == 403
@@ -53,7 +53,7 @@ async def test_permission_catalog_global_admin(
                 [{"id": "scopeType", "operator": "eq", "value": "global"}]
             )
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
 
     assert response.status_code == 200
@@ -77,7 +77,7 @@ async def test_roles_crud_and_delete(
             "name": "Data Steward",
             "permissions": ["users.read_all"],
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
@@ -87,7 +87,7 @@ async def test_roles_crud_and_delete(
 
     read_response = await async_client.get(
         f"/api/v1/roles/{role_id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert read_response.status_code == 200, read_response.text
     role_etag = read_response.headers.get("ETag")
@@ -101,7 +101,7 @@ async def test_roles_crud_and_delete(
             "permissions": ["users.read_all", "roles.read_all"],
         },
         headers={
-            "Authorization": f"Bearer {token}",
+            "X-API-Key": token,
             "If-Match": role_etag,
         },
     )
@@ -115,7 +115,7 @@ async def test_roles_crud_and_delete(
     delete_response = await async_client.delete(
         f"/api/v1/roles/{role_id}",
         headers={
-            "Authorization": f"Bearer {token}",
+            "X-API-Key": token,
             "If-Match": updated_etag,
         },
     )
@@ -123,7 +123,7 @@ async def test_roles_crud_and_delete(
 
     missing_response = await async_client.get(
         f"/api/v1/roles/{role_id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert missing_response.status_code == 404
 
@@ -137,7 +137,7 @@ async def test_workspace_member_listing_requires_permission(
 
     response = await async_client.get(
         f"/api/v1/workspaces/{seed_identity.workspace_id}/members",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert response.status_code == 403
 
@@ -151,7 +151,7 @@ async def test_workspace_member_listing_admin(
 
     response = await async_client.get(
         f"/api/v1/workspaces/{seed_identity.workspace_id}/members",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert response.status_code == 200
     payload = response.json()
@@ -176,7 +176,7 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
 
     default_response = await async_client.get(
         base_url,
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert default_response.status_code == 200
     default_members = {str(item["user_id"]) for item in _items(default_response.json())}
@@ -184,7 +184,7 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
 
     inclusive = await async_client.get(
         base_url,
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         params={
             "filters": json.dumps(
                 [
@@ -217,7 +217,7 @@ async def test_assign_workspace_member_roles(
             "user_id": user_id_str,
             "role_ids": [],
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert create_response.status_code == 422  # must include role_ids
 
@@ -229,7 +229,7 @@ async def test_assign_workspace_member_roles(
                 [{"id": "scopeType", "operator": "eq", "value": "workspace"}]
             )
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert roles_response.status_code == 200
     workspace_roles = {role["slug"]: role["id"] for role in _items(roles_response.json())}
@@ -238,7 +238,7 @@ async def test_assign_workspace_member_roles(
     add_response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/members",
         json={"user_id": user_id_str, "role_ids": [member_role_id]},
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert add_response.status_code == 201, add_response.text
     added = add_response.json()
@@ -248,6 +248,6 @@ async def test_assign_workspace_member_roles(
     # Remove membership
     delete_response = await async_client.delete(
         f"/api/v1/workspaces/{workspace_id}/members/{user_id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert delete_response.status_code == 204

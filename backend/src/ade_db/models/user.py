@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ade_db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from .authn import AuthSession
 
 
 def _normalise_email(value: str) -> str:
@@ -35,7 +39,7 @@ def _clean_display_name(value: str | None) -> str | None:
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Single identity model for humans and service accounts."""
+    """Single identity model for humans."""
 
     __tablename__ = "users"
 
@@ -45,7 +49,6 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_service_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -57,8 +60,8 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    access_tokens: Mapped[list[AccessToken]] = relationship(
-        "AccessToken",
+    auth_sessions: Mapped[list["AuthSession"]] = relationship(
+        "AuthSession",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -110,25 +113,4 @@ class OAuthAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-class AccessToken(UUIDPrimaryKeyMixin, Base):
-    """Opaque session token for cookie-authenticated sessions."""
-
-    __tablename__ = "access_tokens"
-
-    user_id: Mapped[UUID] = mapped_column(
-        GUID(),
-        ForeignKey("users.id", ondelete="NO ACTION"),
-        nullable=False,
-    )
-    token: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(),
-        nullable=False,
-        server_default=func.now(),
-    )
-    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-
-    user: Mapped[User] = relationship("User", back_populates="access_tokens")
-
-
-__all__ = ["User", "OAuthAccount", "AccessToken"]
+__all__ = ["User", "OAuthAccount"]
