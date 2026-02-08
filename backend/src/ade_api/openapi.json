@@ -8602,114 +8602,6 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/publish": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Start a publish run for a draft configuration",
-        "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__publish_post",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configurationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Configuration identifier",
-              "title": "Configurationid"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "null",
-                "description": "Make the configuration active (archives any existing active configuration).",
-                "title": "Payload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunResource"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive": {
       "post": {
         "tags": [
@@ -9996,398 +9888,6 @@
         ]
       }
     },
-    "/api/v1/configurations/{configurationId}/runs": {
-      "post": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Create Run Endpoint",
-        "description": "Create a run for ``configuration_id`` and enqueue execution.",
-        "operationId": "create_run_endpoint_api_v1_configurations__configurationId__runs_post",
-        "parameters": [
-          {
-            "name": "configurationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Configuration identifier",
-              "title": "Configurationid"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunCreateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunResource"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "List Configuration Runs Endpoint",
-        "operationId": "list_configuration_runs_endpoint_api_v1_configurations__configurationId__runs_get",
-        "parameters": [
-          {
-            "name": "configurationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Configuration identifier",
-              "title": "Configurationid"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "description": "Items per page (max 200)",
-              "default": 50,
-              "title": "Limit"
-            },
-            "description": "Items per page (max 200)"
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Opaque cursor token for pagination.",
-              "title": "Cursor"
-            },
-            "description": "Opaque cursor token for pagination."
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "JSON array of {id, desc}.",
-              "title": "Sort"
-            },
-            "description": "JSON array of {id, desc}."
-          },
-          {
-            "name": "filters",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
-              "title": "Filters"
-            },
-            "description": "URL-encoded JSON array of filter objects."
-          },
-          {
-            "name": "joinOperator",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/FilterJoinOperator",
-              "description": "Logical operator to join filters (and/or).",
-              "default": "and"
-            },
-            "description": "Logical operator to join filters (and/or)."
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
-              "title": "Q"
-            },
-            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
-          },
-          {
-            "name": "includeTotal",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include totalCount in the response.",
-              "default": false,
-              "title": "Includetotal"
-            },
-            "description": "Include totalCount in the response."
-          },
-          {
-            "name": "includeFacets",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include facet counts in the response.",
-              "default": false,
-              "title": "Includefacets"
-            },
-            "description": "Include facet counts in the response."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunPage"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/configurations/{configurationId}/runs/batch": {
-      "post": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Create Runs Batch Endpoint",
-        "description": "Create multiple runs for ``configuration_id`` and enqueue execution.",
-        "operationId": "create_runs_batch_endpoint_api_v1_configurations__configurationId__runs_batch_post",
-        "parameters": [
-          {
-            "name": "configurationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Configuration identifier",
-              "title": "Configurationid"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunBatchCreateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunBatchCreateResponse"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspaceId}/runs": {
       "post": {
         "tags": [
@@ -10780,14 +10280,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}": {
       "get": {
         "tags": [
           "runs"
         ],
-        "summary": "Get Run Endpoint",
-        "operationId": "get_run_endpoint_api_v1_runs__runId__get",
+        "summary": "Get Workspace Run Endpoint",
+        "operationId": "get_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs__runId__get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -10849,14 +10361,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/cancel": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/cancel": {
       "post": {
         "tags": [
           "runs"
         ],
-        "summary": "Cancel Run Endpoint",
-        "operationId": "cancel_run_endpoint_api_v1_runs__runId__cancel_post",
+        "summary": "Cancel Workspace Run Endpoint",
+        "operationId": "cancel_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs__runId__cancel_post",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -10934,14 +10458,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/metrics": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/metrics": {
       "get": {
         "tags": [
           "runs"
         ],
-        "summary": "Get Run Metrics Endpoint",
-        "operationId": "get_run_metrics_endpoint_api_v1_runs__runId__metrics_get",
+        "summary": "Get Workspace Run Metrics Endpoint",
+        "operationId": "get_workspace_run_metrics_endpoint_api_v1_workspaces__workspaceId__runs__runId__metrics_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11003,14 +10539,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/fields": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/fields": {
       "get": {
         "tags": [
           "runs"
         ],
-        "summary": "List Run Fields Endpoint",
-        "operationId": "list_run_fields_endpoint_api_v1_runs__runId__fields_get",
+        "summary": "List Workspace Run Fields Endpoint",
+        "operationId": "list_workspace_run_fields_endpoint_api_v1_workspaces__workspaceId__runs__runId__fields_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11034,7 +10582,7 @@
                   "items": {
                     "$ref": "#/components/schemas/RunFieldResource"
                   },
-                  "title": "Response List Run Fields Endpoint Api V1 Runs  Runid  Fields Get"
+                  "title": "Response List Workspace Run Fields Endpoint Api V1 Workspaces  Workspaceid  Runs  Runid  Fields Get"
                 }
               }
             },
@@ -11076,14 +10624,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/columns": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/columns": {
       "get": {
         "tags": [
           "runs"
         ],
-        "summary": "List Run Columns Endpoint",
-        "operationId": "list_run_columns_endpoint_api_v1_runs__runId__columns_get",
+        "summary": "List Workspace Run Columns Endpoint",
+        "operationId": "list_workspace_run_columns_endpoint_api_v1_workspaces__workspaceId__runs__runId__columns_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11193,7 +10753,7 @@
                   "items": {
                     "$ref": "#/components/schemas/RunColumnResource"
                   },
-                  "title": "Response List Run Columns Endpoint Api V1 Runs  Runid  Columns Get"
+                  "title": "Response List Workspace Run Columns Endpoint Api V1 Workspaces  Workspaceid  Runs  Runid  Columns Get"
                 }
               }
             },
@@ -11235,14 +10795,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/input": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/input": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Get run input metadata",
-        "operationId": "get_run_input_endpoint_api_v1_runs__runId__input_get",
+        "operationId": "get_workspace_run_input_endpoint_api_v1_workspaces__workspaceId__runs__runId__input_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11304,14 +10876,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/input/download": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/input/download": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Download run input file",
-        "operationId": "download_run_input_endpoint_api_v1_runs__runId__input_download_get",
+        "operationId": "download_workspace_run_input_endpoint_api_v1_workspaces__workspaceId__runs__runId__input_download_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11371,14 +10955,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/events/stream": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/events/stream": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Stream run events (SSE)",
-        "operationId": "stream_run_events_endpoint_api_v1_runs__runId__events_stream_get",
+        "operationId": "stream_workspace_run_events_endpoint_api_v1_workspaces__workspaceId__runs__runId__events_stream_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11396,13 +10992,19 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "description": "Byte offset cursor for resuming from a prior stream position.",
-              "default": 0,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Byte offset cursor for resuming from a prior stream position. When Last-Event-ID is present, that value takes precedence.",
               "title": "Cursor"
             },
-            "description": "Byte offset cursor for resuming from a prior stream position."
+            "description": "Byte offset cursor for resuming from a prior stream position. When Last-Event-ID is present, that value takes precedence."
           }
         ],
         "responses": {
@@ -11459,14 +11061,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/events/download": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/events/download": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Download run events (NDJSON log)",
-        "operationId": "download_run_events_file_endpoint_api_v1_runs__runId__events_download_get",
+        "operationId": "download_workspace_run_events_file_endpoint_api_v1_workspaces__workspaceId__runs__runId__events_download_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11534,14 +11148,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/output": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/output": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Get run output metadata",
-        "operationId": "get_run_output_metadata_endpoint_api_v1_runs__runId__output_get",
+        "operationId": "get_workspace_run_output_metadata_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11615,8 +11241,20 @@
           "runs"
         ],
         "summary": "Upload manual run output",
-        "operationId": "upload_run_output_endpoint_api_v1_runs__runId__output_post",
+        "operationId": "upload_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_post",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11651,7 +11289,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_upload_run_output_endpoint_api_v1_runs__runId__output_post"
+                "$ref": "#/components/schemas/Body_upload_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_post"
               }
             }
           }
@@ -11728,14 +11366,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/output/download": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/output/download": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Download run output file",
-        "operationId": "download_run_output_endpoint_api_v1_runs__runId__output_download_get",
+        "operationId": "download_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_download_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11811,14 +11461,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/output/sheets": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/output/sheets": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "List run output worksheets",
-        "operationId": "list_run_output_sheets_endpoint_api_v1_runs__runId__output_sheets_get",
+        "operationId": "list_workspace_run_output_sheets_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_sheets_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -11842,7 +11504,7 @@
                   "items": {
                     "$ref": "#/components/schemas/RunOutputSheet"
                   },
-                  "title": "Response List Run Output Sheets Endpoint Api V1 Runs  Runid  Output Sheets Get"
+                  "title": "Response List Workspace Run Output Sheets Endpoint Api V1 Workspaces  Workspaceid  Runs  Runid  Output Sheets Get"
                 }
               }
             },
@@ -11901,14 +11563,26 @@
         ]
       }
     },
-    "/api/v1/runs/{runId}/output/preview": {
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/output/preview": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Preview run output worksheet",
-        "operationId": "preview_run_output_endpoint_api_v1_runs__runId__output_preview_get",
+        "operationId": "preview_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_preview_get",
         "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
           {
             "name": "runId",
             "in": "path",
@@ -13288,7 +12962,7 @@
         ],
         "title": "Body_upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post"
       },
-      "Body_upload_run_output_endpoint_api_v1_runs__runId__output_post": {
+      "Body_upload_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_post": {
         "properties": {
           "file": {
             "type": "string",
@@ -13300,7 +12974,7 @@
         "required": [
           "file"
         ],
-        "title": "Body_upload_run_output_endpoint_api_v1_runs__runId__output_post"
+        "title": "Body_upload_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_post"
       },
       "ConfigSourceClone": {
         "properties": {
@@ -15741,31 +15415,6 @@
         "title": "RunBatchCreateOptions",
         "description": "Execution toggles for batch ADE runs (per-document input)."
       },
-      "RunBatchCreateRequest": {
-        "properties": {
-          "document_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid",
-              "description": "UUIDv7 (RFC 9562) generated in the application layer."
-            },
-            "type": "array",
-            "minItems": 1,
-            "title": "Document Ids",
-            "description": "Documents to enqueue as individual runs (all-or-nothing)."
-          },
-          "options": {
-            "$ref": "#/components/schemas/RunBatchCreateOptions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "document_ids"
-        ],
-        "title": "RunBatchCreateRequest",
-        "description": "Payload accepted by the batch run creation endpoint."
-      },
       "RunBatchCreateResponse": {
         "properties": {
           "runs": {
@@ -15904,91 +15553,6 @@
         "title": "RunColumnResource",
         "description": "Detected column details for a run table."
       },
-      "RunCreateOptions": {
-        "properties": {
-          "operation": {
-            "$ref": "#/components/schemas/RunOperation",
-            "default": "process"
-          },
-          "dry_run": {
-            "type": "boolean",
-            "title": "Dry Run",
-            "default": false
-          },
-          "log_level": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "DEBUG",
-                  "INFO",
-                  "WARNING",
-                  "ERROR"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Log Level",
-            "description": "Engine log level passed as --log-level to ade_engine."
-          },
-          "input_sheet_names": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Sheet Names",
-            "description": "Optional worksheet names to ingest when processing XLSX files."
-          },
-          "active_sheet_only": {
-            "type": "boolean",
-            "title": "Active Sheet Only",
-            "description": "If true, process only the active worksheet when ingesting XLSX files.",
-            "default": false
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata",
-            "description": "Opaque metadata to propagate with run telemetry."
-          },
-          "input_document_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Document Id",
-            "description": "Document identifier to ingest."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunCreateOptions",
-        "description": "Execution toggles for a single ADE run."
-      },
       "RunCreateOptionsBase": {
         "properties": {
           "operation": {
@@ -16059,17 +15623,6 @@
         "type": "object",
         "title": "RunCreateOptionsBase",
         "description": "Optional execution toggles for ADE runs."
-      },
-      "RunCreateRequest": {
-        "properties": {
-          "options": {
-            "$ref": "#/components/schemas/RunCreateOptions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunCreateRequest",
-        "description": "Payload accepted by the run creation endpoint."
       },
       "RunFieldResource": {
         "properties": {
@@ -16262,21 +15815,9 @@
             "type": "string",
             "title": "Events Download"
           },
-          "logs": {
-            "type": "string",
-            "title": "Logs"
-          },
-          "input": {
-            "type": "string",
-            "title": "Input"
-          },
           "input_download": {
             "type": "string",
             "title": "Input Download"
-          },
-          "output": {
-            "type": "string",
-            "title": "Output"
           },
           "output_download": {
             "type": "string",
@@ -16293,10 +15834,7 @@
           "self",
           "events_stream",
           "events_download",
-          "logs",
-          "input",
           "input_download",
-          "output",
           "output_download",
           "output_metadata"
         ],
@@ -16864,17 +16402,6 @@
           },
           "links": {
             "$ref": "#/components/schemas/RunLinks"
-          },
-          "events_download_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Events Download Url"
           }
         },
         "additionalProperties": false,
@@ -18317,7 +17844,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:30685"
+      "url": "http://127.0.0.1:30440"
     }
   ],
   "security": [

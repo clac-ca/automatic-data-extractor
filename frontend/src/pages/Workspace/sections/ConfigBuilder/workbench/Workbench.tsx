@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
+import { PublishConfigurationDialog, type PublishDialogPhase } from "./components/PublishConfigurationDialog";
 import { RunExtractionDialog, type RunExtractionSelection } from "./components/RunExtractionDialog";
 import { WorkbenchChrome } from "./components/WorkbenchChrome";
 import { WorkbenchLayoutSync } from "./components/WorkbenchLayoutSync";
@@ -35,6 +36,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { exportConfiguration, readConfigurationFileJson } from "@/api/configurations/api";
 import {
   configurationKeys,
+  useConfigurationQuery,
   useConfigurationFilesQuery,
   useConfigurationsQuery,
   useDuplicateConfigurationMutation,
@@ -67,6 +69,18 @@ const MIN_WORKBENCH_SIDEBAR_WIDTH = 220;
 const MAX_WORKBENCH_SIDEBAR_WIDTH = 520;
 const CONSOLE_COLLAPSE_MESSAGE =
   "Panel closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
+
+function resolveRunFailureMessage(payload?: Record<string, unknown> | null): string {
+  const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
+  const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
+  const payloadErrorMessage =
+    typeof payload?.error_message === "string"
+      ? payload.error_message.trim()
+      : typeof payload?.errorMessage === "string"
+        ? payload.errorMessage.trim()
+        : null;
+  return failureMessage || payloadErrorMessage || "ADE run failed.";
+}
 
 interface ConsolePanelPreferences {
   readonly version: 2;
@@ -117,6 +131,11 @@ export function Workbench({
   const [runId, setRunId] = useState<string | null>(null);
 
   const usingSeed = Boolean(seed);
+  const configurationQuery = useConfigurationQuery({
+    workspaceId,
+    configurationId: configId,
+    enabled: !usingSeed,
+  });
   const filesQuery = useConfigurationFilesQuery({
     workspaceId,
     configId,
@@ -126,9 +145,23 @@ export function Workbench({
     enabled: !usingSeed,
   });
   const currentFilesetEtag = filesQuery.data?.fileset_hash ?? null;
-  const isDraftConfig = filesQuery.data?.status === "draft";
+  const configStatus = normalizeConfigStatus(configurationQuery.data?.status ?? filesQuery.data?.status);
+  const isDraftConfig = configStatus === "draft";
+  const isActiveConfig = configStatus === "active";
   const fileCapabilities = filesQuery.data?.capabilities;
-  const canEditConfig = usingSeed || Boolean(fileCapabilities?.editable);
+  const hasFreshFilesSnapshot = usingSeed || filesQuery.isFetchedAfterMount;
+  const hasFreshConfigSnapshot = usingSeed || configurationQuery.isFetchedAfterMount;
+  const awaitingFreshFilesSnapshot = !usingSeed && !filesQuery.isError && !filesQuery.isFetchedAfterMount;
+  const awaitingFreshConfigSnapshot =
+    !usingSeed && !configurationQuery.isError && !configurationQuery.isFetchedAfterMount;
+  const [publishSucceededReadOnly, setPublishSucceededReadOnly] = useState(false);
+  const canEditConfig =
+    usingSeed ||
+    (hasFreshConfigSnapshot &&
+      hasFreshFilesSnapshot &&
+      isDraftConfig &&
+      Boolean(fileCapabilities?.editable) &&
+      !publishSucceededReadOnly);
   const isReadOnlyConfig = !canEditConfig;
   const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspaceId), [workspaceId]);
   const configurationsQuery = useConfigurationsQuery({ workspaceId, enabled: !usingSeed });
@@ -170,6 +203,14 @@ export function Workbench({
     }
   }, [configId, usingSeed, filesQuery.isSuccess, lastSelectionStorage]);
 
+  useEffect(() => {
+    setPublishDialogOpen(false);
+    setPublishDialogPhase("confirm");
+    setPublishDialogError(null);
+    setIsSubmittingPublish(false);
+    setPublishSucceededReadOnly(false);
+  }, [configId]);
+
   const openDuplicateDialog = useCallback(() => {
     duplicateToEdit.reset();
     setDuplicateError(null);
@@ -186,9 +227,14 @@ export function Workbench({
   const [actionsMenu, setActionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishDialogPhase, setPublishDialogPhase] = useState<PublishDialogPhase>("confirm");
+  const [publishDialogError, setPublishDialogError] = useState<string | null>(null);
+  const [isSubmittingPublish, setIsSubmittingPublish] = useState(false);
 
   const {
     runStatus: derivedRunStatus,
+    runConnectionState,
     runMode: derivedRunMode,
     runInProgress,
     validation: validationState,
@@ -240,6 +286,7 @@ export function Workbench({
   const [paneAreaEl, setPaneAreaEl] = useState<HTMLDivElement | null>(null);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
+  const streamErrorBannerRunRef = useRef<string | null>(null);
   const { notifyBanner, dismissScope, notifyToast } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
@@ -261,6 +308,25 @@ export function Workbench({
   const clearConsoleBanners = useCallback(() => {
     dismissScope(consoleBannerScope, "banner");
   }, [dismissScope, consoleBannerScope]);
+  const streamRunMode = derivedRunMode ?? (runInProgress ? "extraction" : undefined);
+
+  useEffect(() => {
+    if (streamRunMode === "publish") {
+      return;
+    }
+    if (runConnectionState !== "failed") {
+      return;
+    }
+    const bannerRunKey = runId ?? "__stream_failure__";
+    if (streamErrorBannerRunRef.current === bannerRunKey) {
+      return;
+    }
+    streamErrorBannerRunRef.current = bannerRunKey;
+    showConsoleBanner("Run stream disconnected. Live logs may be incomplete.", {
+      intent: "danger",
+      duration: null,
+    });
+  }, [runConnectionState, runId, showConsoleBanner, streamRunMode]);
 
   const pushConsoleError = useCallback(
     (error: unknown) => {
@@ -295,6 +361,19 @@ export function Workbench({
     setDuplicateError(null);
   }, []);
 
+  const refreshConfigAfterPublish = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
+      queryClient.invalidateQueries({ queryKey: configurationKeys.detail(workspaceId, configId) }),
+      queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) }),
+    ]);
+    await Promise.all([filesQuery.refetch(), configurationsQuery.refetch()]);
+    window.setTimeout(() => {
+      void filesQuery.refetch();
+      void configurationsQuery.refetch();
+    }, 600);
+  }, [configId, configurationsQuery, filesQuery, queryClient, workspaceId]);
+
   const handleConfirmDuplicate = useCallback(() => {
     const trimmed = duplicateName.trim();
     if (!trimmed) {
@@ -322,39 +401,37 @@ export function Workbench({
       return;
     }
     const { runId: completedRunId, status, mode, payload } = pendingCompletion;
-    const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
-    const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
-    const payloadErrorMessage =
-      typeof payload?.error_message === "string"
-        ? payload.error_message.trim()
-        : typeof payload?.errorMessage === "string"
-          ? payload.errorMessage.trim()
-          : null;
-    const errorMessage = failureMessage || payloadErrorMessage || "ADE run failed.";
-    const notice =
-      status === "succeeded"
-        ? mode === "publish"
-          ? "Configuration published successfully."
-          : "ADE run completed successfully."
-        : errorMessage;
-    const intent: NotificationIntent =
-      status === "succeeded" ? "success" : "danger";
-    showConsoleBanner(notice, { intent });
-    if (status === "succeeded" && mode === "publish") {
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
-        queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) }),
-      ]);
-      notifyToast({
-        title: "Configuration published.",
-        description: "This configuration is now active for extraction runs.",
-        intent: "success",
-        duration: 5000,
-      });
+    const errorMessage = resolveRunFailureMessage(payload);
+
+    if (mode === "publish") {
+      setIsSubmittingPublish(false);
+      setPublishDialogOpen(true);
+      if (status === "succeeded") {
+        setPublishSucceededReadOnly(true);
+        setPublishDialogError(null);
+        setPublishDialogPhase("succeeded");
+        void refreshConfigAfterPublish();
+      } else {
+        const publishFailureSummary = errorMessage === "ADE run failed."
+          ? "Publish failed. This configuration remains a draft and is still editable."
+          : `Publish failed: ${errorMessage}`;
+        setPublishSucceededReadOnly(false);
+        setPublishDialogError(publishFailureSummary);
+        setPublishDialogPhase("failed");
+      }
+    } else {
+      const notice = status === "succeeded" ? "ADE run completed successfully." : errorMessage;
+      const intent: NotificationIntent = status === "succeeded" ? "success" : "danger";
+      showConsoleBanner(notice, { intent });
     }
 
     setPendingCompletion((current) => (current && current.runId === completedRunId ? null : current));
-  }, [configId, notifyToast, pendingCompletion, queryClient, setPendingCompletion, showConsoleBanner, workspaceId]);
+  }, [
+    pendingCompletion,
+    refreshConfigAfterPublish,
+    setPendingCompletion,
+    showConsoleBanner,
+  ]);
 
   const isMaximized = windowState === "maximized";
   const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;
@@ -759,24 +836,42 @@ export function Workbench({
     prepareRun,
   ]);
 
-  const handlePublish = useCallback(async () => {
-    if (usingSeed || !isDraftConfig || filesQuery.isLoading || filesQuery.isError) {
+  const startPublishRun = useCallback(async () => {
+    if (
+      isSubmittingPublish ||
+      usingSeed ||
+      !isDraftConfig ||
+      isReadOnlyConfig ||
+      filesQuery.isLoading ||
+      filesQuery.isError
+    ) {
       return;
     }
+    setPublishDialogOpen(true);
+    setPublishDialogPhase("running");
+    setPublishDialogError(null);
+    setIsSubmittingPublish(true);
+    closeConsole();
     const ready = await saveDirtyTabsBeforeRun();
     if (!ready) {
+      setPublishDialogPhase("failed");
+      setPublishDialogError("Save failed. Fix errors before publishing.");
+      setIsSubmittingPublish(false);
       return;
     }
-    await startRun(
-      { operation: "publish" },
-      { mode: "publish" },
-      { prepare: prepareRun },
-    );
+    const started = await startRun({ operation: "publish" }, { mode: "publish" });
+    if (!started) {
+      setPublishDialogPhase("failed");
+      setPublishDialogError("Unable to start publish run. Please try again.");
+      setIsSubmittingPublish(false);
+    }
   }, [
+    closeConsole,
     filesQuery.isError,
     filesQuery.isLoading,
     isDraftConfig,
-    prepareRun,
+    isReadOnlyConfig,
+    isSubmittingPublish,
     saveDirtyTabsBeforeRun,
     startRun,
     usingSeed,
@@ -849,7 +944,7 @@ export function Workbench({
     return () => window.removeEventListener("keydown", handler);
   }, [isMacPlatform, canSaveFiles, handleSaveActiveTab]);
 
-  const activeRunMode = derivedRunMode ?? (runInProgress ? "extraction" : undefined);
+  const activeRunMode = streamRunMode;
   const runBusy = runInProgress;
 
   const isRunningValidation =
@@ -865,28 +960,66 @@ export function Workbench({
   const isRunningPublish = runBusy && activeRunMode === "publish";
   const canPublish =
     isDraftConfig &&
+    canEditConfig &&
     !usingSeed &&
     !filesQuery.isLoading &&
     !filesQuery.isError &&
     !runBusy &&
-    !replaceConfig.isPending;
+    !replaceConfig.isPending &&
+    !isSubmittingPublish;
   const isRunningExtraction = runBusy && activeRunMode === "extraction";
   const canRunExtraction =
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !runBusy;
   const canReplaceFromArchive =
     isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
 
+  const handlePublishRequest = useCallback(() => {
+    if (!canPublish) {
+      return;
+    }
+    setPublishDialogError(null);
+    setPublishDialogPhase("confirm");
+    setPublishDialogOpen(true);
+    closeConsole();
+  }, [canPublish, closeConsole]);
+
   const handleOpenActionsMenu = useCallback((position: { x: number; y: number }) => {
     setActionsMenu(position);
   }, []);
+  const isPublishDialogActive = publishDialogOpen;
+  const handlePublishDialogClose = useCallback(() => {
+    if (publishDialogPhase === "running") {
+      return;
+    }
+    setPublishDialogOpen(false);
+    setPublishDialogPhase("confirm");
+    setPublishDialogError(null);
+    setIsSubmittingPublish(false);
+  }, [publishDialogPhase]);
+  const handlePublishDialogDone = useCallback(() => {
+    setPublishDialogOpen(false);
+    setPublishDialogPhase("confirm");
+    setPublishDialogError(null);
+    setIsSubmittingPublish(false);
+  }, []);
+  const handlePublishDialogDuplicate = useCallback(() => {
+    setPublishDialogOpen(false);
+    setPublishDialogPhase("confirm");
+    setPublishDialogError(null);
+    setIsSubmittingPublish(false);
+    openDuplicateDialog();
+  }, [openDuplicateDialog]);
 
   const handleToggleOutput = useCallback(() => {
+    if (isPublishDialogActive) {
+      return;
+    }
     if (outputCollapsed) {
       void openConsole();
     } else {
       closeConsole();
     }
-  }, [outputCollapsed, openConsole, closeConsole]);
+  }, [closeConsole, isPublishDialogActive, openConsole, outputCollapsed]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -987,7 +1120,7 @@ export function Workbench({
         disabled: !canPublish,
         onSelect: () => {
           setActionsMenu(null);
-          void handlePublish();
+          handlePublishRequest();
         },
       });
     }
@@ -1024,7 +1157,7 @@ export function Workbench({
   }, [
     canPublish,
     canReplaceFromArchive,
-    handlePublish,
+    handlePublishRequest,
     handleExportConfig,
     handleReplaceArchiveRequest,
     isDraftConfig,
@@ -1047,12 +1180,28 @@ export function Workbench({
   const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
   const toggleConsoleShortcutLabel = isMacPlatform ? "⌘`" : "Ctrl+`";
 
-  if (!seed && filesQuery.isLoading) {
+  if (
+    !seed &&
+    (configurationQuery.isLoading ||
+      awaitingFreshConfigSnapshot ||
+      filesQuery.isLoading ||
+      awaitingFreshFilesSnapshot)
+  ) {
     return (
       <PageState
         variant="loading"
-        title="Loading configuration files"
-        description="Fetching workspace configuration files for the workbench."
+        title="Refreshing configuration"
+        description="Checking the latest configuration status and edit permissions."
+      />
+    );
+  }
+
+  if (!seed && configurationQuery.isError) {
+    return (
+      <PageState
+        variant="error"
+        title="Unable to load configuration"
+        description="Try reloading the page or check your connection."
       />
     );
   }
@@ -1134,9 +1283,7 @@ export function Workbench({
               onRunValidation={handleRunValidation}
               canPublish={canPublish}
               isPublishing={isRunningPublish}
-              onPublish={() => {
-                void handlePublish();
-              }}
+              onPublish={handlePublishRequest}
               canRunExtraction={canRunExtraction}
               isRunningExtraction={isRunningExtraction}
               onRunExtraction={() => {
@@ -1145,6 +1292,7 @@ export function Workbench({
               }}
               consoleOpen={!outputCollapsed}
               onToggleConsole={handleToggleOutput}
+              consoleToggleDisabled={isPublishDialogActive}
               appearance={menuAppearance}
               windowState={windowState}
               onMinimizeWindow={handleMinimizeWindow}
@@ -1163,7 +1311,7 @@ export function Workbench({
                     <div className="space-y-0.5">
                       <p className="text-sm font-semibold">Read-only configuration</p>
                       <p className="text-xs text-muted-foreground">
-                        {filesQuery.data?.status === "active"
+                        {isActiveConfig
                           ? "Active configurations can’t be edited. Duplicate this configuration to create a draft you can change."
                           : "Archived configurations can’t be edited. Duplicate this configuration to create a draft you can change."}
                       </p>
@@ -1187,9 +1335,7 @@ export function Workbench({
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => {
-                        void handlePublish();
-                      }}
+                      onClick={handlePublishRequest}
                       disabled={!canPublish}
                       title={!canPublish ? "Publish is unavailable while another run is in progress." : undefined}
                     >
@@ -1302,13 +1448,20 @@ export function Workbench({
                       <span className={clsx("text-[11px]", collapsedConsoleTheme.hint)}>
                         (double-click gutter or {toggleConsoleShortcutLabel})
                       </span>
+                      {isPublishDialogActive ? (
+                        <span className={clsx("text-[11px] font-medium", collapsedConsoleTheme.hint)}>
+                          Publish dialog active
+                        </span>
+                      ) : null}
                     </div>
                     <button
                       type="button"
                       onClick={handleToggleOutput}
+                      disabled={isPublishDialogActive}
                       className={clsx(
                         "rounded px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition",
                         collapsedConsoleTheme.button,
+                        isPublishDialogActive && "cursor-not-allowed opacity-50",
                       )}
                       title="Show console"
                     >
@@ -1325,6 +1478,7 @@ export function Workbench({
                     latestRun={latestRun}
                     onClearConsole={handleClearConsole}
                     runStatus={derivedRunStatus}
+                    runConnectionState={runConnectionState}
                     onToggleCollapse={handleToggleOutput}
                     appearance={menuAppearance}
                   />
@@ -1397,6 +1551,28 @@ export function Workbench({
           </div>
         </div>
       ) : null}
+
+      <PublishConfigurationDialog
+        open={publishDialogOpen}
+        phase={publishDialogPhase}
+        isDirty={files.isDirty}
+        canPublish={canPublish}
+        isSubmitting={isSubmittingPublish}
+        runId={runId}
+        activeConfigurationName={activeConfiguration?.display_name ?? null}
+        connectionState={runConnectionState}
+        errorMessage={publishDialogError}
+        console={console}
+        onCancel={handlePublishDialogClose}
+        onStartPublish={() => {
+          void startPublishRun();
+        }}
+        onDone={handlePublishDialogDone}
+        onRetryPublish={() => {
+          void startPublishRun();
+        }}
+        onDuplicateToEdit={handlePublishDialogDuplicate}
+      />
 
       <ConfirmDialog
         open={duplicateDialogOpen}

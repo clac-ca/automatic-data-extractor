@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { client } from "@/api/client";
 import {
@@ -12,13 +12,104 @@ import {
 import type { RunResource } from "@/api/runs/api";
 import type { RunStreamEvent } from "@/types/runs";
 
-function mockNdjsonFetch(body: string) {
-  const response = new Response(body, {
-    status: 200,
-    headers: { "Content-Type": "application/x-ndjson" },
-  });
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(response);
-  return { fetchMock };
+const originalEventSource = globalThis.EventSource;
+
+class MockEventSource {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 2;
+  static instances: MockEventSource[] = [];
+
+  readonly url: string;
+  readonly withCredentials: boolean;
+  readyState = MockEventSource.CONNECTING;
+
+  private readonly listeners = new Map<string, Set<(event: Event) => void>>();
+  private closed = false;
+
+  constructor(url: string | URL, init?: EventSourceInit) {
+    this.url = String(url);
+    this.withCredentials = Boolean(init?.withCredentials);
+    MockEventSource.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const handler = normalizeListener(listener);
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, new Set());
+    }
+    this.listeners.get(type)?.add(handler);
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const handler = normalizeListener(listener);
+    this.listeners.get(type)?.delete(handler);
+  }
+
+  close() {
+    this.closed = true;
+    this.readyState = MockEventSource.CLOSED;
+  }
+
+  emitOpen() {
+    this.readyState = MockEventSource.OPEN;
+    this.emit("open", new Event("open"));
+  }
+
+  emitError(readyState = MockEventSource.CONNECTING) {
+    this.readyState = readyState;
+    this.emit("error", new Event("error"));
+  }
+
+  emitReady(data: unknown, lastEventId = "") {
+    this.emit(
+      "ready",
+      new MessageEvent("ready", {
+        data: JSON.stringify(data),
+        lastEventId,
+      }),
+    );
+  }
+
+  emitMessage(data: string, lastEventId = "") {
+    this.emit(
+      "message",
+      new MessageEvent("message", {
+        data,
+        lastEventId,
+      }),
+    );
+  }
+
+  emitEnd(data: unknown, lastEventId = "") {
+    this.emit(
+      "end",
+      new MessageEvent("end", {
+        data: JSON.stringify(data),
+        lastEventId,
+      }),
+    );
+  }
+
+  private emit(type: string, event: Event) {
+    if (this.closed) {
+      return;
+    }
+    const listeners = this.listeners.get(type);
+    if (!listeners) {
+      return;
+    }
+    for (const listener of listeners) {
+      listener(event);
+    }
+  }
+}
+
+function normalizeListener(listener: EventListenerOrEventListenerObject): (event: Event) => void {
+  if (typeof listener === "function") {
+    return listener;
+  }
+  return (event) => listener.handleEvent(event);
 }
 
 const sampleRunResource = {
@@ -30,47 +121,116 @@ const sampleRunResource = {
   status: "queued",
   created_at: "2025-01-01T00:00:00Z",
   links: {
-    self: "/api/v1/runs/run-123",
-    events_stream: "/api/v1/runs/run-123/events/stream",
-    events_download: "/api/v1/runs/run-123/events/download",
-    logs: "/api/v1/runs/run-123/events/download",
-    input: "/api/v1/runs/run-123/input",
-    input_download: "/api/v1/runs/run-123/input/download",
-    output: "/api/v1/runs/run-123/output/download",
-    output_download: "/api/v1/runs/run-123/output/download",
-    output_metadata: "/api/v1/runs/run-123/output",
+    self: "/api/v1/workspaces/ws-1/runs/run-123",
+    events_stream: "/api/v1/workspaces/ws-1/runs/run-123/events/stream",
+    events_download: "/api/v1/workspaces/ws-1/runs/run-123/events/download",
+    input_download: "/api/v1/workspaces/ws-1/runs/run-123/input/download",
+    output_download: "/api/v1/workspaces/ws-1/runs/run-123/output/download",
+    output_metadata: "/api/v1/workspaces/ws-1/runs/run-123/output",
   },
 } satisfies RunResource;
 
-type CreateRunPostResponse = Awaited<
-  ReturnType<typeof client.POST>
->;
-type FetchRunResponse = Awaited<ReturnType<typeof client.GET>>;
+type CreateRunPostResponse = Awaited<ReturnType<typeof client.POST>>;
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
+  MockEventSource.instances = [];
+  globalThis.EventSource = originalEventSource;
+});
+
+beforeEach(() => {
+  MockEventSource.instances = [];
+  globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
 });
 
 describe("streamRunEvents", () => {
-  it("parses NDJSON event streams", async () => {
+  it("streams NDJSON message events and completes on end control event", async () => {
     const runEvent: RunStreamEvent = { event: "engine.phase.start", timestamp: "2025-01-01T00:00:00Z" };
-    const completedEvent: RunStreamEvent = {
-      event: "run.complete",
-      timestamp: "2025-01-01T00:05:00Z",
-      data: { status: "succeeded" },
-    };
-    const payload = `${JSON.stringify(runEvent)}\n${JSON.stringify(completedEvent)}\n`;
-    mockNdjsonFetch(payload);
+
     const iterator = streamRunEvents("http://example.com/stream");
+    const streamPromise = (async () => {
+      const events: RunStreamEvent[] = [];
+      for await (const evt of iterator) {
+        events.push(evt);
+      }
+      return events;
+    })();
 
-    const events = [];
-    for await (const evt of iterator) {
-      events.push(evt);
-    }
+    const source = MockEventSource.instances[0];
+    expect(source).toBeDefined();
+    source.emitOpen();
+    source.emitReady({ runId: "run-123", status: "running", cursor: 0 });
+    source.emitMessage(JSON.stringify(runEvent), "10");
+    source.emitEnd({ runId: "run-123", status: "succeeded", cursor: 10, reason: "run_complete" }, "10");
 
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject(runEvent);
-    expect(events[1]).toMatchObject(completedEvent);
+    const events = await streamPromise;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ ...runEvent, event_id: "10" });
+  });
+
+  it("adds reconnecting connection state when EventSource reports reconnect", async () => {
+    const states: string[] = [];
+
+    const iterator = streamRunEvents("http://example.com/stream", {
+      onConnectionStateChange: (state) => states.push(state),
+    });
+    const streamPromise = (async () => {
+      const events: RunStreamEvent[] = [];
+      for await (const evt of iterator) {
+        events.push(evt);
+      }
+      return events;
+    })();
+
+    const source = MockEventSource.instances[0];
+    source.emitOpen();
+    source.emitError(MockEventSource.CONNECTING);
+    source.emitMessage(
+      JSON.stringify({ event: "run.start", timestamp: "2025-01-01T00:00:00Z" } satisfies RunStreamEvent),
+      "5",
+    );
+    source.emitEnd({ runId: "run-123", status: "succeeded", cursor: 5, reason: "run_complete" }, "5");
+
+    const events = await streamPromise;
+    expect(events.map((event) => event.event)).toEqual(["run.start"]);
+    expect(states).toEqual(expect.arrayContaining(["connecting", "streaming", "reconnecting", "completed"]));
+  });
+
+  it("fails when stream closes with non-reconnecting error", async () => {
+    const states: string[] = [];
+
+    const iterator = streamRunEvents("http://example.com/stream", {
+      onConnectionStateChange: (state) => states.push(state),
+    });
+    const streamPromise = (async () => {
+      const events: RunStreamEvent[] = [];
+      for await (const evt of iterator) {
+        events.push(evt);
+      }
+      return events;
+    })();
+
+    const source = MockEventSource.instances[0];
+    source.emitOpen();
+    source.emitError(MockEventSource.CLOSED);
+
+    await expect(streamPromise).rejects.toThrow("Run events stream disconnected.");
+    expect(states).toContain("failed");
+  });
+
+  it("appends cursor query when afterSequence is provided", async () => {
+    const iterator = streamRunEvents("http://example.com/stream", { afterSequence: 42 });
+    const streamPromise = (async () => {
+      for await (const _ of iterator) {
+        // consume until complete
+      }
+    })();
+
+    const source = MockEventSource.instances[0];
+    expect(source.url).toContain("cursor=42");
+    source.emitEnd({ runId: "run-123", status: "succeeded", cursor: 42, reason: "run_complete" }, "42");
+    await streamPromise;
   });
 });
 
@@ -116,9 +276,9 @@ describe("createRun", () => {
     } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    await expect(
-      createRun("workspace-123", { input_document_id: "doc-123" }),
-    ).rejects.toThrow("Expected run creation response.");
+    await expect(createRun("workspace-123", { input_document_id: "doc-123" })).rejects.toThrow(
+      "Expected run creation response.",
+    );
   });
 
   it("allows validation runs without an input document", async () => {
@@ -144,6 +304,38 @@ describe("createRun", () => {
         configuration_id: "config-123",
         options: {
           operation: "validate",
+          dry_run: false,
+          log_level: "INFO",
+          active_sheet_only: false,
+        },
+      },
+      signal: undefined,
+    });
+  });
+
+  it("supports publish runs through workspace run creation", async () => {
+    const postResponse = {
+      data: { ...sampleRunResource, operation: "publish" },
+      response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
+    } as unknown as CreateRunPostResponse;
+    const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
+
+    await createRun(
+      "workspace-123",
+      {
+        operation: "publish",
+        configuration_id: "config-123",
+      },
+      undefined,
+    );
+
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs", {
+      params: { path: { workspaceId: "workspace-123" } },
+      body: {
+        input_document_id: undefined,
+        configuration_id: "config-123",
+        options: {
+          operation: "publish",
           dry_run: false,
           log_level: "INFO",
           active_sheet_only: false,
@@ -206,10 +398,10 @@ describe("cancelRun", () => {
     } as unknown as CreateRunPostResponse;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    const run = await cancelRun("run-123");
+    const run = await cancelRun("workspace-123", "run-123");
 
-    expect(postSpy).toHaveBeenCalledWith("/api/v1/runs/{runId}/cancel", {
-      params: { path: { runId: "run-123" } },
+    expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/runs/{runId}/cancel", {
+      params: { path: { workspaceId: "workspace-123", runId: "run-123" } },
     });
     expect(run).toEqual(cancelled);
   });
@@ -221,56 +413,54 @@ describe("cancelRun", () => {
     } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    await expect(cancelRun("run-123")).rejects.toThrow("Expected run cancellation response.");
+    await expect(cancelRun("workspace-123", "run-123")).rejects.toThrow("Expected run cancellation response.");
   });
 });
 
 describe("runEventsUrl helpers", () => {
-  it("builds event download URLs", () => {
+  it("builds event stream URLs", () => {
     const url = runEventsUrl(sampleRunResource, { afterSequence: 42 });
-    expect(url).toContain("/api/v1/runs/run-123/events/stream");
+    expect(url).toContain("/api/v1/workspaces/ws-1/runs/run-123/events/stream");
     expect(url).toContain("cursor=42");
   });
 
-  it("streams events for a completed run resource", async () => {
+  it("streams events for a run resource", async () => {
     const completedRun = { ...sampleRunResource, status: "succeeded" } satisfies RunResource;
-    const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
-    const payload = `${JSON.stringify(runEvent)}\n`;
-    const { fetchMock } = mockNdjsonFetch(payload);
+    const iterator = streamRunEventsForRun("ws-1", completedRun, { afterSequence: 3 });
+    const streamPromise = (async () => {
+      const events: RunStreamEvent[] = [];
+      for await (const event of iterator) {
+        events.push(event);
+      }
+      return events;
+    })();
 
-    const iterator = streamRunEventsForRun(completedRun, { afterSequence: 3 });
-    const result = await iterator.next();
+    const source = MockEventSource.instances[0];
+    expect(source.url).toContain("/api/v1/workspaces/ws-1/runs/run-123/events/stream");
+    expect(source.url).toContain("cursor=3");
+    source.emitOpen();
+    source.emitMessage(
+      JSON.stringify({ event: "run.start", timestamp: "2025-01-01T00:00:00Z" } satisfies RunStreamEvent),
+      "3",
+    );
+    source.emitEnd({ runId: "run-123", status: "succeeded", cursor: 3, reason: "run_complete" }, "3");
 
-    const [url] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
-    expect(result.value).toMatchObject(runEvent);
-    await iterator.return?.(undefined);
+    const events = await streamPromise;
+    expect(events.map((event) => event.event)).toEqual(["run.start"]);
   });
 
-  it("emits a completion event when fallback polling resolves to cancelled", async () => {
+  it("throws when run stream link is missing", async () => {
     const runWithoutStream = {
       ...sampleRunResource,
       links: {
         ...sampleRunResource.links,
         events_stream: "",
-        events_download: "",
       },
     } satisfies RunResource;
-    const cancelledRun = { ...runWithoutStream, status: "cancelled" } satisfies RunResource;
-    const getResponse = {
-      data: cancelledRun,
-      response: new Response(JSON.stringify(cancelledRun), { status: 200 }),
-    } as unknown as FetchRunResponse;
-    vi.spyOn(client, "GET").mockResolvedValue(getResponse);
 
-    const iterator = streamRunEventsForRun(runWithoutStream);
-    const result = await iterator.next();
-
-    expect(result.value).toMatchObject({
-      event: "run.complete",
-      data: { status: "cancelled" },
-      level: "info",
-    });
-    await iterator.return?.(undefined);
+    await expect(async () => {
+      const iterator = streamRunEventsForRun("ws-1", runWithoutStream);
+      await iterator.next();
+    }).rejects.toThrow("Run events stream is unavailable.");
   });
 });

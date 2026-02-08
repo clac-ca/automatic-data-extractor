@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -23,13 +22,13 @@ from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import SettingsDep, get_runs_service, get_runs_service_read
-from ade_api.common.downloads import build_content_disposition
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
     cursor_query_params,
     resolve_cursor_sort,
     strict_cursor_query_guard,
 )
+from ade_api.common.downloads import build_content_disposition
 from ade_api.common.workbook_preview import (
     DEFAULT_PREVIEW_COLUMNS,
     DEFAULT_PREVIEW_ROWS,
@@ -37,17 +36,16 @@ from ade_api.common.workbook_preview import (
     MAX_PREVIEW_ROWS,
     WorkbookSheetPreview,
 )
-from ade_api.core.auth import AuthenticatedPrincipal
+from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.db import get_session_factory
-from ade_api.core.http import get_current_principal, require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import (
     ConfigEngineDependencyMissingError,
     ConfigStateError,
     ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
 )
+from ade_db.models import Run, RunStatus, User
 from ade_storage import StorageLimitError, get_storage_adapter
-from ade_db.models import RunStatus
 
 from .exceptions import (
     RunDocumentMissingError,
@@ -66,10 +64,8 @@ from .exceptions import (
 )
 from .filters import RunColumnFilters
 from .schemas import (
-    RunBatchCreateRequest,
     RunBatchCreateResponse,
     RunColumnResource,
-    RunCreateRequest,
     RunFieldResource,
     RunInput,
     RunMetricsResource,
@@ -84,12 +80,12 @@ from .service import RunsService
 from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
+    prefix="/workspaces/{workspaceId}/runs",
     tags=["runs"],
     dependencies=[Security(require_authenticated)],
 )
 RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
 RunsServiceReadDep = Annotated[RunsService, Depends(get_runs_service_read)]
-logger = logging.getLogger(__name__)
 
 WorkspacePath = Annotated[
     UUID,
@@ -98,18 +94,25 @@ WorkspacePath = Annotated[
         alias="workspaceId",
     ),
 ]
-ConfigurationPath = Annotated[
-    UUID,
-    Path(
-        description="Configuration identifier",
-        alias="configurationId",
-    ),
-]
 RunPath = Annotated[
     UUID,
     Path(
         description="Run identifier",
         alias="runId",
+    ),
+]
+RunReader = Annotated[
+    User,
+    Security(
+        require_workspace("workspace.runs.read"),
+        scopes=["{workspaceId}"],
+    ),
+]
+RunManager = Annotated[
+    User,
+    Security(
+        require_workspace("workspace.runs.manage"),
+        scopes=["{workspaceId}"],
     ),
 ]
 
@@ -120,6 +123,34 @@ _COLUMN_FILTER_KEYS = {
     "mapped_field",
     "mapping_status",
 }
+
+
+def _require_workspace_run(
+    *,
+    service: RunsService,
+    workspace_id: UUID,
+    run_id: UUID,
+) -> Run:
+    run = service.get_run(run_id)
+    if run is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+    if run.workspace_id != workspace_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+    return run
+
+
+def _resolve_stream_cursor(request: Request, cursor: int | None) -> int:
+    header_cursor = (request.headers.get("last-event-id") or "").strip()
+    if header_cursor:
+        try:
+            parsed = int(header_cursor)
+        except ValueError:
+            parsed = -1
+        if parsed >= 0:
+            return parsed
+    if cursor is None:
+        return 0
+    return max(0, int(cursor))
 
 
 def get_run_column_filters(
@@ -180,106 +211,16 @@ def _input_document_required_detail() -> dict[str, str]:
     return {"error": "input_document_required_for_process"}
 
 
-def _output_missing_detail(
-    *,
-    service: RunsService,
-    run_id: UUID,
-    message: str,
-) -> str | dict[str, dict[str, str]]:
-    run_record = service.get_run(run_id)  # type: ignore[arg-type]
-    if run_record and run_record.status is RunStatus.FAILED:
+def _output_missing_detail(*, run: Run, message: str) -> str | dict[str, dict[str, str]]:
+    if run.status is RunStatus.FAILED:
         return _run_failed_no_output_detail(message)
-    if run_record and run_record.status is RunStatus.CANCELLED:
+    if run.status is RunStatus.CANCELLED:
         return _run_cancelled_no_output_detail(message)
     return message
 
 
 @router.post(
-    "/configurations/{configurationId}/runs",
-    response_model=RunResource,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Security(require_csrf)],
-)
-def create_run_endpoint(
-    *,
-    configuration_id: ConfigurationPath,
-    payload: RunCreateRequest,
-    service: RunsServiceDep,
-) -> RunResource:
-    """Create a run for ``configuration_id`` and enqueue execution."""
-
-    try:
-        run = service.prepare_run(
-            configuration_id=configuration_id,
-            options=payload.options,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunDocumentMissingError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunInputDocumentRequiredForProcessError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_input_document_required_detail(),
-        ) from exc
-    except RunInputMissingError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except ConfigStorageNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except ConfigStateError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except ConfigEngineDependencyMissingError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_engine_dependency_missing_detail(exc),
-        ) from exc
-
-    resource = service.to_resource(run)
-    return resource
-
-
-@router.post(
-    "/configurations/{configurationId}/runs/batch",
-    response_model=RunBatchCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Security(require_csrf)],
-)
-def create_runs_batch_endpoint(
-    *,
-    configuration_id: ConfigurationPath,
-    payload: RunBatchCreateRequest,
-    service: RunsServiceDep,
-) -> RunBatchCreateResponse:
-    """Create multiple runs for ``configuration_id`` and enqueue execution."""
-
-    try:
-        runs = service.prepare_runs_batch(
-            configuration_id=configuration_id,
-            document_ids=payload.document_ids,
-            options=payload.options,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunDocumentMissingError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RunInputDocumentRequiredForProcessError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_input_document_required_detail(),
-        ) from exc
-    except ConfigEngineDependencyMissingError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_engine_dependency_missing_detail(exc),
-        ) from exc
-
-    resources = [service.to_resource(run) for run in runs]
-    response_payload = RunBatchCreateResponse(runs=resources)
-    return response_payload
-
-
-@router.post(
-    "/workspaces/{workspaceId}/runs",
+    "",
     response_model=RunResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
@@ -289,6 +230,7 @@ def create_workspace_run_endpoint(
     workspace_id: WorkspacePath,
     payload: RunWorkspaceCreateRequest,
     service: RunsServiceDep,
+    _actor: RunManager,
 ) -> RunResource:
     """Create a run for ``workspace_id`` and enqueue execution."""
 
@@ -320,12 +262,11 @@ def create_workspace_run_endpoint(
             detail=_engine_dependency_missing_detail(exc),
         ) from exc
 
-    resource = service.to_resource(run)
-    return resource
+    return service.to_resource(run)
 
 
 @router.post(
-    "/workspaces/{workspaceId}/runs/batch",
+    "/batch",
     response_model=RunBatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
@@ -335,6 +276,7 @@ def create_workspace_runs_batch_endpoint(
     workspace_id: WorkspacePath,
     payload: RunWorkspaceBatchCreateRequest,
     service: RunsServiceDep,
+    _actor: RunManager,
 ) -> RunBatchCreateResponse:
     """Create multiple runs for ``workspace_id`` and enqueue execution."""
 
@@ -361,45 +303,11 @@ def create_workspace_runs_batch_endpoint(
         ) from exc
 
     resources = [service.to_resource(run) for run in runs]
-    response_payload = RunBatchCreateResponse(runs=resources)
-    return response_payload
+    return RunBatchCreateResponse(runs=resources)
 
 
 @router.get(
-    "/configurations/{configurationId}/runs",
-    response_model=RunPage,
-    response_model_exclude_none=True,
-)
-def list_configuration_runs_endpoint(
-    configuration_id: ConfigurationPath,
-    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
-    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
-    service: RunsServiceReadDep,
-) -> RunPage:
-    try:
-        resolved_sort = resolve_cursor_sort(
-            list_query.sort,
-            allowed=SORT_FIELDS,
-            cursor_fields=CURSOR_FIELDS,
-            default=DEFAULT_SORT,
-            id_field=ID_FIELD,
-        )
-        return service.list_runs_for_configuration(
-            configuration_id=configuration_id,
-            filters=list_query.filters,
-            join_operator=list_query.join_operator,
-            q=list_query.q,
-            resolved_sort=resolved_sort,
-            limit=list_query.limit,
-            cursor=list_query.cursor,
-            include_total=list_query.include_total,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-
-@router.get(
-    "/workspaces/{workspaceId}/runs",
+    "",
     response_model=RunPage,
     response_model_exclude_none=True,
 )
@@ -408,6 +316,7 @@ def list_workspace_runs_endpoint(
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> RunPage:
     resolved_sort = resolve_cursor_sort(
         list_query.sort,
@@ -428,26 +337,29 @@ def list_workspace_runs_endpoint(
     )
 
 
-@router.get("/runs/{runId}", response_model=RunResource)
-def get_run_endpoint(
+@router.get("/{runId}", response_model=RunResource)
+def get_workspace_run_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> RunResource:
-    run = service.get_run(run_id)
-    if run is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+    run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     return service.to_resource(run)
 
 
 @router.post(
-    "/runs/{runId}/cancel",
+    "/{runId}/cancel",
     response_model=RunResource,
     dependencies=[Security(require_csrf)],
 )
-def cancel_run_endpoint(
+def cancel_workspace_run_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceDep,
+    _actor: RunManager,
 ) -> RunResource:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         run = service.cancel_run(run_id=run_id)
     except RunNotFoundError as exc:
@@ -458,14 +370,17 @@ def cancel_run_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/metrics",
+    "/{runId}/metrics",
     response_model=RunMetricsResource,
     response_model_exclude_none=True,
 )
-def get_run_metrics_endpoint(
+def get_workspace_run_metrics_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> RunMetricsResource:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         metrics = service.get_run_metrics(run_id=run_id)
     except RunNotFoundError as exc:
@@ -476,14 +391,17 @@ def get_run_metrics_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/fields",
+    "/{runId}/fields",
     response_model=list[RunFieldResource],
     response_model_exclude_none=True,
 )
-def list_run_fields_endpoint(
+def list_workspace_run_fields_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> list[RunFieldResource]:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         fields = service.list_run_fields(run_id=run_id)
     except RunNotFoundError as exc:
@@ -492,15 +410,18 @@ def list_run_fields_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/columns",
+    "/{runId}/columns",
     response_model=list[RunColumnResource],
     response_model_exclude_none=True,
 )
-def list_run_columns_endpoint(
+def list_workspace_run_columns_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     filters: Annotated[RunColumnFilters, Depends(get_run_column_filters)],
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> list[RunColumnResource]:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         columns = service.list_run_columns(run_id=run_id, filters=filters)
     except RunNotFoundError as exc:
@@ -509,15 +430,18 @@ def list_run_columns_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/input",
+    "/{runId}/input",
     response_model=RunInput,
     response_model_exclude_none=True,
     summary="Get run input metadata",
 )
-def get_run_input_endpoint(
+def get_workspace_run_input_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> RunInput:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         return service.get_run_input_metadata(run_id=run_id)
     except RunNotFoundError as exc:
@@ -529,24 +453,28 @@ def get_run_input_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/input/download",
+    "/{runId}/input/download",
     summary="Download run input file",
 )
-def download_run_input_endpoint(
+def download_workspace_run_input_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     request: Request,
     settings: SettingsDep,
+    service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> StreamingResponse:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     blob_storage = get_storage_adapter(request)
     session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
-            service = RunsService(
+            local_service = RunsService(
                 session=session,
                 settings=settings,
                 blob_storage=blob_storage,
             )
-            _, document, version, stream = service.stream_run_input(run_id=run_id)
+            _, document, version, stream = local_service.stream_run_input(run_id=run_id)
             media_type = version.content_type or "application/octet-stream"
             filename = version.filename_at_upload or document.name
     except RunNotFoundError as exc:
@@ -560,29 +488,33 @@ def download_run_input_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/events/stream",
+    "/{runId}/events/stream",
     responses={status.HTTP_404_NOT_FOUND: {"description": "Run not found"}},
     summary="Stream run events (SSE)",
 )
-async def stream_run_events_endpoint(
+async def stream_workspace_run_events_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     request: Request,
     service: RunsServiceReadDep,
+    _actor: RunReader,
     *,
     cursor: Annotated[
-        int,
+        int | None,
         Query(
             ge=0,
-            description="Byte offset cursor for resuming from a prior stream position.",
+            description=(
+                "Byte offset cursor for resuming from a prior stream position. "
+                "When Last-Event-ID is present, that value takes precedence."
+            ),
         ),
-    ] = 0,
+    ] = None,
 ) -> EventSourceResponse:
-    run = service.get_run(run_id)
-    if run is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+    run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
+    resolved_cursor = _resolve_stream_cursor(request, cursor)
 
     async def event_stream():
-        async for message in service.stream_run_events(run_id=run.id, cursor=cursor):
+        async for message in service.stream_run_events(run_id=run.id, cursor=resolved_cursor):
             if await request.is_disconnected():
                 return
             yield message
@@ -597,25 +529,29 @@ async def stream_run_events_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/events/download",
+    "/{runId}/events/download",
     responses={status.HTTP_404_NOT_FOUND: {"description": "Events unavailable"}},
     summary="Download run events (NDJSON log)",
 )
-def download_run_events_file_endpoint(
+def download_workspace_run_events_file_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     request: Request,
     settings: SettingsDep,
+    service: RunsServiceReadDep,
+    _actor: RunReader,
 ):
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     blob_storage = get_storage_adapter(request)
     session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
-            service = RunsService(
+            local_service = RunsService(
                 session=session,
                 settings=settings,
                 blob_storage=blob_storage,
             )
-            stream = service.stream_run_logs(run_id=run_id)
+            stream = local_service.stream_run_logs(run_id=run_id)
     except (RunNotFoundError, RunLogsFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     filename = "events.ndjson"
@@ -625,7 +561,7 @@ def download_run_events_file_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/output",
+    "/{runId}/output",
     response_model=RunOutput,
     response_model_exclude_none=True,
     responses={
@@ -633,10 +569,13 @@ def download_run_events_file_endpoint(
     },
     summary="Get run output metadata",
 )
-def get_run_output_metadata_endpoint(
+def get_workspace_run_output_metadata_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> RunOutput:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         return service.get_run_output_metadata(run_id=run_id)
     except RunNotFoundError as exc:
@@ -644,7 +583,7 @@ def get_run_output_metadata_endpoint(
 
 
 @router.post(
-    "/runs/{runId}/output",
+    "/{runId}/output",
     response_model=RunOutput,
     status_code=status.HTTP_201_CREATED,
     response_model_exclude_none=True,
@@ -658,18 +597,20 @@ def get_run_output_metadata_endpoint(
     },
     summary="Upload manual run output",
 )
-def upload_run_output_endpoint(
+def upload_workspace_run_output_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
-    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: RunsServiceDep,
+    actor: RunManager,
     *,
     file: Annotated[UploadFile, File(...)],
 ) -> RunOutput:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         return service.upload_manual_output(
             run_id=run_id,
             upload=file,
-            actor_id=principal.user_id,
+            actor_id=actor.id,
         )
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -685,40 +626,42 @@ def upload_run_output_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/output/download",
+    "/{runId}/output/download",
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Output not found"},
         status.HTTP_409_CONFLICT: {"description": "Output not ready"},
     },
     summary="Download run output file",
 )
-def download_run_output_endpoint(
+def download_workspace_run_output_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     request: Request,
     settings: SettingsDep,
+    service: RunsServiceReadDep,
+    _actor: RunReader,
 ):
+    run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     blob_storage = get_storage_adapter(request)
     session_factory = get_session_factory(request)
     try:
         with session_factory() as session:
-            service = RunsService(
+            local_service = RunsService(
                 session=session,
                 settings=settings,
                 blob_storage=blob_storage,
             )
             try:
-                _, output_file, output_version, stream = service.stream_run_output(run_id=run_id)
+                _, output_file, output_version, stream = local_service.stream_run_output(
+                    run_id=run_id
+                )
             except RunOutputNotReadyError as exc:
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
                     detail=_output_not_ready_detail(str(exc)),
                 ) from exc
             except RunOutputMissingError as exc:
-                detail = _output_missing_detail(
-                    service=service,
-                    run_id=run_id,
-                    message=str(exc),
-                )
+                detail = _output_missing_detail(run=run, message=str(exc))
                 raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -731,7 +674,7 @@ def download_run_output_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/output/sheets",
+    "/{runId}/output/sheets",
     response_model=list[RunOutputSheet],
     response_model_exclude_none=True,
     responses={
@@ -746,10 +689,13 @@ def download_run_output_endpoint(
     },
     summary="List run output worksheets",
 )
-def list_run_output_sheets_endpoint(
+def list_workspace_run_output_sheets_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     service: RunsServiceReadDep,
+    _actor: RunReader,
 ) -> list[RunOutputSheet]:
+    run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     try:
         return service.list_run_output_sheets(run_id=run_id)
     except RunNotFoundError as exc:
@@ -760,11 +706,7 @@ def list_run_output_sheets_endpoint(
             detail=_output_not_ready_detail(str(exc)),
         ) from exc
     except RunOutputMissingError as exc:
-        detail = _output_missing_detail(
-            service=service,
-            run_id=run_id,
-            message=str(exc),
-        )
+        detail = _output_missing_detail(run=run, message=str(exc))
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunOutputSheetUnsupportedError as exc:
         raise HTTPException(
@@ -776,7 +718,7 @@ def list_run_output_sheets_endpoint(
 
 
 @router.get(
-    "/runs/{runId}/output/preview",
+    "/{runId}/output/preview",
     response_model=WorkbookSheetPreview,
     response_model_exclude_none=True,
     summary="Preview run output worksheet",
@@ -791,10 +733,12 @@ def list_run_output_sheets_endpoint(
         },
     },
 )
-def preview_run_output_endpoint(
+def preview_workspace_run_output_endpoint(
+    workspace_id: WorkspacePath,
     run_id: RunPath,
     response: Response,
     service: RunsServiceReadDep,
+    _actor: RunReader,
     *,
     max_rows: Annotated[
         int,
@@ -850,6 +794,7 @@ def preview_run_output_endpoint(
         ),
     ] = None,
 ) -> WorkbookSheetPreview:
+    run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     if sheet_name and sheet_index is not None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -876,11 +821,7 @@ def preview_run_output_endpoint(
             detail=_output_not_ready_detail(str(exc)),
         ) from exc
     except RunOutputMissingError as exc:
-        detail = _output_missing_detail(
-            service=service,
-            run_id=run_id,
-            message=str(exc),
-        )
+        detail = _output_missing_detail(run=run, message=str(exc))
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail) from exc
     except RunOutputPreviewUnsupportedError as exc:
         raise HTTPException(

@@ -73,7 +73,7 @@ export function useDocumentPreviewModel({
     queryFn: ({ signal }) =>
       source === "original"
         ? fetchDocumentSheets(workspaceId, document.id, signal)
-        : fetchRunOutputSheets(normalizedRunId as string, signal),
+        : fetchRunOutputSheets(workspaceId, normalizedRunId as string, signal),
     enabled: Boolean(workspaceId && document.id && canLoadSelectedSource),
     staleTime: 30_000,
   });
@@ -135,7 +135,7 @@ export function useDocumentPreviewModel({
         return fetchDocumentPreview(workspaceId, document.id, options, signal);
       }
 
-      return fetchRunOutputPreview(normalizedRunId as string, options, signal);
+      return fetchRunOutputPreview(workspaceId, normalizedRunId as string, options, signal);
     },
     enabled: Boolean(workspaceId && document.id && canLoadSelectedSource && selectedSheet),
     staleTime: 30_000,

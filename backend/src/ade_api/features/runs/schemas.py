@@ -7,8 +7,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
+from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
 from ade_db.models import RunOperation, RunStatus
 
@@ -17,12 +17,10 @@ RunLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 __all__ = [
     "RunBatchCreateOptions",
-    "RunBatchCreateRequest",
     "RunWorkspaceBatchCreateRequest",
     "RunBatchCreateResponse",
     "RunCreateOptionsBase",
     "RunCreateOptions",
-    "RunCreateRequest",
     "RunWorkspaceCreateRequest",
     "RunInput",
     "RunMetricsResource",
@@ -73,13 +71,6 @@ class RunCreateOptions(RunCreateOptionsBase):
         description="Document identifier to ingest.",
     )
 
-
-class RunCreateRequest(BaseSchema):
-    """Payload accepted by the run creation endpoint."""
-
-    options: RunCreateOptions = Field(default_factory=RunCreateOptions)
-
-
 class RunWorkspaceCreateRequest(BaseSchema):
     """Payload accepted by the workspace run creation endpoint."""
 
@@ -113,17 +104,6 @@ class RunBatchCreateOptions(BaseSchema):
     )
 
 
-class RunBatchCreateRequest(BaseSchema):
-    """Payload accepted by the batch run creation endpoint."""
-
-    document_ids: list[UUIDStr] = Field(
-        ...,
-        min_length=1,
-        description="Documents to enqueue as individual runs (all-or-nothing).",
-    )
-    options: RunBatchCreateOptions = Field(default_factory=RunBatchCreateOptions)
-
-
 class RunWorkspaceBatchCreateRequest(BaseSchema):
     """Payload accepted by the workspace batch run creation endpoint."""
 
@@ -151,10 +131,7 @@ class RunLinks(BaseSchema):
     self: str
     events_stream: str
     events_download: str
-    logs: str
-    input: str
     input_download: str
-    output: str
     output_download: str
     output_metadata: str
 
@@ -284,7 +261,6 @@ class RunResource(BaseSchema):
     input: RunInput = Field(default_factory=RunInput)
     output: RunOutput = Field(default_factory=RunOutput)
     links: RunLinks
-    events_download_url: str | None = None
 
 
 class RunPage(CursorPage[RunResource]):

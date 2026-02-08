@@ -11,8 +11,7 @@ import type {
   FileRenameResponse,
   FileWriteResponse,
 } from "@/types/configurations";
-import type { components, paths } from "@/types";
-type RunResource = components["schemas"]["RunResource"];
+import type { paths } from "@/types";
 
 type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];
@@ -71,20 +70,6 @@ export async function readConfiguration(
     },
   );
   return (data ?? null) as ConfigurationRecord | null;
-}
-
-export async function publishConfiguration(workspaceId: string, configId: string): Promise<RunResource> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/publish",
-    {
-      params: { path: { workspaceId, configurationId: configId } },
-      body: null,
-    },
-  );
-  if (!data) {
-    throw new Error("Expected run payload.");
-  }
-  return data as RunResource;
 }
 
 export async function archiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {

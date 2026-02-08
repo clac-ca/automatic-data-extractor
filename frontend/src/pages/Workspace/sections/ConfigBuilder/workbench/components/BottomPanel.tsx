@@ -4,6 +4,7 @@ import type { WorkbenchPane } from "../state/workbenchSearchParams";
 import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { WorkbenchRunSummary, WorkbenchValidationState } from "../types";
+import type { RunStreamConnectionState } from "@/api/runs/api";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 
@@ -19,6 +20,7 @@ interface BottomPanelProps {
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
   readonly runStatus?: JobStreamStatus;
+  readonly runConnectionState?: RunStreamConnectionState;
   readonly onToggleCollapse?: () => void;
   readonly appearance?: "light" | "dark";
 }
@@ -32,6 +34,7 @@ export function BottomPanel({
   latestRun,
   onClearConsole,
   runStatus,
+  runConnectionState,
   onToggleCollapse,
   appearance = "light",
 }: BottomPanelProps) {
@@ -103,6 +106,7 @@ export function BottomPanel({
             latestRun={latestRun}
             onClearConsole={onClearConsole}
             runStatus={runStatus}
+            runConnectionState={runConnectionState}
           />
         </TabsContent>
 

@@ -7,19 +7,20 @@ import json
 import logging
 import tempfile
 import time
+import unicodedata
 from collections.abc import AsyncIterator, Iterator, Sequence
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
-import unicodedata
 from typing import Any
 from uuid import UUID, uuid4
 
 import openpyxl
 from fastapi import UploadFile
-from sqlalchemy import case, insert, select, update, func
+from sqlalchemy import case, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -46,7 +47,7 @@ from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.upload_metadata import parse_upload_run_options
 from ade_api.features.workspaces.repository import WorkspacesRepository
 from ade_api.features.workspaces.settings import read_processing_paused
-from ade_storage import StorageAdapter
+from ade_api.settings import Settings
 from ade_db.models import (
     Configuration,
     ConfigurationStatus,
@@ -61,7 +62,7 @@ from ade_db.models import (
     RunStatus,
     RunTableColumn,
 )
-from ade_api.settings import Settings
+from ade_storage import StorageAdapter
 
 from .exceptions import (
     RunDocumentMissingError,
@@ -110,6 +111,7 @@ _MAX_FILENAME_LENGTH = 255
 _CONFIG_DIGEST_SNAPSHOT_KEY = "__config_digest_snapshot"
 _RUN_EVENTS_STREAM_POLL_SECONDS = 0.25
 _RUN_EVENTS_STREAM_KEEPALIVE_SECONDS = 15.0
+_RUN_EVENTS_STREAM_TERMINAL_EOF_GRACE_SECONDS = 3.0
 
 
 @lru_cache(maxsize=_DEPS_DIGEST_CACHE_SIZE)
@@ -1096,7 +1098,10 @@ class RunsService:
         output_meta = self._build_output_metadata(
             run=run,
         )
-        links = self._links(run.id)
+        links = self._links(
+            workspace_id=run.workspace_id,
+            run_id=run.id,
+        )
 
         return RunResource(
             id=run.id,
@@ -1115,7 +1120,6 @@ class RunsService:
             input=input_meta,
             output=output_meta,
             links=links,
-            events_download_url=links.events_download,
         )
 
     def _build_input_metadata(
@@ -1135,7 +1139,9 @@ class RunsService:
 
         if run.input_file_version_id:
             file_version_id = str(run.input_file_version_id)
-            download_url = f"/api/v1/runs/{run.id}/input/download"
+            download_url = (
+                f"/api/v1/workspaces/{run.workspace_id}/runs/{run.id}/input/download"
+            )
             try:
                 document, version = self._require_document_with_version(
                     workspace_id=run.workspace_id,
@@ -1200,7 +1206,9 @@ class RunsService:
 
         return RunOutput(
             ready=ready,
-            download_url=f"/api/v1/runs/{run.id}/output/download",
+            download_url=(
+                f"/api/v1/workspaces/{run.workspace_id}/runs/{run.id}/output/download"
+            ),
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
@@ -1210,23 +1218,19 @@ class RunsService:
         )
 
     @staticmethod
-    def _links(run_id: UUID) -> RunLinks:
-        base = f"/api/v1/runs/{run_id}"
+    def _links(*, workspace_id: UUID, run_id: UUID) -> RunLinks:
+        base = f"/api/v1/workspaces/{workspace_id}/runs/{run_id}"
         events_stream = f"{base}/events/stream"
         events_download = f"{base}/events/download"
         output_metadata = f"{base}/output"
         output_download = f"{output_metadata}/download"
-        input_metadata = f"{base}/input"
-        input_download = f"{input_metadata}/download"
+        input_download = f"{base}/input/download"
 
         return RunLinks(
             self=base,
             events_stream=events_stream,
             events_download=events_download,
-            logs=events_download,
-            input=input_metadata,
             input_download=input_download,
-            output=output_download,
             output_download=output_download,
             output_metadata=output_metadata,
         )
@@ -1265,8 +1269,7 @@ class RunsService:
 
         def _guarded() -> Iterator[bytes]:
             try:
-                for chunk in stream:
-                    yield chunk
+                yield from stream
             except FileNotFoundError as exc:
                 logger.warning(
                     "run.input.stream.file_lost",
@@ -1396,8 +1399,7 @@ class RunsService:
 
         def _guarded() -> Iterator[bytes]:
             try:
-                for chunk in stream:
-                    yield chunk
+                yield from stream
             except FileNotFoundError as exc:
                 logger.warning(
                     "run.output.stream.missing",
@@ -1585,8 +1587,7 @@ class RunsService:
 
         def _guarded() -> Iterator[bytes]:
             try:
-                for chunk in stream:
-                    yield chunk
+                yield from stream
             except FileNotFoundError as exc:
                 logger.warning(
                     "run.logs.missing",
@@ -1609,16 +1610,30 @@ class RunsService:
     ) -> AsyncIterator[dict[str, str]]:
         """Tail run NDJSON logs from blob storage and yield SSE event messages."""
 
-        run = self._require_run(run_id)
-        blob_name = self._run_log_blob_name(workspace_id=run.workspace_id, run_id=run.id)
+        snapshot = self._run_stream_snapshot(run_id=run_id)
+        blob_name = self._run_log_blob_name(workspace_id=snapshot["workspace_id"], run_id=run_id)
         offset = max(0, int(cursor))
         buffer = b""
         last_keepalive_at = time.monotonic()
+        terminal_observed_at: float | None = None
         terminal_statuses = {
             RunStatus.SUCCEEDED,
             RunStatus.FAILED,
             RunStatus.CANCELLED,
         }
+
+        yield sse_text(
+            "ready",
+            json.dumps(
+                {
+                    "runId": str(run_id),
+                    "status": snapshot["status"].value,
+                    "cursor": offset,
+                },
+                separators=(",", ":"),
+            ),
+            event_id=offset,
+        )
 
         while True:
             saw_bytes = False
@@ -1644,8 +1659,22 @@ class RunsService:
                         event_name = self._extract_event_name(raw)
                         if not event_name:
                             continue
-                        yield sse_text(event_name, raw, event_id=offset)
+                        yield sse_text("message", raw, event_id=offset)
                         if event_name == "run.complete":
+                            snapshot = self._run_stream_snapshot(run_id=run_id)
+                            yield sse_text(
+                                "end",
+                                json.dumps(
+                                    {
+                                        "runId": str(run_id),
+                                        "status": snapshot["status"].value,
+                                        "cursor": offset,
+                                        "reason": "run_complete",
+                                    },
+                                    separators=(",", ":"),
+                                ),
+                                event_id=offset,
+                            )
                             return
             except FileNotFoundError:
                 # A stream client may connect before the worker writes the first log chunk.
@@ -1656,11 +1685,54 @@ class RunsService:
                 yield sse_text("keepalive", "{}")
                 last_keepalive_at = now
 
-            run = self._require_run(run_id)
-            if run.status in terminal_statuses and not saw_bytes and not buffer:
-                return
+            snapshot = self._run_stream_snapshot(run_id=run_id)
+            if snapshot["status"] in terminal_statuses:
+                if terminal_observed_at is None:
+                    terminal_observed_at = now
+                if saw_bytes or buffer:
+                    terminal_observed_at = now
+                grace_elapsed = (
+                    now - terminal_observed_at
+                    >= _RUN_EVENTS_STREAM_TERMINAL_EOF_GRACE_SECONDS
+                )
+                if grace_elapsed and not saw_bytes and not buffer:
+                    yield sse_text(
+                        "end",
+                        json.dumps(
+                            {
+                                "runId": str(run_id),
+                                "status": snapshot["status"].value,
+                                "cursor": offset,
+                                "reason": "terminal_status",
+                            },
+                            separators=(",", ":"),
+                        ),
+                        event_id=offset,
+                    )
+                    return
+            else:
+                terminal_observed_at = None
 
             await asyncio.sleep(_RUN_EVENTS_STREAM_POLL_SECONDS)
+
+    def _run_stream_snapshot(
+        self,
+        *,
+        run_id: UUID,
+    ) -> dict[str, Any]:
+        row = self._session.execute(
+            select(
+                Run.workspace_id,
+                Run.status,
+            ).where(Run.id == run_id)
+        ).one_or_none()
+        if row is None:
+            raise RunNotFoundError("Run not found")
+        workspace_id, status = row
+        return {
+            "workspace_id": workspace_id,
+            "status": status if isinstance(status, RunStatus) else RunStatus(str(status)),
+        }
 
     @staticmethod
     def _run_log_blob_name(*, workspace_id: UUID, run_id: UUID) -> str:

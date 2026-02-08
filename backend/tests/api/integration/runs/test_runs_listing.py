@@ -1,9 +1,9 @@
-import anyio
 import json
+
+import anyio
 import pytest
 
 from ade_db.models import ConfigurationStatus, RunStatus
-
 from tests.api.integration.runs.helpers import (
     auth_headers,
     make_configuration,
@@ -87,3 +87,29 @@ async def test_workspace_run_listing_filters_by_status(
     assert filtered_payload["meta"]["totalIncluded"] is True
     assert filtered_payload["meta"]["totalCount"] == 1
     assert filtered_payload["items"][0]["id"] == str(run_ok.id)
+
+
+async def test_legacy_run_routes_are_removed(
+    async_client,
+    seed_identity,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    headers = await auth_headers(async_client, seed_identity.workspace_owner)
+
+    legacy_global = await async_client.get(
+        "/api/v1/runs/00000000-0000-0000-0000-000000000000",
+        headers=headers,
+    )
+    assert legacy_global.status_code == 404
+
+    legacy_config = await async_client.get(
+        "/api/v1/configurations/00000000-0000-0000-0000-000000000000/runs",
+        headers=headers,
+    )
+    assert legacy_config.status_code == 404
+
+    current = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/runs",
+        headers=headers,
+    )
+    assert current.status_code == 200

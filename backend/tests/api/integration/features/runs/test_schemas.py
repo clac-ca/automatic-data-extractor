@@ -7,9 +7,9 @@ import pytest
 
 from ade_api.features.runs.schemas import (
     RunCreateOptions,
-    RunCreateRequest,
     RunLinks,
     RunResource,
+    RunWorkspaceCreateRequest,
 )
 from ade_db.models import RunOperation, RunStatus
 
@@ -28,17 +28,14 @@ def timestamp() -> datetime:
     return datetime(2024, 1, 1, tzinfo=UTC)
 
 
-def _links_for(run_id: UUID) -> RunLinks:
+def _links_for(workspace_id: UUID, run_id: UUID) -> RunLinks:
     run_str = str(run_id)
-    base = f"/api/v1/runs/{run_str}"
+    base = f"/api/v1/workspaces/{workspace_id}/runs/{run_str}"
     return RunLinks(
         self=base,
         events_stream=f"{base}/events/stream",
         events_download=f"{base}/events/download",
-        logs=f"{base}/events/download",
-        input=f"{base}/input",
         input_download=f"{base}/input/download",
-        output=f"{base}/output/download",
         output_download=f"{base}/output/download",
         output_metadata=f"{base}/output",
     )
@@ -54,7 +51,7 @@ def test_run_resource_dump_uses_aliases_and_defaults(
         operation=RunOperation.PROCESS,
         status=RunStatus.QUEUED,
         created_at=timestamp,
-        links=_links_for(run_identifiers["run_id"]),
+        links=_links_for(run_identifiers["workspace_id"], run_identifiers["run_id"]),
     )
 
     payload = resource.model_dump()
@@ -76,17 +73,14 @@ def test_run_create_options_captures_input_document() -> None:
     assert options.metadata is None
 
 
-def test_run_create_request_serializes_minimal_options() -> None:
-    request = RunCreateRequest(
-        options=RunCreateOptions(input_document_id=uuid4()),
+def test_workspace_run_create_request_serializes_minimal_options() -> None:
+    request = RunWorkspaceCreateRequest(
+        input_document_id=uuid4(),
+        options=RunCreateOptions(),
     )
     payload = request.model_dump()
 
     assert payload == {
-        "options": {
-            "operation": "process",
-            "dry_run": False,
-            "active_sheet_only": False,
-            "input_document_id": request.options.input_document_id,
-        }
+        "input_document_id": request.input_document_id,
+        "options": {"operation": "process", "dry_run": False, "active_sheet_only": False},
     }

@@ -21,9 +21,8 @@ export type User = GeneratedComponents["schemas"]["UserOut"];
 export type UserPage = GeneratedComponents["schemas"]["UserPage"];
 export type RunResource = GeneratedComponents["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
-export type RunCreateOptions = GeneratedComponents["schemas"]["RunCreateOptions"];
+export type RunCreateOptions = GeneratedComponents["schemas"]["RunCreateOptionsBase"];
 export type RunBatchCreateOptions = GeneratedComponents["schemas"]["RunBatchCreateOptions"];
-export type RunBatchCreateRequest = GeneratedComponents["schemas"]["RunBatchCreateRequest"];
 export type RunBatchCreateResponse = GeneratedComponents["schemas"]["RunBatchCreateResponse"];
 export type { RunSummary } from "./runSummary";
 

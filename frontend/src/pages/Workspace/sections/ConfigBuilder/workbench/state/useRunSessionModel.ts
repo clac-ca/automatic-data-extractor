@@ -59,6 +59,7 @@ export function useRunSessionModel({
     console,
     jobId,
     jobMode,
+    jobConnectionState,
     jobStatus,
     jobInProgress,
     completedDetails,
@@ -147,7 +148,7 @@ export function useRunSessionModel({
 
     void (async () => {
       try {
-        const resource = await fetchRun(resolvedRunId);
+        const resource = await fetchRun(workspaceId, resolvedRunId);
         const outputUrl = runOutputUrl(resource) ?? undefined;
         const logsUrl = runLogsUrl(resource) ?? undefined;
         const inputUrl = runInputUrl(resource) ?? undefined;
@@ -169,7 +170,7 @@ export function useRunSessionModel({
         );
       }
     })();
-  }, [resolvedRunId, jobStatus, completedDetails, onRunComplete, runMode]);
+  }, [workspaceId, resolvedRunId, jobStatus, completedDetails, onRunComplete, runMode]);
 
   const startRun = useCallback(
     async (
@@ -192,6 +193,7 @@ export function useRunSessionModel({
   return useMemo(
     () => ({
       runStatus,
+      runConnectionState: jobConnectionState ?? undefined,
       runMode: runMode ?? undefined,
       runInProgress: jobInProgress,
       validation,
@@ -200,7 +202,7 @@ export function useRunSessionModel({
       clearConsole,
       startRun,
     }),
-    [runStatus, runMode, jobInProgress, validation, console, latestRun, clearConsole, startRun],
+    [runStatus, jobConnectionState, runMode, jobInProgress, validation, console, latestRun, clearConsole, startRun],
   );
 }
 

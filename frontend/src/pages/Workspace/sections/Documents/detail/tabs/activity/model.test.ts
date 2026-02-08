@@ -30,9 +30,10 @@ function makeDocument(): DocumentRow {
 function makeRun(): RunResource {
   return {
     id: "run_1",
+    object: "ade.run",
     workspace_id: "ws_1",
-    document_ids: ["doc_1"],
-    config_id: null,
+    configuration_id: "config_1",
+    operation: "process",
     status: "succeeded",
     created_at: "2026-01-02T00:00:00Z",
     started_at: "2026-01-02T00:00:05Z",
@@ -40,6 +41,14 @@ function makeRun(): RunResource {
     duration_seconds: 7,
     failure_message: null,
     exit_code: 0,
+    links: {
+      self: "/api/v1/workspaces/ws_1/runs/run_1",
+      events_stream: "/api/v1/workspaces/ws_1/runs/run_1/events/stream",
+      events_download: "/api/v1/workspaces/ws_1/runs/run_1/events/download",
+      input_download: "/api/v1/workspaces/ws_1/runs/run_1/input/download",
+      output_download: "/api/v1/workspaces/ws_1/runs/run_1/output/download",
+      output_metadata: "/api/v1/workspaces/ws_1/runs/run_1/output",
+    },
   } as RunResource;
 }
 

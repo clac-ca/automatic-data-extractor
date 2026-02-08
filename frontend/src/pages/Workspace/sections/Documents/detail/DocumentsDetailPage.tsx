@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchWorkspaceDocumentRowById } from "@/api/documents";
 import { ApiError } from "@/api/errors";
 import { cancelRun, createRun } from "@/api/runs/api";
+import type { RunStreamOptions } from "@/api/runs/api";
 import { PageState } from "@/components/layout";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
@@ -130,7 +131,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
 
     setIsRunActionPending(true);
     try {
-      await cancelRun(runId);
+      await cancelRun(workspace.id, runId);
       notifyToast({
         title: "Run cancelled",
         description: `${documentRow.name} was cancelled.`,
@@ -154,10 +155,10 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
     } finally {
       setIsRunActionPending(false);
     }
-  }, [documentQuery, documentRow, isRunActive, notifyToast]);
+  }, [documentQuery, documentRow, isRunActive, notifyToast, workspace.id]);
 
   const onReprocessConfirm = useCallback(
-    async (runOptions: { active_sheet_only?: boolean; input_sheet_names?: string[] }) => {
+    async (runOptions: Pick<RunStreamOptions, "active_sheet_only" | "input_sheet_names">) => {
       if (!documentRow) return;
       setIsRunActionPending(true);
       try {

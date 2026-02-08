@@ -21,7 +21,7 @@ from fastapi import (
 from pydantic import BaseModel
 
 from ade_api.api.deps import get_configurations_service, get_configurations_service_read
-from ade_api.common.etag import canonicalize_etag, format_etag, format_weak_etag
+from ade_api.common.etag import build_etag_token, canonicalize_etag, format_etag, format_weak_etag
 from ade_api.common.responses import JSONResponse
 from ade_api.core.http import require_csrf, require_workspace
 from ade_db.models import User
@@ -174,12 +174,22 @@ def list_config_files(
             detail="cursor is invalid",
         )
 
-    weak_etag = format_weak_etag(listing["fileset_hash"])
+    status_token = (
+        listing["status"].value
+        if hasattr(listing.get("status"), "value")
+        else str(listing.get("status", ""))
+    )
+    listing_etag_token = build_etag_token(
+        listing.get("fileset_hash"),
+        listing.get("configuration_id"),
+        status_token,
+    )
+    weak_etag = format_weak_etag(listing_etag_token)
     client_token = canonicalize_etag(request.headers.get("if-none-match"))
     headers = {}
     if weak_etag:
         headers["ETag"] = weak_etag
-    if client_token and listing["fileset_hash"] and client_token == listing["fileset_hash"]:
+    if client_token and listing_etag_token and client_token == listing_etag_token:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
     payload = FileListing.model_validate(listing)

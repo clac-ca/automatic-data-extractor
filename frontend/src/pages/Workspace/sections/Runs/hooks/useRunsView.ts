@@ -100,7 +100,8 @@ export function useRunsView({
 
   const metricsQuery = useQuery({
     queryKey: activeRunId ? runsKeys.metrics(activeRunId) : [...runsKeys.root(), "metrics", "none"],
-    queryFn: ({ signal }) => (activeRunId ? fetchRunMetrics(activeRunId, signal) : Promise.resolve(null)),
+    queryFn: ({ signal }) =>
+      activeRunId ? fetchRunMetrics(workspaceId, activeRunId, signal) : Promise.resolve(null),
     enabled: shouldFetchDetails,
     staleTime: 30_000,
     refetchInterval: shouldPollDetails ? 10_000 : false,
@@ -108,7 +109,8 @@ export function useRunsView({
 
   const fieldsQuery = useQuery({
     queryKey: activeRunId ? runsKeys.fields(activeRunId) : [...runsKeys.root(), "fields", "none"],
-    queryFn: ({ signal }) => (activeRunId ? fetchRunFields(activeRunId, signal) : Promise.resolve(null)),
+    queryFn: ({ signal }) =>
+      activeRunId ? fetchRunFields(workspaceId, activeRunId, signal) : Promise.resolve(null),
     enabled: shouldFetchDetails,
     staleTime: 30_000,
     refetchInterval: shouldPollDetails ? 10_000 : false,
@@ -116,7 +118,8 @@ export function useRunsView({
 
   const columnsQuery = useQuery({
     queryKey: activeRunId ? runsKeys.columns(activeRunId, null) : [...runsKeys.root(), "columns", "none"],
-    queryFn: ({ signal }) => (activeRunId ? fetchRunColumns(activeRunId, null, signal) : Promise.resolve(null)),
+    queryFn: ({ signal }) =>
+      activeRunId ? fetchRunColumns(workspaceId, activeRunId, null, signal) : Promise.resolve(null),
     enabled: shouldFetchDetails,
     staleTime: 30_000,
     refetchInterval: shouldPollDetails ? 10_000 : false,
