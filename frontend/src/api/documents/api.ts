@@ -10,6 +10,7 @@ export type DocumentSheet = components["schemas"]["DocumentSheet"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
+export type DocumentLifecycle = "active" | "deleted";
 
 export type ListDocumentsQuery = {
   limit: number;
@@ -18,6 +19,7 @@ export type ListDocumentsQuery = {
   filters?: FilterItem[] | string | null;
   joinOperator?: FilterJoinOperator;
   q?: string | null;
+  lifecycle?: DocumentLifecycle;
   includeTotal?: boolean;
   includeFacets?: boolean;
   includeRunMetrics?: boolean;
@@ -100,6 +102,7 @@ export async function fetchWorkspaceDocuments(
     filters?: FilterItem[] | string | null;
     joinOperator?: FilterJoinOperator;
     q?: string | null;
+    lifecycle?: DocumentLifecycle;
     includeTotal?: boolean;
     includeFacets?: boolean;
     includeRunMetrics?: boolean;
@@ -119,6 +122,7 @@ export async function fetchWorkspaceDocuments(
       includeTotal: options.includeTotal,
       includeFacets: options.includeFacets,
     }),
+    ...(options.lifecycle ? { lifecycle: options.lifecycle } : {}),
     ...buildDocumentIncludeQuery(options),
   };
 
@@ -217,6 +221,29 @@ export async function deleteWorkspaceDocumentsBatch(
   return data.documentIds ?? [];
 }
 
+export async function restoreWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+): Promise<DocumentRecord> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
+    params: { path: { workspaceId, documentId } },
+  });
+  if (!data) throw new Error("Expected restored document payload.");
+  return data;
+}
+
+export async function restoreWorkspaceDocumentsBatch(
+  workspaceId: string,
+  documentIds: string[],
+): Promise<string[]> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
+    params: { path: { workspaceId } },
+    body: { documentIds },
+  });
+  if (!data) throw new Error("Expected batch restore response.");
+  return data.documentIds ?? [];
+}
+
 const DEFAULT_ID_FILTER_BATCH = 50;
 
 export async function fetchWorkspaceDocumentRowsByIdFilter(
@@ -224,6 +251,7 @@ export async function fetchWorkspaceDocumentRowsByIdFilter(
   documentIds: string[],
   options: {
     sort: string | null;
+    lifecycle?: DocumentLifecycle;
     filters?: FilterItem[] | null;
     joinOperator?: FilterJoinOperator;
     q?: string | null;
@@ -254,6 +282,7 @@ export async function fetchWorkspaceDocumentRowsByIdFilter(
       {
         limit: batch.length,
         sort: options.sort,
+        lifecycle: options.lifecycle,
         filters,
         joinOperator: options.joinOperator,
         q: options.q,

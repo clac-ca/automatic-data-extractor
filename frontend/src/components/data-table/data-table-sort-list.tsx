@@ -50,6 +50,19 @@ interface DataTableSortListProps<TData>
   disabled?: boolean;
 }
 
+function coerceSorting(value: unknown): ColumnSort[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (item): item is ColumnSort =>
+        Boolean(item) &&
+        typeof item === "object" &&
+        typeof (item as { id?: unknown }).id === "string" &&
+        typeof (item as { desc?: unknown }).desc === "boolean",
+    )
+    .map((item) => ({ id: item.id, desc: item.desc }));
+}
+
 export function DataTableSortList<TData>({
   table,
   disabled,
@@ -61,7 +74,7 @@ export function DataTableSortList<TData>({
   const [open, setOpen] = React.useState(false);
   const addButtonRef = React.useRef<HTMLButtonElement>(null);
 
-  const sorting = table.getState().sorting;
+  const sorting = coerceSorting(table.getState().sorting);
   const onSortingChange = table.setSorting;
 
   const { columnLabels, columns } = React.useMemo(() => {
@@ -91,7 +104,7 @@ export function DataTableSortList<TData>({
     if (!firstColumn) return;
 
     onSortingChange((prevSorting) => [
-      ...prevSorting,
+      ...coerceSorting(prevSorting),
       { id: firstColumn.id, desc: false },
     ]);
   }, [columns, onSortingChange]);
@@ -99,8 +112,7 @@ export function DataTableSortList<TData>({
   const onSortUpdate = React.useCallback(
     (sortId: string, updates: Partial<ColumnSort>) => {
       onSortingChange((prevSorting) => {
-        if (!prevSorting) return prevSorting;
-        return prevSorting.map((sort) =>
+        return coerceSorting(prevSorting).map((sort) =>
           sort.id === sortId ? { ...sort, ...updates } : sort,
         );
       });
@@ -111,14 +123,14 @@ export function DataTableSortList<TData>({
   const onSortRemove = React.useCallback(
     (sortId: string) => {
       onSortingChange((prevSorting) =>
-        prevSorting.filter((item) => item.id !== sortId),
+        coerceSorting(prevSorting).filter((item) => item.id !== sortId),
       );
     },
     [onSortingChange],
   );
 
   const onSortingReset = React.useCallback(
-    () => onSortingChange(table.initialState.sorting),
+    () => onSortingChange(coerceSorting(table.initialState.sorting)),
     [onSortingChange, table.initialState.sorting],
   );
 

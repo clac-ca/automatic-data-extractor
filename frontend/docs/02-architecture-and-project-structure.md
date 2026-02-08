@@ -19,7 +19,7 @@ Everything below exists to make those goals explicit.
 
 ### Instant understanding defaults
 
-- **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `pages/Workspace/sections/...`).
+- **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/configurations`, `/settings` mirrored under `pages/Workspace/sections/...`).
 - **One canonical home per concept:** route helpers use React Router utilities and live close to their consumers; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`).
 - **Reuse patterns:** new list/detail flows should copy Documents/Runs; new URL‑backed filters should reuse the existing filter helpers rather than inventing new query names; NDJSON streaming should go through the helper in `api/ndjson`.
 - **Respect the layers:** never import “upwards” (e.g. `api/` → `pages/`); linting enforces the boundaries.
@@ -138,7 +138,7 @@ The app shell is glue and composition only.
 
 ## 5. `pages/` – page/feature slices
 
-**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings). The physical folder is `src/pages/`, imported via the `@/pages/*` alias.
+**Responsibility:** Implement user‑facing features and pages: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration editor, Settings). The physical folder is `src/pages/`, imported via the `@/pages/*` alias.
 
 Example structure:
 
@@ -173,7 +173,7 @@ src/pages/
       Runs/
         index.tsx
         components/
-      ConfigBuilder/
+      ConfigurationEditor/
         index.tsx
         detail/
           index.tsx
@@ -187,7 +187,7 @@ src/pages/
         pages/
 ```
 
-Keep section naming 1:1 across the UI: the nav item is **Configuration Builder**, the route segment is `config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder`. That folder owns both the configurations list and the workbench editing mode.
+Keep section naming 1:1 across the UI: the nav item is **Configuration editor**, the route segment is `configurations`, and the feature folder is `pages/Workspace/sections/ConfigurationEditor`. That folder owns both the configurations list and the workbench editing mode.
 
 What belongs here:
 
@@ -434,7 +434,7 @@ This section summarises naming conventions used in this document. See **01‑dom
 * Route components typically end with `Screen` or `Page`:
 
   * `LoginScreen`, `WorkspaceDirectoryScreen`, `WorkspaceScreen`.
-  * `DocumentsScreen`, `RunsScreen`, `ConfigBuilderScreen`, `WorkspaceSettingsScreen`.
+  * `DocumentsScreen`, `RunsScreen`, `ConfigurationEditorScreen`, `WorkspaceSettingsScreen`.
 
 * Each page file is named identically to its component, and exports it as the default or main named export.
 

@@ -1,12 +1,11 @@
 import { useEffect, type ReactNode } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { Table } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableAdvancedToolbar } from "@/components/data-table/data-table-advanced-toolbar";
 import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
-import { useDataTable } from "@/hooks/use-data-table";
 import {
   ActionBar,
   ActionBarGroup,
@@ -21,72 +20,48 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-import { DEFAULT_PAGE_SIZE, DEFAULT_SORTING } from "../../shared/constants";
 import type { DocumentRow } from "../../shared/types";
 
 interface DocumentsTableProps {
-  data: DocumentRow[];
-  columns: ColumnDef<DocumentRow>[];
-  pageCount: number;
+  table: Table<DocumentRow>;
+  debounceMs: number;
+  throttleMs: number;
+  shallow: boolean;
   filterMode: "simple" | "advanced";
   onToggleFilterMode?: () => void;
+  leadingToolbarActions?: ReactNode;
   toolbarActions?: ReactNode;
   onBulkReprocessRequest?: (documents: DocumentRow[]) => void;
   onBulkCancelRequest?: (documents: DocumentRow[]) => void;
   onBulkAssignRequest?: (documents: DocumentRow[]) => void;
   onBulkTagRequest?: (documents: DocumentRow[]) => void;
   onBulkDeleteRequest?: (documents: DocumentRow[]) => void;
+  onBulkRestoreRequest?: (documents: DocumentRow[]) => void;
   onBulkDownloadRequest?: (documents: DocumentRow[]) => void;
   onBulkDownloadOriginalRequest?: (documents: DocumentRow[]) => void;
   selectionResetToken?: number;
 }
 
 export function DocumentsTable({
-  data,
-  columns,
-  pageCount,
+  table,
+  debounceMs,
+  throttleMs,
+  shallow,
   filterMode,
   onToggleFilterMode,
+  leadingToolbarActions,
   toolbarActions,
   onBulkReprocessRequest,
   onBulkCancelRequest,
   onBulkAssignRequest,
   onBulkTagRequest,
   onBulkDeleteRequest,
+  onBulkRestoreRequest,
   onBulkDownloadRequest,
   onBulkDownloadOriginalRequest,
   selectionResetToken = 0,
 }: DocumentsTableProps) {
   const isAdvanced = filterMode === "advanced";
-  const { table, debounceMs, throttleMs, shallow } = useDataTable({
-    data,
-    columns,
-    pageCount,
-    enableColumnResizing: true,
-    defaultColumn: {
-      size: 140,
-      minSize: 90,
-    },
-    initialState: {
-      sorting: DEFAULT_SORTING,
-      pagination: { pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE },
-      columnVisibility: {
-        select: true,
-        id: false,
-        fileType: false,
-        uploaderId: false,
-        byteSize: false,
-        activityAt: false,
-        lastRunPhase: true,
-        lastRunAt: true,
-      },
-      columnPinning: { left: ["select"], right: ["actions"] },
-    },
-    getRowId: (row) => row.id,
-    enableAdvancedFilter: isAdvanced,
-    clearOnDefault: true,
-  });
 
   useEffect(() => {
     table.toggleAllRowsSelected(false);
@@ -94,6 +69,7 @@ export function DocumentsTable({
 
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const selectedDocuments = selectedRows.map((row) => row.original);
+  const isRestoreMode = Boolean(onBulkRestoreRequest);
   const cancellableDocuments = selectedDocuments.filter(
     (document) => document.lastRun?.status === "queued" || document.lastRun?.status === "running",
   );
@@ -109,7 +85,31 @@ export function DocumentsTable({
   const showSecondaryActions =
     showOrganizeMenu || showDownloadMenu || Boolean(onBulkDeleteRequest);
 
-  const actionBar = (
+  const actionBar = isRestoreMode ? (
+    <ActionBar
+      open={selectedCount > 0}
+      onOpenChange={(open) => {
+        if (!open) {
+          table.toggleAllRowsSelected(false);
+        }
+      }}
+    >
+      <ActionBarSelection>{selectedCount} selected</ActionBarSelection>
+      <ActionBarSeparator />
+      <ActionBarGroup>
+        <ActionBarItem
+          variant="secondary"
+          size="sm"
+          onSelect={() => onBulkRestoreRequest?.(selectedDocuments)}
+        >
+          Restore ({selectedDocuments.length})
+        </ActionBarItem>
+        <ActionBarItem variant="outline" size="sm" onSelect={() => table.toggleAllRowsSelected(false)}>
+          Clear selection
+        </ActionBarItem>
+      </ActionBarGroup>
+    </ActionBar>
+  ) : (
     <ActionBar
       open={selectedCount > 0}
       onOpenChange={(open) => {
@@ -236,6 +236,11 @@ export function DocumentsTable({
       {isAdvanced ? (
         <DataTableAdvancedToolbar table={table} className={toolbarShellClassName}>
           <div className="flex w-full flex-wrap items-center gap-2">
+            {leadingToolbarActions ? (
+              <div className="min-w-0 flex shrink-0 flex-wrap items-center gap-2">
+                {leadingToolbarActions}
+              </div>
+            ) : null}
             <div className="min-w-0 flex flex-wrap items-center gap-2">
               <DataTableSortList table={table} align="start" />
               <DataTableFilterList
@@ -255,8 +260,13 @@ export function DocumentsTable({
         </DataTableAdvancedToolbar>
       ) : (
         <DataTableToolbar table={table} className={toolbarShellClassName}>
+          {leadingToolbarActions ? (
+            <div className="min-w-0 flex shrink-0 flex-wrap items-center gap-2">
+              {leadingToolbarActions}
+            </div>
+          ) : null}
           <DataTableSortList table={table} align="start" />
-          <div className="min-w-0 flex flex-wrap items-center justify-end gap-2">
+          <div className="ml-auto min-w-0 flex flex-wrap items-center justify-end gap-2">
             {filterToggle}
             {toolbarActions}
           </div>

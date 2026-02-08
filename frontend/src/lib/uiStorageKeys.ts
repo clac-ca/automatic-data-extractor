@@ -6,13 +6,11 @@ export const uiStorageKeys = {
   themeName: `${UI_STORAGE_PREFIX}.theme.name`,
   workspaceLastActive: `${UI_STORAGE_PREFIX}.workspace.lastActive`,
   documentsCursor: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.cursor`,
+  documentsLastView: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.lastView`,
   documentsTableColumnSizing: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.table.columnSizing`,
   documentsPreviewPaneHeight: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.preview.height`,
-  configBuilderLastSelection: (workspaceId: string) =>
-    `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.configBuilder.lastSelection`,
-  workbenchReturnPath: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.workbench.returnPath`,
   workbenchTabs: (workspaceId: string, configId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.config.${configId}.workbench.tabs`,
   workbenchConsole: (workspaceId: string, configId: string) =>
@@ -22,4 +20,6 @@ export const uiStorageKeys = {
   workbenchLayout: (workspaceId: string, configId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.config.${configId}.workbench.layout`,
   workbenchConsoleLevelFilter: `${UI_STORAGE_PREFIX}.workbench.console.levelFilter`,
+  workbenchGuidedTourSeen: (workspaceId: string) =>
+    `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.workbench.guidedTour.seen`,
 };

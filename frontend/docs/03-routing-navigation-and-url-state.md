@@ -29,7 +29,7 @@ We follow a few rules:
 1. The **location bar is authoritative**. A reload should land you back on the same screen with the same view state.
 2. All navigation goes through **React Router** (`useNavigate` / `Link` / `NavLink`), not raw `history.pushState`.
 3. **Query parameters** are the standard way to represent view‑level state that should survive refresh and be shareable.
-4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Configuration Builder workbench).
+4. Navigation blockers are **opt‑in and local** to the features that need them (e.g. the Configuration editor workbench).
 
 ### Canonical sources and names
 
@@ -90,7 +90,7 @@ export const appRoutes = [
 * **`routes.tsx`**
   Central route table mapping paths to pages.
 
-Everything below the route table (workspaces, documents, runs, Configuration Builder) uses URL‑encoded view state and query parameters.
+Everything below the route table (workspaces, documents, runs, Configuration editor) uses URL‑encoded view state and query parameters.
 
 ---
 
@@ -151,10 +151,10 @@ Inside `/workspaces/:workspaceId`, the next path segment selects the section:
 | ---------------- | -------------------------------- | ----------------------------- |
 | `documents`      | `/workspaces/123/documents`      | Documents list & run triggers |
 | `runs`           | `/workspaces/123/runs`           | Runs ledger (workspace run history) |
-| `config-builder` | `/workspaces/123/config-builder` | Configuration Builder (configurations list + workbench) |
+| `configurations` | `/workspaces/123/configurations` | Configuration editor (configurations list + workbench) |
 | `settings`       | `/workspaces/123/settings`       | Workspace settings            |
 
-Naming stays 1:1: the nav item reads **“Configuration Builder”**, the route segment is `config-builder`, and the feature folder is `pages/Workspace/sections/ConfigBuilder`. The Configuration Builder section always includes both the configurations list and the workbench editing mode.
+Naming stays 1:1: the nav item reads **“Configuration editor”**, the route segment is `configurations`, and the feature folder is `pages/Workspace/sections/ConfigurationEditor`. The Configuration editor section always includes both the configurations list and the workbench editing mode.
 
 If the workspace ID is valid but the section segment is unknown, the shell should render a **workspace‑local “Section not found”** state, not the global 404. This lets the user switch to another section without leaving the workspace.
 
@@ -208,7 +208,7 @@ navigate("/workspaces");
 
 Use `useBlocker` when a view has **unsaved changes** that shouldn’t be lost silently.
 
-Example pattern for the Configuration Builder editor:
+Example pattern for the Configuration editor editor:
 
 ```ts
 const blocker = useBlocker(({ currentLocation, nextLocation }) => {
@@ -277,7 +277,7 @@ Examples:
 
 * Documents filters and sort order.
 * Which settings tab is selected.
-* Configuration Builder layout (editor vs split vs zen, which pane is open).
+* Configuration editor layout (editor vs split vs zen, which pane is open).
 
 Plain local component state is fine for **purely ephemeral** UI (e.g. whether a dropdown is open). If a user might:
 
@@ -459,9 +459,9 @@ On `/workspaces/:workspaceId/runs`:
 
 These names should be stable so that links from other parts of the UI (e.g. “View runs for this configuration”) can construct correct URLs.
 
-### 7.5 Configuration Builder (summary)
+### 7.5 Configuration editor (summary)
 
-On `/workspaces/:workspaceId/config-builder` with an active workbench:
+On `/workspaces/:workspaceId/configurations` with an active workbench:
 
 * `pane` (string):
 
@@ -479,7 +479,7 @@ On `/workspaces/:workspaceId/config-builder` with an active workbench:
 
   * ID/path of the active file in the workbench.
 
-The Configuration Builder URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
+The Configuration editor URL state is documented in detail in `09-workbench-editor-and-scripting.md`. The important rule here: we only write **non‑default** values back into the URL to keep it tidy.
 
 ---
 

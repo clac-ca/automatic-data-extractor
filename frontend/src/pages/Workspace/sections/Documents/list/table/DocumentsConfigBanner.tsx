@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import { ConfigureIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { buildConfigurationsPath } from "@/pages/Workspace/sections/ConfigurationEditor/paths";
 
 export function DocumentsConfigBanner({ workspaceId }: { workspaceId: string }) {
   return (
@@ -21,7 +22,7 @@ export function DocumentsConfigBanner({ workspaceId }: { workspaceId: string }) 
         </div>
       </div>
       <Button asChild size="sm" variant="outline" className="shrink-0">
-        <Link to={`/workspaces/${workspaceId}/config-builder`}>Create configuration</Link>
+        <Link to={buildConfigurationsPath(workspaceId)}>Create configuration</Link>
       </Button>
     </div>
   );

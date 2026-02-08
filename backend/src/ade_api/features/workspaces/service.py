@@ -8,7 +8,7 @@ import shutil
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -1047,6 +1047,5 @@ class WorkspacesService:
                 status.HTTP_400_BAD_REQUEST,
                 detail="Workspace must retain at least one owner",
             )
-
 
 __all__ = ["WorkspacesService"]

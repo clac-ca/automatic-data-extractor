@@ -30,6 +30,7 @@ backend/data/**
 # Local automation artifacts
 .playwright-cli/
 tmp/playwright/
+.playwright/
 
 # Workpackages
 workpackages/**

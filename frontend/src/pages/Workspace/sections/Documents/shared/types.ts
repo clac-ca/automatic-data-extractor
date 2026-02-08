@@ -1,5 +1,6 @@
 import type { components } from "@/types";
 import type { FilterItem, FilterJoinOperator } from "@/api/listing";
+import type { DocumentLifecycle } from "@/api/documents";
 
 export type { DocumentPageResult, ListDocumentsQuery } from "@/api/documents";
 
@@ -31,4 +32,5 @@ export type DocumentsListParams = {
   q: string | null;
   filters: FilterItem[] | null;
   joinOperator: FilterJoinOperator | null;
+  lifecycle: DocumentLifecycle;
 };

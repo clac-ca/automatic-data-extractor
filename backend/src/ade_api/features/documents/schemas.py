@@ -34,6 +34,21 @@ class DocumentConflictMode(str, Enum):
     KEEP_BOTH = "keep_both"
 
 
+class DocumentListLifecycle(str, Enum):
+    """Visibility scope for list queries."""
+
+    ACTIVE = "active"
+    DELETED = "deleted"
+
+
+class DocumentViewVisibility(str, Enum):
+    """Visibility scope for saved document views."""
+
+    SYSTEM = "system"
+    PRIVATE = "private"
+    PUBLIC = "public"
+
+
 class UserSummary(BaseSchema):
     """Minimal representation of a user for list/detail payloads."""
 
@@ -263,6 +278,23 @@ class DocumentBatchDeleteResponse(BaseSchema):
     document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
 
 
+class DocumentBatchRestoreRequest(BaseSchema):
+    """Payload for restoring multiple soft-deleted documents."""
+
+    document_ids: list[UUIDStr] = Field(
+        ...,
+        min_length=1,
+        alias="documentIds",
+        description="Documents to restore (all-or-nothing).",
+    )
+
+
+class DocumentBatchRestoreResponse(BaseSchema):
+    """Response envelope for batch restores."""
+
+    document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
+
+
 class TagCatalogItem(BaseSchema):
     """Tag entry with document counts."""
 
@@ -316,6 +348,7 @@ class DocumentListRow(BaseSchema):
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     activity_at: datetime = Field(alias="activityAt")
+    deleted_at: datetime | None = Field(default=None, alias="deletedAt")
     last_run: DocumentRunSummary | None = Field(default=None, alias="lastRun")
     last_run_metrics: RunMetricsResource | None = Field(default=None, alias="lastRunMetrics")
     last_run_table_columns: list[RunColumnResource] | None = Field(
@@ -412,6 +445,90 @@ class DocumentUploadRunOptions(BaseSchema):
         return self
 
 
+class DocumentViewQueryState(BaseSchema):
+    """Serializable list query state persisted for a saved view."""
+
+    lifecycle: DocumentListLifecycle = DocumentListLifecycle.ACTIVE
+    q: str | None = None
+    sort: list[dict[str, Any]] = Field(default_factory=list)
+    filters: list[dict[str, Any]] = Field(default_factory=list)
+    join_operator: Literal["and", "or"] | None = Field(default="and", alias="joinOperator")
+    filter_flag: str | None = Field(default=None, alias="filterFlag")
+    simple_filters: dict[str, Any] | None = Field(default=None, alias="simpleFilters")
+
+
+class DocumentViewTableState(BaseSchema):
+    """Serializable table layout state persisted for a saved view."""
+
+    column_visibility: dict[str, bool] | None = Field(default=None, alias="columnVisibility")
+    column_sizing: dict[str, int] | None = Field(default=None, alias="columnSizing")
+    column_order: list[str] | None = Field(default=None, alias="columnOrder")
+    column_pinning: dict[str, list[str]] | None = Field(default=None, alias="columnPinning")
+
+
+class DocumentViewCreate(BaseSchema):
+    """Payload for creating a saved document view."""
+
+    name: str = Field(min_length=1, max_length=120)
+    visibility: Literal["private", "public"] = "private"
+    query_state: DocumentViewQueryState = Field(alias="queryState")
+    table_state: DocumentViewTableState | None = Field(default=None, alias="tableState")
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("name is required")
+        return stripped
+
+
+class DocumentViewUpdate(BaseSchema):
+    """Payload for updating a saved document view."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    visibility: Literal["private", "public"] | None = None
+    query_state: DocumentViewQueryState | None = Field(default=None, alias="queryState")
+    table_state: DocumentViewTableState | None = Field(default=None, alias="tableState")
+
+    @field_validator("name")
+    @classmethod
+    def _strip_optional_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("name is required")
+        return stripped
+
+    @model_validator(mode="after")
+    def _ensure_any_change(self) -> DocumentViewUpdate:
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be updated")
+        return self
+
+
+class DocumentViewOut(BaseSchema):
+    """Saved document view resource."""
+
+    id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
+    name: str
+    visibility: DocumentViewVisibility
+    system_key: str | None = Field(default=None, alias="systemKey")
+    owner_user_id: UUIDStr | None = Field(default=None, alias="ownerUserId")
+    query_state: DocumentViewQueryState = Field(alias="queryState")
+    table_state: DocumentViewTableState | None = Field(default=None, alias="tableState")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class DocumentViewListResponse(BaseSchema):
+    """Collection of visible document views."""
+
+    items: list[DocumentViewOut]
+
+
 class DocumentSheet(BaseSchema):
     """Descriptor for a worksheet or single-sheet document."""
 
@@ -424,8 +541,11 @@ class DocumentSheet(BaseSchema):
 __all__ = [
     "DocumentBatchDeleteRequest",
     "DocumentBatchDeleteResponse",
+    "DocumentBatchRestoreRequest",
+    "DocumentBatchRestoreResponse",
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
+    "DocumentListLifecycle",
     "DocumentConflictMode",
     "DocumentChangeDeltaResponse",
     "DocumentChangeEntry",
@@ -434,6 +554,13 @@ __all__ = [
     "DocumentListPage",
     "DocumentListRow",
     "DocumentOut",
+    "DocumentViewCreate",
+    "DocumentViewListResponse",
+    "DocumentViewOut",
+    "DocumentViewQueryState",
+    "DocumentViewTableState",
+    "DocumentViewUpdate",
+    "DocumentViewVisibility",
     "DocumentCommentCreate",
     "DocumentCommentOut",
     "DocumentCommentPage",

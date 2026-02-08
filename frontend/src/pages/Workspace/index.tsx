@@ -10,7 +10,6 @@ import { WorkspaceLayout } from "@/pages/Workspace/WorkspaceLayout";
 import { WorkspaceDocumentsStreamProvider } from "@/pages/Workspace/context/WorkspaceDocumentsStreamContext";
 import { WorkspacePresenceProvider, useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
-import { WorkbenchWindowProvider } from "@/pages/Workspace/context/WorkbenchWindowContext";
 import { DEFAULT_WORKSPACE_SECTION_PATH, resolveWorkspaceSection } from "@/pages/Workspace/sectionResolver";
 import type { WorkspaceProfile } from "@/types/workspaces";
 
@@ -104,26 +103,14 @@ function WorkspaceContent() {
     <WorkspaceProvider workspace={workspace} workspaces={workspaces}>
       <WorkspaceDocumentsStreamProvider>
         <WorkspacePresenceProvider>
-          <WorkspaceShell workspace={workspace} />
+          <WorkspaceShellLayout workspace={workspace} />
         </WorkspacePresenceProvider>
       </WorkspaceDocumentsStreamProvider>
     </WorkspaceProvider>
   );
 }
 
-interface WorkspaceShellProps {
-  readonly workspace: WorkspaceProfile;
-}
-
-function WorkspaceShell({ workspace }: WorkspaceShellProps) {
-  return (
-    <WorkbenchWindowProvider workspaceId={workspace.id}>
-      <WorkspaceShellLayout workspace={workspace} />
-    </WorkbenchWindowProvider>
-  );
-}
-
-function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
+function WorkspaceShellLayout({ workspace }: { readonly workspace: WorkspaceProfile }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { setPresence } = useWorkspacePresence();

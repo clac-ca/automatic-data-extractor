@@ -1,6 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { archiveConfiguration, createConfiguration } from "@/api/configurations/api";
+import {
+  archiveConfiguration,
+  createConfiguration,
+  updateConfiguration,
+  type UpdateConfigurationPayload,
+} from "@/api/configurations/api";
 import { configurationKeys } from "./keys";
 import type { ConfigurationRecord } from "@/types/configurations";
 
@@ -30,6 +35,21 @@ export function useDuplicateConfigurationMutation(workspaceId: string) {
       }),
     async onSuccess() {
       await queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) });
+    },
+  });
+}
+
+export function useUpdateConfigurationMutation(workspaceId: string, configurationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<ConfigurationRecord, Error, UpdateConfigurationPayload>({
+    mutationFn: (payload) => updateConfiguration(workspaceId, configurationId, payload),
+    async onSuccess() {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) }),
+        queryClient.invalidateQueries({
+          queryKey: configurationKeys.detail(workspaceId, configurationId),
+        }),
+      ]);
     },
   });
 }

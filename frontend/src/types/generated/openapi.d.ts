@@ -792,6 +792,42 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/documents/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved document views */
+        get: operations["list_document_views_api_v1_workspaces__workspaceId__documents_views_get"];
+        put?: never;
+        /** Create a saved document view */
+        post: operations["create_document_view_api_v1_workspaces__workspaceId__documents_views_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/views/{viewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved document view */
+        delete: operations["delete_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__delete"];
+        options?: never;
+        head?: never;
+        /** Update a saved document view */
+        patch: operations["update_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__patch"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/documents/stream": {
         parameters: {
             query?: never;
@@ -983,6 +1019,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a soft-deleted document */
+        post: operations["restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/documents/batch/delete": {
         parameters: {
             query?: never;
@@ -994,6 +1047,23 @@ export type paths = {
         put?: never;
         /** Soft delete multiple documents */
         post: operations["delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/batch/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore multiple soft-deleted documents */
+        post: operations["restore_documents_batch_api_v1_workspaces__workspaceId__documents_batch_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1018,6 +1088,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/configurations/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve workspace configuration timeline */
+        get: operations["read_workspace_configuration_history_api_v1_workspaces__workspaceId__configurations_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}": {
         parameters: {
             query?: never;
@@ -1029,6 +1116,24 @@ export type paths = {
         get: operations["read_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update editable metadata for a draft configuration */
+        patch: operations["update_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a previous configuration as a new draft */
+        post: operations["restore_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1061,7 +1166,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Archive the active configuration */
+        /** Archive a draft or active configuration */
         post: operations["archive_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__archive_post"];
         delete?: never;
         options?: never;
@@ -1827,6 +1932,8 @@ export type components = {
         Body_import_configuration_api_v1_workspaces__workspaceId__configurations_import_post: {
             /** Display Name */
             display_name: string;
+            /** Notes */
+            notes?: string | null;
             /**
              * File
              * Format: binary
@@ -1901,6 +2008,22 @@ export type components = {
             type: "template";
         };
         /**
+         * ConfigurationChangeSummary
+         * @description File-level change summary between two configuration snapshots.
+         */
+        ConfigurationChangeSummary: {
+            /** Added */
+            added: number;
+            /** Modified */
+            modified: number;
+            /** Removed */
+            removed: number;
+            /** Total */
+            total: number;
+            /** Examples */
+            examples?: string[];
+        };
+        /**
          * ConfigurationCreate
          * @description Payload for creating a configuration.
          */
@@ -1909,6 +2032,58 @@ export type components = {
             display_name: string;
             /** Source */
             source: components["schemas"]["ConfigSourceTemplate"] | components["schemas"]["ConfigSourceClone"];
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * ConfigurationHistoryEntry
+         * @description Single history row for a configuration family.
+         */
+        ConfigurationHistoryEntry: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /** Display Name */
+            display_name: string;
+            status: components["schemas"]["ConfigurationStatus"];
+            source_kind: components["schemas"]["ConfigurationSourceKind"];
+            /** Source Configuration Id */
+            source_configuration_id?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Activated At */
+            activated_at?: string | null;
+            /** Version Label */
+            version_label?: string | null;
+            /**
+             * Is Current
+             * @default false
+             */
+            is_current: boolean;
+            /**
+             * In Focus Lineage
+             * @default false
+             */
+            in_focus_lineage: boolean;
+            /**
+             * Changes Unavailable
+             * @default false
+             */
+            changes_unavailable: boolean;
+            changes?: components["schemas"]["ConfigurationChangeSummary"] | null;
         };
         /**
          * ConfigurationPage
@@ -1943,6 +2118,11 @@ export type components = {
             /** Display Name */
             display_name: string;
             status: components["schemas"]["ConfigurationStatus"];
+            /** Source Configuration Id */
+            source_configuration_id?: string | null;
+            source_kind: components["schemas"]["ConfigurationSourceKind"];
+            /** Notes */
+            notes?: string | null;
             /** Published Digest */
             published_digest?: string | null;
             /**
@@ -1959,11 +2139,71 @@ export type components = {
             activated_at?: string | null;
         };
         /**
+         * ConfigurationRestoreRequest
+         * @description Restore a previous configuration as a new draft.
+         */
+        ConfigurationRestoreRequest: {
+            /**
+             * Source Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            source_configuration_id: string;
+            /** Display Name */
+            display_name?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * ConfigurationSourceKind
+         * @description Provenance marker for how a configuration was created.
+         * @enum {string}
+         */
+        ConfigurationSourceKind: "template" | "import" | "clone" | "restore";
+        /**
          * ConfigurationStatus
          * @description Lifecycle states for workspace configuration packages.
          * @enum {string}
          */
         ConfigurationStatus: "draft" | "active" | "archived";
+        /**
+         * ConfigurationUpdateRequest
+         * @description Patch editable draft metadata for a configuration.
+         */
+        ConfigurationUpdateRequest: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * ConfigurationWorkspaceHistoryResponse
+         * @description Workspace timeline payload with optional lineage focus.
+         */
+        ConfigurationWorkspaceHistoryResponse: {
+            /** Current Configuration Id */
+            current_configuration_id?: string | null;
+            /** Focus Configuration Id */
+            focus_configuration_id?: string | null;
+            /**
+             * Scope
+             * @default workspace
+             * @enum {string}
+             */
+            scope: "workspace" | "lineage";
+            /**
+             * Status Filter
+             * @default all
+             * @enum {string}
+             */
+            status_filter: "all" | "published" | "drafts";
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total Count */
+            total_count: number;
+            /** Items */
+            items: components["schemas"]["ConfigurationHistoryEntry"][];
+        };
         /** CursorMeta */
         CursorMeta: {
             /** Limit */
@@ -2002,6 +2242,25 @@ export type components = {
          * @description Response envelope for batch deletions.
          */
         DocumentBatchDeleteResponse: {
+            /** Documentids */
+            documentIds?: string[];
+        };
+        /**
+         * DocumentBatchRestoreRequest
+         * @description Payload for restoring multiple soft-deleted documents.
+         */
+        DocumentBatchRestoreRequest: {
+            /**
+             * Documentids
+             * @description Documents to restore (all-or-nothing).
+             */
+            documentIds: string[];
+        };
+        /**
+         * DocumentBatchRestoreResponse
+         * @description Response envelope for batch restores.
+         */
+        DocumentBatchRestoreResponse: {
             /** Documentids */
             documentIds?: string[];
         };
@@ -2143,6 +2402,12 @@ export type components = {
          */
         DocumentFileType: "xlsx" | "xls" | "csv" | "pdf" | "unknown";
         /**
+         * DocumentListLifecycle
+         * @description Visibility scope for list queries.
+         * @enum {string}
+         */
+        DocumentListLifecycle: "active" | "deleted";
+        /**
          * DocumentListPage
          * @description Cursor-based envelope of document list rows.
          */
@@ -2206,6 +2471,8 @@ export type components = {
              * Format: date-time
              */
             activityAt: string;
+            /** Deletedat */
+            deletedAt?: string | null;
             lastRun?: components["schemas"]["DocumentRunSummary"] | null;
             lastRunMetrics?: components["schemas"]["RunMetricsResource"] | null;
             /** Lastruntablecolumns */
@@ -2403,6 +2670,134 @@ export type components = {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * DocumentViewCreate
+         * @description Payload for creating a saved document view.
+         */
+        DocumentViewCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Visibility
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "public";
+            queryState: components["schemas"]["DocumentViewQueryState"];
+            tableState?: components["schemas"]["DocumentViewTableState"] | null;
+        };
+        /**
+         * DocumentViewListResponse
+         * @description Collection of visible document views.
+         */
+        DocumentViewListResponse: {
+            /** Items */
+            items: components["schemas"]["DocumentViewOut"][];
+        };
+        /**
+         * DocumentViewOut
+         * @description Saved document view resource.
+         */
+        DocumentViewOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /**
+             * Workspaceid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            workspaceId: string;
+            /** Name */
+            name: string;
+            visibility: components["schemas"]["DocumentViewVisibility"];
+            /** Systemkey */
+            systemKey?: string | null;
+            /** Owneruserid */
+            ownerUserId?: string | null;
+            queryState: components["schemas"]["DocumentViewQueryState"];
+            tableState?: components["schemas"]["DocumentViewTableState"] | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * DocumentViewQueryState
+         * @description Serializable list query state persisted for a saved view.
+         */
+        DocumentViewQueryState: {
+            /** @default active */
+            lifecycle: components["schemas"]["DocumentListLifecycle"];
+            /** Q */
+            q?: string | null;
+            /** Sort */
+            sort?: {
+                [key: string]: unknown;
+            }[];
+            /** Filters */
+            filters?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Joinoperator
+             * @default and
+             */
+            joinOperator: ("and" | "or") | null;
+            /** Filterflag */
+            filterFlag?: string | null;
+            /** Simplefilters */
+            simpleFilters?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * DocumentViewTableState
+         * @description Serializable table layout state persisted for a saved view.
+         */
+        DocumentViewTableState: {
+            /** Columnvisibility */
+            columnVisibility?: {
+                [key: string]: boolean;
+            } | null;
+            /** Columnsizing */
+            columnSizing?: {
+                [key: string]: number;
+            } | null;
+            /** Columnorder */
+            columnOrder?: string[] | null;
+            /** Columnpinning */
+            columnPinning?: {
+                [key: string]: string[];
+            } | null;
+        };
+        /**
+         * DocumentViewUpdate
+         * @description Payload for updating a saved document view.
+         */
+        DocumentViewUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Visibility */
+            visibility?: ("private" | "public") | null;
+            queryState?: components["schemas"]["DocumentViewQueryState"] | null;
+            tableState?: components["schemas"]["DocumentViewTableState"] | null;
+        };
+        /**
+         * DocumentViewVisibility
+         * @description Visibility scope for saved document views.
+         * @enum {string}
+         */
+        DocumentViewVisibility: "system" | "private" | "public";
         /**
          * EffectivePermissions
          * @description Effective permission sets for the current principal.
@@ -6597,6 +6992,7 @@ export interface operations {
     list_documents_api_v1_workspaces__workspaceId__documents_get: {
         parameters: {
             query?: {
+                lifecycle?: components["schemas"]["DocumentListLifecycle"];
                 includeRunMetrics?: boolean;
                 includeRunTableColumns?: boolean;
                 includeRunFields?: boolean;
@@ -6805,6 +7201,162 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_document_views_api_v1_workspaces__workspaceId__documents_views_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentViewListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_document_view_api_v1_workspaces__workspaceId__documents_views_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentViewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentViewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    delete_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document view identifier */
+                viewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document view identifier */
+                viewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentViewUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentViewOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7750,6 +8302,69 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to restore documents. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document restoration. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post: {
         parameters: {
             query?: never;
@@ -7787,6 +8402,71 @@ export interface operations {
                 content?: never;
             };
             /** @description Workspace permissions do not allow document deletion. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    restore_documents_batch_api_v1_workspaces__workspaceId__documents_batch_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchRestoreResponse"];
+                };
+            };
+            /** @description Authentication required to restore documents. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document restoration. */
             403: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -7908,6 +8588,47 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    read_workspace_configuration_history_api_v1_workspaces__workspaceId__configurations_history_get: {
+        parameters: {
+            query?: {
+                focus_configuration_id?: string | null;
+                scope?: "workspace" | "lineage";
+                status_filter?: "all" | "published" | "drafts";
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationWorkspaceHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     read_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__get: {
         parameters: {
             query?: never;
@@ -7927,6 +8648,92 @@ export interface operations {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Configuration identifier */
+                configurationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    restore_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Configuration identifier */
+                configurationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
                 content: {

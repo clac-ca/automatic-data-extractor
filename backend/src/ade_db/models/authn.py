@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Index, String, Text, func
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -47,6 +47,10 @@ class AuthSession(UUIDPrimaryKeyMixin, Base):
     user: Mapped["User"] = relationship("User", back_populates="auth_sessions")
 
     __table_args__ = (
+        CheckConstraint(
+            f"auth_method IN {AUTH_SESSION_AUTH_METHOD_VALUES}",
+            name="ck_auth_sessions_auth_method",
+        ),
         Index("ix_auth_sessions_user_id", "user_id"),
         Index("ix_auth_sessions_expires_at", "expires_at"),
     )

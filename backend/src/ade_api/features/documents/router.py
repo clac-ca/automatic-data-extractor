@@ -71,6 +71,9 @@ from .exceptions import (
     DocumentPreviewUnsupportedError,
     DocumentTooLargeError,
     DocumentVersionNotFoundError,
+    DocumentViewConflictError,
+    DocumentViewImmutableError,
+    DocumentViewNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
@@ -79,6 +82,8 @@ from .exceptions import (
 from .schemas import (
     DocumentBatchDeleteRequest,
     DocumentBatchDeleteResponse,
+    DocumentBatchRestoreRequest,
+    DocumentBatchRestoreResponse,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
     DocumentChangeDeltaResponse,
@@ -88,6 +93,7 @@ from .schemas import (
     DocumentCommentPage,
     DocumentConflictMode,
     DocumentListPage,
+    DocumentListLifecycle,
     DocumentListRow,
     DocumentOut,
     DocumentSheet,
@@ -95,6 +101,10 @@ from .schemas import (
     DocumentTagsReplace,
     DocumentUpdateRequest,
     DocumentUploadRunOptions,
+    DocumentViewCreate,
+    DocumentViewListResponse,
+    DocumentViewOut,
+    DocumentViewUpdate,
     TagCatalogPage,
 )
 from .upload_metadata import build_upload_metadata
@@ -138,6 +148,13 @@ DocumentPath = Annotated[
         alias="documentId",
     ),
 ]
+ViewPath = Annotated[
+    UUID,
+    Path(
+        description="Document view identifier",
+        alias="viewId",
+    ),
+]
 DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
 DocumentsServiceReadDep = Annotated[
     DocumentsService, Depends(get_documents_service_read)
@@ -158,7 +175,6 @@ DocumentManager = Annotated[
         scopes=["{workspaceId}"],
     ),
 ]
-
 
 def _resolve_event_token(request: Request, cursor: str | None) -> int | None:
     last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
@@ -412,7 +428,18 @@ def upload_document_version(
     status_code=status.HTTP_200_OK,
     summary="List documents",
     response_model_exclude_none=True,
-    dependencies=[Depends(strict_cursor_query_guard())],
+    dependencies=[
+        Depends(
+            strict_cursor_query_guard(
+                allowed_extra={
+                    "includeRunMetrics",
+                    "includeRunTableColumns",
+                    "includeRunFields",
+                    "lifecycle",
+                }
+            )
+        )
+    ],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list documents.",
@@ -430,6 +457,7 @@ def list_documents(
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     service: DocumentsServiceReadDep,
     actor: DocumentReader,
+    lifecycle: Annotated[DocumentListLifecycle, Query()] = DocumentListLifecycle.ACTIVE,
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
     include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
@@ -451,11 +479,126 @@ def list_documents(
         q=list_query.q,
         include_total=list_query.include_total,
         include_facets=list_query.include_facets,
+        lifecycle=lifecycle,
         include_run_metrics=include_run_metrics,
         include_run_table_columns=include_run_table_columns,
         include_run_fields=include_run_fields,
     )
     return page_result
+
+
+@router.get(
+    "/views",
+    response_model=DocumentViewListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List saved document views",
+)
+def list_document_views(
+    workspace_id: WorkspacePath,
+    service: DocumentsServiceReadDep,
+    actor: DocumentReader,
+) -> DocumentViewListResponse:
+    return service.list_document_views(
+        workspace_id=workspace_id,
+        actor=actor,
+    )
+
+
+@router.post(
+    "/views",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentViewOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a saved document view",
+)
+def create_document_view(
+    workspace_id: WorkspacePath,
+    payload: DocumentViewCreate,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> DocumentViewOut:
+    can_manage_public_views = service.can_manage_public_document_views(
+        actor=actor,
+        workspace_id=workspace_id,
+    )
+    try:
+        return service.create_document_view(
+            workspace_id=workspace_id,
+            payload=payload,
+            actor=actor,
+            can_manage_public_views=can_manage_public_views,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DocumentViewConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.patch(
+    "/views/{viewId}",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentViewOut,
+    status_code=status.HTTP_200_OK,
+    summary="Update a saved document view",
+)
+def update_document_view(
+    workspace_id: WorkspacePath,
+    view_id: ViewPath,
+    payload: DocumentViewUpdate,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> DocumentViewOut:
+    can_manage_public_views = service.can_manage_public_document_views(
+        actor=actor,
+        workspace_id=workspace_id,
+    )
+    try:
+        return service.update_document_view(
+            workspace_id=workspace_id,
+            view_id=view_id,
+            payload=payload,
+            actor=actor,
+            can_manage_public_views=can_manage_public_views,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DocumentViewNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentViewImmutableError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DocumentViewConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/views/{viewId}",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a saved document view",
+)
+def delete_document_view(
+    workspace_id: WorkspacePath,
+    view_id: ViewPath,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> None:
+    can_manage_public_views = service.can_manage_public_document_views(
+        actor=actor,
+        workspace_id=workspace_id,
+    )
+    try:
+        service.delete_document_view(
+            workspace_id=workspace_id,
+            view_id=view_id,
+            actor=actor,
+            can_manage_public_views=can_manage_public_views,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except DocumentViewNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentViewImmutableError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1197,6 +1340,40 @@ def delete_document(
 
 
 @router.post(
+    "/{documentId:uuid}/restore",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Restore a soft-deleted document",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to restore documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document restoration.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+def restore_document(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        return service.restore_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
     "/batch/delete",
     dependencies=[Security(require_csrf)],
     response_model=DocumentBatchDeleteResponse,
@@ -1230,6 +1407,41 @@ def delete_documents_batch(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return DocumentBatchDeleteResponse(document_ids=deleted_ids)
+
+
+@router.post(
+    "/batch/restore",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchRestoreResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Restore multiple soft-deleted documents",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to restore documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document restoration.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "One or more documents were not found within the workspace.",
+        },
+    },
+)
+def restore_documents_batch(
+    workspace_id: WorkspacePath,
+    payload: DocumentBatchRestoreRequest,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentBatchRestoreResponse:
+    try:
+        restored_ids = service.restore_documents_batch(
+            workspace_id=workspace_id,
+            document_ids=payload.document_ids,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return DocumentBatchRestoreResponse(document_ids=restored_ids)
 
 
 @tags_router.get(

@@ -28,7 +28,7 @@ When you add or touch code, copy, or routes, keep these aligned:
 **Routes**
 
 * Workspace shell entry: `/workspaces`
-* Workspace sections: `/workspaces/:workspaceId/{documents|runs|config-builder|settings}`
+* Workspace sections: `/workspaces/:workspaceId/{documents|runs|configurations|settings}`
 
 **Feature folders**
 
@@ -36,7 +36,7 @@ When you add or touch code, copy, or routes, keep these aligned:
 pages/Workspace/sections/
   Documents
   Runs
-  ConfigBuilder
+  ConfigurationEditor
   Settings
 ```
 
@@ -51,13 +51,13 @@ pages/Workspace/sections/
 
 * `ade.ui.workspace.<workspaceId>…`
 
-### Configuration Builder naming rule (important)
+### Configuration editor naming rule (important)
 
 Keep these three in lockstep:
 
-* **Nav label**: `Configuration Builder`
-* **Route segment**: `/config-builder`
-* **Folder**: `pages/Workspace/sections/ConfigBuilder`
+* **Nav label**: `Configuration editor`
+* **Route segment**: `/configurations`
+* **Folder**: `pages/Workspace/sections/ConfigurationEditor`
 
 ---
 

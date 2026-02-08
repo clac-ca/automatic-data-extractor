@@ -46,6 +46,12 @@ class ConfigurationsRepository:
         result = self._session.execute(stmt)
         return result.scalars().all()
 
+    def list_family_candidates(self, workspace_id: UUID) -> Sequence[Configuration]:
+        """Return all configurations in a workspace for lineage graph traversal."""
+        stmt = self.base_query().where(Configuration.workspace_id == workspace_id)
+        result = self._session.execute(stmt)
+        return result.scalars().all()
+
     def get_by_id(self, configuration_id: UUID) -> Configuration | None:
         stmt = self.base_query().where(Configuration.id == configuration_id).limit(1)
         result = self._session.execute(stmt)
