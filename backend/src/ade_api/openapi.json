@@ -12840,6 +12840,12 @@
             "title": "Force Sso",
             "description": "When true, the frontend should offer only SSO.",
             "default": false
+          },
+          "password_reset_enabled": {
+            "type": "boolean",
+            "title": "Password Reset Enabled",
+            "description": "When true, public password reset flows should be offered.",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -17783,7 +17789,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:30267"
+      "url": "http://127.0.0.1:30188"
     }
   ],
   "security": [

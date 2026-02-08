@@ -287,7 +287,12 @@ class AuthnService:
     # Password reset
     # ------------------------------------------------------------------
 
+    def is_password_reset_enabled(self) -> bool:
+        policy = self.get_policy()
+        return bool(self.settings.auth_password_reset_enabled and not policy.enforce_sso)
+
     def forgot_password(self, *, email: str) -> None:
+        self._ensure_password_reset_enabled()
         user = self._find_user_by_email(email)
         if user is None or not user.is_active:
             return
@@ -306,6 +311,7 @@ class AuthnService:
         self.delivery.send_reset(email=user.email, token=raw, expires_at=expires_at)
 
     def reset_password(self, *, token: str, new_password: str) -> None:
+        self._ensure_password_reset_enabled()
         token_hash = hash_opaque_token(token)
         now = utc_now()
         stmt = (
@@ -508,6 +514,14 @@ class AuthnService:
                     "message": "Global-admin users must enroll MFA for local login while SSO is enforced.",
                 },
             )
+
+    def _ensure_password_reset_enabled(self) -> None:
+        if self.is_password_reset_enabled():
+            return
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Password reset is unavailable.",
+        )
 
     def _find_user_by_email(self, email: str) -> User | None:
         normalized = email.strip().lower()

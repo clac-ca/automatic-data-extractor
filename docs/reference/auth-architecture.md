@@ -33,9 +33,11 @@ JWT bearer login is not part of the active auth model.
 
 ## Password Reset
 
-- Forgot flow: `POST /api/v1/auth/password/forgot` always returns `202`.
+- Forgot flow: when enabled, `POST /api/v1/auth/password/forgot` returns uniform `202` for known/unknown emails.
 - Reset flow: `POST /api/v1/auth/password/reset` consumes one-time token.
-- Reset and challenge tokens are stored as hashes, not plaintext.
+- Reset tokens are stored as hashes, not plaintext.
+- Admin toggle: `ADE_AUTH_PASSWORD_RESET_ENABLED=false` disables forgot/reset endpoints and public UI.
+- SSO interaction: when `enforceSso=true`, password reset endpoints are unavailable in public flows.
 
 ## SSO and Enforcement
 

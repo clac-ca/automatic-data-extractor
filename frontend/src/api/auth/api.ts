@@ -26,6 +26,7 @@ export type AuthProvider = Readonly<{
 export type AuthProviderResponse = Readonly<{
   providers: AuthProvider[];
   forceSso: boolean;
+  passwordResetEnabled: boolean;
 }>;
 type MeContext = components["schemas"]["MeContext"];
 type MeWorkspaceSummary = components["schemas"]["MeWorkspaceSummary"];
@@ -37,6 +38,8 @@ type RequestOptions = {
 
 type LoginPayload = Readonly<{ email: string; password: string }>;
 type MfaVerifyPayload = Readonly<{ challengeToken: string; code: string }>;
+export type PasswordForgotPayload = Readonly<{ email: string }>;
+export type PasswordResetPayload = Readonly<{ token: string; newPassword: string }>;
 type MfaCodePayload = Readonly<{ code: string }>;
 
 type LoginApiResponse = Readonly<{
@@ -104,12 +107,20 @@ export async function fetchAuthProviders(
       signal: options.signal,
     });
     if (!data) {
-      return { providers: [], forceSso: false };
+      return {
+        providers: [],
+        forceSso: false,
+        passwordResetEnabled: false,
+      };
     }
     return normalizeAuthProviderResponse(data);
   } catch (error: unknown) {
     if (error instanceof ApiError && error.status === 404) {
-      return { providers: [], forceSso: false };
+      return {
+        providers: [],
+        forceSso: false,
+        passwordResetEnabled: false,
+      };
     }
     throw error;
   }
@@ -147,6 +158,19 @@ export async function verifyMfaChallenge(
   return bootstrapSession(options.signal, null);
 }
 
+export async function requestPasswordReset(
+  payload: PasswordForgotPayload,
+  options: RequestOptions = {},
+): Promise<void> {
+  await submitPasswordForgot(payload, options.signal);
+}
+
+export async function completePasswordReset(
+  payload: PasswordResetPayload,
+  options: RequestOptions = {},
+): Promise<void> {
+  await submitPasswordReset(payload, options.signal);
+}
 export async function startMfaEnrollment(
   options: RequestOptions = {},
 ): Promise<MfaEnrollStartResponse> {
@@ -361,6 +385,46 @@ async function submitMfaChallenge(payload: MfaVerifyPayload, signal?: AbortSigna
   }
 }
 
+async function submitPasswordForgot(
+  payload: PasswordForgotPayload,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/password/forgot", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+}
+
+async function submitPasswordReset(
+  payload: PasswordResetPayload,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/password/reset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+}
+
 function preferredWorkspaceId(workspaces: SessionWorkspaces): string | null {
   const preferred = workspaces.find((workspace) => workspace.is_default);
   return preferred ? preferred.id : null;
@@ -421,9 +485,17 @@ function normalizeSessionEnvelope(
 }
 
 function normalizeAuthProviderResponse(data: AuthProviderResponseRaw): AuthProviderResponse {
+  const raw = data as AuthProviderResponseRaw & {
+    password_reset_enabled?: boolean;
+  };
+  const forceSso = Boolean(raw.force_sso);
+  const passwordResetEnabled =
+    typeof raw.password_reset_enabled === "boolean" ? raw.password_reset_enabled : !forceSso;
+
   return {
-    providers: (data.providers ?? []).map(normalizeAuthProvider),
-    forceSso: Boolean(data.force_sso),
+    providers: (raw.providers ?? []).map(normalizeAuthProvider),
+    forceSso,
+    passwordResetEnabled,
   };
 }
 

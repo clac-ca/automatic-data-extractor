@@ -51,7 +51,7 @@ describe("LoginScreen SSO UX", () => {
     });
 
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false },
+      data: { providers: [], forceSso: false, passwordResetEnabled: true },
       isError: false,
       isFetching: false,
       isLoading: false,
@@ -62,6 +62,7 @@ describe("LoginScreen SSO UX", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         forceSso: false,
+        passwordResetEnabled: true,
         providers: [
           {
             id: "okta",
@@ -89,6 +90,7 @@ describe("LoginScreen SSO UX", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         forceSso: false,
+        passwordResetEnabled: true,
         providers: [
           {
             id: "okta",
@@ -109,9 +111,24 @@ describe("LoginScreen SSO UX", () => {
     expect(link).toHaveAttribute("href", "/api/v1/auth/sso/okta/authorize?returnTo=%2F");
   });
 
+  it("links forgot-password with a sanitized returnTo parameter", () => {
+    renderWithPath("/login?returnTo=/workspaces/alpha");
+
+    const link = screen.getByRole("link", { name: "Forgot your password?" });
+    expect(link).toHaveAttribute("href", "/forgot-password?returnTo=%2Fworkspaces%2Falpha");
+  });
+
+  it("shows a success message when redirected after password reset", () => {
+    renderWithPath("/login?passwordReset=success");
+
+    expect(
+      screen.getByText("Your password was reset. Sign in with your new password."),
+    ).toBeInTheDocument();
+  });
+
   it("shows a blocking error when forceSso is enabled without providers", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: true },
+      data: { providers: [], forceSso: true, passwordResetEnabled: false },
       isError: false,
       isFetching: false,
       isLoading: false,
@@ -125,11 +142,12 @@ describe("LoginScreen SSO UX", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Forgot your password?" })).not.toBeInTheDocument();
   });
 
   it("keeps password login available when providers fail to load and forceSso is false", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false },
+      data: { providers: [], forceSso: false, passwordResetEnabled: true },
       isError: true,
       isFetching: false,
       isLoading: false,
@@ -149,6 +167,7 @@ describe("LoginScreen SSO UX", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         forceSso: false,
+        passwordResetEnabled: true,
         providers: [
           {
             id: "okta",
@@ -176,6 +195,7 @@ describe("LoginScreen SSO UX", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         forceSso: false,
+        passwordResetEnabled: true,
         providers: [
           {
             id: "okta",
@@ -203,6 +223,7 @@ describe("LoginScreen SSO UX", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         forceSso: false,
+        passwordResetEnabled: true,
         providers: [
           {
             id: "okta",
@@ -223,6 +244,22 @@ describe("LoginScreen SSO UX", () => {
       screen.getByText(
         "Okta sign-in failed. Your account must be provisioned before signing in.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("hides forgot-password entry when password reset is disabled", () => {
+    mockUseAuthProvidersQuery.mockReturnValue({
+      data: { providers: [], forceSso: false, passwordResetEnabled: false },
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+    });
+
+    renderWithPath("/login");
+
+    expect(screen.queryByRole("link", { name: "Forgot your password?" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Password reset is unavailable. Contact your administrator."),
     ).toBeInTheDocument();
   });
 });

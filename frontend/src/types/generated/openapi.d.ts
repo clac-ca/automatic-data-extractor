@@ -1776,6 +1776,12 @@ export type components = {
              * @default false
              */
             force_sso: boolean;
+            /**
+             * Password Reset Enabled
+             * @description When true, public password reset flows should be offered.
+             * @default true
+             */
+            password_reset_enabled: boolean;
         };
         /**
          * AuthSetupRequest

@@ -43,6 +43,7 @@ Runtime authorization is role/permission driven. Do not rely on legacy `is_super
 - `ADE_PUBLIC_WEB_URL`
 - `ADE_AUTH_DISABLED`
 - `ADE_AUTH_FORCE_SSO`
+- `ADE_AUTH_PASSWORD_RESET_ENABLED`
 - `ADE_AUTH_ENFORCE_LOCAL_MFA`
 - `ADE_SSO_ENCRYPTION_KEY`
 - `ADE_BLOB_ACCOUNT_URL` or `ADE_BLOB_CONNECTION_STRING`

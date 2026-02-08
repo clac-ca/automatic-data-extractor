@@ -114,6 +114,74 @@ describe("auth api", () => {
     );
   });
 
+  it("requests password reset using the forgot endpoint", async () => {
+    mockApiFetch.mockResolvedValueOnce(new Response(null, { status: 202 }));
+
+    const { requestPasswordReset } = await import("../api");
+    await requestPasswordReset({ email: "user@example.com" });
+
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      "/api/v1/auth/password/forgot",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "user@example.com" }),
+      }),
+    );
+  });
+
+  it("resets password using the reset endpoint", async () => {
+    mockApiFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const { completePasswordReset } = await import("../api");
+    await completePasswordReset({
+      token: "reset-token",
+      newPassword: "averysecurepassword",
+    });
+
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      "/api/v1/auth/password/reset",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          token: "reset-token",
+          newPassword: "averysecurepassword",
+        }),
+      }),
+    );
+  });
+
+  it("normalizes auth providers including password reset availability", async () => {
+    mockClient.GET.mockResolvedValueOnce({
+      data: {
+        providers: [],
+        force_sso: true,
+        password_reset_enabled: false,
+      },
+    });
+
+    const { fetchAuthProviders } = await import("../api");
+    const providers = await fetchAuthProviders();
+
+    expect(providers).toEqual({
+      providers: [],
+      forceSso: true,
+      passwordResetEnabled: false,
+    });
+  });
+
+  it("falls back to reset enabled when force_sso is false and flag is missing", async () => {
+    mockClient.GET.mockResolvedValueOnce({
+      data: {
+        providers: [],
+        force_sso: false,
+      },
+    });
+
+    const { fetchAuthProviders } = await import("../api");
+    const providers = await fetchAuthProviders();
+
+    expect(providers.passwordResetEnabled).toBe(true);
+  });
   it("starts MFA enrollment and returns setup details", async () => {
     mockApiFetch.mockResolvedValueOnce(
       new Response(

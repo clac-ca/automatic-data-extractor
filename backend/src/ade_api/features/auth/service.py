@@ -80,6 +80,7 @@ class AuthService:
         return AuthProviderListResponse(
             providers=providers,
             force_sso=bool(policy.enforce_sso),
+            password_reset_enabled=authn.is_password_reset_enabled(),
         )
 
     def _sso_configured(self) -> bool:

@@ -39,6 +39,7 @@ When SSO is enforced:
 ## Password Reset Operations
 
 - Forgot endpoint is intentionally uniform (`202`) for known and unknown emails.
+- If `ADE_AUTH_PASSWORD_RESET_ENABLED=false` or SSO enforcement is enabled, forgot/reset endpoints return `403`.
 - Reset tokens are one-time and time-limited.
 - Delivery adapter may be no-op until SMTP integration is configured.
 

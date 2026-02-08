@@ -17,7 +17,7 @@ from ade_api.core.http import (
     set_session_cookie,
 )
 from ade_api.core.http.csrf import clear_csrf_cookie, set_csrf_cookie
-from ade_api.db import get_db_write
+from ade_api.db import get_db_read, get_db_write
 from ade_api.settings import Settings
 from ade_db.models import User
 
@@ -35,7 +35,11 @@ from ..authn.schemas import (
     AuthPasswordResetRequest,
 )
 from ..authn.service import AuthnService, LoginError, MfaRequiredError
-from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
+from .schemas import (
+    AuthProviderListResponse,
+    AuthSetupRequest,
+    AuthSetupStatusResponse,
+)
 from .service import AuthService, SetupAlreadyCompletedError
 from .sso_router import router as sso_router
 
@@ -112,7 +116,11 @@ def create_auth_router(settings: Settings) -> APIRouter:
                 )
             else:
                 provider_items.append(item.model_copy(update={"start_url": "/api/v1/auth/login"}))
-        return AuthProviderListResponse(providers=provider_items, force_sso=payload.force_sso)
+        return AuthProviderListResponse(
+            providers=provider_items,
+            force_sso=payload.force_sso,
+            password_reset_enabled=payload.password_reset_enabled,
+        )
 
     @router.post(
         "/login",

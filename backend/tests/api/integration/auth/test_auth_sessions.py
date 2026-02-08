@@ -4,11 +4,13 @@ from urllib.parse import parse_qs, urlparse
 
 import anyio
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from ade_api.common.time import utc_now
 from ade_api.core.security import hash_opaque_token, mint_opaque_token
+from ade_api.features.authn.service import AuthnService
 from ade_api.features.authn.totp import totp_now
 from ade_api.settings import Settings
 from ade_db.models import AuthSession
@@ -233,6 +235,59 @@ async def test_cookie_logout_requires_csrf_header(
     assert missing_csrf.status_code == 403
 
 
+async def test_auth_providers_include_password_reset_enabled_flag(
+    async_client: AsyncClient,
+) -> None:
+    response = await async_client.get("/api/v1/auth/providers")
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["force_sso"] is False
+    assert payload["password_reset_enabled"] is True
+
+
+async def test_password_reset_forgot_accepts_request_when_enabled(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    response = await async_client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": seed_identity.member.email},
+    )
+    assert response.status_code == 202, response.text
+
+
+async def test_password_reset_forgot_rejects_when_disabled(
+    async_client: AsyncClient,
+    settings: Settings,
+) -> None:
+    settings.auth_password_reset_enabled = False
+
+    response = await async_client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": "user@example.com"},
+    )
+    assert response.status_code == 403, response.text
+
+
+async def test_password_reset_service_respects_disable_toggle(
+    db_session,
+    settings: Settings,
+) -> None:
+    disabled_settings = settings.model_copy(update={"auth_password_reset_enabled": False})
+    service = AuthnService(session=db_session, settings=disabled_settings)
+
+    with pytest.raises(HTTPException) as forgot_exc:
+        service.forgot_password(email="user@example.com")
+    assert forgot_exc.value.status_code == 403
+    assert forgot_exc.value.detail == "Password reset is unavailable."
+
+    with pytest.raises(HTTPException) as reset_exc:
+        service.reset_password(token="reset-token", new_password="averysecurepassword")
+    assert reset_exc.value.status_code == 403
+    assert reset_exc.value.detail == "Password reset is unavailable."
+
+
 async def test_mfa_recovery_code_accepts_compact_and_hyphenated_formats(
     async_client: AsyncClient,
     seed_identity,
@@ -422,6 +477,18 @@ async def test_sso_enforcement_blocks_non_admin_and_preserves_global_admin_local
         headers={"X-CSRF-Token": csrf_cookie},
     )
     assert enforce_sso.status_code == 200, enforce_sso.text
+
+    providers = await async_client.get("/api/v1/auth/providers")
+    assert providers.status_code == 200, providers.text
+    providers_payload = providers.json()
+    assert providers_payload["force_sso"] is True
+    assert providers_payload["password_reset_enabled"] is False
+
+    forgot_while_enforced = await async_client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": member.email},
+    )
+    assert forgot_while_enforced.status_code == 403, forgot_while_enforced.text
 
     logout = await async_client.post(
         "/api/v1/auth/logout",

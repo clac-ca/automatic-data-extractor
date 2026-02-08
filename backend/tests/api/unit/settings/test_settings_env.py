@@ -155,6 +155,20 @@ def test_public_web_url_accepts_https(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.server_cors_origin_regex is None
 
 
+def test_password_reset_toggle_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_RESET_ENABLED", "false")
+    monkeypatch.setenv("ADE_AUTH_ENFORCE_LOCAL_MFA", "true")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.auth_password_reset_enabled is False
+    assert settings.auth_enforce_local_mfa is True
+
+
 
 
 def test_logging_level_falls_back_to_global(monkeypatch: pytest.MonkeyPatch) -> None:

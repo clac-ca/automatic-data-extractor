@@ -106,6 +106,7 @@ class Settings(
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
     auth_force_sso: bool = False
+    auth_password_reset_enabled: bool = True
     auth_enforce_local_mfa: bool = False
     auth_sso_auto_provision: bool = False
     auth_sso_providers_json: str | None = None
