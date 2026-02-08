@@ -15,6 +15,12 @@ import {
   ActionBarSeparator,
 } from "@/components/ui/action-bar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { DEFAULT_PAGE_SIZE, DEFAULT_SORTING } from "../../shared/constants";
 import type { DocumentRow } from "../../shared/types";
@@ -28,6 +34,11 @@ interface DocumentsTableProps {
   toolbarActions?: ReactNode;
   onBulkReprocessRequest?: (documents: DocumentRow[]) => void;
   onBulkCancelRequest?: (documents: DocumentRow[]) => void;
+  onBulkAssignRequest?: (documents: DocumentRow[]) => void;
+  onBulkTagRequest?: (documents: DocumentRow[]) => void;
+  onBulkDeleteRequest?: (documents: DocumentRow[]) => void;
+  onBulkDownloadRequest?: (documents: DocumentRow[]) => void;
+  onBulkDownloadOriginalRequest?: (documents: DocumentRow[]) => void;
   selectionResetToken?: number;
 }
 
@@ -40,6 +51,11 @@ export function DocumentsTable({
   toolbarActions,
   onBulkReprocessRequest,
   onBulkCancelRequest,
+  onBulkAssignRequest,
+  onBulkTagRequest,
+  onBulkDeleteRequest,
+  onBulkDownloadRequest,
+  onBulkDownloadOriginalRequest,
   selectionResetToken = 0,
 }: DocumentsTableProps) {
   const isAdvanced = filterMode === "advanced";
@@ -85,6 +101,14 @@ export function DocumentsTable({
     (document) => document.lastRun?.status !== "queued" && document.lastRun?.status !== "running",
   );
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  const showRunActions =
+    (cancellableDocuments.length > 0 && Boolean(onBulkCancelRequest)) ||
+    (reprocessableDocuments.length > 0 && Boolean(onBulkReprocessRequest));
+  const showOrganizeMenu = Boolean(onBulkAssignRequest || onBulkTagRequest);
+  const showDownloadMenu = Boolean(onBulkDownloadRequest || onBulkDownloadOriginalRequest);
+  const showSecondaryActions =
+    showOrganizeMenu || showDownloadMenu || Boolean(onBulkDeleteRequest);
+
   const actionBar = (
     <ActionBar
       open={selectedCount > 0}
@@ -113,6 +137,76 @@ export function DocumentsTable({
             onSelect={() => onBulkReprocessRequest(reprocessableDocuments)}
           >
             Reprocess ({reprocessableDocuments.length})
+          </ActionBarItem>
+        ) : null}
+      </ActionBarGroup>
+      {showRunActions && showSecondaryActions ? <ActionBarSeparator /> : null}
+      <ActionBarGroup>
+        {showOrganizeMenu ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ActionBarItem
+                variant="outline"
+                size="sm"
+                onSelect={(event) => event.preventDefault()}
+              >
+                Organize
+              </ActionBarItem>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top">
+              {onBulkAssignRequest ? (
+                <DropdownMenuItem
+                  onSelect={() => onBulkAssignRequest(selectedDocuments)}
+                >
+                  Assign…
+                </DropdownMenuItem>
+              ) : null}
+              {onBulkTagRequest ? (
+                <DropdownMenuItem
+                  onSelect={() => onBulkTagRequest(selectedDocuments)}
+                >
+                  Edit tags…
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+        {showDownloadMenu ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <ActionBarItem
+                variant="outline"
+                size="sm"
+                onSelect={(event) => event.preventDefault()}
+              >
+                Download
+              </ActionBarItem>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top">
+              {onBulkDownloadRequest ? (
+                <DropdownMenuItem
+                  onSelect={() => onBulkDownloadRequest(selectedDocuments)}
+                >
+                  Download ({selectedDocuments.length})
+                </DropdownMenuItem>
+              ) : null}
+              {onBulkDownloadOriginalRequest ? (
+                <DropdownMenuItem
+                  onSelect={() => onBulkDownloadOriginalRequest(selectedDocuments)}
+                >
+                  Download original ({selectedDocuments.length})
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+        {onBulkDeleteRequest ? (
+          <ActionBarItem
+            variant="destructive"
+            size="sm"
+            onSelect={() => onBulkDeleteRequest(selectedDocuments)}
+          >
+            Delete ({selectedDocuments.length})
           </ActionBarItem>
         ) : null}
         <ActionBarItem variant="outline" size="sm" onSelect={() => table.toggleAllRowsSelected(false)}>

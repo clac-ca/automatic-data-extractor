@@ -28,9 +28,8 @@ export type DocumentsColumnContext = {
   onToggleTag: (documentId: string, tag: string) => void;
   onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
-  onDownloadOutput: (document: DocumentRow) => void;
-  onDownloadLatest: (document: DocumentRow) => void;
-  onDownloadVersion?: (document: DocumentRow, versionNo: number) => void;
+  onDownload: (document: DocumentRow) => void;
+  onDownloadOriginal: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
   isRowActionPending?: (documentId: string) => boolean;
@@ -50,9 +49,8 @@ export function useDocumentsColumns({
   onToggleTag,
   onRenameRequest,
   onDeleteRequest,
-  onDownloadOutput,
-  onDownloadLatest,
-  onDownloadVersion,
+  onDownload,
+  onDownloadOriginal,
   onReprocessRequest,
   onCancelRunRequest,
   isRowActionPending,
@@ -323,9 +321,8 @@ export function useDocumentsColumns({
             isBusy={isRowActionPending?.(row.original.id) ?? false}
             onRenameRequest={onRenameRequest}
             onDeleteRequest={onDeleteRequest}
-            onDownloadOutput={onDownloadOutput}
-            onDownloadLatest={onDownloadLatest}
-            onDownloadVersion={onDownloadVersion}
+            onDownload={onDownload}
+            onDownloadOriginal={onDownloadOriginal}
             onReprocessRequest={onReprocessRequest}
             onCancelRunRequest={onCancelRunRequest}
           />
@@ -347,9 +344,8 @@ export function useDocumentsColumns({
       onAssign,
       onRenameRequest,
       onDeleteRequest,
-      onDownloadLatest,
-      onDownloadVersion,
-      onDownloadOutput,
+      onDownload,
+      onDownloadOriginal,
       onReprocessRequest,
       onCancelRunRequest,
       onTagOptionsChange,
