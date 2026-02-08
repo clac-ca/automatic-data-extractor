@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { createSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "@/api";
-import { createSession, sessionKeys, type AuthProvider } from "@/api/auth/api";
+import { createSession, sessionKeys, type AuthProvider, verifyMfaChallenge } from "@/api/auth/api";
 import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
 import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
@@ -175,6 +175,7 @@ export default function LoginScreen() {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
 
   useEffect(() => {
     setFormError(null);
@@ -234,9 +235,13 @@ export default function LoginScreen() {
 
     setIsSubmitting(true);
     try {
-      const nextSession = await createSession({ email, password });
-      queryClient.setQueryData(sessionKeys.detail(), nextSession);
-      navigate(pickReturnTo(nextSession.return_to, destination), { replace: true });
+      const result = await createSession({ email, password });
+      if (result.kind === "mfa_required") {
+        setMfaChallengeToken(result.challengeToken);
+        return;
+      }
+      queryClient.setQueryData(sessionKeys.detail(), result.session);
+      navigate(pickReturnTo(result.session.return_to, destination), { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";
@@ -245,6 +250,44 @@ export default function LoginScreen() {
         setFormError(error.message);
       } else {
         setFormError("Unable to sign in.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleMfaSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+
+    if (!mfaChallengeToken) {
+      setFormError("MFA challenge is missing. Please sign in again.");
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const code = String(formData.get("code") ?? "").trim();
+    if (!code) {
+      setFormError("Enter your authentication code.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const nextSession = await verifyMfaChallenge({
+        challengeToken: mfaChallengeToken,
+        code,
+      });
+      queryClient.setQueryData(sessionKeys.detail(), nextSession);
+      navigate(pickReturnTo(nextSession.return_to, returnTo), { replace: true });
+    } catch (error: unknown) {
+      if (error instanceof ApiError) {
+        const message = error.problem?.detail ?? error.message ?? "Unable to verify MFA challenge.";
+        setFormError(message);
+      } else if (error instanceof Error) {
+        setFormError(error.message);
+      } else {
+        setFormError("Unable to verify MFA challenge.");
       }
     } finally {
       setIsSubmitting(false);
@@ -288,7 +331,7 @@ export default function LoginScreen() {
           </div>
         ) : null}
 
-        {!forceSso ? (
+        {!forceSso && !mfaChallengeToken ? (
           <form method="post" className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <input type="hidden" name="returnTo" value={returnTo} />
             <FormField label="Email address" required>
@@ -319,11 +362,48 @@ export default function LoginScreen() {
               {isSubmitting ? "Signing in…" : "Continue"}
             </Button>
           </form>
-        ) : (
+        ) : null}
+
+        {!forceSso && mfaChallengeToken ? (
+          <form method="post" className="mt-8 space-y-6" onSubmit={handleMfaSubmit}>
+            <FormField label="Authentication code" required>
+              <Input
+                id="code"
+                type="text"
+                autoComplete="one-time-code"
+                placeholder="123456 or XXXX-XXXX"
+                name="code"
+                disabled={isSubmitting}
+              />
+            </FormField>
+
+            {shouldShowActionError ? <Alert tone="danger">{formError}</Alert> : null}
+
+            <div className="space-y-2">
+              <Button type="submit" className="w-full justify-center" disabled={isSubmitting}>
+                {isSubmitting ? "Verifying…" : "Verify and continue"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-center"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setMfaChallengeToken(null);
+                  setFormError(null);
+                }}
+              >
+                Back to password login
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        {forceSso ? (
           <Alert tone="info" className="mt-8">
             Password sign-in is disabled for this deployment. Use one of the configured providers above.
           </Alert>
-        )}
+        ) : null}
       </div>
     </div>
   );

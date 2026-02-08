@@ -15,9 +15,10 @@ app = create_app()
 MUTATING_METHODS: set[str] = {"POST", "PUT", "PATCH", "DELETE"}
 CSRF_ROUTE_ALLOWLIST: set[tuple[str, str]] = {
     ("/api/v1/auth/setup", "POST"),
-    ("/api/v1/auth/cookie/login", "POST"),
-    ("/api/v1/auth/jwt/login", "POST"),
-    ("/api/v1/auth/register", "POST"),
+    ("/api/v1/auth/login", "POST"),
+    ("/api/v1/auth/password/forgot", "POST"),
+    ("/api/v1/auth/password/reset", "POST"),
+    ("/api/v1/auth/mfa/challenge/verify", "POST"),
 }
 
 

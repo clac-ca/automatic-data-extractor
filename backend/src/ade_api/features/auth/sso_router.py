@@ -1,28 +1,16 @@
-"""OIDC SSO endpoints backed by database-managed provider config."""
+"""Single-provider OIDC SSO endpoints."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
 import logging
-import secrets
-from dataclasses import dataclass
 from typing import Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
-from ade_db.models import (
-    AccessToken,
-    SsoIdentity,
-    SsoProvider,
-    SsoProviderDomain,
-    SsoProviderStatus,
-    User,
-)
-from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from fastapi_users.password import PasswordHelper
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,9 +19,11 @@ from ade_api.common.rate_limit import InMemoryRateLimiter, RateLimit
 from ade_api.common.responses import JSONResponse
 from ade_api.common.time import utc_now
 from ade_api.common.urls import sanitize_return_to
-from ade_api.core.auth.users import get_cookie_transport, get_password_helper
 from ade_api.core.http.csrf import set_csrf_cookie
+from ade_api.core.http.session_cookie import set_session_cookie
+from ade_api.core.security import hash_password, mint_opaque_token
 from ade_api.db import get_db_read, get_db_write
+from ade_api.features.authn.service import AuthnService
 from ade_api.features.sso.oidc import (
     OidcDiscoveryError,
     OidcJwksError,
@@ -46,6 +36,7 @@ from ade_api.features.sso.oidc import (
 from ade_api.features.sso.schemas import PublicSsoProviderListResponse
 from ade_api.features.sso.service import AuthStateError, SsoService
 from ade_api.settings import Settings, get_settings
+from ade_db.models import SsoIdentity, SsoProvider, SsoProviderDomain, SsoProviderStatus, User
 
 logger = logging.getLogger(__name__)
 
@@ -61,35 +52,24 @@ class ProvisioningError(RuntimeError):
         self.code = code
 
 
-@dataclass(frozen=True, slots=True)
-class ProviderSnapshot:
-    id: str
-    issuer: str
-    client_id: str
-    client_secret: str
-
-
 def _wants_json(request: Request) -> bool:
     accept = request.headers.get("accept", "")
     return "application/json" in accept.lower()
 
 
-def _rate_limit_key(request: Request, provider_id: str, suffix: str) -> str:
+def _rate_limit_key(request: Request, suffix: str) -> str:
     host = request.client.host if request.client else "unknown"
-    return f"{host}:{provider_id}:{suffix}"
+    return f"{host}:sso:{suffix}"
 
 
 def _login_redirect(
     settings: Settings,
     *,
     code: str,
-    provider_id: str | None = None,
     return_to: str | None = None,
 ) -> RedirectResponse:
     frontend = settings.public_web_url
     params: dict[str, str] = {"ssoError": code}
-    if provider_id:
-        params["providerId"] = provider_id
     if return_to:
         params["returnTo"] = return_to
     return RedirectResponse(f"{frontend}/login?{urlencode(params)}")
@@ -100,7 +80,6 @@ def _error_response(
     settings: Settings,
     *,
     code: str,
-    provider_id: str | None = None,
     return_to: str | None = None,
 ) -> Response:
     if _wants_json(request):
@@ -108,7 +87,6 @@ def _error_response(
     return _login_redirect(
         settings,
         code=code,
-        provider_id=provider_id,
         return_to=return_to,
     )
 
@@ -125,14 +103,14 @@ def _success_response(
     return RedirectResponse(f"{frontend}{return_to}")
 
 
-def _callback_url(settings: Settings, provider_id: str) -> str:
+def _callback_url(settings: Settings) -> str:
     base = settings.public_web_url.rstrip("/")
-    return f"{base}/api/v1/auth/sso/{provider_id}/callback"
+    return f"{base}/api/v1/auth/sso/callback"
 
 
 def _generate_verifier() -> str:
     while True:
-        verifier = secrets.token_urlsafe(64)
+        verifier = mint_opaque_token(64)
         if len(verifier) < 43:
             continue
         if len(verifier) > 128:
@@ -183,21 +161,18 @@ def _extract_domain(email: str) -> str | None:
 
 
 def _provider_domains(session: Session, provider_id: str) -> set[str]:
+    from sqlalchemy import select
+
     stmt = select(SsoProviderDomain.domain).where(SsoProviderDomain.provider_id == provider_id)
     return {domain for domain in session.execute(stmt).scalars()}
 
 
-def _load_provider_snapshot(
-    session: Session,
-    *,
-    provider_id: str,
-    settings: Settings,
-) -> ProviderSnapshot:
-    service = SsoService(session=session, settings=settings)
-    if not service.is_sso_enabled():
+def _load_provider_snapshot(session: Session, settings: Settings) -> tuple[SsoProvider, str]:
+    authn = AuthnService(session=session, settings=settings)
+    policy = authn.get_policy()
+    if not policy.external_enabled:
         raise ProvisioningError("PROVIDER_DISABLED")
-
-    provider = session.get(SsoProvider, provider_id)
+    provider = authn.get_external_provider()
     if provider is None or provider.status == SsoProviderStatus.DELETED:
         raise ProvisioningError("PROVIDER_NOT_FOUND")
     if provider.status != SsoProviderStatus.ACTIVE:
@@ -205,64 +180,23 @@ def _load_provider_snapshot(
     if not provider.issuer or not provider.client_id or not provider.client_secret_enc:
         raise ProvisioningError("PROVIDER_MISCONFIGURED")
     try:
-        client_secret = service.decrypt_client_secret(provider)
+        secret = SsoService(session=session, settings=settings).decrypt_client_secret(provider)
     except ValueError as exc:
         raise ProvisioningError("PROVIDER_MISCONFIGURED") from exc
-
-    return ProviderSnapshot(
-        id=provider.id,
-        issuer=provider.issuer,
-        client_id=provider.client_id,
-        client_secret=client_secret,
-    )
-
-
-def _persist_auth_state(
-    session: Session,
-    *,
-    settings: Settings,
-    state: str,
-    provider_id: str,
-    nonce: str,
-    verifier: str,
-    return_to: str,
-) -> None:
-    service = SsoService(session=session, settings=settings)
-    service.create_auth_state(
-        state=state,
-        provider_id=provider_id,
-        nonce=nonce,
-        pkce_verifier=verifier,
-        return_to=return_to,
-    )
-
-
-def _consume_auth_state(
-    session: Session,
-    *,
-    settings: Settings,
-    state: str,
-    provider_id: str,
-) -> dict[str, str]:
-    service = SsoService(session=session, settings=settings)
-    record = service.consume_auth_state(state=state, provider_id=provider_id)
-    return {
-        "nonce": record.nonce,
-        "pkce_verifier": record.pkce_verifier,
-        "return_to": record.return_to,
-    }
+    return provider, secret
 
 
 def _resolve_user(
     session: Session,
     *,
     settings: Settings,
-    password_helper: PasswordHelper,
     provider_id: str,
     subject: str,
     email: str,
     email_verified: bool,
 ) -> User:
+    from sqlalchemy import select
+
     identity = session.execute(
         select(SsoIdentity)
         .where(SsoIdentity.provider_id == provider_id)
@@ -272,15 +206,11 @@ def _resolve_user(
 
     if identity is not None:
         user = session.get(User, identity.user_id)
-        if user is None or not user.is_active or user.is_service_account:
+        if user is None or not user.is_active:
             raise ProvisioningError("USER_NOT_ALLOWED")
         identity.email = email
         identity.email_verified = email_verified
         user.last_login_at = utc_now()
-        logger.info(
-            "sso.user.resolve.identity",
-            extra=log_context(provider_id=provider_id, user_id=str(user.id)),
-        )
         return user
 
     if not email_verified:
@@ -292,7 +222,7 @@ def _resolve_user(
     ).scalar_one_or_none()
 
     if user is not None:
-        if not user.is_active or user.is_service_account:
+        if not user.is_active:
             raise ProvisioningError("USER_NOT_ALLOWED")
         existing_for_user = session.execute(
             select(SsoIdentity)
@@ -302,38 +232,34 @@ def _resolve_user(
         ).scalar_one_or_none()
         if existing_for_user is not None:
             raise ProvisioningError("IDENTITY_CONFLICT")
-        identity = SsoIdentity(
-            provider_id=provider_id,
-            subject=subject,
-            user_id=user.id,
-            email=canonical_email,
-            email_verified=email_verified,
+        session.add(
+            SsoIdentity(
+                provider_id=provider_id,
+                subject=subject,
+                user_id=user.id,
+                email=canonical_email,
+                email_verified=email_verified,
+            )
         )
-        session.add(identity)
         user.last_login_at = utc_now()
-        logger.info(
-            "sso.user.resolve.email_link",
-            extra=log_context(provider_id=provider_id, user_id=str(user.id)),
-        )
         return user
 
-    if not settings.auth_sso_auto_provision:
+    authn = AuthnService(session=session, settings=settings)
+    if not authn.get_policy().allow_jit_provisioning:
         raise ProvisioningError("AUTO_PROVISION_DISABLED")
 
     domain = _extract_domain(canonical_email)
     if not domain:
         raise ProvisioningError("DOMAIN_NOT_ALLOWED")
     allowed_domains = _provider_domains(session, provider_id)
-    if not allowed_domains or domain not in allowed_domains:
+    if allowed_domains and domain not in allowed_domains:
         raise ProvisioningError("DOMAIN_NOT_ALLOWED")
 
-    random_password = secrets.token_urlsafe(32)
     user = User(
         email=canonical_email,
-        hashed_password=password_helper.hash(random_password),
+        hashed_password=hash_password(mint_opaque_token(32)),
         display_name=None,
         is_active=True,
-        is_superuser=False,
         is_verified=True,
         is_service_account=False,
         last_login_at=utc_now(),
@@ -342,26 +268,16 @@ def _resolve_user(
     )
     session.add(user)
     session.flush()
-
-    identity = SsoIdentity(
-        provider_id=provider_id,
-        subject=subject,
-        user_id=user.id,
-        email=canonical_email,
-        email_verified=email_verified,
-    )
-    session.add(identity)
-    logger.info(
-        "sso.user.resolve.auto_provision",
-        extra=log_context(provider_id=provider_id, user_id=str(user.id)),
+    session.add(
+        SsoIdentity(
+            provider_id=provider_id,
+            subject=subject,
+            user_id=user.id,
+            email=canonical_email,
+            email_verified=email_verified,
+        )
     )
     return user
-
-
-def _issue_session_token(session: Session, *, user: User) -> str:
-    token = secrets.token_urlsafe()
-    session.add(AccessToken(user_id=user.id, token=token))
-    return token
 
 
 @router.get(
@@ -371,74 +287,54 @@ def _issue_session_token(session: Session, *, user: User) -> str:
     summary="Return active SSO providers",
 )
 def list_sso_providers(
-    request: Request,
-    settings: Annotated[Settings, Depends(get_settings)] = None,
-    db: Annotated[Session, Depends(get_db_read)] = None,
+    settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[Session, Depends(get_db_read)],
 ) -> PublicSsoProviderListResponse:
-    settings = settings or get_settings()
-    service = SsoService(session=db, settings=settings)
-    providers = service.list_active_providers()
-    items = [
-        {
-            "id": provider.id,
-            "label": provider.label,
-            "type": "oidc",
-            "startUrl": f"/api/v1/auth/sso/{provider.id}/authorize",
-        }
-        for provider in providers
-    ]
+    authn = AuthnService(session=db, settings=settings)
+    provider = authn.get_external_provider()
+    if provider is None or provider.status != SsoProviderStatus.ACTIVE or not authn.get_policy().external_enabled:
+        return PublicSsoProviderListResponse(providers=[], forceSso=authn.get_policy().enforce_sso)
     return PublicSsoProviderListResponse(
-        providers=items,
-        force_sso=bool(settings.auth_force_sso),
+        providers=[
+            {
+                "id": provider.id,
+                "label": provider.label,
+                "type": "oidc",
+                "startUrl": "/api/v1/auth/sso/authorize",
+            }
+        ],
+        forceSso=authn.get_policy().enforce_sso,
     )
 
 
-@router.get("/{providerId}/authorize")
+@router.get("/authorize")
 def authorize_sso(
-    provider_id: Annotated[str, Path(alias="providerId")],
     request: Request,
     return_to: Annotated[str | None, Query(alias="returnTo")] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,
     db: Annotated[Session, Depends(get_db_write)] = None,
 ) -> Response:
     settings = settings or get_settings()
-    if not _AUTHORIZE_LIMITER.allow(_rate_limit_key(request, provider_id, "authorize")):
-        return _error_response(
-            request,
-            settings,
-            code="RATE_LIMITED",
-            provider_id=provider_id,
-        )
+    if not _AUTHORIZE_LIMITER.allow(_rate_limit_key(request, "authorize")):
+        return _error_response(request, settings, code="RATE_LIMITED")
 
     sanitized_return_to = sanitize_return_to(return_to) or "/"
 
     try:
-        provider = _load_provider_snapshot(
-            db,
-            provider_id=provider_id,
-            settings=settings,
-        )
+        provider, _client_secret = _load_provider_snapshot(db, settings)
     except ProvisioningError as exc:
-        return _error_response(
-            request,
-            settings,
-            code=exc.code,
-            provider_id=provider_id,
-            return_to=sanitized_return_to,
-        )
+        return _error_response(request, settings, code=exc.code, return_to=sanitized_return_to)
 
-    state = secrets.token_urlsafe(32)
-    nonce = secrets.token_urlsafe(32)
+    state = mint_opaque_token(32)
+    nonce = mint_opaque_token(32)
     verifier = _generate_verifier()
     challenge = _code_challenge(verifier)
 
-    _persist_auth_state(
-        db,
-        settings=settings,
+    SsoService(session=db, settings=settings).create_auth_state(
         state=state,
         provider_id=provider.id,
         nonce=nonce,
-        verifier=verifier,
+        pkce_verifier=verifier,
         return_to=sanitized_return_to,
     )
     db.commit()
@@ -451,14 +347,13 @@ def authorize_sso(
                 request,
                 settings,
                 code="PROVIDER_MISCONFIGURED",
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
 
     params = {
         "response_type": "code",
         "client_id": provider.client_id,
-        "redirect_uri": _callback_url(settings, provider.id),
+        "redirect_uri": _callback_url(settings),
         "scope": "openid email profile",
         "state": state,
         "nonce": nonce,
@@ -469,68 +364,40 @@ def authorize_sso(
     return RedirectResponse(url)
 
 
-@router.get("/{providerId}/callback")
+@router.get("/callback")
 def callback_sso(
-    provider_id: Annotated[str, Path(alias="providerId")],
     request: Request,
-    password_helper: Annotated[PasswordHelper, Depends(get_password_helper)],
     settings: Annotated[Settings, Depends(get_settings)] = None,
     db: Annotated[Session, Depends(get_db_write)] = None,
 ) -> Response:
     settings = settings or get_settings()
     try:
-        if not _CALLBACK_LIMITER.allow(_rate_limit_key(request, provider_id, "callback")):
-            return _error_response(request, settings, code="RATE_LIMITED", provider_id=provider_id)
+        if not _CALLBACK_LIMITER.allow(_rate_limit_key(request, "callback")):
+            return _error_response(request, settings, code="RATE_LIMITED")
 
         if request.query_params.get("error"):
-            logger.warning(
-                "sso.callback.upstream_error",
-                extra=log_context(provider_id=provider_id),
-            )
-            return _error_response(
-                request,
-                settings,
-                code="UPSTREAM_ERROR",
-                provider_id=provider_id,
-            )
+            return _error_response(request, settings, code="UPSTREAM_ERROR")
 
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:
-            return _error_response(request, settings, code="STATE_INVALID", provider_id=provider_id)
+            return _error_response(request, settings, code="STATE_INVALID")
 
         try:
-            state_record = _consume_auth_state(
-                db,
-                settings=settings,
+            provider, client_secret = _load_provider_snapshot(db, settings)
+        except ProvisioningError as exc:
+            return _error_response(request, settings, code=exc.code)
+
+        try:
+            state_record = SsoService(session=db, settings=settings).consume_auth_state(
                 state=state,
-                provider_id=provider_id,
+                provider_id=provider.id,
             )
         except AuthStateError as exc:
-            return _error_response(
-                request,
-                settings,
-                code=exc.code,
-                provider_id=provider_id,
-            )
+            return _error_response(request, settings, code=exc.code)
         db.commit()
 
-        sanitized_return_to = sanitize_return_to(state_record.get("return_to")) or "/"
-
-        try:
-            provider = _load_provider_snapshot(
-                db,
-                provider_id=provider_id,
-                settings=settings,
-            )
-        except ProvisioningError as exc:
-            return _error_response(
-                request,
-                settings,
-                code=exc.code,
-                provider_id=provider_id,
-                return_to=sanitized_return_to,
-            )
+        sanitized_return_to = sanitize_return_to(state_record.return_to) or "/"
 
         with httpx.Client() as client:
             try:
@@ -540,7 +407,6 @@ def callback_sso(
                     request,
                     settings,
                     code="PROVIDER_MISCONFIGURED",
-                    provider_id=provider_id,
                     return_to=sanitized_return_to,
                 )
 
@@ -548,10 +414,10 @@ def callback_sso(
                 token_response = exchange_code(
                     token_endpoint=metadata.token_endpoint,
                     client_id=provider.client_id,
-                    client_secret=provider.client_secret,
+                    client_secret=client_secret,
                     code=code,
-                    redirect_uri=_callback_url(settings, provider.id),
-                    code_verifier=state_record["pkce_verifier"],
+                    redirect_uri=_callback_url(settings),
+                    code_verifier=state_record.pkce_verifier,
                     client=client,
                 )
             except OidcTokenExchangeError:
@@ -559,7 +425,6 @@ def callback_sso(
                     request,
                     settings,
                     code="TOKEN_EXCHANGE_FAILED",
-                    provider_id=provider_id,
                     return_to=sanitized_return_to,
                 )
 
@@ -568,7 +433,7 @@ def callback_sso(
                 token=token_response["id_token"],
                 issuer=metadata.issuer,
                 client_id=provider.client_id,
-                nonce=state_record["nonce"],
+                nonce=state_record.nonce,
                 jwks_uri=metadata.jwks_uri,
                 now=utc_now(),
             )
@@ -577,7 +442,6 @@ def callback_sso(
                 request,
                 settings,
                 code="PROVIDER_MISCONFIGURED",
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
         except OidcTokenValidationError:
@@ -585,7 +449,6 @@ def callback_sso(
                 request,
                 settings,
                 code="ID_TOKEN_INVALID",
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
 
@@ -595,7 +458,6 @@ def callback_sso(
                 request,
                 settings,
                 code="ID_TOKEN_INVALID",
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
 
@@ -605,7 +467,6 @@ def callback_sso(
                 request,
                 settings,
                 code="EMAIL_MISSING",
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
         email_verified = _resolve_email_verified(claims, email)
@@ -614,8 +475,7 @@ def callback_sso(
             user = _resolve_user(
                 db,
                 settings=settings,
-                password_helper=password_helper,
-                provider_id=provider_id,
+                provider_id=provider.id,
                 subject=subject,
                 email=email,
                 email_verified=email_verified,
@@ -626,7 +486,6 @@ def callback_sso(
                 request,
                 settings,
                 code="IDENTITY_CONFLICT",
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
         except ProvisioningError as exc:
@@ -635,36 +494,26 @@ def callback_sso(
                 request,
                 settings,
                 code=exc.code,
-                provider_id=provider_id,
                 return_to=sanitized_return_to,
             )
 
         logger.info(
             "sso.callback.success",
-            extra=log_context(provider_id=provider_id, user_id=str(user.id)),
+            extra=log_context(provider_id=provider.id, user_id=str(user.id)),
         )
 
-        session_token = _issue_session_token(db, user=user)
+        session_token = AuthnService(session=db, settings=settings).create_session(user_id=user.id)
         db.commit()
 
         response = _success_response(request, settings, return_to=sanitized_return_to)
-        cookie_transport = get_cookie_transport(settings)
-        cookie_transport._set_login_cookie(response, session_token)
+        set_session_cookie(response, settings, session_token)
         set_csrf_cookie(response, settings)
         return response
     except Exception:
         if db is not None:
             db.rollback()
-        logger.exception(
-            "sso.callback.internal_error",
-            extra=log_context(provider_id=provider_id),
-        )
-        return _error_response(
-            request,
-            settings,
-            code="INTERNAL_ERROR",
-            provider_id=provider_id,
-        )
+        logger.exception("sso.callback.internal_error")
+        return _error_response(request, settings, code="INTERNAL_ERROR")
 
 
 __all__ = ["router"]

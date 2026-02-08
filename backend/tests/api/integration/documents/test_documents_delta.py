@@ -14,7 +14,7 @@ async def test_documents_delta_returns_changes_since_token(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     first = await async_client.post(
         f"{workspace_base}/documents",
@@ -57,7 +57,7 @@ async def test_documents_delta_returns_410_for_expired_token(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     created = await async_client.post(
         f"{workspace_base}/documents",

@@ -19,7 +19,7 @@ async def auth_headers(
     password: str,
 ) -> dict[str, str]:
     token, _ = await login(client, email=email, password=password)
-    return {"Authorization": f"Bearer {token}"}
+    return {"X-API-Key": token}
 
 
 async def create_from_template(

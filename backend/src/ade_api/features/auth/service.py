@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ade_api.features.authn.service import AuthnService
 from ade_api.features.rbac import RbacService
 from ade_db.models import SsoProviderStatus, User
 from ade_api.settings import Settings
@@ -50,33 +51,35 @@ class AuthService:
 
     def list_auth_providers(self) -> AuthProviderListResponse:
         providers: list[AuthProvider] = []
+        authn = AuthnService(session=self.session, settings=self.settings)
+        policy = authn.get_policy()
 
-        if not self.settings.auth_force_sso:
-            providers.append(
-                AuthProvider(
-                    id="password",
-                    label="Email & password",
-                    type="password",
-                    start_url="/api/v1/auth/cookie/login",
-                )
+        providers.append(
+            AuthProvider(
+                id="password",
+                label="Email & password",
+                type="password",
+                start_url="/api/v1/auth/login",
             )
+        )
 
         from ade_api.features.sso.service import SsoService
 
         sso_service = SsoService(session=self.session, settings=self.settings)
-        for provider in sso_service.list_active_providers():
+        active = sso_service.list_active_providers() if policy.external_enabled else []
+        for provider in active[:1]:
             providers.append(
                 AuthProvider(
                     id=provider.id,
                     label=provider.label,
                     type="oidc",
-                    start_url=f"/api/v1/auth/sso/{provider.id}/authorize",
+                    start_url="/api/v1/auth/sso/authorize",
                 )
             )
 
         return AuthProviderListResponse(
             providers=providers,
-            force_sso=bool(self.settings.auth_force_sso),
+            force_sso=bool(policy.enforce_sso),
         )
 
     def _sso_configured(self) -> bool:
@@ -101,7 +104,6 @@ class AuthService:
             hashed_password=password_hash,
             display_name=display_name,
             is_active=True,
-            is_superuser=True,
             is_verified=True,
             is_service_account=False,
             last_login_at=now,
@@ -127,8 +129,6 @@ class AuthService:
     def _registration_mode(self, setup_required: bool) -> str:
         if setup_required:
             return "setup-only"
-        if self.settings.allow_public_registration:
-            return "open"
         return "closed"
 
 

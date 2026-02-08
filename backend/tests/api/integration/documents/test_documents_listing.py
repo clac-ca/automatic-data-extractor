@@ -18,7 +18,7 @@ async def test_list_documents_unknown_param_returns_422(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     response = await async_client.get(
         f"{workspace_base}/documents",
@@ -41,7 +41,7 @@ async def test_list_documents_invalid_filter_returns_422(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     response = await async_client.get(
         f"{workspace_base}/documents",
@@ -68,7 +68,7 @@ async def test_list_documents_uploader_me_filters(
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
 
     member_token, _ = await login(async_client, email=member.email, password=member.password)
-    member_headers = {"Authorization": f"Bearer {member_token}"}
+    member_headers = {"X-API-Key": member_token}
 
     upload_one = await async_client.post(
         f"{workspace_base}/documents",
@@ -82,7 +82,7 @@ async def test_list_documents_uploader_me_filters(
         email=owner.email,
         password=owner.password,
     )
-    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    owner_headers = {"X-API-Key": owner_token}
 
     upload_two = await async_client.post(
         f"{workspace_base}/documents",
@@ -93,7 +93,7 @@ async def test_list_documents_uploader_me_filters(
 
     # Re-authenticate as the member for filtering assertions.
     member_token, _ = await login(async_client, email=member.email, password=member.password)
-    member_headers = {"Authorization": f"Bearer {member_token}"}
+    member_headers = {"X-API-Key": member_token}
 
     listing = await async_client.get(
         f"{workspace_base}/documents",
@@ -118,7 +118,7 @@ async def test_list_documents_id_in_filter(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     doc_one = await async_client.post(
         f"{workspace_base}/documents",

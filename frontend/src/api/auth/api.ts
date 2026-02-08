@@ -33,6 +33,14 @@ type RequestOptions = {
 };
 
 type LoginPayload = Readonly<{ email: string; password: string }>;
+type MfaVerifyPayload = Readonly<{ challengeToken: string; code: string }>;
+
+type LoginApiResponse = Readonly<{
+  ok?: boolean;
+  mfa_required?: boolean;
+  challengeToken?: string;
+  challenge_token?: string;
+}>;
 
 export type SessionUser = Readonly<
   MeProfile & {
@@ -51,6 +59,10 @@ export type SessionEnvelope = Readonly<{
   permissions: string[];
   return_to: string | null;
 }>;
+
+export type CreateSessionResult =
+  | Readonly<{ kind: "session"; session: SessionEnvelope }>
+  | Readonly<{ kind: "mfa_required"; challengeToken: string }>;
 
 export async function fetchAuthProviders(
   options: RequestOptions = {},
@@ -82,16 +94,27 @@ export async function fetchSession(options: RequestOptions = {}): Promise<Sessio
 export async function createSession(
   payload: LoginPayload,
   options: RequestOptions = {},
+): Promise<CreateSessionResult> {
+  const login = await submitPasswordLogin(payload, options.signal);
+  if (login.mfaRequired) {
+    return { kind: "mfa_required", challengeToken: login.challengeToken };
+  }
+  return { kind: "session", session: await bootstrapSession(options.signal, null) };
+}
+
+export async function verifyMfaChallenge(
+  payload: MfaVerifyPayload,
+  options: RequestOptions = {},
 ): Promise<SessionEnvelope> {
-  await submitPasswordLogin(payload, options.signal);
+  await submitMfaChallenge(payload, options.signal);
   return bootstrapSession(options.signal, null);
 }
 
 export async function performLogout(options: RequestOptions = {}): Promise<void> {
   try {
-    await client.POST("/api/v1/auth/cookie/logout", {
+    await apiFetch("/api/v1/auth/logout", {
+      method: "POST",
       signal: options.signal,
-      body: undefined,
     });
   } catch (error: unknown) {
     if (!(error instanceof ApiError) || (error.status !== 401 && error.status !== 403)) {
@@ -127,27 +150,51 @@ async function fetchMeBootstrap(signal?: AbortSignal): Promise<MeContext | null>
   }
 }
 
-async function submitPasswordLogin(payload: LoginPayload, signal?: AbortSignal): Promise<void> {
-  const body = new URLSearchParams();
-  body.set("username", payload.email);
-  body.set("password", payload.password);
-
-  const response = await apiFetch("/api/v1/auth/cookie/login", {
+async function submitPasswordLogin(
+  payload: LoginPayload,
+  signal?: AbortSignal,
+): Promise<{ mfaRequired: true; challengeToken: string } | { mfaRequired: false }> {
+  const response = await apiFetch("/api/v1/auth/login", {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "Content-Type": "application/json",
     },
-    body,
+    body: JSON.stringify(payload),
     signal,
   });
 
-  if (response.ok) {
-    return;
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
   }
 
-  const problem = await tryParseProblemDetails(response);
-  const message = buildApiErrorMessage(problem, response.status);
-  throw new ApiError(message, response.status, problem);
+  const data = (await response.json()) as LoginApiResponse;
+  if (data.mfa_required) {
+    const challengeToken = (data.challengeToken ?? data.challenge_token ?? "").trim();
+    if (!challengeToken) {
+      throw new Error("Missing MFA challenge token from login response.");
+    }
+    return { mfaRequired: true, challengeToken };
+  }
+  return { mfaRequired: false };
+}
+
+async function submitMfaChallenge(payload: MfaVerifyPayload, signal?: AbortSignal): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/mfa/challenge/verify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
 }
 
 function preferredWorkspaceId(workspaces: SessionWorkspaces): string | null {

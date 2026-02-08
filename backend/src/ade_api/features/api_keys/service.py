@@ -342,15 +342,9 @@ class ApiKeyService:
             raise AuthenticationError(str(exc)) from exc
 
         api_key = result.api_key
-        owner = getattr(api_key, "user", None)
-        principal_type = (
-            PrincipalType.SERVICE_ACCOUNT
-            if getattr(owner, "is_service_account", False)
-            else PrincipalType.USER
-        )
         return AuthenticatedPrincipal(
             user_id=result.user_id,
-            principal_type=principal_type,
+            principal_type=PrincipalType.USER,
             auth_via=AuthVia.API_KEY,
             api_key_id=api_key.id,
         )

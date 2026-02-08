@@ -15,7 +15,6 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
 
     auth_security = [
         {"SessionCookie": []},
-        {"HTTPBearer": []},
         {"APIKeyHeader": []},
     ]
     public_routes: set[tuple[str, str]] = {
@@ -25,11 +24,12 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         ("/api/v1/auth/sso/providers", "GET"),
         ("/api/v1/auth/setup", "GET"),
         ("/api/v1/auth/setup", "POST"),
-        ("/api/v1/auth/cookie/login", "POST"),
-        ("/api/v1/auth/jwt/login", "POST"),
-        ("/api/v1/auth/register", "POST"),
-        ("/api/v1/auth/sso/{providerId}/authorize", "GET"),
-        ("/api/v1/auth/sso/{providerId}/callback", "GET"),
+        ("/api/v1/auth/login", "POST"),
+        ("/api/v1/auth/password/forgot", "POST"),
+        ("/api/v1/auth/password/reset", "POST"),
+        ("/api/v1/auth/mfa/challenge/verify", "POST"),
+        ("/api/v1/auth/sso/authorize", "GET"),
+        ("/api/v1/auth/sso/callback", "GET"),
     }
     http_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"}
 
@@ -53,15 +53,6 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             "name": settings.session_cookie_name,
             "description": "Browser session cookie issued after interactive sign-in.",
         }
-        security_schemes.setdefault(
-            "HTTPBearer",
-            {
-                "type": "http",
-                "scheme": "bearer",
-                "bearerFormat": "JWT",
-                "description": "Bearer access token returned by ADE or an identity provider.",
-            },
-        )
         security_schemes.setdefault(
             "APIKeyHeader",
             {

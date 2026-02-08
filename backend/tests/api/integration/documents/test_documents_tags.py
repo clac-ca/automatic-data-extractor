@@ -17,7 +17,7 @@ async def test_document_tags_replace_and_patch(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -70,7 +70,7 @@ async def test_tag_catalog_counts_and_excludes_deleted(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload_one = await async_client.post(
         f"{workspace_base}/documents",
@@ -138,7 +138,7 @@ async def test_tag_catalog_rejects_short_query(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     response = await async_client.get(
         f"{workspace_base}/documents/tags",

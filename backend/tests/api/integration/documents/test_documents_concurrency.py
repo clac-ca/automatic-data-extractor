@@ -16,7 +16,7 @@ async def test_document_patch_does_not_require_if_match(
 ) -> None:
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
 
     upload = await async_client.post(

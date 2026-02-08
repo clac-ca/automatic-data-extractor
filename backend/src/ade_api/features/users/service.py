@@ -168,7 +168,6 @@ class UsersService:
                 display_name=cleaned_display_name,
                 is_active=True,
                 is_service_account=False,
-                is_superuser=False,
                 is_verified=True,
             )
         except IntegrityError as exc:
@@ -384,7 +383,6 @@ class UsersService:
                 display_name=cleaned_display_name,
                 is_active=True,
                 is_service_account=False,
-                is_superuser=True,
                 is_verified=True,
             )
         except IntegrityError as exc:  # pragma: no cover - defensive double check

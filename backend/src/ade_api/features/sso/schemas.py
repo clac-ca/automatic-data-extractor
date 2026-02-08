@@ -159,6 +159,8 @@ class PublicSsoProviderListResponse(BaseSchema):
 
 class SsoSettings(BaseSchema):
     enabled: bool = True
+    enforce_sso: bool = Field(default=False, alias="enforceSso")
+    allow_jit_provisioning: bool = Field(default=True, alias="allowJitProvisioning")
 
 
 __all__ = [

@@ -24,7 +24,7 @@ async def test_list_users_requires_admin(
 
     response = await async_client.get(
         "/api/v1/users",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert response.status_code == 403
 
@@ -46,7 +46,7 @@ async def test_list_users_admin_success(
             params["cursor"] = cursor
         response = await async_client.get(
             "/api/v1/users",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"X-API-Key": token},
             params=params,
         )
         assert response.status_code == 200
@@ -77,7 +77,7 @@ async def test_create_user_requires_admin(
 
     response = await async_client.post(
         "/api/v1/users",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         json={"email": "new-user@example.com", "display_name": "New User"},
     )
     assert response.status_code == 403
@@ -94,7 +94,7 @@ async def test_create_user_admin_success(
 
     response = await async_client.post(
         "/api/v1/users",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         json={"email": "new-user@example.com", "display_name": " New User "},
     )
     assert response.status_code == 201, response.text
@@ -117,7 +117,7 @@ async def test_create_user_conflict(
 
     response = await async_client.post(
         "/api/v1/users",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         json={"email": seed_identity.member.email},
     )
     assert response.status_code == 409
@@ -135,7 +135,7 @@ async def test_get_user_requires_admin(
 
     response = await async_client.get(
         f"/api/v1/users/{target.id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
 
     assert response.status_code == 403
@@ -153,7 +153,7 @@ async def test_get_user_admin_success(
 
     response = await async_client.get(
         f"/api/v1/users/{target.id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
 
     assert response.status_code == 200
@@ -176,7 +176,7 @@ async def test_get_user_admin_not_found(
 
     response = await async_client.get(
         f"/api/v1/users/{uuid4()}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
 
     assert response.status_code == 404
@@ -194,7 +194,7 @@ async def test_update_user_requires_admin(
 
     response = await async_client.patch(
         f"/api/v1/users/{target.id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         json={"display_name": "Blocked"},
     )
 
@@ -213,7 +213,7 @@ async def test_update_user_admin_success(
 
     response = await async_client.patch(
         f"/api/v1/users/{target.id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         json={"display_name": " Updated User ", "is_active": False},
     )
 
@@ -224,7 +224,7 @@ async def test_update_user_admin_success(
 
     confirm = await async_client.get(
         f"/api/v1/users/{target.id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     confirm_data = confirm.json()
     assert confirm_data["display_name"] == "Updated User"
@@ -243,7 +243,7 @@ async def test_update_user_rejects_empty_payload(
 
     response = await async_client.patch(
         f"/api/v1/users/{target.id}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
         json={},
     )
     assert response.status_code == 422
@@ -261,7 +261,7 @@ async def test_deactivate_user_revokes_api_keys(
 
     create_key = await async_client.post(
         f"/api/v1/users/{target.id}/apikeys",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"X-API-Key": admin_token},
         json={"name": "Target key"},
     )
     assert create_key.status_code == 201, create_key.text
@@ -275,7 +275,7 @@ async def test_deactivate_user_revokes_api_keys(
 
     deactivate = await async_client.post(
         f"/api/v1/users/{target.id}/deactivate",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"X-API-Key": admin_token},
     )
     assert deactivate.status_code == 200, deactivate.text
     payload = deactivate.json()
@@ -284,7 +284,7 @@ async def test_deactivate_user_revokes_api_keys(
     revoked_filters = json.dumps([{"id": "revokedAt", "operator": "isNotEmpty"}])
     key_list = await async_client.get(
         f"/api/v1/users/{target.id}/apikeys",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"X-API-Key": admin_token},
         params={"filters": revoked_filters},
     )
     assert key_list.status_code == 200, key_list.text
@@ -310,6 +310,6 @@ async def test_deactivate_user_blocks_self(
 
     response = await async_client.post(
         f"/api/v1/users/{admin.id}/deactivate",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"X-API-Key": token},
     )
     assert response.status_code == 400

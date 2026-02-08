@@ -41,20 +41,19 @@ class SeededIdentity:
 
 
 def _seed_identity(session: Session) -> SeededIdentity:
-    def _create_user(email: str, password: str, *, is_superuser: bool = False) -> SeededUser:
+    def _create_user(email: str, password: str) -> SeededUser:
         user = User(
             email=email,
             email_normalized=email.lower(),
             hashed_password=hash_password(password),
             is_active=True,
             is_verified=True,
-            is_superuser=is_superuser,
         )
         session.add(user)
         session.flush()
         return SeededUser(id=user.id, email=email, password=password)
 
-    admin = _create_user("admin@example.com", "admin_pass", is_superuser=True)
+    admin = _create_user("admin@example.com", "admin_pass")
     member = _create_user("member@example.com", "member_pass")
 
     workspace = Workspace(name="Primary Workspace", slug="primary")
@@ -225,7 +224,7 @@ async def test_document_change_stream_round_trip(
     member = seed_identity.member
     token, _ = await login(committed_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     request_timeout = 15.0
 

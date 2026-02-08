@@ -202,7 +202,6 @@ def create_application_lifespan(
                             display_name=settings.auth_disabled_user_name,
                             is_service_account=False,
                             is_active=True,
-                            is_superuser=True,
                             is_verified=True,
                         )
                         session.add(user)

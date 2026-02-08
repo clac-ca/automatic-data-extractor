@@ -30,7 +30,7 @@ async def test_upload_list_download_document(
         password=member.password,
     )
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -80,7 +80,7 @@ async def test_upload_document_ignores_blank_metadata(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     upload = await async_client.post(
         f"{workspace_base}/documents",
@@ -103,7 +103,7 @@ async def test_list_documents_rejects_unknown_query_params(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     response = await async_client.get(
         f"{workspace_base}/documents",
@@ -124,7 +124,7 @@ async def test_upload_document_does_not_cache_worksheets(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     workbook = openpyxl.Workbook()
     workbook.active.title = "Sheet A"
@@ -161,7 +161,7 @@ async def test_upload_document_exceeds_limit_returns_413(
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
     workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-API-Key": token}
 
     override_app_settings(storage_upload_max_bytes=8)
 

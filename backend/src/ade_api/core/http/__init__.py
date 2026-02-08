@@ -10,6 +10,7 @@ from .dependencies import (
     require_workspace,
 )
 from .errors import register_auth_exception_handlers
+from .session_cookie import clear_session_cookie, set_session_cookie
 
 __all__ = [
     "get_current_principal",
@@ -20,4 +21,6 @@ __all__ = [
     "require_global",
     "require_workspace",
     "register_auth_exception_handlers",
+    "set_session_cookie",
+    "clear_session_cookie",
 ]

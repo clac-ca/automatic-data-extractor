@@ -7,6 +7,21 @@ CLI so the packaged Alembic config is used.
 The initial schema installs the `ade_run_queued` NOTIFY trigger used by event-driven
 workers, so ensure you run migrations before starting `ade-worker`.
 
+## Baseline rewrite notice
+
+Migration history was rewritten into a baseline-first chain:
+
+- `0001_initial_schema` is the canonical schema baseline.
+- `0002_run_status_cancelled` and `0003_authn_rework` are compatibility no-ops.
+
+Because this is a breaking migration rewrite, environments should be reset before
+applying migrations:
+
+```bash
+ade db reset --yes
+ade db migrate
+```
+
 ## Usage
 
 Postgres:

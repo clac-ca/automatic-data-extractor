@@ -7,7 +7,11 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
 from ade_api.api.deps import get_sso_service, get_sso_service_read
+from ade_api.db import get_db_read, get_db_write
 from ade_api.core.http import require_authenticated, require_csrf, require_global
+from ade_api.settings import Settings, get_settings
+from ade_api.features.authn.schemas import AuthPolicyUpdateRequest
+from ade_api.features.authn.service import AuthnService
 from ade_db.models import SsoProvider
 
 from .schemas import (
@@ -155,9 +159,16 @@ def delete_provider(
 )
 def read_sso_settings(
     _: Annotated[object, Security(require_global("system.settings.read"))],
-    service: Annotated[SsoService, Depends(get_sso_service)],
+    db=Depends(get_db_read),
+    settings: Annotated[Settings, Depends(get_settings)] = None,
 ) -> SsoSettings:
-    return SsoSettings(enabled=service.is_sso_enabled())
+    settings = settings or get_settings()
+    policy = AuthnService(session=db, settings=settings).get_policy()
+    return SsoSettings(
+        enabled=policy.external_enabled,
+        enforceSso=policy.enforce_sso,
+        allowJitProvisioning=policy.allow_jit_provisioning,
+    )
 
 
 @router.put(
@@ -170,11 +181,24 @@ def read_sso_settings(
 )
 def update_sso_settings(
     _: Annotated[object, Security(require_global("system.settings.manage"))],
-    service: Annotated[SsoService, Depends(get_sso_service)],
     payload: SsoSettings = Body(..., description="SSO global settings."),
+    db=Depends(get_db_write),
+    settings: Annotated[Settings, Depends(get_settings)] = None,
 ) -> SsoSettings:
-    enabled = service.set_sso_enabled(enabled=payload.enabled)
-    return SsoSettings(enabled=enabled)
+    settings = settings or get_settings()
+    service = AuthnService(session=db, settings=settings)
+    updated = service.update_policy(
+        AuthPolicyUpdateRequest(
+            externalEnabled=payload.enabled,
+            enforceSso=payload.enforce_sso,
+            allowJitProvisioning=payload.allow_jit_provisioning,
+        )
+    )
+    return SsoSettings(
+        enabled=updated.external_enabled,
+        enforceSso=updated.enforce_sso,
+        allowJitProvisioning=updated.allow_jit_provisioning,
+    )
 
 
 __all__ = ["router"]

@@ -99,354 +99,9 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
-      }
-    },
-    "/api/v1/auth/cookie/login": {
-      "post": {
-        "tags": [
-          "auth",
-          "auth"
-        ],
-        "summary": "Auth:Cookie.Login",
-        "operationId": "auth_cookie_login_api_v1_auth_cookie_login_post",
-        "requestBody": {
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_auth_cookie_login_api_v1_auth_cookie_login_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                },
-                "examples": {
-                  "LOGIN_BAD_CREDENTIALS": {
-                    "summary": "Bad credentials or the user is inactive.",
-                    "value": {
-                      "detail": "LOGIN_BAD_CREDENTIALS"
-                    }
-                  },
-                  "LOGIN_USER_NOT_VERIFIED": {
-                    "summary": "The user is not verified.",
-                    "value": {
-                      "detail": "LOGIN_USER_NOT_VERIFIED"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "204": {
-            "description": "No Content",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/cookie/logout": {
-      "post": {
-        "tags": [
-          "auth",
-          "auth"
-        ],
-        "summary": "Auth:Cookie.Logout",
-        "operationId": "auth_cookie_logout_api_v1_auth_cookie_logout_post",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Missing token or inactive user.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "204": {
-            "description": "No Content",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        }
-      }
-    },
-    "/api/v1/auth/jwt/login": {
-      "post": {
-        "tags": [
-          "auth",
-          "auth"
-        ],
-        "summary": "Auth:Jwt.Login",
-        "operationId": "auth_jwt_login_api_v1_auth_jwt_login_post",
-        "requestBody": {
-          "content": {
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_auth_jwt_login_api_v1_auth_jwt_login_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BearerResponse"
-                },
-                "example": {
-                  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiOTIyMWZmYzktNjQwZi00MzcyLTg2ZDMtY2U2NDJjYmE1NjAzIiwiYXVkIjoiZmFzdGFwaS11c2VyczphdXRoIiwiZXhwIjoxNTcxNTA0MTkzfQ.M10bjOe45I5Ncu_uXvOmVV8QxnL-nZfcH96U90JaocI",
-                  "token_type": "bearer"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                },
-                "examples": {
-                  "LOGIN_BAD_CREDENTIALS": {
-                    "summary": "Bad credentials or the user is inactive.",
-                    "value": {
-                      "detail": "LOGIN_BAD_CREDENTIALS"
-                    }
-                  },
-                  "LOGIN_USER_NOT_VERIFIED": {
-                    "summary": "The user is not verified.",
-                    "value": {
-                      "detail": "LOGIN_USER_NOT_VERIFIED"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/jwt/logout": {
-      "post": {
-        "tags": [
-          "auth",
-          "auth"
-        ],
-        "summary": "Auth:Jwt.Logout",
-        "operationId": "auth_jwt_logout_api_v1_auth_jwt_logout_post",
-        "security": [
-          {
-            "APIKeyCookie": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Missing token or inactive user.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        }
       }
     },
     "/api/v1/auth/sso/providers": {
@@ -481,7 +136,7 @@
         "security": []
       }
     },
-    "/api/v1/auth/sso/{providerId}/authorize": {
+    "/api/v1/auth/sso/authorize": {
       "get": {
         "tags": [
           "auth",
@@ -489,17 +144,8 @@
           "auth"
         ],
         "summary": "Authorize Sso",
-        "operationId": "authorize_sso_api_v1_auth_sso__providerId__authorize_get",
+        "operationId": "authorize_sso_api_v1_auth_sso_authorize_get",
         "parameters": [
-          {
-            "name": "providerId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Providerid"
-            }
-          },
           {
             "name": "returnTo",
             "in": "query",
@@ -553,7 +199,7 @@
         "security": []
       }
     },
-    "/api/v1/auth/sso/{providerId}/callback": {
+    "/api/v1/auth/sso/callback": {
       "get": {
         "tags": [
           "auth",
@@ -561,127 +207,13 @@
           "auth"
         ],
         "summary": "Callback Sso",
-        "operationId": "callback_sso_api_v1_auth_sso__providerId__callback_get",
-        "parameters": [
-          {
-            "name": "providerId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Providerid"
-            }
-          }
-        ],
+        "operationId": "callback_sso_api_v1_auth_sso_callback_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/register": {
-      "post": {
-        "tags": [
-          "auth",
-          "auth"
-        ],
-        "summary": "Register:Register",
-        "operationId": "register_register_api_v1_auth_register_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ade_api__core__auth__users__UserCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserRead"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                },
-                "examples": {
-                  "REGISTER_USER_ALREADY_EXISTS": {
-                    "summary": "A user with this email already exists.",
-                    "value": {
-                      "detail": "REGISTER_USER_ALREADY_EXISTS"
-                    }
-                  },
-                  "REGISTER_INVALID_PASSWORD": {
-                    "summary": "Password validation failed.",
-                    "value": {
-                      "detail": {
-                        "code": "REGISTER_INVALID_PASSWORD",
-                        "reason": "Password should beat least 3 characters"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
               }
             },
             "headers": {
@@ -801,6 +333,501 @@
           }
         },
         "security": []
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Authenticate with local username/password",
+        "operationId": "login_local_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthLoginSuccess"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AuthLoginMfaRequired"
+                    }
+                  ],
+                  "title": "Response Login Local Api V1 Auth Login Post"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout current user and revoke their sessions",
+        "operationId": "logout_local_api_v1_auth_logout_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create a password reset token and schedule delivery",
+        "operationId": "password_forgot_api_v1_auth_password_forgot_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthPasswordForgotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Consume a password reset token and update credentials",
+        "operationId": "password_reset_api_v1_auth_password_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthPasswordResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/mfa/totp/enroll/start": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start TOTP MFA enrollment for the current user",
+        "operationId": "mfa_enroll_start_api_v1_auth_mfa_totp_enroll_start_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMfaEnrollStartResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/totp/enroll/confirm": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Confirm TOTP enrollment with current code",
+        "operationId": "mfa_enroll_confirm_api_v1_auth_mfa_totp_enroll_confirm_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthMfaEnrollConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMfaEnrollConfirmResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/challenge/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify MFA challenge and issue a session",
+        "operationId": "mfa_verify_challenge_api_v1_auth_mfa_challenge_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthMfaChallengeVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginSuccess"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/mfa/totp": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Disable TOTP for the current user",
+        "operationId": "mfa_disable_api_v1_auth_mfa_totp_delete",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/apikeys": {
@@ -1020,9 +1047,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -1218,9 +1242,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -1315,9 +1336,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -1409,9 +1427,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -1512,9 +1527,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -1732,9 +1744,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -1849,9 +1858,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -1955,9 +1961,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -2070,9 +2073,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -2262,9 +2262,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -2368,9 +2365,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -2459,9 +2453,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -2572,9 +2563,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -2679,9 +2667,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -2871,9 +2856,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3061,9 +3043,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3142,9 +3121,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3209,9 +3185,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -3304,9 +3277,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3378,9 +3348,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -3570,9 +3537,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3639,9 +3603,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3706,9 +3667,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -3805,9 +3763,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3893,9 +3848,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -3958,9 +3910,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -4015,9 +3964,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -4062,9 +4008,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -4155,9 +4098,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -4263,9 +4203,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -4469,9 +4406,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -4560,9 +4494,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -4680,9 +4611,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -4780,9 +4708,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -4872,9 +4797,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -5076,9 +4998,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -5167,9 +5086,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -5276,9 +5192,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -5362,9 +5275,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -5575,9 +5485,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -5708,9 +5615,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -5949,9 +5853,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -6088,9 +5989,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -6171,9 +6069,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -6287,9 +6182,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -6419,9 +6311,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -6554,9 +6443,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -6666,9 +6552,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -6776,9 +6659,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -6902,9 +6782,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -7022,9 +6899,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -7157,9 +7031,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -7397,9 +7268,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -7519,9 +7387,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -7620,9 +7485,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -7733,9 +7595,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -7914,9 +7773,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -7998,9 +7854,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -8117,9 +7970,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -8321,9 +8171,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -8415,9 +8262,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -8497,9 +8341,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -8592,9 +8433,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -8691,9 +8529,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -8779,9 +8614,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -8886,9 +8718,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -9090,9 +8919,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -9214,9 +9040,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -9298,9 +9121,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -9441,9 +9261,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -9536,9 +9353,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -9650,9 +9464,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -9773,9 +9584,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -9880,9 +9688,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -9974,9 +9779,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -10176,9 +9978,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -10272,9 +10071,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -10351,9 +10147,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -10450,9 +10243,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -10529,9 +10319,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -10614,9 +10401,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -10787,9 +10571,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -10868,9 +10649,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -10945,9 +10723,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -11053,9 +10828,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -11138,9 +10910,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -11227,9 +10996,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -11358,9 +11124,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -11451,9 +11214,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -11553,9 +11313,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -11742,9 +11499,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -11780,9 +11534,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -11864,9 +11615,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -11930,9 +11678,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -12025,9 +11770,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -12100,9 +11842,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -12138,9 +11877,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -12222,9 +11958,6 @@
             "SessionCookie": []
           },
           {
-            "HTTPBearer": []
-          },
-          {
             "APIKeyHeader": []
           }
         ]
@@ -12261,9 +11994,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -12336,9 +12066,6 @@
         "security": [
           {
             "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
           },
           {
             "APIKeyHeader": []
@@ -12565,6 +12292,186 @@
         "title": "ApiKeySummary",
         "description": "Metadata describing an API key without exposing the secret."
       },
+      "AuthLoginMfaRequired": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "mfa_required": {
+            "type": "boolean",
+            "title": "Mfa Required",
+            "default": true
+          },
+          "challengeToken": {
+            "type": "string",
+            "title": "Challengetoken"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "challengeToken"
+        ],
+        "title": "AuthLoginMfaRequired"
+      },
+      "AuthLoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "AuthLoginRequest"
+      },
+      "AuthLoginSuccess": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "mfa_required": {
+            "type": "boolean",
+            "title": "Mfa Required",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AuthLoginSuccess"
+      },
+      "AuthMfaChallengeVerifyRequest": {
+        "properties": {
+          "challengeToken": {
+            "type": "string",
+            "title": "Challengetoken"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 9,
+            "minLength": 6,
+            "pattern": "^(?:\\d{6}|[A-Za-z0-9]{8}|[A-Za-z0-9]{4}-[A-Za-z0-9]{4})$",
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "challengeToken",
+          "code"
+        ],
+        "title": "AuthMfaChallengeVerifyRequest"
+      },
+      "AuthMfaEnrollConfirmRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 6,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "AuthMfaEnrollConfirmRequest"
+      },
+      "AuthMfaEnrollConfirmResponse": {
+        "properties": {
+          "recoveryCodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recoverycodes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "recoveryCodes"
+        ],
+        "title": "AuthMfaEnrollConfirmResponse"
+      },
+      "AuthMfaEnrollStartResponse": {
+        "properties": {
+          "otpauthUri": {
+            "type": "string",
+            "title": "Otpauthuri"
+          },
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "accountName": {
+            "type": "string",
+            "title": "Accountname"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "otpauthUri",
+          "issuer",
+          "accountName"
+        ],
+        "title": "AuthMfaEnrollStartResponse"
+      },
+      "AuthPasswordForgotRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "AuthPasswordForgotRequest"
+      },
+      "AuthPasswordResetRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "format": "password",
+            "title": "Token",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "title": "Newpassword",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token",
+          "newPassword"
+        ],
+        "title": "AuthPasswordResetRequest"
+      },
       "AuthProvider": {
         "properties": {
           "id": {
@@ -12720,142 +12627,6 @@
         ],
         "title": "AuthSetupStatusResponse",
         "description": "Setup status response returned by /auth/setup."
-      },
-      "BearerResponse": {
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token"
-          },
-          "token_type": {
-            "type": "string",
-            "title": "Token Type"
-          }
-        },
-        "type": "object",
-        "required": [
-          "access_token",
-          "token_type"
-        ],
-        "title": "BearerResponse"
-      },
-      "Body_auth_cookie_login_api_v1_auth_cookie_login_post": {
-        "properties": {
-          "grant_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^password$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Grant Type"
-          },
-          "username": {
-            "type": "string",
-            "title": "Username"
-          },
-          "password": {
-            "type": "string",
-            "format": "password",
-            "title": "Password"
-          },
-          "scope": {
-            "type": "string",
-            "title": "Scope",
-            "default": ""
-          },
-          "client_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Id"
-          },
-          "client_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "format": "password",
-            "title": "Client Secret"
-          }
-        },
-        "type": "object",
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "Body_auth_cookie_login_api_v1_auth_cookie_login_post"
-      },
-      "Body_auth_jwt_login_api_v1_auth_jwt_login_post": {
-        "properties": {
-          "grant_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^password$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Grant Type"
-          },
-          "username": {
-            "type": "string",
-            "title": "Username"
-          },
-          "password": {
-            "type": "string",
-            "format": "password",
-            "title": "Password"
-          },
-          "scope": {
-            "type": "string",
-            "title": "Scope",
-            "default": ""
-          },
-          "client_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Id"
-          },
-          "client_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "format": "password",
-            "title": "Client Secret"
-          }
-        },
-        "type": "object",
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "Body_auth_jwt_login_api_v1_auth_jwt_login_post"
       },
       "Body_import_configuration_api_v1_workspaces__workspaceId__configurations_import_post": {
         "properties": {
@@ -14209,29 +13980,6 @@
         "type": "object",
         "title": "EffectivePermissions",
         "description": "Effective permission sets for the current principal."
-      },
-      "ErrorModel": {
-        "properties": {
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              }
-            ],
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "required": [
-          "detail"
-        ],
-        "title": "ErrorModel"
       },
       "FileCapabilities": {
         "properties": {
@@ -16817,6 +16565,16 @@
             "type": "boolean",
             "title": "Enabled",
             "default": true
+          },
+          "enforceSso": {
+            "type": "boolean",
+            "title": "Enforcesso",
+            "default": false
+          },
+          "allowJitProvisioning": {
+            "type": "boolean",
+            "title": "Allowjitprovisioning",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -17023,57 +16781,6 @@
         ],
         "title": "UserPage",
         "description": "Cursor-based collection of users."
-      },
-      "UserRead": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active",
-            "default": true
-          },
-          "is_superuser": {
-            "type": "boolean",
-            "title": "Is Superuser",
-            "default": false
-          },
-          "is_verified": {
-            "type": "boolean",
-            "title": "Is Verified",
-            "default": false
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "is_service_account": {
-            "type": "boolean",
-            "title": "Is Service Account",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "email"
-        ],
-        "title": "UserRead"
       },
       "UserRoleSummary": {
         "properties": {
@@ -17641,72 +17348,6 @@
         "title": "WorkspaceUpdate",
         "description": "Payload for updating workspace metadata."
       },
-      "ade_api__core__auth__users__UserCreate": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active",
-            "default": true
-          },
-          "is_superuser": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Superuser",
-            "default": false
-          },
-          "is_verified": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Verified",
-            "default": false
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "UserCreate"
-      },
       "ProblemDetailsErrorItem": {
         "type": "object",
         "properties": {
@@ -17766,31 +17407,11 @@
       }
     },
     "securitySchemes": {
-      "APIKeyCookie": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "ade_session"
-      },
-      "OAuth2PasswordBearer": {
-        "type": "oauth2",
-        "flows": {
-          "password": {
-            "scopes": {},
-            "tokenUrl": "/api/v1/auth/jwt/login"
-          }
-        }
-      },
       "SessionCookie": {
         "type": "apiKey",
         "in": "cookie",
         "name": "ade_session",
         "description": "Browser session cookie issued after interactive sign-in."
-      },
-      "HTTPBearer": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "Bearer access token returned by ADE or an identity provider."
       },
       "APIKeyHeader": {
         "type": "apiKey",
@@ -17844,15 +17465,12 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:30440"
+      "url": "http://localhost:8000"
     }
   ],
   "security": [
     {
       "SessionCookie": []
-    },
-    {
-      "HTTPBearer": []
     },
     {
       "APIKeyHeader": []
