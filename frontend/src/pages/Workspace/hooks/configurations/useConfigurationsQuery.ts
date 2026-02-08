@@ -51,6 +51,7 @@ export function useConfigurationQuery({ workspaceId, configurationId, enabled = 
       return readConfiguration(workspaceId, configurationId, signal);
     },
     enabled: enabled && workspaceId.length > 0 && Boolean(configurationId),
-    staleTime: 10_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }

@@ -34,6 +34,7 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
   const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspace.id), [workspace.id]);
 
   const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configurationId: configId });
+  const awaitingFreshConfigSnapshot = Boolean(configId) && !configQuery.isError && !configQuery.isFetchedAfterMount;
   const { refetch: refetchConfig } = configQuery;
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
   const { refetch: refetchConfigurations } = configurationsQuery;
@@ -203,12 +204,12 @@ export default function ConfigurationDetailScreen({ params }: ConfigurationDetai
     );
   }
 
-  if (configQuery.isLoading) {
+  if (configQuery.isLoading || awaitingFreshConfigSnapshot) {
     return (
       <PageState
         variant="loading"
-        title="Loading configuration"
-        description="Fetching configuration details."
+        title="Refreshing configuration"
+        description="Checking the latest configuration status."
       />
     );
   }

@@ -24,7 +24,6 @@ from ade_api.api.deps import (
     SettingsDep,
     get_configurations_service,
     get_configurations_service_read,
-    get_runs_service,
 )
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
@@ -36,8 +35,6 @@ from ade_api.common.downloads import build_content_disposition
 from ade_api.common.etag import build_etag_token, format_etag, format_weak_etag
 from ade_api.core.http import require_csrf, require_workspace
 from ade_api.db import get_session_factory
-from ade_api.features.runs.service import RunsService
-from ade_api.features.runs.schemas import RunResource
 from ade_db.models import User
 
 from ..exceptions import (
@@ -72,16 +69,11 @@ CONFIG_CREATE_BODY = Body(
     ...,
     description="Display name and template/clone source for the configuration.",
 )
-MAKE_ACTIVE_BODY = Body(
-    None,
-    description="Make the configuration active (archives any existing active configuration).",
-)
 
 ConfigurationsServiceDep = Annotated[ConfigurationsService, Depends(get_configurations_service)]
 ConfigurationsServiceReadDep = Annotated[
     ConfigurationsService, Depends(get_configurations_service_read)
 ]
-RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
 
 
 def _engine_dependency_missing_detail(exc: ConfigEngineDependencyMissingError) -> dict[str, str]:
@@ -268,51 +260,6 @@ def import_configuration(
         raise HTTPException(status_code, detail=detail) from exc
 
     return ConfigurationRecord.model_validate(record)
-
-
-@router.post(
-    "/configurations/{configurationId}/publish",
-    dependencies=[Security(require_csrf)],
-    response_model=RunResource,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Start a publish run for a draft configuration",
-    response_model_exclude_none=True,
-)
-def publish_configuration_endpoint(
-    workspace_id: WorkspaceIdPath,
-    configuration_id: ConfigurationIdPath,
-    runs_service: RunsServiceDep,
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.configurations.manage"),
-            scopes=["{workspaceId}"],
-        ),
-    ],
-    payload: None = MAKE_ACTIVE_BODY,
-) -> RunResource:
-    del payload
-    try:
-        run = runs_service.prepare_publish_run(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
-    except ConfigStorageNotFoundError as exc:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail="configuration_storage_missing",
-        ) from exc
-    except ConfigEngineDependencyMissingError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_engine_dependency_missing_detail(exc),
-        ) from exc
-    except ConfigStateError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    return runs_service.to_resource(run)
 
 
 @router.post(

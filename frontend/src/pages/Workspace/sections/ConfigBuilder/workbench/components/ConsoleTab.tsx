@@ -6,6 +6,7 @@ import { DownloadIcon } from "@/components/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { createScopedStorage } from "@/lib/storage";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
+import type { RunStreamConnectionState } from "@/api/runs/api";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";
@@ -17,6 +18,7 @@ interface ConsoleTabProps {
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
   readonly runStatus?: JobStreamStatus;
+  readonly runConnectionState?: RunStreamConnectionState;
 }
 
 type ConsoleFilters = {
@@ -28,7 +30,13 @@ type ConsoleViewMode = "parsed" | "ndjson";
 
 const consoleLevelStorage = createScopedStorage(uiStorageKeys.workbenchConsoleLevelFilter);
 
-export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: ConsoleTabProps) {
+export function ConsoleTab({
+  console,
+  latestRun,
+  onClearConsole,
+  runStatus,
+  runConnectionState,
+}: ConsoleTabProps) {
   const [filters, setFilters] = useState<ConsoleFilters>(() => {
     const defaultFilters: ConsoleFilters = { origin: "all", level: "info" };
     const stored = consoleLevelStorage.get<string>();
@@ -74,6 +82,10 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   const hasConsoleLines = filteredIndices.length > 0;
   const hasAnyConsoleLines = totalLines > 0;
   const statusLabel = runStatus && runStatus !== "idle" ? runStatus : null;
+  const connectionLabel =
+    runConnectionState && runConnectionState !== "completed"
+      ? formatConnectionLabel(runConnectionState)
+      : null;
   const clipboardAvailable = typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
 
   const rowVirtualizer = useVirtualizer({
@@ -162,6 +174,11 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
             {statusLabel ? (
               <span className="rounded border border-border bg-background/80 px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-foreground/80">
                 {statusLabel}
+              </span>
+            ) : null}
+            {connectionLabel ? (
+              <span className="rounded border border-border bg-background/80 px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-foreground/80">
+                {connectionLabel}
               </span>
             ) : null}
           </div>
@@ -371,11 +388,14 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
         ) : hasAnyConsoleLines ? (
           <EmptyState title="No console output matches these filters." description="Adjust origin or level filters to see more." />
         ) : (
-          <EmptyState title="Waiting for ADE output…" description="Run validation or a test to stream logs into this terminal." />
-	        )}
-	      </div>
-	    </div>
-	  );
+          <EmptyState
+            title={resolveEmptyStateTitle(runConnectionState)}
+            description={resolveEmptyStateDescription(runConnectionState)}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 function EmptyState({ title, description }: { readonly title: string; readonly description: string }) {
@@ -512,6 +532,48 @@ function formatRunDuration(valueMs: number): string {
   const minutes = Math.floor(valueMs / 60_000);
   const seconds = Math.round((valueMs % 60_000) / 1000);
   return `${minutes}m ${seconds}s`;
+}
+
+function formatConnectionLabel(state: RunStreamConnectionState): string {
+  switch (state) {
+    case "connecting":
+      return "connecting";
+    case "streaming":
+      return "streaming";
+    case "reconnecting":
+      return "reconnecting";
+    case "failed":
+      return "disconnected";
+    case "completed":
+    default:
+      return "";
+  }
+}
+
+function resolveEmptyStateTitle(state?: RunStreamConnectionState): string {
+  if (state === "connecting") {
+    return "Connecting to live run stream…";
+  }
+  if (state === "reconnecting") {
+    return "Reconnecting to live run stream…";
+  }
+  if (state === "failed") {
+    return "Stream disconnected.";
+  }
+  return "Waiting for ADE output…";
+}
+
+function resolveEmptyStateDescription(state?: RunStreamConnectionState): string {
+  if (state === "connecting") {
+    return "Establishing stream connection for this run.";
+  }
+  if (state === "reconnecting") {
+    return "Connection dropped. Attempting to resume from the last event.";
+  }
+  if (state === "failed") {
+    return "Unable to keep the stream open. Start another run or retry when the network recovers.";
+  }
+  return "Run validation or a test to stream logs into this terminal.";
 }
 
 function RunArtifactLink({

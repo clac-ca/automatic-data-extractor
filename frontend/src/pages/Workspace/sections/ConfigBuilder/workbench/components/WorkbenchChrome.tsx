@@ -36,6 +36,7 @@ interface WorkbenchChromeProps {
   readonly onRunExtraction: () => void;
   readonly consoleOpen: boolean;
   readonly onToggleConsole: () => void;
+  readonly consoleToggleDisabled?: boolean;
   readonly appearance: "light" | "dark";
   readonly windowState: "restored" | "maximized";
   readonly onMinimizeWindow: () => void;
@@ -64,6 +65,7 @@ export function WorkbenchChrome({
   onRunExtraction,
   consoleOpen,
   onToggleConsole,
+  consoleToggleDisabled = false,
   appearance,
   windowState,
   onMinimizeWindow,
@@ -161,6 +163,7 @@ export function WorkbenchChrome({
             onClick={onToggleConsole}
             appearance={appearance}
             active={consoleOpen}
+            disabled={consoleToggleDisabled}
             icon={<ConsoleIcon className="h-3.5 w-3.5" />}
           />
         </div>

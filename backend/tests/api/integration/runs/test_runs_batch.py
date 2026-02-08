@@ -1,11 +1,11 @@
-import anyio
 from uuid import UUID
 
+import anyio
 import pytest
 from sqlalchemy import select
-from ade_storage import workspace_config_root
-from ade_db.models import Run
 
+from ade_db.models import Run
+from ade_storage import workspace_config_root
 from tests.api.integration.runs.helpers import auth_headers, make_configuration, make_document
 
 pytestmark = pytest.mark.asyncio
@@ -27,6 +27,15 @@ async def test_create_runs_batch_creates_runs(
 
     config_dir = workspace_config_root(settings, workspace_id, configuration.id)
     config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "pyproject.toml").write_text(
+        (
+            "[project]\n"
+            "name = \"ade-config\"\n"
+            "version = \"0.0.0\"\n"
+            "dependencies = [\"ade-engine\"]\n"
+        ),
+        encoding="utf-8",
+    )
 
     documents = [
         make_document(workspace_id=workspace_id, filename="input-a.csv"),
@@ -37,10 +46,11 @@ async def test_create_runs_batch_creates_runs(
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
     response = await async_client.post(
-        f"/api/v1/configurations/{configuration.id}/runs/batch",
+        f"/api/v1/workspaces/{workspace_id}/runs/batch",
         headers=headers,
         json={
             "document_ids": [str(doc.id) for doc in documents],
+            "configuration_id": str(configuration.id),
             "options": {"log_level": "INFO"},
         },
     )

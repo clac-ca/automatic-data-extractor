@@ -1,14 +1,19 @@
-import anyio
 import io
+
+import anyio
 import pytest
 
-from ade_api.common.time import utc_now
 from ade_api.common.ids import generate_uuid7
-from ade_storage import build_storage_adapter
-from ade_db.models import File, FileKind, FileVersion, FileVersionOrigin, RunStatus
+from ade_api.common.time import utc_now
 from ade_api.settings import Settings
-
-from tests.api.integration.runs.helpers import auth_headers, make_configuration, make_document, make_run
+from ade_db.models import File, FileKind, FileVersion, FileVersionOrigin, RunStatus
+from ade_storage import build_storage_adapter
+from tests.api.integration.runs.helpers import (
+    auth_headers,
+    make_configuration,
+    make_document,
+    make_run,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -81,14 +86,19 @@ async def test_run_output_endpoint_serves_file(
 
     headers = await auth_headers(async_client, seed_identity.workspace_owner)
 
-    metadata = await async_client.get(f"/api/v1/runs/{run.id}/output", headers=headers)
+    metadata = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/output",
+        headers=headers,
+    )
     assert metadata.status_code == 200
     payload = metadata.json()
     assert payload["has_output"] is True
     assert payload["ready"] is True
     assert payload["filename"] == "normalized.xlsx"
     assert payload["fileVersionId"] == str(output_version.id)
-    assert payload["download_url"].endswith(f"/api/v1/runs/{run.id}/output/download")
+    assert payload["download_url"].endswith(
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/output/download"
+    )
 
     download = await async_client.get(payload["download_url"], headers=headers)
     assert download.status_code == 200

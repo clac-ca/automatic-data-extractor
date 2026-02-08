@@ -69,7 +69,8 @@ export function useConfigurationFilesQuery({
         signal,
       }),
     enabled: enabled && workspaceId.length > 0 && configId.length > 0,
-    staleTime: 5_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 

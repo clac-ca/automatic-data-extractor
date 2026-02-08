@@ -1,4 +1,4 @@
-"""Configuration publish endpoint validation contract tests."""
+"""Configuration publish-run validation contract tests."""
 
 from __future__ import annotations
 
@@ -26,11 +26,14 @@ async def test_publish_does_not_require_prior_validation_digest(
     )
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json={
+            "configuration_id": record["id"],
+            "options": {"operation": "publish"},
+        },
     )
-    assert response.status_code == 202, response.text
+    assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["operation"] == "publish"
 
@@ -45,9 +48,12 @@ async def test_publish_missing_config_returns_not_found(
     random_id = str(generate_uuid7())
 
     response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{random_id}/publish",
+        f"/api/v1/workspaces/{workspace_id}/runs",
         headers=headers,
-        json=None,
+        json={
+            "configuration_id": random_id,
+            "options": {"operation": "publish"},
+        },
     )
     assert response.status_code == 404
-    assert response.json()["detail"] == "configuration_not_found"
+    assert random_id in str(response.json().get("detail", ""))
