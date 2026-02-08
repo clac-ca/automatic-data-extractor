@@ -6,6 +6,8 @@ import os
 import shutil
 import socket
 import sys
+import threading
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Annotated
@@ -21,7 +23,7 @@ from .db import app as db_app
 from .infra import app as infra_app
 from .local_dev import missing_core_runtime_env
 from .storage import app as storage_app
-from .web import app as web_app
+from .web import app as web_app, resolve_public_web_url
 from .worker import app as worker_app
 
 SERVICE_ORDER = ("api", "worker", "web")
@@ -101,6 +103,66 @@ def _is_port_open(host: str, port: int, *, timeout_seconds: float = 0.6) -> bool
             return True
     except OSError:
         return False
+
+
+def _open_browser_when_ready(
+    url: str,
+    *,
+    timeout_seconds: float = 30.0,
+    poll_interval_seconds: float = 0.4,
+) -> None:
+    parsed = urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    def _worker() -> None:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if _is_port_open(host, port):
+                status = typer.launch(url)
+                if status != 0:
+                    typer.echo(
+                        f"warning: failed to open browser automatically (exit code {status}).",
+                        err=True,
+                    )
+                    typer.echo(f"Open manually: {url}", err=True)
+                return
+            time.sleep(poll_interval_seconds)
+
+        typer.echo(
+            f"warning: timed out waiting for web service at {host}:{port}; "
+            "browser was not opened automatically.",
+            err=True,
+        )
+        typer.echo(f"Open manually: {url}", err=True)
+
+    threading.Thread(target=_worker, name="ade-open-browser", daemon=True).start()
+
+
+def _maybe_open_browser(*, selected: list[str], open_in_browser: bool) -> None:
+    if not open_in_browser:
+        return
+    if "web" not in selected:
+        typer.echo("warning: --open ignored because web service is not selected.", err=True)
+        return
+    try:
+        url = resolve_public_web_url(os.environ)
+    except typer.Exit:
+        typer.echo(
+            "warning: unable to resolve web URL for --open; services will continue running.",
+            err=True,
+        )
+        return
+    except Exception as exc:  # pragma: no cover - defensive guardrail
+        typer.echo(
+            f"warning: unable to resolve web URL for --open ({exc}); "
+            "services will continue running.",
+            err=True,
+        )
+        return
+
+    typer.echo(f"-> will open browser when web is ready: {url}", err=True)
+    _open_browser_when_ready(url)
 
 
 def _exit_with_local_infra_hint(reason: str) -> None:
@@ -185,10 +247,16 @@ def start(
         help="Run database migrations before starting services.",
         envvar="ADE_DB_MIGRATE_ON_START",
     ),
+    open_in_browser: bool = typer.Option(
+        False,
+        "--open",
+        help="Open ADE web in the default browser once the web service is reachable.",
+    ),
 ) -> None:
     selected = _parse_services(services)
     _preflight_runtime(selected)
     _maybe_run_migrations(selected, migrate)
+    _maybe_open_browser(selected=selected, open_in_browser=open_in_browser)
     run_many(_build_processes(mode="start", selected=selected), cwd=REPO_ROOT)
 
 
@@ -206,10 +274,16 @@ def dev(
         help="Run database migrations before starting services.",
         envvar="ADE_DB_MIGRATE_ON_START",
     ),
+    open_in_browser: bool = typer.Option(
+        False,
+        "--open",
+        help="Open ADE web in the default browser once the web service is reachable.",
+    ),
 ) -> None:
     selected = _parse_services(services)
     _preflight_runtime(selected)
     _maybe_run_migrations(selected, migrate)
+    _maybe_open_browser(selected=selected, open_in_browser=open_in_browser)
     run_many(_build_processes(mode="dev", selected=selected), cwd=REPO_ROOT)
 
 

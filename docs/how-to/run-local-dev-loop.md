@@ -18,7 +18,7 @@ You need:
 From repo root:
 
 ```bash
-./setup.sh --with-infra
+./setup.sh
 ```
 
 This installs:
@@ -27,7 +27,17 @@ This installs:
 - frontend dependencies in `frontend/node_modules`
 - local infra profile keys in `.env`
 
-`setup.sh --with-infra` starts infrastructure automatically.
+To start local infrastructure during setup:
+
+```bash
+./setup.sh --with-infra
+```
+
+To start ADE immediately after setup and open a browser when the web service is reachable:
+
+```bash
+./setup.sh --open
+```
 
 If you already ran setup and only want to manage infrastructure:
 
@@ -58,37 +68,17 @@ Development mode (recommended while coding):
 cd backend && uv run ade dev
 ```
 
+Open browser automatically while starting services:
+
+```bash
+cd backend && uv run ade dev --open
+```
+
 Production-style mode (no reload behavior):
 
 ```bash
 cd backend && uv run ade start
 ```
-
-Stop tracked ADE service processes:
-
-```bash
-cd backend && uv run ade stop
-```
-
-Show tracked ADE service status:
-
-```bash
-cd backend && uv run ade status
-```
-
-Restart in one command (stop then start):
-
-```bash
-cd backend && uv run ade restart
-```
-
-Restart with service selection and migration control:
-
-```bash
-cd backend && uv run ade restart --services worker --no-migrate
-```
-
-`ade stop`/`ade restart` now act on tracked processes started by `ade` (state file at `.ade/state.json`).
 
 ## Run One Service
 
@@ -156,6 +146,5 @@ curl -sS http://localhost:8001/api/v1/health
 - Re-run `./setup.sh`.
 - If `ade dev` reports missing local runtime settings or unreachable local infra, run `cd backend && uv run ade infra up`.
 - In devcontainers, ADE now uses `/app/.venv` for Python tooling and `/app/data` for runtime state; rebuild/reopen the container after path-related config changes.
-- Check service state with `cd backend && uv run ade status`.
 - If startup errors mention migrations, use [Run Migrations and Resets](run-migrations-and-resets.md).
 - For runtime issues, use [Triage Playbook](../troubleshooting/triage-playbook.md).

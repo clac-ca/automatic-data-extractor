@@ -32,20 +32,25 @@ docker compose down -v
 ## Native Dev Loop (Isolated Per Worktree)
 
 ```bash
-./setup.sh --with-infra
+./setup.sh
+cd backend && uv run ade infra up -d --wait
 cd backend && uv run ade dev
 ```
 
 This flow uses a generated local profile in `.env` and keeps each worktree isolated.
+If you want setup to immediately launch ADE and open a browser, run `./setup.sh --open`.
 
 Useful commands:
 
 ```bash
+./setup.sh
+./setup.sh --open
 cd backend && uv run ade infra info
 cd backend && uv run ade infra up -d --wait
 cd backend && uv run ade infra down
 cd backend && uv run ade infra down -v --rmi all
 ./setup.sh --with-infra --force
+cd backend && uv run ade dev --open
 ```
 
 ## Production Start Points

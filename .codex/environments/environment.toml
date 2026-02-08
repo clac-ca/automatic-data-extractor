@@ -3,29 +3,19 @@ version = 1
 name = "ADE Local Dev"
 
 [setup]
-script = "./setup.sh --with-infra --force"
+script = "./setup.sh"
 
 [[actions]]
-name = "🚀 Dev: API + Worker + Web (hot reload)"
+name = "Infra Up (detached)"
+icon = "tool"
+command = "cd backend && uv run ade infra up -d"
+
+[[actions]]
+name = "Dev + Open (ade dev --open)"
 icon = "run"
-command = "cd backend && uv run ade dev"
+command = "cd backend && uv run ade dev --open"
 
 [[actions]]
-name = "🟢 Infra: Start (detached + health wait)"
+name = "Stop + Clean (kill dev + infra cleanup)"
 icon = "tool"
-command = "cd backend && uv run ade infra up -d --wait"
-
-[[actions]]
-name = "🛑 Infra: Stop and remove"
-icon = "tool"
-command = "cd backend && uv run ade infra down"
-
-[[actions]]
-name = "🌐 Web: Open in browser"
-icon = "tool"
-command = "uv run --project backend ade web open"
-
-[[actions]]
-name = "✅ Test: Full suite (backend + frontend)"
-icon = "test"
-command = "cd backend && uv run ade test"
+command = "repo_root=\"$(pwd)\"; backend_dir=\"$repo_root/backend\"; backend_python=\"$backend_dir/.venv/bin/python\"; if command -v pkill >/dev/null 2>&1; then pkill -f \"$backend_python -m ade_api\" || true; pkill -f \"$backend_python -m ade_worker\" || true; pkill -f \"$backend_python -m ade_cli web dev\" || true; fi; cd backend && uv run ade infra down -v --remove-orphans"
