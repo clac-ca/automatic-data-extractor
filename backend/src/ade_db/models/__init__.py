@@ -8,7 +8,7 @@ from .authn import (
     PasswordResetToken,
     UserMfaTotp,
 )
-from .configuration import Configuration, ConfigurationStatus
+from .configuration import Configuration, ConfigurationSourceKind, ConfigurationStatus
 from .file import (
     FILE_KIND_VALUES,
     FILE_VERSION_ORIGIN_VALUES,
@@ -43,6 +43,7 @@ __all__ = [
     "AUTH_SESSION_AUTH_METHOD_VALUES",
     "AuthSession",
     "Configuration",
+    "ConfigurationSourceKind",
     "ConfigurationStatus",
     "FILE_KIND_VALUES",
     "FILE_VERSION_ORIGIN_VALUES",

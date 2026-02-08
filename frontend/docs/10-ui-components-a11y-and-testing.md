@@ -554,7 +554,6 @@ ade.ui.workspace.<workspaceId>.<suffix>
 Examples:
 
 * `ade.ui.workspace.<workspaceId>.nav.collapsed`
-* `ade.ui.workspace.<workspaceId>.workbench.returnPath`
 * `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.tabs`
 * `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.console`
 * `ade.ui.workspace.<workspaceId>.configuration.<configurationId>.editor-theme`
@@ -573,11 +572,6 @@ Current preferences include:
 * **Workspace nav collapsed state**
 
   * Suffix: `nav.collapsed` (boolean).
-
-* **Workbench return path**
-
-  * Suffix: `workbench.returnPath` (string URL).
-  * Used when exiting the workbench to navigate back to where the user came from.
 
 * **Workbench open tabs**
 

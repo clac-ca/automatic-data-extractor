@@ -169,6 +169,7 @@ export function WorkbenchSidebar({
     <Sidebar
       collapsible="icon"
       className="border-r border-sidebar-border md:absolute md:h-full"
+      data-guided-tour="files"
     >
       <SidebarHeader className="group-data-[collapsible=icon]:hidden">
         <div className="space-y-1 rounded-md bg-sidebar-accent/40 px-2 py-2">

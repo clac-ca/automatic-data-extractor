@@ -19,6 +19,8 @@ type ImportConfigurationBody =
   paths["/api/v1/workspaces/{workspaceId}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
 type ReplaceConfigurationBody =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
+type UpdateConfigurationBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}"]["patch"]["requestBody"]["content"]["application/json"];
 type UpsertConfigurationFileQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}"]["put"]["parameters"]["query"];
 
@@ -330,6 +332,7 @@ export async function deleteConfigurationDirectory(
 export interface ImportConfigurationPayload {
   readonly displayName: string;
   readonly file: File | Blob;
+  readonly notes?: string | null;
 }
 
 export async function importConfiguration(
@@ -338,6 +341,9 @@ export async function importConfiguration(
 ): Promise<ConfigurationRecord> {
   const formData = new FormData();
   formData.append("display_name", payload.displayName);
+  if (payload.notes && payload.notes.trim().length > 0) {
+    formData.append("notes", payload.notes.trim());
+  }
   formData.append("file", payload.file);
 
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations/import", {
@@ -386,6 +392,7 @@ export type ConfigurationSourceInput =
 export interface CreateConfigurationPayload {
   readonly displayName: string;
   readonly source: ConfigurationSourceInput;
+  readonly notes?: string | null;
 }
 
 function serializeConfigurationSource(source: ConfigurationSourceInput) {
@@ -411,8 +418,39 @@ export async function createConfiguration(
     body: {
       display_name: payload.displayName.trim(),
       source: serializeConfigurationSource(payload.source),
+      notes: payload.notes?.trim() || undefined,
     },
   });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export interface UpdateConfigurationPayload {
+  readonly displayName?: string;
+  readonly notes?: string | null;
+}
+
+export async function updateConfiguration(
+  workspaceId: string,
+  configurationId: string,
+  payload: UpdateConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const body: UpdateConfigurationBody = {};
+  if (Object.prototype.hasOwnProperty.call(payload, "displayName")) {
+    body.display_name = payload.displayName?.trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "notes")) {
+    body.notes = payload.notes?.trim() || null;
+  }
+  const { data } = await client.PATCH(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}",
+    {
+      params: { path: { workspaceId, configurationId } },
+      body,
+    },
+  );
   if (!data) {
     throw new Error("Expected configuration payload.");
   }

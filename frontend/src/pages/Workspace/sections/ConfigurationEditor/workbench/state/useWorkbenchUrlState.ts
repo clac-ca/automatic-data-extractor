@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from "react";
-
 import { useSearchParams } from "react-router-dom";
+
 import {
   DEFAULT_WORKBENCH_SEARCH,
-  mergeWorkbenchSearchParams,
+  applyWorkbenchSearchPatch,
   readWorkbenchSearchParams,
   type WorkbenchConsoleState,
   type WorkbenchPane,
+  type WorkbenchSearchPatch,
 } from "./workbenchSearchParams";
 
 interface WorkbenchUrlState {
@@ -17,20 +18,31 @@ interface WorkbenchUrlState {
   readonly setFileId: (fileId: string | undefined) => void;
   readonly setPane: (pane: WorkbenchPane) => void;
   readonly setConsole: (console: WorkbenchConsoleState) => void;
+  readonly patchState: (patch: WorkbenchSearchPatch) => void;
 }
 
 export function useWorkbenchUrlState(): WorkbenchUrlState {
   const [params, setSearchParams] = useSearchParams();
   const snapshot = useMemo(() => readWorkbenchSearchParams(params), [params]);
 
+  const patchState = useCallback(
+    (patch: WorkbenchSearchPatch) => {
+      setSearchParams(
+        (current) => applyWorkbenchSearchPatch(current, patch),
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const setFileId = useCallback(
     (fileId: string | undefined) => {
       if (snapshot.fileId === fileId || (!fileId && !snapshot.present.fileId)) {
         return;
       }
-      setSearchParams(mergeWorkbenchSearchParams(params, { fileId: fileId ?? undefined }), { replace: true });
+      patchState({ fileId: fileId ?? undefined });
     },
-    [params, setSearchParams, snapshot.fileId, snapshot.present.fileId],
+    [patchState, snapshot.fileId, snapshot.present.fileId],
   );
 
   const setPane = useCallback(
@@ -38,9 +50,9 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
       if (snapshot.pane === pane) {
         return;
       }
-      setSearchParams(mergeWorkbenchSearchParams(params, { pane }), { replace: true });
+      patchState({ pane });
     },
-    [params, setSearchParams, snapshot.pane],
+    [patchState, snapshot.pane],
   );
 
   const setConsole = useCallback(
@@ -48,9 +60,9 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
       if (snapshot.console === console) {
         return;
       }
-      setSearchParams(mergeWorkbenchSearchParams(params, { console }), { replace: true });
+      patchState({ console });
     },
-    [params, setSearchParams, snapshot.console],
+    [patchState, snapshot.console],
   );
 
   return {
@@ -61,5 +73,6 @@ export function useWorkbenchUrlState(): WorkbenchUrlState {
     setFileId,
     setPane,
     setConsole,
+    patchState,
   };
 }

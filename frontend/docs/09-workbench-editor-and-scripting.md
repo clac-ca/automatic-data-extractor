@@ -1,6 +1,6 @@
 # 09 – Workbench editor and scripting
 
-The **Configuration Builder workbench** is the dedicated editing surface for ADE configuration packages and for kicking off validation/test runs in the browser.
+The **Configuration editor workbench** is the dedicated editing surface for ADE configuration packages and for kicking off validation/test runs in the browser.
 
 * “**Workbench**” = the whole editing window (panels, tabs, console, etc.).
 * “**Editor**” = specifically the Monaco editor instance.
@@ -11,7 +11,7 @@ This doc is for people working on `ade-web` internals. It explains how the workb
 >
 > * `01-domain-model-and-naming.md`
 > * `07-documents-and-runs.md` (canonical `RunOptions`)
-> * `08-configurations-and-config-builder.md`
+> * `08-configurations-and-configurations.md`
 > * `frontend/docs/04-data-layer-and-backend-contracts.md` and
 >   `https://github.com/clac-ca/ade-engine/blob/main/docs/11-ade-event-model.md` (event schemas)
 
@@ -41,9 +41,8 @@ A workbench session is always scoped to **exactly one configuration in one works
 
 * In any given browser tab there is at most **one active workbench** for a given `(workspaceId, configurationId)`.
 
-* Session‑scoped state includes (non‑persisted unless stated otherwise):
+* Session‑scoped state includes:
 
-  * Window state (restored / maximized / docked).
   * Open tabs, pinning, and MRU order (persisted).
   * Console open/closed + height (persisted).
   * Editor theme preference (persisted).
@@ -53,57 +52,18 @@ A workbench session is always scoped to **exactly one configuration in one works
 
 Typical entry flow:
 
-1. User clicks **“Open in workbench”** (may be labelled “Open editor”) from the Configuration Builder screen.
-2. The *current* URL is captured as the **return path** and stored under:
-
-   ```text
-   ade.ui.workspace.<workspaceId>.workbench.returnPath
-   ```
+1. User opens `/workspaces/:workspaceId/configurations`.
+2. The entry route resolves the best configuration context (last opened -> active -> newest draft -> starter state).
+3. The editor is rendered inline at `/workspaces/:workspaceId/configurations/:configurationId`.
 
 On exit:
 
-* The **close** action:
+* The **close** action checks for unsaved changes (see §1.3).
+* If the user confirms, navigation returns to the editor entry route (`/workspaces/:workspaceId/configurations`).
 
-  * Checks for unsaved changes (see §1.3).
-  * If the user is allowed to leave:
+### 1.2 Window model
 
-    * Navigates back to the stored return path, if it still exists.
-    * Otherwise falls back to the Configuration Builder screen.
-  * Clears the stored return path key.
-
-This keeps the workbench feeling like a “modal workspace” on top of the existing navigation, not a separate app.
-
-### 1.2 Window states
-
-The workbench can appear in three **window states**:
-
-```ts
-type WorkbenchWindowState = "restored" | "maximized" | "docked";
-
-interface WorkbenchWindowContextValue {
-  state: WorkbenchWindowState;
-  setState(next: WorkbenchWindowState): void;
-  close(): void; // respects unsaved-change guards
-}
-```
-
-* **Restored**
-
-  * Workbench is embedded in the Configuration Builder section.
-  * Workspace shell (top bar, left nav) is fully visible and usable.
-
-* **Maximized**
-
-  * Workbench covers the full viewport.
-  * Workspace shell is visually dimmed and effectively disabled.
-  * Body scroll is locked to prevent scroll bleed.
-
-* **Docked**
-
-  * Workbench UI is hidden.
-  * A small “docked workbench” affordance appears on the Configuration Builder screen and brings it back to `restored`.
-
-Window state is **session‑local only** and not persisted. On reload we always start in `restored` to avoid surprise full‑screen takeovers.
+The workbench is now **inline-only**. There is no maximize/dock state manager and no return-path storage. This keeps route behavior deterministic and avoids modal-style shell layering bugs.
 
 ### 1.3 Unsaved changes and navigation blocking
 

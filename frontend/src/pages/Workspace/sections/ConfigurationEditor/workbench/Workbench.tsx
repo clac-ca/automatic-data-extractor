@@ -15,8 +15,10 @@ import { useNavigate } from "react-router-dom";
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { PublishConfigurationDialog, type PublishDialogPhase } from "./components/PublishConfigurationDialog";
+import { RenameConfigurationDialog } from "./components/RenameConfigurationDialog";
 import { RunExtractionDialog, type RunExtractionSelection } from "./components/RunExtractionDialog";
 import { WorkbenchChrome } from "./components/WorkbenchChrome";
+import { WorkbenchGuidedTour } from "./components/WorkbenchGuidedTour";
 import { WorkbenchLayoutSync } from "./components/WorkbenchLayoutSync";
 import { WorkbenchSidebar } from "./components/WorkbenchSidebar";
 import { WorkbenchSidebarResizeHandle } from "./components/WorkbenchSidebarResizeHandle";
@@ -36,12 +38,15 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { exportConfiguration, readConfigurationFileJson } from "@/api/configurations/api";
 import {
   configurationKeys,
+  useArchiveConfigurationMutation,
+  useCreateConfigurationMutation,
   useConfigurationQuery,
   useConfigurationFilesQuery,
   useConfigurationsQuery,
   useDuplicateConfigurationMutation,
   useReplaceConfigurationMutation,
   useSaveConfigurationFileMutation,
+  useUpdateConfigurationMutation,
 } from "@/pages/Workspace/hooks/configurations";
 import { createScopedStorage } from "@/lib/storage";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
@@ -54,7 +59,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
-import { createLastSelectionStorage, persistLastSelection } from "../storage";
+import { buildConfigurationEditorPath, buildConfigurationsPath } from "../paths";
 import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
 
 const MIN_EDITOR_HEIGHT = 320;
@@ -88,18 +93,11 @@ interface ConsolePanelPreferences {
   readonly state: WorkbenchConsoleState;
 }
 
-type WorkbenchWindowState = "restored" | "maximized";
-
 interface WorkbenchProps {
   readonly workspaceId: string;
   readonly configId: string;
-  readonly configName: string;
   readonly configDisplayName: string;
   readonly seed?: WorkbenchDataSeed;
-  readonly windowState: WorkbenchWindowState;
-  readonly onMinimizeWindow: () => void;
-  readonly onMaximizeWindow: () => void;
-  readonly onRestoreWindow: () => void;
   readonly onCloseWorkbench: () => void;
   readonly shouldBypassUnsavedGuard?: () => boolean;
 }
@@ -107,13 +105,8 @@ interface WorkbenchProps {
 export function Workbench({
   workspaceId,
   configId,
-  configName,
   configDisplayName,
   seed,
-  windowState,
-  onMinimizeWindow,
-  onMaximizeWindow,
-  onRestoreWindow,
   onCloseWorkbench,
   shouldBypassUnsavedGuard,
 }: WorkbenchProps) {
@@ -146,6 +139,8 @@ export function Workbench({
   });
   const currentFilesetEtag = filesQuery.data?.fileset_hash ?? null;
   const configStatus = normalizeConfigStatus(configurationQuery.data?.status ?? filesQuery.data?.status);
+  const currentConfigDisplayName =
+    configurationQuery.data?.display_name?.trim() || configDisplayName.trim() || configId;
   const isDraftConfig = configStatus === "draft";
   const isActiveConfig = configStatus === "active";
   const fileCapabilities = filesQuery.data?.capabilities;
@@ -155,6 +150,8 @@ export function Workbench({
   const awaitingFreshConfigSnapshot =
     !usingSeed && !configurationQuery.isError && !configurationQuery.isFetchedAfterMount;
   const [publishSucceededReadOnly, setPublishSucceededReadOnly] = useState(false);
+  const [titleMenuOpen, setTitleMenuOpen] = useState(false);
+  const [archiveDraftDialogOpen, setArchiveDraftDialogOpen] = useState(false);
   const canEditConfig =
     usingSeed ||
     (hasFreshConfigSnapshot &&
@@ -163,7 +160,16 @@ export function Workbench({
       Boolean(fileCapabilities?.editable) &&
       !publishSucceededReadOnly);
   const isReadOnlyConfig = !canEditConfig;
-  const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspaceId), [workspaceId]);
+  const createConfiguration = useCreateConfigurationMutation(workspaceId);
+  const renameConfiguration = useUpdateConfigurationMutation(workspaceId, configId);
+  const archiveConfiguration = useArchiveConfigurationMutation(workspaceId);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const guidedTourStorage = useMemo(
+    () => createScopedStorage(uiStorageKeys.workbenchGuidedTourSeen(workspaceId)),
+    [workspaceId],
+  );
+  const [guidedTourOpen, setGuidedTourOpen] = useState(false);
   const configurationsQuery = useConfigurationsQuery({ workspaceId, enabled: !usingSeed });
   const existingConfigNames = useMemo(() => {
     const items = configurationsQuery.data?.items ?? [];
@@ -195,28 +201,34 @@ export function Workbench({
   }, [seed, filesQuery.data]);
 
   useEffect(() => {
-    if (!configId) {
-      return;
-    }
-    if (usingSeed || filesQuery.isSuccess) {
-      persistLastSelection(lastSelectionStorage, configId);
-    }
-  }, [configId, usingSeed, filesQuery.isSuccess, lastSelectionStorage]);
-
-  useEffect(() => {
     setPublishDialogOpen(false);
     setPublishDialogPhase("confirm");
     setPublishDialogError(null);
     setIsSubmittingPublish(false);
     setPublishSucceededReadOnly(false);
+    setRenameDialogOpen(false);
+    setRenameError(null);
+    setTitleMenuOpen(false);
+    setArchiveDraftDialogOpen(false);
   }, [configId]);
+
+  useEffect(() => {
+    if (usingSeed) {
+      return;
+    }
+    const seen = guidedTourStorage.get<boolean>();
+    if (seen) {
+      return;
+    }
+    setGuidedTourOpen(true);
+  }, [guidedTourStorage, usingSeed]);
 
   const openDuplicateDialog = useCallback(() => {
     duplicateToEdit.reset();
     setDuplicateError(null);
-    setDuplicateName(suggestDuplicateName(configDisplayName, existingConfigNames));
+    setDuplicateName(suggestDuplicateName(currentConfigDisplayName, existingConfigNames));
     setDuplicateDialogOpen(true);
-  }, [configDisplayName, duplicateToEdit, existingConfigNames]);
+  }, [currentConfigDisplayName, duplicateToEdit, existingConfigNames]);
 
   const [pendingCompletion, setPendingCompletion] = useState<RunCompletionInfo | null>(null);
   const handleRunComplete = useCallback((info: RunCompletionInfo) => {
@@ -387,7 +399,7 @@ export function Workbench({
         onSuccess(record) {
           notifyToast({ title: "Draft created.", intent: "success", duration: 3500 });
           closeDuplicateDialog();
-          navigate(`/workspaces/${workspaceId}/config-builder/${encodeURIComponent(record.id)}/editor`);
+          navigate(buildConfigurationEditorPath(workspaceId, record.id));
         },
         onError(error) {
           setDuplicateError(error instanceof Error ? error.message : "Unable to duplicate configuration.");
@@ -433,7 +445,6 @@ export function Workbench({
     showConsoleBanner,
   ]);
 
-  const isMaximized = windowState === "maximized";
   const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;
   const handleCloseWorkbench = useCallback(() => {
     onCloseWorkbench();
@@ -497,22 +508,14 @@ export function Workbench({
     [usingSeed, queryClient, workspaceId, configId, files],
   );
 
+  const shouldBypassNavigation = useCallback(() => {
+    return Boolean(shouldBypassUnsavedGuard?.());
+  }, [shouldBypassUnsavedGuard]);
+
   useUnsavedChangesGuard({
     isDirty: files.isDirty,
-    shouldBypassNavigation: shouldBypassUnsavedGuard,
+    shouldBypassNavigation,
   });
-
-  const handleMinimizeWindow = useCallback(() => {
-    onMinimizeWindow();
-  }, [onMinimizeWindow]);
-
-  const handleToggleMaximize = useCallback(() => {
-    if (isMaximized) {
-      onRestoreWindow();
-    } else {
-      onMaximizeWindow();
-    }
-  }, [isMaximized, onMaximizeWindow, onRestoreWindow]);
 
   const outputCollapsed = consoleState !== "open";
   const dirtyTabs = useMemo(
@@ -969,9 +972,14 @@ export function Workbench({
     !isSubmittingPublish;
   const isRunningExtraction = runBusy && activeRunMode === "extraction";
   const canRunExtraction =
-    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !runBusy;
+    !usingSeed &&
+    Boolean(tree) &&
+    !filesQuery.isLoading &&
+    !filesQuery.isError &&
+    !runBusy;
   const canReplaceFromArchive =
     isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
+  const canArchiveDraft = !usingSeed && isDraftConfig;
 
   const handlePublishRequest = useCallback(() => {
     if (!canPublish) {
@@ -982,6 +990,138 @@ export function Workbench({
     setPublishDialogOpen(true);
     closeConsole();
   }, [canPublish, closeConsole]);
+  const handleOpenConfigurationsHome = useCallback(() => {
+    navigate(buildConfigurationsPath(workspaceId));
+  }, [navigate, workspaceId]);
+  const handleCreateConfigurationFromFileMenu = useCallback(() => {
+    const existingNames = configurationsQuery.data?.items?.map((item) => item.display_name.trim().toLowerCase()) ?? [];
+    const existingSet = new Set(existingNames);
+    const base = "New configuration";
+    let nextName = base;
+    if (existingSet.has(base.toLowerCase())) {
+      for (let index = 2; index < 100; index += 1) {
+        const candidate = `${base} (${index})`;
+        if (!existingSet.has(candidate.toLowerCase())) {
+          nextName = candidate;
+          break;
+        }
+      }
+    }
+    createConfiguration.mutate(
+      { displayName: nextName, source: { type: "template" } },
+      {
+        onSuccess(record) {
+          notifyToast({ title: "Configuration created.", intent: "success", duration: 3000 });
+          navigate(buildConfigurationEditorPath(workspaceId, record.id));
+        },
+        onError(error) {
+          notifyToast({
+            title: error instanceof Error ? error.message : "Unable to create configuration.",
+            intent: "danger",
+            duration: 5000,
+          });
+        },
+      },
+    );
+  }, [configurationsQuery.data?.items, createConfiguration, navigate, notifyToast, workspaceId]);
+  const handleCloseToHome = useCallback(() => {
+    navigate(buildConfigurationsPath(workspaceId));
+  }, [navigate, workspaceId]);
+  const canRenameConfiguration = !usingSeed && isDraftConfig;
+  const handleOpenRenameDialog = useCallback(() => {
+    if (!canRenameConfiguration) {
+      return;
+    }
+    setRenameError(null);
+    setRenameDialogOpen(true);
+  }, [canRenameConfiguration]);
+  const handleConfirmRename = useCallback(
+    (nextDisplayName: string) => {
+      setRenameError(null);
+      renameConfiguration.mutate(
+        { displayName: nextDisplayName },
+        {
+          onSuccess(record) {
+            queryClient.setQueryData(
+              configurationKeys.detail(workspaceId, configId),
+              record,
+            );
+            setRenameDialogOpen(false);
+            notifyToast({
+              title: `Configuration renamed to ${record.display_name}.`,
+              intent: "success",
+              duration: 3000,
+            });
+          },
+          onError(error) {
+            if (error instanceof ApiError && error.status === 409) {
+              setRenameError("Only draft configurations can be renamed.");
+              return;
+            }
+            if (error instanceof ApiError && error.status === 422) {
+              setRenameError("Enter a valid configuration name.");
+              return;
+            }
+            const message = error instanceof Error ? error.message : "Unable to rename configuration.";
+            setRenameError(message);
+            notifyToast({ title: message, intent: "danger", duration: 5000 });
+          },
+        },
+      );
+    },
+    [configId, notifyToast, queryClient, renameConfiguration, workspaceId],
+  );
+  const handleCopyConfigurationId = useCallback(async () => {
+    try {
+      if (typeof navigator === "undefined" || typeof navigator.clipboard?.writeText !== "function") {
+        throw new Error("Clipboard API unavailable.");
+      }
+      await navigator.clipboard.writeText(configId);
+      notifyToast({ title: "Configuration ID copied.", intent: "success", duration: 2500 });
+    } catch {
+      notifyToast({ title: "Unable to copy configuration ID.", intent: "danger", duration: 5000 });
+    }
+  }, [configId, notifyToast]);
+  const handleOpenArchiveDraftDialog = useCallback(() => {
+    if (!canArchiveDraft) {
+      return;
+    }
+    setArchiveDraftDialogOpen(true);
+  }, [canArchiveDraft]);
+  const handleConfirmArchiveDraft = useCallback(() => {
+    if (!canArchiveDraft) {
+      return;
+    }
+    archiveConfiguration.mutate(
+      { configurationId: configId },
+      {
+        onSuccess() {
+          setArchiveDraftDialogOpen(false);
+          notifyToast({ title: "Draft archived.", intent: "success", duration: 3000 });
+          navigate(buildConfigurationsPath(workspaceId));
+        },
+        onError(error) {
+          const message = error instanceof Error ? error.message : "Unable to archive draft.";
+          notifyToast({ title: message, intent: "danger", duration: 5000 });
+        },
+      },
+    );
+  }, [
+    archiveConfiguration,
+    canArchiveDraft,
+    configId,
+    navigate,
+    notifyToast,
+    workspaceId,
+  ]);
+  const markGuidedTourSeen = useCallback(() => {
+    guidedTourStorage.set(true);
+    setGuidedTourOpen(false);
+  }, [guidedTourStorage]);
+  const handleStartGuidedTour = useCallback(() => {
+    setTitleMenuOpen(false);
+    setGuidedTourOpen(true);
+  }, []);
 
   const handleOpenActionsMenu = useCallback((position: { x: number; y: number }) => {
     setActionsMenu(position);
@@ -1113,18 +1253,6 @@ export function Workbench({
   const actionsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const items: ContextMenuItem[] = [];
 
-    if (isDraftConfig) {
-      items.push({
-        id: "publish",
-        label: "Publish",
-        disabled: !canPublish,
-        onSelect: () => {
-          setActionsMenu(null);
-          handlePublishRequest();
-        },
-      });
-    }
-
     items.push({
       id: "duplicate",
       label: "Duplicate to edit",
@@ -1155,26 +1283,12 @@ export function Workbench({
 
     return items;
   }, [
-    canPublish,
     canReplaceFromArchive,
-    handlePublishRequest,
     handleExportConfig,
     handleReplaceArchiveRequest,
-    isDraftConfig,
     isExporting,
     openDuplicateDialog,
   ]);
-
-  useEffect(() => {
-    if (typeof document === "undefined" || !isMaximized) {
-      return;
-    }
-    const previous = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = previous || "";
-    };
-  }, [isMaximized]);
 
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
   const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
@@ -1225,10 +1339,8 @@ export function Workbench({
       />
     );
   }
-  const rootSurfaceClass = isMaximized ? "bg-background text-foreground" : "bg-transparent text-foreground";
-  const windowFrameClass = isMaximized
-    ? "fixed inset-0 z-[90] flex flex-col bg-background text-foreground"
-    : "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground";
+  const rootSurfaceClass = "bg-transparent text-foreground";
+  const windowFrameClass = "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground";
   const workbenchSidebarStyle = {
     "--sidebar-width": `${sidebarWidth}px`,
     "--sidebar-width-icon": "3.5rem",
@@ -1243,13 +1355,11 @@ export function Workbench({
     <div
       className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}
     >
-      {isMaximized ? <div className="fixed inset-0 z-40 bg-overlay-strong" /> : null}
       <div className={windowFrameClass}>
         <SidebarProvider className="relative min-h-0 w-full flex-1" style={workbenchSidebarStyle}>
           <WorkbenchLayoutSync
             outputCollapsed={outputCollapsed}
             consoleFraction={consoleFraction}
-            isMaximized={isMaximized}
             pane={pane}
           />
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -1260,7 +1370,7 @@ export function Workbench({
                 files.openFile(fileId);
                 setFileId(fileId);
               }}
-              configDisplayName={configDisplayName}
+              configDisplayName={currentConfigDisplayName}
             />
             <WorkbenchSidebarResizeHandle
               width={sidebarWidth}
@@ -1270,20 +1380,35 @@ export function Workbench({
             />
             <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card text-card-foreground">
             <WorkbenchChrome
-              configName={configName}
+              configName={currentConfigDisplayName}
+              configStatus={configStatus}
               workspaceLabel={workspaceLabel}
               validationLabel={validationLabel}
               canSaveFiles={canSaveFiles}
               isSavingFiles={isSavingTabs}
               onSaveFile={handleSaveActiveTab}
               saveShortcutLabel={saveShortcutLabel}
+              toggleConsoleShortcutLabel={toggleConsoleShortcutLabel}
               onOpenActionsMenu={handleOpenActionsMenu}
               canRunValidation={canRunValidation}
               isRunningValidation={isRunningValidation}
               onRunValidation={handleRunValidation}
+              onOpenConfigurationsHome={handleOpenConfigurationsHome}
+              onCreateConfigurationFromFileMenu={handleCreateConfigurationFromFileMenu}
+              onCloseFromFileMenu={handleCloseToHome}
               canPublish={canPublish}
               isPublishing={isRunningPublish}
               onPublish={handlePublishRequest}
+              canRenameConfiguration={canRenameConfiguration}
+              canArchiveDraft={canArchiveDraft}
+              titleMenuOpen={titleMenuOpen}
+              onTitleMenuOpenChange={setTitleMenuOpen}
+              onRenameConfiguration={handleOpenRenameDialog}
+              onCopyConfigurationId={() => {
+                void handleCopyConfigurationId();
+              }}
+              onArchiveDraft={handleOpenArchiveDraftDialog}
+              onStartGuidedTour={handleStartGuidedTour}
               canRunExtraction={canRunExtraction}
               isRunningExtraction={isRunningExtraction}
               onRunExtraction={() => {
@@ -1294,9 +1419,6 @@ export function Workbench({
               onToggleConsole={handleToggleOutput}
               consoleToggleDisabled={isPublishDialogActive}
               appearance={menuAppearance}
-              windowState={windowState}
-              onMinimizeWindow={handleMinimizeWindow}
-              onToggleMaximize={handleToggleMaximize}
               onCloseWindow={handleCloseWorkbench}
               actionsBusy={isExporting || replaceConfig.isPending}
             />
@@ -1332,15 +1454,7 @@ export function Workbench({
                         <p className="text-xs font-medium text-accent-foreground">Unsaved changes will be saved before publish.</p>
                       ) : null}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={handlePublishRequest}
-                      disabled={!canPublish}
-                      title={!canPublish ? "Publish is unavailable while another run is in progress." : undefined}
-                    >
-                      {isRunningPublish ? "Publishing…" : "Publish"}
-                    </Button>
+                    <p className="text-xs text-muted-foreground">Use the Publish action in the top bar.</p>
                   </div>
                 )}
               </div>
@@ -1499,6 +1613,7 @@ export function Workbench({
           onRun={handleRunExtraction}
         />
       ) : null}
+
       <input
         ref={replaceInputRef}
         type="file"
@@ -1574,10 +1689,49 @@ export function Workbench({
         onDuplicateToEdit={handlePublishDialogDuplicate}
       />
 
+      <RenameConfigurationDialog
+        open={renameDialogOpen}
+        currentName={currentConfigDisplayName}
+        error={renameError}
+        isSubmitting={renameConfiguration.isPending}
+        onCancel={() => {
+          setRenameDialogOpen(false);
+          setRenameError(null);
+        }}
+        onConfirm={handleConfirmRename}
+      />
+
+      <ConfirmDialog
+        open={archiveDraftDialogOpen}
+        title="Archive this draft?"
+        description="This removes it from draft editing flow but keeps version history and run references intact."
+        confirmLabel="Archive draft"
+        cancelLabel="Cancel"
+        tone="danger"
+        onCancel={() => setArchiveDraftDialogOpen(false)}
+        onConfirm={handleConfirmArchiveDraft}
+        isConfirming={archiveConfiguration.isPending}
+        confirmDisabled={!canArchiveDraft || archiveConfiguration.isPending}
+      />
+
+      <WorkbenchGuidedTour
+        open={
+          guidedTourOpen &&
+          !usingSeed &&
+          !publishDialogOpen &&
+          !replaceConfirmOpen &&
+          !duplicateDialogOpen &&
+          !archiveDraftDialogOpen &&
+          !titleMenuOpen
+        }
+        onSkip={markGuidedTourSeen}
+        onComplete={markGuidedTourSeen}
+      />
+
       <ConfirmDialog
         open={duplicateDialogOpen}
         title="Duplicate configuration"
-        description={`Create a new draft based on “${configDisplayName}”.`}
+        description={`Create a new draft based on “${currentConfigDisplayName}”.`}
         confirmLabel="Create draft"
         cancelLabel="Cancel"
         onCancel={closeDuplicateDialog}

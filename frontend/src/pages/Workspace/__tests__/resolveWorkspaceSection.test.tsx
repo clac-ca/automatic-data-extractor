@@ -8,11 +8,8 @@ vi.mock("@/pages/Workspace/sections/Documents", () => ({
   DocumentsDetailPage: ({ documentId }: { documentId: string }) => <div>doc {documentId}</div>,
 }));
 vi.mock("@/pages/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
-vi.mock("@/pages/Workspace/sections/ConfigBuilder", () => ({ default: () => <div>configs</div> }));
-vi.mock("@/pages/Workspace/sections/ConfigBuilder/detail", () => ({
-  default: () => <div>config detail</div>,
-}));
-vi.mock("@/pages/Workspace/sections/ConfigBuilder/workbench", () => ({ default: () => <div>editor</div> }));
+vi.mock("@/pages/Workspace/sections/ConfigurationEditor", () => ({ default: () => <div>configs</div> }));
+vi.mock("@/pages/Workspace/sections/ConfigurationEditor/workbench", () => ({ default: () => <div>editor</div> }));
 vi.mock("@/pages/Workspace/sections/Settings", () => ({ default: () => <div>settings</div> }));
 vi.mock("@/components/layout", () => ({
   PageState: ({ title }: { title: string }) => <div>{title}</div>,
@@ -44,24 +41,24 @@ describe("resolveWorkspaceSection", () => {
     expect(result).toMatchObject({ kind: "content", key: "documents", fullWidth: true });
   });
 
-  it("returns the config builder index and details", () => {
-    const index = resolveWorkspaceSection(workspaceId, ["config-builder"], "", "");
-    expect(index).toMatchObject({ kind: "content", key: "config-builder" });
+  it("returns the configuration editor entry route and editor route", () => {
+    const index = resolveWorkspaceSection(workspaceId, ["configurations"], "", "");
+    expect(index).toMatchObject({ kind: "content", key: "configurations", fullHeight: true });
 
-    const detail = resolveWorkspaceSection(workspaceId, ["config-builder", "cfg-9"], "", "");
-    expect(detail).toMatchObject({ kind: "content", key: "config-builder:cfg-9" });
+    const detail = resolveWorkspaceSection(workspaceId, ["configurations", "cfg-9"], "", "");
+    expect(detail).toMatchObject({ kind: "content", key: "configurations:cfg-9", fullHeight: true });
   });
 
-  it("returns the config editor without encoding search/hash in the key", () => {
+  it("rejects unknown trailing configuration segments", () => {
     const editor = resolveWorkspaceSection(
       workspaceId,
-      ["config-builder", "cfg-9", "editor"],
+      ["configurations", "cfg-9", "editor"],
       "?tab=editor",
       "#panel",
     );
     expect(editor).toMatchObject({
       kind: "content",
-      key: "config-builder:cfg-9:editor",
+      key: "not-found:configurations/cfg-9/editor",
     });
   });
 

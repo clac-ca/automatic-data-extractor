@@ -48,14 +48,14 @@ describe("useUnsavedChangesGuard", () => {
     const confirmMock = vi.fn().mockReturnValue(false);
     const { router } = renderWithRouter(
       <GuardHarness confirm={confirmMock} />,
-      "/workspaces/acme/config-builder/foo/editor",
+      "/workspaces/acme/configurations/foo",
     );
 
     await userEvent.click(screen.getByRole("button", { name: "mark-dirty" }));
     await userEvent.click(screen.getByRole("button", { name: "navigate-away" }));
 
     expect(confirmMock).toHaveBeenCalledWith(UNSAVED_CHANGES_PROMPT);
-    expect(router.state.location.pathname).toBe("/workspaces/acme/config-builder/foo/editor");
+    expect(router.state.location.pathname).toBe("/workspaces/acme/configurations/foo");
 
     const event = new Event("beforeunload", { cancelable: true });
     Object.defineProperty(event, "returnValue", { writable: true, value: undefined });
@@ -69,7 +69,7 @@ describe("useUnsavedChangesGuard", () => {
     const confirmMock = vi.fn().mockReturnValue(true);
     const { router } = renderWithRouter(
       <GuardHarness confirm={confirmMock} />,
-      "/workspaces/acme/config-builder/foo/editor",
+      "/workspaces/acme/configurations/foo",
     );
 
     await userEvent.click(screen.getByRole("button", { name: "mark-dirty" }));

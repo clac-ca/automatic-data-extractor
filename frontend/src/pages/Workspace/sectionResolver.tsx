@@ -1,6 +1,7 @@
 import { lazy, type ReactElement } from "react";
 
 import { PageState } from "@/components/layout";
+import { CONFIGURATIONS_SECTION_SEGMENT } from "@/pages/Workspace/sections/ConfigurationEditor/paths";
 
 const DocumentsListPage = lazy(() => import("@/pages/Workspace/sections/Documents"));
 const DocumentsDetailPage = lazy(async () => {
@@ -8,9 +9,8 @@ const DocumentsDetailPage = lazy(async () => {
   return { default: module.DocumentsDetailPage };
 });
 const RunsScreen = lazy(() => import("@/pages/Workspace/sections/Runs"));
-const ConfigBuilderScreen = lazy(() => import("@/pages/Workspace/sections/ConfigBuilder"));
-const ConfigurationDetailScreen = lazy(() => import("@/pages/Workspace/sections/ConfigBuilder/detail"));
-const ConfigBuilderWorkbenchScreen = lazy(() => import("@/pages/Workspace/sections/ConfigBuilder/workbench"));
+const ConfigurationEditorEntryRoute = lazy(() => import("@/pages/Workspace/sections/ConfigurationEditor"));
+const ConfigurationEditorRoute = lazy(() => import("@/pages/Workspace/sections/ConfigurationEditor/workbench"));
 const WorkspaceSettingsScreen = lazy(() => import("@/pages/Workspace/sections/Settings"));
 
 export const DEFAULT_WORKSPACE_SECTION_PATH = "documents";
@@ -33,7 +33,7 @@ type WorkspaceSectionResolver = (segments: string[]) => WorkspaceSectionRender;
 const workspaceSectionResolvers: Record<string, WorkspaceSectionResolver> = {
   [DEFAULT_WORKSPACE_SECTION_PATH]: resolveDocumentsSection,
   runs: resolveRunsSection,
-  "config-builder": resolveConfigBuilderSection,
+  [CONFIGURATIONS_SECTION_SEGMENT]: resolveConfigurationEditorSection,
   settings: resolveSettingsSection,
 };
 
@@ -64,22 +64,19 @@ function resolveRunsSection(): WorkspaceSectionRender {
   return createSectionContent("runs", <RunsScreen />, { fullWidth: true });
 }
 
-function resolveConfigBuilderSection(segments: string[]): WorkspaceSectionRender {
-  const [, maybeConfigId, maybeMode] = segments;
+function resolveConfigurationEditorSection(segments: string[]): WorkspaceSectionRender {
+  const [, maybeConfigId] = segments;
   if (!maybeConfigId) {
-    return createSectionContent("config-builder", <ConfigBuilderScreen />);
+    return createSectionContent("configurations", <ConfigurationEditorEntryRoute />, { fullHeight: true });
+  }
+  if (segments.length > 2) {
+    return resolveUnknownSection(segments);
   }
   const configId = decodeURIComponent(maybeConfigId);
-  if (maybeMode === "editor") {
-    return createSectionContent(
-      `config-builder:${maybeConfigId}:editor`,
-      <ConfigBuilderWorkbenchScreenWithParams configId={configId} />,
-      { fullHeight: true },
-    );
-  }
   return createSectionContent(
-    `config-builder:${maybeConfigId}`,
-    <ConfigurationDetailScreen params={{ configId }} />,
+    `configurations:${maybeConfigId}`,
+    <ConfigurationEditorRouteWithParams configId={configId} />,
+    { fullHeight: true },
   );
 }
 
@@ -120,6 +117,6 @@ export function resolveWorkspaceSection(
   return resolver ? resolver(segments) : resolveUnknownSection(segments);
 }
 
-function ConfigBuilderWorkbenchScreenWithParams({ configId }: { readonly configId: string }) {
-  return <ConfigBuilderWorkbenchScreen params={{ configId }} />;
+function ConfigurationEditorRouteWithParams({ configId }: { readonly configId: string }) {
+  return <ConfigurationEditorRoute params={{ configId }} />;
 }

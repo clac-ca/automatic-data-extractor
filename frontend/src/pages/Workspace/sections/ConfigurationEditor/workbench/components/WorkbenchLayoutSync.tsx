@@ -7,12 +7,10 @@ import type { WorkbenchPane } from "../state/workbenchSearchParams";
 export function WorkbenchLayoutSync({
   outputCollapsed,
   consoleFraction,
-  isMaximized,
   pane,
 }: {
   readonly outputCollapsed: boolean;
   readonly consoleFraction: number | null;
-  readonly isMaximized: boolean;
   readonly pane: WorkbenchPane;
 }) {
   const { state, openMobile } = useSidebar();
@@ -24,7 +22,7 @@ export function WorkbenchLayoutSync({
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event("ade:workbench-layout"));
     });
-  }, [state, openMobile, outputCollapsed, consoleFraction, isMaximized, pane]);
+  }, [state, openMobile, outputCollapsed, consoleFraction, pane]);
 
   return null;
 }

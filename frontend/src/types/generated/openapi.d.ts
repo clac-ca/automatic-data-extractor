@@ -1018,6 +1018,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/configurations/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve workspace configuration timeline */
+        get: operations["read_workspace_configuration_history_api_v1_workspaces__workspaceId__configurations_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}": {
         parameters: {
             query?: never;
@@ -1029,6 +1046,24 @@ export type paths = {
         get: operations["read_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update editable metadata for a draft configuration */
+        patch: operations["update_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a previous configuration as a new draft */
+        post: operations["restore_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1061,7 +1096,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Archive the active configuration */
+        /** Archive a draft or active configuration */
         post: operations["archive_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__archive_post"];
         delete?: never;
         options?: never;
@@ -1827,6 +1862,8 @@ export type components = {
         Body_import_configuration_api_v1_workspaces__workspaceId__configurations_import_post: {
             /** Display Name */
             display_name: string;
+            /** Notes */
+            notes?: string | null;
             /**
              * File
              * Format: binary
@@ -1901,6 +1938,22 @@ export type components = {
             type: "template";
         };
         /**
+         * ConfigurationChangeSummary
+         * @description File-level change summary between two configuration snapshots.
+         */
+        ConfigurationChangeSummary: {
+            /** Added */
+            added: number;
+            /** Modified */
+            modified: number;
+            /** Removed */
+            removed: number;
+            /** Total */
+            total: number;
+            /** Examples */
+            examples?: string[];
+        };
+        /**
          * ConfigurationCreate
          * @description Payload for creating a configuration.
          */
@@ -1909,6 +1962,58 @@ export type components = {
             display_name: string;
             /** Source */
             source: components["schemas"]["ConfigSourceTemplate"] | components["schemas"]["ConfigSourceClone"];
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * ConfigurationHistoryEntry
+         * @description Single history row for a configuration family.
+         */
+        ConfigurationHistoryEntry: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /** Display Name */
+            display_name: string;
+            status: components["schemas"]["ConfigurationStatus"];
+            source_kind: components["schemas"]["ConfigurationSourceKind"];
+            /** Source Configuration Id */
+            source_configuration_id?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Activated At */
+            activated_at?: string | null;
+            /** Version Label */
+            version_label?: string | null;
+            /**
+             * Is Current
+             * @default false
+             */
+            is_current: boolean;
+            /**
+             * In Focus Lineage
+             * @default false
+             */
+            in_focus_lineage: boolean;
+            /**
+             * Changes Unavailable
+             * @default false
+             */
+            changes_unavailable: boolean;
+            changes?: components["schemas"]["ConfigurationChangeSummary"] | null;
         };
         /**
          * ConfigurationPage
@@ -1943,6 +2048,11 @@ export type components = {
             /** Display Name */
             display_name: string;
             status: components["schemas"]["ConfigurationStatus"];
+            /** Source Configuration Id */
+            source_configuration_id?: string | null;
+            source_kind: components["schemas"]["ConfigurationSourceKind"];
+            /** Notes */
+            notes?: string | null;
             /** Published Digest */
             published_digest?: string | null;
             /**
@@ -1959,11 +2069,71 @@ export type components = {
             activated_at?: string | null;
         };
         /**
+         * ConfigurationRestoreRequest
+         * @description Restore a previous configuration as a new draft.
+         */
+        ConfigurationRestoreRequest: {
+            /**
+             * Source Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            source_configuration_id: string;
+            /** Display Name */
+            display_name?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * ConfigurationSourceKind
+         * @description Provenance marker for how a configuration was created.
+         * @enum {string}
+         */
+        ConfigurationSourceKind: "template" | "import" | "clone" | "restore";
+        /**
          * ConfigurationStatus
          * @description Lifecycle states for workspace configuration packages.
          * @enum {string}
          */
         ConfigurationStatus: "draft" | "active" | "archived";
+        /**
+         * ConfigurationUpdateRequest
+         * @description Patch editable draft metadata for a configuration.
+         */
+        ConfigurationUpdateRequest: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
+         * ConfigurationWorkspaceHistoryResponse
+         * @description Workspace timeline payload with optional lineage focus.
+         */
+        ConfigurationWorkspaceHistoryResponse: {
+            /** Current Configuration Id */
+            current_configuration_id?: string | null;
+            /** Focus Configuration Id */
+            focus_configuration_id?: string | null;
+            /**
+             * Scope
+             * @default workspace
+             * @enum {string}
+             */
+            scope: "workspace" | "lineage";
+            /**
+             * Status Filter
+             * @default all
+             * @enum {string}
+             */
+            status_filter: "all" | "published" | "drafts";
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total Count */
+            total_count: number;
+            /** Items */
+            items: components["schemas"]["ConfigurationHistoryEntry"][];
+        };
         /** CursorMeta */
         CursorMeta: {
             /** Limit */
@@ -7908,6 +8078,47 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    read_workspace_configuration_history_api_v1_workspaces__workspaceId__configurations_history_get: {
+        parameters: {
+            query?: {
+                focus_configuration_id?: string | null;
+                scope?: "workspace" | "lineage";
+                status_filter?: "all" | "published" | "drafts";
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationWorkspaceHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     read_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__get: {
         parameters: {
             query?: never;
@@ -7927,6 +8138,92 @@ export interface operations {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Configuration identifier */
+                configurationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    restore_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Configuration identifier */
+                configurationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
                 content: {

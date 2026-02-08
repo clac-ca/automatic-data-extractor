@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -12,6 +13,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     Response,
     Security,
@@ -50,8 +52,13 @@ from ..exceptions import (
 from ..http import ConfigurationIdPath, WorkspaceIdPath, raise_problem
 from ..schemas import (
     ConfigurationCreate,
+    ConfigurationHistoryScope,
+    ConfigurationHistoryStatusFilter,
     ConfigurationPage,
     ConfigurationRecord,
+    ConfigurationRestoreRequest,
+    ConfigurationUpdateRequest,
+    ConfigurationWorkspaceHistoryResponse,
 )
 from ..service import (
     ConfigurationsService,
@@ -68,6 +75,14 @@ UPLOAD_ARCHIVE_FIELD = File(...)
 CONFIG_CREATE_BODY = Body(
     ...,
     description="Display name and template/clone source for the configuration.",
+)
+CONFIG_RESTORE_BODY = Body(
+    ...,
+    description="Restore source and optional metadata for creating a new draft.",
+)
+CONFIG_UPDATE_BODY = Body(
+    ...,
+    description="Update editable draft configuration metadata.",
 )
 
 ConfigurationsServiceDep = Annotated[ConfigurationsService, Depends(get_configurations_service)]
@@ -119,6 +134,47 @@ def list_configurations(
         cursor=list_query.cursor,
         include_total=list_query.include_total,
     )
+
+
+@router.get(
+    "/configurations/history",
+    response_model=ConfigurationWorkspaceHistoryResponse,
+    response_model_exclude_none=True,
+    summary="Retrieve workspace configuration timeline",
+)
+def read_workspace_configuration_history(
+    workspace_id: WorkspaceIdPath,
+    service: ConfigurationsServiceReadDep,
+    focus_configuration_id: Annotated[
+        UUID | None, Query(alias="focus_configuration_id")
+    ] = None,
+    scope: Annotated[ConfigurationHistoryScope, Query()] = "workspace",
+    status_filter: Annotated[
+        ConfigurationHistoryStatusFilter, Query(alias="status_filter")
+    ] = "all",
+    cursor: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.read"),
+            scopes=["{workspaceId}"],
+        ),
+    ] = None,
+) -> ConfigurationWorkspaceHistoryResponse:
+    try:
+        return service.list_workspace_configuration_history(
+            workspace_id=workspace_id,
+            focus_configuration_id=focus_configuration_id,
+            scope=scope,
+            status_filter=status_filter,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigStateError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
 @router.get(
@@ -180,6 +236,7 @@ def create_configuration(
             workspace_id=workspace_id,
             display_name=payload.display_name,
             source=payload.source,
+            notes=payload.notes,
         )
     except ConfigSourceNotFoundError as exc:
         raise HTTPException(
@@ -207,6 +264,83 @@ def create_configuration(
 
 
 @router.post(
+    "/configurations/{configurationId}/restore",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    status_code=status.HTTP_201_CREATED,
+    summary="Restore a previous configuration as a new draft",
+    response_model_exclude_none=True,
+)
+def restore_configuration(
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
+    service: ConfigurationsServiceDep,
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspaceId}"],
+        ),
+    ],
+    *,
+    payload: ConfigurationRestoreRequest = CONFIG_RESTORE_BODY,
+) -> ConfigurationRecord:
+    try:
+        record = service.restore_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            payload=payload,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigSourceNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="source_not_found") from exc
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigPublishConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.patch(
+    "/configurations/{configurationId}",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    response_model_exclude_none=True,
+    summary="Update editable metadata for a draft configuration",
+)
+def update_configuration(
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
+    service: ConfigurationsServiceDep,
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspaceId}"],
+        ),
+    ],
+    *,
+    payload: ConfigurationUpdateRequest = CONFIG_UPDATE_BODY,
+) -> ConfigurationRecord:
+    try:
+        record = service.update_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            payload=payload,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.post(
     "/configurations/import",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
@@ -226,6 +360,7 @@ def import_configuration(
     ],
     *,
     display_name: Annotated[str, Form(min_length=1)],
+    notes: Annotated[str | None, Form()] = None,
     file: UploadFile = UPLOAD_ARCHIVE_FIELD,
 ) -> ConfigurationRecord:
     try:
@@ -234,6 +369,7 @@ def import_configuration(
             workspace_id=workspace_id,
             display_name=display_name.strip(),
             archive=archive,
+            notes=notes.strip() if notes is not None else None,
         )
     except ConfigSourceInvalidError as exc:
         detail = {
@@ -266,7 +402,7 @@ def import_configuration(
     "/configurations/{configurationId}/archive",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
-    summary="Archive the active configuration",
+    summary="Archive a draft or active configuration",
     response_model_exclude_none=True,
 )
 def archive_configuration_endpoint(

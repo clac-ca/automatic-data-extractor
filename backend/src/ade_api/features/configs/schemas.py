@@ -11,7 +11,7 @@ from pydantic import Field, field_validator, model_validator
 from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
-from ade_db.models import ConfigurationStatus
+from ade_db.models import ConfigurationSourceKind, ConfigurationStatus
 
 
 class ConfigSourceTemplate(BaseSchema):
@@ -47,11 +47,20 @@ class ConfigurationCreate(BaseSchema):
 
     display_name: str = Field(min_length=1, max_length=255)
     source: ConfigSource
+    notes: str | None = None
 
     @field_validator("display_name", mode="before")
     @classmethod
     def _clean_display_name(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _clean_notes(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
 
 
 class ConfigurationRecord(BaseSchema):
@@ -61,6 +70,9 @@ class ConfigurationRecord(BaseSchema):
     workspace_id: UUIDStr
     display_name: str
     status: ConfigurationStatus
+    source_configuration_id: UUIDStr | None = None
+    source_kind: ConfigurationSourceKind
+    notes: str | None = None
     published_digest: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -76,6 +88,108 @@ class ConfigValidationIssue(BaseSchema):
 
 class ConfigurationPage(CursorPage[ConfigurationRecord]):
     """Cursor-based configuration listing."""
+
+
+class ConfigurationChangeSummary(BaseSchema):
+    """File-level change summary between two configuration snapshots."""
+
+    added: int
+    modified: int
+    removed: int
+    total: int
+    examples: list[str] = Field(default_factory=list)
+
+
+class ConfigurationHistoryEntry(BaseSchema):
+    """Single history row for a configuration family."""
+
+    id: UUIDStr
+    display_name: str
+    status: ConfigurationStatus
+    source_kind: ConfigurationSourceKind
+    source_configuration_id: UUIDStr | None = None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    activated_at: datetime | None = None
+    version_label: str | None = None
+    is_current: bool = False
+    in_focus_lineage: bool = False
+    changes_unavailable: bool = False
+    changes: ConfigurationChangeSummary | None = None
+
+
+ConfigurationHistoryScope = Literal["workspace", "lineage"]
+ConfigurationHistoryStatusFilter = Literal["all", "published", "drafts"]
+
+
+class ConfigurationWorkspaceHistoryResponse(BaseSchema):
+    """Workspace timeline payload with optional lineage focus."""
+
+    current_configuration_id: UUIDStr | None = None
+    focus_configuration_id: UUIDStr | None = None
+    scope: ConfigurationHistoryScope = "workspace"
+    status_filter: ConfigurationHistoryStatusFilter = "all"
+    next_cursor: str | None = None
+    total_count: int
+    items: list[ConfigurationHistoryEntry]
+
+
+class ConfigurationRestoreRequest(BaseSchema):
+    """Restore a previous configuration as a new draft."""
+
+    source_configuration_id: UUIDStr
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    notes: str | None = None
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def _clean_optional_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _clean_optional_notes(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+
+class ConfigurationUpdateRequest(BaseSchema):
+    """Patch editable draft metadata for a configuration."""
+
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    notes: str | None = None
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def _clean_optional_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _clean_optional_notes(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @model_validator(mode="after")
+    def _ensure_mutation_present(self) -> ConfigurationUpdateRequest:
+        has_display_name = "display_name" in self.model_fields_set
+        has_notes = "notes" in self.model_fields_set
+        if not has_display_name and not has_notes:
+            raise ValueError("At least one field is required.")
+        if has_display_name and self.display_name is None:
+            raise ValueError("display_name must be a non-empty string.")
+        return self
 
 
 class FileCapabilities(BaseSchema):
@@ -181,8 +295,15 @@ __all__ = [
     "ConfigSourceTemplate",
     "ConfigValidationIssue",
     "ConfigurationPage",
+    "ConfigurationChangeSummary",
+    "ConfigurationHistoryEntry",
+    "ConfigurationHistoryScope",
+    "ConfigurationHistoryStatusFilter",
+    "ConfigurationWorkspaceHistoryResponse",
     "ConfigurationCreate",
     "ConfigurationRecord",
+    "ConfigurationRestoreRequest",
+    "ConfigurationUpdateRequest",
     "FileCapabilities",
     "FileSizeLimits",
     "FileListingSummary",

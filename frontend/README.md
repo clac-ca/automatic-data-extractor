@@ -4,7 +4,7 @@ ADE Web is the browser-based front-end for the **Automatic Data Extractor (ADE)*
 
 It serves two main personas:
 
-- **Workspace owners / engineers** – design and evolve **Configurations** (backed by Python configuration packages / `ade_config` projects), manage Safe mode, and administer workspaces, SSO, roles, and members using the **Configuration Builder** workbench.
+- **Workspace owners / engineers** – design and evolve **Configurations** (backed by Python configuration packages / `ade_config` projects), manage Safe mode, and administer workspaces, SSO, roles, and members using the **Configuration editor** workbench.
 - **End users / analysts / operators** – upload documents, run extractions, monitor progress, inspect logs and telemetry, and download structured outputs.
 
 ADE Web is intentionally **backend-agnostic**. This README describes **what** the app does and the behaviour it expects from any compatible backend. For deep technical details, see the numbered docs in `./docs` (listed at the end).
@@ -16,7 +16,7 @@ ADE Web is intentionally **backend-agnostic**. This README describes **what** th
 Use these as your “don’t break the mental model” guardrails:
 
 - **Name things after the domain**  
-  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `pages/Workspace/sections`.  
+  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/configurations`, `/settings`) and mirrored under `pages/Workspace/sections`.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
@@ -44,7 +44,7 @@ For contribution workflow, linting, scripts, and local dev setup, see `CONTRIBUT
 ADE Web has two major UX layers:
 
 1. **Workspace directory** (`/workspaces`) – where users discover and create workspaces.
-2. **Workspace shell** (`/workspaces/:workspaceId/...`) – where users operate *inside* a workspace (Documents, Runs, Configuration Builder, Settings).
+2. **Workspace shell** (`/workspaces/:workspaceId/...`) – where users operate *inside* a workspace (Documents, Runs, Configuration editor, Settings).
 
 Both layers share:
 
@@ -71,7 +71,7 @@ Inside a workspace, the **workspace shell** provides:
   Workspace identity + primary sections:
   - Documents  
   - Runs  
-  - Configurations (**Configuration Builder**)  
+  - Configurations (**Configuration editor**)  
   - Settings
 
 - **Top bar**  
@@ -86,7 +86,7 @@ Inside a workspace, the **workspace shell** provides:
 - **Notifications**  
   Toasts for transient success/error; banners for cross-cutting issues (Safe mode, connectivity, console auto-collapse, etc).
 
-Some routes (notably the **Configuration Builder workbench**) can temporarily hide or dim parts of the shell for an immersive editing layout.
+Some routes (notably the **Configuration editor workbench**) can temporarily hide or dim parts of the shell for an immersive editing layout.
 
 See: [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md)
 
@@ -111,15 +111,15 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
 
 - **Configuration & configuration package**  
   Workspace concept that describes how ADE interprets and transforms documents. Backed by an installable Python `ade_config` package; versions are exposed as **Configuration versions** with a simple lifecycle: **Draft → Active → Archived**.  
-  See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#33-configuration), [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md)
+  See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#33-configuration), [`docs/08-configurations-and-configurations.md`](./docs/08-configurations-and-configurations.md)
 
 - **Environment**  
   Worker-owned execution cache for a given configuration + dependency digest (virtualenv with `ade_engine` + configuration). Environments are provisioned automatically as runs start.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#34-environment), [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md#47-configurations--environments)
 
 - **Manifest & schema**  
-  Structured description of expected outputs (tables, columns, transforms, validators) surfaced in the Configuration Builder. ADE Web patches the manifest without dropping unknown fields so the backend can evolve independently.  
-  See: [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md#7-manifest-and-schema-integration)
+  Structured description of expected outputs (tables, columns, transforms, validators) surfaced in the Configuration editor. ADE Web patches the manifest without dropping unknown fields so the backend can evolve independently.  
+  See: [`docs/08-configurations-and-configurations.md`](./docs/08-configurations-and-configurations.md#7-manifest-and-schema-integration)
 
 - **Safe mode**  
   Global kill switch for engine execution. When enabled, new runs, validations, and activations are blocked; read-only operations continue to work. Safe mode is toggled from a system-level Settings surface (permission-gated), and ADE Web shows a workspace banner and disables run/validation controls with explanatory tooltips.  
@@ -152,7 +152,7 @@ Workspace sections live under:
 
 - `/workspaces/:workspaceId/documents`
 - `/workspaces/:workspaceId/runs`
-- `/workspaces/:workspaceId/config-builder`
+- `/workspaces/:workspaceId/configurations`
 - `/workspaces/:workspaceId/settings`
 
 Route helpers now use React Router utilities (for example, `generatePath`, `createSearchParams`) and are kept close to the
@@ -178,7 +178,7 @@ Important UI state is encoded in **query parameters**, not local component state
   (See [`docs/07`](./docs/07-documents-and-runs.md#6-runs-ledger-screen))
 - Workspace Settings tab: `view=general|members|roles`  
   (See [`docs/06`](./docs/06-workspace-layout-and-sections.md#9-guidelines-for-new-sections))
-- Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
+- Configuration editor workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
 Use React Router’s `useSearchParams` directly; workbench- and page-specific helpers live alongside their consuming modules.
@@ -219,19 +219,19 @@ Run creation, options (`RunOptions`), and event streaming (`ade.event/v1`) are d
 
 ---
 
-## 5. Configuration Builder & workbench
+## 5. Configuration editor & workbench
 
-The **Configurations** section (Configuration Builder) is where workspace owners and engineers manage configuration packages.
+The **Configurations** section (Configuration editor) is where workspace owners and engineers manage configuration packages.
 
-**Route:** `/workspaces/:workspaceId/config-builder`  
-**Folder:** `pages/Workspace/sections/ConfigBuilder`  
-**Nav label:** “Configuration Builder”
+**Route:** `/workspaces/:workspaceId/configurations`  
+**Folder:** `pages/Workspace/sections/ConfigurationEditor`  
+**Nav label:** “Configuration editor”
 
 Responsibilities:
 
 - Show configurations per workspace and their active/draft/archived versions.
 - Provide actions: create, clone, export, duplicate, make active, and archive configurations.
-- Launch the **Configuration Builder workbench** for editing a specific configuration (file tree + Monaco editor + console + validation).
+- Launch the **Configuration editor workbench** for editing a specific configuration (file tree + Monaco editor + console + validation).
 
 ### Workbench
 
@@ -250,7 +250,7 @@ Environment readiness is handled automatically when runs start:
 
 See:
 
-- [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md)
+- [`docs/08-configurations-and-configurations.md`](./docs/08-configurations-and-configurations.md)
 - [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md)
 
 ---
@@ -322,7 +322,7 @@ ADE Web is backend-agnostic but assumes a set of HTTP APIs and behaviours under 
 - **Workspaces** – list/create/update/delete, default workspace, membership and workspace-scoped roles.
 - **Documents** – upload, list with filters, download, optional worksheet metadata.
 - **Runs** – workspace run ledger (`/workspaces/{workspace_id}/runs` for list/create), run detail/outputs/logs (`/runs/{run_id}/...`), streaming NDJSON event streams using the `ade.event/v1` envelope.
-- **Configurations & Configuration Builder** – configuration metadata, version lifecycle, file listing and content APIs, validation endpoint, configuration-scoped runs.
+- **Configurations & Configuration editor** – configuration metadata, version lifecycle, file listing and content APIs, validation endpoint, configuration-scoped runs.
 - **Safe mode** – status and toggle endpoints, permission-gated.
 - **Security** – strict tenant isolation, safe `redirectTo` handling, and compatible CORS/CSRF for browser SPAs.
 
@@ -357,11 +357,11 @@ The numbered docs under `frontend/docs` are the **source of truth** for ADE Web�
 7. [`07-documents-and-runs.md`](./docs/07-documents-and-runs.md)  
    Document model, runs model, Documents & Runs sections, run options, and per-document run preferences.
 
-8. [`08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md)  
-   Configuration domain model and the Configurations section (Configuration Builder).
+8. [`08-configurations-and-configurations.md`](./docs/08-configurations-and-configurations.md)  
+   Configuration domain model and the Configurations section (Configuration editor).
 
 9. [`09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md)  
-   Configuration Builder workbench, file tree, tabs, console, validation, URL state, and ADE scripting helpers.
+   Configuration editor workbench, file tree, tabs, console, validation, URL state, and ADE scripting helpers.
 
 10. [`10-ui-components-a11y-and-testing.md`](./docs/10-ui-components-a11y-and-testing.md)  
     UI component library, accessibility conventions, keyboard shortcuts, preferences, and testing philosophy.

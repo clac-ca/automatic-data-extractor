@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { normalizeConfigStatus, sortByUpdatedDesc, suggestDuplicateName } from "../configs";
 
-describe("ConfigBuilder config utils", () => {
+describe("ConfigurationEditor config utils", () => {
   it("normalizes configuration status values", () => {
     expect(normalizeConfigStatus(undefined)).toBe("");
     expect(normalizeConfigStatus(null)).toBe("");
@@ -39,4 +39,3 @@ describe("ConfigBuilder config utils", () => {
     now.mockRestore();
   });
 });
-
