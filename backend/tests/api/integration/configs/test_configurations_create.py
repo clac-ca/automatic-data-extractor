@@ -25,6 +25,8 @@ async def test_create_configuration_from_template(
         workspace_id=workspace_id,
         headers=headers,
     )
+    assert record["source_kind"] == "template"
+    assert record.get("source_configuration_id") is None
 
     path = config_path(settings, workspace_id, record["id"])
     assert path.exists()
@@ -60,6 +62,8 @@ async def test_clone_configuration_creates_copy(
     assert clone_response.status_code == 201, clone_response.text
     clone = clone_response.json()
     assert clone["display_name"] == "Cloned Config"
+    assert clone["source_kind"] == "clone"
+    assert clone["source_configuration_id"] == source["id"]
     clone_path = config_path(settings, workspace_id, clone["id"])
     assert clone_path.exists()
     assert (clone_path / "src" / "ade_config" / "__init__.py").exists()

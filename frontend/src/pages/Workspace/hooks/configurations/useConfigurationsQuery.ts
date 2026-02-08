@@ -1,8 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { listConfigurations, readConfiguration } from "@/api/configurations/api";
+import {
+  listConfigurations,
+  readConfiguration,
+} from "@/api/configurations/api";
 import { configurationKeys } from "./keys";
-import type { ConfigurationRecord, ConfigurationPage } from "@/types/configurations";
+import type {
+  ConfigurationRecord,
+  ConfigurationPage,
+} from "@/types/configurations";
 
 const CONFIGURATIONS_PAGE_SIZE = 100;
 

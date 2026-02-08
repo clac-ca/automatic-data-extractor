@@ -52,8 +52,8 @@ describe("App routes", () => {
     { path: "/workspaces", testId: "workspaces-screen" },
     { path: "/workspaces/new", testId: "workspace-new-screen" },
     { path: "/workspaces/ws-1", testId: "workspace-screen" },
-    { path: "/workspaces/ws-1/config-builder", testId: "workspace-screen" },
-    { path: "/workspaces/ws-1/config-builder/cfg-1/editor", testId: "workspace-screen" },
+    { path: "/workspaces/ws-1/configurations", testId: "workspace-screen" },
+    { path: "/workspaces/ws-1/configurations/cfg-1", testId: "workspace-screen" },
   ];
 
   for (const { path, testId } of cases) {

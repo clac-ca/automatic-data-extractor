@@ -49,6 +49,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { buildConfigurationsPath } from "@/pages/Workspace/sections/ConfigurationEditor/paths";
 import type { PresenceParticipant } from "@/types/presence";
 import type { WorkspaceProfile } from "@/types/workspaces";
 
@@ -65,7 +66,7 @@ type AvatarItem = {
 type NavIcon = typeof FileText;
 
 type WorkspaceNavItem = {
-  key: "documents" | "runs" | "configBuilder";
+  key: "documents" | "runs" | "configurations";
   label: string;
   to: string;
   Icon: NavIcon;
@@ -122,7 +123,7 @@ export function WorkspaceSidebar() {
   const links = {
     documents: `${base}/documents`,
     runs: `${base}/runs`,
-    configBuilder: `${base}/config-builder`,
+    configurations: buildConfigurationsPath(workspace.id),
     settings: `${base}/settings`,
     organizationSettings: "/organization",
   } as const;
@@ -131,9 +132,9 @@ export function WorkspaceSidebar() {
     () => [
       { key: "documents", label: "Documents", to: links.documents, Icon: FileText },
       { key: "runs", label: "Runs", to: links.runs, Icon: PlayCircle },
-      { key: "configBuilder", label: "Config Builder", to: links.configBuilder, Icon: Wrench },
+      { key: "configurations", label: "Configurations", to: links.configurations, Icon: Wrench },
     ],
-    [links.configBuilder, links.documents, links.runs],
+    [links.configurations, links.documents, links.runs],
   );
 
   const assignedDocumentsKey = useMemo(

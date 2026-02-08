@@ -52,10 +52,21 @@ vi.mock("../state/useWorkbenchUrlState", () => ({
     fileId: "manifest.toml",
     pane: "terminal",
     console: "closed",
+    panel: "none",
+    historyScope: "workspace",
+    historyFilter: "all",
+    versionId: undefined,
+    mode: "live",
+    returnToId: undefined,
+    sourceVersionId: undefined,
     consoleExplicit: false,
     setFileId: vi.fn(),
     setPane: vi.fn(),
     setConsole: vi.fn(),
+    setHistoryFilter: vi.fn(),
+    setVersionId: vi.fn(),
+    setMode: vi.fn(),
+    patchState: vi.fn(),
   }),
 }));
 
@@ -64,6 +75,7 @@ vi.mock("@/pages/Workspace/hooks/configurations", () => ({
     files: (workspaceId: string, configId: string) => ["workspaces", workspaceId, "configurations", configId, "files"],
     detail: (workspaceId: string, configId: string) => ["workspaces", workspaceId, "configurations", configId],
     root: (workspaceId: string) => ["workspaces", workspaceId, "configurations"],
+    historyWorkspace: (workspaceId: string) => ["workspaces", workspaceId, "configurations", "history", "workspace"],
     file: (workspaceId: string, configId: string, path: string) => [
       "workspaces",
       workspaceId,
@@ -113,12 +125,36 @@ vi.mock("@/pages/Workspace/hooks/configurations", () => ({
     reset: vi.fn(),
     isPending: false,
   }),
+  useCreateConfigurationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useArchiveConfigurationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
   useReplaceConfigurationMutation: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
   useSaveConfigurationFileMutation: () => ({
     mutateAsync: vi.fn(),
+  }),
+  useConfigurationWorkspaceHistoryQuery: () => ({
+    data: null,
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+  useRestoreConfigurationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
+  useUpdateConfigurationMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
   }),
 }));
 
@@ -230,6 +266,10 @@ vi.mock("../components/WorkbenchChrome", () => ({
   ),
 }));
 
+vi.mock("../components/WorkbenchGuidedTour", () => ({
+  WorkbenchGuidedTour: () => null,
+}));
+
 vi.mock("../components/PublishConfigurationDialog", () => ({
   PublishConfigurationDialog: ({
     open,
@@ -309,12 +349,7 @@ describe("Workbench publish flow", () => {
       <Workbench
         workspaceId="ws-1"
         configId="cfg-1"
-        configName="Workspace · Draft"
         configDisplayName="Draft"
-        windowState="restored"
-        onMinimizeWindow={vi.fn()}
-        onMaximizeWindow={vi.fn()}
-        onRestoreWindow={vi.fn()}
         onCloseWorkbench={vi.fn()}
       />,
     );
@@ -348,12 +383,7 @@ describe("Workbench publish flow", () => {
       <Workbench
         workspaceId="ws-1"
         configId="cfg-1"
-        configName="Workspace · Draft"
         configDisplayName="Draft"
-        windowState="restored"
-        onMinimizeWindow={vi.fn()}
-        onMaximizeWindow={vi.fn()}
-        onRestoreWindow={vi.fn()}
         onCloseWorkbench={vi.fn()}
       />,
     );
@@ -388,12 +418,7 @@ describe("Workbench publish flow", () => {
       <Workbench
         workspaceId="ws-1"
         configId="cfg-1"
-        configName="Workspace · Active"
         configDisplayName="Active"
-        windowState="restored"
-        onMinimizeWindow={vi.fn()}
-        onMaximizeWindow={vi.fn()}
-        onRestoreWindow={vi.fn()}
         onCloseWorkbench={vi.fn()}
       />,
     );
@@ -409,12 +434,7 @@ describe("Workbench publish flow", () => {
       <Workbench
         workspaceId="ws-1"
         configId="cfg-1"
-        configName="Workspace · Draft"
         configDisplayName="Draft"
-        windowState="restored"
-        onMinimizeWindow={vi.fn()}
-        onMaximizeWindow={vi.fn()}
-        onRestoreWindow={vi.fn()}
         onCloseWorkbench={vi.fn()}
       />,
     );
@@ -429,12 +449,7 @@ describe("Workbench publish flow", () => {
       <Workbench
         workspaceId="ws-1"
         configId="cfg-1"
-        configName="Workspace · Draft"
         configDisplayName="Draft"
-        windowState="restored"
-        onMinimizeWindow={vi.fn()}
-        onMaximizeWindow={vi.fn()}
-        onRestoreWindow={vi.fn()}
         onCloseWorkbench={vi.fn()}
       />,
     );

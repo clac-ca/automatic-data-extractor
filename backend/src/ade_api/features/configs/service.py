@@ -27,7 +27,7 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
-from ade_db.models import Configuration, ConfigurationStatus
+from ade_db.models import Configuration, ConfigurationSourceKind, ConfigurationStatus
 
 from .constants import CONFIG_EXCLUDED_NAMES, CONFIG_EXCLUDED_SUFFIXES, CONFIG_IGNORED_FILENAMES
 from .exceptions import (
@@ -39,11 +39,18 @@ from .exceptions import (
 from .filters import apply_config_filters
 from .repository import ConfigurationsRepository
 from .schemas import (
+    ConfigurationChangeSummary,
+    ConfigurationHistoryEntry,
+    ConfigurationHistoryScope,
+    ConfigurationHistoryStatusFilter,
+    ConfigurationWorkspaceHistoryResponse,
     ConfigSource,
     ConfigSourceClone,
     ConfigSourceTemplate,
     ConfigurationPage,
     ConfigurationRecord,
+    ConfigurationRestoreRequest,
+    ConfigurationUpdateRequest,
 )
 from .storage import ConfigStorage
 
@@ -139,8 +146,14 @@ class ConfigurationsService:
         workspace_id: UUID,
         display_name: str,
         source: ConfigSource,
+        notes: str | None = None,
+        source_kind_override: ConfigurationSourceKind | None = None,
     ) -> Configuration:
         configuration_id = generate_uuid7()
+        source_kind, source_configuration_id = self._resolve_source_metadata(
+            source=source,
+            source_kind_override=source_kind_override,
+        )
         logger.debug(
             "config.create.start",
             extra=log_context(
@@ -148,6 +161,8 @@ class ConfigurationsService:
                 configuration_id=configuration_id,
                 display_name=display_name,
                 source_type=getattr(source, "type", None),
+                source_kind=source_kind.value,
+                source_configuration_id=source_configuration_id,
             ),
         )
         try:
@@ -189,6 +204,9 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
+            source_configuration_id=source_configuration_id,
+            source_kind=source_kind,
+            notes=notes,
         )
         self._session.add(record)
         self._session.flush()
@@ -243,6 +261,7 @@ class ConfigurationsService:
         workspace_id: UUID,
         display_name: str,
         archive: bytes,
+        notes: str | None = None,
     ) -> Configuration:
         configuration_id = generate_uuid7()
         logger.debug(
@@ -272,6 +291,9 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
+            source_kind=ConfigurationSourceKind.IMPORT,
+            source_configuration_id=None,
+            notes=notes,
             published_digest=None,
         )
         self._session.add(record)
@@ -288,6 +310,155 @@ class ConfigurationsService:
             ),
         )
         return record
+
+    def restore_configuration(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        payload: ConfigurationRestoreRequest,
+    ) -> Configuration:
+        # Ensure caller-supplied context exists in this workspace.
+        self._require_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+        source_configuration_id = UUID(str(payload.source_configuration_id))
+        source_configuration = self._require_configuration(
+            workspace_id=workspace_id,
+            configuration_id=source_configuration_id,
+        )
+
+        display_name = payload.display_name or self._default_restore_display_name(
+            source_configuration.display_name
+        )
+        notes = payload.notes or (
+            f"Restored from {source_configuration.display_name} at {utc_now().isoformat()}"
+        )
+        source = ConfigSourceClone(type="clone", configuration_id=source_configuration_id)
+        return self.create_configuration(
+            workspace_id=workspace_id,
+            display_name=display_name,
+            source=source,
+            notes=notes,
+            source_kind_override=ConfigurationSourceKind.RESTORE,
+        )
+
+    def update_configuration(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        payload: ConfigurationUpdateRequest,
+    ) -> Configuration:
+        configuration = self._require_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+        update_display_name = "display_name" in payload.model_fields_set
+        update_notes = "notes" in payload.model_fields_set
+        if not update_display_name and not update_notes:
+            return configuration
+        _ensure_editable_status(configuration)
+
+        changed = False
+        if update_display_name and payload.display_name != configuration.display_name:
+            configuration.display_name = payload.display_name or configuration.display_name
+            changed = True
+        if update_notes and payload.notes != configuration.notes:
+            configuration.notes = payload.notes
+            changed = True
+        if changed:
+            configuration.updated_at = utc_now()
+            self._session.flush()
+            self._session.refresh(configuration)
+        return configuration
+
+    def list_workspace_configuration_history(
+        self,
+        *,
+        workspace_id: UUID,
+        focus_configuration_id: UUID | None,
+        scope: ConfigurationHistoryScope,
+        status_filter: ConfigurationHistoryStatusFilter,
+        cursor: str | None,
+        limit: int,
+    ) -> ConfigurationWorkspaceHistoryResponse:
+        configs = list(self._repo.list_family_candidates(workspace_id))
+        by_id = {config.id: config for config in configs}
+
+        focus_configuration: Configuration | None = None
+        focus_lineage_ids: set[UUID] = set()
+        if focus_configuration_id is not None:
+            focus_configuration = self._require_configuration(
+                workspace_id=workspace_id,
+                configuration_id=focus_configuration_id,
+            )
+            focus_lineage_ids = {
+                config.id
+                for config in self._resolve_configuration_family(configs, focus_configuration.id)
+            }
+
+        if scope == "lineage":
+            if focus_configuration is None:
+                raise ConfigStateError("focus_configuration_id is required for lineage scope")
+            scoped = [config for config in configs if config.id in focus_lineage_ids]
+        else:
+            scoped = list(configs)
+
+        filtered = [
+            config
+            for config in scoped
+            if self._history_status_matches(config.status, status_filter=status_filter)
+        ]
+        filtered.sort(
+            key=lambda item: item.activated_at or item.updated_at or item.created_at,
+            reverse=True,
+        )
+
+        start = self._parse_history_cursor(cursor)
+        start = max(0, min(start, len(filtered)))
+        end = min(start + limit, len(filtered))
+        page_items = filtered[start:end]
+        next_cursor = str(end) if end < len(filtered) else None
+
+        version_labels = self._build_published_version_labels(configs)
+        file_maps: dict[UUID, dict[str, str] | None] = {}
+        items: list[ConfigurationHistoryEntry] = []
+        for config in page_items:
+            changes, changes_unavailable = self._build_history_change_summary(
+                workspace_id=workspace_id,
+                configuration=config,
+                by_id=by_id,
+                cache=file_maps,
+            )
+            items.append(
+                ConfigurationHistoryEntry(
+                    id=config.id,
+                    display_name=config.display_name,
+                    status=config.status,
+                    source_kind=config.source_kind,
+                    source_configuration_id=config.source_configuration_id,
+                    notes=config.notes,
+                    created_at=config.created_at,
+                    updated_at=config.updated_at,
+                    activated_at=config.activated_at,
+                    version_label=version_labels.get(config.id),
+                    is_current=focus_configuration is not None and config.id == focus_configuration.id,
+                    in_focus_lineage=config.id in focus_lineage_ids,
+                    changes_unavailable=changes_unavailable,
+                    changes=changes,
+                )
+            )
+        return ConfigurationWorkspaceHistoryResponse(
+            current_configuration_id=focus_configuration.id if focus_configuration is not None else None,
+            focus_configuration_id=focus_configuration.id if focus_configuration is not None else None,
+            scope=scope,
+            status_filter=status_filter,
+            next_cursor=next_cursor,
+            total_count=len(filtered),
+            items=items,
+        )
 
     def make_active_configuration(
         self,
@@ -374,7 +545,10 @@ class ConfigurationsService:
             )
             return configuration
 
-        if configuration.status is not ConfigurationStatus.ACTIVE:
+        if configuration.status not in {
+            ConfigurationStatus.ACTIVE,
+            ConfigurationStatus.DRAFT,
+        }:
             logger.warning(
                 "config.archive.state_invalid",
                 extra=log_context(
@@ -383,9 +557,10 @@ class ConfigurationsService:
                     current_status=configuration.status.value,
                 ),
             )
-            raise ConfigStateError("Only the active configuration can be archived")
+            raise ConfigStateError("Only draft or active configurations can be archived")
 
         configuration.status = ConfigurationStatus.ARCHIVED
+        configuration.updated_at = utc_now()
         self._session.flush()
         self._session.refresh(configuration)
 
@@ -962,6 +1137,194 @@ class ConfigurationsService:
             ),
         )
         return data
+
+    @staticmethod
+    def _parse_history_cursor(cursor: str | None) -> int:
+        if cursor is None:
+            return 0
+        try:
+            return int(cursor)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _history_status_matches(
+        status: ConfigurationStatus,
+        *,
+        status_filter: ConfigurationHistoryStatusFilter,
+    ) -> bool:
+        if status_filter == "drafts":
+            return status == ConfigurationStatus.DRAFT
+        if status_filter == "published":
+            return status in (ConfigurationStatus.ACTIVE, ConfigurationStatus.ARCHIVED)
+        return True
+
+    def _resolve_source_metadata(
+        self,
+        *,
+        source: ConfigSource,
+        source_kind_override: ConfigurationSourceKind | None = None,
+    ) -> tuple[ConfigurationSourceKind, UUID | None]:
+        source_configuration_id: UUID | None = None
+        source_kind = ConfigurationSourceKind.TEMPLATE
+        if isinstance(source, ConfigSourceClone):
+            source_kind = ConfigurationSourceKind.CLONE
+            source_configuration_id = UUID(str(source.configuration_id))
+        if source_kind_override is not None:
+            source_kind = source_kind_override
+        return source_kind, source_configuration_id
+
+    @staticmethod
+    def _default_restore_display_name(source_display_name: str) -> str:
+        timestamp = utc_now().strftime("%Y-%m-%d %H:%M")
+        return f"Restored from {source_display_name} ({timestamp})"
+
+    @staticmethod
+    def _build_published_version_labels(
+        configs: list[Configuration],
+    ) -> dict[UUID, str]:
+        published = [
+            config
+            for config in configs
+            if config.status in (ConfigurationStatus.ACTIVE, ConfigurationStatus.ARCHIVED)
+            and config.activated_at is not None
+        ]
+        published.sort(key=lambda item: item.activated_at or item.created_at)
+        labels: dict[UUID, str] = {}
+        for index, config in enumerate(published, start=1):
+            labels[config.id] = f"v{index}"
+        return labels
+
+    def _resolve_configuration_family(
+        self,
+        configs: list[Configuration],
+        current_id: UUID,
+    ) -> list[Configuration]:
+        by_id = {config.id: config for config in configs}
+        children: dict[UUID, list[UUID]] = defaultdict(list)
+        for config in configs:
+            if config.source_configuration_id is not None:
+                children[config.source_configuration_id].append(config.id)
+
+        root_id = current_id
+        visited: set[UUID] = set()
+        while True:
+            if root_id in visited:
+                break
+            visited.add(root_id)
+            current = by_id.get(root_id)
+            if current is None or current.source_configuration_id is None:
+                break
+            parent_id = current.source_configuration_id
+            if parent_id not in by_id:
+                break
+            root_id = parent_id
+
+        family_ids: set[UUID] = set()
+        queue = [root_id]
+        while queue:
+            config_id = queue.pop(0)
+            if config_id in family_ids:
+                continue
+            family_ids.add(config_id)
+            queue.extend(children.get(config_id, []))
+
+        # Include ancestor chain of current configuration in case of malformed links.
+        ancestor_cursor = current_id
+        seen_ancestors: set[UUID] = set()
+        while ancestor_cursor not in seen_ancestors:
+            seen_ancestors.add(ancestor_cursor)
+            family_ids.add(ancestor_cursor)
+            candidate = by_id.get(ancestor_cursor)
+            if candidate is None or candidate.source_configuration_id is None:
+                break
+            ancestor_cursor = candidate.source_configuration_id
+
+        family = [by_id[item_id] for item_id in family_ids if item_id in by_id]
+        if current_id not in {item.id for item in family} and current_id in by_id:
+            family.append(by_id[current_id])
+        return family
+
+    def _build_history_change_summary(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration: Configuration,
+        by_id: dict[UUID, Configuration],
+        cache: dict[UUID, dict[str, str] | None],
+    ) -> tuple[ConfigurationChangeSummary | None, bool]:
+        current_map = self._load_configuration_file_map(
+            workspace_id=workspace_id,
+            configuration_id=configuration.id,
+            cache=cache,
+        )
+        if current_map is None:
+            return None, True
+
+        source_map: dict[str, str] = {}
+        if configuration.source_configuration_id is not None:
+            source = by_id.get(configuration.source_configuration_id)
+            if source is not None:
+                loaded_source_map = self._load_configuration_file_map(
+                    workspace_id=workspace_id,
+                    configuration_id=source.id,
+                    cache=cache,
+                )
+                if loaded_source_map is None:
+                    return None, True
+                source_map = loaded_source_map
+
+        current_paths = set(current_map.keys())
+        source_paths = set(source_map.keys())
+
+        added_paths = sorted(current_paths - source_paths)
+        removed_paths = sorted(source_paths - current_paths)
+        modified_paths = sorted(
+            path
+            for path in (current_paths & source_paths)
+            if current_map.get(path) != source_map.get(path)
+        )
+
+        examples: list[str] = []
+        examples.extend(f"+ {path}" for path in added_paths[:3])
+        remaining_slots = max(0, 3 - len(examples))
+        if remaining_slots > 0:
+            examples.extend(f"~ {path}" for path in modified_paths[:remaining_slots])
+        remaining_slots = max(0, 3 - len(examples))
+        if remaining_slots > 0:
+            examples.extend(f"- {path}" for path in removed_paths[:remaining_slots])
+
+        summary = ConfigurationChangeSummary(
+            added=len(added_paths),
+            modified=len(modified_paths),
+            removed=len(removed_paths),
+            total=len(added_paths) + len(modified_paths) + len(removed_paths),
+            examples=examples,
+        )
+        return summary, False
+
+    def _load_configuration_file_map(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        cache: dict[UUID, dict[str, str] | None],
+    ) -> dict[str, str] | None:
+        if configuration_id in cache:
+            return cache[configuration_id]
+        try:
+            config_path = self._storage.ensure_config_path(workspace_id, configuration_id)
+        except Exception:
+            cache[configuration_id] = None
+            return None
+        index = _build_file_index(config_path)
+        mapping = {
+            entry["path"]: entry.get("etag", "")
+            for entry in index["entries"]
+            if entry.get("kind") == "file"
+        }
+        cache[configuration_id] = mapping
+        return mapping
 
     def _materialize_source(
         self,

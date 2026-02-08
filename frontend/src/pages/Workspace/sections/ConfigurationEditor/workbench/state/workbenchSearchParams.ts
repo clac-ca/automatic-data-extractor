@@ -37,14 +37,10 @@ export function readWorkbenchSearchParams(source: URLSearchParams | string): Wor
   const consoleRaw = params.get("console");
   const fileRaw = params.get("file");
 
-  const state: WorkbenchSearchState = {
+  return {
     pane: normalizePane(paneRaw),
     console: normalizeConsole(consoleRaw),
     fileId: fileRaw ?? undefined,
-  };
-
-  return {
-    ...state,
     present: {
       pane: params.has("pane"),
       console: params.has("console"),
@@ -58,7 +54,7 @@ export function mergeWorkbenchSearchParams(
   patch: Partial<WorkbenchSearchState>,
 ): URLSearchParams {
   const existing = readWorkbenchSearchParams(current);
-  const nextState: WorkbenchSearchState = {
+  const mergedState: WorkbenchSearchState = {
     ...DEFAULT_WORKBENCH_SEARCH,
     ...existing,
     ...patch,
@@ -68,15 +64,27 @@ export function mergeWorkbenchSearchParams(
   for (const key of WORKBENCH_PARAM_KEYS) {
     next.delete(key);
   }
-  if (nextState.pane !== DEFAULT_WORKBENCH_SEARCH.pane) {
-    next.set("pane", nextState.pane);
+  if (mergedState.pane !== DEFAULT_WORKBENCH_SEARCH.pane) {
+    next.set("pane", mergedState.pane);
   }
-  if (nextState.console !== DEFAULT_WORKBENCH_SEARCH.console) {
-    next.set("console", nextState.console);
+  if (mergedState.console !== DEFAULT_WORKBENCH_SEARCH.console) {
+    next.set("console", mergedState.console);
   }
-  if (nextState.fileId && nextState.fileId.length > 0) {
-    next.set("file", nextState.fileId);
+  if (mergedState.fileId && mergedState.fileId.length > 0) {
+    next.set("file", mergedState.fileId);
   }
-
   return next;
+}
+
+export type WorkbenchSearchPatch =
+  | Partial<WorkbenchSearchState>
+  | ((snapshot: WorkbenchSearchSnapshot) => Partial<WorkbenchSearchState>);
+
+export function applyWorkbenchSearchPatch(
+  current: URLSearchParams,
+  patch: WorkbenchSearchPatch,
+): URLSearchParams {
+  const snapshot = readWorkbenchSearchParams(current);
+  const resolvedPatch = typeof patch === "function" ? patch(snapshot) : patch;
+  return mergeWorkbenchSearchParams(current, resolvedPatch);
 }
