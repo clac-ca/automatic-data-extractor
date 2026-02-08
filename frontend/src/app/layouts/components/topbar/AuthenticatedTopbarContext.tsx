@@ -79,7 +79,7 @@ function areReactNodesEqual(left: ReactNode, right: ReactNode): boolean {
   if (left === right) return true;
   if (!isValidElement(left) || !isValidElement(right)) return false;
   if (left.type !== right.type || left.key !== right.key) return false;
-  return arePropsEqual(left.props, right.props);
+  return arePropsEqual(left.props as Record<string, unknown>, right.props as Record<string, unknown>);
 }
 
 function arePropsEqual(left: Record<string, unknown>, right: Record<string, unknown>) {

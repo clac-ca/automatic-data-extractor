@@ -113,7 +113,7 @@ export function useDocumentViews({
   const initializedRef = useRef(false);
   const simpleParsers = useMemo(createDocumentsSimpleFilterParsers, []);
   const lastViewStorage = useMemo(
-    () => createScopedStorage<string>(uiStorageKeys.documentsLastView(workspaceId)),
+    () => createScopedStorage(uiStorageKeys.documentsLastView(workspaceId)),
     [workspaceId],
   );
 

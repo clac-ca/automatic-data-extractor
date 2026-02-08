@@ -92,6 +92,7 @@ function mockStartViewTransition(callbackImpl?: (callback: () => void) => void) 
       ready: Promise.resolve(),
       finished: Promise.resolve(),
       updateCallbackDone: Promise.resolve(),
+      types: new Set<string>() as ViewTransitionTypeSet,
     };
   });
 
@@ -130,8 +131,10 @@ describe("modeTransition", () => {
     expect(startViewTransition).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledTimes(1);
     expect(animate).toHaveBeenCalledTimes(1);
-    const [frames, options] = animate.mock.calls[0] as [
-      Array<{ clipPath: string }>,
+    const firstCall = animate.mock.calls.at(0);
+    expect(firstCall).toBeDefined();
+    const [frames, options] = firstCall as unknown as [
+      Array<{ clipPath: string; filter?: string }>,
       KeyframeAnimationOptions,
     ];
     expect(frames[0].clipPath).toContain(`circle(${MOTION_PROFILE.revealExpand.startRadiusPx}px at 120px 80px)`);
@@ -156,8 +159,10 @@ describe("modeTransition", () => {
     });
 
     expect(apply).toHaveBeenCalledTimes(1);
-    const [frames, options] = animate.mock.calls[0] as [
-      Array<{ clipPath: string }>,
+    const firstCall = animate.mock.calls.at(0);
+    expect(firstCall).toBeDefined();
+    const [frames, options] = firstCall as unknown as [
+      Array<{ clipPath: string; filter?: string }>,
       KeyframeAnimationOptions,
     ];
     expect(frames[1].clipPath).toContain(`circle(${MOTION_PROFILE.revealCollapse.endRadiusPx}px at 12px 18px)`);

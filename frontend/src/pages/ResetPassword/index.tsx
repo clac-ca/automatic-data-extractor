@@ -60,11 +60,6 @@ function buildPostResetLoginPath(returnTo: string | null | undefined) {
   return `/login?${query}`;
 }
 
-interface ResetPasswordFormValues {
-  newPassword: string;
-  confirmPassword: string;
-}
-
 export default function ResetPasswordScreen() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -105,9 +100,7 @@ export default function ResetPasswordScreen() {
     }
 
     const formData = new FormData(event.currentTarget);
-    const parsed = resetPasswordSchema.safeParse(
-      Object.fromEntries(formData.entries()) as ResetPasswordFormValues,
-    );
+    const parsed = resetPasswordSchema.safeParse(Object.fromEntries(formData.entries()));
 
     if (!parsed.success) {
       const message = parsed.error.issues[0]?.message ?? "Invalid input.";

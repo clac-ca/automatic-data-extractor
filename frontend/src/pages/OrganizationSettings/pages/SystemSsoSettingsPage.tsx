@@ -10,7 +10,7 @@ import {
   useUpdateSsoProviderMutation,
   useUpdateSsoSettingsMutation,
 } from "@/hooks/admin";
-import type { SsoProviderAdmin } from "@/api/admin/sso";
+import type { SsoProviderAdmin, SsoProviderCreateRequest, SsoProviderUpdateRequest } from "@/api/admin/sso";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,15 +28,15 @@ const DOMAIN_PATTERN = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
 type FeedbackTone = "success" | "danger";
 type FeedbackMessage = { tone: FeedbackTone; message: string };
 
-type ProviderStatus = "active" | "disabled";
+type ProviderStatus = SsoProviderAdmin["status"];
 
 type ProviderFieldErrors = {
-  readonly id?: string;
-  readonly label?: string;
-  readonly issuer?: string;
-  readonly clientId?: string;
-  readonly clientSecret?: string;
-  readonly domains?: string;
+  id?: string;
+  label?: string;
+  issuer?: string;
+  clientId?: string;
+  clientSecret?: string;
+  domains?: string;
 };
 
 export function SystemSsoSettingsPage() {
@@ -348,23 +348,8 @@ function ProviderDrawer({
   readonly provider?: SsoProviderAdmin;
   readonly onClose: () => void;
   readonly isSubmitting: boolean;
-  readonly onCreate: (payload: {
-    id: string;
-    label: string;
-    issuer: string;
-    client_id: string;
-    client_secret: string;
-    status: ProviderStatus;
-    domains: string[];
-  }) => Promise<void>;
-  readonly onUpdate: (payload: {
-    label?: string;
-    issuer?: string;
-    client_id?: string;
-    client_secret?: string;
-    status?: ProviderStatus;
-    domains?: string[];
-  }) => Promise<void>;
+  readonly onCreate: (payload: SsoProviderCreateRequest) => Promise<void>;
+  readonly onUpdate: (payload: SsoProviderUpdateRequest) => Promise<void>;
   readonly onDelete?: () => Promise<void>;
 }) {
   const [id, setId] = useState("");
@@ -390,9 +375,9 @@ function ProviderDrawer({
       setId(provider.id);
       setLabel(provider.label);
       setIssuer(provider.issuer);
-      setClientId(provider.client_id);
+      setClientId(provider.clientId);
       setClientSecret("");
-      setStatus(provider.status as ProviderStatus);
+      setStatus(provider.status);
       setDomains((provider.domains ?? []).join(", "));
       setFieldErrors({});
       return;
@@ -440,10 +425,11 @@ function ProviderDrawer({
       if (mode === "create") {
         await onCreate({
           id: id.trim(),
+          type: "oidc",
           label: label.trim(),
           issuer: issuer.trim(),
-          client_id: clientId.trim(),
-          client_secret: clientSecret.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
           status,
           domains: parsedDomains,
         });
@@ -451,8 +437,8 @@ function ProviderDrawer({
         await onUpdate({
           label: label.trim(),
           issuer: issuer.trim(),
-          client_id: clientId.trim(),
-          client_secret: clientSecret.trim() || undefined,
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim() || undefined,
           status,
           domains: parsedDomains,
         });
@@ -470,8 +456,13 @@ function ProviderDrawer({
         id: findFirstFieldError(mapped.fieldErrors, ["id", "provider_id", "body.id"]),
         label: findFirstFieldError(mapped.fieldErrors, ["label", "body.label"]),
         issuer: findFirstFieldError(mapped.fieldErrors, ["issuer", "body.issuer"]),
-        clientId: findFirstFieldError(mapped.fieldErrors, ["client_id", "clientId", "body.client_id"]),
-        clientSecret: findFirstFieldError(mapped.fieldErrors, ["client_secret", "body.client_secret"]),
+        clientId: findFirstFieldError(mapped.fieldErrors, ["client_id", "clientId", "body.client_id", "body.clientId"]),
+        clientSecret: findFirstFieldError(mapped.fieldErrors, [
+          "client_secret",
+          "clientSecret",
+          "body.client_secret",
+          "body.clientSecret",
+        ]),
         domains: findFirstFieldError(mapped.fieldErrors, ["domains", "body.domains"]),
       }));
       setError(mapped.message);
