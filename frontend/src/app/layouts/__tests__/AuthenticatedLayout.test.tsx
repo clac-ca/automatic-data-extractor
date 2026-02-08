@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { useMemo } from "react";
+import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -79,5 +80,24 @@ describe("AuthenticatedLayout", () => {
     expect(await screen.findByTestId("plain-page")).toBeInTheDocument();
     expect(screen.queryByTestId("desktop-slot")).not.toBeInTheDocument();
     expect(screen.queryByTestId("mobile-slot")).not.toBeInTheDocument();
+  });
+
+  it("renders a workspace return action on organization routes", async () => {
+    const user = userEvent.setup();
+    const router = renderRouter(
+      ["/organization/users"],
+      [
+        { path: "organization/*", element: <PlainPage /> },
+        { path: "workspaces", element: <PlainPage /> },
+      ],
+    );
+
+    expect(screen.getByRole("link", { name: "Go back to workspace" })).toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(screen.getByRole("link", { name: "Go back to workspace" }));
+    });
+
+    expect(router.state.location.pathname).toBe("/workspaces");
   });
 });

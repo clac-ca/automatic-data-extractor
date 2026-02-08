@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
 import {
   AuthenticatedTopbarProvider,
   useAuthenticatedTopbarConfig,
 } from "@/app/layouts/components/topbar/AuthenticatedTopbarContext";
 import { UnifiedTopbarControls } from "@/app/layouts/components/topbar/UnifiedTopbarControls";
+import { Button } from "@/components/ui/button";
 import {
   Topbar,
   TopbarCenter,
@@ -59,14 +61,28 @@ export function AuthenticatedLayout() {
 
 function AuthenticatedLayoutInner() {
   const topbarConfig = useAuthenticatedTopbarConfig();
+  const location = useLocation();
+  const isOrganizationRoute =
+    location.pathname === "/organization" || location.pathname.startsWith("/organization/");
+  const shouldRenderTopbarStart = isOrganizationRoute || Boolean(topbarConfig?.mobileAction);
 
   const topbar = (
     <Topbar className="shadow-sm">
       <SkipToContent />
       <TopbarContent maxWidth="full" className="px-4 sm:px-6 lg:px-8">
-        {topbarConfig?.mobileAction ? (
+        {shouldRenderTopbarStart ? (
           <TopbarStart className="relative z-10">
-            <div className="md:hidden">{topbarConfig.mobileAction}</div>
+            {isOrganizationRoute ? (
+              <Button asChild variant="outline" size="sm" className="h-9">
+                <Link to="/workspaces">
+                  <ArrowLeft className="size-4" />
+                  <span>Go back to workspace</span>
+                </Link>
+              </Button>
+            ) : null}
+            {topbarConfig?.mobileAction ? (
+              <div className="md:hidden">{topbarConfig.mobileAction}</div>
+            ) : null}
           </TopbarStart>
         ) : null}
         <TopbarCenter className="hidden md:flex">
