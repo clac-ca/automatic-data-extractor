@@ -182,7 +182,6 @@ describe("auth api", () => {
 
     expect(providers.passwordResetEnabled).toBe(true);
   });
-
   it("starts MFA enrollment and returns setup details", async () => {
     mockApiFetch.mockResolvedValueOnce(
       new Response(

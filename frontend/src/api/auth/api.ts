@@ -171,7 +171,6 @@ export async function completePasswordReset(
 ): Promise<void> {
   await submitPasswordReset(payload, options.signal);
 }
-
 export async function startMfaEnrollment(
   options: RequestOptions = {},
 ): Promise<MfaEnrollStartResponse> {
