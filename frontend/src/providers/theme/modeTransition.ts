@@ -187,7 +187,10 @@ function sampleCurveDerivative(t: number, p0: number, p1: number, p2: number, p3
   return 3 * invT ** 2 * (p1 - p0) + 6 * invT * t * (p2 - p1) + 3 * t ** 2 * (p3 - p2);
 }
 
-function cubicBezierProgress(progress: number, bezier: [number, number, number, number]): number {
+function cubicBezierProgress(
+  progress: number,
+  bezier: readonly [number, number, number, number],
+): number {
   if (progress <= 0 || progress >= 1) {
     return progress;
   }
@@ -237,9 +240,11 @@ async function runViewRevealTransition({
   const isEnteringDark = from === "light" && to === "dark";
   const transitionState: TransitionState = isEnteringDark ? "reveal-expand" : "reveal-collapse";
   const profile = isEnteringDark ? MOTION_PROFILE.revealExpand : MOTION_PROFILE.revealCollapse;
+  const revealProfile = MOTION_PROFILE.revealExpand;
+  const collapseProfile = MOTION_PROFILE.revealCollapse;
   const pseudoElement = isEnteringDark ? "::view-transition-new(root)" : "::view-transition-old(root)";
-  const startingRadius = isEnteringDark ? profile.startRadiusPx : radius;
-  const endingRadius = isEnteringDark ? radius : profile.endRadiusPx;
+  const startingRadius = isEnteringDark ? revealProfile.startRadiusPx : radius;
+  const endingRadius = isEnteringDark ? radius : collapseProfile.endRadiusPx;
   let hasApplied = false;
   let isCanceled = false;
   let animation: Animation | null = null;
@@ -328,10 +333,8 @@ async function runDirectionalFallbackTransition({
   let rafId = 0;
   let isCanceled = false;
   let resolveTransition: (() => void) | null = null;
-  let rejectTransition: ((error: unknown) => void) | null = null;
-  const transitionPromise = new Promise<void>((resolve, reject) => {
+  const transitionPromise = new Promise<void>((resolve) => {
     resolveTransition = resolve;
-    rejectTransition = reject;
   });
   const active: ActiveTransition = {
     cancel: () => {
@@ -391,9 +394,6 @@ async function runDirectionalFallbackTransition({
     applyFallbackMask(overlay, direction, origin, startRadius, feather);
     rafId = requestAnimationFrame(frame);
     await transitionPromise;
-  } catch (error) {
-    rejectTransition?.(error);
-    throw error;
   } finally {
     overlay.remove();
     clearTransitionAttributes();

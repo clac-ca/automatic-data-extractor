@@ -429,7 +429,7 @@ function ManageUserDrawer({
     | {
         id: string;
         email: string;
-        display_name: string | null;
+        display_name?: string | null;
         is_active: boolean;
       }
     | undefined;

@@ -10,6 +10,7 @@ import { getDefaultFilterOperator, getValidFilters } from "@/lib/data-table";
 import { getFiltersStateParser, getSortingStateParser } from "@/lib/parsers";
 import type { FilterItem, FilterJoinOperator } from "@/api/listing";
 import type { ExtendedColumnFilter, ExtendedColumnSort, FilterVariant } from "@/types/data-table";
+import type { components } from "@/types";
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -21,11 +22,13 @@ import type { DocumentListRow } from "../../shared/types";
 
 type SortState = ExtendedColumnSort<DocumentListRow>[];
 type FiltersState = ExtendedColumnFilter<DocumentListRow>[];
+type FilterValue = ExtendedColumnFilter<DocumentListRow>["value"];
 type JoinOperator = "and" | "or";
 type Lifecycle = "active" | "deleted";
 type FilterFlag = "advancedFilters" | null;
 type SimpleFilters = Record<string, string | string[]>;
 export type FilterMode = "advanced" | "simple";
+type DocumentViewQueryState = components["schemas"]["DocumentViewQueryState"];
 
 type QuerySnapshotInput = {
   q: string | null;
@@ -146,15 +149,19 @@ export function createDocumentsSimpleFilterParsers() {
   return parsers;
 }
 
-function resolveAssigneeToken(value: unknown, currentUserId: string | null): unknown {
+function resolveAssigneeTokenValue(value: string, currentUserId: string | null): string {
+  return value === "me" && currentUserId ? currentUserId : value;
+}
+
+function resolveAssigneeToken(value: FilterValue, currentUserId: string | null): FilterValue {
   if (value === "me" && currentUserId) return currentUserId;
   if (Array.isArray(value)) {
-    return value.map((item) => (item === "me" && currentUserId ? currentUserId : item));
+    return value.map((item) => resolveAssigneeTokenValue(item, currentUserId));
   }
   return value;
 }
 
-export function encodeAssigneeToken(value: unknown, currentUserId: string): unknown {
+export function encodeAssigneeToken(value: FilterValue, currentUserId: string): FilterValue {
   if (value === currentUserId) return "me";
   if (Array.isArray(value)) {
     return value.map((item) => (item === currentUserId ? "me" : item));
@@ -195,7 +202,7 @@ function normalizeSimpleFilterToApiItems({
         items.push({
           id,
           operator: getDefaultFilterOperator(variant),
-          value: values.map((value) => resolveAssigneeToken(value, currentUserId)),
+          value: values.map((value) => resolveAssigneeTokenValue(value, currentUserId)),
         });
         return;
       }
@@ -216,7 +223,7 @@ function normalizeSimpleFilterToApiItems({
       items.push({
         id,
         operator: getDefaultFilterOperator(variant),
-        value: resolveAssigneeToken(rawValue, currentUserId),
+        value: resolveAssigneeTokenValue(rawValue, currentUserId),
       });
       return;
     }
@@ -241,7 +248,7 @@ function normalizeAdvancedFiltersToApiItems({
   const parsed = getValidFilters(snapshot.filters).map((filter) => {
     if (filter.id !== "assigneeId") return filter;
     const next = Array.isArray(filter.value)
-      ? filter.value.map((value) => resolveAssigneeToken(value, currentUserId))
+      ? filter.value.map((value) => resolveAssigneeTokenValue(value, currentUserId))
       : resolveAssigneeToken(filter.value, currentUserId);
     return { ...filter, value: next };
   });
@@ -358,36 +365,29 @@ export function encodeSnapshotForViewPersistence({
 }: {
   snapshot: DocumentsQuerySnapshot;
   currentUserId: string;
-}): {
-  lifecycle: Lifecycle;
-  q: string | null;
-  sort: SortState;
-  filters: FiltersState;
-  joinOperator: JoinOperator;
-  filterFlag: FilterFlag;
-  simpleFilters: SimpleFilters | null;
-} {
+}): DocumentViewQueryState {
   const canonical = canonicalizeSnapshotForViewPersistence(snapshot);
-  const filters = canonical.filters.map((item) => {
-    if (!item || typeof item !== "object") return item;
-    const candidate = item as Record<string, unknown>;
-    if (candidate.id !== "assigneeId") return candidate;
+  const filters: FiltersState = canonical.filters.map((item) => {
+    if (item.id !== "assigneeId") return item;
     return {
-      ...candidate,
-      value: encodeAssigneeToken(candidate.value, currentUserId),
+      ...item,
+      value: encodeAssigneeToken(item.value, currentUserId),
     };
   });
 
   return {
     lifecycle: canonical.lifecycle,
     q: canonical.q,
-    sort: canonical.sort,
-    filters,
+    sort: canonical.sort as unknown as DocumentViewQueryState["sort"],
+    filters: filters as unknown as DocumentViewQueryState["filters"],
     joinOperator: canonical.joinOperator,
     filterFlag: canonical.filterFlag,
     simpleFilters:
       Object.keys(canonical.simpleFilters).length > 0
-        ? encodeSimpleFiltersForView(canonical.simpleFilters, currentUserId)
+        ? (encodeSimpleFiltersForView(
+            canonical.simpleFilters,
+            currentUserId,
+          ) as DocumentViewQueryState["simpleFilters"])
         : null,
   };
 }

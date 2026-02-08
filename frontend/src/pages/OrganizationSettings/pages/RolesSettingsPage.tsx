@@ -109,7 +109,6 @@ export function RolesSettingsPage() {
       slug: values.slug.trim() || undefined,
       description: values.description.trim() || undefined,
       permissions: values.permissions,
-      scope_type: "global",
     });
     setFeedbackMessage({ tone: "success", message: "Role created." });
     closeDrawer();

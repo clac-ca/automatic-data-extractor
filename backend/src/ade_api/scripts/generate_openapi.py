@@ -11,6 +11,7 @@ from paths import REPO_ROOT
 from ..main import create_app
 
 DEFAULT_OUTPUT = REPO_ROOT / "backend" / "src" / "ade_api" / "openapi.json"
+CANONICAL_SERVER_URL = "http://localhost:8000"
 
 
 def _write_schema(path: Path, schema: dict, indent: int | None) -> None:
@@ -47,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
 
     indent = 0 if args.compact else max(args.indent, 0)
     schema = create_app().openapi()
+    # Keep generated artifacts deterministic regardless of local ADE_PUBLIC_WEB_URL.
+    schema["servers"] = [{"url": CANONICAL_SERVER_URL}]
     output_path = args.output.expanduser().resolve()
     _write_schema(output_path, schema, indent or None)
     print(f"📝 wrote OpenAPI schema to {output_path}")

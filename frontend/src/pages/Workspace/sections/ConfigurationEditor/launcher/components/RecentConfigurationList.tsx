@@ -174,7 +174,9 @@ export function RecentConfigurationList({
               <li key={item.id} className="rounded-lg border border-border bg-background/70 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <button
-                    ref={(node) => rowButtonRefs.current.set(item.id, node)}
+                    ref={(node) => {
+                      rowButtonRefs.current.set(item.id, node);
+                    }}
                     type="button"
                     onClick={() => onOpenConfiguration(item.id)}
                     className="min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"

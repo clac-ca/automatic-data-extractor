@@ -4,8 +4,6 @@ export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
 export type ConfigurationChangeSummary = components["schemas"]["ConfigurationChangeSummary"];
 export type ConfigurationHistoryEntry = components["schemas"]["ConfigurationHistoryEntry"];
-export type ConfigurationHistoryScope = components["schemas"]["ConfigurationHistoryScope"];
-export type ConfigurationHistoryStatusFilter = components["schemas"]["ConfigurationHistoryStatusFilter"];
 export type ConfigurationWorkspaceHistoryResponse =
   components["schemas"]["ConfigurationWorkspaceHistoryResponse"];
 

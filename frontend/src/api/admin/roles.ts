@@ -43,12 +43,8 @@ export async function listAdminRoles(options: ListAdminRolesOptions = {}): Promi
 }
 
 export async function createAdminRole(payload: AdminRoleCreateRequest): Promise<AdminRole> {
-  const rolePayload: AdminRoleCreateRequest = {
-    ...payload,
-    scope_type: "global",
-  };
   const { data } = await client.POST("/api/v1/roles", {
-    body: rolePayload,
+    body: payload,
   });
 
   if (!data) {
