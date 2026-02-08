@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { Outlet, useLocation } from "react-router-dom";
 
 import {
   AuthenticatedTopbarProvider,
   useAuthenticatedTopbarConfig,
 } from "@/app/layouts/components/topbar/AuthenticatedTopbarContext";
+import { HomeTopbarAction } from "@/app/layouts/components/topbar/HomeTopbarAction";
 import { UnifiedTopbarControls } from "@/app/layouts/components/topbar/UnifiedTopbarControls";
-import { Button } from "@/components/ui/button";
 import {
   Topbar,
   TopbarCenter,
@@ -62,9 +61,13 @@ export function AuthenticatedLayout() {
 function AuthenticatedLayoutInner() {
   const topbarConfig = useAuthenticatedTopbarConfig();
   const location = useLocation();
+  const isAccountRoute = location.pathname === "/account" || location.pathname.startsWith("/account/");
   const isOrganizationRoute =
     location.pathname === "/organization" || location.pathname.startsWith("/organization/");
-  const shouldRenderTopbarStart = isOrganizationRoute || Boolean(topbarConfig?.mobileAction);
+  const isWorkspacesIndexRoute =
+    location.pathname === "/workspaces" || location.pathname === "/workspaces/new";
+  const shouldShowHomeAction = isAccountRoute || isOrganizationRoute || isWorkspacesIndexRoute;
+  const shouldRenderTopbarStart = shouldShowHomeAction || Boolean(topbarConfig?.mobileAction);
 
   const topbar = (
     <Topbar className="shadow-sm">
@@ -72,14 +75,7 @@ function AuthenticatedLayoutInner() {
       <TopbarContent maxWidth="full" className="px-4 sm:px-6 lg:px-8">
         {shouldRenderTopbarStart ? (
           <TopbarStart className="relative z-10">
-            {isOrganizationRoute ? (
-              <Button asChild variant="outline" size="sm" className="h-9">
-                <Link to="/workspaces">
-                  <ArrowLeft className="size-4" />
-                  <span>Go back to workspace</span>
-                </Link>
-              </Button>
-            ) : null}
+            {shouldShowHomeAction ? <HomeTopbarAction /> : null}
             {topbarConfig?.mobileAction ? (
               <div className="md:hidden">{topbarConfig.mobileAction}</div>
             ) : null}
