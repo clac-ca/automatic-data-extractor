@@ -63,6 +63,40 @@ async def test_list_tenant_api_keys_requires_permission(
     assert response.status_code == 403
 
 
+async def test_self_api_key_management_requires_manage_all_permission(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, payload = await login(async_client, email=member.email, password=member.password)
+    auth_header = {"X-API-Key": token}
+
+    list_response = await async_client.get("/api/v1/users/me/apikeys", headers=auth_header)
+    assert list_response.status_code == 403, list_response.text
+
+    create_response = await async_client.post(
+        "/api/v1/users/me/apikeys",
+        json={"name": "Forbidden key"},
+        headers=auth_header,
+    )
+    assert create_response.status_code == 403, create_response.text
+
+    api_key_id = payload.get("id")
+    assert isinstance(api_key_id, str) and api_key_id
+
+    read_response = await async_client.get(
+        f"/api/v1/users/me/apikeys/{api_key_id}",
+        headers=auth_header,
+    )
+    assert read_response.status_code == 403, read_response.text
+
+    revoke_response = await async_client.delete(
+        f"/api/v1/users/me/apikeys/{api_key_id}",
+        headers={**auth_header, "If-Match": "*"},
+    )
+    assert revoke_response.status_code == 403, revoke_response.text
+
+
 async def test_list_tenant_api_keys_admin_supports_user_filter(
     async_client: AsyncClient,
     seed_identity,

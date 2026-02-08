@@ -19,6 +19,7 @@ from .schemas import (
     EffectivePermissions,
     MeContext,
     MeProfile,
+    MeProfileUpdateRequest,
     MeWorkspaceSummary,
     PermissionCheckRequest,
     PermissionCheckResponse,
@@ -74,6 +75,31 @@ class MeService:
             roles=roles,
             permissions=permissions,
             workspaces=workspaces,
+        )
+
+    def update_profile(
+        self,
+        principal: AuthenticatedPrincipal,
+        payload: MeProfileUpdateRequest,
+    ) -> MeProfile:
+        """Update editable fields on the caller profile."""
+
+        user, roles, permissions, access = self._load_principal_state(principal)
+
+        if "display_name" not in payload.model_fields_set:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="No editable profile fields were provided.",
+            )
+
+        user.display_name = payload.display_name
+        self.session.flush()
+
+        return self._to_me_profile(
+            user=user,
+            roles=roles,
+            permissions=permissions,
+            preferred_workspace_id=access.default_workspace_id,
         )
 
     def get_effective_permissions(

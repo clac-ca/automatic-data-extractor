@@ -232,6 +232,24 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/mfa/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read TOTP MFA status for the current user */
+        get: operations["mfa_status_api_v1_auth_mfa_totp_get"];
+        put?: never;
+        post?: never;
+        /** Disable TOTP for the current user */
+        delete: operations["mfa_disable_api_v1_auth_mfa_totp_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/mfa/totp/enroll/confirm": {
         parameters: {
             query?: never;
@@ -243,6 +261,23 @@ export type paths = {
         put?: never;
         /** Confirm TOTP enrollment with current code */
         post: operations["mfa_enroll_confirm_api_v1_auth_mfa_totp_enroll_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/totp/recovery/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate recovery codes for current user */
+        post: operations["mfa_regenerate_recovery_codes_api_v1_auth_mfa_totp_recovery_regenerate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -261,23 +296,6 @@ export type paths = {
         /** Verify MFA challenge and issue a session */
         post: operations["mfa_verify_challenge_api_v1_auth_mfa_challenge_verify_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/mfa/totp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Disable TOTP for the current user */
-        delete: operations["mfa_disable_api_v1_auth_mfa_totp_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -565,7 +583,11 @@ export type paths = {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update editable fields on the authenticated user's profile
+         * @description Patch mutable fields for the current principal.
+         */
+        patch: operations["patch_me_api_v1_me_patch"];
         trace?: never;
     };
     "/api/v1/me/bootstrap": {
@@ -1622,6 +1644,16 @@ export type components = {
              * @default false
              */
             mfa_required: boolean;
+            /**
+             * Mfasetuprecommended
+             * @default false
+             */
+            mfaSetupRecommended: boolean;
+            /**
+             * Mfasetuprequired
+             * @default false
+             */
+            mfaSetupRequired: boolean;
         };
         /** AuthMfaChallengeVerifyRequest */
         AuthMfaChallengeVerifyRequest: {
@@ -1648,6 +1680,35 @@ export type components = {
             issuer: string;
             /** Accountname */
             accountName: string;
+        };
+        /** AuthMfaRecoveryRegenerateRequest */
+        AuthMfaRecoveryRegenerateRequest: {
+            /** Code */
+            code: string;
+        };
+        /** AuthMfaStatusResponse */
+        AuthMfaStatusResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Enrolledat */
+            enrolledAt?: string | null;
+            /** Recoverycodesremaining */
+            recoveryCodesRemaining?: number | null;
+            /**
+             * Onboardingrecommended
+             * @default false
+             */
+            onboardingRecommended: boolean;
+            /**
+             * Onboardingrequired
+             * @default false
+             */
+            onboardingRequired: boolean;
+            /**
+             * Skipallowed
+             * @default false
+             */
+            skipAllowed: boolean;
         };
         /** AuthPasswordForgotRequest */
         AuthPasswordForgotRequest: {
@@ -1715,6 +1776,12 @@ export type components = {
              * @default false
              */
             force_sso: boolean;
+            /**
+             * Password Reset Enabled
+             * @description When true, public password reset flows should be offered.
+             * @default true
+             */
+            password_reset_enabled: boolean;
         };
         /**
          * AuthSetupRequest
@@ -2651,6 +2718,17 @@ export type components = {
              * @description Timestamp of last profile update, if any.
              */
             updated_at?: string | null;
+        };
+        /**
+         * MeProfileUpdateRequest
+         * @description Payload for updating editable fields on the caller profile.
+         */
+        MeProfileUpdateRequest: {
+            /**
+             * Display Name
+             * @description Optional display name shown in the ADE user interface.
+             */
+            display_name?: string | null;
         };
         /**
          * MeWorkspaceSummary
@@ -4211,6 +4289,60 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    mfa_status_api_v1_auth_mfa_totp_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMfaStatusResponse"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    mfa_disable_api_v1_auth_mfa_totp_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     mfa_enroll_confirm_api_v1_auth_mfa_totp_enroll_confirm_post: {
         parameters: {
             query?: never;
@@ -4223,6 +4355,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AuthMfaEnrollConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMfaEnrollConfirmResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    mfa_regenerate_recovery_codes_api_v1_auth_mfa_totp_recovery_regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthMfaRecoveryRegenerateRequest"];
             };
         };
         responses: {
@@ -4271,38 +4441,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthLoginSuccess"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    mfa_disable_api_v1_auth_mfa_totp_delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4428,6 +4566,14 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Requires api_keys.manage_all global permission. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4482,6 +4628,14 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Requires api_keys.manage_all global permission. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4526,7 +4680,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description API key not owned by caller. */
+            /** @description Requires api_keys.manage_all global permission. */
             403: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -4587,7 +4741,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description API key not owned by caller. */
+            /** @description Requires api_keys.manage_all global permission. */
             403: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -5647,6 +5801,58 @@ export interface operations {
             };
             /** @description User record not found. */
             404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    patch_me_api_v1_me_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            /** @description Authentication required to update the profile. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service account principals cannot access this endpoint. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No editable fields provided or payload validation failed. */
+            422: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;

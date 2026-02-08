@@ -7,10 +7,14 @@ import { AuthenticatedLayout } from "@/app/layouts/AuthenticatedLayout";
 import { PublicLayout } from "@/app/layouts/PublicLayout";
 
 const HomeScreen = lazy(() => import("@/pages/Home"));
+const ForgotPasswordScreen = lazy(() => import("@/pages/ForgotPassword"));
 const LoginScreen = lazy(() => import("@/pages/Login"));
 const LogoutScreen = lazy(() => import("@/pages/Logout"));
 const NotFoundScreen = lazy(() => import("@/pages/NotFound"));
+const AccountCenterScreen = lazy(() => import("@/pages/Account"));
+const MfaSetupScreen = lazy(() => import("@/pages/MfaSetup"));
 const OrganizationSettingsScreen = lazy(() => import("@/pages/OrganizationSettings"));
+const ResetPasswordScreen = lazy(() => import("@/pages/ResetPassword"));
 const SetupScreen = lazy(() => import("@/pages/Setup"));
 const WorkspaceScreen = lazy(() => import("@/pages/Workspace"));
 const WorkspaceCreateScreen = lazy(() => import("@/pages/Workspaces/New"));
@@ -33,8 +37,10 @@ export const appRoutes: RouteObject[] = [
       {
         element: <PublicLayout />,
         children: [
+          { path: "forgot-password", element: withRouteSuspense(<ForgotPasswordScreen />) },
           { path: "login", element: withRouteSuspense(<LoginScreen />) },
           { path: "logout", element: withRouteSuspense(<LogoutScreen />) },
+          { path: "reset-password", element: withRouteSuspense(<ResetPasswordScreen />) },
           { path: "setup", element: withRouteSuspense(<SetupScreen />) },
         ],
       },
@@ -45,6 +51,8 @@ export const appRoutes: RouteObject[] = [
             element: <AuthenticatedLayout />,
             children: [
               { index: true, element: withRouteSuspense(<HomeScreen />) },
+              { path: "account/*", element: withRouteSuspense(<AccountCenterScreen />) },
+              { path: "mfa/setup", element: withRouteSuspense(<MfaSetupScreen />) },
               { path: "organization/*", element: withRouteSuspense(<OrganizationSettingsScreen />) },
               { path: "workspaces", element: withRouteSuspense(<WorkspacesScreen />) },
               { path: "workspaces/new", element: withRouteSuspense(<WorkspaceCreateScreen />) },

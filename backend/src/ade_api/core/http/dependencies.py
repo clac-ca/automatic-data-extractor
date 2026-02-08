@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.common.time import utc_now
 from ade_api.db import get_db_read, get_session_factory
-from ade_db.models import ApiKey, AuthSession, User
+from ade_db.models import AUTH_SESSION_AUTH_METHOD_VALUES, ApiKey, AuthSession, User
 from ade_api.settings import Settings, get_settings
 
 from ..auth import (
@@ -31,6 +31,11 @@ ReadSessionDep = Annotated[Session, Depends(get_db_read)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 PermissionDependency = Callable[..., User]
+_KNOWN_AUTH_METHODS = set(AUTH_SESSION_AUTH_METHOD_VALUES)
+_MFA_SETUP_ALLOWLIST = {
+    "/api/v1/auth/logout",
+    "/api/v1/me/bootstrap",
+}
 
 class _RbacAdapter(RbacServiceInterface):
     """Bridge the RBAC feature service to the interface expected by dependencies."""
@@ -240,6 +245,9 @@ def get_cookie_authenticator(
                 principal_type=PrincipalType.USER,
                 auth_via=AuthVia.SESSION,
                 api_key_id=None,
+                session_auth_method=_normalize_session_auth_method(
+                    auth_session.auth_method
+                ),
             )
 
     return _CookieAuthenticator()
@@ -268,12 +276,66 @@ def get_current_principal(
 ) -> AuthenticatedPrincipal:
     """Authenticate the incoming request and return the current principal."""
 
-    return authenticate_request(
+    principal = authenticate_request(
         request=request,
         _db=db,
         settings=settings,
         api_key_service=api_key_service,
         cookie_service=cookie_service,
+    )
+    _enforce_local_mfa_onboarding(
+        request=request,
+        db=db,
+        settings=settings,
+        principal=principal,
+    )
+    return principal
+
+
+def _normalize_session_auth_method(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    return normalized if normalized in _KNOWN_AUTH_METHODS else "unknown"
+
+
+def _is_mfa_allowlisted_path(path: str) -> bool:
+    normalized = path.rstrip("/") or "/"
+    if normalized in _MFA_SETUP_ALLOWLIST:
+        return True
+    if normalized.startswith("/api/v1/auth/mfa/totp"):
+        return True
+    return False
+
+
+def _enforce_local_mfa_onboarding(
+    *,
+    request: Request,
+    db: Session,
+    settings: Settings,
+    principal: AuthenticatedPrincipal,
+) -> None:
+    if not settings.auth_enforce_local_mfa:
+        return
+    if principal.auth_via is not AuthVia.SESSION:
+        return
+    if principal.session_auth_method != "password":
+        return
+    if _is_mfa_allowlisted_path(request.url.path):
+        return
+
+    from ade_api.features.authn.service import AuthnService
+
+    authn = AuthnService(session=db, settings=settings)
+    if authn.has_mfa_enabled(user_id=principal.user_id):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "mfa_setup_required",
+            "message": (
+                "Multi-factor authentication setup is required before continuing."
+            ),
+        },
     )
 
 

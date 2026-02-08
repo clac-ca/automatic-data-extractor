@@ -16,6 +16,8 @@ from ade_db import GUID, Base, UTCDateTime, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from .user import User
 
+AUTH_SESSION_AUTH_METHOD_VALUES = ("password", "sso", "unknown")
+
 
 class AuthSession(UUIDPrimaryKeyMixin, Base):
     """Hashed browser session token."""
@@ -28,6 +30,12 @@ class AuthSession(UUIDPrimaryKeyMixin, Base):
         nullable=False,
     )
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    auth_method: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(),
         nullable=False,
@@ -127,6 +135,7 @@ class MfaChallenge(UUIDPrimaryKeyMixin, Base):
 
 
 __all__ = [
+    "AUTH_SESSION_AUTH_METHOD_VALUES",
     "AuthSession",
     "PasswordResetToken",
     "UserMfaTotp",

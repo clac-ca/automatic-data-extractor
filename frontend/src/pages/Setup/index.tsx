@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { createSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "@/api";
-import { sessionKeys } from "@/api/auth/api";
+import { fetchMfaStatus, sessionKeys } from "@/api/auth/api";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
 import { completeSetup } from "@/api/setup/api";
 import { Alert } from "@/components/ui/alert";
@@ -146,7 +146,13 @@ export default function SetupScreen() {
         password: parsed.data.password,
       });
       queryClient.setQueryData(sessionKeys.detail(), session);
-      navigate(pickReturnTo(session.return_to, destination), { replace: true });
+      const nextPath = pickReturnTo(session.return_to, destination);
+      const mfaStatus = await fetchMfaStatus();
+      if (mfaStatus.onboardingRequired || mfaStatus.onboardingRecommended) {
+        navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
+        return;
+      }
+      navigate(nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const message = error.problem?.detail ?? error.message ?? "Setup failed. Try again.";

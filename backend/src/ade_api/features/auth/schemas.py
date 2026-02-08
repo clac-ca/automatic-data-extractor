@@ -48,6 +48,10 @@ class AuthProviderListResponse(BaseSchema):
         default=False,
         description="When true, the frontend should offer only SSO.",
     )
+    password_reset_enabled: bool = Field(
+        default=True,
+        description="When true, public password reset flows should be offered.",
+    )
 
 
 class AuthSetupStatusResponse(BaseSchema):

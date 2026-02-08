@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { createSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { createSearchParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "@/api";
 import { createSession, sessionKeys, type AuthProvider, verifyMfaChallenge } from "@/api/auth/api";
 import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
@@ -90,6 +90,7 @@ export default function LoginScreen() {
   const providers: AuthProvider[] = providersQuery.data?.providers ?? [];
   const oidcProviders = providers.filter((provider) => provider.type === "oidc");
   const forceSso = providersQuery.data?.forceSso ?? false;
+  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? !forceSso;
   const providersLoadFailed = providersQuery.isError && !providersQuery.isFetching;
   const providersUnavailable = oidcProviders.length === 0;
   const blockingSsoMessage =
@@ -105,6 +106,10 @@ export default function LoginScreen() {
     const params = new URLSearchParams(location.search);
     return resolveReturnTo(params.get("returnTo"));
   }, [location.search]);
+  const forgotPasswordPath = useMemo(
+    () => buildRedirectPath("/forgot-password", returnTo),
+    [returnTo],
+  );
 
   useEffect(() => {
     if (!session) {
@@ -172,6 +177,13 @@ export default function LoginScreen() {
         return `${prefix} Please try again.`;
     }
   }, [location.search, oidcProviders]);
+  const passwordResetMessage = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("passwordReset") === "success") {
+      return "Your password was reset. Sign in with your new password.";
+    }
+    return null;
+  }, [location.search]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -241,7 +253,12 @@ export default function LoginScreen() {
         return;
       }
       queryClient.setQueryData(sessionKeys.detail(), result.session);
-      navigate(pickReturnTo(result.session.return_to, destination), { replace: true });
+      const nextPath = pickReturnTo(result.session.return_to, destination);
+      if (result.mfaSetupRequired || result.mfaSetupRecommended) {
+        navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
+        return;
+      }
+      navigate(nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";
@@ -308,6 +325,7 @@ export default function LoginScreen() {
           </p>
         </header>
 
+        {passwordResetMessage ? <Alert tone="info" className="mt-6">{passwordResetMessage}</Alert> : null}
         {ssoErrorMessage ? <Alert tone="danger" className="mt-6">{ssoErrorMessage}</Alert> : null}
         {blockingSsoMessage ? <Alert tone="danger" className="mt-6">{blockingSsoMessage}</Alert> : null}
         {providersError ? <Alert tone="warning" className="mt-6">{providersError}</Alert> : null}
@@ -355,6 +373,21 @@ export default function LoginScreen() {
                 disabled={isSubmitting}
               />
             </FormField>
+
+            {passwordResetEnabled ? (
+              <div className="text-right">
+                <Link
+                  to={forgotPasswordPath}
+                  className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+            ) : (
+              <p className="text-right text-sm text-muted-foreground">
+                Password reset is unavailable. Contact your administrator.
+              </p>
+            )}
 
             {shouldShowActionError ? <Alert tone="danger">{formError}</Alert> : null}
 

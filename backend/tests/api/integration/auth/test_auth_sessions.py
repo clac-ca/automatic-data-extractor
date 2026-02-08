@@ -4,9 +4,13 @@ from urllib.parse import parse_qs, urlparse
 
 import anyio
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from ade_api.common.time import utc_now
+from ade_api.core.security import hash_opaque_token, mint_opaque_token
+from ade_api.features.authn.service import AuthnService
 from ade_api.features.authn.totp import totp_now
 from ade_api.settings import Settings
 from ade_db.models import AuthSession
@@ -35,11 +39,130 @@ async def test_cookie_login_sets_session_and_bootstrap(
     tokens = await anyio.to_thread.run_sync(_load_tokens)
     assert len(tokens) == 1
     assert tokens[0].user_id == admin.id
+    assert tokens[0].auth_method == "password"
 
     bootstrap = await async_client.get("/api/v1/me/bootstrap")
     assert bootstrap.status_code == 200, bootstrap.text
     payload = bootstrap.json()
     assert payload["user"]["email"] == admin.email
+
+
+async def test_local_login_reports_recommended_mfa_setup_when_optional(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+
+    response = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": member.email, "password": member.password},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["mfa_required"] is False
+    assert payload["mfaSetupRecommended"] is True
+    assert payload["mfaSetupRequired"] is False
+
+
+async def test_local_login_reports_required_mfa_setup_when_enforced(
+    async_client: AsyncClient,
+    seed_identity,
+    settings: Settings,
+) -> None:
+    member = seed_identity.member
+    settings.auth_enforce_local_mfa = True
+
+    response = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": member.email, "password": member.password},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["mfa_required"] is False
+    assert payload["mfaSetupRecommended"] is False
+    assert payload["mfaSetupRequired"] is True
+
+
+async def test_local_mfa_enforcement_blocks_profile_until_enrolled(
+    async_client: AsyncClient,
+    seed_identity,
+    settings: Settings,
+) -> None:
+    member = seed_identity.member
+    settings.auth_enforce_local_mfa = True
+
+    login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": member.email, "password": member.password},
+    )
+    assert login.status_code == 200, login.text
+    csrf_cookie = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert csrf_cookie
+
+    blocked_profile = await async_client.get("/api/v1/me")
+    assert blocked_profile.status_code == 403, blocked_profile.text
+    blocked_payload = blocked_profile.json()
+    error_codes = {
+        item.get("code")
+        for item in blocked_payload.get("errors", [])
+        if isinstance(item, dict)
+    }
+    assert "mfa_setup_required" in error_codes
+
+    bootstrap = await async_client.get("/api/v1/me/bootstrap")
+    assert bootstrap.status_code == 200, bootstrap.text
+    refreshed_csrf = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert refreshed_csrf
+
+    mfa_status = await async_client.get("/api/v1/auth/mfa/totp")
+    assert mfa_status.status_code == 200, mfa_status.text
+    status_payload = mfa_status.json()
+    assert status_payload["onboardingRequired"] is True
+    assert status_payload["skipAllowed"] is False
+
+    enroll_start = await async_client.post(
+        "/api/v1/auth/mfa/totp/enroll/start",
+        headers={"X-CSRF-Token": refreshed_csrf},
+    )
+    assert enroll_start.status_code == 200, enroll_start.text
+    otpauth_uri = enroll_start.json()["otpauthUri"]
+    secret = parse_qs(urlparse(otpauth_uri).query)["secret"][0]
+
+    enroll_confirm = await async_client.post(
+        "/api/v1/auth/mfa/totp/enroll/confirm",
+        json={"code": totp_now(secret)},
+        headers={"X-CSRF-Token": refreshed_csrf},
+    )
+    assert enroll_confirm.status_code == 200, enroll_confirm.text
+
+    unblocked_profile = await async_client.get("/api/v1/me")
+    assert unblocked_profile.status_code == 200, unblocked_profile.text
+
+
+async def test_local_mfa_enforcement_does_not_apply_to_sso_sessions(
+    async_client: AsyncClient,
+    seed_identity,
+    settings: Settings,
+    db_session,
+) -> None:
+    settings.auth_enforce_local_mfa = True
+    member = seed_identity.member
+
+    raw_token = mint_opaque_token()
+    db_session.add(
+        AuthSession(
+            user_id=member.id,
+            token_hash=hash_opaque_token(raw_token),
+            auth_method="sso",
+            expires_at=utc_now() + settings.session_access_ttl,
+            revoked_at=None,
+        )
+    )
+    db_session.flush()
+    async_client.cookies.set(settings.session_cookie_name, raw_token)
+
+    response = await async_client.get("/api/v1/me")
+    assert response.status_code == 200, response.text
 
 
 async def test_cookie_login_sets_secure_flag_when_public_url_is_https(
@@ -110,6 +233,59 @@ async def test_cookie_logout_requires_csrf_header(
 
     missing_csrf = await async_client.post("/api/v1/auth/logout")
     assert missing_csrf.status_code == 403
+
+
+async def test_auth_providers_include_password_reset_enabled_flag(
+    async_client: AsyncClient,
+) -> None:
+    response = await async_client.get("/api/v1/auth/providers")
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["force_sso"] is False
+    assert payload["password_reset_enabled"] is True
+
+
+async def test_password_reset_forgot_accepts_request_when_enabled(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    response = await async_client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": seed_identity.member.email},
+    )
+    assert response.status_code == 202, response.text
+
+
+async def test_password_reset_forgot_rejects_when_disabled(
+    async_client: AsyncClient,
+    settings: Settings,
+) -> None:
+    settings.auth_password_reset_enabled = False
+
+    response = await async_client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": "user@example.com"},
+    )
+    assert response.status_code == 403, response.text
+
+
+async def test_password_reset_service_respects_disable_toggle(
+    db_session,
+    settings: Settings,
+) -> None:
+    disabled_settings = settings.model_copy(update={"auth_password_reset_enabled": False})
+    service = AuthnService(session=db_session, settings=disabled_settings)
+
+    with pytest.raises(HTTPException) as forgot_exc:
+        service.forgot_password(email="user@example.com")
+    assert forgot_exc.value.status_code == 403
+    assert forgot_exc.value.detail == "Password reset is unavailable."
+
+    with pytest.raises(HTTPException) as reset_exc:
+        service.reset_password(token="reset-token", new_password="averysecurepassword")
+    assert reset_exc.value.status_code == 403
+    assert reset_exc.value.detail == "Password reset is unavailable."
 
 
 async def test_mfa_recovery_code_accepts_compact_and_hyphenated_formats(
@@ -302,6 +478,18 @@ async def test_sso_enforcement_blocks_non_admin_and_preserves_global_admin_local
     )
     assert enforce_sso.status_code == 200, enforce_sso.text
 
+    providers = await async_client.get("/api/v1/auth/providers")
+    assert providers.status_code == 200, providers.text
+    providers_payload = providers.json()
+    assert providers_payload["force_sso"] is True
+    assert providers_payload["password_reset_enabled"] is False
+
+    forgot_while_enforced = await async_client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": member.email},
+    )
+    assert forgot_while_enforced.status_code == 403, forgot_while_enforced.text
+
     logout = await async_client.post(
         "/api/v1/auth/logout",
         headers={"X-CSRF-Token": csrf_cookie},
@@ -327,3 +515,109 @@ async def test_sso_enforcement_blocks_non_admin_and_preserves_global_admin_local
     admin_payload = admin_local_login.json()
     assert admin_payload["mfa_required"] is True
     assert (admin_payload.get("challengeToken") or admin_payload.get("challenge_token"))
+
+
+async def test_mfa_status_and_recovery_regeneration(
+    async_client: AsyncClient,
+    seed_identity,
+    settings: Settings,
+) -> None:
+    admin = seed_identity.admin
+
+    login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": admin.email, "password": admin.password},
+    )
+    assert login.status_code == 200, login.text
+    csrf_cookie = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert csrf_cookie
+
+    status_before = await async_client.get("/api/v1/auth/mfa/totp")
+    assert status_before.status_code == 200, status_before.text
+    before_payload = status_before.json()
+    assert before_payload["enabled"] is False
+    assert before_payload["recoveryCodesRemaining"] is None
+    assert before_payload["onboardingRecommended"] is True
+    assert before_payload["onboardingRequired"] is False
+    assert before_payload["skipAllowed"] is True
+
+    enroll_start = await async_client.post(
+        "/api/v1/auth/mfa/totp/enroll/start",
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert enroll_start.status_code == 200, enroll_start.text
+    otpauth_uri = enroll_start.json()["otpauthUri"]
+    secret = parse_qs(urlparse(otpauth_uri).query)["secret"][0]
+
+    enroll_confirm = await async_client.post(
+        "/api/v1/auth/mfa/totp/enroll/confirm",
+        json={"code": totp_now(secret)},
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert enroll_confirm.status_code == 200, enroll_confirm.text
+    original_recovery_codes = enroll_confirm.json()["recoveryCodes"]
+    assert len(original_recovery_codes) >= 2
+
+    status_after_enroll = await async_client.get("/api/v1/auth/mfa/totp")
+    assert status_after_enroll.status_code == 200, status_after_enroll.text
+    enrolled_payload = status_after_enroll.json()
+    assert enrolled_payload["enabled"] is True
+    assert enrolled_payload["enrolledAt"]
+    assert enrolled_payload["recoveryCodesRemaining"] == len(original_recovery_codes)
+    assert enrolled_payload["onboardingRecommended"] is False
+    assert enrolled_payload["onboardingRequired"] is False
+    assert enrolled_payload["skipAllowed"] is False
+
+    regenerate = await async_client.post(
+        "/api/v1/auth/mfa/totp/recovery/regenerate",
+        json={"code": totp_now(secret)},
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert regenerate.status_code == 200, regenerate.text
+    regenerated_codes = regenerate.json()["recoveryCodes"]
+    assert regenerated_codes
+    assert regenerated_codes != original_recovery_codes
+
+    status_after_regenerate = await async_client.get("/api/v1/auth/mfa/totp")
+    assert status_after_regenerate.status_code == 200, status_after_regenerate.text
+    regenerated_payload = status_after_regenerate.json()
+    assert regenerated_payload["enabled"] is True
+    assert regenerated_payload["recoveryCodesRemaining"] == len(regenerated_codes)
+
+
+async def test_mfa_recovery_regeneration_rejects_invalid_code(
+    async_client: AsyncClient,
+    seed_identity,
+    settings: Settings,
+) -> None:
+    admin = seed_identity.admin
+
+    login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": admin.email, "password": admin.password},
+    )
+    assert login.status_code == 200, login.text
+    csrf_cookie = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert csrf_cookie
+
+    enroll_start = await async_client.post(
+        "/api/v1/auth/mfa/totp/enroll/start",
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert enroll_start.status_code == 200, enroll_start.text
+    otpauth_uri = enroll_start.json()["otpauthUri"]
+    secret = parse_qs(urlparse(otpauth_uri).query)["secret"][0]
+
+    enroll_confirm = await async_client.post(
+        "/api/v1/auth/mfa/totp/enroll/confirm",
+        json={"code": totp_now(secret)},
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert enroll_confirm.status_code == 200, enroll_confirm.text
+
+    regenerate = await async_client.post(
+        "/api/v1/auth/mfa/totp/recovery/regenerate",
+        json={"code": "ZZZZ-ZZZZ"},
+        headers={"X-CSRF-Token": csrf_cookie},
+    )
+    assert regenerate.status_code == 400, regenerate.text

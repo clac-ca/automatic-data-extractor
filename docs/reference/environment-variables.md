@@ -58,6 +58,8 @@ See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact m
 | `ADE_AUTH_DISABLED_USER_NAME` | API auth bypass | optional | `Development User` | used only in auth-disabled mode |
 | `ADE_ALLOW_PUBLIC_REGISTRATION` | API auth policy | optional | `false` | allows open user signup |
 | `ADE_AUTH_FORCE_SSO` | API auth policy | optional | `false` | enforce SSO for non-global-admin local login |
+| `ADE_AUTH_PASSWORD_RESET_ENABLED` | API auth policy | optional | `true` | enable/disable public forgot/reset password endpoints and UI |
+| `ADE_AUTH_ENFORCE_LOCAL_MFA` | API auth policy | optional | `false` | require MFA enrollment for password-authenticated sessions before protected API access |
 | `ADE_AUTH_SSO_AUTO_PROVISION` | API auth policy | optional | `false` | create users automatically from SSO |
 | `ADE_AUTH_SSO_PROVIDERS_JSON` | API SSO | optional | none | provider settings payload |
 | `ADE_SSO_ENCRYPTION_KEY` | API SSO | optional | none | encryption key for SSO secrets |

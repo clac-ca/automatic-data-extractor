@@ -54,6 +54,8 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.blob_prefix == "workspaces"
     assert settings.blob_versioning_mode == "auto"
     assert settings.database_connection_budget is None
+    assert settings.auth_password_reset_enabled is True
+    assert settings.auth_enforce_local_mfa is False
 
 
 def test_data_dir_propagates_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

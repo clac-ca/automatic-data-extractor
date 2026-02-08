@@ -10,6 +10,7 @@ import type { SessionEnvelope } from "@/api/auth/api";
 
 const mockUseSessionQuery = vi.fn();
 const mockUseSetupStatusQuery = vi.fn();
+const mockUseMfaStatusQuery = vi.fn();
 
 vi.mock("@/hooks/auth/useSessionQuery", () => ({
   useSessionQuery: () => mockUseSessionQuery(),
@@ -17,6 +18,10 @@ vi.mock("@/hooks/auth/useSessionQuery", () => ({
 
 vi.mock("@/hooks/auth/useSetupStatusQuery", () => ({
   useSetupStatusQuery: (enabled?: boolean) => mockUseSetupStatusQuery(enabled),
+}));
+
+vi.mock("@/hooks/auth/useMfaStatusQuery", () => ({
+  useMfaStatusQuery: (options?: { enabled?: boolean }) => mockUseMfaStatusQuery(options),
 }));
 
 function LocationDisplay() {
@@ -49,6 +54,7 @@ describe("RequireSession", () => {
   beforeEach(() => {
     mockUseSessionQuery.mockReset();
     mockUseSetupStatusQuery.mockReset();
+    mockUseMfaStatusQuery.mockReset();
 
     mockUseSetupStatusQuery.mockReturnValue({
       data: {
@@ -61,6 +67,19 @@ describe("RequireSession", () => {
       isSuccess: true,
       isError: false,
       refetch: vi.fn(),
+    });
+
+    mockUseMfaStatusQuery.mockReturnValue({
+      data: {
+        enabled: false,
+        enrolledAt: null,
+        recoveryCodesRemaining: null,
+        onboardingRecommended: false,
+        onboardingRequired: false,
+        skipAllowed: false,
+      },
+      isPending: false,
+      isError: false,
     });
   });
 
@@ -209,5 +228,50 @@ describe("RequireSession", () => {
     );
 
     expect(await screen.findByText("Signed in as Test User")).toBeInTheDocument();
+  });
+
+  it("redirects authenticated users to MFA setup when onboarding is required", async () => {
+    const session: SessionEnvelope = {
+      user: {
+        id: "user-1",
+        email: "user@example.com",
+        is_service_account: false,
+        display_name: "Test User",
+        roles: [],
+        permissions: [],
+        preferred_workspace_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      workspaces: [],
+      roles: [],
+      permissions: [],
+      return_to: null,
+    };
+
+    mockUseSessionQuery.mockReturnValue({
+      session,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    mockUseMfaStatusQuery.mockReturnValue({
+      data: {
+        enabled: false,
+        enrolledAt: null,
+        recoveryCodesRemaining: null,
+        onboardingRecommended: false,
+        onboardingRequired: true,
+        skipAllowed: false,
+      },
+      isPending: false,
+      isError: false,
+    });
+
+    renderWithHistory(<RequireSession>Protected</RequireSession>, "/workspaces");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent("/mfa/setup?returnTo=%2Fworkspaces"),
+    );
   });
 });

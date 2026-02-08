@@ -8,14 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, Securi
 from fastapi.concurrency import run_in_threadpool
 
 from ade_api.api.deps import get_auth_service_read
+from ade_api.core.auth import AuthenticatedPrincipal
 from ade_api.core.http import (
     clear_session_cookie,
+    get_current_principal,
     require_authenticated,
     require_csrf,
     set_session_cookie,
 )
 from ade_api.core.http.csrf import clear_csrf_cookie, set_csrf_cookie
-from ade_api.db import get_db_write
+from ade_api.db import get_db_read, get_db_write
 from ade_api.settings import Settings
 from ade_db.models import User
 
@@ -24,14 +26,20 @@ from ..authn.schemas import (
     AuthLoginRequest,
     AuthLoginSuccess,
     AuthMfaChallengeVerifyRequest,
+    AuthMfaRecoveryRegenerateRequest,
     AuthMfaEnrollConfirmRequest,
     AuthMfaEnrollConfirmResponse,
     AuthMfaEnrollStartResponse,
+    AuthMfaStatusResponse,
     AuthPasswordForgotRequest,
     AuthPasswordResetRequest,
 )
 from ..authn.service import AuthnService, LoginError, MfaRequiredError
-from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
+from .schemas import (
+    AuthProviderListResponse,
+    AuthSetupRequest,
+    AuthSetupStatusResponse,
+)
 from .service import AuthService, SetupAlreadyCompletedError
 from .sso_router import router as sso_router
 
@@ -78,7 +86,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
                             password_hash=password_hash,
                         )
                         authn = AuthnService(session=session, settings=settings)
-                        token = authn.create_session(user_id=user.id)
+                        token = authn.create_session(user_id=user.id, auth_method="password")
                         return user, token
 
             _user, token = await run_in_threadpool(_create_admin_and_session)
@@ -108,7 +116,11 @@ def create_auth_router(settings: Settings) -> APIRouter:
                 )
             else:
                 provider_items.append(item.model_copy(update={"start_url": "/api/v1/auth/login"}))
-        return AuthProviderListResponse(providers=provider_items, force_sso=payload.force_sso)
+        return AuthProviderListResponse(
+            providers=provider_items,
+            force_sso=payload.force_sso,
+            password_reset_enabled=payload.password_reset_enabled,
+        )
 
     @router.post(
         "/login",
@@ -122,7 +134,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     ) -> AuthLoginSuccess | AuthLoginMfaRequired:
         service = AuthnService(session=db, settings=settings)
         try:
-            session_token = service.login_local(
+            login_result = service.login_local(
                 email=str(payload.email),
                 password=payload.password.get_secret_value(),
             )
@@ -144,11 +156,14 @@ def create_auth_router(settings: Settings) -> APIRouter:
             ) from exc
 
         response = Response(
-            content=AuthLoginSuccess().model_dump_json(),
+            content=AuthLoginSuccess(
+                mfaSetupRecommended=login_result.mfa_setup_recommended,
+                mfaSetupRequired=login_result.mfa_setup_required,
+            ).model_dump_json(),
             media_type="application/json",
             status_code=status.HTTP_200_OK,
         )
-        set_session_cookie(response, settings, session_token)
+        set_session_cookie(response, settings, login_result.session_token)
         set_csrf_cookie(response, settings)
         return response  # type: ignore[return-value]
 
@@ -217,6 +232,33 @@ def create_auth_router(settings: Settings) -> APIRouter:
             accountName=account_name,
         )
 
+    @router.get(
+        "/mfa/totp",
+        response_model=AuthMfaStatusResponse,
+        status_code=status.HTTP_200_OK,
+        summary="Read TOTP MFA status for the current user",
+    )
+    def mfa_status(
+        principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
+        user: Annotated[User, Security(require_authenticated)],
+        db=Depends(get_db_write),
+    ) -> AuthMfaStatusResponse:
+        service = AuthnService(session=db, settings=settings)
+        enabled, enrolled_at, recovery_codes_remaining = service.get_totp_status(user=user)
+        onboarding_recommended, onboarding_required, skip_allowed = service.totp_onboarding_flags(
+            has_mfa_enabled=enabled,
+            auth_via=principal.auth_via,
+            session_auth_method=principal.session_auth_method,
+        )
+        return AuthMfaStatusResponse(
+            enabled=enabled,
+            enrolledAt=enrolled_at,
+            recoveryCodesRemaining=recovery_codes_remaining,
+            onboardingRecommended=onboarding_recommended,
+            onboardingRequired=onboarding_required,
+            skipAllowed=skip_allowed,
+        )
+
     @router.post(
         "/mfa/totp/enroll/confirm",
         dependencies=[Depends(require_csrf)],
@@ -231,6 +273,22 @@ def create_auth_router(settings: Settings) -> APIRouter:
     ) -> AuthMfaEnrollConfirmResponse:
         service = AuthnService(session=db, settings=settings)
         recovery_codes = service.confirm_totp_enrollment(user=user, code=payload.code)
+        return AuthMfaEnrollConfirmResponse(recoveryCodes=recovery_codes)
+
+    @router.post(
+        "/mfa/totp/recovery/regenerate",
+        dependencies=[Depends(require_csrf)],
+        response_model=AuthMfaEnrollConfirmResponse,
+        status_code=status.HTTP_200_OK,
+        summary="Regenerate recovery codes for current user",
+    )
+    def mfa_regenerate_recovery_codes(
+        payload: AuthMfaRecoveryRegenerateRequest,
+        user: Annotated[User, Security(require_authenticated)],
+        db=Depends(get_db_write),
+    ) -> AuthMfaEnrollConfirmResponse:
+        service = AuthnService(session=db, settings=settings)
+        recovery_codes = service.regenerate_recovery_codes(user=user, code=payload.code)
         return AuthMfaEnrollConfirmResponse(recoveryCodes=recovery_codes)
 
     @router.post(

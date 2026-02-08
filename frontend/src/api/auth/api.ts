@@ -11,6 +11,9 @@ export const sessionKeys = {
 
 type AuthProviderRaw = components["schemas"]["AuthProvider"];
 type AuthProviderResponseRaw = components["schemas"]["AuthProviderListResponse"];
+type MfaEnrollStartResponseRaw = components["schemas"]["AuthMfaEnrollStartResponse"];
+type MfaEnrollConfirmResponseRaw = components["schemas"]["AuthMfaEnrollConfirmResponse"];
+type MfaStatusResponseRaw = components["schemas"]["AuthMfaStatusResponse"];
 
 export type AuthProvider = Readonly<{
   id: string;
@@ -23,6 +26,7 @@ export type AuthProvider = Readonly<{
 export type AuthProviderResponse = Readonly<{
   providers: AuthProvider[];
   forceSso: boolean;
+  passwordResetEnabled: boolean;
 }>;
 type MeContext = components["schemas"]["MeContext"];
 type MeWorkspaceSummary = components["schemas"]["MeWorkspaceSummary"];
@@ -34,12 +38,19 @@ type RequestOptions = {
 
 type LoginPayload = Readonly<{ email: string; password: string }>;
 type MfaVerifyPayload = Readonly<{ challengeToken: string; code: string }>;
+export type PasswordForgotPayload = Readonly<{ email: string }>;
+export type PasswordResetPayload = Readonly<{ token: string; newPassword: string }>;
+type MfaCodePayload = Readonly<{ code: string }>;
 
 type LoginApiResponse = Readonly<{
   ok?: boolean;
   mfa_required?: boolean;
   challengeToken?: string;
   challenge_token?: string;
+  mfaSetupRecommended?: boolean;
+  mfa_setup_recommended?: boolean;
+  mfaSetupRequired?: boolean;
+  mfa_setup_required?: boolean;
 }>;
 
 export type SessionUser = Readonly<
@@ -60,8 +71,32 @@ export type SessionEnvelope = Readonly<{
   return_to: string | null;
 }>;
 
+export type MfaEnrollStartResponse = Readonly<{
+  otpauthUri: string;
+  issuer: string;
+  accountName: string;
+}>;
+
+export type MfaEnrollConfirmResponse = Readonly<{
+  recoveryCodes: string[];
+}>;
+
+export type MfaStatusResponse = Readonly<{
+  enabled: boolean;
+  enrolledAt: string | null;
+  recoveryCodesRemaining: number | null;
+  onboardingRecommended: boolean;
+  onboardingRequired: boolean;
+  skipAllowed: boolean;
+}>;
+
 export type CreateSessionResult =
-  | Readonly<{ kind: "session"; session: SessionEnvelope }>
+  | Readonly<{
+      kind: "session";
+      session: SessionEnvelope;
+      mfaSetupRecommended: boolean;
+      mfaSetupRequired: boolean;
+    }>
   | Readonly<{ kind: "mfa_required"; challengeToken: string }>;
 
 export async function fetchAuthProviders(
@@ -72,12 +107,20 @@ export async function fetchAuthProviders(
       signal: options.signal,
     });
     if (!data) {
-      return { providers: [], forceSso: false };
+      return {
+        providers: [],
+        forceSso: false,
+        passwordResetEnabled: false,
+      };
     }
     return normalizeAuthProviderResponse(data);
   } catch (error: unknown) {
     if (error instanceof ApiError && error.status === 404) {
-      return { providers: [], forceSso: false };
+      return {
+        providers: [],
+        forceSso: false,
+        passwordResetEnabled: false,
+      };
     }
     throw error;
   }
@@ -99,7 +142,12 @@ export async function createSession(
   if (login.mfaRequired) {
     return { kind: "mfa_required", challengeToken: login.challengeToken };
   }
-  return { kind: "session", session: await bootstrapSession(options.signal, null) };
+  return {
+    kind: "session",
+    session: await bootstrapSession(options.signal, null),
+    mfaSetupRecommended: login.mfaSetupRecommended,
+    mfaSetupRequired: login.mfaSetupRequired,
+  };
 }
 
 export async function verifyMfaChallenge(
@@ -108,6 +156,134 @@ export async function verifyMfaChallenge(
 ): Promise<SessionEnvelope> {
   await submitMfaChallenge(payload, options.signal);
   return bootstrapSession(options.signal, null);
+}
+
+export async function requestPasswordReset(
+  payload: PasswordForgotPayload,
+  options: RequestOptions = {},
+): Promise<void> {
+  await submitPasswordForgot(payload, options.signal);
+}
+
+export async function completePasswordReset(
+  payload: PasswordResetPayload,
+  options: RequestOptions = {},
+): Promise<void> {
+  await submitPasswordReset(payload, options.signal);
+}
+
+export async function startMfaEnrollment(
+  options: RequestOptions = {},
+): Promise<MfaEnrollStartResponse> {
+  const response = await apiFetch("/api/v1/auth/mfa/totp/enroll/start", {
+    method: "POST",
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+
+  const data = (await response.json()) as Partial<MfaEnrollStartResponseRaw>;
+  const otpauthUri = normalizeRequiredField(data.otpauthUri, "MFA enrollment uri");
+  const issuer = normalizeRequiredField(data.issuer, "MFA enrollment issuer");
+  const accountName = normalizeRequiredField(data.accountName, "MFA enrollment account name");
+  return { otpauthUri, issuer, accountName };
+}
+
+export async function confirmMfaEnrollment(
+  payload: MfaCodePayload,
+  options: RequestOptions = {},
+): Promise<MfaEnrollConfirmResponse> {
+  const response = await apiFetch("/api/v1/auth/mfa/totp/enroll/confirm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+
+  const data = (await response.json()) as Partial<MfaEnrollConfirmResponseRaw>;
+  const recoveryCodes = normalizeTrimmedStringList(data.recoveryCodes);
+  if (recoveryCodes.length === 0) {
+    throw new Error("Missing MFA recovery codes from enrollment response.");
+  }
+  return { recoveryCodes };
+}
+
+export async function fetchMfaStatus(options: RequestOptions = {}): Promise<MfaStatusResponse> {
+  const response = await apiFetch("/api/v1/auth/mfa/totp", {
+    method: "GET",
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+
+  const data = (await response.json()) as Partial<MfaStatusResponseRaw>;
+  return {
+    enabled: Boolean(data.enabled),
+    enrolledAt: normalizeOptionalField(data.enrolledAt),
+    recoveryCodesRemaining:
+      typeof data.recoveryCodesRemaining === "number" && Number.isFinite(data.recoveryCodesRemaining)
+        ? Math.max(0, Math.floor(data.recoveryCodesRemaining))
+        : null,
+    onboardingRecommended: Boolean(data.onboardingRecommended),
+    onboardingRequired: Boolean(data.onboardingRequired),
+    skipAllowed: Boolean(data.skipAllowed),
+  };
+}
+
+export async function regenerateMfaRecoveryCodes(
+  payload: MfaCodePayload,
+  options: RequestOptions = {},
+): Promise<MfaEnrollConfirmResponse> {
+  const response = await apiFetch("/api/v1/auth/mfa/totp/recovery/regenerate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+
+  const data = (await response.json()) as Partial<MfaEnrollConfirmResponseRaw>;
+  const recoveryCodes = normalizeTrimmedStringList(data.recoveryCodes);
+  if (recoveryCodes.length === 0) {
+    throw new Error("Missing MFA recovery codes from regeneration response.");
+  }
+  return { recoveryCodes };
+}
+
+export async function disableMfa(options: RequestOptions = {}): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/mfa/totp", {
+    method: "DELETE",
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
 }
 
 export async function performLogout(options: RequestOptions = {}): Promise<void> {
@@ -153,7 +329,14 @@ async function fetchMeBootstrap(signal?: AbortSignal): Promise<MeContext | null>
 async function submitPasswordLogin(
   payload: LoginPayload,
   signal?: AbortSignal,
-): Promise<{ mfaRequired: true; challengeToken: string } | { mfaRequired: false }> {
+): Promise<
+  | { mfaRequired: true; challengeToken: string }
+  | {
+      mfaRequired: false;
+      mfaSetupRecommended: boolean;
+      mfaSetupRequired: boolean;
+    }
+> {
   const response = await apiFetch("/api/v1/auth/login", {
     method: "POST",
     headers: {
@@ -177,11 +360,57 @@ async function submitPasswordLogin(
     }
     return { mfaRequired: true, challengeToken };
   }
-  return { mfaRequired: false };
+  return {
+    mfaRequired: false,
+    mfaSetupRecommended: Boolean(
+      data.mfaSetupRecommended ?? data.mfa_setup_recommended ?? false,
+    ),
+    mfaSetupRequired: Boolean(data.mfaSetupRequired ?? data.mfa_setup_required ?? false),
+  };
 }
 
 async function submitMfaChallenge(payload: MfaVerifyPayload, signal?: AbortSignal): Promise<void> {
   const response = await apiFetch("/api/v1/auth/mfa/challenge/verify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+}
+
+async function submitPasswordForgot(
+  payload: PasswordForgotPayload,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/password/forgot", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+}
+
+async function submitPasswordReset(
+  payload: PasswordResetPayload,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/password/reset", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -207,6 +436,25 @@ function normalizeStringList(values?: string[] | null): string[] {
     return [];
   }
   return values.filter((value) => typeof value === "string");
+}
+
+function normalizeTrimmedStringList(values?: string[] | null): string[] {
+  return normalizeStringList(values)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function normalizeRequiredField(value: unknown, fieldName: string): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) {
+    throw new Error(`Missing ${fieldName} from API response.`);
+  }
+  return text;
+}
+
+function normalizeOptionalField(value: unknown): string | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length > 0 ? text : null;
 }
 
 function normalizeWorkspaces(workspaces: MeContext["workspaces"] | null | undefined): SessionWorkspaces {
@@ -238,9 +486,17 @@ function normalizeSessionEnvelope(
 }
 
 function normalizeAuthProviderResponse(data: AuthProviderResponseRaw): AuthProviderResponse {
+  const raw = data as AuthProviderResponseRaw & {
+    password_reset_enabled?: boolean;
+  };
+  const forceSso = Boolean(raw.force_sso);
+  const passwordResetEnabled =
+    typeof raw.password_reset_enabled === "boolean" ? raw.password_reset_enabled : !forceSso;
+
   return {
-    providers: (data.providers ?? []).map(normalizeAuthProvider),
-    forceSso: Boolean(data.force_sso),
+    providers: (raw.providers ?? []).map(normalizeAuthProvider),
+    forceSso,
+    passwordResetEnabled,
   };
 }
 
