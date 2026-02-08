@@ -42,7 +42,10 @@ This documentation is written for people who operate ADE in production and contr
 | Improve processing capacity | [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md) |
 | Run migrations or resets safely | [Run Migrations and Resets](how-to/run-migrations-and-resets.md) |
 | Manage users and permissions | [Manage Users and Access](how-to/manage-users-and-access.md) |
+| Operate auth and SSO policy | [Auth Operations Runbook](how-to/auth-operations.md) |
+| Run auth rollout smoke checks | [Auth Rollout and Smoke Checklist](how-to/auth-rollout-and-smoke-checklist.md) |
 | Understand run states and retries | [Runtime Lifecycle](reference/runtime-lifecycle.md) |
+| Respond to auth incidents | [Auth Incident Runbook](troubleshooting/auth-incident-runbook.md) |
 | Troubleshoot quickly | [Triage Playbook](troubleshooting/triage-playbook.md) |
 | See exact command syntax | [CLI Reference](reference/cli-reference.md) |
 | See required settings | [Environment Variables](reference/environment-variables.md) |
@@ -60,13 +63,17 @@ This documentation is written for people who operate ADE in production and contr
   - [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md)
   - [Run Migrations and Resets](how-to/run-migrations-and-resets.md)
   - [Manage Users and Access](how-to/manage-users-and-access.md)
+  - [Auth Operations Runbook](how-to/auth-operations.md)
+  - [Auth Rollout and Smoke Checklist](how-to/auth-rollout-and-smoke-checklist.md)
   - [Operate Runs](how-to/operate-runs.md)
 - Troubleshooting
   - [Triage Playbook](troubleshooting/triage-playbook.md)
   - [Common Failures](troubleshooting/common-failures.md)
+  - [Auth Incident Runbook](troubleshooting/auth-incident-runbook.md)
 - Reference
   - [CLI Reference](reference/cli-reference.md)
   - [Backend Service Module Contract](reference/backend-service-module-contract.md)
+  - [Auth Architecture](reference/auth-architecture.md)
   - [Environment Variables](reference/environment-variables.md)
   - [API Capability Map](reference/api-capability-map.md)
   - [Defaults Matrix](reference/defaults-matrix.md)

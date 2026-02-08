@@ -19,8 +19,6 @@ from ade_api.db import get_db_write
 from ade_api.settings import Settings
 from ade_db.models import User
 
-from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
-from .service import AuthService, SetupAlreadyCompletedError
 from ..authn.schemas import (
     AuthLoginMfaRequired,
     AuthLoginRequest,
@@ -32,7 +30,9 @@ from ..authn.schemas import (
     AuthPasswordForgotRequest,
     AuthPasswordResetRequest,
 )
-from ..authn.service import AuthnService, MfaRequiredError
+from ..authn.service import AuthnService, LoginError, MfaRequiredError
+from .schemas import AuthProviderListResponse, AuthSetupRequest, AuthSetupStatusResponse
+from .service import AuthService, SetupAlreadyCompletedError
 from .sso_router import router as sso_router
 
 
@@ -128,6 +128,13 @@ def create_auth_router(settings: Settings) -> APIRouter:
             )
         except MfaRequiredError as exc:
             return AuthLoginMfaRequired(challengeToken=exc.challenge_token)
+        except LoginError as exc:
+            # Failed-login counters/lockouts must be persisted even when returning 401.
+            db.commit()
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+            ) from exc
         except HTTPException:
             raise
         except Exception as exc:

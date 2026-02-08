@@ -2,11 +2,11 @@
 
 ## Goal
 
-Create users, update user status, and assign roles from the CLI.
+Create users, update user status, assign roles, and manage API access with user-bound API keys.
 
 ## Quick Definitions
 
-- **User**: person or service account that can access ADE.
+- **User**: person account that can access ADE.
 - **Role**: named permission bundle.
 - **Scope**:
   - `global`: applies everywhere.
@@ -66,7 +66,15 @@ cd backend && uv run ade-api users show user@example.com
 cd backend && uv run ade-api users roles list user@example.com
 ```
 
+## API Access
+
+API access is user-scoped and uses `X-API-Key` transport.
+
+- API keys are created for users.
+- `Authorization: Bearer` is not a supported API-key transport.
+
 ## If Something Fails
 
 - If you lock yourself out, use another admin account.
 - Check auth settings in [Security and Authentication](../explanation/security-and-authentication.md).
+- Use [Auth Incident Runbook](../troubleshooting/auth-incident-runbook.md) for SSO or lockout incidents.
