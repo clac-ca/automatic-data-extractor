@@ -82,22 +82,34 @@ describe("AuthenticatedLayout", () => {
     expect(screen.queryByTestId("mobile-slot")).not.toBeInTheDocument();
   });
 
-  it("renders a workspace return action on organization routes", async () => {
+  it.each([
+    { path: "/account", routePath: "account/*" },
+    { path: "/organization/users", routePath: "organization/*" },
+    { path: "/workspaces", routePath: "workspaces" },
+    { path: "/workspaces/new", routePath: "workspaces/new" },
+  ])("renders a home action on $path routes", async ({ path, routePath }) => {
     const user = userEvent.setup();
     const router = renderRouter(
-      ["/organization/users"],
+      [path],
       [
-        { path: "organization/*", element: <PlainPage /> },
-        { path: "workspaces", element: <PlainPage /> },
+        { index: true, element: <PlainPage /> },
+        { path: routePath, element: <PlainPage /> },
       ],
     );
 
-    expect(screen.getByRole("link", { name: "Go back to workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to home" })).toBeInTheDocument();
 
     await act(async () => {
-      await user.click(screen.getByRole("link", { name: "Go back to workspace" }));
+      await user.click(screen.getByRole("link", { name: "Go to home" }));
     });
 
-    expect(router.state.location.pathname).toBe("/workspaces");
+    expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("does not render a home action on root route", async () => {
+    renderRouter(["/"], [{ index: true, element: <PlainPage /> }]);
+
+    expect(await screen.findByTestId("unified-topbar-controls")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Go to home" })).not.toBeInTheDocument();
   });
 });

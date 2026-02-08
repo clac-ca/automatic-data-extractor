@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import { resolveApiUrl } from "@/api/client";
 import {
+  deleteWorkspaceDocumentsBatch,
   deleteWorkspaceDocument,
   fetchWorkspaceDocumentRowsByIdFilter,
   patchWorkspaceDocument,
@@ -13,13 +14,14 @@ import {
   type DocumentRecord,
   type DocumentUploadResponse,
 } from "@/api/documents";
-import { patchDocumentTags, fetchTagCatalog } from "@/api/documents/tags";
+import { patchDocumentTags, patchDocumentTagsBatch, fetchTagCatalog } from "@/api/documents/tags";
 import { ApiError } from "@/api/errors";
 import { cancelRun, createRun, createRunsBatch } from "@/api/runs/api";
 import type { RunStreamOptions } from "@/api/runs/api";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
 import { Button } from "@/components/ui/button";
 import { SpinnerIcon } from "@/components/icons";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +46,7 @@ import { useDocumentsDeltaSync } from "../../shared/hooks/useDocumentsDeltaSync"
 import { getRenameDocumentErrorMessage, useRenameDocumentMutation } from "../../shared/hooks/useRenameDocumentMutation";
 import { buildDocumentDetailUrl } from "../../shared/navigation";
 import { RenameDocumentDialog } from "../../shared/ui/RenameDocumentDialog";
+import { TagSelector } from "../../shared/ui/TagSelector";
 import { DocumentsConfigBanner } from "./DocumentsConfigBanner";
 import { DocumentsEmptyState } from "./DocumentsEmptyState";
 import { DocumentsTable } from "./DocumentsTable";
@@ -64,6 +67,14 @@ type UploadItem = UploadManagerItem<DocumentUploadResponse>;
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
 type RowMutation = "delete" | "assign" | "rename" | "tags" | "run";
+type BulkTagPatch = {
+  add: string[];
+  remove: string[];
+};
+
+const BULK_DOWNLOAD_WARNING_THRESHOLD = 12;
+const BULK_DOWNLOAD_DELAY_MS = 80;
+const ASSIGN_CHOICE_UNASSIGN = "__unassign__";
 
 function tagKey(value: string) {
   return value.trim().toLowerCase();
@@ -92,6 +103,29 @@ function hasTagOption(options: readonly string[], tag: string) {
   const k = tagKey(tag);
   if (!k) return false;
   return options.some((option) => tagKey(option) === k);
+}
+
+function uniqueDocumentIds(documents: readonly DocumentRow[]) {
+  return Array.from(new Set(documents.map((document) => document.id).filter(Boolean)));
+}
+
+function applyTagPatch(
+  currentTags: readonly string[] | null | undefined,
+  patch: BulkTagPatch,
+) {
+  const removeKeys = new Set(patch.remove.map(tagKey).filter(Boolean));
+  const kept = (currentTags ?? []).filter((tag) => !removeKeys.has(tagKey(tag)));
+  return mergeTagOptions(kept, patch.add);
+}
+
+function normalizeBulkTagPatch(patch: BulkTagPatch): BulkTagPatch {
+  const add = mergeTagOptions(patch.add, []);
+  const addKeys = new Set(add.map(tagKey).filter(Boolean));
+  const remove = mergeTagOptions(
+    patch.remove.filter((tag) => !addKeys.has(tagKey(tag))),
+    [],
+  );
+  return { add, remove };
 }
 
 function isSameStringArray(a: readonly string[], b: readonly string[]) {
@@ -142,6 +176,15 @@ export function DocumentsTableView({
   const [pendingMutations, setPendingMutations] = useState<Record<string, Set<RowMutation>>>({});
   const [reprocessTargets, setReprocessTargets] = useState<ReprocessTargetDocument[]>([]);
   const [isReprocessSubmitting, setIsReprocessSubmitting] = useState(false);
+  const [bulkAssignTargets, setBulkAssignTargets] = useState<DocumentRow[]>([]);
+  const [bulkAssignChoice, setBulkAssignChoice] = useState<string>("");
+  const [isBulkAssignSubmitting, setIsBulkAssignSubmitting] = useState(false);
+  const [bulkTagTargets, setBulkTagTargets] = useState<DocumentRow[]>([]);
+  const [bulkTagAdd, setBulkTagAdd] = useState<string[]>([]);
+  const [bulkTagRemove, setBulkTagRemove] = useState<string[]>([]);
+  const [isBulkTagSubmitting, setIsBulkTagSubmitting] = useState(false);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<DocumentRow[]>([]);
+  const [isBulkDeleteSubmitting, setIsBulkDeleteSubmitting] = useState(false);
   const [selectionResetToken, setSelectionResetToken] = useState(0);
   const renameMutation = useRenameDocumentMutation({ workspaceId });
 
@@ -212,6 +255,15 @@ export function DocumentsTableView({
     setPendingMutations({});
     setReprocessTargets([]);
     setIsReprocessSubmitting(false);
+    setBulkAssignTargets([]);
+    setBulkAssignChoice("");
+    setIsBulkAssignSubmitting(false);
+    setBulkTagTargets([]);
+    setBulkTagAdd([]);
+    setBulkTagRemove([]);
+    setIsBulkTagSubmitting(false);
+    setBulkDeleteTargets([]);
+    setIsBulkDeleteSubmitting(false);
     setSelectionResetToken(0);
     setUpdatesAvailable(false);
     handledUploadsRef.current.clear();
@@ -405,11 +457,16 @@ export function DocumentsTableView({
   );
 
   const openDownload = useCallback((url: string) => {
-    if (typeof window === "undefined") return;
-    const opened = window.open(url, "_blank", "noopener");
-    if (!opened) {
-      window.location.assign(url);
-    }
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.rel = "noopener";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    window.setTimeout(() => {
+      anchor.remove();
+    }, 0);
   }, []);
 
   const handleDownloadOutput = useCallback(
@@ -423,28 +480,86 @@ export function DocumentsTableView({
         });
         return;
       }
+
       const url = resolveApiUrl(`/api/v1/workspaces/${workspaceId}/runs/${runId}/output/download`);
       openDownload(url);
+    },
+    [notifyToast, openDownload, workspaceId],
+  );
+
+  const getOriginalDownloadUrl = useCallback(
+    (document: DocumentRow) => {
+      const hasVersionHistory =
+        typeof document.currentVersionNo === "number" && document.currentVersionNo > 1;
+      if (!hasVersionHistory) {
+        return resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`);
+      }
+      return resolveApiUrl(
+        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/versions/1/download`,
+      );
+    },
+    [workspaceId],
+  );
+
+  const handleDownloadOriginal = useCallback(
+    (document: DocumentRow) => {
+      openDownload(getOriginalDownloadUrl(document));
+    },
+    [getOriginalDownloadUrl, openDownload],
+  );
+
+  const startBulkDownloads = useCallback(
+    (urls: string[], label: string) => {
+      if (urls.length === 0) {
+        notifyToast({
+          title: "No files available",
+          description: `No eligible documents were found to ${label}.`,
+          intent: "warning",
+        });
+        return;
+      }
+
+      if (urls.length >= BULK_DOWNLOAD_WARNING_THRESHOLD) {
+        notifyToast({
+          title: `Preparing ${urls.length} downloads`,
+          description: "Your browser may ask for permission to download multiple files.",
+          intent: "warning",
+        });
+      }
+
+      urls.forEach((url, index) => {
+        window.setTimeout(() => {
+          openDownload(url);
+        }, index * BULK_DOWNLOAD_DELAY_MS);
+      });
+      notifyToast({
+        title: "Download started",
+        description: `${urls.length} file${urls.length === 1 ? "" : "s"} queued for download.`,
+        intent: "success",
+      });
     },
     [notifyToast, openDownload],
   );
 
-  const handleDownloadLatest = useCallback(
-    (document: DocumentRow) => {
-      const url = resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`);
-      openDownload(url);
+  const onBulkDownloadRequest = useCallback(
+    (selected: DocumentRow[]) => {
+      const urls = uniqueDocumentIds(selected).map((documentId) =>
+        resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/download`),
+      );
+      startBulkDownloads(urls, "download files");
     },
-    [openDownload, workspaceId],
+    [startBulkDownloads, workspaceId],
   );
 
-  const handleDownloadVersion = useCallback(
-    (document: DocumentRow, versionNo: number) => {
-      const url = resolveApiUrl(
-        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/versions/${versionNo}/download`,
+  const onBulkDownloadOriginalRequest = useCallback(
+    (selected: DocumentRow[]) => {
+      const uniqueDocuments = Array.from(
+        new Map(selected.map((document) => [document.id, document])).values(),
       );
-      openDownload(url);
+      const urls = uniqueDocuments.map((document) => getOriginalDownloadUrl(document));
+      startBulkDownloads(urls, "download original files");
     },
-    [openDownload, workspaceId],
+    [getOriginalDownloadUrl, startBulkDownloads],
   );
 
   const onReprocessRequest = useCallback((document: DocumentRow) => {
@@ -579,6 +694,308 @@ export function DocumentsTableView({
     },
     [clearRowPending, markRowPending, notifyToast, refreshSnapshot, updateRow],
   );
+
+  const onBulkAssignRequest = useCallback((selected: DocumentRow[]) => {
+    const targets = selected.filter((document) => Boolean(document.id));
+    if (targets.length === 0) return;
+    setBulkAssignTargets(targets);
+    setBulkAssignChoice("");
+  }, []);
+
+  const onBulkAssignCancel = useCallback(() => {
+    if (isBulkAssignSubmitting) return;
+    setBulkAssignTargets([]);
+    setBulkAssignChoice("");
+  }, [isBulkAssignSubmitting]);
+
+  const onBulkAssignConfirm = useCallback(async () => {
+    if (!bulkAssignChoice) {
+      notifyToast({
+        title: "Choose an assignee",
+        description: "Select a person or choose Unassigned to continue.",
+        intent: "warning",
+      });
+      return;
+    }
+
+    const assigneeId = bulkAssignChoice === ASSIGN_CHOICE_UNASSIGN ? null : bulkAssignChoice;
+    const targets = uniqueDocumentIds(bulkAssignTargets);
+    if (targets.length === 0) {
+      onBulkAssignCancel();
+      return;
+    }
+
+    const person = assigneeId ? people.find((entry) => entry.id === assigneeId) ?? null : null;
+    const shouldApplyOptimistic = assigneeId === null || (Boolean(person?.email) && Boolean(person?.label));
+    const optimisticAssignee =
+      assigneeId === null
+        ? null
+        : shouldApplyOptimistic && person?.email
+          ? { id: assigneeId, name: person.label, email: person.email }
+          : null;
+    const previousAssignees = new Map<string, DocumentRow["assignee"]>();
+    const targetLabel = assigneeId === null ? "Unassigned" : (person?.label ?? "selected user");
+
+    targets.forEach((documentId) => {
+      previousAssignees.set(documentId, documentsById[documentId]?.assignee ?? null);
+      markRowPending(documentId, "assign");
+      if (shouldApplyOptimistic) {
+        updateRow(documentId, { assignee: optimisticAssignee });
+      }
+    });
+
+    setIsBulkAssignSubmitting(true);
+    try {
+      const settled = await Promise.allSettled(
+        targets.map((documentId) =>
+          patchWorkspaceDocument(workspaceId, documentId, { assigneeId }),
+        ),
+      );
+
+      let updatedCount = 0;
+      let failedCount = 0;
+      settled.forEach((result, index) => {
+        const documentId = targets[index];
+        if (!documentId) return;
+        if (result.status === "fulfilled") {
+          updatedCount += 1;
+          applyDocumentUpdate(documentId, result.value);
+          return;
+        }
+        failedCount += 1;
+        if (shouldApplyOptimistic) {
+          updateRow(documentId, { assignee: previousAssignees.get(documentId) ?? null });
+        }
+      });
+
+      notifyToast({
+        title: "Bulk assignment complete",
+        description:
+          failedCount > 0
+            ? `${updatedCount} updated to ${targetLabel}, ${failedCount} failed.`
+            : `${updatedCount} document${updatedCount === 1 ? "" : "s"} assigned to ${targetLabel}.`,
+        intent: failedCount > 0 ? "warning" : "success",
+      });
+      if (failedCount > 0) {
+        void refreshSnapshot();
+      }
+      if (updatedCount > 0) {
+        onBulkAssignCancel();
+      }
+    } catch (error) {
+      targets.forEach((documentId) => {
+        if (shouldApplyOptimistic) {
+          updateRow(documentId, { assignee: previousAssignees.get(documentId) ?? null });
+        }
+      });
+      notifyToast({
+        title: "Unable to update assignees",
+        description: error instanceof Error ? error.message : "Please try again.",
+        intent: "danger",
+      });
+    } finally {
+      targets.forEach((documentId) => clearRowPending(documentId, "assign"));
+      setIsBulkAssignSubmitting(false);
+    }
+  }, [
+    applyDocumentUpdate,
+    bulkAssignChoice,
+    bulkAssignTargets,
+    clearRowPending,
+    documentsById,
+    markRowPending,
+    notifyToast,
+    onBulkAssignCancel,
+    people,
+    refreshSnapshot,
+    updateRow,
+    workspaceId,
+  ]);
+
+  const onBulkTagRequest = useCallback((selected: DocumentRow[]) => {
+    const targets = selected.filter((document) => Boolean(document.id));
+    if (targets.length === 0) return;
+    setBulkTagTargets(targets);
+    setBulkTagAdd([]);
+    setBulkTagRemove([]);
+  }, []);
+
+  const onBulkTagCancel = useCallback(() => {
+    if (isBulkTagSubmitting) return;
+    setBulkTagTargets([]);
+    setBulkTagAdd([]);
+    setBulkTagRemove([]);
+  }, [isBulkTagSubmitting]);
+
+  const onBulkTagConfirm = useCallback(async () => {
+    const normalizedPatch = normalizeBulkTagPatch({ add: bulkTagAdd, remove: bulkTagRemove });
+    if (normalizedPatch.add.length === 0 && normalizedPatch.remove.length === 0) {
+      notifyToast({
+        title: "No tag changes selected",
+        description: "Choose tags to add and/or remove before applying.",
+        intent: "warning",
+      });
+      return;
+    }
+
+    const targets = uniqueDocumentIds(bulkTagTargets);
+    if (targets.length === 0) {
+      onBulkTagCancel();
+      return;
+    }
+
+    const previousTags = new Map<string, string[]>();
+    const previousTagOptions = tagOptions;
+    targets.forEach((documentId) => {
+      markRowPending(documentId, "tags");
+      const currentTags = documentsById[documentId]?.tags ?? [];
+      previousTags.set(documentId, [...currentTags]);
+      updateRow(documentId, { tags: applyTagPatch(currentTags, normalizedPatch) });
+    });
+
+    if (normalizedPatch.add.length > 0) {
+      setTagOptions((currentOptions) => {
+        const merged = mergeTagOptions(currentOptions, normalizedPatch.add);
+        return isSameStringArray(merged, currentOptions) ? currentOptions : merged;
+      });
+    }
+
+    setIsBulkTagSubmitting(true);
+    try {
+      const updatedDocuments = await patchDocumentTagsBatch(workspaceId, targets, {
+        add: normalizedPatch.add.length > 0 ? normalizedPatch.add : undefined,
+        remove: normalizedPatch.remove.length > 0 ? normalizedPatch.remove : undefined,
+      });
+      const updatedById = new Map(updatedDocuments.map((document) => [document.id, document]));
+      targets.forEach((documentId) => {
+        const updated = updatedById.get(documentId);
+        if (!updated) return;
+        applyDocumentUpdate(documentId, updated);
+      });
+
+      if (normalizedPatch.add.length > 0) {
+        queryClient.setQueryData<TagCatalogPage | undefined>(
+          ["documents-tags", workspaceId],
+          (currentCatalog) => {
+            if (!currentCatalog) return currentCatalog;
+            const existingKeys = new Set(currentCatalog.items.map((item) => tagKey(item.tag)));
+            const additions = normalizedPatch.add
+              .filter((tag) => !existingKeys.has(tagKey(tag)))
+              .map((tag) => ({ tag, document_count: targets.length }));
+            if (additions.length === 0) return currentCatalog;
+            return {
+              ...currentCatalog,
+              items: [...currentCatalog.items, ...additions],
+            };
+          },
+        );
+        queryClient.invalidateQueries({ queryKey: ["documents-tags", workspaceId] });
+      }
+
+      const changeParts: string[] = [];
+      if (normalizedPatch.add.length > 0) {
+        changeParts.push(`added ${normalizedPatch.add.length}`);
+      }
+      if (normalizedPatch.remove.length > 0) {
+        changeParts.push(`removed ${normalizedPatch.remove.length}`);
+      }
+      notifyToast({
+        title: "Bulk tags updated",
+        description: `${targets.length} document${targets.length === 1 ? "" : "s"} updated (${changeParts.join(", ")}).`,
+        intent: "success",
+      });
+      onBulkTagCancel();
+    } catch (error) {
+      targets.forEach((documentId) => {
+        updateRow(documentId, { tags: previousTags.get(documentId) ?? [] });
+      });
+      if (normalizedPatch.add.length > 0) {
+        setTagOptions((currentOptions) =>
+          isSameStringArray(currentOptions, previousTagOptions)
+            ? currentOptions
+            : previousTagOptions,
+        );
+      }
+      notifyToast({
+        title: "Unable to update tags",
+        description: error instanceof Error ? error.message : "Please try again.",
+        intent: "danger",
+      });
+      void refreshSnapshot();
+    } finally {
+      targets.forEach((documentId) => clearRowPending(documentId, "tags"));
+      setIsBulkTagSubmitting(false);
+    }
+  }, [
+    applyDocumentUpdate,
+    bulkTagAdd,
+    bulkTagRemove,
+    bulkTagTargets,
+    clearRowPending,
+    documentsById,
+    markRowPending,
+    notifyToast,
+    onBulkTagCancel,
+    queryClient,
+    refreshSnapshot,
+    tagOptions,
+    updateRow,
+    workspaceId,
+  ]);
+
+  const onBulkDeleteRequest = useCallback((selected: DocumentRow[]) => {
+    const targets = selected.filter((document) => Boolean(document.id));
+    if (targets.length === 0) return;
+    setBulkDeleteTargets(targets);
+  }, []);
+
+  const onBulkDeleteCancel = useCallback(() => {
+    if (isBulkDeleteSubmitting) return;
+    setBulkDeleteTargets([]);
+  }, [isBulkDeleteSubmitting]);
+
+  const onBulkDeleteConfirm = useCallback(async () => {
+    const targets = uniqueDocumentIds(bulkDeleteTargets);
+    if (targets.length === 0) {
+      onBulkDeleteCancel();
+      return;
+    }
+
+    targets.forEach((documentId) => markRowPending(documentId, "delete"));
+    setIsBulkDeleteSubmitting(true);
+    try {
+      const deletedIds = await deleteWorkspaceDocumentsBatch(workspaceId, targets);
+      const resolvedDeletedIds = deletedIds.length > 0 ? deletedIds : targets;
+      resolvedDeletedIds.forEach((documentId) => removeRow(documentId));
+      void refreshSnapshot();
+      notifyToast({
+        title: "Documents deleted",
+        description: `${resolvedDeletedIds.length} document${resolvedDeletedIds.length === 1 ? "" : "s"} deleted.`,
+        intent: "success",
+      });
+      setSelectionResetToken((value) => value + 1);
+      onBulkDeleteCancel();
+    } catch (error) {
+      notifyToast({
+        title: "Unable to delete documents",
+        description: error instanceof Error ? error.message : "Please try again.",
+        intent: "danger",
+      });
+      void refreshSnapshot();
+    } finally {
+      targets.forEach((documentId) => clearRowPending(documentId, "delete"));
+      setIsBulkDeleteSubmitting(false);
+    }
+  }, [
+    bulkDeleteTargets,
+    clearRowPending,
+    markRowPending,
+    notifyToast,
+    onBulkDeleteCancel,
+    refreshSnapshot,
+    removeRow,
+    workspaceId,
+  ]);
 
   const onReprocessCancel = useCallback(() => {
     if (isReprocessSubmitting) return;
@@ -959,9 +1376,8 @@ export function DocumentsTableView({
     onDeleteRequest,
     onReprocessRequest,
     onCancelRunRequest,
-    onDownloadOutput: handleDownloadOutput,
-    onDownloadLatest: handleDownloadLatest,
-    onDownloadVersion: handleDownloadVersion,
+    onDownload: handleDownloadOutput,
+    onDownloadOriginal: handleDownloadOriginal,
     isRowActionPending: isRowMutationPending,
   });
 
@@ -1051,6 +1467,19 @@ export function DocumentsTableView({
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
   const renamePending =
     renameTarget ? pendingMutations[renameTarget.id]?.has("rename") ?? false : false;
+  const bulkAssignCount = bulkAssignTargets.length;
+  const bulkTagCount = bulkTagTargets.length;
+  const bulkDeleteCount = bulkDeleteTargets.length;
+  const normalizedBulkTagPatch = normalizeBulkTagPatch({
+    add: bulkTagAdd,
+    remove: bulkTagRemove,
+  });
+  const canApplyBulkTags =
+    normalizedBulkTagPatch.add.length > 0 || normalizedBulkTagPatch.remove.length > 0;
+  const bulkDeletePreview =
+    bulkDeleteTargets.length === 0
+      ? []
+      : bulkDeleteTargets.slice(0, 3).map((document) => document.name);
 
   const tableContent = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -1066,6 +1495,11 @@ export function DocumentsTableView({
           toolbarActions={toolbarContent}
           onBulkReprocessRequest={onBulkReprocessRequest}
           onBulkCancelRequest={onBulkCancelRequest}
+          onBulkAssignRequest={onBulkAssignRequest}
+          onBulkTagRequest={onBulkTagRequest}
+          onBulkDeleteRequest={onBulkDeleteRequest}
+          onBulkDownloadRequest={onBulkDownloadRequest}
+          onBulkDownloadOriginalRequest={onBulkDownloadOriginalRequest}
           selectionResetToken={selectionResetToken}
         />
       </div>
@@ -1077,6 +1511,172 @@ export function DocumentsTableView({
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {tableContent}
       </div>
+      <Dialog
+        open={bulkAssignCount > 0}
+        onOpenChange={(open) => (!open ? onBulkAssignCancel() : undefined)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign selected documents</DialogTitle>
+            <DialogDescription>
+              {bulkAssignCount} document{bulkAssignCount === 1 ? "" : "s"} selected.
+              Choose who should own them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Assign to
+            </p>
+            <Select
+              value={bulkAssignChoice || undefined}
+              onValueChange={setBulkAssignChoice}
+              disabled={isBulkAssignSubmitting}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a person..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ASSIGN_CHOICE_UNASSIGN}>Unassigned</SelectItem>
+                {people.map((person) => (
+                  <SelectItem key={person.id} value={person.id}>
+                    {person.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={onBulkAssignCancel} disabled={isBulkAssignSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={onBulkAssignConfirm}
+              disabled={isBulkAssignSubmitting || !bulkAssignChoice}
+            >
+              {isBulkAssignSubmitting ? "Updating..." : "Apply assignment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={bulkTagCount > 0}
+        onOpenChange={(open) => (!open ? onBulkTagCancel() : undefined)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit tags for selected documents</DialogTitle>
+            <DialogDescription>
+              Apply tag changes to {bulkTagCount} document{bulkTagCount === 1 ? "" : "s"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Add tags
+              </p>
+              <TagSelector
+                value={bulkTagAdd}
+                onValueChange={(next) => {
+                  const normalized = mergeTagOptions(next, []);
+                  const normalizedKeys = new Set(normalized.map(tagKey));
+                  setBulkTagAdd(normalized);
+                  setBulkTagRemove((current) =>
+                    current.filter((tag) => !normalizedKeys.has(tagKey(tag))),
+                  );
+                }}
+                options={tagOptions}
+                onOptionsChange={handleTagOptionsChange}
+                disabled={isBulkTagSubmitting}
+                allowCreate
+                placeholder={bulkTagAdd.length ? "Search tags..." : "Search or create tags..."}
+                emptyText={(query) => (query ? "No matches." : "No tags yet.")}
+              >
+                <Button variant="outline" className="w-full justify-start" disabled={isBulkTagSubmitting}>
+                  {bulkTagAdd.length > 0
+                    ? `${bulkTagAdd.length} tag${bulkTagAdd.length === 1 ? "" : "s"} selected`
+                    : "Select tags to add"}
+                </Button>
+              </TagSelector>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Remove tags
+              </p>
+              <TagSelector
+                value={bulkTagRemove}
+                onValueChange={(next) => {
+                  const normalized = mergeTagOptions(next, []);
+                  const normalizedKeys = new Set(normalized.map(tagKey));
+                  setBulkTagRemove(normalized);
+                  setBulkTagAdd((current) =>
+                    current.filter((tag) => !normalizedKeys.has(tagKey(tag))),
+                  );
+                }}
+                options={tagOptions}
+                disabled={isBulkTagSubmitting}
+                allowCreate={false}
+                placeholder={bulkTagRemove.length ? "Search tags..." : "Select tags to remove..."}
+                emptyText={(query) => (query ? "No matches." : "No tags yet.")}
+              >
+                <Button variant="outline" className="w-full justify-start" disabled={isBulkTagSubmitting}>
+                  {bulkTagRemove.length > 0
+                    ? `${bulkTagRemove.length} tag${bulkTagRemove.length === 1 ? "" : "s"} selected`
+                    : "Select tags to remove"}
+                </Button>
+              </TagSelector>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={onBulkTagCancel} disabled={isBulkTagSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={onBulkTagConfirm} disabled={isBulkTagSubmitting || !canApplyBulkTags}>
+              {isBulkTagSubmitting ? "Updating..." : "Apply tag changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={bulkDeleteCount > 0}
+        onOpenChange={(open) => (!open ? onBulkDeleteCancel() : undefined)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete selected documents?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes {bulkDeleteCount} document{bulkDeleteCount === 1 ? "" : "s"}.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {bulkDeletePreview.length > 0 ? (
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <p className="mb-1 font-medium">Selected:</p>
+              <ul className="list-disc pl-4 text-muted-foreground">
+                {bulkDeletePreview.map((name, index) => (
+                  <li key={`${name}-${index}`}>{name}</li>
+                ))}
+              </ul>
+              {bulkDeleteCount > bulkDeletePreview.length ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  +{bulkDeleteCount - bulkDeletePreview.length} more
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="ghost" onClick={onBulkDeleteCancel} disabled={isBulkDeleteSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={onBulkDeleteConfirm}
+              disabled={isBulkDeleteSubmitting}
+            >
+              {isBulkDeleteSubmitting ? "Deleting..." : "Delete selected"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <RenameDocumentDialog
         open={Boolean(renameTarget)}
         documentName={renameTarget?.name ?? ""}
