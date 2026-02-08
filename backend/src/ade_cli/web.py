@@ -43,7 +43,7 @@ def _resolve_internal_api_url(env: dict[str, str]) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _resolve_public_web_url(env: dict[str, str]) -> str:
+def resolve_public_web_url(env: dict[str, str]) -> str:
     raw_public = env.get("ADE_PUBLIC_WEB_URL", "").strip().rstrip("/")
     if raw_public:
         parsed = urlparse(raw_public)
@@ -133,7 +133,7 @@ def preview() -> None:
 
 @app.command(name="open", help="Open web UI in the default browser.")
 def open_web() -> None:
-    url = _resolve_public_web_url(os.environ)
+    url = resolve_public_web_url(os.environ)
     typer.echo(url)
     status = typer.launch(url)
     if status != 0:
@@ -144,4 +144,4 @@ def open_web() -> None:
         typer.echo(f"Open manually: {url}", err=True)
 
 
-__all__ = ["app"]
+__all__ = ["app", "resolve_public_web_url"]

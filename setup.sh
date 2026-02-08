@@ -6,14 +6,16 @@ BACKEND_DIR="${ROOT_DIR}/backend"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 WITH_INFRA=false
 FORCE_INFRA=false
+OPEN_DEV=false
 
 print_usage() {
   cat <<'EOF'
-Usage: ./setup.sh [--with-infra] [--force]
+Usage: ./setup.sh [--with-infra] [--force] [--open]
 
 Options:
   --with-infra   Run `uv run ade infra up -d` after dependency installation.
   --force        Pass `--force` to `ade infra up` (requires --with-infra).
+  --open         Start `uv run ade dev --open` after setup completes.
 EOF
 }
 
@@ -24,6 +26,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --force)
       FORCE_INFRA=true
+      ;;
+    --open)
+      OPEN_DEV=true
       ;;
     -h|--help)
       print_usage
@@ -65,6 +70,18 @@ if [[ "${WITH_INFRA}" == true ]]; then
     infra_cmd+=(--force)
   fi
   (cd "${BACKEND_DIR}" && "${infra_cmd[@]}")
+fi
+
+if [[ "${OPEN_DEV}" == true ]]; then
+  cat <<'EOF'
+
+Setup complete.
+Starting ADE dev services with browser auto-open:
+  cd backend
+  uv run ade dev --open
+EOF
+  (cd "${BACKEND_DIR}" && uv run ade dev --open)
+  exit 0
 fi
 
 cat <<'EOF'

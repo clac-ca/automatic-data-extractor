@@ -35,6 +35,7 @@ Key options for `ade start`/`ade dev`:
 
 - `--services`
 - `--migrate` / `--no-migrate`
+- `--open` (open ADE web in the default browser when the web service is reachable)
 - `ADE_API_PROCESSES` applies to `ade start`; `ade dev` keeps API reload mode (single process)
 
 ## API CLI: `ade-api`
@@ -97,6 +98,7 @@ cd backend && uv run ade infra up
 cd backend && uv run ade infra info
 cd backend && uv run ade infra down -v --rmi all
 cd backend && uv run ade dev
+cd backend && uv run ade dev --open
 cd backend && uv run ade start --services worker --no-migrate
 cd backend && uv run ade db migrate
 cd backend && uv run ade api types
