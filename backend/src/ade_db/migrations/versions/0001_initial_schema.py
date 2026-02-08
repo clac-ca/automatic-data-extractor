@@ -55,8 +55,8 @@ def upgrade() -> None:
                     rand_a := floor(random() * 4096)::int;
                     rand_a_hex := lpad(to_hex(rand_a), 3, '0');
 
-                    rand_b_hex := lpad(to_hex(floor(random() * 4294967296)::int), 8, '0')
-                               || lpad(to_hex(floor(random() * 4294967296)::int), 8, '0');
+                    rand_b_hex := lpad(to_hex(floor(random() * 4294967296)::bigint), 8, '0')
+                               || lpad(to_hex(floor(random() * 4294967296)::bigint), 8, '0');
                     variant_nibble := (floor(random() * 4)::int) + 8;
                     rand_b_hex := to_hex(variant_nibble) || substring(rand_b_hex from 2);
 
