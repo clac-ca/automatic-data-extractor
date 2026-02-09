@@ -83,7 +83,7 @@ async def test_create_user_requires_admin(
             "displayName": "New User",
             "passwordProfile": {
                 "mode": "explicit",
-                "password": "Password123!",
+                "password": "notsecret1!Ab",
                 "forceChangeOnNextSignIn": False,
             },
         },
@@ -108,7 +108,7 @@ async def test_create_user_admin_success(
             "displayName": " New User ",
             "passwordProfile": {
                 "mode": "explicit",
-                "password": "Password123!",
+                "password": "notsecret1!Ab",
                 "forceChangeOnNextSignIn": False,
             },
         },
@@ -141,7 +141,7 @@ async def test_create_user_conflict(
             "email": seed_identity.member.email,
             "passwordProfile": {
                 "mode": "explicit",
-                "password": "Password123!",
+                "password": "notsecret1!Ab",
                 "forceChangeOnNextSignIn": False,
             },
         },

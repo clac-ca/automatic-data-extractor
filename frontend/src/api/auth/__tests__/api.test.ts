@@ -48,13 +48,13 @@ describe("auth api", () => {
   it("creates a cookie session and bootstraps profile data", async () => {
     const { createSession } = await import("../api");
 
-    const result = await createSession({ email: "user@example.com", password: "pass" });
+    const result = await createSession({ email: "user@example.com", password: "notsecret-login" });
 
     expect(mockApiFetch).toHaveBeenCalledWith(
       "/api/v1/auth/login",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ email: "user@example.com", password: "pass" }),
+        body: JSON.stringify({ email: "user@example.com", password: "notsecret-login" }),
       }),
     );
 
@@ -82,7 +82,7 @@ describe("auth api", () => {
     );
 
     const { createSession } = await import("../api");
-    const result = await createSession({ email: "user@example.com", password: "pass" });
+    const result = await createSession({ email: "user@example.com", password: "notsecret-login" });
 
     expect(result.kind).toBe("session");
     if (result.kind === "session") {
@@ -105,7 +105,7 @@ describe("auth api", () => {
     );
 
     const { createSession } = await import("../api");
-    const result = await createSession({ email: "user@example.com", password: "pass" });
+    const result = await createSession({ email: "user@example.com", password: "notsecret-login" });
     expect(result.kind).toBe("session");
     if (result.kind === "session") {
       expect(result.passwordChangeRequired).toBe(true);
@@ -121,7 +121,7 @@ describe("auth api", () => {
     );
 
     const { createSession } = await import("../api");
-    const result = await createSession({ email: "user@example.com", password: "pass" });
+    const result = await createSession({ email: "user@example.com", password: "notsecret-login" });
 
     expect(result).toEqual({
       kind: "mfa_required",
@@ -162,7 +162,7 @@ describe("auth api", () => {
     const { completePasswordReset } = await import("../api");
     await completePasswordReset({
       token: "reset-token",
-      newPassword: "averysecurepassword",
+      newPassword: "notsecret3!Ab",
     });
 
     expect(mockApiFetch).toHaveBeenCalledWith(
@@ -171,7 +171,7 @@ describe("auth api", () => {
         method: "POST",
         body: JSON.stringify({
           token: "reset-token",
-          newPassword: "averysecurepassword",
+          newPassword: "notsecret3!Ab",
         }),
       }),
     );
@@ -182,8 +182,8 @@ describe("auth api", () => {
 
     const { changePassword } = await import("../api");
     await changePassword({
-      currentPassword: "OldPassword123!",
-      newPassword: "NewPassword123!",
+      currentPassword: "notsecret1!Ab",
+      newPassword: "notsecret2!Ab",
     });
 
     expect(mockApiFetch).toHaveBeenCalledWith(
@@ -191,8 +191,8 @@ describe("auth api", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          currentPassword: "OldPassword123!",
-          newPassword: "NewPassword123!",
+          currentPassword: "notsecret1!Ab",
+          newPassword: "notsecret2!Ab",
         }),
       }),
     );

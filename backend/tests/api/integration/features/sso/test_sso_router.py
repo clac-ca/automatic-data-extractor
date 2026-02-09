@@ -47,7 +47,7 @@ async def test_validate_provider_returns_metadata(
         json={
             "issuer": "https://issuer.example.com",
             "clientId": "demo-client",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
         },
     )
 
@@ -83,7 +83,7 @@ async def test_validate_provider_timeout_maps_problem_code(
         json={
             "issuer": "https://issuer.example.com",
             "clientId": "demo-client",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
         },
     )
 
@@ -114,7 +114,7 @@ async def test_create_active_provider_rejects_discovery_failure(
             "label": "Okta",
             "issuer": "https://issuer.example.com",
             "clientId": "demo-client",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
             "status": "active",
             "domains": [f"{provider_id}.example.com"],
         },
@@ -140,7 +140,7 @@ async def test_activate_provider_rejects_metadata_issuer_mismatch(
             "label": "Okta",
             "issuer": "https://issuer.example.com",
             "clientId": "demo-client",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
             "status": "disabled",
             "domains": [f"{provider_id}.example.com"],
         },
@@ -160,7 +160,7 @@ async def test_activate_provider_rejects_metadata_issuer_mismatch(
         headers=headers,
         json={
             "status": "active",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
         },
     )
 
@@ -183,7 +183,7 @@ async def test_list_providers_never_exposes_deleted_status(
             "label": "Okta UI Status",
             "issuer": "https://issuer.example.com",
             "clientId": "demo-client",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
             "status": "disabled",
             "domains": [],
         },

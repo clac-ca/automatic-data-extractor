@@ -297,7 +297,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("Step 2 of 2")).toBeInTheDocument();
@@ -316,7 +316,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     const codeInput = await screen.findByLabelText(/verification code/i);
@@ -333,7 +333,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     const codeInput = await screen.findByLabelText(/verification code/i);
@@ -359,7 +359,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     const codeInput = await screen.findByLabelText(/verification code/i);
@@ -385,7 +385,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(await screen.findByLabelText(/verification code/i), "1234567");
     await user.click(screen.getByRole("button", { name: "Verify and continue" }));
@@ -420,7 +420,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     const codeInput = await screen.findByLabelText(/verification code/i);
@@ -450,7 +450,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(await screen.findByLabelText(/verification code/i), "123456");
     await user.click(screen.getByRole("button", { name: "Verify and continue" }));
@@ -476,7 +476,7 @@ describe("LoginScreen", () => {
     renderWithPath("/login");
 
     await user.type(screen.getByLabelText(/email address/i), "user@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(await screen.findByLabelText(/verification code/i), "123456");
     await user.click(screen.getByRole("button", { name: "Verify and continue" }));
@@ -496,7 +496,7 @@ describe("LoginScreen", () => {
 
     const emailInput = screen.getByLabelText(/email address/i);
     await user.type(emailInput, "remember.me@example.com");
-    await user.type(screen.getByLabelText(/password/i), "Password123!");
+    await user.type(screen.getByLabelText(/password/i), "notsecret1!Ab");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.click(await screen.findByRole("button", { name: "Back to password login" }));
 

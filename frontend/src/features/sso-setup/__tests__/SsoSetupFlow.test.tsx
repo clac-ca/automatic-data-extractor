@@ -70,7 +70,7 @@ async function fillCreateFormToTestStep(user: ReturnType<typeof userEvent.setup>
 
   await user.type(await screen.findByLabelText(/Issuer/i), "https://issuer.example.com");
   await user.type(screen.getByLabelText(/Client ID/i), "demo-client");
-  await user.type(screen.getByLabelText(/Client secret/i), "demo-secret");
+  await user.type(screen.getByLabelText(/Client secret/i), "notsecret-client");
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
@@ -98,7 +98,7 @@ describe("SsoSetupFlow", () => {
       expect(onValidate).toHaveBeenCalledWith({
         issuer: "https://issuer.example.com",
         clientId: "demo-client",
-        clientSecret: "demo-secret",
+        clientSecret: "notsecret-client",
       }),
     );
 
@@ -112,7 +112,7 @@ describe("SsoSetupFlow", () => {
         label: "Okta Workforce",
         issuer: "https://issuer.example.com",
         clientId: "demo-client",
-        clientSecret: "demo-secret",
+        clientSecret: "notsecret-client",
         status: "active",
         domains: ["example.com"],
       }),

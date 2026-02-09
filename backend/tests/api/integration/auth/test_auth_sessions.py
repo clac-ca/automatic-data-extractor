@@ -289,7 +289,7 @@ async def test_password_reset_service_respects_disable_toggle(
     assert forgot_exc.value.detail == "Password reset is unavailable."
 
     with pytest.raises(HTTPException) as reset_exc:
-        service.reset_password(token="reset-token", new_password="averysecurepassword")
+        service.reset_password(token="reset-token", new_password="notsecret3!Ab")
     assert reset_exc.value.status_code == 403
     assert reset_exc.value.detail == "Password reset is unavailable."
 
@@ -415,7 +415,7 @@ async def test_local_login_lockout_blocks_valid_password_until_expiry(
     for _ in range(int(settings.auth_password_lockout_max_attempts)):
         failed_login = await async_client.post(
             "/api/v1/auth/login",
-            json={"email": admin.email, "password": "incorrect-password"},
+            json={"email": admin.email, "password": "incorrect-test-credential"},
         )
         assert failed_login.status_code == 401
 
@@ -660,7 +660,7 @@ async def test_password_change_requirement_blocks_routes_until_password_is_updat
             "displayName": "Forced Change",
             "passwordProfile": {
                 "mode": "explicit",
-                "password": "Password123!",
+                "password": "notsecret1!Ab",
                 "forceChangeOnNextSignIn": True,
             },
         },
@@ -675,7 +675,7 @@ async def test_password_change_requirement_blocks_routes_until_password_is_updat
 
     login_forced_user = await async_client.post(
         "/api/v1/auth/login",
-        json={"email": "forced-change@example.com", "password": "Password123!"},
+        json={"email": "forced-change@example.com", "password": "notsecret1!Ab"},
     )
     assert login_forced_user.status_code == 200, login_forced_user.text
     login_payload = login_forced_user.json()
@@ -704,7 +704,7 @@ async def test_password_change_requirement_blocks_routes_until_password_is_updat
         headers={"X-CSRF-Token": user_csrf},
         json={
             "currentPassword": "wrong-password",
-            "newPassword": "NewPassword123!",
+            "newPassword": "notsecret2!Ab",
         },
     )
     assert bad_change.status_code == 400, bad_change.text
@@ -713,8 +713,8 @@ async def test_password_change_requirement_blocks_routes_until_password_is_updat
         "/api/v1/auth/password/change",
         headers={"X-CSRF-Token": user_csrf},
         json={
-            "currentPassword": "Password123!",
-            "newPassword": "NewPassword123!",
+            "currentPassword": "notsecret1!Ab",
+            "newPassword": "notsecret2!Ab",
         },
     )
     assert apply_change.status_code == 204, apply_change.text

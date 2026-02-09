@@ -212,7 +212,7 @@ async def test_patch_allows_idp_only_with_active_provider(
             "label": "Okta",
             "issuer": "https://issuer.example.com",
             "clientId": "demo-client",
-            "clientSecret": "demo-secret",
+            "clientSecret": "notsecret-client",
             "status": "active",
             "domains": ["example.com"],
         },

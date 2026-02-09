@@ -60,7 +60,7 @@ describe("ResetPasswordScreen", () => {
     const user = userEvent.setup();
     renderWithPath("/reset-password?token=token-123");
 
-    await user.type(screen.getByPlaceholderText("••••••••••••"), "averysecurepassword");
+    await user.type(screen.getByPlaceholderText("••••••••••••"), "notsecret3!Ab");
     await user.type(screen.getByPlaceholderText("Re-enter your new password"), "differentpassword");
     await user.click(screen.getByRole("button", { name: "Reset password" }));
 
@@ -72,13 +72,13 @@ describe("ResetPasswordScreen", () => {
     const user = userEvent.setup();
     renderWithPath("/reset-password?token=token-abc&returnTo=/workspaces/alpha");
 
-    await user.type(screen.getByPlaceholderText("••••••••••••"), "averysecurepassword");
-    await user.type(screen.getByPlaceholderText("Re-enter your new password"), "averysecurepassword");
+    await user.type(screen.getByPlaceholderText("••••••••••••"), "notsecret3!Ab");
+    await user.type(screen.getByPlaceholderText("Re-enter your new password"), "notsecret3!Ab");
     await user.click(screen.getByRole("button", { name: "Reset password" }));
 
     expect(mockCompletePasswordReset).toHaveBeenCalledWith({
       token: "token-abc",
-      newPassword: "averysecurepassword",
+      newPassword: "notsecret3!Ab",
     });
     expect(navigateMock).toHaveBeenCalledWith(
       "/login?passwordReset=success&returnTo=%2Fworkspaces%2Falpha",
@@ -97,8 +97,8 @@ describe("ResetPasswordScreen", () => {
     );
     renderWithPath("/reset-password?token=expired-token");
 
-    await user.type(screen.getByPlaceholderText("••••••••••••"), "averysecurepassword");
-    await user.type(screen.getByPlaceholderText("Re-enter your new password"), "averysecurepassword");
+    await user.type(screen.getByPlaceholderText("••••••••••••"), "notsecret3!Ab");
+    await user.type(screen.getByPlaceholderText("Re-enter your new password"), "notsecret3!Ab");
     await user.click(screen.getByRole("button", { name: "Reset password" }));
 
     expect(await screen.findByText("Reset token is invalid or expired.")).toBeInTheDocument();

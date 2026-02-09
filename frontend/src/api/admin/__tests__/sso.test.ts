@@ -42,14 +42,14 @@ describe("admin sso api", () => {
     await validateSsoProvider({
       issuer: "https://issuer.example.com",
       clientId: "demo-client",
-      clientSecret: "demo-secret",
+      clientSecret: "notsecret-client",
     });
 
     expect(client.POST).toHaveBeenCalledWith("/api/v1/admin/sso/providers/validate", {
       body: {
         issuer: "https://issuer.example.com",
         clientId: "demo-client",
-        clientSecret: "demo-secret",
+        clientSecret: "notsecret-client",
       },
     });
   });
@@ -67,7 +67,7 @@ describe("admin sso api", () => {
       label: "Okta",
       issuer: "https://issuer.example.com",
       clientId: "demo-client",
-      clientSecret: "demo-secret",
+      clientSecret: "notsecret-client",
       status: "active",
       domains: ["example.com"],
     });
@@ -79,7 +79,7 @@ describe("admin sso api", () => {
         label: "Okta",
         issuer: "https://issuer.example.com",
         clientId: "demo-client",
-        clientSecret: "demo-secret",
+        clientSecret: "notsecret-client",
         status: "active",
         domains: ["example.com"],
       },

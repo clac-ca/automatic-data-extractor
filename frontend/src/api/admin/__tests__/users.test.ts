@@ -46,7 +46,7 @@ describe("admin users api", () => {
       displayName: "User",
       passwordProfile: {
         mode: "explicit",
-        password: "Password123!",
+        password: "notsecret1!Ab",
         forceChangeOnNextSignIn: false,
       },
     });
@@ -56,7 +56,7 @@ describe("admin users api", () => {
         displayName: "User",
         passwordProfile: {
           mode: "explicit",
-          password: "Password123!",
+          password: "notsecret1!Ab",
           forceChangeOnNextSignIn: false,
         },
       },

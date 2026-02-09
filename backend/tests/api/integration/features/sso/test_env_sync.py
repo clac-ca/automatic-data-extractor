@@ -60,7 +60,7 @@ def test_env_sync_updates_existing_provider(session, settings) -> None:
         label="Old",
         issuer="https://issuer.old.com",
         client_id="old-client",
-        client_secret="old-secret",
+        client_secret="notsecret-client-old",
         status_value=SsoProviderStatus.DISABLED,
         domains=["old.com"],
     )
@@ -101,7 +101,7 @@ def test_env_sync_releases_removed_env_provider(session, settings) -> None:
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.DISABLED,
         domains=["example.com"],
     )

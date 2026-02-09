@@ -65,7 +65,7 @@ def test_create_provider_normalizes_domains(session, settings) -> None:
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=["Example.COM", " example.com ", "sub.example.com"],
     )
@@ -82,7 +82,7 @@ def test_create_provider_rejects_domain_conflict(session, settings) -> None:
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=["example.com"],
     )
@@ -93,7 +93,7 @@ def test_create_provider_rejects_domain_conflict(session, settings) -> None:
             label="Other",
             issuer="https://issuer.example.com",
             client_id="other-client",
-            client_secret="other-secret",
+            client_secret="notsecret-client-other",
             status_value=SsoProviderStatus.ACTIVE,
             domains=["example.com"],
         )
@@ -110,7 +110,7 @@ def test_list_active_providers_respects_global_disable(session, settings) -> Non
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=[],
     )
@@ -128,7 +128,7 @@ def test_resolve_provider_for_domain_matches_active_only(session, settings) -> N
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=["Example.COM"],
     )
@@ -137,7 +137,7 @@ def test_resolve_provider_for_domain_matches_active_only(session, settings) -> N
         label="Okta Disabled",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.DISABLED,
         domains=["disabled.com"],
     )
@@ -156,7 +156,7 @@ def test_consume_auth_state_marks_used_and_blocks_reuse(session, settings) -> No
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=[],
     )
@@ -185,7 +185,7 @@ def test_consume_auth_state_expired_raises(session, settings) -> None:
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=[],
     )
@@ -218,7 +218,7 @@ def test_update_provider_rejects_locked(session, settings) -> None:
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.DISABLED,
         domains=[],
     )
@@ -250,7 +250,7 @@ def test_delete_provider_rejects_locked(session, settings) -> None:
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.DISABLED,
         domains=[],
     )
@@ -277,7 +277,7 @@ def test_update_provider_rejects_disabling_last_active_provider_when_sso_enforce
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=[],
     )
@@ -309,7 +309,7 @@ def test_delete_provider_rejects_last_active_provider_when_sso_enforced(
         label="Okta",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=[],
     )
@@ -333,7 +333,7 @@ def test_delete_provider_allows_when_another_active_provider_exists_under_sso_en
         label="Okta Primary",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=["example.com"],
     )
@@ -342,7 +342,7 @@ def test_delete_provider_allows_when_another_active_provider_exists_under_sso_en
         label="Okta Secondary",
         issuer="https://issuer2.example.com",
         client_id="demo-client-2",
-        client_secret="demo-secret-2",
+        client_secret="notsecret-client-2",
         status_value=SsoProviderStatus.ACTIVE,
         domains=["example.org"],
     )
@@ -358,7 +358,7 @@ def test_update_provider_reactivates_deleted_provider(session, settings) -> None
         label="Okta Reactivate",
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
         status_value=SsoProviderStatus.ACTIVE,
         domains=["reactivate.example.com"],
     )
@@ -383,7 +383,7 @@ def test_validate_provider_configuration_returns_discovery_metadata(session, set
     metadata = service.validate_provider_configuration(
         issuer="https://issuer.example.com",
         client_id="demo-client",
-        client_secret="demo-secret",
+        client_secret="notsecret-client",
     )
 
     assert metadata.issuer == "https://issuer.example.com"
@@ -413,7 +413,7 @@ def test_validate_provider_configuration_timeout_maps_problem_code(
         service.validate_provider_configuration(
             issuer="https://issuer.example.com",
             client_id="demo-client",
-            client_secret="demo-secret",
+            client_secret="notsecret-client",
         )
 
     assert excinfo.value.status_code == 422
@@ -440,7 +440,7 @@ def test_validate_provider_configuration_issuer_mismatch_maps_problem_code(
         service.validate_provider_configuration(
             issuer="https://issuer.example.com",
             client_id="demo-client",
-            client_secret="demo-secret",
+            client_secret="notsecret-client",
         )
 
     assert excinfo.value.status_code == 422
@@ -467,7 +467,7 @@ def test_validate_provider_configuration_metadata_invalid_maps_problem_code(
         service.validate_provider_configuration(
             issuer="https://issuer.example.com",
             client_id="demo-client",
-            client_secret="demo-secret",
+            client_secret="notsecret-client",
         )
 
     assert excinfo.value.status_code == 422
@@ -496,7 +496,7 @@ def test_create_active_provider_requires_successful_validation(
             label="Okta",
             issuer="https://issuer.example.com",
             client_id="demo-client",
-            client_secret="demo-secret",
+            client_secret="notsecret-client",
             status_value=SsoProviderStatus.ACTIVE,
             domains=[],
         )
