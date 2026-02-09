@@ -1,0 +1,39 @@
+# Root-level editor settings for ADE monorepo
+# Enforces consistent whitespace, newlines, and basic formatting across Python, TS/JS, docs, and infra.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# ---------- Python (backend + engine) ----------
+[*.py]
+indent_style = space
+indent_size = 4
+
+# ---------- Frontend & common config ----------
+[*.{ts,tsx,js,jsx,json,yml,yaml,toml,css,scss,html}]
+indent_style = space
+indent_size = 2
+
+# ---------- Markdown ----------
+# Keep trailing two spaces for hard line breaks in docs.
+[*.md]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+
+# ---------- Shell / Docker ----------
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2
+
+[Dockerfile*]
+indent_style = space
+indent_size = 2
+
+# ---------- Make ----------
+[Makefile]
+indent_style = tab

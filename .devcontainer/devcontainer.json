@@ -1,42 +1,16 @@
 {
-  "name": "ADE Dev",
-  "dockerComposeFile": [
-    "../docker-compose.yaml",
-    "docker-compose.override.yaml"
-  ],
+  "name": "ADE Dev (Postgres + Azurite)",
+  "dockerComposeFile": "docker-compose.yaml",
   "service": "ade",
-  "runServices": ["ade", "db", "blob", "blob-init"],
-  "workspaceFolder": "/app/src",
+  "workspaceFolder": "/workspaces/automatic-data-extractor",
   "shutdownAction": "stopCompose",
-
-  "remoteUser": "adeuser",
+  "remoteUser": "vscode",
   "updateRemoteUserUID": true,
-  "postCreateCommand": "./setup.sh",
-  // Mirror production's canonical virtualenv location so container binaries always come from /app/.venv.
-  "remoteEnv": {
-    "UV_PROJECT_ENVIRONMENT": "/app/.venv",
-    "VIRTUAL_ENV": "/app/.venv",
-    "PATH": "/app/.venv/bin:${containerEnv:PATH}"
-  },
-
-  "forwardPorts": [8000, 8001, 5432, 10000],
-  "portsAttributes": {
-    "8000": { "label": "Web" },
-    "8001": { "label": "API" },
-    "5432": { "label": "Postgres" },
-    "10000": { "label": "Azurite (Blob)" }
-  },
-
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "openai.chatgpt"
-      ],
-      "settings": {
-        "python.defaultInterpreterPath": "/app/.venv/bin/python"
-      }
-    }
+  "postCreateCommand": "bash -lc './setup.sh'",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
   }
 }

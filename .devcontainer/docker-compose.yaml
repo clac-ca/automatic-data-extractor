@@ -1,0 +1,80 @@
+# .devcontainer/docker-compose.yaml
+#
+# Devcontainer stack: a long-running "ade" dev shell + local Postgres + local Azurite.
+# You develop inside the "ade" container; Postgres/Azurite are dependencies.
+#
+# Build / Run (VS Code does this automatically):
+#   Dev Containers: Reopen in Container
+#
+# Diagram (containers; host ports in brackets — VS Code forwards ports automatically):
+#
+#   ┌──────────────┐        ┌──────────────┐
+#   │ ade          │ ─────> │ postgres     │
+#   │ dev shell    │        │ :5432        │
+#   └──────┬───────┘        └──────────────┘
+#          │
+#          │               ┌──────────────┐
+#          └─────────────> │ azurite      │
+#                          │ :10000       │
+#                          └──────────────┘
+#
+services:
+  ade:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/automatic-data-extractor:cached
+      # ADE runtime data lives at /app/data, and is mounted into the workspace for visibility.
+      - ade_data:/app/data
+      - ade_data:/workspaces/automatic-data-extractor/data
+    environment:
+      # ---- Database (local Postgres) ----
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable}
+
+      # ---- Blob (local Azurite) ----
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;}
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
+      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false}
+
+      ADE_DATA_DIR: /app/data
+
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      # blob container is created explicitly (see README)
+
+  postgres:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    volumes:
+      - ade_pg_data:/var/lib/postgresql
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
+      POSTGRES_DB: ${POSTGRES_DB:-ade}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    restart: unless-stopped
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
+    volumes:
+      - ade_azurite_data:/data
+    environment:
+      AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+
+volumes:
+  ade_pg_data:
+  ade_azurite_data:
+  ade_data:

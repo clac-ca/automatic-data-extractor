@@ -1,7 +1,5 @@
 # Python
 .venv/
-backend/.venv/
-.ade/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -12,27 +10,19 @@ __pycache__/
 coverage.xml
 
 # Node / web
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/public/version.json
+apps/ade-web/node_modules/
+apps/ade-web/dist/
+apps/ade-web/.vite/
 
 # Local env / secrets
 .env
 
 # Local data volumes
-backend/data/**
-!backend/data/**/.gitkeep
+data/**
+!data/**/.gitkeep
 
 # OS
 .DS_Store
-
-# Local automation artifacts
-.playwright-cli/
-tmp/playwright/
-.playwright/
-output/playwright/
-output/runtime-validation/
 
 # Workpackages
 workpackages/**

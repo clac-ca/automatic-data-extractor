@@ -13,5 +13,5 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-echo "==> Building production image: automatic-data-extractor:local"
-DOCKER_BUILDKIT=1 docker build -t automatic-data-extractor:local .
+echo "==> Building production image: ade-app:local"
+DOCKER_BUILDKIT=1 docker build -t ade-app:local .

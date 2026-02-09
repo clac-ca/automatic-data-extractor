@@ -10,10 +10,6 @@ __pycache__/
 *.egg-info/
 .venv*/
 venv*/
-backend/.venv/
-backend/data/
-backend/.coverage*
-backend/htmlcov/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
@@ -23,29 +19,22 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 .pnpm-store/
-frontend/**/node_modules
-frontend/.vite/
-frontend/.cache/
-frontend/.eslintcache
-frontend/.turbo/
-frontend/coverage/
+apps/**/node_modules
 
 # Build outputs
 dist/
 build/
-frontend/dist/
+apps/ade-web/dist/
 
 # Local data & misc
 data/
 artifacts/
 .workpackage/
 .workpackages/
-workpackages/
 .old-codebase/
 *.log
-.DS_Store
 
 # Env files (avoid baking secrets into images)
 .env
 .env.*
-frontend/.env*
+apps/ade-web/.env*

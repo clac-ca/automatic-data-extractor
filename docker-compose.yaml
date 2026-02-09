@@ -1,60 +1,59 @@
 # docker-compose.yaml
 #
-# Local development stack:
-# - app (api + worker + web) in one container
-# - db (Postgres)
-# - blob (Azurite)
+# Quickstart: starts ADE (api + worker + web) with local Postgres & Azurite.
+# The ade container runs `ade start` (API + worker + nginx).
+# The web server listens on :8000 and proxies /api to the API running on :8001.
 #
-# Quickstart:
-#   docker compose up --build -d
+# Requirements:
+# - Docker and Docker Compose
 #
-# Open:
-#   http://localhost:8000
-
+# Build / Run:
+#   docker compose up --build
+#
+# Diagram of services:
+#
+#   Host
+#    │  http://localhost:8000
+#    ▼
+# [8000]  ┌──────────────┐
+#         │ ade          │  api + worker + nginx
+#         └──────┬───────┘
+#                ├───────────────> postgres:5432
+#                └───────────────> azurite:10000
+#
 services:
-  app:
-    image: automatic-data-extractor:local
+  ade:
+    image: ${ADE_IMAGE:-automatic-data-extractor:local}
     build:
       context: .
-      dockerfile: Dockerfile
-      target: production
-    env_file:
-      - path: ./.env
-        required: false
+      target: final
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
-      blob:
+      azurite:
         condition: service_started
-      blob-init:
-        condition: service_completed_successfully
     volumes:
-      - app_data:/app/data
-      # - ./backend/data:/app/data
+      - ade_data:/app/data
     ports:
       - 8000:8000
+      # - 8001:8001 # optional: expose API directly
+    command: ["ade", "start"]
     environment:
-      ADE_SERVICES: ${ADE_SERVICES:-api,worker,web}
-      ADE_API_PROCESSES: ${ADE_API_PROCESSES:-2}
-      ADE_WORKER_RUN_CONCURRENCY: ${ADE_WORKER_RUN_CONCURRENCY:-8}
-      ADE_AUTH_DISABLED: ${ADE_AUTH_DISABLED:-true} # Auth disabled for local development. Set to false to enable auth.
-      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:-http://localhost:8000}
-      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@db:5432/ade?sslmode=disable}
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://blob:10000/devstoreaccount1;}
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
-      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto|require|off; see docs/reference/environment-variables.md
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:-postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable} # Default local Postgres
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;} # Default local Azurite
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade} # Default local container
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces} # Default local prefix
+      ADE_BLOB_REQUIRE_VERSIONING: ${ADE_BLOB_REQUIRE_VERSIONING:-false} # disable versioning requirement for local Azurite
       ADE_DATA_DIR: /app/data
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000}
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:-dev-only-unsafe-secret-key-change-me-please-0000000000000000} # change me!
 
-  db:
+  postgres:
     image: postgres:18-bookworm
     ports:
       - 5432:5432
     volumes:
-      - db_data:/var/lib/postgresql
+      - ade_pg_data:/var/lib/postgresql
     environment:
-      # Compose-only local Postgres settings (not ADE runtime configuration).
       POSTGRES_USER: ${POSTGRES_USER:-ade}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ade}
       POSTGRES_DB: ${POSTGRES_DB:-ade}
@@ -64,38 +63,17 @@ services:
       timeout: 5s
       retries: 30
 
-  blob:
+  azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
-    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --disableTelemetry --skipApiVersionCheck
+    command: azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000
     ports:
       - 10000:10000
     volumes:
-      - blob_data:/data
+      - ade_azurite_data:/data
     environment:
-      # Compose-only local Azurite setting (not ADE runtime configuration).
       AZURITE_ACCOUNTS: ${AZURITE_ACCOUNTS:-devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
-    healthcheck:
-      test: ["CMD", "node", "-e", "const net=require('net'); const c=net.createConnection({host:'127.0.0.1',port:10000}); const t=setTimeout(()=>{c.destroy(); process.exit(1)}, 1000); c.on('connect',()=>{clearTimeout(t); c.end(); process.exit(0)}); c.on('error',()=>{clearTimeout(t); process.exit(1)});"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
-      start_period: 2s
-
-  blob-init:
-    image: mcr.microsoft.com/azure-cli:2.82.0
-    depends_on:
-      blob:
-        condition: service_healthy
-    command:
-      - sh
-      - -c
-      - az storage container create --name "$$ADE_BLOB_CONTAINER" --connection-string "$$ADE_BLOB_CONNECTION_STRING"
-    environment:
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://blob:10000/devstoreaccount1;}
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:-ade}
-    restart: "no"
 
 volumes:
-  app_data:
-  db_data:
-  blob_data:
+  ade_data:
+  ade_pg_data:
+  ade_azurite_data:

@@ -1,28 +1,18 @@
-name: Dependabot Auto-approve + Merge (minor/patch)
+name: Dependabot Auto-approve + Auto-merge (minor/patch)
 
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
 
-permissions: read-all
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   dependabot:
-    name: Auto-approve + merge (minor/patch)
-    if: >-
-      github.actor == 'dependabot[bot]' &&
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    name: Auto-approve + enable auto-merge
+    if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-      pull-requests: write
-      checks: read
-      statuses: read
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PR_URL: ${{ github.event.pull_request.html_url }}
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
@@ -30,14 +20,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Auto-approve (minor/patch)
+      - name: Auto-approve and enable auto-merge (minor/patch)
         if: ${{ contains(steps.metadata.outputs.update-type, 'minor') || contains(steps.metadata.outputs.update-type, 'patch') }}
-        run: gh pr review --approve "$PR_URL"
-
-      - name: Wait for checks (minor/patch)
-        if: ${{ contains(steps.metadata.outputs.update-type, 'minor') || contains(steps.metadata.outputs.update-type, 'patch') }}
-        run: gh pr checks --watch "$PR_URL"
-
-      - name: Merge (minor/patch)
-        if: ${{ contains(steps.metadata.outputs.update-type, 'minor') || contains(steps.metadata.outputs.update-type, 'patch') }}
-        run: gh pr merge --squash --delete-branch "$PR_URL"
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}

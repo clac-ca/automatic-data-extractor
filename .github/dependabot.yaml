@@ -2,6 +2,18 @@ version: 2
 
 updates:
   # -----------------------------
+  # GitHub Actions workflow deps
+  # -----------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "development"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # -----------------------------
   # Web (npm) dependencies
   # -----------------------------
   - package-ecosystem: "npm"
@@ -17,10 +29,10 @@ updates:
         update-types: ["minor", "patch"]
 
   # -----------------------------
-  # API + Worker (uv) dependencies
+  # API + Worker (pip) dependencies
   # -----------------------------
-  - package-ecosystem: "uv"
-    directory: "/"
+  - package-ecosystem: "pip"
+    directory: "/apps/ade-api"
     target-branch: "development"
     schedule:
       interval: "monthly"
@@ -28,5 +40,17 @@ updates:
       prefix: "deps"
       include: "scope"
     groups:
-      uv-minor-patch:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "pip"
+    directory: "/apps/ade-worker"
+    target-branch: "development"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      pip-minor-patch:
         update-types: ["minor", "patch"]

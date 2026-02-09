@@ -1,21 +1,84 @@
 # Automatic Data Extractor (ADE)
 
-ADE is a self-hosted document normalization platform with:
+ADE is a self-hostable document extraction service with an **API**, **Web UI**, and a background **worker**.
 
-- FastAPI control plane (`ade-api`)
-- Background run processor (`ade-worker`)
-- React web UI (`ade-web`)
-- Shared DB/storage packages (`ade-db`, `ade-storage`)
+---
 
-## Quickstart (Local)
+## Prerequisites
+
+Install these first:
+
+- **Docker** (includes Docker Compose)
+  - Windows:
+    ```bash
+    winget install --id Docker.DockerDesktop
+    ```
+  - macOS:
+    ```bash
+    brew install --cask docker
+    ```
+  - Linux (Ubuntu/Debian):
+    ```bash
+    curl -fsSL https://get.docker.com | sh
+    ```
+- **Git**
+  - Windows:
+    ```bash
+    winget install --id Git.Git
+    ```
+  - macOS:
+    ```bash
+    brew install git
+    ```
+  - Linux (Ubuntu/Debian):
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y git
+    ```
+- **Optional (recommended for contributors):** VS Code Dev Container workflow
+  - VS Code
+    - Windows:
+      ```bash
+      winget install --id Microsoft.VisualStudioCode
+      ```
+    - macOS:
+      ```bash
+      brew install --cask visual-studio-code
+      ```
+    - Linux (Ubuntu/Debian):
+      ```bash
+      sudo snap install code --classic
+      ```
+  - Dev Containers extension
+    ```bash
+    code --install-extension ms-vscode-remote.remote-containers
+    ```
+
+---
+
+## Get the code
+
+### Clone with Git
+1. Run:
 
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor
 cd automatic-data-extractor
-docker compose up --build -d
 ```
 
-Open `http://localhost:8000`.
+---
+
+## Quickstart (local)
+
+This starts ADE + local Postgres + local Azurite.
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+* `http://localhost:8000`
 
 Stop:
 
@@ -23,112 +86,62 @@ Stop:
 docker compose down
 ```
 
-Full local reset:
+Reset local data (database + storage + ADE data):
 
 ```bash
 docker compose down -v
 ```
 
-## Native Dev Loop (Isolated Per Worktree)
+---
+
+## Production
+
+Production uses **external Postgres** and **external Azure Blob Storage**.
+The default deployment runs a single container that starts **API**, **worker**, and **web (nginx)**.
 
 ```bash
-./setup.sh
-cd backend && uv run ade infra up -d --wait
-cd backend && uv run ade dev
+docker compose -f docker-compose.prod.yaml pull
+docker compose -f docker-compose.prod.yaml up -d
 ```
 
-This flow uses a generated local profile in `.env` and keeps each worktree isolated.
-If you want setup to immediately launch ADE and open a browser, run `./setup.sh --open`.
-
-Useful commands:
+Alternate (split services across containers):
 
 ```bash
-./setup.sh
-./setup.sh --open
-cd backend && uv run ade infra info
-cd backend && uv run ade infra up -d --wait
-cd backend && uv run ade infra down
-cd backend && uv run ade infra down -v --rmi all
-./setup.sh --with-infra --force
-cd backend && uv run ade dev --open
+docker compose -f docker-compose.prod.split.yaml pull
+docker compose -f docker-compose.prod.split.yaml up -d
 ```
 
-## Production Start Points
+Create a `.env` file next to the compose file you run (minimum):
 
-Primary production path: Azure Container Apps.
+```env
+ADE_DATABASE_URL=postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
 
-- Bootstrap tutorial: [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
-- Deployment runbook: [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
-- Scaling guide: [`docs/how-to/scale-and-tune-throughput.md`](docs/how-to/scale-and-tune-throughput.md)
+# Azure Blob (choose one auth method supported by your deployment)
+ADE_BLOB_ACCOUNT_URL=https://<account>.blob.core.windows.net
+ADE_BLOB_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net
 
-Self-hosted compose production is still supported, but not the default path.
+ADE_BLOB_CONTAINER=ade
+ADE_SECRET_KEY=<long-random-secret>
+```
 
-## Default Performance Settings
+See `.env.example` for the full set of supported environment variables.
 
-Benchmark-backed defaults are now set directly in compose:
+Tip: for a single container with a subset of services, use `ade start --services api,web`
+or set `ADE_START_SERVICES=api,web`.
 
-- Local (`docker-compose.yaml`)
-  - `ADE_API_PROCESSES=2`
-  - `ADE_WORKER_RUN_CONCURRENCY=8`
-- Self-hosted production (`docker-compose.prod.yaml`, `docker-compose.prod.split.yaml`)
-  - `ADE_API_PROCESSES=2`
-  - `ADE_WORKER_RUN_CONCURRENCY=4`
+---
 
-These are safe starting points with better out-of-box throughput than app-level defaults.
+## Development (VS Code Dev Container)
 
-API runtime hardening defaults (app-level) are also enabled by default:
+If you’re contributing, the fastest setup is a dev container:
 
-- `ADE_API_PROXY_HEADERS_ENABLED=true`
-- `ADE_API_FORWARDED_ALLOW_IPS=127.0.0.1`
-- `ADE_API_THREADPOOL_TOKENS=40`
-- `ADE_DATABASE_CONNECTION_BUDGET` unset (warn-only if configured)
+1. Install Docker + VS Code + the Dev Containers extension
+2. Open the repo in VS Code
+3. Run **“Dev Containers: Reopen in Container”**
 
-## Documentation
+---
 
-Top-level docs index: [`docs/index.md`](docs/index.md)
+## Troubleshooting
 
-Primary operator pages:
-
-- [`docs/tutorials/developer-setup.md`](docs/tutorials/developer-setup.md)
-- [`docs/tutorials/local-quickstart.md`](docs/tutorials/local-quickstart.md)
-- [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
-- [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
-- [`docs/troubleshooting/triage-playbook.md`](docs/troubleshooting/triage-playbook.md)
-
-## Contributing
-
-- Use Conventional Commits (`feat:`, `fix:`, `deps:`, `chore:`).
-- Run relevant tests/lint before merging.
-- Update docs in the same PR when behavior changes.
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/standards/documentation-maintenance.md`](docs/standards/documentation-maintenance.md).
-
-## Security Notes
-
-- Treat `ADE_SECRET_KEY` like a password.
-- Do not enable `ADE_AUTH_DISABLED=true` in production.
-- Restrict network access to Postgres and blob storage endpoints.
-
-## License
-
-The MIT License (MIT)
-
-Copyright (c) 2015 Chris Kibble
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+* See logs: `docker compose logs -f`
+* “Start fresh”: `docker compose down -v`
