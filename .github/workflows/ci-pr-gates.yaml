@@ -93,10 +93,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      azurite:
-        image: mcr.microsoft.com/azure-storage/azurite
-        ports:
-          - 10000:10000
 
     env:
       CI: "true"
@@ -120,6 +116,21 @@ jobs:
         working-directory: backend
         run: uv sync --frozen
 
+      - name: Start Azurite blob emulator
+        run: |
+          docker run --detach \
+            --name azurite \
+            --publish 10000:10000 \
+            mcr.microsoft.com/azure-storage/azurite:3.35.0 \
+            azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --disableTelemetry --skipApiVersionCheck
+          for attempt in {1..30}; do
+            if docker logs azurite 2>&1 | grep -q "successfully listening"; then
+              break
+            fi
+            sleep 1
+          done
+          docker logs azurite 2>&1 | grep -q "successfully listening"
+
       - name: Run API integration tests
         working-directory: backend
         run: uv run ade api test integration
@@ -141,10 +152,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      azurite:
-        image: mcr.microsoft.com/azure-storage/azurite
-        ports:
-          - 10000:10000
 
     env:
       CI: "true"
@@ -167,6 +174,21 @@ jobs:
       - name: Sync backend environment
         working-directory: backend
         run: uv sync --frozen
+
+      - name: Start Azurite blob emulator
+        run: |
+          docker run --detach \
+            --name azurite \
+            --publish 10000:10000 \
+            mcr.microsoft.com/azure-storage/azurite:3.35.0 \
+            azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --disableTelemetry --skipApiVersionCheck
+          for attempt in {1..30}; do
+            if docker logs azurite 2>&1 | grep -q "successfully listening"; then
+              break
+            fi
+            sleep 1
+          done
+          docker logs azurite 2>&1 | grep -q "successfully listening"
 
       - name: Run worker integration tests
         working-directory: backend
