@@ -254,7 +254,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Change password for the current authenticated user */
+        /**
+         * Change password for the current authenticated user
+         * @description Change password for the current authenticated user.
+         */
         post: operations["password_change_api_v1_auth_password_change_post"];
         delete?: never;
         options?: never;
@@ -1380,7 +1383,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Create a configuration from a GitHub repository URL */
+        /**
+         * Create a configuration from a GitHub repository URL
+         * @description Create a configuration from a GitHub repository URL.
+         */
         post: operations["import_configuration_from_github_api_v1_workspaces__workspaceId__configurations_import_github_post"];
         delete?: never;
         options?: never;
@@ -1456,7 +1462,10 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Replace a draft configuration from a GitHub repository URL */
+        /**
+         * Replace a draft configuration from a GitHub repository URL
+         * @description Replace a draft configuration from a GitHub repository URL.
+         */
         put: operations["replace_configuration_from_github_api_v1_workspaces__workspaceId__configurations__configurationId__import_github_put"];
         post?: never;
         delete?: never;

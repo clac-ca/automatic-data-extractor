@@ -1,7 +1,7 @@
 import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SsoProviderAdmin } from "@/api/admin/sso";
 import { ApiError } from "@/api/errors";
@@ -63,18 +63,22 @@ function setup(overrides: Partial<ComponentProps<typeof SsoSetupFlow>> = {}) {
 
 async function fillCreateFormToTestStep(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Continue" }));
-  await user.type(screen.getByLabelText(/Provider ID/i), "okta-primary");
+  await user.type(await screen.findByLabelText(/Provider ID/i), "okta-primary");
   await user.type(screen.getByLabelText(/Label/i), "Okta Workforce");
   await user.type(screen.getByLabelText(/Allowed domains/i), "example.com");
   await user.click(screen.getByRole("button", { name: "Continue" }));
 
-  await user.type(screen.getByLabelText(/Issuer/i), "https://issuer.example.com");
+  await user.type(await screen.findByLabelText(/Issuer/i), "https://issuer.example.com");
   await user.type(screen.getByLabelText(/Client ID/i), "demo-client");
   await user.type(screen.getByLabelText(/Client secret/i), "demo-secret");
   await user.click(screen.getByRole("button", { name: "Continue" }));
 }
 
 describe("SsoSetupFlow", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
   it("disables continue on test step until validation passes", async () => {
     const user = userEvent.setup();
     setup();

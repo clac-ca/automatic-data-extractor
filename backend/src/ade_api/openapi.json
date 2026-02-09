@@ -642,7 +642,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Change password for the current authenticated user."
       }
     },
     "/api/v1/auth/mfa/totp/enroll/start": {
@@ -9988,7 +9989,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a configuration from a GitHub repository URL."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive": {
@@ -10381,7 +10383,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Replace a draft configuration from a GitHub repository URL."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files": {
