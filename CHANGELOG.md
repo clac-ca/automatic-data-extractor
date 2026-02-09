@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.2...v1.7.3) (2026-02-09)
+
+
+### Bug Fixes
+
+* **ci:** prune package versions with non-policy tags ([2f29f45](https://github.com/clac-ca/automatic-data-extractor/commit/2f29f45f8ef871c67458e3ba887c9d2573a42fb1))
+
 ## [1.7.2](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.1...v1.7.2) (2026-02-09)
 
 
