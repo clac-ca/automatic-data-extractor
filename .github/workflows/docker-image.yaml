@@ -16,6 +16,15 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git ref to build from (optional)
+        required: false
+        default: ""
+      publish_tag:
+        description: Exact image tag to publish (optional, e.g. v1.7.0)
+        required: false
+        default: ""
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -36,12 +45,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
 
       - name: Resolve app metadata
         id: app-meta
         run: |
+          publish_tag="${{ inputs.publish_tag }}"
           short_sha="${GITHUB_SHA::7}"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+          if [ -n "$publish_tag" ]; then
+            app_version="${publish_tag#v}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
             app_version="${GITHUB_REF_NAME#v}"
           elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             app_version="main"
@@ -97,10 +111,11 @@ jobs:
             latest=false
           tags: |
             # Branch tags (main/development only)
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' && inputs.publish_tag == '' }}
+            type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' && inputs.publish_tag == '' }}
             # Immutable release tags for pinning (vX.Y.Z)
-            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') && inputs.publish_tag == '' }}
+            type=raw,value=${{ inputs.publish_tag }},enable=${{ inputs.publish_tag != '' }}
 
       - name: Build (and push if not PR)
         uses: docker/build-push-action@v6
