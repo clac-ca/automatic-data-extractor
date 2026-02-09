@@ -2,93 +2,143 @@
 
 ## Goal
 
-Operate ADE auth safely in production with one consistent control path.
+Operate ADE authentication safely in production using the Authentication Policy V2 model.
 
 ## Canonical Routes
-
-Use only:
 
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/password/forgot`
 - `POST /api/v1/auth/password/reset`
+- `POST /api/v1/auth/password/change`
 - `POST /api/v1/auth/mfa/challenge/verify`
-- `GET/PUT /api/v1/admin/sso/settings`
+- `POST /api/v1/admin/sso/providers/validate`
+- `GET/POST/PATCH/DELETE /api/v1/admin/sso/providers*`
+- `GET/PATCH /api/v1/admin/settings`
 
-Do not use legacy JWT or cookie route namespaces.
+Do not use removed legacy auth route namespaces.
 
-## SSO Enforcement Operations
+## Authentication Policy Model
 
-1. Ensure at least one active external provider exists (`/api/v1/admin/sso/providers*`).
-2. Set settings via `PUT /api/v1/admin/sso/settings`:
-- `enabled`
-- `enforceSso`
-- `allowJitProvisioning`
-3. Validate behavior:
-- regular local user login is blocked (`sso_enforced`)
-- global-admin local login remains available
-- global-admin local login still requires MFA enrollment
+Runtime policy lives in `auth` under `/api/v1/admin/settings`:
 
-## Global-Admin Local Login Exception
+- `auth.mode`: `password_only | idp_only | password_and_idp`
+- `auth.password.*`: password-reset, MFA requirement, complexity, lockout
+- `auth.identityProvider.jitProvisioningEnabled`
 
-When SSO is enforced:
+## Setup First, Policy Second
 
-- global-admin users can still use local login for emergency admin access.
-- global-admin users must keep MFA enabled for local login.
+Use this rollout order:
 
-## Password Reset Operations
+1. Configure provider metadata.
+2. Validate provider connection (`POST /api/v1/admin/sso/providers/validate`).
+3. Save provider and set provider status.
+4. Update `auth.mode` and related policy settings.
 
-- Forgot endpoint is intentionally uniform (`202`) for known and unknown emails.
-- If `ADE_AUTH_PASSWORD_RESET_ENABLED=false` or SSO enforcement is enabled, forgot/reset endpoints return `403`.
-- Reset tokens are one-time and time-limited.
-- Delivery adapter may be no-op until SMTP integration is configured.
+Provider setup does not auto-change policy mode.
 
-## MFA Recovery Code Behavior
+## Provider Lifecycle
 
-- Accept `XXXX-XXXX` and `XXXXXXXX` input styles.
-- Recovery codes are single-use.
-- Failed/replayed code attempts should not grant session creation.
+Preferred lifecycle API is `PATCH /api/v1/admin/sso/providers/{id}`:
 
-## API Key Transport Contract
+- set `status=active` to enable provider sign-in
+- set `status=disabled` to disable provider sign-in
 
-- Programmatic auth must use `X-API-Key`.
-- Bearer headers are not valid API key transport.
+UI/API status values are user-facing only: `active` and `disabled`.
 
-## Observability and Alerts
+## Mode Behavior
+
+- `password_only`: password sign-in available; IdP sign-in unavailable.
+- `password_and_idp`: both sign-in methods available.
+- `idp_only`: organization members use IdP sign-in; global admins still have password + MFA break-glass access.
+
+## Password Reset Behavior
+
+Password reset is available only when:
+
+- `auth.password.resetEnabled=true`
+- `auth.mode != idp_only`
+
+Forgot/reset endpoints return `403` when reset is disabled by policy.
+
+## MFA Behavior
+
+- `auth.password.mfaRequired=true` requires MFA enrollment for password-authenticated sessions before protected API access.
+- SSO and API-key sessions are not forced by password MFA policy.
+
+## Password Policy Behavior
+
+Password checks use runtime settings:
+
+- `auth.password.complexity.*`
+- `auth.password.lockout.*`
+
+These are enforced for:
+
+- first-admin creation
+- admin-created/reset passwords
+- password reset flow
+- failed password login lockout
+
+## User Provisioning Contract
+
+`POST /api/v1/users` now requires `passwordProfile`:
+
+- `mode=explicit`: caller provides `passwordProfile.password`.
+- `mode=auto_generate`: API generates a compliant password and returns it one time in `passwordProvisioning.initialPassword`.
+- `forceChangeOnNextSignIn`: when `true`, user must change password before normal app access.
+
+No implicit hidden-random-password behavior is supported.
+
+## Forced Password Change Behavior
+
+- Login success includes `passwordChangeRequired`.
+- Flagged users can access onboarding endpoints (`/api/v1/me/bootstrap`, MFA routes, logout, `/api/v1/auth/password/change`) and are blocked from other protected routes with `403 password_change_required`.
+- `POST /api/v1/auth/password/change` clears the requirement after successful change.
+
+## SSO Validation Failure Codes
+
+`POST /api/v1/admin/sso/providers/validate` may return:
+
+- `sso_discovery_failed`
+- `sso_issuer_mismatch`
+- `sso_metadata_invalid`
+- `sso_validation_timeout`
+
+Operational actions:
+
+- `sso_discovery_failed`: verify issuer URL reachability and OIDC metadata endpoint.
+- `sso_issuer_mismatch`: ensure configured issuer exactly matches metadata issuer.
+- `sso_metadata_invalid`: provider metadata is incomplete/invalid.
+- `sso_validation_timeout`: verify DNS/TLS/network egress from ADE to issuer.
+
+## API Key Contract
+
+- API keys are accepted only via `X-API-Key`.
+- `Authorization: Bearer` is not an API-key transport channel.
+
+## Observability Checklist
 
 Track and alert on:
 
-- repeated login failures and lockout events
-- MFA challenge failures and recovery-code usage spikes
-- password reset request spikes and reset failures
-- API key auth failures and denied access bursts
-- SSO callback/provider failures and policy update failures
+- repeated password login failures and lockout spikes
+- MFA challenge failures and recovery code spikes
+- password reset request spikes/failures
+- SSO callback/provider validation failures
+- admin settings update failures
 
-Create alerts for sustained error-rate or anomaly spikes, not single-request failures.
-
-## Secret Management and Rotation
-
-Auth-related secrets to manage and rotate:
-
-- `ADE_SECRET_KEY`
-- `ADE_SSO_ENCRYPTION_KEY` (when set)
-- external IdP client secrets
-
-After rotation, run the post-change smoke checklist and confirm login, MFA, reset, and SSO provider operations still work.
-
-## Security Validation Commands
+## Validation Commands
 
 ```bash
 cd backend && uv run ade api test
 cd backend && uv run ade test
-cd backend && uv run python -m ade_api.scripts.generate_openapi
 cd backend && uv run ade api types
 ```
 
 ## Post-Change Smoke Checklist
 
-1. Local login/logout (with CSRF on logout).
-2. MFA challenge and recovery code success/replay behavior.
-3. Forgot/reset flows.
-4. SSO settings read/write.
-5. API key auth via `X-API-Key`.
+1. Password login/logout works as expected for selected `auth.mode`.
+2. SSO sign-in works for active providers.
+3. Global-admin break-glass password path still works in `idp_only` mode.
+4. Forgot/reset behavior matches policy.
+5. Admin settings and provider lifecycle updates succeed.

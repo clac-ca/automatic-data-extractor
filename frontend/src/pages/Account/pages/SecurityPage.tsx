@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
-import type { MfaStatusResponse } from "@/api/auth/api";
+import { changePassword, type MfaStatusResponse } from "@/api/auth/api";
+import { mapUiError } from "@/api/uiErrors";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -27,16 +31,68 @@ export function SecurityPage({
   mfaStatusError,
   onRefreshMfaStatus,
 }: SecurityPageProps) {
+  const location = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+  const passwordChangeRequired = useMemo(
+    () => new URLSearchParams(location.search).get("requirePasswordChange") === "1",
+    [location.search],
+  );
   const statusLabel = isMfaStatusLoading
     ? "Checking"
     : mfaStatus?.enabled
       ? "MFA enabled"
       : "MFA not enabled";
 
+  const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentPassword.trim()) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+    if (!newPassword.trim()) {
+      setPasswordError("Enter a new password.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirmation do not match.");
+      return;
+    }
+
+    setIsPasswordSubmitting(true);
+    try {
+      await changePassword({
+        currentPassword,
+        newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess("Password updated.");
+    } catch (error) {
+      const mapped = mapUiError(error, { fallback: "Unable to change password." });
+      setPasswordError(mapped.message);
+    } finally {
+      setIsPasswordSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {mfaStatusError ? <Alert tone="danger">{mfaStatusError}</Alert> : null}
+      {passwordChangeRequired ? (
+        <Alert tone="warning">
+          You must change your password before using other areas of the application.
+        </Alert>
+      ) : null}
 
       <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
@@ -73,6 +129,53 @@ export function SecurityPage({
         <Button type="button" onClick={() => setDialogOpen(true)}>
           {mfaStatus?.enabled ? "Manage MFA" : "Set up MFA"}
         </Button>
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold text-foreground">Password</h3>
+          <p className="text-sm text-muted-foreground">
+            Change your password for password sign-in sessions.
+          </p>
+        </div>
+
+        {passwordError ? <Alert tone="danger">{passwordError}</Alert> : null}
+        {passwordSuccess ? <Alert tone="success">{passwordSuccess}</Alert> : null}
+
+        <form className="space-y-4" onSubmit={handlePasswordSubmit}>
+          <FormField label="Current password" required>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              disabled={isPasswordSubmitting}
+            />
+          </FormField>
+          <FormField label="New password" required>
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              disabled={isPasswordSubmitting}
+            />
+          </FormField>
+          <FormField label="Confirm new password" required>
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              disabled={isPasswordSubmitting}
+            />
+          </FormField>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={isPasswordSubmitting}>
+              {isPasswordSubmitting ? "Saving..." : "Change password"}
+            </Button>
+          </div>
+        </form>
       </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

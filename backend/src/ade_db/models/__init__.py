@@ -1,6 +1,7 @@
 """Central exports for ADE SQLAlchemy models."""
 
 from .api_key import ApiKey
+from .application_setting import ApplicationSetting
 from .authn import (
     AUTH_SESSION_AUTH_METHOD_VALUES,
     AuthSession,
@@ -45,6 +46,7 @@ from .workspace import Workspace, WorkspaceMembership
 
 __all__ = [
     "ApiKey",
+    "ApplicationSetting",
     "AUTH_SESSION_AUTH_METHOD_VALUES",
     "AuthSession",
     "Configuration",

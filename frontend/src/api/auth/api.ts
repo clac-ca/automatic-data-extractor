@@ -25,7 +25,7 @@ export type AuthProvider = Readonly<{
 
 export type AuthProviderResponse = Readonly<{
   providers: AuthProvider[];
-  forceSso: boolean;
+  mode: "password_only" | "idp_only" | "password_and_idp";
   passwordResetEnabled: boolean;
 }>;
 type MeContext = components["schemas"]["MeContext"];
@@ -40,6 +40,7 @@ type LoginPayload = Readonly<{ email: string; password: string }>;
 type MfaVerifyPayload = Readonly<{ challengeToken: string; code: string }>;
 export type PasswordForgotPayload = Readonly<{ email: string }>;
 export type PasswordResetPayload = Readonly<{ token: string; newPassword: string }>;
+export type PasswordChangePayload = Readonly<{ currentPassword: string; newPassword: string }>;
 type MfaCodePayload = Readonly<{ code: string }>;
 
 type LoginApiResponse = Readonly<{
@@ -51,6 +52,8 @@ type LoginApiResponse = Readonly<{
   mfa_setup_recommended?: boolean;
   mfaSetupRequired?: boolean;
   mfa_setup_required?: boolean;
+  passwordChangeRequired?: boolean;
+  password_change_required?: boolean;
 }>;
 
 export type SessionUser = Readonly<
@@ -96,8 +99,16 @@ export type CreateSessionResult =
       session: SessionEnvelope;
       mfaSetupRecommended: boolean;
       mfaSetupRequired: boolean;
+      passwordChangeRequired: boolean;
     }>
   | Readonly<{ kind: "mfa_required"; challengeToken: string }>;
+
+export type VerifyMfaChallengeResult = Readonly<{
+  session: SessionEnvelope;
+  mfaSetupRecommended: boolean;
+  mfaSetupRequired: boolean;
+  passwordChangeRequired: boolean;
+}>;
 
 export async function fetchAuthProviders(
   options: RequestOptions = {},
@@ -109,7 +120,7 @@ export async function fetchAuthProviders(
     if (!data) {
       return {
         providers: [],
-        forceSso: false,
+        mode: "password_only",
         passwordResetEnabled: false,
       };
     }
@@ -118,7 +129,7 @@ export async function fetchAuthProviders(
     if (error instanceof ApiError && error.status === 404) {
       return {
         providers: [],
-        forceSso: false,
+        mode: "password_only",
         passwordResetEnabled: false,
       };
     }
@@ -147,15 +158,21 @@ export async function createSession(
     session: await bootstrapSession(options.signal, null),
     mfaSetupRecommended: login.mfaSetupRecommended,
     mfaSetupRequired: login.mfaSetupRequired,
+    passwordChangeRequired: login.passwordChangeRequired,
   };
 }
 
 export async function verifyMfaChallenge(
   payload: MfaVerifyPayload,
   options: RequestOptions = {},
-): Promise<SessionEnvelope> {
-  await submitMfaChallenge(payload, options.signal);
-  return bootstrapSession(options.signal, null);
+): Promise<VerifyMfaChallengeResult> {
+  const login = await submitMfaChallenge(payload, options.signal);
+  return {
+    session: await bootstrapSession(options.signal, null),
+    mfaSetupRecommended: login.mfaSetupRecommended,
+    mfaSetupRequired: login.mfaSetupRequired,
+    passwordChangeRequired: login.passwordChangeRequired,
+  };
 }
 
 export async function requestPasswordReset(
@@ -170,6 +187,26 @@ export async function completePasswordReset(
   options: RequestOptions = {},
 ): Promise<void> {
   await submitPasswordReset(payload, options.signal);
+}
+
+export async function changePassword(
+  payload: PasswordChangePayload,
+  options: RequestOptions = {},
+): Promise<void> {
+  const response = await apiFetch("/api/v1/auth/password/change", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
 }
 export async function startMfaEnrollment(
   options: RequestOptions = {},
@@ -334,6 +371,7 @@ async function submitPasswordLogin(
       mfaRequired: false;
       mfaSetupRecommended: boolean;
       mfaSetupRequired: boolean;
+      passwordChangeRequired: boolean;
     }
 > {
   const response = await apiFetch("/api/v1/auth/login", {
@@ -365,10 +403,20 @@ async function submitPasswordLogin(
       data.mfaSetupRecommended ?? data.mfa_setup_recommended ?? false,
     ),
     mfaSetupRequired: Boolean(data.mfaSetupRequired ?? data.mfa_setup_required ?? false),
+    passwordChangeRequired: Boolean(
+      data.passwordChangeRequired ?? data.password_change_required ?? false,
+    ),
   };
 }
 
-async function submitMfaChallenge(payload: MfaVerifyPayload, signal?: AbortSignal): Promise<void> {
+async function submitMfaChallenge(
+  payload: MfaVerifyPayload,
+  signal?: AbortSignal,
+): Promise<{
+  mfaSetupRecommended: boolean;
+  mfaSetupRequired: boolean;
+  passwordChangeRequired: boolean;
+}> {
   const response = await apiFetch("/api/v1/auth/mfa/challenge/verify", {
     method: "POST",
     headers: {
@@ -383,6 +431,17 @@ async function submitMfaChallenge(payload: MfaVerifyPayload, signal?: AbortSigna
     const message = buildApiErrorMessage(problem, response.status);
     throw new ApiError(message, response.status, problem);
   }
+
+  const data = (await response.json()) as LoginApiResponse;
+  return {
+    mfaSetupRecommended: Boolean(
+      data.mfaSetupRecommended ?? data.mfa_setup_recommended ?? false,
+    ),
+    mfaSetupRequired: Boolean(data.mfaSetupRequired ?? data.mfa_setup_required ?? false),
+    passwordChangeRequired: Boolean(
+      data.passwordChangeRequired ?? data.password_change_required ?? false,
+    ),
+  };
 }
 
 async function submitPasswordForgot(
@@ -486,15 +545,21 @@ function normalizeSessionEnvelope(
 
 function normalizeAuthProviderResponse(data: AuthProviderResponseRaw): AuthProviderResponse {
   const raw = data as AuthProviderResponseRaw & {
+    mode?: string;
     password_reset_enabled?: boolean;
   };
-  const forceSso = Boolean(raw.force_sso);
+  const mode =
+    raw.mode === "idp_only" || raw.mode === "password_and_idp" || raw.mode === "password_only"
+      ? raw.mode
+      : "password_only";
   const passwordResetEnabled =
-    typeof raw.password_reset_enabled === "boolean" ? raw.password_reset_enabled : !forceSso;
+    typeof raw.password_reset_enabled === "boolean"
+      ? raw.password_reset_enabled
+      : mode !== "idp_only";
 
   return {
     providers: (raw.providers ?? []).map(normalizeAuthProvider),
-    forceSso,
+    mode,
     passwordResetEnabled,
   };
 }

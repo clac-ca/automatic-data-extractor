@@ -34,6 +34,7 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
+from ade_api.features.admin_settings.service import RuntimeSettingsService
 from ade_api.features.configs.deps import compute_dependency_digest, has_engine_dependency
 from ade_api.features.configs.exceptions import (
     ConfigEngineDependencyMissingError,
@@ -78,6 +79,7 @@ from .exceptions import (
     RunOutputPreviewUnsupportedError,
     RunOutputSheetParseError,
     RunOutputSheetUnsupportedError,
+    RunSafeModeEnabledError,
 )
 from .filters import RunColumnFilters
 from .repository import RunsRepository
@@ -182,6 +184,9 @@ class RunsService:
             settings=settings,
         )
         self._blob_storage = blob_storage
+        self._runtime_settings = RuntimeSettingsService(
+            session=session,
+        )
 
         default_max = Run.__table__.c.max_attempts.default
         self._run_max_attempts = int(default_max.arg) if default_max is not None else 3
@@ -208,6 +213,10 @@ class RunsService:
                 input_document_id=options.input_document_id,
             ),
         )
+
+        safe_mode = self._runtime_settings.get_effective_values().safe_mode
+        if safe_mode.enabled:
+            raise RunSafeModeEnabledError(safe_mode.detail)
 
         configuration = self._resolve_configuration(configuration_id)
         if operation is RunOperation.PUBLISH:
@@ -397,6 +406,10 @@ class RunsService:
                 dry_run=options.dry_run,
             ),
         )
+
+        safe_mode = self._runtime_settings.get_effective_values().safe_mode
+        if safe_mode.enabled:
+            raise RunSafeModeEnabledError(safe_mode.detail)
 
         if not document_ids:
             return []

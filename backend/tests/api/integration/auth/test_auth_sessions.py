@@ -31,6 +31,8 @@ async def test_cookie_login_sets_session_and_bootstrap(
         json={"email": admin.email, "password": admin.password},
     )
     assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["passwordChangeRequired"] is False
     assert async_client.cookies.get(settings.session_cookie_name)
 
     def _load_tokens():
@@ -68,9 +70,10 @@ async def test_local_login_reports_required_mfa_setup_when_enforced(
     async_client: AsyncClient,
     seed_identity,
     settings: Settings,
+    monkeypatch,
 ) -> None:
     member = seed_identity.member
-    settings.auth_enforce_local_mfa = True
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_MFA_REQUIRED", "true")
 
     response = await async_client.post(
         "/api/v1/auth/login",
@@ -87,9 +90,10 @@ async def test_local_mfa_enforcement_blocks_profile_until_enrolled(
     async_client: AsyncClient,
     seed_identity,
     settings: Settings,
+    monkeypatch,
 ) -> None:
     member = seed_identity.member
-    settings.auth_enforce_local_mfa = True
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_MFA_REQUIRED", "true")
 
     login = await async_client.post(
         "/api/v1/auth/login",
@@ -144,8 +148,9 @@ async def test_local_mfa_enforcement_does_not_apply_to_sso_sessions(
     seed_identity,
     settings: Settings,
     db_session,
+    monkeypatch,
 ) -> None:
-    settings.auth_enforce_local_mfa = True
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_MFA_REQUIRED", "true")
     member = seed_identity.member
 
     raw_token = mint_opaque_token()
@@ -242,7 +247,7 @@ async def test_auth_providers_include_password_reset_enabled_flag(
     assert response.status_code == 200, response.text
 
     payload = response.json()
-    assert payload["force_sso"] is False
+    assert payload["mode"] == "password_only"
     assert payload["password_reset_enabled"] is True
 
 
@@ -259,9 +264,9 @@ async def test_password_reset_forgot_accepts_request_when_enabled(
 
 async def test_password_reset_forgot_rejects_when_disabled(
     async_client: AsyncClient,
-    settings: Settings,
+    monkeypatch,
 ) -> None:
-    settings.auth_password_reset_enabled = False
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_RESET_ENABLED", "false")
 
     response = await async_client.post(
         "/api/v1/auth/password/forgot",
@@ -273,9 +278,10 @@ async def test_password_reset_forgot_rejects_when_disabled(
 async def test_password_reset_service_respects_disable_toggle(
     db_session,
     settings: Settings,
+    monkeypatch,
 ) -> None:
-    disabled_settings = settings.model_copy(update={"auth_password_reset_enabled": False})
-    service = AuthnService(session=db_session, settings=disabled_settings)
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_RESET_ENABLED", "false")
+    service = AuthnService(session=db_session, settings=settings)
 
     with pytest.raises(HTTPException) as forgot_exc:
         service.forgot_password(email="user@example.com")
@@ -406,7 +412,7 @@ async def test_local_login_lockout_blocks_valid_password_until_expiry(
     settings: Settings,
 ) -> None:
     admin = seed_identity.admin
-    for _ in range(int(settings.failed_login_lock_threshold)):
+    for _ in range(int(settings.auth_password_lockout_max_attempts)):
         failed_login = await async_client.post(
             "/api/v1/auth/login",
             json={"email": admin.email, "password": "incorrect-password"},
@@ -467,21 +473,29 @@ async def test_sso_enforcement_blocks_non_admin_and_preserves_global_admin_local
     )
     assert create_provider.status_code == 201, create_provider.text
 
-    enforce_sso = await async_client.put(
-        "/api/v1/admin/sso/settings",
+    settings_read = await async_client.get("/api/v1/admin/settings")
+    assert settings_read.status_code == 200, settings_read.text
+    current_revision = settings_read.json()["revision"]
+
+    enforce_mode = await async_client.patch(
+        "/api/v1/admin/settings",
         json={
-            "enabled": True,
-            "enforceSso": True,
-            "allowJitProvisioning": True,
+            "revision": current_revision,
+            "changes": {
+                "auth": {
+                    "mode": "idp_only",
+                    "identityProvider": {"jitProvisioningEnabled": True},
+                }
+            },
         },
         headers={"X-CSRF-Token": csrf_cookie},
     )
-    assert enforce_sso.status_code == 200, enforce_sso.text
+    assert enforce_mode.status_code == 200, enforce_mode.text
 
     providers = await async_client.get("/api/v1/auth/providers")
     assert providers.status_code == 200, providers.text
     providers_payload = providers.json()
-    assert providers_payload["force_sso"] is True
+    assert providers_payload["mode"] == "idp_only"
     assert providers_payload["password_reset_enabled"] is False
 
     forgot_while_enforced = await async_client.post(
@@ -621,3 +635,89 @@ async def test_mfa_recovery_regeneration_rejects_invalid_code(
         headers={"X-CSRF-Token": csrf_cookie},
     )
     assert regenerate.status_code == 400, regenerate.text
+
+
+async def test_password_change_requirement_blocks_routes_until_password_is_updated(
+    async_client: AsyncClient,
+    seed_identity,
+    settings: Settings,
+) -> None:
+    admin = seed_identity.admin
+
+    admin_login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": admin.email, "password": admin.password},
+    )
+    assert admin_login.status_code == 200, admin_login.text
+    admin_csrf = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert admin_csrf
+
+    create_user = await async_client.post(
+        "/api/v1/users",
+        headers={"X-CSRF-Token": admin_csrf},
+        json={
+            "email": "forced-change@example.com",
+            "displayName": "Forced Change",
+            "passwordProfile": {
+                "mode": "explicit",
+                "password": "Password123!",
+                "forceChangeOnNextSignIn": True,
+            },
+        },
+    )
+    assert create_user.status_code == 201, create_user.text
+
+    logout_admin = await async_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": admin_csrf},
+    )
+    assert logout_admin.status_code == 204, logout_admin.text
+
+    login_forced_user = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "forced-change@example.com", "password": "Password123!"},
+    )
+    assert login_forced_user.status_code == 200, login_forced_user.text
+    login_payload = login_forced_user.json()
+    assert login_payload["passwordChangeRequired"] is True
+
+    user_csrf = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert user_csrf
+
+    bootstrap_allowed = await async_client.get("/api/v1/me/bootstrap")
+    assert bootstrap_allowed.status_code == 200, bootstrap_allowed.text
+    user_csrf = async_client.cookies.get(settings.session_csrf_cookie_name)
+    assert user_csrf
+
+    blocked = await async_client.get("/api/v1/me")
+    assert blocked.status_code == 403, blocked.text
+    blocked_payload = blocked.json()
+    error_codes = {
+        item.get("code")
+        for item in blocked_payload.get("errors", [])
+        if isinstance(item, dict)
+    }
+    assert "password_change_required" in error_codes
+
+    bad_change = await async_client.post(
+        "/api/v1/auth/password/change",
+        headers={"X-CSRF-Token": user_csrf},
+        json={
+            "currentPassword": "wrong-password",
+            "newPassword": "NewPassword123!",
+        },
+    )
+    assert bad_change.status_code == 400, bad_change.text
+
+    apply_change = await async_client.post(
+        "/api/v1/auth/password/change",
+        headers={"X-CSRF-Token": user_csrf},
+        json={
+            "currentPassword": "Password123!",
+            "newPassword": "NewPassword123!",
+        },
+    )
+    assert apply_change.status_code == 204, apply_change.text
+
+    allowed = await async_client.get("/api/v1/me")
+    assert allowed.status_code == 200, allowed.text

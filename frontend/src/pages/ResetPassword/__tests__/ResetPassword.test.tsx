@@ -36,7 +36,7 @@ describe("ResetPasswordScreen", () => {
     mockUseAuthProvidersQuery.mockReset();
     mockCompletePasswordReset.mockReset();
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false, passwordResetEnabled: true },
+      data: { providers: [], mode: "password_only", passwordResetEnabled: true },
       isError: false,
       isFetching: false,
       isLoading: false,
@@ -118,7 +118,7 @@ describe("ResetPasswordScreen", () => {
 
   it("shows disabled messaging when password reset is turned off", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false, passwordResetEnabled: false },
+      data: { providers: [], mode: "password_only", passwordResetEnabled: false },
       isError: false,
       isFetching: false,
       isLoading: false,

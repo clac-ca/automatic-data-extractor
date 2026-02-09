@@ -70,8 +70,8 @@ export default function ForgotPasswordScreen() {
   const { session, isLoading: sessionLoading, isError: sessionError } = sessionQuery;
   const shouldCheckSetup = !session && !sessionLoading && !sessionError;
   const setupQuery = useSetupStatusQuery(shouldCheckSetup);
-  const forceSso = providersQuery.data?.forceSso ?? false;
-  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? !forceSso;
+  const authMode = providersQuery.data?.mode ?? "password_only";
+  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? authMode !== "idp_only";
   const providersLoadFailed = providersQuery.isError && !providersQuery.isFetching;
   const returnTo = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -82,7 +82,7 @@ export default function ForgotPasswordScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requestComplete, setRequestComplete] = useState(false);
-  const resetUnavailableMessage = forceSso
+  const resetUnavailableMessage = authMode === "idp_only"
     ? "Password reset is managed by your organization's identity provider. Use SSO sign-in or contact your administrator."
     : "Password reset is unavailable. Contact your administrator.";
 

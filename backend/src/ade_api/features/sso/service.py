@@ -7,7 +7,9 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Literal, NoReturn
 
+import httpx
 import sqlalchemy as sa
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +23,8 @@ from ade_api.common.problem_details import (
 )
 from ade_api.common.time import utc_now
 from ade_api.core.security.secrets import decrypt_secret, encrypt_secret
-from ade_api.features.system_settings.service import SystemSettingsService
+from ade_api.features.admin_settings.service import RuntimeSettingsService
+from ade_api.features.sso.oidc import OidcDiscoveryError, OidcMetadata, discover_metadata
 from ade_api.settings import Settings
 from ade_db.models import (
     SsoAuthState,
@@ -33,7 +36,6 @@ from ade_db.models import (
 logger = logging.getLogger(__name__)
 
 AUTH_STATE_TTL = timedelta(minutes=10)
-SSO_SETTINGS_KEY = "sso-settings"
 
 
 class AuthStateError(RuntimeError):
@@ -92,6 +94,22 @@ class SsoService:
         stmt = sa.select(SsoProvider).order_by(SsoProvider.id.asc())
         return list(self.session.execute(stmt).scalars())
 
+    @staticmethod
+    def db_status_to_ui_status(
+        status_value: SsoProviderStatus,
+    ) -> Literal["active", "disabled"]:
+        if status_value == SsoProviderStatus.ACTIVE:
+            return "active"
+        return "disabled"
+
+    @staticmethod
+    def ui_status_to_db_status(
+        status_value: Literal["active", "disabled"],
+    ) -> SsoProviderStatus:
+        if status_value == "active":
+            return SsoProviderStatus.ACTIVE
+        return SsoProviderStatus.DISABLED
+
     def get_provider(self, provider_id: str) -> SsoProvider:
         provider = self.session.get(SsoProvider, provider_id)
         if provider is None:
@@ -109,6 +127,13 @@ class SsoService:
         status_value: SsoProviderStatus,
         domains: Iterable[str],
     ) -> SsoProvider:
+        if status_value == SsoProviderStatus.ACTIVE:
+            self.validate_provider_configuration(
+                issuer=issuer,
+                client_id=client_id,
+                client_secret=client_secret,
+            )
+
         secret_enc = encrypt_secret(client_secret, self.settings)
         provider = SsoProvider(
             id=provider_id,
@@ -156,6 +181,29 @@ class SsoService:
     ) -> SsoProvider:
         provider = self.get_provider(provider_id)
         self._ensure_provider_mutable(provider)
+        target_status = status_value or provider.status
+        self._ensure_provider_status_change_allowed(
+            provider=provider,
+            target_status=target_status,
+        )
+
+        should_validate_active_provider = target_status == SsoProviderStatus.ACTIVE and (
+            provider.status != SsoProviderStatus.ACTIVE
+            or issuer is not None
+            or client_id is not None
+            or client_secret is not None
+        )
+
+        if should_validate_active_provider:
+            self.validate_provider_configuration(
+                issuer=issuer or provider.issuer,
+                client_id=client_id or provider.client_id,
+                client_secret=(
+                    client_secret
+                    if client_secret is not None
+                    else decrypt_secret(provider.client_secret_enc, self.settings)
+                ),
+            )
 
         if label is not None:
             provider.label = label
@@ -192,9 +240,27 @@ class SsoService:
         )
         return provider
 
+    def validate_provider_configuration(
+        self,
+        *,
+        issuer: str,
+        client_id: str,
+        client_secret: str,
+    ) -> OidcMetadata:
+        del client_id, client_secret
+        try:
+            with httpx.Client(follow_redirects=True) as client:
+                return discover_metadata(issuer, client)
+        except OidcDiscoveryError as exc:
+            self._raise_validation_error(exc)
+
     def delete_provider(self, provider_id: str) -> None:
         provider = self.get_provider(provider_id)
         self._ensure_provider_mutable(provider)
+        self._ensure_provider_status_change_allowed(
+            provider=provider,
+            target_status=SsoProviderStatus.DELETED,
+        )
         provider.status = SsoProviderStatus.DELETED
         self.session.flush()
         logger.info(
@@ -226,16 +292,10 @@ class SsoService:
         return self.session.execute(stmt).scalar_one_or_none()
 
     def is_sso_enabled(self) -> bool:
-        settings_service = SystemSettingsService(session=self.session)
-        record = settings_service.get(SSO_SETTINGS_KEY)
-        if record is None:
-            return True
-        return bool(record.get("enabled", True))
-
-    def set_sso_enabled(self, *, enabled: bool) -> bool:
-        settings_service = SystemSettingsService(session=self.session)
-        settings_service.upsert(SSO_SETTINGS_KEY, {"enabled": bool(enabled)})
-        return bool(enabled)
+        runtime = RuntimeSettingsService(
+            session=self.session,
+        ).get_effective_values()
+        return runtime.auth.mode in {"idp_only", "password_and_idp"}
 
     # -- Auth state -----------------------------------------------------
 
@@ -346,6 +406,48 @@ class SsoService:
                 detail="Provider must be fully configured to activate",
             )
 
+    def _ensure_provider_status_change_allowed(
+        self,
+        *,
+        provider: SsoProvider,
+        target_status: SsoProviderStatus,
+    ) -> None:
+        if provider.status != SsoProviderStatus.ACTIVE:
+            return
+        if target_status == SsoProviderStatus.ACTIVE:
+            return
+
+        runtime = RuntimeSettingsService(session=self.session).get_effective_values()
+        if runtime.auth.mode != "idp_only":
+            return
+
+        remaining_active = self.session.execute(
+            sa.select(sa.func.count())
+            .select_from(SsoProvider)
+            .where(SsoProvider.status == SsoProviderStatus.ACTIVE)
+            .where(SsoProvider.id != provider.id)
+        ).scalar_one()
+        if int(remaining_active) > 0:
+            return
+
+        raise ApiError(
+            error_type="validation_error",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Cannot disable the last active provider while identity provider-only sign-in is enabled."
+            ),
+            errors=[
+                ProblemDetailsErrorItem(
+                    path="status",
+                    message=(
+                        "At least one active provider is required while "
+                        "auth.mode is idp_only."
+                    ),
+                    code="active_provider_required",
+                )
+            ],
+        )
+
     def _ensure_provider_mutable(self, provider: SsoProvider) -> None:
         if not provider.locked:
             return
@@ -361,6 +463,37 @@ class SsoService:
                 )
             ],
         )
+
+    def _raise_validation_error(self, exc: OidcDiscoveryError) -> NoReturn:
+        cause = exc.__cause__
+        detail = str(exc)
+        normalized = detail.lower()
+
+        if isinstance(cause, httpx.TimeoutException):
+            code = "sso_validation_timeout"
+            message = "Issuer discovery timed out. Verify network access and try again."
+        elif "issuer mismatch" in normalized:
+            code = "sso_issuer_mismatch"
+            message = "Issuer validation failed because discovery metadata issuer did not match."
+        elif "missing required endpoints" in normalized or "not json" in normalized:
+            code = "sso_metadata_invalid"
+            message = "Issuer discovery metadata is invalid or incomplete."
+        else:
+            code = "sso_discovery_failed"
+            message = "Unable to discover OIDC metadata for the issuer."
+
+        raise ApiError(
+            error_type="validation_error",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=message,
+            errors=[
+                ProblemDetailsErrorItem(
+                    path="issuer",
+                    message=message,
+                    code=code,
+                )
+            ],
+        ) from exc
 
     def decrypt_client_secret(self, provider: SsoProvider) -> str:
         return decrypt_secret(provider.client_secret_enc, self.settings)

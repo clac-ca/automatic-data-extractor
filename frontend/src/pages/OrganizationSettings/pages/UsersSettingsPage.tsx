@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { buildWeakEtag } from "@/api/etag";
 import { mapUiError } from "@/api/uiErrors";
-import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 import {
   useAdminRolesQuery,
@@ -40,6 +39,11 @@ type KeyReveal = {
   readonly secret: string;
 };
 
+type ProvisionedPassword = {
+  readonly email: string;
+  readonly secret: string;
+};
+
 const SIMPLE_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function UsersSettingsPage() {
@@ -54,7 +58,6 @@ export function UsersSettingsPage() {
 
   const usersQuery = useAdminUsersQuery({ enabled: canReadUsers, pageSize: 100 });
   const rolesQuery = useAdminRolesQuery("global");
-  const authProvidersQuery = useAuthProvidersQuery();
 
   const createUser = useCreateAdminUserMutation();
   const updateUser = useUpdateAdminUserMutation();
@@ -65,15 +68,18 @@ export function UsersSettingsPage() {
   const revokeUserApiKey = useRevokeAdminUserApiKeyMutation();
 
   const [feedbackMessage, setFeedbackMessage] = useState<FeedbackMessage | null>(null);
+  const [provisionedPassword, setProvisionedPassword] = useState<ProvisionedPassword | null>(
+    null,
+  );
+  const [provisionedCopyStatus, setProvisionedCopyStatus] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
 
   const users = usersQuery.users;
   const selectedParam = params[0];
   const isCreateOpen = selectedParam === "new";
   const selectedUserId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
   const selectedUser = users.find((entry) => entry.id === selectedUserId);
-
-  const providers = authProvidersQuery.data?.providers ?? [];
-  const ssoEnabled = providers.some((provider) => provider.type === "oidc");
 
   const basePath = "/organization/users";
   const suffix = `${location.search}${location.hash}`;
@@ -92,6 +98,53 @@ export function UsersSettingsPage() {
   return (
     <div className="space-y-6">
       {feedbackMessage ? <Alert tone={feedbackMessage.tone}>{feedbackMessage.message}</Alert> : null}
+      {provisionedPassword ? (
+        <div className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+          <p className="text-sm font-semibold text-warning-foreground">
+            Copy the initial password for {provisionedPassword.email}
+          </p>
+          <p className="text-xs text-warning-foreground/90">
+            This password is shown only once. Store it securely and share it through a trusted channel.
+          </p>
+          <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+            <code className="break-all text-xs text-foreground">{provisionedPassword.secret}</code>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(provisionedPassword.secret);
+                    setProvisionedCopyStatus("copied");
+                  } catch {
+                    setProvisionedCopyStatus("failed");
+                  }
+                }}
+              >
+                Copy
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setProvisionedPassword(null);
+                  setProvisionedCopyStatus("idle");
+                }}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+          {provisionedCopyStatus === "copied" ? (
+            <p className="text-xs text-success">Password copied to clipboard.</p>
+          ) : null}
+          {provisionedCopyStatus === "failed" ? (
+            <p className="text-xs text-destructive">Unable to copy. Copy manually.</p>
+          ) : null}
+        </div>
+      ) : null}
       {usersQuery.isError ? (
         <Alert tone="danger">
           {mapUiError(usersQuery.error, { fallback: "Unable to load users." }).message}
@@ -103,18 +156,12 @@ export function UsersSettingsPage() {
         description={usersQuery.isLoading ? "Loading users..." : `${users.length} users`}
         actions={
           canManageUsers ? (
-            <Button type="button" size="sm" onClick={openCreateDrawer} disabled={!ssoEnabled}>
+            <Button type="button" size="sm" onClick={openCreateDrawer}>
               Create user
             </Button>
           ) : null
         }
       >
-        {!ssoEnabled ? (
-          <Alert tone="info">
-            User creation is available only when SSO providers are configured.
-          </Alert>
-        ) : null}
-
         {usersQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading users...</p>
         ) : users.length === 0 ? (
@@ -232,13 +279,27 @@ export function UsersSettingsPage() {
 
       <CreateUserDrawer
         open={isCreateOpen && canManageUsers}
-        canCreate={ssoEnabled}
         onClose={closeDrawer}
-        onSubmit={async ({ email, displayName }) => {
+        onSubmit={async ({ email, displayName, passwordProfile }) => {
           setFeedbackMessage(null);
+          setProvisionedPassword(null);
+          setProvisionedCopyStatus("idle");
           try {
-            await createUser.mutateAsync({ email, display_name: displayName || null });
+            const created = await createUser.mutateAsync({
+              email,
+              displayName: displayName || null,
+              passwordProfile,
+            });
             setFeedbackMessage({ tone: "success", message: "User created." });
+            if (
+              created.passwordProvisioning.mode === "auto_generate" &&
+              created.passwordProvisioning.initialPassword
+            ) {
+              setProvisionedPassword({
+                email: created.user.email,
+                secret: created.passwordProvisioning.initialPassword,
+              });
+            }
             closeDrawer();
           } catch (error) {
             const mapped = mapUiError(error, { fallback: "Unable to create user." });
@@ -319,28 +380,44 @@ export function UsersSettingsPage() {
 
 function CreateUserDrawer({
   open,
-  canCreate,
   onClose,
   onSubmit,
   isSubmitting,
 }: {
   readonly open: boolean;
-  readonly canCreate: boolean;
   readonly onClose: () => void;
-  readonly onSubmit: (input: { email: string; displayName: string }) => Promise<void>;
+  readonly onSubmit: (input: {
+    email: string;
+    displayName: string;
+    passwordProfile: {
+      mode: "auto_generate" | "explicit";
+      password?: string;
+      forceChangeOnNextSignIn: boolean;
+    };
+  }) => Promise<void>;
   readonly isSubmitting: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [passwordMode, setPasswordMode] = useState<"auto_generate" | "explicit">("auto_generate");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [forceChangeOnNextSignIn, setForceChangeOnNextSignIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setEmail("");
       setDisplayName("");
+      setPasswordMode("auto_generate");
+      setPassword("");
+      setConfirmPassword("");
+      setForceChangeOnNextSignIn(false);
       setError(null);
       setEmailError(null);
+      setPasswordError(null);
     }
   }, [open]);
 
@@ -348,10 +425,7 @@ function CreateUserDrawer({
     event.preventDefault();
     setError(null);
     setEmailError(null);
-    if (!canCreate) {
-      setError("SSO must be configured before creating users.");
-      return;
-    }
+    setPasswordError(null);
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setEmailError("Email is required.");
@@ -361,8 +435,34 @@ function CreateUserDrawer({
       setEmailError("Enter a valid email address.");
       return;
     }
+
+    if (passwordMode === "explicit") {
+      if (!password) {
+        setPasswordError("Password is required in explicit mode.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setPasswordError("Password and confirmation must match.");
+        return;
+      }
+    }
+
     try {
-      await onSubmit({ email: trimmedEmail, displayName: displayName.trim() });
+      await onSubmit({
+        email: trimmedEmail,
+        displayName: displayName.trim(),
+        passwordProfile:
+          passwordMode === "explicit"
+            ? {
+                mode: "explicit",
+                password,
+                forceChangeOnNextSignIn,
+              }
+            : {
+                mode: "auto_generate",
+                forceChangeOnNextSignIn,
+              },
+      });
     } catch (submitError) {
       const mapped = mapUiError(submitError, { fallback: "Unable to create user." });
       setError(mapped.message);
@@ -374,7 +474,7 @@ function CreateUserDrawer({
       open={open}
       onClose={onClose}
       title="Create user"
-      description="Pre-provision an SSO user account."
+      description="Provision a user and choose how their initial password is set."
     >
       <form className="space-y-4" onSubmit={handleSubmit}>
         {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -383,7 +483,7 @@ function CreateUserDrawer({
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="user@example.com"
-            disabled={isSubmitting || !canCreate}
+            disabled={isSubmitting}
           />
         </FormField>
         <FormField label="Display name">
@@ -391,15 +491,75 @@ function CreateUserDrawer({
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="Optional"
-            disabled={isSubmitting || !canCreate}
+            disabled={isSubmitting}
           />
         </FormField>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-foreground">Initial password</legend>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="radio"
+              name="password-mode"
+              checked={passwordMode === "auto_generate"}
+              onChange={() => setPasswordMode("auto_generate")}
+              disabled={isSubmitting}
+            />
+            Auto-generate password
+          </label>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="radio"
+              name="password-mode"
+              checked={passwordMode === "explicit"}
+              onChange={() => setPasswordMode("explicit")}
+              disabled={isSubmitting}
+            />
+            Set password manually
+          </label>
+        </fieldset>
+
+        {passwordMode === "explicit" ? (
+          <>
+            <FormField label="Password" required error={passwordError}>
+              <Input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={isSubmitting}
+              />
+            </FormField>
+            <FormField label="Confirm password" required>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                disabled={isSubmitting}
+              />
+            </FormField>
+          </>
+        ) : (
+          <Alert tone="info">
+            A compliant random password will be generated and shown once after user creation.
+          </Alert>
+        )}
+
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-border"
+            checked={forceChangeOnNextSignIn}
+            onChange={(event) => setForceChangeOnNextSignIn(event.target.checked)}
+            disabled={isSubmitting}
+          />
+          Force password change on next sign-in
+        </label>
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting || !canCreate}>
+          <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Creating..." : "Create user"}
           </Button>
         </div>

@@ -50,6 +50,7 @@ This documentation is written for people who operate ADE in production and contr
 | Improve processing capacity | [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md) |
 | Run migrations or resets safely | [Run Migrations and Resets](how-to/run-migrations-and-resets.md) |
 | Manage users and permissions | [Manage Users and Access](how-to/manage-users-and-access.md) |
+| Update runtime safe mode and SSO policy settings | [Manage Runtime Settings](how-to/manage-runtime-settings.md) |
 | Operate auth and SSO policy | [Auth Operations Runbook](how-to/auth-operations.md) |
 | Run auth rollout smoke checks | [Auth Rollout and Smoke Checklist](how-to/auth-rollout-and-smoke-checklist.md) |
 | Authenticate API requests with API key | [Authenticate with API Key](how-to/api-authenticate-with-api-key.md) |
@@ -76,6 +77,7 @@ This documentation is written for people who operate ADE in production and contr
   - [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md)
   - [Run Migrations and Resets](how-to/run-migrations-and-resets.md)
   - [Manage Users and Access](how-to/manage-users-and-access.md)
+  - [Manage Runtime Settings](how-to/manage-runtime-settings.md)
   - [Auth Operations Runbook](how-to/auth-operations.md)
   - [Auth Rollout and Smoke Checklist](how-to/auth-rollout-and-smoke-checklist.md)
   - [Authenticate with API Key](how-to/api-authenticate-with-api-key.md)

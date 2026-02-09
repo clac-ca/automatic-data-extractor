@@ -31,6 +31,7 @@ from ..authn.schemas import (
     AuthMfaEnrollConfirmResponse,
     AuthMfaEnrollStartResponse,
     AuthMfaStatusResponse,
+    AuthPasswordChangeRequest,
     AuthPasswordForgotRequest,
     AuthPasswordResetRequest,
 )
@@ -68,11 +69,8 @@ def create_auth_router(settings: Settings) -> APIRouter:
         payload: AuthSetupRequest,
         request: Request,
     ) -> Response:
-        from ade_api.core.security import hash_password
         from ade_api.db import get_session_factory
         from ade_api.features.authn.service import AuthnService
-
-        password_hash = hash_password(payload.password.get_secret_value())
 
         try:
             session_factory = get_session_factory(request)
@@ -81,10 +79,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
                 with session_factory() as session:
                     with session.begin():
                         local_service = AuthService(session=session, settings=settings)
-                        user = local_service.create_first_admin(
-                            payload,
-                            password_hash=password_hash,
-                        )
+                        user = local_service.create_first_admin(payload)
                         authn = AuthnService(session=session, settings=settings)
                         token = authn.create_session(user_id=user.id, auth_method="password")
                         return user, token
@@ -118,7 +113,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
                 provider_items.append(item.model_copy(update={"start_url": "/api/v1/auth/login"}))
         return AuthProviderListResponse(
             providers=provider_items,
-            force_sso=payload.force_sso,
+            mode=payload.mode,
             password_reset_enabled=payload.password_reset_enabled,
         )
 
@@ -159,6 +154,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
             content=AuthLoginSuccess(
                 mfaSetupRecommended=login_result.mfa_setup_recommended,
                 mfaSetupRequired=login_result.mfa_setup_required,
+                passwordChangeRequired=login_result.password_change_required,
             ).model_dump_json(),
             media_type="application/json",
             status_code=status.HTTP_200_OK,
@@ -209,6 +205,25 @@ def create_auth_router(settings: Settings) -> APIRouter:
         service = AuthnService(session=db, settings=settings)
         service.reset_password(
             token=payload.token.get_secret_value(),
+            new_password=payload.new_password.get_secret_value(),
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.post(
+        "/password/change",
+        dependencies=[Depends(require_csrf)],
+        status_code=status.HTTP_204_NO_CONTENT,
+        summary="Change password for the current authenticated user",
+    )
+    def password_change(
+        payload: AuthPasswordChangeRequest,
+        user: Annotated[User, Security(require_authenticated)],
+        db=Depends(get_db_write),
+    ) -> Response:
+        service = AuthnService(session=db, settings=settings)
+        service.change_password(
+            user=user,
+            current_password=payload.current_password.get_secret_value(),
             new_password=payload.new_password.get_secret_value(),
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -302,16 +317,20 @@ def create_auth_router(settings: Settings) -> APIRouter:
         db=Depends(get_db_write),
     ) -> AuthLoginSuccess:
         service = AuthnService(session=db, settings=settings)
-        token = service.verify_challenge(
+        login_result = service.verify_challenge(
             challenge_token=payload.challenge_token,
             code=payload.code,
         )
         response = Response(
-            content=AuthLoginSuccess().model_dump_json(),
+            content=AuthLoginSuccess(
+                mfaSetupRecommended=login_result.mfa_setup_recommended,
+                mfaSetupRequired=login_result.mfa_setup_required,
+                passwordChangeRequired=login_result.password_change_required,
+            ).model_dump_json(),
             media_type="application/json",
             status_code=status.HTTP_200_OK,
         )
-        set_session_cookie(response, settings, token)
+        set_session_cookie(response, settings, login_result.session_token)
         set_csrf_cookie(response, settings)
         return response  # type: ignore[return-value]
 

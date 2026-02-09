@@ -17,7 +17,8 @@ Azure Container Apps production deployments should set values explicitly in app 
 | --- | --- | --- | --- | --- |
 | `ADE_AUTH_DISABLED` | `false` | `true` | `false` | `false` |
 | `ADE_AUTH_PASSWORD_RESET_ENABLED` | `true` | inherited app default | inherited app default | inherited app default |
-| `ADE_AUTH_ENFORCE_LOCAL_MFA` | `false` | inherited app default | inherited app default | inherited app default |
+| `ADE_AUTH_PASSWORD_MFA_REQUIRED` | `false` | inherited app default | inherited app default | inherited app default |
+| `ADE_AUTH_MODE` | `password_only` | inherited app default | inherited app default | inherited app default |
 | `ADE_SERVICES` | `api,worker,web` | `api,worker,web` | `api,worker,web` | app=`api,web`, worker=`worker` |
 
 ## API Runtime Hardening Defaults

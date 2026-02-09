@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import timedelta
 from uuid import UUID
 
@@ -17,14 +16,28 @@ from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
 from ade_api.core.security.hashing import hash_password
+from ade_api.core.security.password_policy import (
+    PasswordComplexityPolicy,
+    enforce_password_complexity,
+    generate_password_for_policy,
+)
 from ade_api.features.api_keys.service import ApiKeyService
+from ade_api.features.admin_settings.service import RuntimeSettingsService
 from ade_api.features.rbac import RbacService
 from ade_db.models import User
 from ade_api.settings import Settings
 
 from .filters import apply_user_filters
 from .repository import UsersRepository
-from .schemas import UserOut, UserPage, UserProfile, UserUpdate
+from .schemas import (
+    UserCreateResponse,
+    UserOut,
+    UserPage,
+    UserPasswordProfile,
+    UserPasswordProvisioning,
+    UserProfile,
+    UserUpdate,
+)
 
 logger = logging.getLogger(__name__)
 LOCKOUT_HORIZON = timedelta(days=365 * 10)
@@ -37,6 +50,7 @@ class UsersService:
         self._session = session
         self._repo = UsersRepository(session)
         self._api_keys = ApiKeyService(session=session, settings=settings)
+        self._runtime_settings = RuntimeSettingsService(session=session)
 
     def get_profile(self, *, user: User) -> UserProfile:
         """Return the profile for the authenticated user."""
@@ -136,7 +150,8 @@ class UsersService:
         *,
         email: str,
         display_name: str | None = None,
-    ) -> UserOut:
+        password_profile: UserPasswordProfile,
+    ) -> UserCreateResponse:
         """Create an active pre-provisioned user account."""
 
         canonical_email = email.strip().lower()
@@ -160,7 +175,35 @@ class UsersService:
                 detail="Email already in use",
             )
 
-        password_hash = hash_password(secrets.token_urlsafe(48))
+        runtime = self._runtime_settings.get_effective_values()
+        complexity = runtime.auth.password.complexity
+        policy = PasswordComplexityPolicy(
+            min_length=complexity.min_length,
+            require_uppercase=complexity.require_uppercase,
+            require_lowercase=complexity.require_lowercase,
+            require_number=complexity.require_number,
+            require_symbol=complexity.require_symbol,
+        )
+
+        initial_password: str | None = None
+        if password_profile.mode == "explicit":
+            if password_profile.password is None:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="password is required when mode is explicit.",
+                )
+            explicit_password = password_profile.password.get_secret_value()
+            enforce_password_complexity(
+                explicit_password,
+                policy=policy,
+                field_path="passwordProfile.password",
+            )
+            password_hash = hash_password(explicit_password)
+        else:
+            generated_password = generate_password_for_policy(policy=policy)
+            password_hash = hash_password(generated_password)
+            initial_password = generated_password
+
         try:
             user = self._repo.create(
                 email=canonical_email,
@@ -169,6 +212,7 @@ class UsersService:
                 is_active=True,
                 is_service_account=False,
                 is_verified=True,
+                must_change_password=bool(password_profile.force_change_on_next_sign_in),
             )
         except IntegrityError as exc:
             raise HTTPException(
@@ -194,7 +238,14 @@ class UsersService:
                 has_display_name=bool(cleaned_display_name),
             ),
         )
-        return self._serialize_user(user)
+        return UserCreateResponse(
+            user=self._serialize_user(user),
+            passwordProvisioning=UserPasswordProvisioning(
+                mode=password_profile.mode,
+                initialPassword=initial_password,
+                forceChangeOnNextSignIn=bool(password_profile.force_change_on_next_sign_in),
+            ),
+        )
 
     def update_user(
         self,
@@ -373,6 +424,18 @@ class UsersService:
                 detail="Email already in use",
             )
 
+        complexity = self._runtime_settings.get_effective_values().auth.password.complexity
+        enforce_password_complexity(
+            password,
+            policy=PasswordComplexityPolicy(
+                min_length=complexity.min_length,
+                require_uppercase=complexity.require_uppercase,
+                require_lowercase=complexity.require_lowercase,
+                require_number=complexity.require_number,
+                require_symbol=complexity.require_symbol,
+            ),
+            field_path="password",
+        )
         password_hash = hash_password(password)
         cleaned_display_name = display_name.strip() if display_name else None
 

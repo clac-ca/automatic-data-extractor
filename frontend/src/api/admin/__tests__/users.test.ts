@@ -30,12 +30,36 @@ describe("admin users api", () => {
   });
 
   it("creates and updates users", async () => {
-    (client.POST as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: "u1" } });
+    (client.POST as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        user: { id: "u1" },
+        passwordProvisioning: {
+          mode: "explicit",
+          forceChangeOnNextSignIn: false,
+        },
+      },
+    });
     (client.PATCH as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { id: "u1" } });
 
-    await createAdminUser({ email: "u@example.com", display_name: "User" });
+    await createAdminUser({
+      email: "u@example.com",
+      displayName: "User",
+      passwordProfile: {
+        mode: "explicit",
+        password: "Password123!",
+        forceChangeOnNextSignIn: false,
+      },
+    });
     expect(client.POST).toHaveBeenCalledWith("/api/v1/users", {
-      body: { email: "u@example.com", display_name: "User" },
+      body: {
+        email: "u@example.com",
+        displayName: "User",
+        passwordProfile: {
+          mode: "explicit",
+          password: "Password123!",
+          forceChangeOnNextSignIn: false,
+        },
+      },
     });
 
     await updateAdminUser("u1", { display_name: "Updated" });

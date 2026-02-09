@@ -52,15 +52,23 @@ See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact m
 
 | Variable | Component | Required Scope | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `ADE_SAFE_MODE` | API/system | optional | `false` | disables engine execution paths when true |
+| `ADE_SAFE_MODE` | API/system | optional | unset (no override) | env override for `safeMode.enabled` runtime setting |
+| `ADE_SAFE_MODE_DETAIL` | API/system | optional | unset (no override) | env override for `safeMode.detail` runtime setting |
 | `ADE_AUTH_DISABLED` | API auth | dev-only optional | local compose `true`, app default `false` | never enable in production |
 | `ADE_AUTH_DISABLED_USER_EMAIL` | API auth bypass | optional | `developer@example.com` | used only in auth-disabled mode |
 | `ADE_AUTH_DISABLED_USER_NAME` | API auth bypass | optional | `Development User` | used only in auth-disabled mode |
 | `ADE_ALLOW_PUBLIC_REGISTRATION` | API auth policy | optional | `false` | allows open user signup |
-| `ADE_AUTH_FORCE_SSO` | API auth policy | optional | `false` | enforce SSO for non-global-admin local login |
+| `ADE_AUTH_MODE` | API auth policy | optional | `password_only` | runtime auth mode (`password_only`, `idp_only`, `password_and_idp`) |
 | `ADE_AUTH_PASSWORD_RESET_ENABLED` | API auth policy | optional | `true` | enable/disable public forgot/reset password endpoints and UI |
-| `ADE_AUTH_ENFORCE_LOCAL_MFA` | API auth policy | optional | `false` | require MFA enrollment for password-authenticated sessions before protected API access |
-| `ADE_AUTH_SSO_AUTO_PROVISION` | API auth policy | optional | `false` | create users automatically from SSO |
+| `ADE_AUTH_PASSWORD_MFA_REQUIRED` | API auth policy | optional | `false` | require MFA enrollment for password-authenticated sessions before protected API access |
+| `ADE_AUTH_PASSWORD_MIN_LENGTH` | API auth policy | optional | `12` | minimum password length for password-authenticated flows |
+| `ADE_AUTH_PASSWORD_REQUIRE_UPPERCASE` | API auth policy | optional | `false` | require uppercase in passwords |
+| `ADE_AUTH_PASSWORD_REQUIRE_LOWERCASE` | API auth policy | optional | `false` | require lowercase in passwords |
+| `ADE_AUTH_PASSWORD_REQUIRE_NUMBER` | API auth policy | optional | `false` | require numeric characters in passwords |
+| `ADE_AUTH_PASSWORD_REQUIRE_SYMBOL` | API auth policy | optional | `false` | require symbols in passwords |
+| `ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS` | API auth policy | optional | `5` | failed password attempts before lockout |
+| `ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS` | API auth policy | optional | `300` | lockout duration in seconds after threshold is reached |
+| `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED` | API auth policy | optional | `true` | runtime override for IdP JIT provisioning policy |
 | `ADE_AUTH_SSO_PROVIDERS_JSON` | API SSO | optional | none | provider settings payload |
 | `ADE_SSO_ENCRYPTION_KEY` | API SSO | optional | none | encryption key for SSO secrets |
 | `ADE_SESSION_COOKIE_DOMAIN` | API sessions | optional | none | override cookie domain |
@@ -69,11 +77,50 @@ See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact m
 | `ADE_SESSION_COOKIE_PATH` | API sessions | optional | `/` | cookie path |
 | `ADE_SESSION_ACCESS_TTL` | API sessions | optional | `14 days` | session lifetime |
 
+User provisioning controls are API-level (not env vars):
+
+- `POST /api/v1/users` `passwordProfile.mode` (`explicit` or `auto_generate`)
+- `POST /api/v1/users` `passwordProfile.forceChangeOnNextSignIn`
+
 Auth transport contract:
 
 - Browser auth uses session cookies + CSRF.
 - API keys are accepted via `X-API-Key`.
 - `Authorization: Bearer` is not an API-key transport.
+
+### Runtime Settings Override Behavior
+
+The runtime-setting env vars below are overrides, not primary storage:
+
+- `ADE_SAFE_MODE`
+- `ADE_SAFE_MODE_DETAIL`
+- `ADE_AUTH_MODE`
+- `ADE_AUTH_PASSWORD_RESET_ENABLED`
+- `ADE_AUTH_PASSWORD_MFA_REQUIRED`
+- `ADE_AUTH_PASSWORD_MIN_LENGTH`
+- `ADE_AUTH_PASSWORD_REQUIRE_UPPERCASE`
+- `ADE_AUTH_PASSWORD_REQUIRE_LOWERCASE`
+- `ADE_AUTH_PASSWORD_REQUIRE_NUMBER`
+- `ADE_AUTH_PASSWORD_REQUIRE_SYMBOL`
+- `ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS`
+- `ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS`
+- `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED`
+
+Runtime settings are resolved as:
+
+1. env override
+2. DB value (`application_settings.data`)
+3. code default
+
+When an override is present, the field is locked in API/UI and managed by environment + restart workflow.
+Use [Manage Runtime Settings](../how-to/manage-runtime-settings.md) for full update examples and failure handling.
+
+Removed auth env vars that are no longer accepted:
+
+- `ADE_AUTH_EXTERNAL_ENABLED`
+- `ADE_AUTH_FORCE_SSO`
+- `ADE_AUTH_SSO_AUTO_PROVISION`
+- `ADE_AUTH_ENFORCE_LOCAL_MFA`
 
 ## API and Worker Capacity
 

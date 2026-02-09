@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ade_api.features.admin_settings.router import router as admin_settings_router
 from ade_api.features.api_keys.router import router as api_keys_router
 from ade_api.features.auth.router import create_auth_router
 from ade_api.features.configs.router import router as configurations_router
@@ -17,7 +18,6 @@ from ade_api.features.rbac.router import router as rbac_router
 from ade_api.features.rbac.router import user_roles_router as rbac_user_roles_router
 from ade_api.features.runs.router import router as runs_router
 from ade_api.features.sso.router import router as sso_router
-from ade_api.features.system_settings.router import router as system_router
 from ade_api.features.users.router import router as users_router
 from ade_api.features.workspaces.members import router as workspace_members_router
 from ade_api.features.workspaces.router import router as workspaces_router
@@ -44,7 +44,7 @@ def create_api_router(settings: Settings) -> APIRouter:
     api_router.include_router(configurations_router)
     api_router.include_router(runs_router)
     api_router.include_router(sso_router)
-    api_router.include_router(system_router)
+    api_router.include_router(admin_settings_router)
     return api_router
 
 

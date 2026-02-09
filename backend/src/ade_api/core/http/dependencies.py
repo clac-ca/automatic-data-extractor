@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.common.time import utc_now
 from ade_api.db import get_db_read, get_session_factory
-from ade_db.models import AUTH_SESSION_AUTH_METHOD_VALUES, ApiKey, AuthSession, User
 from ade_api.settings import Settings, get_settings
+from ade_db.models import AUTH_SESSION_AUTH_METHOD_VALUES, ApiKey, AuthSession, User
 
 from ..auth import (
     AuthenticatedPrincipal,
@@ -34,6 +34,12 @@ PermissionDependency = Callable[..., User]
 _KNOWN_AUTH_METHODS = set(AUTH_SESSION_AUTH_METHOD_VALUES)
 _MFA_SETUP_ALLOWLIST = {
     "/api/v1/auth/logout",
+    "/api/v1/auth/password/change",
+    "/api/v1/me/bootstrap",
+}
+_PASSWORD_CHANGE_ALLOWLIST = {
+    "/api/v1/auth/logout",
+    "/api/v1/auth/password/change",
     "/api/v1/me/bootstrap",
 }
 
@@ -283,10 +289,15 @@ def get_current_principal(
         api_key_service=api_key_service,
         cookie_service=cookie_service,
     )
-    _enforce_local_mfa_onboarding(
+    _enforce_password_mfa_onboarding(
         request=request,
         db=db,
         settings=settings,
+        principal=principal,
+    )
+    _enforce_password_change_requirement(
+        request=request,
+        db=db,
         principal=principal,
     )
     return principal
@@ -306,15 +317,22 @@ def _is_mfa_allowlisted_path(path: str) -> bool:
     return False
 
 
-def _enforce_local_mfa_onboarding(
+def _is_password_change_allowlisted_path(path: str) -> bool:
+    normalized = path.rstrip("/") or "/"
+    if normalized in _PASSWORD_CHANGE_ALLOWLIST:
+        return True
+    if normalized.startswith("/api/v1/auth/mfa/totp"):
+        return True
+    return False
+
+
+def _enforce_password_mfa_onboarding(
     *,
     request: Request,
     db: Session,
     settings: Settings,
     principal: AuthenticatedPrincipal,
 ) -> None:
-    if not settings.auth_enforce_local_mfa:
-        return
     if principal.auth_via is not AuthVia.SESSION:
         return
     if principal.session_auth_method != "password":
@@ -325,6 +343,8 @@ def _enforce_local_mfa_onboarding(
     from ade_api.features.authn.service import AuthnService
 
     authn = AuthnService(session=db, settings=settings)
+    if not authn.get_policy().password_mfa_required:
+        return
     if authn.has_mfa_enabled(user_id=principal.user_id):
         return
 
@@ -335,6 +355,34 @@ def _enforce_local_mfa_onboarding(
             "message": (
                 "Multi-factor authentication setup is required before continuing."
             ),
+        },
+    )
+
+
+def _enforce_password_change_requirement(
+    *,
+    request: Request,
+    db: Session,
+    principal: AuthenticatedPrincipal,
+) -> None:
+    if principal.auth_via is not AuthVia.SESSION:
+        return
+    if principal.session_auth_method != "password":
+        return
+    if _is_password_change_allowlisted_path(request.url.path):
+        return
+
+    user = db.get(User, principal.user_id)
+    if user is None:
+        return
+    if not bool(user.must_change_password):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "password_change_required",
+            "message": "You must change your password before continuing.",
         },
     )
 

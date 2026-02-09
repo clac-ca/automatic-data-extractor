@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import EmailStr, Field, SecretStr
 
@@ -19,6 +20,7 @@ class AuthLoginSuccess(BaseSchema):
     mfa_required: bool = False
     mfa_setup_recommended: bool = Field(default=False, alias="mfaSetupRecommended")
     mfa_setup_required: bool = Field(default=False, alias="mfaSetupRequired")
+    password_change_required: bool = Field(default=False, alias="passwordChangeRequired")
 
 
 class AuthLoginMfaRequired(BaseSchema):
@@ -33,6 +35,11 @@ class AuthPasswordForgotRequest(BaseSchema):
 
 class AuthPasswordResetRequest(BaseSchema):
     token: SecretStr
+    new_password: SecretStr = Field(..., alias="newPassword")
+
+
+class AuthPasswordChangeRequest(BaseSchema):
+    current_password: SecretStr = Field(..., alias="currentPassword")
     new_password: SecretStr = Field(..., alias="newPassword")
 
 
@@ -78,15 +85,17 @@ class AuthMfaChallengeVerifyRequest(BaseSchema):
 
 
 class AuthPolicyResponse(BaseSchema):
-    external_enabled: bool = Field(default=False, alias="externalEnabled")
-    enforce_sso: bool = Field(default=False, alias="enforceSso")
-    allow_jit_provisioning: bool = Field(default=True, alias="allowJitProvisioning")
-
-
-class AuthPolicyUpdateRequest(BaseSchema):
-    external_enabled: bool = Field(alias="externalEnabled")
-    enforce_sso: bool = Field(alias="enforceSso")
-    allow_jit_provisioning: bool = Field(alias="allowJitProvisioning")
+    mode: Literal["password_only", "idp_only", "password_and_idp"]
+    password_reset_enabled: bool = Field(default=True, alias="passwordResetEnabled")
+    password_mfa_required: bool = Field(default=False, alias="passwordMfaRequired")
+    password_min_length: int = Field(default=12, alias="passwordMinLength")
+    password_require_uppercase: bool = Field(default=False, alias="passwordRequireUppercase")
+    password_require_lowercase: bool = Field(default=False, alias="passwordRequireLowercase")
+    password_require_number: bool = Field(default=False, alias="passwordRequireNumber")
+    password_require_symbol: bool = Field(default=False, alias="passwordRequireSymbol")
+    password_lockout_max_attempts: int = Field(default=5, alias="passwordLockoutMaxAttempts")
+    password_lockout_duration_seconds: int = Field(default=300, alias="passwordLockoutDurationSeconds")
+    idp_jit_provisioning_enabled: bool = Field(default=True, alias="idpJitProvisioningEnabled")
 
 
 class AuthMfaRecoveryRegenerateRequest(BaseSchema):
@@ -108,7 +117,7 @@ __all__ = [
     "AuthMfaStatusResponse",
     "AuthMfaEnrollStartResponse",
     "AuthPasswordForgotRequest",
+    "AuthPasswordChangeRequest",
     "AuthPasswordResetRequest",
     "AuthPolicyResponse",
-    "AuthPolicyUpdateRequest",
 ]

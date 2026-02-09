@@ -78,7 +78,15 @@ async def test_create_user_requires_admin(
     response = await async_client.post(
         "/api/v1/users",
         headers={"X-API-Key": token},
-        json={"email": "new-user@example.com", "display_name": "New User"},
+        json={
+            "email": "new-user@example.com",
+            "displayName": "New User",
+            "passwordProfile": {
+                "mode": "explicit",
+                "password": "Password123!",
+                "forceChangeOnNextSignIn": False,
+            },
+        },
     )
     assert response.status_code == 403
 
@@ -95,15 +103,26 @@ async def test_create_user_admin_success(
     response = await async_client.post(
         "/api/v1/users",
         headers={"X-API-Key": token},
-        json={"email": "new-user@example.com", "display_name": " New User "},
+        json={
+            "email": "new-user@example.com",
+            "displayName": " New User ",
+            "passwordProfile": {
+                "mode": "explicit",
+                "password": "Password123!",
+                "forceChangeOnNextSignIn": False,
+            },
+        },
     )
     assert response.status_code == 201, response.text
     data = response.json()
-    assert data["email"] == "new-user@example.com"
-    assert data["display_name"] == "New User"
-    assert data["is_active"] is True
-    assert data["is_service_account"] is False
-    assert "global-user" in data["roles"]
+    assert data["user"]["email"] == "new-user@example.com"
+    assert data["user"]["display_name"] == "New User"
+    assert data["user"]["is_active"] is True
+    assert data["user"]["is_service_account"] is False
+    assert "global-user" in data["user"]["roles"]
+    assert data["passwordProvisioning"]["mode"] == "explicit"
+    assert "initialPassword" not in data["passwordProvisioning"]
+    assert data["passwordProvisioning"]["forceChangeOnNextSignIn"] is False
 
 
 async def test_create_user_conflict(
@@ -118,9 +137,45 @@ async def test_create_user_conflict(
     response = await async_client.post(
         "/api/v1/users",
         headers={"X-API-Key": token},
-        json={"email": seed_identity.member.email},
+        json={
+            "email": seed_identity.member.email,
+            "passwordProfile": {
+                "mode": "explicit",
+                "password": "Password123!",
+                "forceChangeOnNextSignIn": False,
+            },
+        },
     )
     assert response.status_code == 409
+
+
+async def test_create_user_auto_generate_returns_one_time_password(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    response = await async_client.post(
+        "/api/v1/users",
+        headers={"X-API-Key": token},
+        json={
+            "email": "generated-user@example.com",
+            "displayName": "Generated User",
+            "passwordProfile": {
+                "mode": "auto_generate",
+                "forceChangeOnNextSignIn": True,
+            },
+        },
+    )
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["user"]["email"] == "generated-user@example.com"
+    assert payload["passwordProvisioning"]["mode"] == "auto_generate"
+    generated = payload["passwordProvisioning"]["initialPassword"]
+    assert isinstance(generated, str)
+    assert len(generated) >= 12
+    assert payload["passwordProvisioning"]["forceChangeOnNextSignIn"] is True
 
 
 async def test_get_user_requires_admin(

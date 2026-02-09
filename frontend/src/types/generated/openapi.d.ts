@@ -245,6 +245,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change password for the current authenticated user */
+        post: operations["password_change_api_v1_auth_password_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/mfa/totp/enroll/start": {
         parameters: {
             query?: never;
@@ -1854,6 +1871,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sso/providers/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate SSO provider configuration (admin) */
+        post: operations["validate_provider_api_v1_admin_sso_providers_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/sso/providers/{id}": {
         parameters: {
             query?: never;
@@ -1873,52 +1907,50 @@ export type paths = {
         patch: operations["update_provider_api_v1_admin_sso_providers__id__patch"];
         trace?: never;
     };
-    "/api/v1/admin/sso/settings": {
+    "/api/v1/admin/settings": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read SSO global settings (admin) */
-        get: operations["read_sso_settings_api_v1_admin_sso_settings_get"];
-        /** Update SSO global settings (admin) */
-        put: operations["update_sso_settings_api_v1_admin_sso_settings_put"];
+        /** Read runtime admin settings */
+        get: operations["read_admin_settings_api_v1_admin_settings_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/system/safemode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read ADE safe mode status
-         * @description Return the current ADE safe mode status.
-         */
-        get: operations["read_safe_mode_api_v1_system_safemode_get"];
-        /**
-         * Toggle ADE safe mode
-         * @description Persist and broadcast an updated ADE safe mode state.
-         */
-        put: operations["update_safe_mode_api_v1_system_safemode_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
+        /** Update runtime admin settings */
+        patch: operations["patch_admin_settings_api_v1_admin_settings_patch"];
         trace?: never;
     };
 };
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
+        /** AdminSettingsPatchRequest */
+        AdminSettingsPatchRequest: {
+            /** Revision */
+            revision: number;
+            changes: components["schemas"]["RuntimeSettingsPatch"];
+        };
+        /** AdminSettingsReadResponse */
+        AdminSettingsReadResponse: {
+            /** Schemaversion */
+            schemaVersion: number;
+            /** Revision */
+            revision: number;
+            values: components["schemas"]["RuntimeSettingsValues"];
+            meta: components["schemas"]["RuntimeSettingsMeta"];
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Updatedby */
+            updatedBy?: string | null;
+        };
         /**
          * ApiKeyCreateRequest
          * @description Request payload to create a new API key.
@@ -2068,6 +2100,11 @@ export type components = {
              * @default false
              */
             mfaSetupRequired: boolean;
+            /**
+             * Passwordchangerequired
+             * @default false
+             */
+            passwordChangeRequired: boolean;
         };
         /** AuthMfaChallengeVerifyRequest */
         AuthMfaChallengeVerifyRequest: {
@@ -2123,6 +2160,19 @@ export type components = {
              * @default false
              */
             skipAllowed: boolean;
+        };
+        /** AuthPasswordChangeRequest */
+        AuthPasswordChangeRequest: {
+            /**
+             * Currentpassword
+             * Format: password
+             */
+            currentPassword: string;
+            /**
+             * Newpassword
+             * Format: password
+             */
+            newPassword: string;
         };
         /** AuthPasswordForgotRequest */
         AuthPasswordForgotRequest: {
@@ -2185,11 +2235,12 @@ export type components = {
             /** Providers */
             providers: components["schemas"]["AuthProvider"][];
             /**
-             * Force Sso
-             * @description When true, the frontend should offer only SSO.
-             * @default false
+             * Mode
+             * @description Effective authentication mode for this organization.
+             * @default password_only
+             * @enum {string}
              */
-            force_sso: boolean;
+            mode: "password_only" | "idp_only" | "password_and_idp";
             /**
              * Password Reset Enabled
              * @description When true, public password reset flows should be offered.
@@ -3611,10 +3662,11 @@ export type components = {
             /** Providers */
             providers: components["schemas"]["PublicSsoProvider"][];
             /**
-             * Forcesso
-             * @default false
+             * Mode
+             * @default password_only
+             * @enum {string}
              */
-            forceSso: boolean;
+            mode: "password_only" | "idp_only" | "password_and_idp";
         };
         /**
          * RoleAssignmentOut
@@ -4119,37 +4171,171 @@ export type components = {
             configuration_id?: string | null;
             options?: components["schemas"]["RunCreateOptionsBase"];
         };
-        /**
-         * SafeModeStatus
-         * @description Represents the current safe mode state.
-         */
-        SafeModeStatus: {
+        /** RuntimeAuthMeta */
+        RuntimeAuthMeta: {
+            mode: components["schemas"]["RuntimeSettingFieldMeta"];
+            password: components["schemas"]["RuntimePasswordMeta"];
+            identityProvider: components["schemas"]["RuntimeIdentityProviderMeta"];
+        };
+        /** RuntimeAuthPatch */
+        RuntimeAuthPatch: {
+            /** Mode */
+            mode?: ("password_only" | "idp_only" | "password_and_idp") | null;
+            password?: components["schemas"]["RuntimePasswordPatch"] | null;
+            identityProvider?: components["schemas"]["RuntimeIdentityProviderPatch"] | null;
+        };
+        /** RuntimeAuthValues */
+        RuntimeAuthValues: {
             /**
-             * Enabled
-             * @description Whether ADE is short-circuiting user runs
+             * Mode
+             * @enum {string}
              */
+            mode: "password_only" | "idp_only" | "password_and_idp";
+            password: components["schemas"]["RuntimePasswordValues"];
+            identityProvider: components["schemas"]["RuntimeIdentityProviderValues"];
+        };
+        /** RuntimeIdentityProviderMeta */
+        RuntimeIdentityProviderMeta: {
+            jitProvisioningEnabled: components["schemas"]["RuntimeSettingFieldMeta"];
+        };
+        /** RuntimeIdentityProviderPatch */
+        RuntimeIdentityProviderPatch: {
+            /** Jitprovisioningenabled */
+            jitProvisioningEnabled?: boolean | null;
+        };
+        /** RuntimeIdentityProviderValues */
+        RuntimeIdentityProviderValues: {
+            /** Jitprovisioningenabled */
+            jitProvisioningEnabled: boolean;
+        };
+        /** RuntimePasswordComplexityMeta */
+        RuntimePasswordComplexityMeta: {
+            minLength: components["schemas"]["RuntimeSettingFieldMeta"];
+            requireUppercase: components["schemas"]["RuntimeSettingFieldMeta"];
+            requireLowercase: components["schemas"]["RuntimeSettingFieldMeta"];
+            requireNumber: components["schemas"]["RuntimeSettingFieldMeta"];
+            requireSymbol: components["schemas"]["RuntimeSettingFieldMeta"];
+        };
+        /** RuntimePasswordComplexityPatch */
+        RuntimePasswordComplexityPatch: {
+            /** Minlength */
+            minLength?: number | null;
+            /** Requireuppercase */
+            requireUppercase?: boolean | null;
+            /** Requirelowercase */
+            requireLowercase?: boolean | null;
+            /** Requirenumber */
+            requireNumber?: boolean | null;
+            /** Requiresymbol */
+            requireSymbol?: boolean | null;
+        };
+        /** RuntimePasswordComplexityValues */
+        RuntimePasswordComplexityValues: {
+            /** Minlength */
+            minLength: number;
+            /** Requireuppercase */
+            requireUppercase: boolean;
+            /** Requirelowercase */
+            requireLowercase: boolean;
+            /** Requirenumber */
+            requireNumber: boolean;
+            /** Requiresymbol */
+            requireSymbol: boolean;
+        };
+        /** RuntimePasswordLockoutMeta */
+        RuntimePasswordLockoutMeta: {
+            maxAttempts: components["schemas"]["RuntimeSettingFieldMeta"];
+            durationSeconds: components["schemas"]["RuntimeSettingFieldMeta"];
+        };
+        /** RuntimePasswordLockoutPatch */
+        RuntimePasswordLockoutPatch: {
+            /** Maxattempts */
+            maxAttempts?: number | null;
+            /** Durationseconds */
+            durationSeconds?: number | null;
+        };
+        /** RuntimePasswordLockoutValues */
+        RuntimePasswordLockoutValues: {
+            /** Maxattempts */
+            maxAttempts: number;
+            /** Durationseconds */
+            durationSeconds: number;
+        };
+        /** RuntimePasswordMeta */
+        RuntimePasswordMeta: {
+            resetEnabled: components["schemas"]["RuntimeSettingFieldMeta"];
+            mfaRequired: components["schemas"]["RuntimeSettingFieldMeta"];
+            complexity: components["schemas"]["RuntimePasswordComplexityMeta"];
+            lockout: components["schemas"]["RuntimePasswordLockoutMeta"];
+        };
+        /** RuntimePasswordPatch */
+        RuntimePasswordPatch: {
+            /** Resetenabled */
+            resetEnabled?: boolean | null;
+            /** Mfarequired */
+            mfaRequired?: boolean | null;
+            complexity?: components["schemas"]["RuntimePasswordComplexityPatch"] | null;
+            lockout?: components["schemas"]["RuntimePasswordLockoutPatch"] | null;
+        };
+        /** RuntimePasswordValues */
+        RuntimePasswordValues: {
+            /** Resetenabled */
+            resetEnabled: boolean;
+            /** Mfarequired */
+            mfaRequired: boolean;
+            complexity: components["schemas"]["RuntimePasswordComplexityValues"];
+            lockout: components["schemas"]["RuntimePasswordLockoutValues"];
+        };
+        /** RuntimeSafeModeMeta */
+        RuntimeSafeModeMeta: {
+            enabled: components["schemas"]["RuntimeSettingFieldMeta"];
+            detail: components["schemas"]["RuntimeSettingFieldMeta"];
+        };
+        /** RuntimeSafeModePatch */
+        RuntimeSafeModePatch: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Detail */
+            detail?: string | null;
+        };
+        /** RuntimeSafeModeValues */
+        RuntimeSafeModeValues: {
+            /** Enabled */
             enabled: boolean;
-            /**
-             * Detail
-             * @description User-visible explanation of the safe mode status
-             */
+            /** Detail */
             detail: string;
         };
-        /**
-         * SafeModeUpdateRequest
-         * @description Request payload for toggling safe mode.
-         */
-        SafeModeUpdateRequest: {
+        /** RuntimeSettingFieldMeta */
+        RuntimeSettingFieldMeta: {
             /**
-             * Enabled
-             * @description Updated safe mode state
+             * Source
+             * @enum {string}
              */
-            enabled: boolean;
+            source: "env" | "db" | "default";
+            /** Lockedbyenv */
+            lockedByEnv: boolean;
+            /** Envvar */
+            envVar?: string | null;
             /**
-             * Detail
-             * @description Optional message describing the active state
+             * Restartrequired
+             * @default false
              */
-            detail?: string | null;
+            restartRequired: boolean;
+        };
+        /** RuntimeSettingsMeta */
+        RuntimeSettingsMeta: {
+            safeMode: components["schemas"]["RuntimeSafeModeMeta"];
+            auth: components["schemas"]["RuntimeAuthMeta"];
+        };
+        /** RuntimeSettingsPatch */
+        RuntimeSettingsPatch: {
+            safeMode?: components["schemas"]["RuntimeSafeModePatch"] | null;
+            auth?: components["schemas"]["RuntimeAuthPatch"] | null;
+        };
+        /** RuntimeSettingsValues */
+        RuntimeSettingsValues: {
+            safeMode: components["schemas"]["RuntimeSafeModeValues"];
+            auth: components["schemas"]["RuntimeAuthValues"];
         };
         /**
          * ScopeType
@@ -4171,7 +4357,11 @@ export type components = {
             issuer: string;
             /** Clientid */
             clientId: string;
-            status: components["schemas"]["SsoProviderStatus"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "disabled";
             /** Domains */
             domains: string[];
             managedBy: components["schemas"]["SsoProviderManagedBy"];
@@ -4201,8 +4391,12 @@ export type components = {
             issuer: string;
             /** Clientid */
             clientId: string;
-            /** @default disabled */
-            status: components["schemas"]["SsoProviderStatus"];
+            /**
+             * Status
+             * @default disabled
+             * @enum {string}
+             */
+            status: "active" | "disabled";
             /** Domains */
             domains?: string[];
             /** Id */
@@ -4225,12 +4419,6 @@ export type components = {
          */
         SsoProviderManagedBy: "db" | "env";
         /**
-         * SsoProviderStatus
-         * @description Lifecycle status for SSO providers.
-         * @enum {string}
-         */
-        SsoProviderStatus: "active" | "disabled" | "deleted";
-        /**
          * SsoProviderType
          * @description Supported SSO provider types.
          * @enum {string}
@@ -4249,27 +4437,39 @@ export type components = {
             clientId?: string | null;
             /** Clientsecret */
             clientSecret?: string | null;
-            status?: components["schemas"]["SsoProviderStatus"] | null;
+            /** Status */
+            status?: ("active" | "disabled") | null;
             /** Domains */
             domains?: string[] | null;
         };
-        /** SsoSettings */
-        SsoSettings: {
+        /**
+         * SsoProviderValidateRequest
+         * @description Payload used to validate provider OIDC discovery metadata.
+         */
+        SsoProviderValidateRequest: {
+            /** Issuer */
+            issuer: string;
+            /** Clientid */
+            clientId: string;
             /**
-             * Enabled
-             * @default true
+             * Clientsecret
+             * Format: password
              */
-            enabled: boolean;
-            /**
-             * Enforcesso
-             * @default false
-             */
-            enforceSso: boolean;
-            /**
-             * Allowjitprovisioning
-             * @default true
-             */
-            allowJitProvisioning: boolean;
+            clientSecret: string;
+        };
+        /**
+         * SsoProviderValidationResponse
+         * @description Normalized discovery metadata returned after validation.
+         */
+        SsoProviderValidationResponse: {
+            /** Issuer */
+            issuer: string;
+            /** Authorizationendpoint */
+            authorizationEndpoint: string;
+            /** Tokenendpoint */
+            tokenEndpoint: string;
+            /** Jwksuri */
+            jwksUri: string;
         };
         /**
          * TagCatalogItem
@@ -4306,10 +4506,20 @@ export type components = {
              */
             email: string;
             /**
-             * Display Name
+             * Displayname
              * @description Optional display name for the user.
              */
-            display_name?: string | null;
+            displayName?: string | null;
+            /** @description Password provisioning mode for the user account. */
+            passwordProfile: components["schemas"]["UserPasswordProfile"];
+        };
+        /**
+         * UserCreateResponse
+         * @description Create-user response including one-time password provisioning payload.
+         */
+        UserCreateResponse: {
+            user: components["schemas"]["UserOut"];
+            passwordProvisioning: components["schemas"]["UserPasswordProvisioning"];
         };
         /**
          * UserOut
@@ -4359,6 +4569,39 @@ export type components = {
             facets?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * UserPasswordProfile
+         * @description Password provisioning mode for user creation.
+         */
+        UserPasswordProfile: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto_generate" | "explicit";
+            /** Password */
+            password?: string | null;
+            /**
+             * Forcechangeonnextsignin
+             * @default false
+             */
+            forceChangeOnNextSignIn: boolean;
+        };
+        /**
+         * UserPasswordProvisioning
+         * @description Password provisioning result for created users.
+         */
+        UserPasswordProvisioning: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto_generate" | "explicit";
+            /** Initialpassword */
+            initialPassword?: string | null;
+            /** Forcechangeonnextsignin */
+            forceChangeOnNextSignIn: boolean;
         };
         /**
          * UserRoleSummary
@@ -4996,6 +5239,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AuthPasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    password_change_api_v1_auth_password_change_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthPasswordChangeRequest"];
             };
         };
         responses: {
@@ -5864,7 +6143,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserOut"];
+                    "application/json": components["schemas"]["UserCreateResponse"];
                 };
             };
             /** @description Authentication required to create users. */
@@ -10654,6 +10933,44 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    validate_provider_api_v1_admin_sso_providers_validate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoProviderValidateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoProviderValidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     get_provider_api_v1_admin_sso_providers__id__get: {
         parameters: {
             query?: never;
@@ -10765,7 +11082,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    read_sso_settings_api_v1_admin_sso_settings_get: {
+    read_admin_settings_api_v1_admin_settings_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -10781,13 +11098,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SsoSettings"];
+                    "application/json": components["schemas"]["AdminSettingsReadResponse"];
                 };
             };
             default: components["responses"]["ProblemDetails"];
         };
     };
-    update_sso_settings_api_v1_admin_sso_settings_put: {
+    patch_admin_settings_api_v1_admin_settings_patch: {
         parameters: {
             query?: never;
             header?: {
@@ -10798,7 +11115,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SsoSettings"];
+                "application/json": components["schemas"]["AdminSettingsPatchRequest"];
             };
         };
         responses: {
@@ -10809,66 +11126,8 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SsoSettings"];
+                    "application/json": components["schemas"]["AdminSettingsReadResponse"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    read_safe_mode_api_v1_system_safemode_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SafeModeStatus"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    update_safe_mode_api_v1_system_safemode_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SafeModeUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {

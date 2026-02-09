@@ -25,7 +25,7 @@ router = APIRouter()
 def read_liveness(settings: SettingsDep) -> HealthCheckResponse:
     """Return liveness status without touching the database."""
 
-    service = HealthService(settings=settings, safe_mode_service=None)
+    service = HealthService(settings=settings, runtime_settings_service=None)
     return service.status()
 
 

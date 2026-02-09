@@ -31,6 +31,8 @@ backend/data/**
 .playwright-cli/
 tmp/playwright/
 .playwright/
+output/playwright/
+output/runtime-validation/
 
 # Workpackages
 workpackages/**

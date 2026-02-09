@@ -5,6 +5,7 @@ import type { components } from "@/types";
 export type AdminUser = components["schemas"]["UserOut"];
 export type AdminUserPage = components["schemas"]["UserPage"];
 export type AdminUserCreateRequest = components["schemas"]["UserCreate"];
+export type AdminUserCreateResponse = components["schemas"]["UserCreateResponse"];
 export type AdminUserUpdateRequest = components["schemas"]["UserUpdate"];
 
 export interface ListAdminUsersOptions {
@@ -37,13 +38,15 @@ export async function listAdminUsers(options: ListAdminUsersOptions = {}): Promi
   return data;
 }
 
-export async function createAdminUser(payload: AdminUserCreateRequest): Promise<AdminUser> {
+export async function createAdminUser(
+  payload: AdminUserCreateRequest,
+): Promise<AdminUserCreateResponse> {
   const { data } = await client.POST("/api/v1/users", {
     body: payload,
   });
 
   if (!data) {
-    throw new Error("Expected user payload.");
+    throw new Error("Expected create-user payload.");
   }
 
   return data;

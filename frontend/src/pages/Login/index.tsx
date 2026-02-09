@@ -81,6 +81,17 @@ function buildRedirectPath(basePath: string, returnTo: string | null | undefined
   return `${basePath}?${query}`;
 }
 
+function buildPasswordChangePath(returnTo: string | null | undefined) {
+  const safeReturnTo = sanitizeReturnTo(returnTo);
+  const queryPayload: Record<string, string> = {
+    requirePasswordChange: "1",
+  };
+  if (safeReturnTo && safeReturnTo !== DEFAULT_RETURN_TO) {
+    queryPayload.returnTo = safeReturnTo;
+  }
+  return `/account/security?${createSearchParams(queryPayload).toString()}`;
+}
+
 function mapMfaApiError(error: ApiError): string {
   const detail = typeof error.problem?.detail === "string" ? error.problem.detail.trim() : "";
   if (detail === "Invalid one-time password.") {
@@ -105,17 +116,23 @@ export default function LoginScreen() {
   const providersQuery = useAuthProvidersQuery();
   const providers: AuthProvider[] = providersQuery.data?.providers ?? [];
   const oidcProviders = providers.filter((provider) => provider.type === "oidc");
-  const forceSso = providersQuery.data?.forceSso ?? false;
-  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? !forceSso;
+  const authMode =
+    providersQuery.data?.mode ?? (oidcProviders.length > 0 ? "password_and_idp" : "password_only");
+  const idpOnlyMode = authMode === "idp_only";
+  const idpEnabledMode = authMode !== "password_only";
+  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? authMode !== "idp_only";
   const providersLoadFailed = providersQuery.isError && !providersQuery.isFetching;
-  const providersUnavailable = oidcProviders.length === 0;
-  const blockingSsoMessage =
-    forceSso && (providersLoadFailed || providersUnavailable)
-      ? "Single sign-on is required, but no providers are available. Contact your administrator."
-      : null;
-  const providersError =
-    providersLoadFailed && !forceSso
-      ? "We couldn't load the list of providers. Refresh the page or continue with email."
+  const providersUnavailable = idpEnabledMode && oidcProviders.length === 0;
+  const providerError = providersLoadFailed
+    ? idpOnlyMode
+      ? "We couldn't load identity provider options. Organization members must use identity provider sign-in. Global admins can still use password + MFA."
+      : "We couldn't load identity provider options. Refresh the page or continue with password sign-in."
+    : null;
+  const providerUnavailableMessage =
+    providersUnavailable && !providersLoadFailed
+      ? idpOnlyMode
+        ? "No active identity providers are available. Organization members can't sign in until a provider is enabled. Global admins can still use password + MFA."
+        : "No active identity providers are available right now."
       : null;
 
   const returnTo = useMemo(() => {
@@ -204,6 +221,7 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
+  const [showGlobalAdminPassword, setShowGlobalAdminPassword] = useState(false);
   const [lastSubmittedEmail, setLastSubmittedEmail] = useState("");
   const [mfaCodeValue, setMfaCodeValue] = useState("");
   const [mfaFieldError, setMfaFieldError] = useState<string | null>(null);
@@ -217,6 +235,12 @@ export default function LoginScreen() {
     setMfaFieldError(null);
     setMfaFailedAttempts(0);
   }, [location.search]);
+
+  useEffect(() => {
+    if (!idpOnlyMode) {
+      setShowGlobalAdminPassword(false);
+    }
+  }, [idpOnlyMode]);
 
   useEffect(() => {
     if (!isMfaStep) {
@@ -294,6 +318,10 @@ export default function LoginScreen() {
       }
       queryClient.setQueryData(sessionKeys.detail(), result.session);
       const nextPath = pickReturnTo(result.session.return_to, destination);
+      if (result.passwordChangeRequired) {
+        navigate(buildPasswordChangePath(nextPath), { replace: true });
+        return;
+      }
       if (result.mfaSetupRequired || result.mfaSetupRecommended) {
         navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
         return;
@@ -337,9 +365,18 @@ export default function LoginScreen() {
         challengeToken: mfaChallengeToken,
         code: parsedCode.submitValue,
       });
-      queryClient.setQueryData(sessionKeys.detail(), nextSession);
+      queryClient.setQueryData(sessionKeys.detail(), nextSession.session);
       setMfaFailedAttempts(0);
-      navigate(pickReturnTo(nextSession.return_to, returnTo), { replace: true });
+      const nextPath = pickReturnTo(nextSession.session.return_to, returnTo);
+      if (nextSession.passwordChangeRequired) {
+        navigate(buildPasswordChangePath(nextPath), { replace: true });
+        return;
+      }
+      if (nextSession.mfaSetupRequired || nextSession.mfaSetupRecommended) {
+        navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
+        return;
+      }
+      navigate(nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         setFormError(mapMfaApiError(error));
@@ -358,8 +395,10 @@ export default function LoginScreen() {
 
   const shouldShowActionError = Boolean(formError) && !isSubmitting;
   const isProvidersLoading = providersQuery.isLoading || providersQuery.isFetching;
-  const shouldShowProviderDivider =
-    !forceSso && !isMfaStep && !isProvidersLoading && !blockingSsoMessage && oidcProviders.length > 0;
+  const canUsePasswordPath = !idpOnlyMode || showGlobalAdminPassword;
+  const showPasswordForm = canUsePasswordPath && !isMfaStep;
+  const showMfaForm = canUsePasswordPath && isMfaStep;
+  const shouldShowProviderDivider = !idpOnlyMode && !isMfaStep && !isProvidersLoading && oidcProviders.length > 0;
   const mfaDetectionKind: DetectedMfaCodeKind = parsedMfaCode.kind;
   const mfaInputMode = mfaDetectionKind === "recovery" ? "text" : "numeric";
   const shouldShowRecoveryDetected = mfaDetectionKind === "recovery" && parsedMfaCode.alnum.length > 0;
@@ -378,21 +417,23 @@ export default function LoginScreen() {
           <p className="text-sm text-muted-foreground">
             {isMfaStep
               ? "Enter a code from your authenticator app or use a recovery code."
+              : idpOnlyMode
+              ? "Continue with your identity provider. Global admins can use password + MFA."
               : "Enter your email and password or continue with a connected provider."}
           </p>
         </header>
 
         {passwordResetMessage ? <Alert tone="info" className="mt-6">{passwordResetMessage}</Alert> : null}
         {ssoErrorMessage ? <Alert tone="danger" className="mt-6">{ssoErrorMessage}</Alert> : null}
-        {blockingSsoMessage ? <Alert tone="danger" className="mt-6">{blockingSsoMessage}</Alert> : null}
-        {providersError ? <Alert tone="warning" className="mt-6">{providersError}</Alert> : null}
+        {providerError ? <Alert tone="warning" className="mt-6">{providerError}</Alert> : null}
+        {providerUnavailableMessage ? <Alert tone="warning" className="mt-6">{providerUnavailableMessage}</Alert> : null}
 
         {isProvidersLoading ? (
           <div className="mt-6 space-y-3">
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
           </div>
-        ) : !isMfaStep && !blockingSsoMessage && oidcProviders.length > 0 ? (
+        ) : !isMfaStep && idpEnabledMode && oidcProviders.length > 0 ? (
           <div className="mt-6 space-y-3">
             {oidcProviders.map((provider) => (
               <a
@@ -406,6 +447,25 @@ export default function LoginScreen() {
           </div>
         ) : null}
 
+        {idpOnlyMode && !showGlobalAdminPassword && !isMfaStep ? (
+          <div className="mt-8 space-y-3">
+            <Alert tone="info">
+              Need break-glass access? Global admins can still sign in with password + MFA.
+            </Alert>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center"
+              onClick={() => {
+                setShowGlobalAdminPassword(true);
+                setFormError(null);
+              }}
+            >
+              Global admin password sign-in
+            </Button>
+          </div>
+        ) : null}
+
         {shouldShowProviderDivider ? (
           <div className="mt-6 flex items-center gap-3 text-xs font-medium text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
@@ -414,7 +474,7 @@ export default function LoginScreen() {
           </div>
         ) : null}
 
-        {!forceSso && !isMfaStep ? (
+        {showPasswordForm ? (
           <form method="post" className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <input type="hidden" name="returnTo" value={returnTo} />
             <FormField label="Email address" required>
@@ -470,10 +530,26 @@ export default function LoginScreen() {
             <Button type="submit" className="w-full justify-center" disabled={isSubmitting}>
               {isSubmitting ? "Signing in…" : "Continue"}
             </Button>
+
+            {idpOnlyMode ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-center"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setShowGlobalAdminPassword(false);
+                  setFormError(null);
+                  setMfaChallengeToken(null);
+                }}
+              >
+                Back to identity provider sign-in
+              </Button>
+            ) : null}
           </form>
         ) : null}
 
-        {!forceSso && isMfaStep ? (
+        {showMfaForm ? (
           <form method="post" className="mt-8 space-y-6" onSubmit={handleMfaSubmit}>
             <FormField
               label="Verification code"
@@ -495,8 +571,8 @@ export default function LoginScreen() {
                 name="code"
                 value={mfaCodeValue}
                 onChange={(event) => {
-                  const parsedCode = parseMfaCode(event.currentTarget.value);
-                  setMfaCodeValue(parsedCode.displayValue);
+                  const nextParsedCode = parseMfaCode(event.currentTarget.value);
+                  setMfaCodeValue(nextParsedCode.displayValue);
                   if (mfaFieldError) {
                     setMfaFieldError(null);
                   }
@@ -525,9 +601,7 @@ export default function LoginScreen() {
             {shouldShowTroubleHint ? (
               <div className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 <p className="font-medium text-foreground">Having trouble with your code?</p>
-                <p className="mt-1">
-                  This field also accepts recovery codes (example: AB12-3CD4).
-                </p>
+                <p className="mt-1">This field also accepts recovery codes (example: AB12-3CD4).</p>
               </div>
             ) : null}
 
@@ -546,6 +620,9 @@ export default function LoginScreen() {
                   setMfaFieldError(null);
                   setMfaFailedAttempts(0);
                   setFormError(null);
+                  if (idpOnlyMode) {
+                    setShowGlobalAdminPassword(false);
+                  }
                 }}
               >
                 Back to password login
@@ -554,9 +631,9 @@ export default function LoginScreen() {
           </form>
         ) : null}
 
-        {forceSso ? (
+        {idpOnlyMode ? (
           <Alert tone="info" className="mt-8">
-            Password sign-in is disabled for this deployment. Use one of the configured providers above.
+            Identity provider sign-in is required for organization members.
           </Alert>
         ) : null}
       </div>

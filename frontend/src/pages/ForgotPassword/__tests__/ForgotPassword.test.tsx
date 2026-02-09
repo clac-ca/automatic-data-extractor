@@ -61,7 +61,7 @@ describe("ForgotPasswordScreen", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         providers: [],
-        forceSso: false,
+        mode: "password_only",
         passwordResetEnabled: true,
       },
       isError: false,
@@ -109,7 +109,7 @@ describe("ForgotPasswordScreen", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         providers: [],
-        forceSso: false,
+        mode: "password_only",
         passwordResetEnabled: false,
       },
       isError: false,
@@ -124,11 +124,11 @@ describe("ForgotPasswordScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows SSO-unavailable messaging when force SSO disables reset", () => {
+  it("shows SSO-unavailable messaging when idp-only mode disables reset", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
         providers: [],
-        forceSso: true,
+        mode: "idp_only",
         passwordResetEnabled: false,
       },
       isError: false,

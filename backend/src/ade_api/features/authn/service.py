@@ -14,11 +14,21 @@ from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
 from ade_api.core.auth.principal import AuthVia
-from ade_api.core.security import hash_opaque_token, hash_password, mint_opaque_token, verify_password
+from ade_api.core.security import (
+    hash_opaque_token,
+    hash_password,
+    mint_opaque_token,
+    verify_password,
+)
+from ade_api.core.security.password_policy import (
+    PasswordComplexityPolicy,
+    enforce_password_complexity,
+)
 from ade_api.core.security.secrets import decrypt_secret, encrypt_secret
+from ade_api.features.admin_settings.service import RuntimeSettingsService
 from ade_api.features.rbac import RbacService
-from ade_api.features.sso.service import SSO_SETTINGS_KEY, SsoService
-from ade_api.features.system_settings.service import SystemSettingsService
+from ade_api.features.sso.service import SsoService
+from ade_api.settings import Settings
 from ade_db.models import (
     AuthSession,
     MfaChallenge,
@@ -28,10 +38,9 @@ from ade_db.models import (
     User,
     UserMfaTotp,
 )
-from ade_api.settings import Settings
 
 from .delivery import NoopPasswordResetDelivery, PasswordResetDelivery
-from .schemas import AuthPolicyResponse, AuthPolicyUpdateRequest
+from .schemas import AuthPolicyResponse
 from .totp import (
     generate_recovery_codes,
     generate_totp_secret,
@@ -41,12 +50,6 @@ from .totp import (
     verify_totp,
 )
 
-AUTH_POLICY_KEY = "auth-policy"
-DEFAULT_AUTH_POLICY = AuthPolicyResponse(
-    external_enabled=False,
-    enforce_sso=False,
-    allow_jit_provisioning=True,
-)
 MFA_CHALLENGE_TTL = timedelta(minutes=10)
 PASSWORD_RESET_TTL = timedelta(minutes=30)
 
@@ -73,6 +76,7 @@ class LocalLoginSuccess:
     session_token: str
     mfa_setup_recommended: bool
     mfa_setup_required: bool
+    password_change_required: bool
 
 
 @dataclass(slots=True)
@@ -82,59 +86,37 @@ class AuthnService:
     session: Session
     settings: Settings
     delivery: PasswordResetDelivery | None = None
-    _system: SystemSettingsService = field(init=False, repr=False)
+    _runtime_settings: RuntimeSettingsService = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.delivery is None:
             self.delivery = NoopPasswordResetDelivery()
-        self._system = SystemSettingsService(session=self.session)
+        self._runtime_settings = RuntimeSettingsService(
+            session=self.session,
+        )
 
     # ------------------------------------------------------------------
     # Policy
     # ------------------------------------------------------------------
 
     def get_policy(self) -> AuthPolicyResponse:
-        payload = self._system.get(AUTH_POLICY_KEY)
-        if payload is None:
-            return DEFAULT_AUTH_POLICY
+        resolved = self._runtime_settings.get_effective_values().auth
+        password = resolved.password
+        complexity = password.complexity
+        lockout = password.lockout
         return AuthPolicyResponse(
-            external_enabled=bool(payload.get("external_enabled", False)),
-            enforce_sso=bool(payload.get("enforce_sso", False)),
-            allow_jit_provisioning=bool(payload.get("allow_jit_provisioning", True)),
+            mode=resolved.mode,
+            password_reset_enabled=bool(password.reset_enabled),
+            password_mfa_required=bool(password.mfa_required),
+            password_min_length=int(complexity.min_length),
+            password_require_uppercase=bool(complexity.require_uppercase),
+            password_require_lowercase=bool(complexity.require_lowercase),
+            password_require_number=bool(complexity.require_number),
+            password_require_symbol=bool(complexity.require_symbol),
+            password_lockout_max_attempts=int(lockout.max_attempts),
+            password_lockout_duration_seconds=int(lockout.duration_seconds),
+            idp_jit_provisioning_enabled=bool(resolved.identity_provider.jit_provisioning_enabled),
         )
-
-    def update_policy(self, payload: AuthPolicyUpdateRequest) -> AuthPolicyResponse:
-        policy = AuthPolicyResponse(
-            external_enabled=payload.external_enabled,
-            enforce_sso=payload.enforce_sso,
-            allow_jit_provisioning=payload.allow_jit_provisioning,
-        )
-        if policy.enforce_sso:
-            if not policy.external_enabled:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="externalEnabled must be true when enforceSso is enabled.",
-                )
-            provider = self.get_external_provider()
-            if provider is None or provider.status != SsoProviderStatus.ACTIVE:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="An active external provider is required to enforce SSO.",
-                )
-
-        self._system.upsert(
-            AUTH_POLICY_KEY,
-            {
-                "external_enabled": policy.external_enabled,
-                "enforce_sso": policy.enforce_sso,
-                "allow_jit_provisioning": policy.allow_jit_provisioning,
-            },
-        )
-        self._system.upsert(
-            SSO_SETTINGS_KEY,
-            {"enabled": bool(policy.external_enabled)},
-        )
-        return policy
 
     # ------------------------------------------------------------------
     # External provider
@@ -210,6 +192,7 @@ class AuthnService:
             raise LoginError("Invalid email or password.")
 
         self._register_successful_login(user)
+        password_change_required = bool(user.must_change_password)
 
         has_mfa_enabled = self.has_mfa_enabled(user_id=user.id)
         if has_mfa_enabled:
@@ -223,6 +206,7 @@ class AuthnService:
             session_token=self.create_session(user_id=user.id, auth_method="password"),
             mfa_setup_recommended=mfa_setup_recommended,
             mfa_setup_required=mfa_setup_required,
+            password_change_required=password_change_required,
         )
 
     def create_session(
@@ -246,7 +230,7 @@ class AuthnService:
     ) -> tuple[bool, bool]:
         if has_mfa_enabled:
             return False, False
-        if self.settings.auth_enforce_local_mfa:
+        if self.get_policy().password_mfa_required:
             return False, True
         return True, False
 
@@ -263,7 +247,7 @@ class AuthnService:
         if auth_via is not AuthVia.SESSION or (session_auth_method or "").strip() != "password":
             return False, False, False
 
-        if self.settings.auth_enforce_local_mfa:
+        if self.get_policy().password_mfa_required:
             return False, True, False
         return True, False, True
 
@@ -289,7 +273,7 @@ class AuthnService:
 
     def is_password_reset_enabled(self) -> bool:
         policy = self.get_policy()
-        return bool(self.settings.auth_password_reset_enabled and not policy.enforce_sso)
+        return bool(policy.password_reset_enabled and policy.mode != "idp_only")
 
     def forgot_password(self, *, email: str) -> None:
         self._ensure_password_reset_enabled()
@@ -312,6 +296,7 @@ class AuthnService:
 
     def reset_password(self, *, token: str, new_password: str) -> None:
         self._ensure_password_reset_enabled()
+        self._enforce_password_policy(new_password, field_path="newPassword")
         token_hash = hash_opaque_token(token)
         now = utc_now()
         stmt = (
@@ -323,17 +308,42 @@ class AuthnService:
         )
         reset = self.session.execute(stmt).scalar_one_or_none()
         if reset is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Reset token is invalid or expired.")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Reset token is invalid or expired.",
+            )
 
         user = self.session.get(User, reset.user_id)
         if user is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Reset token is invalid or expired.")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Reset token is invalid or expired.",
+            )
 
         user.hashed_password = hash_password(new_password)
         user.failed_login_count = 0
         user.locked_until = None
+        user.must_change_password = False
         reset.consumed_at = now
         self.revoke_all_sessions_for_user(user_id=user.id)
+
+    def change_password(
+        self,
+        *,
+        user: User,
+        current_password: str,
+        new_password: str,
+    ) -> None:
+        if not verify_password(current_password, user.hashed_password):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect.",
+            )
+        self._enforce_password_policy(new_password, field_path="newPassword")
+        user.hashed_password = hash_password(new_password)
+        user.failed_login_count = 0
+        user.locked_until = None
+        user.must_change_password = False
 
     # ------------------------------------------------------------------
     # MFA
@@ -415,14 +425,16 @@ class AuthnService:
 
     def disable_totp(self, *, user: User) -> None:
         policy = self.get_policy()
-        if policy.enforce_sso and self._is_global_admin(user):
+        if policy.mode == "idp_only" and self._is_global_admin(user):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail="Global-admin users must keep MFA enabled while SSO enforcement is enabled.",
+                detail=(
+                    "Global-admin users must keep MFA enabled while identity provider-only sign-in is enabled."
+                ),
             )
         self.session.execute(delete(UserMfaTotp).where(UserMfaTotp.user_id == user.id))
 
-    def verify_challenge(self, *, challenge_token: str, code: str) -> str:
+    def verify_challenge(self, *, challenge_token: str, code: str) -> LocalLoginSuccess:
         token_hash = hash_opaque_token(challenge_token)
         now = utc_now()
         stmt = (
@@ -441,10 +453,16 @@ class AuthnService:
 
         user = self.session.get(User, challenge.user_id)
         if user is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="MFA challenge is invalid or expired.")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="MFA challenge is invalid or expired.",
+            )
         mfa = self.session.get(UserMfaTotp, user.id)
         if mfa is None or mfa.verified_at is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="MFA challenge is invalid or expired.")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="MFA challenge is invalid or expired.",
+            )
 
         valid = False
         secret = decrypt_secret(mfa.secret_enc, self.settings)
@@ -465,7 +483,12 @@ class AuthnService:
 
         challenge.consumed_at = now
         self._register_successful_login(user)
-        return self.create_session(user_id=user.id, auth_method="password")
+        return LocalLoginSuccess(
+            session_token=self.create_session(user_id=user.id, auth_method="password"),
+            mfa_setup_recommended=False,
+            mfa_setup_required=False,
+            password_change_required=bool(user.must_change_password),
+        )
 
     def _create_mfa_challenge(self, *, user_id: UUID) -> str:
         raw = mint_opaque_token()
@@ -494,7 +517,7 @@ class AuthnService:
             )
 
         policy = self.get_policy()
-        if not policy.enforce_sso:
+        if policy.mode != "idp_only":
             return
 
         if not self._is_global_admin(user):
@@ -511,7 +534,10 @@ class AuthnService:
                 status.HTTP_403_FORBIDDEN,
                 detail={
                     "error": "admin_mfa_required",
-                    "message": "Global-admin users must enroll MFA for local login while SSO is enforced.",
+                    "message": (
+                        "Global-admin users must enroll MFA for local login "
+                        "while SSO is enforced."
+                    ),
                 },
             )
 
@@ -532,9 +558,11 @@ class AuthnService:
 
     def _register_failed_login(self, user: User) -> None:
         user.failed_login_count += 1
-        threshold = int(self.settings.failed_login_lock_threshold)
+        policy = self.get_policy()
+        threshold = int(policy.password_lockout_max_attempts)
         if user.failed_login_count >= threshold:
-            user.locked_until = utc_now() + self.settings.failed_login_lock_duration
+            lockout_seconds = int(policy.password_lockout_duration_seconds)
+            user.locked_until = utc_now() + timedelta(seconds=lockout_seconds)
 
     def _register_successful_login(self, user: User) -> None:
         user.failed_login_count = 0
@@ -544,3 +572,18 @@ class AuthnService:
     def _is_global_admin(self, user: User) -> bool:
         role_slugs = RbacService(session=self.session).get_global_role_slugs_for_user(user=user)
         return "global-admin" in role_slugs
+
+    def _enforce_password_policy(self, password: str, *, field_path: str) -> None:
+        policy = self.get_policy()
+        complexity = PasswordComplexityPolicy(
+            min_length=policy.password_min_length,
+            require_uppercase=policy.password_require_uppercase,
+            require_lowercase=policy.password_require_lowercase,
+            require_number=policy.password_require_number,
+            require_symbol=policy.password_require_symbol,
+        )
+        enforce_password_complexity(
+            password,
+            policy=complexity,
+            field_path=field_path,
+        )

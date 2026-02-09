@@ -6,8 +6,9 @@ Explain ADE security decisions in plain language: who can access ADE, how ADE au
 
 ## Authentication Modes
 
-- Built-in ADE auth (recommended for production)
-- Optional external SSO provider auth (OIDC)
+- Password sign-in
+- Identity provider sign-in (OIDC SSO)
+- Runtime authentication mode (`password_only`, `idp_only`, `password_and_idp`) controls which methods are available
 - Auth-disabled mode (`ADE_AUTH_DISABLED=true`) for local development only
 
 ### Runtime Credential Channels
@@ -25,15 +26,15 @@ ADE uses role-based access control:
 
 Runtime authorization is role/permission driven. Do not rely on legacy `is_superuser` bypass assumptions.
 
-## SSO Enforcement Model
+## Sign-In Policy Model
 
-- SSO enforcement is managed via `GET/PUT /api/v1/admin/sso/settings`.
-- When `enforceSso=true`, non-global-admin local login is blocked.
-- Global-admin local login remains available for emergency operational access and requires MFA enrollment.
+- Sign-in policy is managed via `GET/PATCH /api/v1/admin/settings` (`auth` settings).
+- In `idp_only` mode, organization members sign in with IdP only.
+- Global admins retain password sign-in as break-glass access and still require MFA.
 
 ## Local MFA Enforcement Model
 
-- `ADE_AUTH_ENFORCE_LOCAL_MFA=true` enforces MFA onboarding for password-authenticated sessions.
+- `auth.password.mfaRequired` (or env override `ADE_AUTH_PASSWORD_MFA_REQUIRED=true`) enforces MFA onboarding for password-authenticated sessions.
 - When enabled, users signed in with built-in auth must complete TOTP enrollment before most protected endpoints are accessible.
 - SSO and API key sessions are not forced by this setting.
 
@@ -41,10 +42,20 @@ Runtime authorization is role/permission driven. Do not rely on legacy `is_super
 
 - `ADE_SECRET_KEY`
 - `ADE_PUBLIC_WEB_URL`
+- `ADE_SAFE_MODE`
+- `ADE_SAFE_MODE_DETAIL`
 - `ADE_AUTH_DISABLED`
-- `ADE_AUTH_FORCE_SSO`
+- `ADE_AUTH_MODE`
 - `ADE_AUTH_PASSWORD_RESET_ENABLED`
-- `ADE_AUTH_ENFORCE_LOCAL_MFA`
+- `ADE_AUTH_PASSWORD_MFA_REQUIRED`
+- `ADE_AUTH_PASSWORD_MIN_LENGTH`
+- `ADE_AUTH_PASSWORD_REQUIRE_UPPERCASE`
+- `ADE_AUTH_PASSWORD_REQUIRE_LOWERCASE`
+- `ADE_AUTH_PASSWORD_REQUIRE_NUMBER`
+- `ADE_AUTH_PASSWORD_REQUIRE_SYMBOL`
+- `ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS`
+- `ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS`
+- `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED`
 - `ADE_SSO_ENCRYPTION_KEY`
 - `ADE_BLOB_ACCOUNT_URL` or `ADE_BLOB_CONNECTION_STRING`
 - `ADE_DATABASE_AUTH_MODE`
@@ -94,6 +105,7 @@ Use when policy requires private-only data-plane access.
 ## Safe Mode
 
 Set `ADE_SAFE_MODE=true` to disable engine execution during controlled maintenance or incident response.
+Set `ADE_SAFE_MODE_DETAIL` to override the operator-facing status message.
 
 ## Related
 

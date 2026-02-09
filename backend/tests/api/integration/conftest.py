@@ -20,6 +20,7 @@ from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
 from ade_api.db import get_db_read, get_db_write
+from ade_api.features.sso.oidc import OidcMetadata
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.settings import Settings, get_settings
@@ -92,7 +93,7 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         auth_disabled=False,
         safe_mode=False,
         secret_key="test-secret-key-for-tests-please-change",
-        auth_force_sso=False,
+        auth_mode="password_only",
         database_url=url.render_as_string(hide_password=False),
         database_auth_mode=auth_mode,
         database_sslrootcert=_env("DATABASE_SSLROOTCERT"),
@@ -150,6 +151,47 @@ def _fast_hash_env() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _reset_auth_caches() -> None:
     reset_auth_state()
+
+
+@pytest.fixture(autouse=True)
+def _clear_runtime_settings_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Keep integration tests deterministic regardless of shell/.env runtime overrides.
+    for key in (
+        "ADE_SAFE_MODE",
+        "ADE_SAFE_MODE_DETAIL",
+        "ADE_AUTH_MODE",
+        "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
+        "ADE_AUTH_PASSWORD_RESET_ENABLED",
+        "ADE_AUTH_PASSWORD_MFA_REQUIRED",
+        "ADE_AUTH_PASSWORD_MIN_LENGTH",
+        "ADE_AUTH_PASSWORD_REQUIRE_UPPERCASE",
+        "ADE_AUTH_PASSWORD_REQUIRE_LOWERCASE",
+        "ADE_AUTH_PASSWORD_REQUIRE_NUMBER",
+        "ADE_AUTH_PASSWORD_REQUIRE_SYMBOL",
+        "ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS",
+        "ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS",
+        "ADE_AUTH_SSO_PROVIDERS_JSON",
+        "ADE_AUTH_DISABLED",
+        "ADE_AUTH_DISABLED_USER_EMAIL",
+        "ADE_AUTH_DISABLED_USER_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _stub_sso_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ade_api.features.sso import service as sso_service_module
+
+    def _fake_discover_metadata(issuer: str, _client) -> OidcMetadata:
+        normalized = issuer.rstrip("/")
+        return OidcMetadata(
+            issuer=normalized,
+            authorization_endpoint=f"{normalized}/oauth2/v1/authorize",
+            token_endpoint=f"{normalized}/oauth2/v1/token",
+            jwks_uri=f"{normalized}/oauth2/v1/keys",
+        )
+
+    monkeypatch.setattr(sso_service_module, "discover_metadata", _fake_discover_metadata)
 
 
 @pytest.fixture(scope="session")

@@ -7,6 +7,7 @@ import {
   deactivateAdminUser,
   listAdminUsers,
   updateAdminUser,
+  type AdminUserCreateResponse,
   type AdminUser,
   type AdminUserCreateRequest,
   type AdminUserPage,
@@ -61,7 +62,7 @@ export function useAdminUsersQuery(options: UseAdminUsersQueryOptions = {}) {
 
 export function useCreateAdminUserMutation() {
   const queryClient = useQueryClient();
-  return useMutation<AdminUser, Error, AdminUserCreateRequest>({
+  return useMutation<AdminUserCreateResponse, Error, AdminUserCreateRequest>({
     mutationFn: (payload) => createAdminUser(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.users() });
