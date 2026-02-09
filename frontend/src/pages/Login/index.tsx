@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -13,6 +13,11 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import {
+  buildMfaInputError,
+  parseMfaCode,
+  type DetectedMfaCodeKind,
+} from "./mfaCode";
 
 const loginSchema = z.object({
   email: z
@@ -74,6 +79,17 @@ function buildRedirectPath(basePath: string, returnTo: string | null | undefined
   }
   const query = createSearchParams({ returnTo: safeReturnTo }).toString();
   return `${basePath}?${query}`;
+}
+
+function mapMfaApiError(error: ApiError): string {
+  const detail = typeof error.problem?.detail === "string" ? error.problem.detail.trim() : "";
+  if (detail === "Invalid one-time password.") {
+    return "That code wasn't accepted. Check the code and try again.";
+  }
+  if (detail === "MFA challenge is invalid or expired.") {
+    return "Your verification session expired. Sign in again.";
+  }
+  return detail || error.message || "Unable to verify MFA challenge.";
 }
 
 export default function LoginScreen() {
@@ -188,10 +204,29 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
+  const [lastSubmittedEmail, setLastSubmittedEmail] = useState("");
+  const [mfaCodeValue, setMfaCodeValue] = useState("");
+  const [mfaFieldError, setMfaFieldError] = useState<string | null>(null);
+  const [mfaFailedAttempts, setMfaFailedAttempts] = useState(0);
+  const mfaCodeInputRef = useRef<HTMLInputElement>(null);
+  const isMfaStep = Boolean(mfaChallengeToken);
+  const parsedMfaCode = useMemo(() => parseMfaCode(mfaCodeValue), [mfaCodeValue]);
 
   useEffect(() => {
     setFormError(null);
+    setMfaFieldError(null);
+    setMfaFailedAttempts(0);
   }, [location.search]);
+
+  useEffect(() => {
+    if (!isMfaStep) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      mfaCodeInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isMfaStep]);
 
   if (sessionLoading) {
     return (
@@ -230,6 +265,7 @@ export default function LoginScreen() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
+    setMfaFieldError(null);
 
     const formData = new FormData(event.currentTarget);
     const raw = Object.fromEntries(formData.entries());
@@ -242,6 +278,7 @@ export default function LoginScreen() {
     }
 
     const { email, password } = parsed.data;
+    setLastSubmittedEmail(email);
     const redirectValue = typeof raw.returnTo === "string" ? raw.returnTo : null;
     const destination = resolveReturnTo(redirectValue);
 
@@ -249,6 +286,9 @@ export default function LoginScreen() {
     try {
       const result = await createSession({ email, password });
       if (result.kind === "mfa_required") {
+        setMfaCodeValue("");
+        setMfaFieldError(null);
+        setMfaFailedAttempts(0);
         setMfaChallengeToken(result.challengeToken);
         return;
       }
@@ -276,16 +316,18 @@ export default function LoginScreen() {
   const handleMfaSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
+    setMfaFieldError(null);
 
     if (!mfaChallengeToken) {
       setFormError("MFA challenge is missing. Please sign in again.");
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
-    const code = String(formData.get("code") ?? "").trim();
-    if (!code) {
-      setFormError("Enter your authentication code.");
+    const parsedCode = parseMfaCode(mfaCodeValue);
+    const inputError = buildMfaInputError(parsedCode);
+    if (inputError) {
+      setMfaFieldError(inputError);
+      setMfaFailedAttempts((current) => current + 1);
       return;
     }
 
@@ -293,18 +335,21 @@ export default function LoginScreen() {
     try {
       const nextSession = await verifyMfaChallenge({
         challengeToken: mfaChallengeToken,
-        code,
+        code: parsedCode.submitValue,
       });
       queryClient.setQueryData(sessionKeys.detail(), nextSession);
+      setMfaFailedAttempts(0);
       navigate(pickReturnTo(nextSession.return_to, returnTo), { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
-        const message = error.problem?.detail ?? error.message ?? "Unable to verify MFA challenge.";
-        setFormError(message);
+        setFormError(mapMfaApiError(error));
+        setMfaFailedAttempts((current) => current + 1);
       } else if (error instanceof Error) {
         setFormError(error.message);
+        setMfaFailedAttempts((current) => current + 1);
       } else {
         setFormError("Unable to verify MFA challenge.");
+        setMfaFailedAttempts((current) => current + 1);
       }
     } finally {
       setIsSubmitting(false);
@@ -313,15 +358,27 @@ export default function LoginScreen() {
 
   const shouldShowActionError = Boolean(formError) && !isSubmitting;
   const isProvidersLoading = providersQuery.isLoading || providersQuery.isFetching;
+  const shouldShowProviderDivider =
+    !forceSso && !isMfaStep && !isProvidersLoading && !blockingSsoMessage && oidcProviders.length > 0;
+  const mfaDetectionKind: DetectedMfaCodeKind = parsedMfaCode.kind;
+  const mfaInputMode = mfaDetectionKind === "recovery" ? "text" : "numeric";
+  const shouldShowRecoveryDetected = mfaDetectionKind === "recovery" && parsedMfaCode.alnum.length > 0;
+  const shouldShowTroubleHint = mfaFailedAttempts >= 2;
 
   return (
     <div className="mx-auto flex min-h-screen flex-col justify-center bg-background px-6 py-16">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-10 shadow-soft">
         <header className="space-y-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Welcome back</p>
-          <h1 className="text-3xl font-semibold text-foreground">Sign in to ADE</h1>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {isMfaStep ? "Step 2 of 2" : "Welcome back"}
+          </p>
+          <h1 className="text-3xl font-semibold text-foreground">
+            {isMfaStep ? "Verify your identity" : "Sign in to ADE"}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Enter your email and password or continue with a connected provider.
+            {isMfaStep
+              ? "Enter a code from your authenticator app or use a recovery code."
+              : "Enter your email and password or continue with a connected provider."}
           </p>
         </header>
 
@@ -335,7 +392,7 @@ export default function LoginScreen() {
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
             <div className="h-10 animate-pulse rounded-lg bg-muted" />
           </div>
-        ) : !blockingSsoMessage && oidcProviders.length > 0 ? (
+        ) : !isMfaStep && !blockingSsoMessage && oidcProviders.length > 0 ? (
           <div className="mt-6 space-y-3">
             {oidcProviders.map((provider) => (
               <a
@@ -349,16 +406,28 @@ export default function LoginScreen() {
           </div>
         ) : null}
 
-        {!forceSso && !mfaChallengeToken ? (
+        {shouldShowProviderDivider ? (
+          <div className="mt-6 flex items-center gap-3 text-xs font-medium text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            <span>or continue with email</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        ) : null}
+
+        {!forceSso && !isMfaStep ? (
           <form method="post" className="mt-8 space-y-6" onSubmit={handleSubmit}>
             <input type="hidden" name="returnTo" value={returnTo} />
             <FormField label="Email address" required>
               <Input
                 id="email"
                 type="email"
-                autoComplete="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="you@example.com"
                 name="email"
+                defaultValue={lastSubmittedEmail}
                 disabled={isSubmitting}
               />
             </FormField>
@@ -368,6 +437,9 @@ export default function LoginScreen() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="••••••••"
                 name="password"
                 disabled={isSubmitting}
@@ -389,7 +461,11 @@ export default function LoginScreen() {
               </p>
             )}
 
-            {shouldShowActionError ? <Alert tone="danger">{formError}</Alert> : null}
+            {shouldShowActionError ? (
+              <Alert tone="danger" role="alert" aria-live="assertive">
+                {formError}
+              </Alert>
+            ) : null}
 
             <Button type="submit" className="w-full justify-center" disabled={isSubmitting}>
               {isSubmitting ? "Signing in…" : "Continue"}
@@ -397,20 +473,63 @@ export default function LoginScreen() {
           </form>
         ) : null}
 
-        {!forceSso && mfaChallengeToken ? (
+        {!forceSso && isMfaStep ? (
           <form method="post" className="mt-8 space-y-6" onSubmit={handleMfaSubmit}>
-            <FormField label="Authentication code" required>
+            <FormField
+              label="Verification code"
+              hint="Use a 6-digit authenticator code or an 8-character recovery code."
+              error={mfaFieldError}
+              required
+            >
               <Input
                 id="code"
                 type="text"
                 autoComplete="one-time-code"
-                placeholder="123456 or XXXX-XXXX"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode={mfaInputMode}
+                pattern="[A-Za-z0-9-]*"
+                maxLength={9}
+                placeholder="123456 or AB12-3CD4"
                 name="code"
+                value={mfaCodeValue}
+                onChange={(event) => {
+                  const parsedCode = parseMfaCode(event.currentTarget.value);
+                  setMfaCodeValue(parsedCode.displayValue);
+                  if (mfaFieldError) {
+                    setMfaFieldError(null);
+                  }
+                  if (formError) {
+                    setFormError(null);
+                  }
+                }}
+                className="font-mono tracking-[0.06em]"
+                ref={mfaCodeInputRef}
                 disabled={isSubmitting}
               />
             </FormField>
 
-            {shouldShowActionError ? <Alert tone="danger">{formError}</Alert> : null}
+            {shouldShowRecoveryDetected ? (
+              <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                Recovery code detected.
+              </p>
+            ) : null}
+
+            {shouldShowActionError ? (
+              <Alert tone="danger" role="alert" aria-live="assertive">
+                {formError}
+              </Alert>
+            ) : null}
+
+            {shouldShowTroubleHint ? (
+              <div className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">Having trouble with your code?</p>
+                <p className="mt-1">
+                  This field also accepts recovery codes (example: AB12-3CD4).
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Button type="submit" className="w-full justify-center" disabled={isSubmitting}>
@@ -423,6 +542,9 @@ export default function LoginScreen() {
                 disabled={isSubmitting}
                 onClick={() => {
                   setMfaChallengeToken(null);
+                  setMfaCodeValue("");
+                  setMfaFieldError(null);
+                  setMfaFailedAttempts(0);
                   setFormError(null);
                 }}
               >
