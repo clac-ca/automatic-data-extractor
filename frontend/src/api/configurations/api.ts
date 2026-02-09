@@ -1,0 +1,573 @@
+import { apiFetch, client } from "@/api/client";
+import { buildListQuery, type FilterItem } from "@/api/listing";
+import { ApiError, buildApiErrorMessage, tryParseProblemDetails } from "@/api/errors";
+
+import type {
+  ConfigurationPage,
+  ConfigurationRecord,
+  DirectoryWriteResponse,
+  FileListing,
+  FileReadJson,
+  FileRenameResponse,
+  FileWriteResponse,
+} from "@/types/configurations";
+import type { components, paths } from "@/types";
+
+type DeleteDirectoryQuery =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];
+type ImportConfigurationBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
+type ImportConfigurationGithubBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/import/github"]["post"]["requestBody"]["content"]["application/json"];
+type ReplaceConfigurationBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
+type ReplaceConfigurationGithubBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import/github"]["put"]["requestBody"]["content"]["application/json"];
+type UpdateConfigurationBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}"]["patch"]["requestBody"]["content"]["application/json"];
+type UpsertConfigurationFileQuery =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}"]["put"]["parameters"]["query"];
+type ConfigurationStatus = components["schemas"]["ConfigurationStatus"];
+
+export interface ListConfigurationsOptions {
+  readonly limit?: number;
+  readonly cursor?: string | null;
+  readonly sort?: string;
+  readonly includeTotal?: boolean;
+  readonly statuses?: readonly ConfigurationStatus[];
+  readonly signal?: AbortSignal;
+}
+
+function buildStatusFilters(statuses: readonly ConfigurationStatus[] | undefined): FilterItem[] | undefined {
+  if (!statuses?.length) {
+    return undefined;
+  }
+
+  const uniqueStatuses = Array.from(new Set(statuses));
+  if (uniqueStatuses.length === 1) {
+    return [{ id: "status", operator: "eq", value: uniqueStatuses[0] }];
+  }
+
+  return [{ id: "status", operator: "in", value: uniqueStatuses }];
+}
+
+export async function listConfigurations(
+  workspaceId: string,
+  options: ListConfigurationsOptions = {},
+): Promise<ConfigurationPage> {
+  const { signal, limit, cursor, sort, includeTotal, statuses } = options;
+  const query = buildListQuery({
+    limit,
+    cursor: cursor ?? null,
+    sort: sort ?? null,
+    filters: buildStatusFilters(statuses),
+    includeTotal,
+  });
+
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/configurations", {
+    params: {
+      path: { workspaceId },
+      query,
+    },
+    signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected configuration page payload.");
+  }
+
+  return data;
+}
+
+export async function readConfiguration(
+  workspaceId: string,
+  configId: string,
+  signal?: AbortSignal,
+): Promise<ConfigurationRecord | null> {
+  const { data } = await client.GET(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}",
+    {
+      params: { path: { workspaceId, configurationId: configId } },
+      signal,
+    },
+  );
+  return (data ?? null) as ConfigurationRecord | null;
+}
+
+export async function archiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
+  const { data } = await client.POST(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive",
+    {
+      params: { path: { workspaceId, configurationId: configId } },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export interface ListConfigurationFilesOptions {
+  readonly prefix?: string;
+  readonly depth?: "0" | "1" | "infinity";
+  readonly include?: readonly string[];
+  readonly exclude?: readonly string[];
+  readonly limit?: number;
+  readonly cursor?: string | null;
+  readonly sort?: "path" | "name" | "mtime" | "size";
+  readonly order?: "asc" | "desc";
+  readonly signal?: AbortSignal;
+}
+
+export async function listConfigurationFiles(
+  workspaceId: string,
+  configId: string,
+  options: ListConfigurationFilesOptions = {},
+): Promise<FileListing> {
+  const { prefix, depth, include, exclude, limit, cursor, sort, order, signal } = options;
+  const { data } = await client.GET(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files",
+    {
+      params: {
+        path: { workspaceId, configurationId: configId },
+        query: {
+          prefix: prefix ?? "",
+          depth: depth ?? "infinity",
+          include: include?.length ? [...include] : undefined,
+          exclude: exclude?.length ? [...exclude] : undefined,
+          limit,
+          cursor: cursor ?? undefined,
+          sort,
+          order,
+        },
+      },
+      signal,
+      requestInitExt: { cache: "no-store" },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected file listing payload.");
+  }
+  return data as FileListing;
+}
+
+export async function readConfigurationFileJson(
+  workspaceId: string,
+  configId: string,
+  filePath: string,
+  signal?: AbortSignal,
+): Promise<FileReadJson> {
+  const { data } = await client.GET(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}",
+    {
+      params: {
+        path: { workspaceId, configurationId: configId, filePath },
+      },
+      headers: {
+        Accept: "application/json",
+      },
+      signal,
+      requestInitExt: { cache: "no-store" },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected file payload.");
+  }
+  return data as FileReadJson;
+}
+
+export interface ExportConfigurationResult {
+  readonly blob: Blob;
+  readonly filename?: string;
+}
+
+export async function exportConfiguration(
+  workspaceId: string,
+  configId: string,
+): Promise<ExportConfigurationResult> {
+  const { data, response } = await client.GET(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/export",
+    {
+      params: { path: { workspaceId, configurationId: configId } },
+      parseAs: "blob",
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration archive payload.");
+  }
+  const disposition = response?.headers?.get("content-disposition") ?? "";
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = filenameMatch?.[1];
+  return { blob: data as Blob, filename: filename ?? undefined };
+}
+
+export interface UpsertConfigurationFilePayload {
+  readonly path: string;
+  readonly content: string | Blob | ArrayBuffer;
+  readonly parents?: boolean;
+  readonly etag?: string | null;
+  readonly create?: boolean;
+  readonly contentType?: string;
+}
+
+export async function upsertConfigurationFile(
+  workspaceId: string,
+  configId: string,
+  payload: UpsertConfigurationFilePayload,
+): Promise<FileWriteResponse> {
+  const encodedPath = encodeFilePath(payload.path);
+  const query: UpsertConfigurationFileQuery = payload.parents ? { parents: true } : {};
+  const searchParams = new URLSearchParams();
+  if (query.parents) {
+    searchParams.set("parents", "true");
+  }
+  const queryString = searchParams.toString();
+  const body = payload.content;
+  const contentType =
+    payload.contentType ??
+    (typeof Blob !== "undefined" && payload.content instanceof Blob && payload.content.type
+      ? payload.content.type
+      : "application/octet-stream");
+  const response = await apiFetch(
+    `/api/v1/workspaces/${workspaceId}/configurations/${configId}/files/${encodedPath}${
+      queryString ? `?${queryString}` : ""
+    }`,
+    {
+      method: "PUT",
+      body,
+      headers: {
+        "Content-Type": contentType,
+        ...(payload.create ? { "If-None-Match": "*" } : payload.etag ? { "If-Match": payload.etag } : {}),
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  }
+
+  const data = (await response.json().catch(() => ({}))) as FileWriteResponse;
+  if (!data || !data.path) {
+    throw new Error("Expected write response payload.");
+  }
+  return data;
+}
+
+export interface RenameConfigurationFilePayload {
+  readonly fromPath: string;
+  readonly toPath: string;
+  readonly overwrite?: boolean;
+  readonly destIfMatch?: string | null;
+}
+
+export async function renameConfigurationFile(
+  workspaceId: string,
+  configId: string,
+  payload: RenameConfigurationFilePayload,
+): Promise<FileRenameResponse> {
+  const { data } = await client.PATCH(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}",
+    {
+      params: {
+        path: { workspaceId, configurationId: configId, filePath: payload.fromPath },
+      },
+      body: {
+        op: "move",
+        to: payload.toPath,
+        overwrite: payload.overwrite ?? false,
+        dest_if_match: payload.destIfMatch ?? undefined,
+      },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected rename payload.");
+  }
+  return data as FileRenameResponse;
+}
+
+export async function deleteConfigurationFile(
+  workspaceId: string,
+  configId: string,
+  filePath: string,
+  options: { etag?: string | null } = {},
+): Promise<void> {
+  await client.DELETE("/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}", {
+    params: {
+      path: { workspaceId, configurationId: configId, filePath },
+    },
+    headers: options.etag ? { "If-Match": options.etag } : undefined,
+  });
+}
+
+export async function createConfigurationDirectory(
+  workspaceId: string,
+  configId: string,
+  directoryPath: string,
+): Promise<DirectoryWriteResponse> {
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}",
+    {
+      params: {
+        path: {
+          workspaceId,
+          configurationId: configId,
+          directoryPath,
+        },
+      },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected directory response payload.");
+  }
+  return data as DirectoryWriteResponse;
+}
+
+export async function deleteConfigurationDirectory(
+  workspaceId: string,
+  configId: string,
+  directoryPath: string,
+  options: { recursive?: boolean } = {},
+): Promise<void> {
+  const query: DeleteDirectoryQuery = {};
+  if (options.recursive) {
+    query.recursive = true;
+  }
+  await client.DELETE(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}",
+    {
+      params: {
+        path: {
+          workspaceId,
+          configurationId: configId,
+          directoryPath,
+        },
+        query,
+      },
+    },
+  );
+}
+
+export interface ImportConfigurationArchivePayload {
+  readonly type: "zip";
+  readonly displayName: string;
+  readonly file: File | Blob;
+  readonly notes?: string | null;
+}
+
+export interface ImportConfigurationGithubPayload {
+  readonly type: "github";
+  readonly displayName: string;
+  readonly url: string;
+  readonly notes?: string | null;
+}
+
+export type ImportConfigurationPayload =
+  | ImportConfigurationArchivePayload
+  | ImportConfigurationGithubPayload;
+
+export async function importConfigurationFromArchive(
+  workspaceId: string,
+  payload: ImportConfigurationArchivePayload,
+): Promise<ConfigurationRecord> {
+  const formData = new FormData();
+  formData.append("display_name", payload.displayName);
+  if (payload.notes && payload.notes.trim().length > 0) {
+    formData.append("notes", payload.notes.trim());
+  }
+  formData.append("file", payload.file);
+
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations/import", {
+    params: { path: { workspaceId } },
+    body: formData as unknown as ImportConfigurationBody,
+    bodySerializer: () => formData,
+  });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export async function importConfigurationFromGithub(
+  workspaceId: string,
+  payload: ImportConfigurationGithubPayload,
+): Promise<ConfigurationRecord> {
+  const body: ImportConfigurationGithubBody = {
+    display_name: payload.displayName.trim(),
+    url: payload.url.trim(),
+  };
+  if (payload.notes && payload.notes.trim().length > 0) {
+    body.notes = payload.notes.trim();
+  }
+
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations/import/github", {
+    params: { path: { workspaceId } },
+    body,
+  });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export async function importConfiguration(
+  workspaceId: string,
+  payload: ImportConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  if (payload.type === "github") {
+    return importConfigurationFromGithub(workspaceId, payload);
+  }
+  return importConfigurationFromArchive(workspaceId, payload);
+}
+
+export interface ReplaceConfigurationArchivePayload {
+  readonly type: "zip";
+  readonly file: File | Blob;
+  readonly ifMatch?: string | null;
+}
+
+export interface ReplaceConfigurationGithubPayload {
+  readonly type: "github";
+  readonly url: string;
+  readonly ifMatch?: string | null;
+}
+
+export type ReplaceConfigurationPayload =
+  | ReplaceConfigurationArchivePayload
+  | ReplaceConfigurationGithubPayload;
+
+export async function replaceConfigurationFromArchive(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationArchivePayload,
+): Promise<ConfigurationRecord> {
+  const formData = new FormData();
+  formData.append("file", payload.file);
+
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import",
+    {
+      params: { path: { workspaceId, configurationId: configId } },
+      headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
+      body: formData as unknown as ReplaceConfigurationBody,
+      bodySerializer: () => formData,
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export async function replaceConfigurationFromGithub(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationGithubPayload,
+): Promise<ConfigurationRecord> {
+  const body: ReplaceConfigurationGithubBody = {
+    url: payload.url.trim(),
+  };
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import/github",
+    {
+      params: { path: { workspaceId, configurationId: configId } },
+      headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
+      body,
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export async function replaceConfigurationImport(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  if (payload.type === "github") {
+    return replaceConfigurationFromGithub(workspaceId, configId, payload);
+  }
+  return replaceConfigurationFromArchive(workspaceId, configId, payload);
+}
+
+export type ConfigurationSourceInput =
+  | { readonly type: "template" }
+  | { readonly type: "clone"; readonly configurationId: string };
+
+export interface CreateConfigurationPayload {
+  readonly displayName: string;
+  readonly source: ConfigurationSourceInput;
+  readonly notes?: string | null;
+}
+
+function serializeConfigurationSource(source: ConfigurationSourceInput) {
+  if (source.type === "template") {
+    return {
+      type: "template" as const,
+    };
+  }
+  return {
+    type: "clone" as const,
+    configuration_id: source.configurationId.trim(),
+  };
+}
+
+export async function createConfiguration(
+  workspaceId: string,
+  payload: CreateConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations", {
+    params: {
+      path: { workspaceId },
+    },
+    body: {
+      display_name: payload.displayName.trim(),
+      source: serializeConfigurationSource(payload.source),
+      notes: payload.notes?.trim() || undefined,
+    },
+  });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export interface UpdateConfigurationPayload {
+  readonly displayName?: string;
+  readonly notes?: string | null;
+}
+
+export async function updateConfiguration(
+  workspaceId: string,
+  configurationId: string,
+  payload: UpdateConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const body: UpdateConfigurationBody = {};
+  if (Object.prototype.hasOwnProperty.call(payload, "displayName")) {
+    body.display_name = payload.displayName?.trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "notes")) {
+    body.notes = payload.notes?.trim() || null;
+  }
+  const { data } = await client.PATCH(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}",
+    {
+      params: { path: { workspaceId, configurationId } },
+      body,
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+function encodeFilePath(path: string) {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}

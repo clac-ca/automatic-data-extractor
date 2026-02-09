@@ -1,48 +1,53 @@
 # docker-compose.prod.yaml
 #
-# Production: runs ADE API + worker + web (nginx) in a single container.
-# The web server listens on :8000 and proxies /api to the API running on :8001.
+# Production deployment (recommended default):
+# - app container runs api + worker + web in one container
 #
-# Requirements:
-# - Docker and Docker Compose
-# - External Postgres database
-# - External Azure Storage account (Blob)
+# Start:
+#   docker compose -f docker-compose.prod.yaml up -d
 #
-# Build / Run:
-#   docker compose -f docker-compose.prod.yaml up --build
+# Scale-out alternative:
+#   docker compose -f docker-compose.prod.split.yaml up -d
 #
-# Diagram of services:
+# Required variables:
+# - ADE_PUBLIC_WEB_URL
+# - ADE_DATABASE_URL
+# - ADE_BLOB_CONTAINER
+# - ADE_SECRET_KEY
+# - ADE_BLOB_CONNECTION_STRING (or ADE_BLOB_ACCOUNT_URL for managed identity auth)
 #
-#   Host
-#    │  http://localhost:8000
-#    ▼
-# [8000]  ┌──────────────┐
-#         │ ade          │  api + worker + nginx
-#         └──────┬───────┘
-#                ├───────────────> external Postgres
-#                └───────────────> external Azure Storage
+# Optional:
+# - ADE_DOCKER_TAG (default: main; compose image selector, set in shell/CI at deploy time)
+# - ADE_API_PROCESSES (default: 2)
+# - ADE_WORKER_RUN_CONCURRENCY (default: 4)
+
 services:
-  ade:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
+  app:
+    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}
     command: ["ade", "start"]
+    env_file:
+      - path: ./.env
+        required: false
+    restart: unless-stopped
+    volumes:
+      - app_data:/app/data
     ports:
       - 8000:8000
-    volumes:
-      - ade_data:/app/data
-      # - ./data:/app/data
     environment:
-      ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
-      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
-      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
-
+      ADE_SERVICES: api,worker,web
+      ADE_API_PROCESSES: ${ADE_API_PROCESSES:-2} # benchmark-backed baseline for production
+      ADE_WORKER_RUN_CONCURRENCY: ${ADE_WORKER_RUN_CONCURRENCY:-4} # benchmark-backed baseline for production
+      ADE_AUTH_DISABLED: "false"
+      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:?Set ADE_PUBLIC_WEB_URL to your external web URL}
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:?Set ADE_DATABASE_URL}
       ADE_DATA_DIR: /app/data
-
-      ADE_BLOB_ACCOUNT_URL: ${ADE_BLOB_ACCOUNT_URL} # https://<account>.blob.core.windows.net
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
-      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE-}
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT-}
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING-} # Alternatively set ADE_BLOB_ACCOUNT_URL in .env for managed identity auth.
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:?Set ADE_BLOB_CONTAINER}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX-}
+      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto|require|off; see docs/reference/environment-variables.md
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?Set ADE_SECRET_KEY}
 
 volumes:
-  ade_data:
+  app_data:

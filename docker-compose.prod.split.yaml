@@ -1,78 +1,76 @@
 # docker-compose.prod.split.yaml
 #
-# Production (split): run API, worker, and web in separate containers using the same image.
-# The web container runs nginx and proxies /api to the api service.
+# Production scale-out deployment:
+# - app container runs api + web
+# - worker container runs worker only (scale this service independently)
 #
-# Requirements:
-# - Docker and Docker Compose
-# - External Postgres database
-# - External Azure Storage account (Blob)
+# Start:
+#   docker compose -f docker-compose.prod.split.yaml up -d
 #
-# Build / Run:
-#   docker compose -f docker-compose.prod.split.yaml up --build
+# Scale workers:
+#   docker compose -f docker-compose.prod.split.yaml up -d --scale worker=3
 #
-# Diagram of services:
+# Required variables:
+# - ADE_PUBLIC_WEB_URL
+# - ADE_DATABASE_URL
+# - ADE_BLOB_CONTAINER
+# - ADE_SECRET_KEY
+# - ADE_BLOB_CONNECTION_STRING (or ADE_BLOB_ACCOUNT_URL for managed identity auth)
 #
-#   Host
-#    │  http://localhost:8000
-#    ▼
-# [8000]  ┌──────────────┐
-#         │ web          │  nginx + SPA
-#         └──────┬───────┘
-#                ├───────────────> ade-api
-#                └───────────────> ade-worker
-#                ├───────────────> external Postgres
-#                └───────────────> external Azure Storage
+# Optional:
+# - ADE_DOCKER_TAG (default: main; compose image selector, set in shell/CI at deploy time)
+# - ADE_API_PROCESSES (default: 2)
+# - ADE_WORKER_RUN_CONCURRENCY (default: 4)
+
 services:
-  api:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["ade", "api", "start"]
+  app:
+    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}
+    command: ["ade", "start"]
+    env_file:
+      - path: ./.env
+        required: false
+    restart: unless-stopped
     volumes:
-      - ade_data:/app/data
-      # - ./data:/app/data
-    environment:
-      ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
-      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
-      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
-
-      ADE_DATA_DIR: /app/data
-
-      ADE_BLOB_ACCOUNT_URL: ${ADE_BLOB_ACCOUNT_URL} # https://<account>.blob.core.windows.net
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
-      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
-
-  worker:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["ade", "worker", "start"]
-    volumes:
-      - ade_data:/app/data
-    environment:
-      ADE_DATABASE_URL: ${ADE_DATABASE_URL} # postgresql+psycopg://user:pass@pg.example.com:5432/ade?sslmode=verify-full
-      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE} # password|managed_identity
-      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT} # /path/to/ca.crt (optional)
-
-      ADE_DATA_DIR: /app/data
-
-      ADE_BLOB_ACCOUNT_URL: ${ADE_BLOB_ACCOUNT_URL} # https://<account>.blob.core.windows.net
-      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING} # required for connection_string auth
-      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER} # private container name
-      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX:-workspaces}
-
-      ADE_SECRET_KEY: ${ADE_SECRET_KEY}
-
-  web:
-    image: ${ADE_IMAGE:-ghcr.io/clac-ca/automatic-data-extractor:latest}
-    command: ["ade", "web", "serve"]
-    depends_on:
-      api:
-        condition: service_started
+      - app_data:/app/data
     ports:
       - 8000:8000
     environment:
-      ADE_WEB_PROXY_TARGET: http://api:8000
+      ADE_SERVICES: api,web
+      ADE_API_PROCESSES: ${ADE_API_PROCESSES:-2} # benchmark-backed baseline for production
+      ADE_AUTH_DISABLED: "false"
+      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:?Set ADE_PUBLIC_WEB_URL to your external web URL}
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:?Set ADE_DATABASE_URL}
+      ADE_DATA_DIR: /app/data
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE-}
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT-}
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING-} # Alternatively set ADE_BLOB_ACCOUNT_URL in .env for managed identity auth.
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:?Set ADE_BLOB_CONTAINER}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX-}
+      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto|require|off; see docs/reference/environment-variables.md
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?Set ADE_SECRET_KEY}
+
+  worker:
+    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}
+    command: ["ade", "start"]
+    env_file:
+      - path: ./.env
+        required: false
+    restart: unless-stopped
+    volumes:
+      - app_data:/app/data
+    environment:
+      ADE_SERVICES: worker
+      ADE_WORKER_RUN_CONCURRENCY: ${ADE_WORKER_RUN_CONCURRENCY:-4} # benchmark-backed baseline for production
+      ADE_AUTH_DISABLED: "false"
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:?Set ADE_DATABASE_URL}
+      ADE_DATA_DIR: /app/data
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE-}
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT-}
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING-} # Alternatively set ADE_BLOB_ACCOUNT_URL in .env for managed identity auth.
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:?Set ADE_BLOB_CONTAINER}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX-}
+      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto|require|off; see docs/reference/environment-variables.md
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?Set ADE_SECRET_KEY}
 
 volumes:
-  ade_data:
+  app_data:

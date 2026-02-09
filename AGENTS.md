@@ -6,10 +6,14 @@ This file is **for AI coding agents** working on the `ade` codebase. ADE is a li
 
 ```
 automatic-data-extractor/
-├─ apps/
-│  ├─ ade-api/      # FastAPI backend (API only)
-│  ├─ ade-web/      # React/Vite SPA
-│  └─ ade-worker/   # Background worker (builds + runs).
+├─ backend/
+│  ├─ pyproject.toml   # Unified backend project metadata/scripts/deps
+│  ├─ uv.lock          # Unified backend lockfile
+│  ├─ src/             # Python packages (ade, ade_api, ade_worker, ade_db, ade_storage)
+│  └─ tests/           # Backend test suites (api + worker)
+├─ frontend/
+│  ├─ src/             # React/Vite SPA source
+│  └─ public/          # Static web assets
 ├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
@@ -55,37 +59,35 @@ automatic-data-extractor/
 
 ```bash
 # CLI discovery (source of truth)
-ade --help
-ade api --help
-ade worker --help
-ade-api --help
-ade-worker --help
-ade-engine --help
+cd backend && uv run ade --help
+cd backend && uv run ade-api --help
+cd backend && uv run ade-worker --help
+cd backend && uv run ade-engine --help
 ```
 
 ```bash
 # Common workflows
-ade dev              # api + worker + web (reload)
-ade start            # api + worker + web (nginx)
-ade api dev          # api only (reload)
-ade api start        # api only (prod-style)
-ade worker start
-ade web serve        # nginx (built assets)
-ade web dev          # requires dev deps + node_modules
+cd backend && uv run ade dev              # api + worker + web (reload)
+cd backend && uv run ade start            # api + worker + web (prod-style)
+cd backend && uv run ade api dev          # api only (reload)
+cd backend && uv run ade worker start
+cd backend && uv run ade web dev
 ```
 
 ```bash
 # Quality checks
-ade api types
-ade api lint
-ade api test
-npm run lint --prefix apps/ade-web
-npm run test --prefix apps/ade-web
+cd backend && uv run ade api types
+cd backend && uv run ade api lint
+cd backend && uv run ade api test
+cd backend && uv run ade worker test
+cd backend && uv run ade web lint
+cd backend && uv run ade web test
+cd backend && uv run ade test
 ```
 
 ```bash
 # Build web assets
-ade web build        # or: npm run build --prefix apps/ade-web
+cd backend && uv run ade web build
 ```
 
 ## Engine CLI quick runs (current)
@@ -121,7 +123,7 @@ ade-engine process batch \
 
 ## Frontend API types
 
-- Generated types: `apps/ade-web/src/types/generated/openapi.d.ts`.
+- Generated types: `frontend/src/types/generated/openapi.d.ts`.
 - If missing/stale, run `ade api types` before touching frontend API code.
 - Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
@@ -132,8 +134,16 @@ ade-engine process batch \
 - Use `deps:` for dependency updates that should trigger a patch release.
 - Stage only task-related files; avoid bundling unrelated changes.
 - Versions/changelog are managed by Release Please; do not bump `VERSION` or `CHANGELOG.md` manually unless requested.
+- Official releases are created from `main`; `development` and `main` are branch channels for image tags.
+- SemVer mapping:
+  - `fix:` / `deps:` -> patch release
+  - `feat:` -> minor release
+  - `feat!:` or `BREAKING CHANGE:` footer -> major release
+- If a specific version must be forced, use a `Release-As: X.Y.Z` footer in the commit body.
+- Runtime version metadata (`ADE_APP_VERSION`, `ADE_APP_COMMIT_SHA`) is CI-managed; do not ask users to set these in `.env` for normal deployments.
+- Production deployments should pin immutable release tags via `ADE_DOCKER_TAG=vX.Y.Z`.
 - See `CONTRIBUTING.md` for the full collaboration and release flow.
 
 ## 🤖 Agent rules
 
-1. Always run `ade api test` before committing and run the relevant frontend/backend checks for touched areas.
+1. Always run `cd backend && uv run ade test` (or the affected service tests) before committing and run the relevant frontend/backend checks for touched areas.

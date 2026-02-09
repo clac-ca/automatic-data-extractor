@@ -1,2 +1,0 @@
-"""Presence (WebSocket) feature module."""
-
