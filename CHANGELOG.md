@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.1...v1.7.2) (2026-02-09)
+
+
+### Bug Fixes
+
+* **ci:** snapshot package versions before cleanup deletion ([9dd119f](https://github.com/clac-ca/automatic-data-extractor/commit/9dd119f037a0a037ede44f4f3d5791b54a9822f6))
+
 ## [1.7.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.0...v1.7.1) (2026-02-09)
 
 
