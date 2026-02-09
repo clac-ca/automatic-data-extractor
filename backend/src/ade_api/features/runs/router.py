@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path as FilePath
 from typing import Annotated
@@ -606,7 +607,7 @@ async def stream_workspace_run_events_endpoint(
     run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     resolved_cursor = _resolve_stream_cursor(request, cursor)
 
-    async def event_stream():
+    async def event_stream() -> AsyncIterator[dict[str, str]]:
         async for message in service.stream_run_events(run_id=run.id, cursor=resolved_cursor):
             if await request.is_disconnected():
                 return
@@ -634,7 +635,7 @@ def download_workspace_run_events_file_endpoint(
     settings: SettingsDep,
     service: RunsServiceReadDep,
     _actor: RunReader,
-):
+) -> StreamingResponse:
     run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     blob_storage = get_storage_adapter(request)
     session_factory = get_session_factory(request)
@@ -743,7 +744,7 @@ def download_workspace_run_output_endpoint(
     settings: SettingsDep,
     service: RunsServiceReadDep,
     _actor: RunReader,
-):
+) -> StreamingResponse:
     run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     blob_storage = get_storage_adapter(request)
     session_factory = get_session_factory(request)

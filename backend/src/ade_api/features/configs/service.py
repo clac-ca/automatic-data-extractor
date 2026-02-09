@@ -1707,16 +1707,17 @@ def _filter_entries(
 def _sort_entries(entries: list[dict], sort: str, order: str) -> list[dict]:
     reverse = order == "desc"
 
-    def _key(entry: dict):
-        if sort == "name":
-            return entry["name"]
-        if sort == "mtime":
-            return entry.get("mtime") or dt.datetime.fromtimestamp(0, tz=dt.UTC)
-        if sort == "size":
-            return entry.get("size") or 0
-        return entry["path"]
-
-    return sorted(entries, key=_key, reverse=reverse)
+    if sort == "name":
+        return sorted(entries, key=lambda entry: str(entry["name"]), reverse=reverse)
+    if sort == "mtime":
+        return sorted(
+            entries,
+            key=lambda entry: entry.get("mtime") or dt.datetime.fromtimestamp(0, tz=dt.UTC),
+            reverse=reverse,
+        )
+    if sort == "size":
+        return sorted(entries, key=lambda entry: int(entry.get("size") or 0), reverse=reverse)
+    return sorted(entries, key=lambda entry: str(entry["path"]), reverse=reverse)
 
 
 def _compute_fileset_hash(entries: list[dict]) -> str:

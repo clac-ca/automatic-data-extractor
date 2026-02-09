@@ -6,11 +6,14 @@ import json
 from collections.abc import Mapping
 from datetime import date, datetime
 from decimal import Decimal
+from types import ModuleType
 from typing import Any
 from uuid import UUID
 
+orjson: ModuleType | None
+
 try:  # pragma: no cover - optional dependency
-    import orjson  # type: ignore
+    import orjson
 except ImportError:  # pragma: no cover - optional dependency
     orjson = None
 

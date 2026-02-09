@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from ade_api.common.logging import log_context
 from ade_api.common.problem_details import (
     ApiError,
+    ProblemDetailsErrorItem,
     build_problem_details,
     coerce_detail_and_errors,
     error_items_from_pydantic,
@@ -31,7 +32,7 @@ def _problem_response(
     request: Request,
     status_code: int,
     detail: str | dict[str, object] | None,
-    errors,
+    errors: list[ProblemDetailsErrorItem] | None,
     error_type: str | None = None,
     title: str | None = None,
     headers: dict[str, str] | None = None,

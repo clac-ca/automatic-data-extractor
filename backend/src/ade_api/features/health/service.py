@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from ade_api.common.logging import log_context
 from ade_api.features.admin_settings.service import (
     RuntimeSettingsService,
+    RuntimeSettingsV2,
     resolve_runtime_settings_from_env_defaults,
 )
 from ade_api.settings import Settings
@@ -93,7 +94,7 @@ class HealthService:
             )
             raise HealthCheckError("Failed to compute health status") from exc
 
-    def _runtime_settings(self):
+    def _runtime_settings(self) -> RuntimeSettingsV2:
         if self._runtime_settings_service is not None:
             logger.debug(
                 "health.runtime_settings.fetch_from_service",

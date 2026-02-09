@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -343,7 +344,7 @@ def upload_document(
             service.discard_staged_upload(staged=staged)
         raise
     finally:
-        if upload_slot_acquired:
+        if upload_slot_acquired and upload_semaphore is not None:
             upload_semaphore.release()
 
     run_enqueued = _try_enqueue_run(
@@ -618,7 +619,7 @@ async def stream_document_changes(
     session_factory = get_session_factory(request)
     events_hub = get_document_changes_hub(request)
 
-    async def event_stream():
+    async def event_stream() -> AsyncIterator[dict[str, Any]]:
         token_value = start_token
         queue, unsubscribe = events_hub.subscribe(str(workspace_id))
 

@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ade_api.common.cursor_listing import (
+    CursorPage,
     ResolvedCursorSort,
     paginate_query_cursor,
     paginate_sequence_cursor,
@@ -197,7 +198,7 @@ def _all_permissions_for_scope(scope: ScopeType) -> frozenset[str]:
     return _ALL_WORKSPACE_PERMISSIONS
 
 
-def _assignment_scope_filter(workspace_id: UUID | None):
+def _assignment_scope_filter(workspace_id: UUID | None) -> Any:
     if workspace_id is None:
         return UserRoleAssignment.workspace_id.is_(None)
     return UserRoleAssignment.workspace_id == workspace_id
@@ -328,7 +329,7 @@ class RbacService:
         limit: int,
         cursor: str | None,
         include_total: bool,
-    ):
+    ) -> CursorPage[Permission]:
         stmt = select(Permission)
         stmt = apply_permission_filters(
             stmt,
@@ -358,7 +359,7 @@ class RbacService:
         limit: int,
         cursor: str | None,
         include_total: bool,
-    ):
+    ) -> CursorPage[Role]:
         stmt: Select[Role] = select(Role).options(
             selectinload(Role.permissions).selectinload(RolePermission.permission),
         )
@@ -556,7 +557,7 @@ class RbacService:
         cursor: str | None,
         include_total: bool,
         default_active_only: bool = True,
-    ):
+    ) -> CursorPage[UserRoleAssignment]:
         stmt: Select[UserRoleAssignment] = select(UserRoleAssignment).options(
             selectinload(UserRoleAssignment.user),
             selectinload(UserRoleAssignment.role)
@@ -745,7 +746,7 @@ class RbacService:
         if cached is not None:
             return cached
 
-        stmt: Select[str] = (
+        stmt: Select[tuple[str]] = (
             select(Permission.key)
             .select_from(RolePermission)
             .join(Permission, Permission.id == RolePermission.permission_id)
@@ -777,7 +778,7 @@ class RbacService:
         if cached is not None:
             return cached
 
-        stmt: Select[str] = (
+        stmt: Select[tuple[str]] = (
             select(Permission.key)
             .select_from(RolePermission)
             .join(Permission, Permission.id == RolePermission.permission_id)
@@ -849,7 +850,7 @@ class RbacService:
         if cached is not None:
             return cached
 
-        stmt: Select[str] = (
+        stmt: Select[tuple[str]] = (
             select(Role.slug)
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(

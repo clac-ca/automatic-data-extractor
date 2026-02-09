@@ -4,6 +4,7 @@ import csv
 from collections.abc import Sequence
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 import openpyxl
 from pydantic import Field
@@ -100,7 +101,11 @@ def build_workbook_preview_from_csv(
     )
 
 
-def _select_xlsx_sheet(workbook, sheet_name: str | None, sheet_index: int | None):
+def _select_xlsx_sheet(
+    workbook: Any,
+    sheet_name: str | None,
+    sheet_index: int | None,
+) -> tuple[int, Any]:
     if sheet_name:
         if sheet_name not in workbook.sheetnames:
             raise KeyError(f"Sheet {sheet_name!r} not found")
@@ -113,7 +118,7 @@ def _select_xlsx_sheet(workbook, sheet_name: str | None, sheet_index: int | None
 
 
 def _preview_xlsx_sheet(
-    sheet,
+    sheet: Any,
     *,
     index: int,
     max_rows: int,

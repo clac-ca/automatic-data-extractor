@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import case, func, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.common.cursor_listing import (
     CursorFieldSpec,
@@ -18,7 +20,7 @@ from ade_api.common.sql import nulls_last
 from ade_db.models import File, FileComment, FileVersion, FileVersionOrigin, Run
 
 
-def _current_version_byte_size_expr():
+def _current_version_byte_size_expr() -> ColumnElement[Any]:
     return (
         select(FileVersion.byte_size)
         .where(FileVersion.id == File.current_version_id)
@@ -26,7 +28,7 @@ def _current_version_byte_size_expr():
     )
 
 
-def _current_version_origin_expr():
+def _current_version_origin_expr() -> ColumnElement[Any]:
     return (
         select(FileVersion.origin)
         .where(FileVersion.id == File.current_version_id)
@@ -34,7 +36,7 @@ def _current_version_origin_expr():
     )
 
 
-def _last_run_at_expr():
+def _last_run_at_expr() -> ColumnElement[Any]:
     return (
         select(func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at)))
         .select_from(Run)
@@ -47,7 +49,7 @@ def _last_run_at_expr():
     )
 
 
-def _activity_at_expr():
+def _activity_at_expr() -> ColumnElement[Any]:
     last_run_at = _last_run_at_expr()
     return case(
         (last_run_at.is_(None), File.updated_at),

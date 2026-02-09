@@ -405,11 +405,11 @@ def update_role(
     except RoleValidationError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
-    payload = _serialize_role(updated)
+    response_payload = _serialize_role(updated)
     etag = format_weak_etag(build_etag_token(updated.id, updated.updated_at or updated.created_at))
     if etag:
         response.headers["ETag"] = etag
-    return payload
+    return response_payload
 
 
 @router.delete(
@@ -552,7 +552,7 @@ def _load_user_role_assignments(
         include_total=False,
         default_active_only=False,
     )
-    return assignments_page.items
+    return list(assignments_page.items)
 
 
 @user_roles_router.get(

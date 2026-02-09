@@ -273,7 +273,8 @@ def coerce_detail_and_errors(
             cursor = payload.get("latest_cursor")
             if cursor:
                 suffix = f" (latest_cursor={cursor})"
-                detail_text = (detail_text or "Resync required") + suffix
+                base = detail_text if isinstance(detail_text, str) else "Resync required"
+                detail_text = base + suffix
 
         if "limit" in payload:
             limit = payload["limit"]

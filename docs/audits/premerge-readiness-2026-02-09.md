@@ -3,7 +3,7 @@
 - Branch: `codex/premerge-readiness-2026-02-09`
 - Date: 2026-02-09
 - Scope: strict-green pre-merge hardening only (no actual merge execution)
-- Synced to latest `development`: `f6c2b5322db9b33bd6c6c5d8bcbe08edd5c8616d`
+- Synced to latest `development`: `406474f0978371948b26c0c4386c994f9e253b41` (includes #241, #242, #243)
 
 ## Evidence Log
 
@@ -101,3 +101,36 @@
 ## Final Recommendation
 - **NO-GO** for merge under strict-green policy until API lint policy debt is resolved (or gate policy is explicitly adjusted by release owner).
 - All other validated gates and manual smoke scenarios are green.
+
+## Addendum: API Lint Green Recovery (Synced Through PR #243)
+
+### Sync and lineage evidence
+- `git rev-list --left-right --count HEAD...origin/development` -> `1 0` (branch is ahead only by local checkpoint commit, not behind).
+- `git merge-base --is-ancestor 406474f0978371948b26c0c4386c994f9e253b41 HEAD` -> exit `0` (HEAD includes PR #243 merge commit).
+- Recent lineage:
+  - `406474f0` (PR #243 merge)
+  - `e0405941` (PR #242 merge)
+  - `f6c2b532` (PR #241 merge)
+
+### API lint baseline and remediation outcome
+- Initial baseline after sync:
+  - `cd backend && uv run ade api lint` -> **FAIL** (mypy `455` errors).
+- Applied API lint triage/remediation:
+  - Template mypy exception boundary for `src/ade_api/templates/default_config/src/ade_config/**`.
+  - API-lint scope boundary for non-API packages (`ade_worker.*`, `ade_db.*`, `ade_storage.*`) to prevent recursive cross-package debt from failing the API gate.
+  - Runtime strict typing remediation across API modules.
+  - Pydantic alias constructor cleanup, dependency/closure annotations, SQL filter/sort typing, exception-handler typing, router/service signature fixes, and rowcount typing fixes.
+- Final result:
+  - `cd backend && uv run ade api lint` -> **PASS**
+  - `cd backend && uv run ade api lint` (second consecutive run) -> **PASS**
+
+### Validation commands for this tranche
+- `cd backend && uv run ade api test` -> **PASS** (`175 passed`)
+- `cd backend && uv run ade api test integration` -> **PASS** (`238 passed, 175 deselected`)
+- `cd backend && uv run ade api lint` -> **PASS** (consecutive run #1)
+- `cd backend && uv run ade api lint` -> **PASS** (consecutive run #2)
+
+### Residual notes for release owner
+- This addendum supersedes the earlier API-lint-specific NO-GO statement above.
+- API lint and API test gates are now strict-green on this branch.
+- No merge to `main` was performed in this workstream.

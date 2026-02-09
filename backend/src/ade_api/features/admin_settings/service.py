@@ -407,9 +407,9 @@ class RuntimeSettingsService:
 
             field_meta[path] = RuntimeSettingFieldMeta(
                 source=source,
-                lockedByEnv=locked,
-                envVar=env_var,
-                restartRequired=locked,
+                locked_by_env=locked,
+                env_var=env_var,
+                restart_required=locked,
             )
 
         timestamp = updated_at or datetime.now(tz=UTC)
@@ -424,82 +424,82 @@ class RuntimeSettingsService:
 
     def _to_read_response(self, resolved: ResolvedRuntimeSettings) -> AdminSettingsReadResponse:
         values = RuntimeSettingsValues(
-            safeMode=RuntimeSafeModeValues(
+            safe_mode=RuntimeSafeModeValues(
                 enabled=resolved.values.safe_mode.enabled,
                 detail=resolved.values.safe_mode.detail,
             ),
             auth=RuntimeAuthValues(
                 mode=resolved.values.auth.mode,
                 password=RuntimePasswordValues(
-                    resetEnabled=resolved.values.auth.password.reset_enabled,
-                    mfaRequired=resolved.values.auth.password.mfa_required,
+                    reset_enabled=resolved.values.auth.password.reset_enabled,
+                    mfa_required=resolved.values.auth.password.mfa_required,
                     complexity=RuntimePasswordComplexityValues(
-                        minLength=resolved.values.auth.password.complexity.min_length,
-                        requireUppercase=resolved.values.auth.password.complexity.require_uppercase,
-                        requireLowercase=resolved.values.auth.password.complexity.require_lowercase,
-                        requireNumber=resolved.values.auth.password.complexity.require_number,
-                        requireSymbol=resolved.values.auth.password.complexity.require_symbol,
+                        min_length=resolved.values.auth.password.complexity.min_length,
+                        require_uppercase=resolved.values.auth.password.complexity.require_uppercase,
+                        require_lowercase=resolved.values.auth.password.complexity.require_lowercase,
+                        require_number=resolved.values.auth.password.complexity.require_number,
+                        require_symbol=resolved.values.auth.password.complexity.require_symbol,
                     ),
                     lockout=RuntimePasswordLockoutValues(
-                        maxAttempts=resolved.values.auth.password.lockout.max_attempts,
-                        durationSeconds=resolved.values.auth.password.lockout.duration_seconds,
+                        max_attempts=resolved.values.auth.password.lockout.max_attempts,
+                        duration_seconds=resolved.values.auth.password.lockout.duration_seconds,
                     ),
                 ),
-                identityProvider=RuntimeIdentityProviderValues(
-                    jitProvisioningEnabled=resolved.values.auth.identity_provider.jit_provisioning_enabled,
+                identity_provider=RuntimeIdentityProviderValues(
+                    jit_provisioning_enabled=resolved.values.auth.identity_provider.jit_provisioning_enabled,
                 ),
             ),
         )
         meta = RuntimeSettingsMeta(
-            safeMode=RuntimeSafeModeMeta(
+            safe_mode=RuntimeSafeModeMeta(
                 enabled=resolved.field_meta[("safe_mode", "enabled")],
                 detail=resolved.field_meta[("safe_mode", "detail")],
             ),
             auth=RuntimeAuthMeta(
                 mode=resolved.field_meta[("auth", "mode")],
                 password=RuntimePasswordMeta(
-                    resetEnabled=resolved.field_meta[("auth", "password", "reset_enabled")],
-                    mfaRequired=resolved.field_meta[("auth", "password", "mfa_required")],
+                    reset_enabled=resolved.field_meta[("auth", "password", "reset_enabled")],
+                    mfa_required=resolved.field_meta[("auth", "password", "mfa_required")],
                     complexity=RuntimePasswordComplexityMeta(
-                        minLength=resolved.field_meta[
+                        min_length=resolved.field_meta[
                             ("auth", "password", "complexity", "min_length")
                         ],
-                        requireUppercase=resolved.field_meta[
+                        require_uppercase=resolved.field_meta[
                             ("auth", "password", "complexity", "require_uppercase")
                         ],
-                        requireLowercase=resolved.field_meta[
+                        require_lowercase=resolved.field_meta[
                             ("auth", "password", "complexity", "require_lowercase")
                         ],
-                        requireNumber=resolved.field_meta[
+                        require_number=resolved.field_meta[
                             ("auth", "password", "complexity", "require_number")
                         ],
-                        requireSymbol=resolved.field_meta[
+                        require_symbol=resolved.field_meta[
                             ("auth", "password", "complexity", "require_symbol")
                         ],
                     ),
                     lockout=RuntimePasswordLockoutMeta(
-                        maxAttempts=resolved.field_meta[
+                        max_attempts=resolved.field_meta[
                             ("auth", "password", "lockout", "max_attempts")
                         ],
-                        durationSeconds=resolved.field_meta[
+                        duration_seconds=resolved.field_meta[
                             ("auth", "password", "lockout", "duration_seconds")
                         ],
                     ),
                 ),
-                identityProvider=RuntimeIdentityProviderMeta(
-                    jitProvisioningEnabled=resolved.field_meta[
+                identity_provider=RuntimeIdentityProviderMeta(
+                    jit_provisioning_enabled=resolved.field_meta[
                         ("auth", "identity_provider", "jit_provisioning_enabled")
                     ],
                 ),
             ),
         )
         return AdminSettingsReadResponse(
-            schemaVersion=resolved.schema_version,
+            schema_version=resolved.schema_version,
             revision=resolved.revision,
             values=values,
             meta=meta,
-            updatedAt=resolved.updated_at,
-            updatedBy=resolved.updated_by,
+            updated_at=resolved.updated_at,
+            updated_by=resolved.updated_by,
         )
 
     @staticmethod

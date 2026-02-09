@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
 from ade_api.common.cursor_listing import (
+    CursorFieldSpec,
     ResolvedCursorSort,
     cursor_field,
     paginate_query_cursor,
@@ -131,7 +132,7 @@ _VIEW_NAME_PATTERN = re.compile(r"[^a-z0-9]+")
 _VIRTUAL_VIEW_TIMESTAMP = datetime(1970, 1, 1, tzinfo=UTC)
 
 
-def _run_with_timeout(func, *, timeout: float, **kwargs):
+def _run_with_timeout(func: Any, *, timeout: float, **kwargs: Any) -> Any:
     """Run a callable with a timeout to avoid hanging on large workbook operations."""
     if timeout <= 0:
         return func(**kwargs)
@@ -478,7 +479,7 @@ class DocumentsService:
             limit=limit,
             cursor=cursor,
             include_total=include_total,
-            changes_cursor=changes_cursor,
+            changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
             row_mapper=lambda row: _map_document_row(row),
         )
         raw_items = list(page_result.items)
@@ -1645,7 +1646,7 @@ class DocumentsService:
             "count": (count_expr.asc(), count_expr.desc()),
         }
 
-        cursor_fields = {
+        cursor_fields: dict[str, CursorFieldSpec[TagCatalogItem]] = {
             "id": cursor_field(lambda item: item.tag, parse_str),
             "name": cursor_field(lambda item: item.tag, parse_str),
             "count": cursor_field(lambda item: item.document_count, parse_int),
@@ -1949,7 +1950,7 @@ class DocumentsService:
                 return str(value)
             return value
 
-        def build_buckets(expr) -> list[dict[str, Any]]:
+        def build_buckets(expr: Any) -> list[dict[str, Any]]:
             rows = self._session.execute(
                 select(
                     expr.label("value"),

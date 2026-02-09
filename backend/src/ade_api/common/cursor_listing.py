@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import cmp_to_key
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException, Query, Request, status
@@ -107,6 +107,10 @@ class ResolvedCursorSort[T]:
     order_by: tuple[ColumnElement[Any], ...]
 
 
+type OrderByExpr = ColumnElement[Any] | list[ColumnElement[Any]] | tuple[ColumnElement[Any], ...]
+type OrderByPair = tuple[OrderByExpr, OrderByExpr]
+
+
 def cursor_query_params(
     limit: int = Query(
         DEFAULT_LIMIT,
@@ -125,12 +129,7 @@ def cursor_query_params(
     filters: str | None = Query(
         None,
         description="URL-encoded JSON array of filter objects.",
-        examples={
-            "statusIn": {
-                "summary": "Status filter",
-                "value": STATUS_FILTER_EXAMPLE,
-            }
-        },
+        examples=[STATUS_FILTER_EXAMPLE],
     ),
     join_operator: FilterJoinOperator = JOIN_OPERATOR_QUERY,
     q: str | None = Query(
@@ -139,12 +138,7 @@ def cursor_query_params(
             "Free-text search string. Tokens are whitespace-separated, matched case-insensitively "
             "as substrings; tokens shorter than 2 characters are ignored."
         ),
-        examples={
-            "multiToken": {
-                "summary": "Search multiple tokens",
-                "value": "acme invoice",
-            }
-        },
+        examples=["acme invoice"],
     ),
     include_total: bool = Query(
         False,
@@ -177,7 +171,9 @@ def cursor_query_params(
     )
 
 
-def strict_cursor_query_guard(*, allowed_extra: set[str] | None = None):
+def strict_cursor_query_guard(
+    *, allowed_extra: set[str] | None = None
+) -> Callable[[Request], None]:
     allowed = CURSOR_QUERY_KEYS | (allowed_extra or set())
 
     def dependency(request: Request) -> None:
@@ -203,11 +199,11 @@ def _is_desc(ordering: ColumnElement[Any]) -> bool:
 
 
 def _normalize_order_by(
-    ordering: ColumnElement[Any] | Sequence[ColumnElement[Any]],
+    ordering: OrderByExpr,
 ) -> tuple[ColumnElement[Any], ...]:
     if isinstance(ordering, (list, tuple)):
         return tuple(ordering)
-    return (ordering,)
+    return (cast(ColumnElement[Any], ordering),)
 
 
 def _dedupe_order_by(orderings: Sequence[ColumnElement[Any]]) -> tuple[ColumnElement[Any], ...]:
@@ -222,10 +218,10 @@ def _dedupe_order_by(orderings: Sequence[ColumnElement[Any]]) -> tuple[ColumnEle
 def resolve_cursor_sort[T](
     tokens: Iterable[str],
     *,
-    allowed: Mapping[str, tuple[ColumnElement[Any], ColumnElement[Any]]],
+    allowed: Mapping[str, OrderByPair],
     cursor_fields: Mapping[str, CursorFieldSpec[T]],
     default: Sequence[str],
-    id_field: tuple[ColumnElement[Any], ColumnElement[Any]],
+    id_field: OrderByPair,
 ) -> ResolvedCursorSort[T]:
     materialized = list(tokens) or list(default)
     if not materialized:
@@ -409,18 +405,20 @@ def serialize_cursor_value(value: Any) -> Any:
     return value
 
 
-def _compare_eq(expr: ColumnElement[Any], value: Any):
+def _compare_eq(expr: ColumnElement[Any], value: Any) -> ColumnElement[bool]:
     if value is None:
         return expr.is_(None)
-    return expr == value
+    return cast(ColumnElement[bool], expr == value)
 
 
-def _compare_after(expr: ColumnElement[Any], value: Any, direction: str):
+def _compare_after(
+    expr: ColumnElement[Any], value: Any, direction: str
+) -> ColumnElement[bool] | None:
     if value is None:
         return None
     if direction == "desc":
-        return expr < value
-    return expr > value
+        return cast(ColumnElement[bool], expr < value)
+    return cast(ColumnElement[bool], expr > value)
 
 
 def _unwrap_ordering(expr: ColumnElement[Any]) -> ColumnElement[Any]:
@@ -523,7 +521,7 @@ def paginate_query_cursor(
     if row_mapper is None:
         rows = result.scalars().all()
     else:
-        rows = [row_mapper(row) for row in result.mappings().all()]
+        rows = [row_mapper(cast(Mapping[str, Any], row)) for row in result.mappings().all()]
     has_more = len(rows) > limit
     items = rows[:limit]
 
@@ -647,8 +645,8 @@ def paginate_sequence_cursor(
         items,
         key=cmp_to_key(
             lambda left, right: _compare_sequence_keys(
-                _sequence_sort_key(left, resolved_sort=resolved_sort),
-                _sequence_sort_key(right, resolved_sort=resolved_sort),
+                _sequence_sort_key(cast(T, left), resolved_sort=resolved_sort),
+                _sequence_sort_key(cast(T, right), resolved_sort=resolved_sort),
                 directions,
             )
         ),

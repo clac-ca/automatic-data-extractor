@@ -242,11 +242,11 @@ def current_request_id() -> str | None:
 
 def log_context(
     *,
-    workspace_id: UUID | None = None,
-    configuration_id: UUID | None = None,
-    run_id: UUID | None = None,
-    document_id: UUID | None = None,
-    user_id: UUID | None = None,
+    workspace_id: UUID | str | None = None,
+    configuration_id: UUID | str | None = None,
+    run_id: UUID | str | None = None,
+    document_id: UUID | str | None = None,
+    user_id: UUID | str | None = None,
     **extra: Any,
 ) -> dict[str, Any]:
     """Build a consistent `extra` payload for structured logs.

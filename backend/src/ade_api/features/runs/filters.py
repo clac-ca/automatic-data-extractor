@@ -160,7 +160,7 @@ class RunColumnFilters(FilterBase):
 
     @field_validator("mapping_status", mode="before")
     @classmethod
-    def _normalize_status(cls, value):
+    def _normalize_status(cls, value: object) -> object:
         if value is None:
             return None
         if isinstance(value, str):

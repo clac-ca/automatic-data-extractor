@@ -18,14 +18,14 @@ class BaseSchema(BaseModel):
         ser_json_timedelta="iso8601",
     )
 
-    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Ensure serialization defaults exclude ``None`` and honor aliases."""
 
         kwargs.setdefault("exclude_none", True)
         kwargs.setdefault("by_alias", True)
         return super().model_dump(*args, **kwargs)
 
-    def model_dump_json(self, *args: Any, **kwargs: Any) -> str:  # type: ignore[override]
+    def model_dump_json(self, *args: Any, **kwargs: Any) -> str:
         """JSON serialization with ADE defaults."""
 
         kwargs.setdefault("exclude_none", True)

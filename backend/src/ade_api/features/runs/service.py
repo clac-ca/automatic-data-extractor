@@ -134,7 +134,7 @@ def _deps_digest_cache_key(configuration: Configuration) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def _run_with_timeout(func, *, timeout: float, **kwargs):
+def _run_with_timeout(func: Any, *, timeout: float, **kwargs: Any) -> Any:
     """Run a callable with a timeout to avoid hanging on large workbook operations."""
     if timeout <= 0:
         return func(**kwargs)
@@ -263,7 +263,7 @@ class RunsService:
             )
 
         # Touch configuration usage timestamp.
-        configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
+        configuration.last_used_at = utc_now()
         self._session.flush()
 
         logger.info(
@@ -344,7 +344,7 @@ class RunsService:
                 return existing
             raise
 
-        configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
+        configuration.last_used_at = utc_now()
         self._session.flush()
 
         logger.info(
@@ -491,7 +491,7 @@ class RunsService:
                 operation=RunOperation.PROCESS,
             )
 
-        configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
+        configuration.last_used_at = utc_now()
         self._session.flush()
 
         runs = self._runs.list_active_for_documents(

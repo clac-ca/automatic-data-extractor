@@ -32,7 +32,12 @@ from ade_api.core.http import get_current_principal, require_csrf, require_globa
 from ade_db.models import ApiKey
 
 from .schemas import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyPage, ApiKeySummary
-from .service import ApiKeyAccessDeniedError, ApiKeyNotFoundError, ApiKeyService
+from .service import (
+    ApiKeyAccessDeniedError,
+    ApiKeyCreateResult,
+    ApiKeyNotFoundError,
+    ApiKeyService,
+)
 from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["api-keys"])
@@ -75,7 +80,7 @@ def _serialize_summary(record: ApiKey) -> ApiKeySummary:
     )
 
 
-def _make_create_response(result) -> ApiKeyCreateResponse:
+def _make_create_response(result: ApiKeyCreateResult) -> ApiKeyCreateResponse:
     api_key = result.api_key
     return ApiKeyCreateResponse(
         id=api_key.id,

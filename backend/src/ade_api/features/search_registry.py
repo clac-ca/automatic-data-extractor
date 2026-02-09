@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import String, case, cast
+from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.common.search import SearchField, SearchRegistry, build_like_predicate
 from ade_db.models import (
@@ -20,27 +23,27 @@ from ade_db.models import (
 )
 
 
-def _field(field_id: str, column) -> SearchField:
+def _field(field_id: str, column: ColumnElement[Any]) -> SearchField:
     return SearchField(field_id, build_like_predicate(column))
 
 
-def _field_cast(field_id: str, column) -> SearchField:
+def _field_cast(field_id: str, column: ColumnElement[Any]) -> SearchField:
     return SearchField(field_id, build_like_predicate(cast(column, String)))
 
 
-def _has_field(field_id: str, relationship, column) -> SearchField:
+def _has_field(field_id: str, relationship: Any, column: ColumnElement[Any]) -> SearchField:
     predicate = build_like_predicate(column)
 
-    def _builder(token: str):
+    def _builder(token: str) -> ColumnElement[Any]:
         return relationship.has(predicate(token))
 
     return SearchField(field_id, _builder)
 
 
-def _any_field(field_id: str, relationship, column) -> SearchField:
+def _any_field(field_id: str, relationship: Any, column: ColumnElement[Any]) -> SearchField:
     predicate = build_like_predicate(column)
 
-    def _builder(token: str):
+    def _builder(token: str) -> ColumnElement[Any]:
         return relationship.any(predicate(token))
 
     return SearchField(field_id, _builder)
