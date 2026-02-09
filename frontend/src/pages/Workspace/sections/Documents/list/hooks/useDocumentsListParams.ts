@@ -1,13 +1,11 @@
 import { useMemo } from "react";
-import { useQueryState, useQueryStates } from "nuqs";
+import { useQueryState } from "nuqs";
 
 import type { DocumentLifecycle } from "@/api/documents";
 
 import type { DocumentsListParams } from "../../shared/types";
 import {
   buildDocumentsQuerySnapshot,
-  createDocumentsSimpleFilterParsers,
-  documentsFilterFlagParser,
   documentsFiltersParser,
   documentsJoinOperatorParser,
   documentsLifecycleParser,
@@ -16,14 +14,11 @@ import {
   documentsSearchParser,
   documentsSortParser,
   resolveListFiltersForApi,
-  type FilterMode,
 } from "../state/queryState";
 
 export function useDocumentsListParams({
-  filterMode = "advanced",
   currentUserId = null,
 }: {
-  filterMode?: FilterMode;
   currentUserId?: string | null;
 } = {}): DocumentsListParams {
   const [page] = useQueryState("page", documentsPageParser);
@@ -32,10 +27,7 @@ export function useDocumentsListParams({
   const [sorting] = useQueryState("sort", documentsSortParser);
   const [filtersState] = useQueryState("filters", documentsFiltersParser);
   const [joinOperator] = useQueryState("joinOperator", documentsJoinOperatorParser);
-  const [filterFlag] = useQueryState("filterFlag", documentsFilterFlagParser);
   const [lifecycle] = useQueryState("lifecycle", documentsLifecycleParser);
-  const simpleParsers = useMemo(createDocumentsSimpleFilterParsers, []);
-  const [simpleFilterValues] = useQueryStates(simpleParsers);
 
   const snapshot = useMemo(
     () =>
@@ -44,11 +36,9 @@ export function useDocumentsListParams({
         sort: sorting,
         filters: filtersState,
         joinOperator,
-        filterFlag,
         lifecycle,
-        simpleFilters: simpleFilterValues,
       }),
-    [filterFlag, filtersState, joinOperator, lifecycle, q, simpleFilterValues, sorting],
+    [filtersState, joinOperator, lifecycle, q, sorting],
   );
 
   const sort = useMemo(
@@ -60,10 +50,9 @@ export function useDocumentsListParams({
     () =>
       resolveListFiltersForApi({
         snapshot,
-        filterMode,
         currentUserId,
       }),
-    [currentUserId, filterMode, snapshot],
+    [currentUserId, snapshot],
   );
 
   return {

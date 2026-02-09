@@ -52,6 +52,12 @@ import { cn } from "@/lib/utils";
 import { buildConfigurationsPath } from "@/pages/Workspace/sections/ConfigurationEditor/paths";
 import type { PresenceParticipant } from "@/types/presence";
 import type { WorkspaceProfile } from "@/types/workspaces";
+import {
+  dedupePresenceParticipants,
+  filterParticipantsByPage,
+  mapPresenceByDocument,
+  type DocumentPresenceEntry,
+} from "@/pages/Workspace/hooks/presence/presenceParticipants";
 
 const ASSIGNED_DOCUMENTS_LIMIT = 20;
 const ASSIGNED_DOCUMENTS_SORT = '[{"id":"updatedAt","desc":true}]';
@@ -94,7 +100,7 @@ type WorkspacePresenceSummaryProps = HTMLAttributes<HTMLDivElement> & {
 
 type AssignedDocumentsSectionProps = {
   assignedDocuments: DocumentListRow[];
-  documentsPresenceById: Map<string, PresenceParticipant[]>;
+  documentsPresenceById: Map<string, DocumentPresenceEntry[]>;
   activeDocId: string | null;
   isLoading: boolean;
   isError: boolean;
@@ -103,7 +109,7 @@ type AssignedDocumentsSectionProps = {
 
 type AssignedDocumentItemProps = {
   document: DocumentListRow;
-  documentsPresenceById: Map<string, PresenceParticipant[]>;
+  documentsPresenceById: Map<string, DocumentPresenceEntry[]>;
   isActive: boolean;
 };
 
@@ -216,7 +222,7 @@ export function WorkspaceSidebar() {
     return segment ? decodeURIComponent(segment) : null;
   }, [pathname, workspace.id]);
   const workspaceParticipants = useMemo(
-    () => dedupeParticipants(presence.participants),
+    () => dedupePresenceParticipants(presence.participants),
     [presence.participants],
   );
   const documentsParticipants = useMemo(
@@ -224,8 +230,12 @@ export function WorkspaceSidebar() {
     [presence.participants],
   );
   const documentsPresenceById = useMemo(
-    () => mapPresenceByDocument(documentsParticipants),
-    [documentsParticipants],
+    () =>
+      mapPresenceByDocument(documentsParticipants, {
+        currentUserId: session.user.id,
+        currentClientId: presence.clientId,
+      }),
+    [documentsParticipants, presence.clientId, session.user.id],
   );
   const fallbackAvatar = useMemo(
     () => ({
@@ -543,7 +553,9 @@ function AssignedDocumentItem({
   documentsPresenceById,
   isActive,
 }: AssignedDocumentItemProps) {
-  const documentParticipants = documentsPresenceById.get(document.id) ?? [];
+  const documentParticipants = (documentsPresenceById.get(document.id) ?? []).map(
+    (entry) => entry.participant,
+  );
   const documentAvatars = buildAvatarItems(documentParticipants);
   const documentPresenceLabel = documentAvatars.map((item) => item.label).join(", ");
 
@@ -593,76 +605,6 @@ function getWorkspaceInitials(value: string) {
     .map((word) => word[0])
     .join("")
     .toUpperCase();
-}
-
-function getPresencePage(participant: PresenceParticipant) {
-  const presence = participant.presence;
-  if (!presence || typeof presence !== "object") return null;
-  const page = presence["page"];
-  return typeof page === "string" ? page : null;
-}
-
-function getSelectedDocumentId(participant: PresenceParticipant) {
-  const selection = participant.selection;
-  if (!selection || typeof selection !== "object") return null;
-  const documentId = selection["documentId"];
-  return typeof documentId === "string" ? documentId : null;
-}
-
-function rankParticipant(participant: PresenceParticipant) {
-  let score = 0;
-  if (participant.status === "active") score += 2;
-  if (getSelectedDocumentId(participant)) score += 3;
-  if (participant.editing) score += 1;
-  return score;
-}
-
-function sortParticipants(participants: PresenceParticipant[]) {
-  return participants.sort((a, b) => {
-    const aPriority = a.status === "active" ? 0 : 1;
-    const bPriority = b.status === "active" ? 0 : 1;
-    if (aPriority !== bPriority) return aPriority - bPriority;
-    const aLabel = a.display_name || a.email || "Workspace member";
-    const bLabel = b.display_name || b.email || "Workspace member";
-    return aLabel.localeCompare(bLabel);
-  });
-}
-
-function dedupeParticipants(participants: PresenceParticipant[]) {
-  const byUser = new Map<string, PresenceParticipant>();
-  for (const participant of participants) {
-    const key = participant.user_id || participant.client_id;
-    const existing = byUser.get(key);
-    if (!existing || rankParticipant(participant) > rankParticipant(existing)) {
-      byUser.set(key, participant);
-    }
-  }
-  return sortParticipants(Array.from(byUser.values()));
-}
-
-function filterParticipantsByPage(participants: PresenceParticipant[], page: string) {
-  return participants.filter((participant) => getPresencePage(participant) === page);
-}
-
-function mapPresenceByDocument(participants: PresenceParticipant[]) {
-  const map = new Map<string, Map<string, PresenceParticipant>>();
-  participants.forEach((participant) => {
-    const documentId = getSelectedDocumentId(participant);
-    if (!documentId) return;
-    const userKey = participant.user_id || participant.client_id;
-    const bucket = map.get(documentId) ?? new Map<string, PresenceParticipant>();
-    const existing = bucket.get(userKey);
-    if (!existing || rankParticipant(participant) > rankParticipant(existing)) {
-      bucket.set(userKey, participant);
-    }
-    map.set(documentId, bucket);
-  });
-
-  const resolved = new Map<string, PresenceParticipant[]>();
-  map.forEach((bucket, documentId) => {
-    resolved.set(documentId, sortParticipants(Array.from(bucket.values())));
-  });
-  return resolved;
 }
 
 function buildAvatarItems(participants: PresenceParticipant[]): AvatarItem[] {

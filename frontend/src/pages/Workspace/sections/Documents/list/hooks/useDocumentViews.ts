@@ -13,20 +13,13 @@ import {
 import { createScopedStorage } from "@/lib/storage";
 import { uiStorageKeys } from "@/lib/uiStorageKeys";
 
-import { DOCUMENTS_SIMPLE_FILTERS } from "../../shared/constants";
 import type { DocumentRow } from "../../shared/types";
 import {
   areSnapshotsEqual,
   buildDocumentsQuerySnapshot,
   canonicalizeSnapshotForViewPersistence,
-  createDocumentsSimpleFilterParsers,
-  documentsFilterFlagParser,
-  documentsFiltersParser,
-  documentsJoinOperatorParser,
-  documentsLifecycleParser,
   documentsPageParser,
-  documentsSearchParser,
-  documentsSortParser,
+  documentsQueryParsers,
   documentsViewIdParser,
   encodeSnapshotForViewPersistence,
   hasExplicitListState as queryHasExplicitListState,
@@ -98,6 +91,11 @@ type SaveAsNewInput = {
   visibility: Extract<ViewVisibility, "private" | "public">;
 };
 
+const viewQueryParsers = {
+  ...documentsQueryParsers,
+  page: documentsPageParser,
+};
+
 export function useDocumentViews({
   workspaceId,
   userId,
@@ -111,21 +109,13 @@ export function useDocumentViews({
 }) {
   const queryClient = useQueryClient();
   const initializedRef = useRef(false);
-  const simpleParsers = useMemo(createDocumentsSimpleFilterParsers, []);
   const lastViewStorage = useMemo(
     () => createScopedStorage(uiStorageKeys.documentsLastView(workspaceId)),
     [workspaceId],
   );
 
   const [viewId, setViewId] = useQueryState(VIEW_QUERY_KEY, documentsViewIdParser);
-  const [q, setQ] = useQueryState("q", documentsSearchParser);
-  const [sortState, setSortState] = useQueryState("sort", documentsSortParser);
-  const [filtersState, setFiltersState] = useQueryState("filters", documentsFiltersParser);
-  const [joinOperator, setJoinOperator] = useQueryState("joinOperator", documentsJoinOperatorParser);
-  const [filterFlag, setFilterFlag] = useQueryState("filterFlag", documentsFilterFlagParser);
-  const [lifecycle, setLifecycle] = useQueryState("lifecycle", documentsLifecycleParser);
-  const [, setPage] = useQueryState("page", documentsPageParser);
-  const [simpleValues, setSimpleValues] = useQueryStates(simpleParsers);
+  const [listQueryState, setListQueryState] = useQueryStates(viewQueryParsers);
 
   const viewsQuery = useQuery({
     queryKey: ["document-views", workspaceId],
@@ -143,15 +133,19 @@ export function useDocumentViews({
   const currentQuerySnapshot = useMemo(
     () =>
       buildDocumentsQuerySnapshot({
-        q,
-        sort: sortState,
-        filters: filtersState,
-        joinOperator,
-        filterFlag,
-        lifecycle,
-        simpleFilters: simpleValues,
+        q: listQueryState.q,
+        sort: listQueryState.sort,
+        filters: listQueryState.filters,
+        joinOperator: listQueryState.joinOperator,
+        lifecycle: listQueryState.lifecycle,
       }),
-    [filterFlag, filtersState, joinOperator, lifecycle, q, simpleValues, sortState],
+    [
+      listQueryState.filters,
+      listQueryState.joinOperator,
+      listQueryState.lifecycle,
+      listQueryState.q,
+      listQueryState.sort,
+    ],
   );
   const currentCanonicalSnapshot = useMemo(
     () => canonicalizeSnapshotForViewPersistence(currentQuerySnapshot),
@@ -210,22 +204,19 @@ export function useDocumentViews({
       const snapshot = parseViewQueryStateToSnapshot(
         (view.queryState ?? {}) as Record<string, unknown>,
       );
-      const nextSimple: Record<string, string | string[] | null> = {};
-      Object.keys(DOCUMENTS_SIMPLE_FILTERS).forEach((key) => {
-        nextSimple[key] = snapshot.simpleFilters[key] ?? null;
-      });
 
       await Promise.all([
         setViewId(view.id),
-        setQ(snapshot.q),
-        setSortState(snapshot.sort.length > 0 ? snapshot.sort : null),
-        setFiltersState(snapshot.filters.length > 0 ? snapshot.filters : null),
-        setJoinOperator(snapshot.joinOperator === "and" ? null : snapshot.joinOperator),
-        setFilterFlag(snapshot.filterFlag),
-        setLifecycle(snapshot.lifecycle === "active" ? null : snapshot.lifecycle),
-        setPage(1),
-        setSimpleValues(nextSimple),
+        setListQueryState({
+          q: snapshot.q,
+          sort: snapshot.sort.length > 0 ? snapshot.sort : null,
+          filters: snapshot.filters.length > 0 ? snapshot.filters : null,
+          joinOperator: snapshot.joinOperator === "and" ? null : snapshot.joinOperator,
+          lifecycle: snapshot.lifecycle === "active" ? null : snapshot.lifecycle,
+          page: 1,
+        }),
       ]);
+
       table.setColumnFilters([]);
       applyTableSnapshot(view);
       lastViewStorage.set(view.id);
@@ -233,14 +224,7 @@ export function useDocumentViews({
     [
       applyTableSnapshot,
       lastViewStorage,
-      setFilterFlag,
-      setFiltersState,
-      setJoinOperator,
-      setLifecycle,
-      setPage,
-      setQ,
-      setSimpleValues,
-      setSortState,
+      setListQueryState,
       setViewId,
       table,
     ],

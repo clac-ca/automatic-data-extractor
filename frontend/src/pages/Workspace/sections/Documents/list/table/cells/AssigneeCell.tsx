@@ -19,12 +19,14 @@ import type { WorkspacePerson } from "../../../shared/types";
 export function AssigneeCell({
   assigneeId,
   people,
+  currentUserId,
   onAssign,
   disabled = false,
   className,
 }: {
   assigneeId: string | null;
   people: WorkspacePerson[];
+  currentUserId?: string;
   onAssign: (next: string | null) => void;
   disabled?: boolean;
   className?: string;
@@ -44,13 +46,20 @@ export function AssigneeCell({
       return;
     }
 
+    if (next === "assign-to-me" && currentUserId) {
+      if (assigneeId !== currentUserId) {
+        onAssign(currentUserId);
+      }
+      return;
+    }
+
     if (next !== assigneeId) {
       onAssign(next);
     }
   };
 
   return (
-    <div className={cn("min-w-[140px]", className)} data-ignore-row-click>
+    <div className={cn("min-w-[140px]", className)} data-row-interactive data-ignore-row-click>
       <Faceted value={value} onValueChange={handleValueChange}>
         <FacetedTrigger asChild>
           <Button
@@ -59,6 +68,7 @@ export function AssigneeCell({
             size="sm"
             disabled={disabled}
             className="h-7 min-w-[140px] justify-between gap-2 bg-background px-2 text-[11px]"
+            data-row-interactive
           >
             <span className="flex min-w-0 items-center gap-2">
               {selectedPerson ? (
@@ -77,11 +87,23 @@ export function AssigneeCell({
             <ChevronUpDownIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           </Button>
         </FacetedTrigger>
-        <FacetedContent className="w-56">
+        <FacetedContent
+          className="w-56"
+          data-row-interactive
+          onPointerDownCapture={(event) => {
+            event.stopPropagation();
+          }}
+        >
           <FacetedInput placeholder="Search people..." disabled={disabled} />
           <FacetedList>
             <FacetedEmpty>No people found.</FacetedEmpty>
             <FacetedGroup>
+              {currentUserId ? (
+                <FacetedItem value="assign-to-me" disabled={disabled}>
+                  <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="truncate">Assign to me</span>
+                </FacetedItem>
+              ) : null}
               <FacetedItem value="unassigned" disabled={disabled}>
                 <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="truncate">Unassigned</span>

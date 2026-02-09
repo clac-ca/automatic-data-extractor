@@ -38,7 +38,7 @@ export function TagsCell({
   );
 
   return (
-    <div className={cn("min-w-0", className)} data-ignore-row-click>
+    <div className={cn("min-w-0", className)} data-row-interactive data-ignore-row-click>
       <TagSelector
         value={selected}
         onValueChange={handleValueChange}
@@ -58,6 +58,7 @@ export function TagsCell({
           disabled={disabled}
           className="h-7 min-w-[120px] justify-start gap-2 bg-background px-2 text-[11px]"
           aria-label="Edit tags"
+          data-row-interactive
         >
           <TagIcon aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 

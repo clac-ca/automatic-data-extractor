@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { parseAsStringEnum, useQueryState } from "nuqs";
 import { useNavigate } from "react-router-dom";
 
 import { resolveApiUrl } from "@/api/client";
@@ -36,9 +35,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useNotifications } from "@/providers/notifications";
-import type { PresenceParticipant } from "@/types/presence";
 import type { components } from "@/types";
 import type { UploadManagerItem } from "@/pages/Workspace/sections/Documents/list/upload/useUploadManager";
+import {
+  filterParticipantsByPage,
+  mapPresenceByDocument,
+} from "@/pages/Workspace/hooks/presence/presenceParticipants";
 
 import { inferFileType, shortId } from "../../shared/utils";
 import { partitionDocumentChanges } from "../../shared/documentChanges";
@@ -59,6 +61,7 @@ import { DocumentsViewsDropdown } from "./DocumentsViewsDropdown";
 import { useDocumentsColumns } from "./documentsColumns";
 import { useDocumentsBulkActions } from "./useDocumentsBulkActions";
 import { useDocumentsRowActions } from "./useDocumentsRowActions";
+import { buildDocumentRowActions, toContextMenuItems } from "./actions/documentRowActions";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -202,8 +205,6 @@ export function DocumentsTableContainer({
   const [restoreRenameTarget, setRestoreRenameTarget] = useState<DocumentRow | null>(null);
   const [restoreRenameInitialName, setRestoreRenameInitialName] = useState("");
   const [restoreRenameError, setRestoreRenameError] = useState<string | null>(null);
-  const [renameTarget, setRenameTarget] = useState<DocumentRow | null>(null);
-  const [renameError, setRenameError] = useState<string | null>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState("");
   const [saveAsVisibility, setSaveAsVisibility] = useState<"private" | "public">("private");
@@ -217,6 +218,10 @@ export function DocumentsTableContainer({
   const [reprocessTargets, setReprocessTargets] = useState<ReprocessTargetDocument[]>([]);
   const [isReprocessSubmitting, setIsReprocessSubmitting] = useState(false);
   const [selectionResetToken, setSelectionResetToken] = useState(0);
+  const [inlineRenameRequest, setInlineRenameRequest] = useState<{
+    documentId: string;
+    nonce: number;
+  } | null>(null);
   const renameMutation = useRenameDocumentMutation({ workspaceId });
   const canManagePublicViews = hasPermission("workspace.documents.views.public.manage");
   const {
@@ -252,14 +257,8 @@ export function DocumentsTableContainer({
     resetRowMutations,
   } = useDocumentsRowActions();
 
-  const [filterFlag, setFilterFlag] = useQueryState(
-    "filterFlag",
-    parseAsStringEnum(["advancedFilters"]).withOptions({ clearOnDefault: true }),
-  );
-  const filterMode = filterFlag === "advancedFilters" ? "advanced" : "simple";
   const presence = useWorkspacePresence();
   const { page, perPage, sort, q, lifecycle, filters, joinOperator } = useDocumentsListParams({
-    filterMode,
     currentUserId: currentUser.id,
   });
   const filtersKey = useMemo(() => (filters?.length ? JSON.stringify(filters) : ""), [filters]);
@@ -312,12 +311,9 @@ export function DocumentsTableContainer({
     [navigate, workspaceId],
   );
 
-  const onToggleFilterMode = useCallback(() => {
-    setFilterFlag(filterFlag === "advancedFilters" ? null : "advancedFilters");
-  }, [filterFlag, setFilterFlag]);
-
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
+  const inlineRenameNonceRef = useRef(0);
 
   useEffect(() => {
     setDeleteTarget(null);
@@ -325,8 +321,6 @@ export function DocumentsTableContainer({
     setRestoreRenameTarget(null);
     setRestoreRenameInitialName("");
     setRestoreRenameError(null);
-    setRenameTarget(null);
-    setRenameError(null);
     setSaveAsOpen(false);
     setSaveAsName("");
     setSaveAsVisibility("private");
@@ -342,6 +336,7 @@ export function DocumentsTableContainer({
     setIsReprocessSubmitting(false);
     resetBulkActions();
     setSelectionResetToken(0);
+    setInlineRenameRequest(null);
     setUpdatesAvailable(false);
     handledUploadsRef.current.clear();
     completedUploadsRef.current.clear();
@@ -356,14 +351,13 @@ export function DocumentsTableContainer({
     [presence.participants],
   );
 
-  const toolbarParticipants = useMemo(
-    () => dedupeParticipants(documentsParticipants, presence.clientId),
-    [documentsParticipants, presence.clientId],
-  );
-
   const rowPresence = useMemo(
-    () => mapPresenceByDocument(documentsParticipants, presence.clientId),
-    [documentsParticipants, presence.clientId],
+    () =>
+      mapPresenceByDocument(documentsParticipants, {
+        currentUserId: currentUser.id,
+        currentClientId: presence.clientId,
+      }),
+    [currentUser.id, documentsParticipants, presence.clientId],
   );
 
   const membersQuery = useQuery({
@@ -1290,58 +1284,44 @@ export function DocumentsTableContainer({
     ],
   );
 
-  const onRenameRequest = useCallback((document: DocumentRow) => {
-    setRenameTarget(document);
-    setRenameError(null);
-  }, []);
-
-  const onRenameCancel = useCallback(() => {
-    setRenameTarget(null);
-    setRenameError(null);
-    renameMutation.reset();
-  }, [renameMutation]);
-
-  const onRenameConfirm = useCallback(async (nextName: string) => {
-    if (!renameTarget) return;
-    const current = documentsById[renameTarget.id] ?? renameTarget;
-    markRowPending(current.id, "rename");
-    setRenameError(null);
-    try {
-      const result = await renameMutation.renameDocument({
-        documentId: current.id,
-        currentName: current.name,
-        nextName,
-      });
-      if (!result) {
-        onRenameCancel();
-        return;
+  const onRenameInline = useCallback(
+    async (document: DocumentRow, nextName: string) => {
+      const current = documentsById[document.id] ?? document;
+      markRowPending(current.id, "rename");
+      try {
+        const result = await renameMutation.renameDocument({
+          documentId: current.id,
+          currentName: current.name,
+          nextName,
+        });
+        if (result) {
+          notifyToast({
+            title: "Document renamed.",
+            intent: "success",
+            duration: 2500,
+          });
+        }
+      } catch (error) {
+        const description = getRenameDocumentErrorMessage(error);
+        notifyToast({
+          title: "Unable to rename document",
+          description,
+          intent: "danger",
+        });
+        throw new Error(description);
+      } finally {
+        clearRowPending(current.id, "rename");
       }
-      notifyToast({
-        title: "Document renamed.",
-        intent: "success",
-        duration: 4000,
-      });
-      onRenameCancel();
-    } catch (error) {
-      const description = getRenameDocumentErrorMessage(error);
-      setRenameError(description);
-      notifyToast({
-        title: "Unable to rename document",
-        description,
-        intent: "danger",
-      });
-    } finally {
-      clearRowPending(current.id, "rename");
-    }
-  }, [
-    clearRowPending,
-    documentsById,
-    markRowPending,
-    notifyToast,
-    onRenameCancel,
-    renameMutation,
-    renameTarget,
-  ]);
+    },
+    [clearRowPending, documentsById, markRowPending, notifyToast, renameMutation],
+  );
+  const requestInlineRename = useCallback((documentId: string) => {
+    inlineRenameNonceRef.current += 1;
+    setInlineRenameRequest({
+      documentId,
+      nonce: inlineRenameNonceRef.current,
+    });
+  }, []);
 
   const onDeleteRequest = useCallback((document: DocumentRow) => {
     setDeleteTarget(document);
@@ -1564,19 +1544,18 @@ export function DocumentsTableContainer({
   });
 
   const columns = useDocumentsColumns({
-    filterMode,
     lifecycle,
     people,
+    currentUserId: currentUser.id,
     tagOptions,
     rowPresence,
-    onOpenDocument: (documentId) => openDocument(documentId, "activity"),
     onOpenPreview: (documentId) => openDocument(documentId, "preview"),
     onOpenActivity: (documentId) =>
       openDocument(documentId, "activity", { activityFilter: "comments" }),
     onAssign,
     onToggleTag,
     onTagOptionsChange: handleTagOptionsChange,
-    onRenameRequest,
+    onRenameInline,
     onDeleteRequest,
     onRestoreRequest,
     onReprocessRequest,
@@ -1584,6 +1563,7 @@ export function DocumentsTableContainer({
     onDownloadLatest: handleDownloadLatest,
     onDownloadOriginal: handleDownloadOriginal,
     isRowActionPending: isRowMutationPending,
+    inlineRenameRequest,
   });
 
   const { table, debounceMs, throttleMs, shallow } = useDataTable({
@@ -1609,10 +1589,10 @@ export function DocumentsTableContainer({
         lastRunPhase: true,
         lastRunAt: true,
       },
-      columnPinning: { left: ["select"], right: ["actions"] },
+      columnPinning: { left: ["select"] },
     },
     getRowId: (row) => row.id,
-    enableAdvancedFilter: filterMode === "advanced",
+    enableAdvancedFilter: true,
     clearOnDefault: true,
   });
 
@@ -1813,6 +1793,49 @@ export function DocumentsTableContainer({
     },
     [canManagePublicViews, documentViews, notifyToast, queryClient, workspaceId],
   );
+  const buildRowContextMenuItems = useCallback(
+    (document: DocumentRow) => {
+      const row = documentsById[document.id] ?? document;
+      const actions = buildDocumentRowActions({
+        document: row,
+        lifecycle,
+        isBusy: isRowMutationPending(row.id),
+        isSelfAssigned: row.assignee?.id === currentUser.id,
+        canRenameInline: lifecycle === "active",
+        surface: "context",
+        onOpen: () => openDocument(row.id, "activity"),
+        onOpenPreview: () => openDocument(row.id, "preview"),
+        onDownloadLatest: handleDownloadLatest,
+        onDownloadOriginal: handleDownloadOriginal,
+        onAssignToMe:
+          lifecycle === "active"
+            ? () => {
+                void onAssign(row.id, currentUser.id);
+              }
+            : undefined,
+        onRename:
+          lifecycle === "active"
+            ? () => {
+                requestInlineRename(row.id);
+              }
+            : undefined,
+        onDeleteRequest: lifecycle === "active" ? onDeleteRequest : undefined,
+      });
+      return toContextMenuItems(actions);
+    },
+    [
+      currentUser.id,
+      documentsById,
+      handleDownloadLatest,
+      handleDownloadOriginal,
+      isRowMutationPending,
+      lifecycle,
+      onAssign,
+      onDeleteRequest,
+      openDocument,
+      requestInlineRename,
+    ],
+  );
 
   const viewsToolbarControl = (
     <DocumentsViewsDropdown
@@ -1820,12 +1843,23 @@ export function DocumentsTableContainer({
       publicViews={documentViews.publicViews}
       privateViews={documentViews.privateViews}
       selectedViewId={documentViews.selectedViewId}
+      hasExplicitListState={documentViews.hasExplicitListState}
       isEdited={documentViews.isEdited}
       isLoading={documentViews.isLoading}
       isFetching={documentViews.isFetching}
+      isSaving={documentViews.isSaving}
+      isCreating={documentViews.isCreating}
+      isDeleting={documentViews.isDeleting}
+      canMutateSelectedView={documentViews.canMutateSelectedView}
       canMutateView={documentViews.canMutateView}
       onSelectView={documentViews.selectView}
       onCreateView={() => openSaveAsDialog(null)}
+      onSaveSelectedView={() => {
+        void handleSaveSelectedView();
+      }}
+      onDiscardViewChanges={() => {
+        void handleDiscardViewChanges();
+      }}
       onRenameView={openRenameViewDialog}
       onDuplicateView={(view) => {
         void handleDuplicateView(view);
@@ -1836,22 +1870,12 @@ export function DocumentsTableContainer({
 
   const toolbarContent = (
     <DocumentsToolbar
-      participants={toolbarParticipants}
-      connectionState={presence.connectionState}
       configMissing={configMissing}
       processingPaused={processingPaused}
       hasDocuments={hasDocuments}
       isListFetching={isFetching}
       hasListError={Boolean(error)}
-      views={documentViews}
       toolbarActions={toolbarActions}
-      onOpenSaveAs={openSaveAsDialog}
-      onSaveSelectedView={() => {
-        void handleSaveSelectedView();
-      }}
-      onDiscardViewChanges={() => {
-        void handleDiscardViewChanges();
-      }}
     />
   );
 
@@ -1895,8 +1919,6 @@ export function DocumentsTableContainer({
     restoreTarget ? pendingMutations[restoreTarget.id]?.has("restore") ?? false : false;
   const restoreRenamePending =
     restoreRenameTarget ? pendingMutations[restoreRenameTarget.id]?.has("restore") ?? false : false;
-  const renamePending =
-    renameTarget ? pendingMutations[renameTarget.id]?.has("rename") ?? false : false;
   const bulkAssignCount = bulkAssignTargets.length;
   const bulkTagCount = bulkTagTargets.length;
   const bulkDeleteCount = bulkDeleteTargets.length;
@@ -1926,10 +1948,10 @@ export function DocumentsTableContainer({
           debounceMs={debounceMs}
           throttleMs={throttleMs}
           shallow={shallow}
-          filterMode={filterMode}
-          onToggleFilterMode={onToggleFilterMode}
+          rowPresence={rowPresence}
           leadingToolbarActions={viewsToolbarControl}
           toolbarActions={toolbarContent}
+          onRowActivate={(document) => openDocument(document.id, "activity")}
           onBulkReprocessRequest={lifecycle === "active" ? onBulkReprocessRequest : undefined}
           onBulkCancelRequest={lifecycle === "active" ? onBulkCancelRequest : undefined}
           onBulkAssignRequest={lifecycle === "active" ? onBulkAssignRequest : undefined}
@@ -1938,6 +1960,7 @@ export function DocumentsTableContainer({
           onBulkRestoreRequest={lifecycle === "deleted" ? onBulkRestoreRequest : undefined}
           onBulkDownloadRequest={lifecycle === "active" ? onBulkDownloadRequest : undefined}
           onBulkDownloadOriginalRequest={lifecycle === "active" ? onBulkDownloadOriginalRequest : undefined}
+          buildRowContextMenuItems={buildRowContextMenuItems}
           selectionResetToken={selectionResetToken}
         />
       </div>
@@ -2198,19 +2221,6 @@ export function DocumentsTableContainer({
         }}
       />
       <RenameDocumentDialog
-        open={Boolean(renameTarget)}
-        documentName={renameTarget?.name ?? ""}
-        isPending={renamePending}
-        errorMessage={renameError}
-        onOpenChange={(open) => {
-          if (!open) onRenameCancel();
-        }}
-        onClearError={() => {
-          if (renameError) setRenameError(null);
-        }}
-        onSubmit={onRenameConfirm}
-      />
-      <RenameDocumentDialog
         open={Boolean(restoreRenameTarget)}
         documentName={restoreRenameInitialName || restoreRenameTarget?.name || ""}
         isPending={restoreRenamePending}
@@ -2281,84 +2291,4 @@ export function DocumentsTableContainer({
       </Dialog>
     </div>
   );
-}
-
-function getParticipantLabel(participant: PresenceParticipant) {
-  return participant.display_name || participant.email || "Workspace member";
-}
-
-function getPresencePage(participant: PresenceParticipant) {
-  const presence = participant.presence;
-  if (!presence || typeof presence !== "object") return null;
-  const page = presence["page"];
-  return typeof page === "string" ? page : null;
-}
-
-function filterParticipantsByPage(participants: PresenceParticipant[], page: string) {
-  return participants.filter((participant) => getPresencePage(participant) === page);
-}
-
-function getSelectedDocumentId(participant: PresenceParticipant) {
-  const selection = participant.selection;
-  if (!selection || typeof selection !== "object") return null;
-  const documentId = selection["documentId"];
-  return typeof documentId === "string" ? documentId : null;
-}
-
-function rankParticipant(participant: PresenceParticipant) {
-  let score = 0;
-  if (participant.status === "active") score += 2;
-  if (getSelectedDocumentId(participant)) score += 3;
-  if (participant.editing) score += 1;
-  return score;
-}
-
-function sortParticipants(participants: PresenceParticipant[]) {
-  return [...participants].sort((a, b) => {
-    const aPriority = a.status === "active" ? 0 : 1;
-    const bPriority = b.status === "active" ? 0 : 1;
-    if (aPriority !== bPriority) return aPriority - bPriority;
-    const aLabel = getParticipantLabel(a).toLowerCase();
-    const bLabel = getParticipantLabel(b).toLowerCase();
-    return aLabel.localeCompare(bLabel);
-  });
-}
-
-function dedupeParticipants(participants: PresenceParticipant[], clientId: string | null) {
-  const byUser = new Map<string, PresenceParticipant>();
-  for (const participant of participants) {
-    if (participant.client_id === clientId) continue;
-    const key = participant.user_id || participant.client_id;
-    const existing = byUser.get(key);
-    if (!existing) {
-      byUser.set(key, participant);
-      continue;
-    }
-    if (rankParticipant(participant) > rankParticipant(existing)) {
-      byUser.set(key, participant);
-    }
-  }
-  return sortParticipants(Array.from(byUser.values()));
-}
-
-function mapPresenceByDocument(participants: PresenceParticipant[], clientId: string | null) {
-  const map = new Map<string, Map<string, PresenceParticipant>>();
-  participants.forEach((participant) => {
-    if (participant.client_id === clientId) return;
-    const documentId = getSelectedDocumentId(participant);
-    if (!documentId) return;
-    const userKey = participant.user_id || participant.client_id;
-    const bucket = map.get(documentId) ?? new Map<string, PresenceParticipant>();
-    const existing = bucket.get(userKey);
-    if (!existing || rankParticipant(participant) > rankParticipant(existing)) {
-      bucket.set(userKey, participant);
-    }
-    map.set(documentId, bucket);
-  });
-
-  const resolved = new Map<string, PresenceParticipant[]>();
-  map.forEach((bucket, documentId) => {
-    resolved.set(documentId, sortParticipants(Array.from(bucket.values())));
-  });
-  return resolved;
 }

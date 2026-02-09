@@ -36,6 +36,10 @@ const MENU_WIDTH = 232;
 const MENU_ITEM_HEIGHT = 30;
 const MENU_PADDING = 6;
 
+function sanitizeCoordinate(value: number, fallback: number) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
 export function ContextMenu({
   open,
   position,
@@ -60,17 +64,21 @@ export function ContextMenu({
       setCoords(null);
       return;
     }
+    const viewportWidth = Math.max(window.innerWidth || 0, MENU_WIDTH + MENU_PADDING * 2);
+    const viewportHeight = Math.max(window.innerHeight || 0, MENU_ITEM_HEIGHT + MENU_PADDING * 2);
+    const rawX = sanitizeCoordinate(position.x, viewportWidth / 2);
+    const rawY = sanitizeCoordinate(position.y, viewportHeight / 2);
     const estimatedHeight = items.length * MENU_ITEM_HEIGHT + MENU_PADDING * 2;
     const maxX = Math.max(
       MENU_PADDING,
-      (window.innerWidth || 0) - MENU_WIDTH - MENU_PADDING,
+      viewportWidth - MENU_WIDTH - MENU_PADDING,
     );
     const maxY = Math.max(
       MENU_PADDING,
-      (window.innerHeight || 0) - estimatedHeight - MENU_PADDING,
+      viewportHeight - estimatedHeight - MENU_PADDING,
     );
-    const nextX = Math.min(Math.max(position.x, MENU_PADDING), maxX);
-    const nextY = Math.min(Math.max(position.y, MENU_PADDING), maxY);
+    const nextX = Math.min(Math.max(rawX, MENU_PADDING), maxX);
+    const nextY = Math.min(Math.max(rawY, MENU_PADDING), maxY);
     setCoords({ x: nextX, y: nextY });
   }, [open, position, items.length]);
 
@@ -93,7 +101,12 @@ export function ContextMenu({
     if (!open || typeof window === "undefined") {
       return;
     }
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
+      // Secondary clicks are part of context-menu invocation on some platforms.
+      // Treating them as outside-click close events can immediately dismiss the menu.
+      if (event.button !== 0 && event.pointerType !== "touch") {
+        return;
+      }
       if (!menuRef.current) {
         return;
       }
@@ -144,11 +157,11 @@ export function ContextMenu({
         }
       }
     };
-    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("pointerdown", handlePointerDown, true);
     window.addEventListener("contextmenu", handleContextMenu);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
     };
