@@ -43,7 +43,7 @@ const MODE_BUTTON_INTENT_VAR = "--mode-button-intent";
 const MODE_BUTTON_PARALLAX_VAR = "--mode-button-parallax";
 const MODE_BUTTON_LIMB_VAR = "--mode-button-limb";
 
-const INTENT_NEAR_FIELD_PX = 128;
+const INTENT_NEAR_FIELD_PX = 76;
 const INTENT_HOVER_FLOOR = 0.26;
 const INTENT_MAX = 0.62;
 const INTENT_EASE_OUT_MS = 180;
