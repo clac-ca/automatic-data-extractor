@@ -24,32 +24,51 @@ type RunModeTransitionOptions = {
 
 export const THEME_MODE_ANCHOR_ATTR = "data-theme-mode-anchor";
 export const WORKSPACE_THEME_MODE_ANCHOR = "workspace-topbar-mode-toggle";
+export const ORGANIC_STYLE_VERSION = "v2-orbital-shear";
+const REVEAL_PHASE_OFFSETS = [0, 0.22, 0.72, 1] as const;
+const REVEAL_PHASE_TARGETS = [0, 0.3, 0.92, 1] as const;
+
 export const MOTION_PROFILE = {
-  revealExpand: {
-    durationMs: 760,
-    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-    featherPx: 12,
+  revealPhases: {
+    offsets: REVEAL_PHASE_OFFSETS,
+    targets: REVEAL_PHASE_TARGETS,
+  },
+  toDark: {
+    minDurationMs: 760,
+    maxDurationMs: 920,
+    easing: "linear",
+    featherPx: 22,
+    haloPx: 18,
     startRadiusPx: 6,
   },
-  revealCollapse: {
-    durationMs: 520,
-    easing: "cubic-bezier(0.4, 0, 0.2, 1)",
-    featherPx: 10,
-    endRadiusPx: 4,
+  toLight: {
+    minDurationMs: 700,
+    maxDurationMs: 860,
+    easing: "linear",
+    featherPx: 18,
+    haloPx: 12,
+    startRadiusPx: 6,
   },
   buttonPress: {
     durationMs: 120,
-    leadInMs: 40,
+    leadInMs: 12,
   },
-  fallbackDirectional: {
-    durationMs: 420,
-    easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-    bezier: [0.22, 1, 0.36, 1] as const,
-    featherPx: 14,
+  fallback: {
+    featherBoostPx: 2,
+  },
+  organic: {
+    shearMaxPx: 7,
+    shearFrameMultipliers: [0, 1, 0.35, 0] as const,
+    penumbraLagPxDark: 12,
+    penumbraLagPxLight: 10,
+    secondaryShadowStrengthDark: [0.11, 0.16, 0.07, 0.03] as const,
+    secondaryShadowStrengthLight: [0.09, 0.13, 0.06, 0.02] as const,
   },
 } as const;
 
-export const DEFAULT_MODE_TRANSITION_DURATION_MS = MOTION_PROFILE.revealExpand.durationMs;
+export const DEFAULT_MODE_TRANSITION_DURATION_MS = Math.round(
+  (MOTION_PROFILE.toDark.minDurationMs + MOTION_PROFILE.toDark.maxDurationMs) / 2,
+);
 
 const MODE_TRANSITION_ATTR = "data-mode-transition";
 const MODE_TRANSITION_ORIGIN_X = "--mode-transition-origin-x";
@@ -60,13 +79,21 @@ const FALLBACK_OVERLAY_ATTR = "data-mode-transition-overlay";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 type TransitionState =
-  | "reveal-expand"
-  | "reveal-collapse"
-  | "fallback-expand"
-  | "fallback-collapse";
+  | "reveal-dark"
+  | "reveal-light"
+  | "fallback-dark"
+  | "fallback-light";
 
 type ActiveTransition = {
   cancel: () => void;
+};
+
+type DirectionalMotionProfile =
+  | (typeof MOTION_PROFILE)["toDark"]
+  | (typeof MOTION_PROFILE)["toLight"];
+
+type TransitionAttributes = {
+  featherPx: number;
 };
 
 let activeTransition: ActiveTransition | null = null;
@@ -106,6 +133,7 @@ function distanceToFarthestCorner(origin: TransitionOrigin): number {
   if (typeof window === "undefined") {
     return 0;
   }
+
   const corners: Array<[number, number]> = [
     [0, 0],
     [window.innerWidth, 0],
@@ -121,19 +149,38 @@ function distanceToFarthestCorner(origin: TransitionOrigin): number {
   }, 0);
 }
 
-function setTransitionAttributes(state: TransitionState, origin: TransitionOrigin, radius: number): void {
+function resolveDurationMs(
+  profile: DirectionalMotionProfile,
+  radius: number,
+  explicitDurationMs?: number,
+): number {
+  if (typeof explicitDurationMs === "number") {
+    return Math.max(0, Math.round(explicitDurationMs));
+  }
+
+  if (typeof window === "undefined") {
+    return Math.round((profile.minDurationMs + profile.maxDurationMs) / 2);
+  }
+
+  const viewportDiagonal = Math.hypot(window.innerWidth, window.innerHeight);
+  const normalizedRadius = viewportDiagonal > 0 ? Math.min(1, Math.max(0, radius / viewportDiagonal)) : 1;
+  const duration = profile.minDurationMs + (profile.maxDurationMs - profile.minDurationMs) * normalizedRadius;
+
+  return Math.round(duration);
+}
+
+function setTransitionAttributes(
+  state: TransitionState,
+  origin: TransitionOrigin,
+  radius: number,
+  attributes: TransitionAttributes,
+): void {
   const root = document.documentElement;
-  const feather =
-    state === "reveal-expand"
-      ? MOTION_PROFILE.revealExpand.featherPx
-      : state === "reveal-collapse"
-        ? MOTION_PROFILE.revealCollapse.featherPx
-        : MOTION_PROFILE.fallbackDirectional.featherPx;
   root.setAttribute(MODE_TRANSITION_ATTR, state);
   root.style.setProperty(MODE_TRANSITION_ORIGIN_X, `${origin.x}px`);
   root.style.setProperty(MODE_TRANSITION_ORIGIN_Y, `${origin.y}px`);
   root.style.setProperty(MODE_TRANSITION_RADIUS, `${radius}px`);
-  root.style.setProperty(MODE_TRANSITION_FEATHER, `${feather}px`);
+  root.style.setProperty(MODE_TRANSITION_FEATHER, `${attributes.featherPx}px`);
 }
 
 function clearTransitionAttributes(): void {
@@ -145,14 +192,15 @@ function clearTransitionAttributes(): void {
   root.style.removeProperty(MODE_TRANSITION_FEATHER);
 }
 
-function buildClipPath(radius: number, origin: TransitionOrigin): string {
-  return `circle(${radius}px at ${origin.x}px ${origin.y}px)`;
+function buildClipPath(radiusPx: number, origin: TransitionOrigin): string {
+  return `circle(${Math.max(0, radiusPx)}px at ${origin.x}px ${origin.y}px)`;
 }
 
 function removeFallbackOverlays(): void {
   if (typeof document === "undefined") {
     return;
   }
+
   const overlays = document.querySelectorAll(`[${FALLBACK_OVERLAY_ATTR}]`);
   overlays.forEach((overlay) => overlay.remove());
 }
@@ -177,59 +225,140 @@ function clearActiveTransition(next: ActiveTransition): void {
   }
 }
 
-function sampleCurve(t: number, p0: number, p1: number, p2: number, p3: number): number {
-  const invT = 1 - t;
-  return invT ** 3 * p0 + 3 * invT ** 2 * t * p1 + 3 * invT * t ** 2 * p2 + t ** 3 * p3;
-}
-
-function sampleCurveDerivative(t: number, p0: number, p1: number, p2: number, p3: number): number {
-  const invT = 1 - t;
-  return 3 * invT ** 2 * (p1 - p0) + 6 * invT * t * (p2 - p1) + 3 * t ** 2 * (p3 - p2);
-}
-
-function cubicBezierProgress(
-  progress: number,
-  bezier: readonly [number, number, number, number],
-): number {
-  if (progress <= 0 || progress >= 1) {
-    return progress;
+function mapStagedProgress(rawProgress: number): number {
+  if (rawProgress <= 0) {
+    return 0;
+  }
+  if (rawProgress >= 1) {
+    return 1;
   }
 
-  const [x1, y1, x2, y2] = bezier;
-  let t = progress;
-  for (let index = 0; index < 5; index += 1) {
-    const estimate = sampleCurve(t, 0, x1, x2, 1) - progress;
-    const derivative = sampleCurveDerivative(t, 0, x1, x2, 1);
-    if (Math.abs(derivative) < 1e-6) {
-      break;
+  const offsets = MOTION_PROFILE.revealPhases.offsets;
+  const targets = MOTION_PROFILE.revealPhases.targets;
+
+  // Piecewise interpolation gives us explicit engage/carry/settle velocity changes.
+  for (let index = 1; index < offsets.length; index += 1) {
+    const previousOffset = offsets[index - 1];
+    const nextOffset = offsets[index];
+    if (rawProgress > nextOffset) {
+      continue;
     }
-    t -= estimate / derivative;
-    t = Math.min(1, Math.max(0, t));
+
+    const range = Math.max(1e-6, nextOffset - previousOffset);
+    const localProgress = (rawProgress - previousOffset) / range;
+    const previousTarget = targets[index - 1];
+    const nextTarget = targets[index];
+    return previousTarget + (nextTarget - previousTarget) * localProgress;
   }
 
-  return sampleCurve(t, 0, y1, y2, 1);
+  return 1;
+}
+
+function resolveIntentAngleDeg(origin: TransitionOrigin): number {
+  if (typeof document !== "undefined") {
+    const cssAngle = Number.parseFloat(document.documentElement.style.getPropertyValue("--mode-intent-angle"));
+    if (Number.isFinite(cssAngle)) {
+      return cssAngle;
+    }
+  }
+
+  const viewportCenter = getViewportCenter();
+  const deltaX = viewportCenter.x - origin.x;
+  const deltaY = viewportCenter.y - origin.y;
+  if (deltaX === 0 && deltaY === 0) {
+    return 90;
+  }
+  return (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
 }
 
 function applyFallbackMask(
   overlay: HTMLDivElement,
-  direction: "expand" | "collapse",
   origin: TransitionOrigin,
   radius: number,
   featherPx: number,
+  trailingLagPx: number,
+  stagedProgress: number,
 ): void {
   const inner = Math.max(0, radius - featherPx);
-  const outer = Math.max(inner + 0.001, radius + featherPx);
-  const gradient =
-    direction === "expand"
-      ? `radial-gradient(circle at ${origin.x}px ${origin.y}px, transparent ${inner}px, rgb(0 0 0) ${outer}px)`
-      : `radial-gradient(circle at ${origin.x}px ${origin.y}px, rgb(0 0 0) ${inner}px, transparent ${outer}px)`;
+  const trailingRadius = Math.max(radius + 0.001, radius + trailingLagPx * stagedProgress);
+  const trailingOuter = Math.max(trailingRadius + 0.001, trailingRadius + featherPx * 1.18);
+  const edgeAlpha = 0.72;
+  const trailingAlpha = 0.26;
+
+  const gradient = `radial-gradient(circle at ${origin.x}px ${origin.y}px, transparent ${inner}px, rgb(0 0 0 / ${edgeAlpha}) ${radius}px, rgb(0 0 0 / ${trailingAlpha}) ${trailingRadius}px, rgb(0 0 0) ${trailingOuter}px)`;
 
   overlay.style.maskImage = gradient;
   overlay.style.webkitMaskImage = gradient;
 }
 
+function resolveMotionProfile(targetMode: ResolvedMode): DirectionalMotionProfile {
+  return targetMode === "dark" ? MOTION_PROFILE.toDark : MOTION_PROFILE.toLight;
+}
+
+function resolveRevealFilter(
+  profile: DirectionalMotionProfile,
+  targetMode: ResolvedMode,
+  phaseIndex: number,
+  shearAngleDeg: number,
+): string {
+  const spreads = targetMode === "dark" ? [1.5, 1.95, 1.1, 0.7] : [1.3, 1.7, 0.95, 0.35];
+  const alphas = targetMode === "dark" ? [0.16, 0.22, 0.1, 0.05] : [0.14, 0.18, 0.08, 0];
+  const secondaryStrengths =
+    targetMode === "dark"
+      ? MOTION_PROFILE.organic.secondaryShadowStrengthDark
+      : MOTION_PROFILE.organic.secondaryShadowStrengthLight;
+  const lagPx = targetMode === "dark" ? MOTION_PROFILE.organic.penumbraLagPxDark : MOTION_PROFILE.organic.penumbraLagPxLight;
+
+  const spread = spreads[Math.min(phaseIndex, spreads.length - 1)];
+  const primaryAlpha = alphas[Math.min(phaseIndex, alphas.length - 1)];
+  const secondaryAlpha = secondaryStrengths[Math.min(phaseIndex, secondaryStrengths.length - 1)];
+  if (primaryAlpha <= 0 && secondaryAlpha <= 0) {
+    return "drop-shadow(0 0 0 rgba(0, 0, 0, 0))";
+  }
+
+  const angleRad = (shearAngleDeg * Math.PI) / 180;
+  const secondaryOffsetScale = 0.34;
+  const secondaryOffsetX = Math.cos(angleRad) * lagPx * secondaryOffsetScale;
+  const secondaryOffsetY = Math.sin(angleRad) * lagPx * secondaryOffsetScale;
+  const primaryBlur = Math.round(profile.haloPx * spread);
+  const secondaryBlur = Math.round(primaryBlur + lagPx * 0.42);
+  const primaryShadow = `drop-shadow(0 0 ${primaryBlur}px rgba(0, 0, 0, ${Math.max(0, primaryAlpha).toFixed(3)}))`;
+  const secondaryShadow = `drop-shadow(${secondaryOffsetX.toFixed(2)}px ${secondaryOffsetY.toFixed(2)}px ${secondaryBlur}px rgba(0, 0, 0, ${Math.max(0, secondaryAlpha).toFixed(3)}))`;
+
+  return `${primaryShadow} ${secondaryShadow}`;
+}
+
+function resolveStagedRevealKeyframes(
+  profile: DirectionalMotionProfile,
+  targetMode: ResolvedMode,
+  origin: TransitionOrigin,
+  radius: number,
+): Keyframe[] {
+  const phases = MOTION_PROFILE.revealPhases;
+  const travel = Math.max(0, radius - profile.startRadiusPx);
+  const intentAngleDeg = resolveIntentAngleDeg(origin);
+  const intentAngleRad = (intentAngleDeg * Math.PI) / 180;
+
+  return phases.targets.map((phaseTarget, index) => {
+    const clipRadius = profile.startRadiusPx + travel * phaseTarget + profile.featherPx;
+    const shearMagnitude =
+      MOTION_PROFILE.organic.shearMaxPx *
+      MOTION_PROFILE.organic.shearFrameMultipliers[Math.min(index, MOTION_PROFILE.organic.shearFrameMultipliers.length - 1)];
+    // Offset the center slightly during early/mid phases so the wavefront feels less mechanically uniform.
+    const shearedOrigin = {
+      x: origin.x + Math.cos(intentAngleRad) * shearMagnitude,
+      y: origin.y + Math.sin(intentAngleRad) * shearMagnitude,
+    };
+
+    return {
+      offset: phases.offsets[index],
+      clipPath: buildClipPath(clipRadius, shearedOrigin),
+      filter: resolveRevealFilter(profile, targetMode, index, intentAngleDeg),
+    };
+  });
+}
+
 async function runViewRevealTransition({
-  from,
   to,
   apply,
   origin: explicitOrigin,
@@ -237,28 +366,30 @@ async function runViewRevealTransition({
 }: Omit<RunModeTransitionOptions, "animate">): Promise<void> {
   const origin = explicitOrigin ?? getViewportCenter();
   const radius = distanceToFarthestCorner(origin);
-  const isEnteringDark = from === "light" && to === "dark";
-  const transitionState: TransitionState = isEnteringDark ? "reveal-expand" : "reveal-collapse";
-  const profile = isEnteringDark ? MOTION_PROFILE.revealExpand : MOTION_PROFILE.revealCollapse;
-  const revealProfile = MOTION_PROFILE.revealExpand;
-  const collapseProfile = MOTION_PROFILE.revealCollapse;
-  const pseudoElement = isEnteringDark ? "::view-transition-new(root)" : "::view-transition-old(root)";
-  const startingRadius = isEnteringDark ? revealProfile.startRadiusPx : radius;
-  const endingRadius = isEnteringDark ? radius : collapseProfile.endRadiusPx;
+  const targetMode: ResolvedMode = to;
+  const transitionState: TransitionState = targetMode === "dark" ? "reveal-dark" : "reveal-light";
+  const profile = resolveMotionProfile(targetMode);
+  const pseudoElement = "::view-transition-new(root)";
+  const transitionDurationMs = resolveDurationMs(profile, radius, durationMs);
+  const keyframes = resolveStagedRevealKeyframes(profile, targetMode, origin, radius);
+
   let hasApplied = false;
   let isCanceled = false;
-  let animation: Animation | null = null;
+  let revealAnimation: Animation | null = null;
+
   const active: ActiveTransition = {
     cancel: () => {
       isCanceled = true;
-      animation?.cancel();
+      revealAnimation?.cancel();
       clearTransitionAttributes();
       removeFallbackOverlays();
     },
   };
 
   setActiveTransition(active);
-  setTransitionAttributes(transitionState, origin, radius);
+  setTransitionAttributes(transitionState, origin, radius, {
+    featherPx: profile.featherPx,
+  });
 
   try {
     const transition = document.startViewTransition?.(() => {
@@ -277,27 +408,17 @@ async function runViewRevealTransition({
       return;
     }
 
-    const dropShadowFrom = isEnteringDark
-      ? `drop-shadow(0 0 ${Math.round(profile.featherPx * 1.5)}px rgba(0, 0, 0, 0.22))`
-      : `drop-shadow(0 0 ${profile.featherPx}px rgba(0, 0, 0, 0.14))`;
-    const dropShadowTo = isEnteringDark
-      ? `drop-shadow(0 0 ${profile.featherPx}px rgba(0, 0, 0, 0.1))`
-      : `drop-shadow(0 0 ${profile.featherPx}px rgba(0, 0, 0, 0.14))`;
+    revealAnimation = document.documentElement.animate(keyframes, {
+      duration: transitionDurationMs,
+      easing: profile.easing,
+      fill: "both",
+      pseudoElement,
+    });
 
-    animation = document.documentElement.animate(
-      [
-        { clipPath: buildClipPath(startingRadius, origin), filter: dropShadowFrom },
-        { clipPath: buildClipPath(endingRadius, origin), filter: dropShadowTo },
-      ],
-      {
-        duration: durationMs ?? profile.durationMs,
-        easing: profile.easing,
-        fill: "both",
-        pseudoElement,
-      },
-    );
-
-    await Promise.allSettled([animation.finished.catch(() => null), transition.finished.catch(() => null)]);
+    await Promise.allSettled([
+      revealAnimation.finished.catch(() => null),
+      transition.finished.catch(() => null),
+    ]);
   } catch (error) {
     if (!hasApplied) {
       throw error;
@@ -308,8 +429,7 @@ async function runViewRevealTransition({
   }
 }
 
-async function runDirectionalFallbackTransition({
-  from,
+async function runFallbackRevealTransition({
   to,
   apply,
   origin: explicitOrigin,
@@ -317,25 +437,31 @@ async function runDirectionalFallbackTransition({
 }: Omit<RunModeTransitionOptions, "animate">): Promise<void> {
   const origin = explicitOrigin ?? getViewportCenter();
   const radius = distanceToFarthestCorner(origin);
-  const isEnteringDark = from === "light" && to === "dark";
-  const transitionState: TransitionState = isEnteringDark ? "fallback-expand" : "fallback-collapse";
-  const direction = isEnteringDark ? "expand" : "collapse";
-  const fallbackProfile = MOTION_PROFILE.fallbackDirectional;
-  const duration = durationMs ?? fallbackProfile.durationMs;
-  const feather = fallbackProfile.featherPx;
-  const startRadius = isEnteringDark ? 0 : radius;
-  const endRadius = isEnteringDark ? radius : 0;
+  const targetMode: ResolvedMode = to;
+  const transitionState: TransitionState = targetMode === "dark" ? "fallback-dark" : "fallback-light";
+  const profile = resolveMotionProfile(targetMode);
+
+  const duration = resolveDurationMs(profile, radius, durationMs);
+  const feather = profile.featherPx + MOTION_PROFILE.fallback.featherBoostPx;
+  const trailingLagPx =
+    targetMode === "dark" ? MOTION_PROFILE.organic.penumbraLagPxDark : MOTION_PROFILE.organic.penumbraLagPxLight;
+  const startRadius = 0;
+  const endRadius = radius;
+
   const root = document.documentElement;
   const overlay = document.createElement("div");
   const bodyColor = getComputedStyle(document.body).backgroundColor;
   const rootColor = getComputedStyle(document.documentElement).backgroundColor;
   const overlayColor = bodyColor || rootColor || "rgb(255, 255, 255)";
+
   let rafId = 0;
   let isCanceled = false;
   let resolveTransition: (() => void) | null = null;
+
   const transitionPromise = new Promise<void>((resolve) => {
     resolveTransition = resolve;
   });
+
   const active: ActiveTransition = {
     cancel: () => {
       isCanceled = true;
@@ -350,13 +476,15 @@ async function runDirectionalFallbackTransition({
   };
 
   setActiveTransition(active);
-  setTransitionAttributes(transitionState, origin, radius);
+  setTransitionAttributes(transitionState, origin, radius, {
+    featherPx: feather,
+  });
 
   overlay.setAttribute(FALLBACK_OVERLAY_ATTR, "true");
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
   overlay.style.pointerEvents = "none";
-  overlay.style.zIndex = "var(--app-z-tooltip)";
+  overlay.style.zIndex = "calc(var(--app-z-modal) + 1)";
   overlay.style.backgroundColor = overlayColor;
   overlay.style.willChange = "mask-image, -webkit-mask-image";
   overlay.style.contain = "strict";
@@ -364,7 +492,6 @@ async function runDirectionalFallbackTransition({
 
   apply();
 
-  const easing = fallbackProfile.bezier;
   const startedAt = performance.now();
 
   const frame = (now: number) => {
@@ -374,10 +501,10 @@ async function runDirectionalFallbackTransition({
 
     const elapsed = Math.max(0, now - startedAt);
     const rawProgress = Math.min(1, elapsed / duration);
-    const easedProgress = cubicBezierProgress(rawProgress, easing);
-    const currentRadius = startRadius + (endRadius - startRadius) * easedProgress;
+    const stagedProgress = mapStagedProgress(rawProgress);
+    const currentRadius = startRadius + (endRadius - startRadius) * stagedProgress;
 
-    applyFallbackMask(overlay, direction, origin, currentRadius, feather);
+    applyFallbackMask(overlay, origin, currentRadius, feather, trailingLagPx, stagedProgress);
 
     if (rawProgress >= 1) {
       overlay.remove();
@@ -391,7 +518,7 @@ async function runDirectionalFallbackTransition({
   };
 
   try {
-    applyFallbackMask(overlay, direction, origin, startRadius, feather);
+    applyFallbackMask(overlay, origin, startRadius, feather, trailingLagPx, 0);
     rafId = requestAnimationFrame(frame);
     await transitionPromise;
   } finally {
@@ -420,7 +547,7 @@ export async function runModeTransition(options: RunModeTransitionOptions): Prom
   cancelInFlightTransition();
 
   if (!supportsViewTransition()) {
-    await runDirectionalFallbackTransition({ from, to, apply, origin, durationMs });
+    await runFallbackRevealTransition({ from, to, apply, origin, durationMs });
     return;
   }
 

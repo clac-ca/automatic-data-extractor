@@ -105,6 +105,31 @@ function mockStartViewTransition(callbackImpl?: (callback: () => void) => void) 
   return startViewTransition;
 }
 
+function extractClipRadius(clipPath: string): number {
+  const match = /circle\(([\d.]+)px/.exec(clipPath);
+  return match ? Number(match[1]) : Number.NaN;
+}
+
+function extractClipOrigin(clipPath: string): { x: number; y: number } {
+  const match = /at ([\d.-]+)px ([\d.-]+)px/.exec(clipPath);
+  return {
+    x: match ? Number(match[1]) : Number.NaN,
+    y: match ? Number(match[2]) : Number.NaN,
+  };
+}
+
+function extractMaskPxValues(maskImage: string): number[] {
+  return Array.from(maskImage.matchAll(/([\d.]+)px/g)).map((entry) => Number(entry[1]));
+}
+
+function extractMaskWaveRadius(maskImage: string): number {
+  const pxValues = extractMaskPxValues(maskImage);
+  if (pxValues.length < 4) {
+    return Number.NaN;
+  }
+  return pxValues[pxValues.length - 2];
+}
+
 describe("modeTransition", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -112,6 +137,7 @@ describe("modeTransition", () => {
     document.documentElement.style.removeProperty("--mode-transition-origin-x");
     document.documentElement.style.removeProperty("--mode-transition-origin-y");
     document.documentElement.style.removeProperty("--mode-transition-radius");
+    document.documentElement.style.removeProperty("--mode-transition-feather");
     mockMatchMedia(false);
   });
 
@@ -134,18 +160,34 @@ describe("modeTransition", () => {
     const firstCall = animate.mock.calls.at(0);
     expect(firstCall).toBeDefined();
     const [frames, options] = firstCall as unknown as [
-      Array<{ clipPath: string; filter?: string }>,
+      Array<{ clipPath: string; filter?: string; offset?: number }>,
       KeyframeAnimationOptions,
     ];
-    expect(frames[0].clipPath).toContain(`circle(${MOTION_PROFILE.revealExpand.startRadiusPx}px at 120px 80px)`);
+    expect(frames).toHaveLength(4);
+    expect(frames.map((frame) => frame.offset)).toEqual([0, 0.22, 0.72, 1]);
+    expect(frames[0].clipPath).toContain(
+      `circle(${MOTION_PROFILE.toDark.startRadiusPx + MOTION_PROFILE.toDark.featherPx}px at 120px 80px)`,
+    );
     expect(frames[0].filter).toContain("drop-shadow");
+    const radii = frames.map((frame) => extractClipRadius(frame.clipPath));
+    expect(radii[1]).toBeGreaterThan(radii[0]);
+    expect(radii[2]).toBeGreaterThan(radii[1]);
+    expect(radii[3]).toBeGreaterThan(radii[2]);
+    const origins = frames.map((frame) => extractClipOrigin(frame.clipPath));
+    expect(origins[0]).toEqual({ x: 120, y: 80 });
+    expect(
+      origins.some((originPoint, index) => index > 0 && (originPoint.x !== 120 || originPoint.y !== 80)),
+    ).toBe(true);
+    expect((frames[1].filter?.match(/drop-shadow\(/g) ?? []).length).toBe(2);
     expect(options.pseudoElement).toBe("::view-transition-new(root)");
-    expect(options.duration).toBe(MOTION_PROFILE.revealExpand.durationMs);
-    expect(options.easing).toBe(MOTION_PROFILE.revealExpand.easing);
+    expect(Number(options.duration)).toBeGreaterThanOrEqual(MOTION_PROFILE.toDark.minDurationMs);
+    expect(Number(options.duration)).toBeLessThanOrEqual(MOTION_PROFILE.toDark.maxDurationMs);
+    expect(options.easing).toBe(MOTION_PROFILE.toDark.easing);
     expect(document.documentElement).not.toHaveAttribute("data-mode-transition");
+    expect(document.documentElement.style.getPropertyValue("--mode-transition-feather")).toBe("");
   });
 
-  it("uses collapse direction when exiting dark mode", async () => {
+  it("uses outward reveal when exiting dark mode", async () => {
     const apply = vi.fn();
     mockStartViewTransition();
     const animate = mockAnimate();
@@ -159,19 +201,30 @@ describe("modeTransition", () => {
     });
 
     expect(apply).toHaveBeenCalledTimes(1);
+    expect(animate).toHaveBeenCalledTimes(1);
     const firstCall = animate.mock.calls.at(0);
     expect(firstCall).toBeDefined();
     const [frames, options] = firstCall as unknown as [
-      Array<{ clipPath: string; filter?: string }>,
+      Array<{ clipPath: string; filter?: string; offset?: number }>,
       KeyframeAnimationOptions,
     ];
-    expect(frames[1].clipPath).toContain(`circle(${MOTION_PROFILE.revealCollapse.endRadiusPx}px at 12px 18px)`);
-    expect(options.pseudoElement).toBe("::view-transition-old(root)");
-    expect(options.duration).toBe(MOTION_PROFILE.revealCollapse.durationMs);
-    expect(options.easing).toBe(MOTION_PROFILE.revealCollapse.easing);
+    expect(frames).toHaveLength(4);
+    expect(frames.map((frame) => frame.offset)).toEqual([0, 0.22, 0.72, 1]);
+    expect(frames[0].clipPath).toContain(
+      `circle(${MOTION_PROFILE.toLight.startRadiusPx + MOTION_PROFILE.toLight.featherPx}px at 12px 18px)`,
+    );
+    const radii = frames.map((frame) => extractClipRadius(frame.clipPath));
+    expect(radii[1]).toBeGreaterThan(radii[0]);
+    expect(radii[2]).toBeGreaterThan(radii[1]);
+    expect(radii[3]).toBeGreaterThan(radii[2]);
+    expect((frames[1].filter?.match(/drop-shadow\(/g) ?? []).length).toBe(2);
+    expect(options.pseudoElement).toBe("::view-transition-new(root)");
+    expect(Number(options.duration)).toBeGreaterThanOrEqual(MOTION_PROFILE.toLight.minDurationMs);
+    expect(Number(options.duration)).toBeLessThanOrEqual(MOTION_PROFILE.toLight.maxDurationMs);
+    expect(options.easing).toBe(MOTION_PROFILE.toLight.easing);
   });
 
-  it("uses directional fallback mask when view transitions are unavailable", async () => {
+  it("uses fallback mask when view transitions are unavailable", async () => {
     const apply = vi.fn();
     const raf = installRafController();
     Object.defineProperty(document, "startViewTransition", {
@@ -192,8 +245,26 @@ describe("modeTransition", () => {
     const overlay = document.querySelector<HTMLElement>("[data-mode-transition-overlay]");
     expect(overlay).not.toBeNull();
     expect(overlay?.style.maskImage).toContain("30px 40px");
+    const initialStops = extractMaskPxValues(overlay?.style.maskImage ?? "");
+    expect(initialStops.length).toBeGreaterThanOrEqual(6);
+    const primaryRadiusStop = initialStops.at(-3);
+    const trailingRadiusStop = initialStops.at(-2);
+    expect(primaryRadiusStop).toBeDefined();
+    expect(trailingRadiusStop).toBeDefined();
+    expect(trailingRadiusStop!).toBeGreaterThan(primaryRadiusStop!);
 
-    raf.flush(MOTION_PROFILE.fallbackDirectional.durationMs);
+    const fullRadius = Math.max(
+      Math.hypot(0 - 30, 0 - 40),
+      Math.hypot(window.innerWidth - 30, 0 - 40),
+      Math.hypot(0 - 30, window.innerHeight - 40),
+      Math.hypot(window.innerWidth - 30, window.innerHeight - 40),
+    );
+    raf.step(Math.round(MOTION_PROFILE.toDark.maxDurationMs * 0.22));
+    const stagedRadius = extractMaskWaveRadius(overlay?.style.maskImage ?? "");
+    expect(stagedRadius).toBeGreaterThan(fullRadius * 0.25);
+    expect(stagedRadius).toBeLessThan(fullRadius);
+
+    raf.flush(MOTION_PROFILE.toDark.maxDurationMs + 80);
     await transition;
     raf.restore();
 
@@ -270,7 +341,7 @@ describe("modeTransition", () => {
       animate: true,
       origin: { x: 20, y: 30 },
     });
-    raf.flush(MOTION_PROFILE.fallbackDirectional.durationMs);
+    raf.flush(Math.max(MOTION_PROFILE.toDark.maxDurationMs, MOTION_PROFILE.toLight.maxDurationMs) + 80);
 
     await Promise.all([firstTransition, secondTransition]);
     raf.restore();
