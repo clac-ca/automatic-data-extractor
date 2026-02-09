@@ -59,13 +59,6 @@ export default function MfaSetupPage() {
     void refreshStatus();
   }, [refreshStatus]);
 
-  useEffect(() => {
-    if (!mfaStatus?.enabled) {
-      return;
-    }
-    navigate(returnTo, { replace: true });
-  }, [mfaStatus?.enabled, navigate, returnTo]);
-
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
