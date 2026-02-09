@@ -50,7 +50,15 @@ jobs:
           deleted=0
           failed=0
 
-          while IFS= read -r row; do
+          mapfile -t version_rows < <(
+            gh api --paginate \
+              "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
+              --jq '.[] | @base64'
+          )
+
+          echo "Loaded versions: ${#version_rows[@]}"
+
+          for row in "${version_rows[@]}"; do
             version_json="$(echo "$row" | base64 --decode)"
             id="$(jq -r '.id' <<<"$version_json")"
             mapfile -t tags < <(jq -r '.metadata.container.tags[]? // empty' <<<"$version_json")
@@ -87,11 +95,7 @@ jobs:
               failed=$((failed + 1))
               echo "FAILED id=${id} tags=$(IFS=,; echo "${tags[*]}")" >&2
             fi
-          done < <(
-            gh api --paginate \
-              "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
-              --jq '.[] | @base64'
-          )
+          done
 
           echo "Summary: kept=${kept} deleted=${deleted} failed=${failed}"
           if [ "$failed" -gt 0 ]; then
