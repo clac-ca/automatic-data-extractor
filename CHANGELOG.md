@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.4](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.3...v1.7.4) (2026-02-09)
+
+
+### Bug Fixes
+
+* **ci:** publish v tags when dispatching on tag refs ([1d3caa4](https://github.com/clac-ca/automatic-data-extractor/commit/1d3caa40273e15ea0473a5a61259a5f8c8c06b45))
+
 ## [1.7.3](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.2...v1.7.3) (2026-02-09)
 
 
