@@ -103,4 +103,69 @@ describe("queryState", () => {
       lifecycle: "deleted",
     });
   });
+
+  it("parses assigned-to-me system view query state", () => {
+    const snapshot = parseViewQueryStateToSnapshot({
+      lifecycle: "active",
+      q: null,
+      filters: [
+        {
+          id: "assigneeId",
+          operator: "inArray",
+          value: ["me"],
+          variant: "multiSelect",
+          filterId: "system-assigned-to-me",
+        },
+      ],
+    });
+
+    expect(snapshot.filters).toEqual([
+      {
+        id: "assigneeId",
+        operator: "inArray",
+        value: ["me"],
+        variant: "multiSelect",
+        filterId: "system-assigned-to-me",
+      },
+    ]);
+  });
+
+  it("parses unassigned system view query state", () => {
+    const snapshot = parseViewQueryStateToSnapshot({
+      lifecycle: "active",
+      q: null,
+      filters: [
+        {
+          id: "assigneeId",
+          operator: "isEmpty",
+          value: "",
+          variant: "multiSelect",
+          filterId: "system-unassigned",
+        },
+      ],
+    });
+
+    expect(snapshot.filters).toEqual([
+      {
+        id: "assigneeId",
+        operator: "isEmpty",
+        value: "",
+        variant: "multiSelect",
+        filterId: "system-unassigned",
+      },
+    ]);
+
+    const resolved = resolveListFiltersForApi({
+      snapshot,
+      currentUserId: "user-123",
+    });
+
+    expect(resolved.filters).toEqual([
+      {
+        id: "assigneeId",
+        operator: "isEmpty",
+        value: "",
+      },
+    ]);
+  });
 });

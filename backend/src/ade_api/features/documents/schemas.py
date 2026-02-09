@@ -9,8 +9,8 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
+from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 from ade_db.models import FileVersionOrigin, RunStatus
@@ -483,8 +483,6 @@ class DocumentViewQueryState(BaseSchema):
     sort: list[dict[str, Any]] = Field(default_factory=list)
     filters: list[dict[str, Any]] = Field(default_factory=list)
     join_operator: Literal["and", "or"] | None = Field(default="and", alias="joinOperator")
-    filter_flag: str | None = Field(default=None, alias="filterFlag")
-    simple_filters: dict[str, Any] | None = Field(default=None, alias="simpleFilters")
 
 
 class DocumentViewTableState(BaseSchema):

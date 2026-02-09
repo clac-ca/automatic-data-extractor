@@ -58,12 +58,26 @@ async def test_list_document_views_includes_default_system_views(
         for item in items
         if item["visibility"] == "system" and item["systemKey"]
     }
-    assert by_key["assigned_to_me"]["queryState"]["simpleFilters"] == {"assigneeId": ["me"]}
-    assert by_key["assigned_to_me"]["queryState"]["filters"] == []
-    assert by_key["unassigned"]["queryState"]["simpleFilters"] == {
-        "assigneeId": ["__empty__"]
-    }
-    assert by_key["unassigned"]["queryState"]["filters"] == []
+    assert by_key["assigned_to_me"]["queryState"]["filters"] == [
+        {
+            "id": "assigneeId",
+            "operator": "inArray",
+            "value": ["me"],
+            "variant": "multiSelect",
+            "filterId": "system-assigned-to-me",
+        }
+    ]
+    assert "simpleFilters" not in by_key["assigned_to_me"]["queryState"]
+    assert by_key["unassigned"]["queryState"]["filters"] == [
+        {
+            "id": "assigneeId",
+            "operator": "isEmpty",
+            "value": "",
+            "variant": "multiSelect",
+            "filterId": "system-unassigned",
+        }
+    ]
+    assert "simpleFilters" not in by_key["unassigned"]["queryState"]
 
     persisted = list(
         db_session.execute(
@@ -220,7 +234,10 @@ async def test_mutating_unknown_non_system_view_returns_not_found(
     assert delete.status_code == 404, delete.text
 
 
-@pytest.mark.parametrize("reserved_name", ["All documents", "Assigned to me", "Unassigned", "Deleted"])
+@pytest.mark.parametrize(
+    "reserved_name",
+    ["All documents", "Assigned to me", "Unassigned", "Deleted"],
+)
 async def test_reserved_system_names_are_blocked_on_create(
     async_client: AsyncClient,
     seed_identity,

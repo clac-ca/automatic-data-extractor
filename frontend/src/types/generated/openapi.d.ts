@@ -3181,12 +3181,6 @@ export type components = {
              * @default and
              */
             joinOperator: ("and" | "or") | null;
-            /** Filterflag */
-            filterFlag?: string | null;
-            /** Simplefilters */
-            simpleFilters?: {
-                [key: string]: unknown;
-            } | null;
         };
         /**
          * DocumentViewTableState
