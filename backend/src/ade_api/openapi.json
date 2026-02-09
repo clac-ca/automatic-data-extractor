@@ -112,6 +112,7 @@
           "auth"
         ],
         "summary": "Return active SSO providers",
+        "description": "List public SSO providers currently available for interactive sign-in.",
         "operationId": "list_sso_providers_api_v1_auth_sso_providers_get",
         "responses": {
           "200": {
@@ -143,7 +144,8 @@
           "auth",
           "auth"
         ],
-        "summary": "Authorize Sso",
+        "summary": "Start SSO authorization",
+        "description": "Initiate the OIDC authorization flow and redirect to the configured identity provider.",
         "operationId": "authorize_sso_api_v1_auth_sso_authorize_get",
         "parameters": [
           {
@@ -206,7 +208,8 @@
           "auth",
           "auth"
         ],
-        "summary": "Callback Sso",
+        "summary": "Complete SSO authorization",
+        "description": "Handle the OIDC callback, validate the provider response, and establish an ADE session.",
         "operationId": "callback_sso_api_v1_auth_sso_callback_get",
         "responses": {
           "200": {
@@ -256,7 +259,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Return setup status for the first admin user."
       },
       "post": {
         "tags": [
@@ -302,7 +306,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Create the first admin user and log them in."
       }
     },
     "/api/v1/auth/providers": {
@@ -332,7 +337,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Return configured authentication providers."
       }
     },
     "/api/v1/auth/login": {
@@ -395,7 +401,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Authenticate with local username/password."
       }
     },
     "/api/v1/auth/logout": {
@@ -458,7 +465,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Logout current user and revoke their sessions."
       }
     },
     "/api/v1/auth/password/forgot": {
@@ -511,7 +519,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Create a password reset token and schedule delivery."
       }
     },
     "/api/v1/auth/password/reset": {
@@ -559,7 +568,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Consume a password reset token and update credentials."
       }
     },
     "/api/v1/auth/mfa/totp/enroll/start": {
@@ -629,7 +639,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Start TOTP MFA enrollment for the current user."
       }
     },
     "/api/v1/auth/mfa/totp": {
@@ -666,7 +677,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Read TOTP MFA status for the current user."
       },
       "delete": {
         "tags": [
@@ -727,7 +739,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Disable TOTP for the current user."
       }
     },
     "/api/v1/auth/mfa/totp/enroll/confirm": {
@@ -807,7 +820,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Confirm TOTP enrollment with current code."
       }
     },
     "/api/v1/auth/mfa/totp/recovery/regenerate": {
@@ -887,7 +901,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Regenerate recovery codes for current user."
       }
     },
     "/api/v1/auth/mfa/challenge/verify": {
@@ -942,7 +957,8 @@
             "$ref": "#/components/responses/ProblemDetails"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Verify MFA challenge and issue a session."
       }
     },
     "/api/v1/apikeys": {
@@ -3999,6 +4015,18 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MeProfile"
+                },
+                "examples": {
+                  "meProfile": {
+                    "summary": "Authenticated profile",
+                    "value": {
+                      "id": "01J7YATV4Y2R7BNS2N8MP4H2YK",
+                      "email": "operator@example.com",
+                      "displayName": "ADE Operator",
+                      "isServiceAccount": false,
+                      "isVerified": true
+                    }
+                  }
                 }
               }
             },
@@ -4426,7 +4454,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a new workspace."
       },
       "get": {
         "tags": [
@@ -4627,7 +4656,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List workspaces for the authenticated user."
       }
     },
     "/api/v1/workspaces/{workspaceId}": {
@@ -4717,7 +4747,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Retrieve workspace context by identifier."
       },
       "patch": {
         "tags": [
@@ -4832,7 +4863,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Update workspace metadata."
       },
       "delete": {
         "tags": [
@@ -4929,7 +4961,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Delete a workspace."
       }
     },
     "/api/v1/workspaces/{workspaceId}/default": {
@@ -5020,7 +5053,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Mark a workspace as the caller's default."
       }
     },
     "/api/v1/workspaces/{workspaceId}/members": {
@@ -5219,7 +5253,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List workspace members with their roles."
       },
       "post": {
         "tags": [
@@ -5309,7 +5344,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Add a workspace member with roles."
       }
     },
     "/api/v1/workspaces/{workspaceId}/members/{userId}": {
@@ -5413,7 +5449,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Replace workspace member roles."
       },
       "delete": {
         "tags": [
@@ -5498,7 +5535,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Remove a workspace member."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/tags": {
@@ -5706,7 +5744,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List document tags."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents": {
@@ -5752,6 +5791,16 @@
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_upload_document_api_v1_workspaces__workspaceId__documents_post"
+              },
+              "examples": {
+                "uploadDocument": {
+                  "summary": "Upload and queue with active sheet only",
+                  "value": {
+                    "metadata": "{\"source\":\"api-guide\",\"mode\":\"active-sheet-only\"}",
+                    "run_options": "{\"activeSheetOnly\":true}",
+                    "conflictMode": "keep_both"
+                  }
+                }
               }
             }
           }
@@ -5763,6 +5812,21 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DocumentOut"
+                },
+                "examples": {
+                  "uploadedDocument": {
+                    "summary": "Uploaded document",
+                    "value": {
+                      "id": "01J7YB4D2YQ35XQB7AVJH8GWWV",
+                      "workspaceId": "01J7YAX69V8ACZ8SBRJ8GHXW1A",
+                      "name": "input.xlsx",
+                      "byteSize": 12482,
+                      "metadata": {
+                        "source": "api-guide",
+                        "mode": "active-sheet-only"
+                      }
+                    }
+                  }
                 }
               }
             },
@@ -5838,7 +5902,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Upload a document."
       },
       "get": {
         "tags": [
@@ -6083,7 +6148,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List documents."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/versions": {
@@ -6219,7 +6285,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Upload a new document version."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/views": {
@@ -6285,7 +6352,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List saved document views."
       },
       "post": {
         "tags": [
@@ -6375,7 +6443,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a saved document view."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/views/{viewId}": {
@@ -6479,7 +6548,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Update a saved document view."
       },
       "delete": {
         "tags": [
@@ -6564,7 +6634,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Delete a saved document view."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/stream": {
@@ -6646,7 +6717,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Stream document changes."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/delta": {
@@ -6759,7 +6831,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List document changes since token."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}": {
@@ -6888,7 +6961,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Update document metadata, assignment, or name."
       },
       "get": {
         "tags": [
@@ -7018,7 +7092,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Retrieve document metadata."
       },
       "delete": {
         "tags": [
@@ -7127,7 +7202,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Soft delete a document."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/batch/tags": {
@@ -7236,7 +7312,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Update tags on multiple documents."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/tags": {
@@ -7357,7 +7434,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Replace document tags."
       },
       "patch": {
         "tags": [
@@ -7476,7 +7554,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Update document tags."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/listrow": {
@@ -7608,7 +7687,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Retrieve document list row."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments": {
@@ -7843,7 +7923,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List document comments."
       },
       "post": {
         "tags": [
@@ -7962,7 +8043,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a document comment."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/download": {
@@ -8062,7 +8144,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Download latest document artifact."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/original/download": {
@@ -8162,7 +8245,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Download original document version."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download": {
@@ -8272,7 +8356,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Download a specific document version."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/preview": {
@@ -8448,7 +8533,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Preview a document worksheet."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/sheets": {
@@ -8531,7 +8617,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List worksheets for a document."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
@@ -8649,7 +8736,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Restore a soft-deleted document."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/batch/delete": {
@@ -8765,7 +8853,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Soft delete multiple documents."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/batch/restore": {
@@ -8881,7 +8970,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Restore multiple soft-deleted documents."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations": {
@@ -9080,7 +9170,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List configurations for a workspace."
       },
       "post": {
         "tags": [
@@ -9125,6 +9216,18 @@
               "schema": {
                 "$ref": "#/components/schemas/ConfigurationCreate",
                 "description": "Display name and template/clone source for the configuration."
+              },
+              "examples": {
+                "createFromTemplate": {
+                  "summary": "Create a draft configuration from template",
+                  "value": {
+                    "displayName": "Customer Imports v2",
+                    "source": {
+                      "type": "template"
+                    },
+                    "notes": "Initial draft for spreadsheet normalization."
+                  }
+                }
               }
             }
           }
@@ -9136,6 +9239,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConfigurationRecord"
+                },
+                "examples": {
+                  "configurationRecord": {
+                    "summary": "Created draft configuration",
+                    "value": {
+                      "id": "01J7YC64V8M7CJWVJCE2R9VW5G",
+                      "workspaceId": "01J7YAX69V8ACZ8SBRJ8GHXW1A",
+                      "displayName": "Customer Imports v2",
+                      "status": "draft"
+                    }
+                  }
                 }
               }
             },
@@ -9171,7 +9285,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a configuration from a template or clone."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/history": {
@@ -9311,7 +9426,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Retrieve workspace configuration timeline."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}": {
@@ -9392,7 +9508,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Retrieve configuration metadata."
       },
       "patch": {
         "tags": [
@@ -9495,7 +9612,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Update editable metadata for a draft configuration."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/restore": {
@@ -9600,7 +9718,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Restore a previous configuration as a new draft."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/import": {
@@ -9692,7 +9811,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a configuration from an uploaded archive."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive": {
@@ -9786,7 +9906,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Archive a draft or active configuration."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/export": {
@@ -9794,7 +9915,8 @@
         "tags": [
           "configurations"
         ],
-        "summary": "Export Config",
+        "summary": "Export a configuration archive",
+        "description": "Export the selected configuration as a ZIP archive.",
         "operationId": "export_config_api_v1_workspaces__workspaceId__configurations__configurationId__export_get",
         "parameters": [
           {
@@ -9977,7 +10099,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Replace a draft configuration from an uploaded archive."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files": {
@@ -10176,7 +10299,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "List editable files and directories."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}": {
@@ -10184,7 +10308,8 @@
         "tags": [
           "configurations"
         ],
-        "summary": "Read Config File",
+        "summary": "Read configuration file content",
+        "description": "Read a file from a draft configuration as JSON (`format=json`) or raw bytes. Supports ETag and HTTP range semantics.",
         "operationId": "read_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__get",
         "parameters": [
           {
@@ -10380,13 +10505,15 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Head Config File."
       },
       "put": {
         "tags": [
           "configurations"
         ],
-        "summary": "Upsert Config File",
+        "summary": "Create or replace a configuration file",
+        "description": "Write file content into a draft configuration path. Supports conditional writes with `If-Match` and `If-None-Match`.",
         "operationId": "upsert_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__put",
         "parameters": [
           {
@@ -10524,7 +10651,8 @@
         "tags": [
           "configurations"
         ],
-        "summary": "Delete Config File",
+        "summary": "Delete a configuration file",
+        "description": "Delete a file from a draft configuration with optional optimistic concurrency checks.",
         "operationId": "delete_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__delete",
         "parameters": [
           {
@@ -10723,7 +10851,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Rename or move a file."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}": {
@@ -10731,7 +10860,8 @@
         "tags": [
           "configurations"
         ],
-        "summary": "Create Config Directory",
+        "summary": "Create a configuration directory",
+        "description": "Create a directory path in a draft configuration.",
         "operationId": "create_config_directory_api_v1_workspaces__workspaceId__configurations__configurationId__directories__directoryPath__put",
         "parameters": [
           {
@@ -10847,7 +10977,8 @@
         "tags": [
           "configurations"
         ],
-        "summary": "Delete Config Directory",
+        "summary": "Delete a configuration directory",
+        "description": "Delete a directory path from a draft configuration.",
         "operationId": "delete_config_directory_api_v1_workspaces__workspaceId__configurations__configurationId__directories__directoryPath__delete",
         "parameters": [
           {
@@ -10953,8 +11084,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "Create Workspace Run Endpoint",
-        "description": "Create a run for ``workspace_id`` and enqueue execution.",
+        "summary": "Create and enqueue a run",
+        "description": "Create a run in the target workspace and enqueue it for worker processing. When `configuration_id` is omitted, the active workspace configuration is used.",
         "operationId": "create_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs_post",
         "parameters": [
           {
@@ -10992,6 +11123,18 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RunWorkspaceCreateRequest"
+              },
+              "examples": {
+                "processDocumentRun": {
+                  "summary": "Create a run for one uploaded document",
+                  "value": {
+                    "inputDocumentId": "01J7YB4D2YQ35XQB7AVJH8GWWV",
+                    "options": {
+                      "operation": "process",
+                      "activeSheetOnly": true
+                    }
+                  }
+                }
               }
             }
           }
@@ -11003,6 +11146,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunResource"
+                },
+                "examples": {
+                  "createdRun": {
+                    "summary": "Queued run",
+                    "value": {
+                      "id": "01J7YB9A6Y3QFNBVE9S9THQ4HC",
+                      "workspaceId": "01J7YAX69V8ACZ8SBRJ8GHXW1A",
+                      "status": "queued",
+                      "operation": "process"
+                    }
+                  }
                 }
               }
             },
@@ -11044,7 +11198,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "List Workspace Runs Endpoint",
+        "summary": "List runs in a workspace",
+        "description": "Return a cursor-paginated run list for the workspace with filtering, search, and sorting.",
         "operationId": "list_workspace_runs_endpoint_api_v1_workspaces__workspaceId__runs_get",
         "parameters": [
           {
@@ -11243,8 +11398,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "Create Workspace Runs Batch Endpoint",
-        "description": "Create multiple runs for ``workspace_id`` and enqueue execution.",
+        "summary": "Create and enqueue runs in batch",
+        "description": "Create one run per document in `document_ids` and enqueue all runs as a single all-or-nothing operation.",
         "operationId": "create_workspace_runs_batch_endpoint_api_v1_workspaces__workspaceId__runs_batch_post",
         "parameters": [
           {
@@ -11336,7 +11491,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "Get Workspace Run Endpoint",
+        "summary": "Get run details",
+        "description": "Return a single run resource for the requested workspace and run identifier.",
         "operationId": "get_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs__runId__get",
         "parameters": [
           {
@@ -11414,7 +11570,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "Cancel Workspace Run Endpoint",
+        "summary": "Cancel a run",
+        "description": "Request cancellation for a run that is still cancellable.",
         "operationId": "cancel_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs__runId__cancel_post",
         "parameters": [
           {
@@ -11508,7 +11665,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "Get Workspace Run Metrics Endpoint",
+        "summary": "Get run metrics",
+        "description": "Return derived run metrics from worker events, including evaluation, validation, and workbook statistics.",
         "operationId": "get_workspace_run_metrics_endpoint_api_v1_workspaces__workspaceId__runs__runId__metrics_get",
         "parameters": [
           {
@@ -11586,7 +11744,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "List Workspace Run Fields Endpoint",
+        "summary": "List run field detection results",
+        "description": "Return field-level detection outcomes captured for the run.",
         "operationId": "list_workspace_run_fields_endpoint_api_v1_workspaces__workspaceId__runs__runId__fields_get",
         "parameters": [
           {
@@ -11668,7 +11827,8 @@
         "tags": [
           "runs"
         ],
-        "summary": "List Workspace Run Columns Endpoint",
+        "summary": "List run column mappings",
+        "description": "Return detected input columns and mapping metadata for the run.",
         "operationId": "list_workspace_run_columns_endpoint_api_v1_workspaces__workspaceId__runs__runId__columns_get",
         "parameters": [
           {
@@ -11837,6 +11997,7 @@
           "runs"
         ],
         "summary": "Get run input metadata",
+        "description": "Return the input document/version metadata associated with the run.",
         "operationId": "get_workspace_run_input_endpoint_api_v1_workspaces__workspaceId__runs__runId__input_get",
         "parameters": [
           {
@@ -11915,6 +12076,7 @@
           "runs"
         ],
         "summary": "Download run input file",
+        "description": "Download the exact input file version used by this run.",
         "operationId": "download_workspace_run_input_endpoint_api_v1_workspaces__workspaceId__runs__runId__input_download_get",
         "parameters": [
           {
@@ -11991,6 +12153,7 @@
           "runs"
         ],
         "summary": "Stream run events (SSE)",
+        "description": "Stream run events using Server-Sent Events. Use `cursor` or `Last-Event-ID` to resume from a prior position.",
         "operationId": "stream_workspace_run_events_endpoint_api_v1_workspaces__workspaceId__runs__runId__events_stream_get",
         "parameters": [
           {
@@ -12094,6 +12257,7 @@
           "runs"
         ],
         "summary": "Download run events (NDJSON log)",
+        "description": "Download the persisted NDJSON event log for the run.",
         "operationId": "download_workspace_run_events_file_endpoint_api_v1_workspaces__workspaceId__runs__runId__events_download_get",
         "parameters": [
           {
@@ -12178,6 +12342,7 @@
           "runs"
         ],
         "summary": "Get run output metadata",
+        "description": "Return output file metadata, readiness, and download link information.",
         "operationId": "get_workspace_run_output_metadata_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_get",
         "parameters": [
           {
@@ -12262,6 +12427,7 @@
           "runs"
         ],
         "summary": "Upload manual run output",
+        "description": "Upload an output artifact for a run managed manually outside worker execution.",
         "operationId": "upload_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_post",
         "parameters": [
           {
@@ -12390,6 +12556,7 @@
           "runs"
         ],
         "summary": "Download run output file",
+        "description": "Download the latest output file artifact associated with the run.",
         "operationId": "download_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_download_get",
         "parameters": [
           {
@@ -12482,6 +12649,7 @@
           "runs"
         ],
         "summary": "List run output worksheets",
+        "description": "List worksheets available in the run output artifact when sheet introspection is supported.",
         "operationId": "list_workspace_run_output_sheets_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_sheets_get",
         "parameters": [
           {
@@ -12581,6 +12749,7 @@
           "runs"
         ],
         "summary": "Preview run output worksheet",
+        "description": "Return a bounded preview of run output worksheet data with optional sheet selection and trimming controls.",
         "operationId": "preview_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_preview_get",
         "parameters": [
           {

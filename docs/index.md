@@ -32,6 +32,14 @@ This documentation is written for people who operate ADE in production and contr
 5. [System Architecture](explanation/system-architecture.md)
 6. [Documentation Maintenance](standards/documentation-maintenance.md)
 
+### API Integrator Path
+
+1. [API Reference Hub](reference/api/index.md)
+2. [Authenticate with API Key](how-to/api-authenticate-with-api-key.md)
+3. [Manage Configurations via API](how-to/api-manage-configurations.md)
+4. [Upload a Document and Queue Runs](how-to/api-upload-and-queue-runs.md)
+5. [Create and Monitor Runs via API](how-to/api-create-and-monitor-runs.md)
+
 ## I Need To
 
 | Task | Go To |
@@ -44,6 +52,11 @@ This documentation is written for people who operate ADE in production and contr
 | Manage users and permissions | [Manage Users and Access](how-to/manage-users-and-access.md) |
 | Operate auth and SSO policy | [Auth Operations Runbook](how-to/auth-operations.md) |
 | Run auth rollout smoke checks | [Auth Rollout and Smoke Checklist](how-to/auth-rollout-and-smoke-checklist.md) |
+| Authenticate API requests with API key | [Authenticate with API Key](how-to/api-authenticate-with-api-key.md) |
+| Manage configuration lifecycle through API | [Manage Configurations via API](how-to/api-manage-configurations.md) |
+| Upload documents and queue runs via API | [Upload a Document and Queue Runs](how-to/api-upload-and-queue-runs.md) |
+| Create and monitor runs via API | [Create and Monitor Runs via API](how-to/api-create-and-monitor-runs.md) |
+| Explore API endpoint contracts | [API Reference Hub](reference/api/index.md) |
 | Understand run states and retries | [Runtime Lifecycle](reference/runtime-lifecycle.md) |
 | Respond to auth incidents | [Auth Incident Runbook](troubleshooting/auth-incident-runbook.md) |
 | Troubleshoot quickly | [Triage Playbook](troubleshooting/triage-playbook.md) |
@@ -65,6 +78,10 @@ This documentation is written for people who operate ADE in production and contr
   - [Manage Users and Access](how-to/manage-users-and-access.md)
   - [Auth Operations Runbook](how-to/auth-operations.md)
   - [Auth Rollout and Smoke Checklist](how-to/auth-rollout-and-smoke-checklist.md)
+  - [Authenticate with API Key](how-to/api-authenticate-with-api-key.md)
+  - [Manage Configurations via API](how-to/api-manage-configurations.md)
+  - [Upload a Document and Queue Runs](how-to/api-upload-and-queue-runs.md)
+  - [Create and Monitor Runs via API](how-to/api-create-and-monitor-runs.md)
   - [Operate Runs](how-to/operate-runs.md)
 - Troubleshooting
   - [Triage Playbook](troubleshooting/triage-playbook.md)
@@ -76,6 +93,13 @@ This documentation is written for people who operate ADE in production and contr
   - [Auth Architecture](reference/auth-architecture.md)
   - [Environment Variables](reference/environment-variables.md)
   - [API Capability Map](reference/api-capability-map.md)
+  - [API Reference Hub](reference/api/index.md)
+  - [API Authentication](reference/api/authentication.md)
+  - [API Workspaces](reference/api/workspaces.md)
+  - [API Configurations](reference/api/configurations.md)
+  - [API Documents](reference/api/documents.md)
+  - [API Runs](reference/api/runs.md)
+  - [API Errors and Problem Details](reference/api/errors-and-problem-details.md)
   - [Defaults Matrix](reference/defaults-matrix.md)
   - [Runtime Lifecycle](reference/runtime-lifecycle.md)
   - [Release Process](reference/release-process.md)

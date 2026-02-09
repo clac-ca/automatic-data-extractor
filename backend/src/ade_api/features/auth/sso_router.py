@@ -285,6 +285,7 @@ def _resolve_user(
     response_model=PublicSsoProviderListResponse,
     status_code=status.HTTP_200_OK,
     summary="Return active SSO providers",
+    description="List public SSO providers currently available for interactive sign-in.",
 )
 def list_sso_providers(
     settings: Annotated[Settings, Depends(get_settings)],
@@ -307,7 +308,13 @@ def list_sso_providers(
     )
 
 
-@router.get("/authorize")
+@router.get(
+    "/authorize",
+    summary="Start SSO authorization",
+    description=(
+        "Initiate the OIDC authorization flow and redirect to the configured identity provider."
+    ),
+)
 def authorize_sso(
     request: Request,
     return_to: Annotated[str | None, Query(alias="returnTo")] = None,
@@ -364,7 +371,13 @@ def authorize_sso(
     return RedirectResponse(url)
 
 
-@router.get("/callback")
+@router.get(
+    "/callback",
+    summary="Complete SSO authorization",
+    description=(
+        "Handle the OIDC callback, validate the provider response, and establish an ADE session."
+    ),
+)
 def callback_sso(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)] = None,
