@@ -70,19 +70,19 @@ jobs:
             mapfile -t tags < <(jq -r '.metadata.container.tags[]? // empty' <<<"$version_json")
 
             keep_version=0
-            if [ "${#tags[@]}" -eq 0 ]; then
-              keep_version=0
-            else
+            has_allowed=0
+            has_disallowed=0
+            if [ "${#tags[@]}" -gt 0 ]; then
               for tag in "${tags[@]}"; do
-                if [ -n "${KEEP[$tag]+x}" ]; then
-                  keep_version=1
-                  break
-                fi
-                if [[ "$tag" =~ $KEEP_TAG_REGEX ]]; then
-                  keep_version=1
-                  break
+                if [ -n "${KEEP[$tag]+x}" ] || [[ "$tag" =~ $KEEP_TAG_REGEX ]]; then
+                  has_allowed=1
+                else
+                  has_disallowed=1
                 fi
               done
+            fi
+            if [ "$has_allowed" -eq 1 ] && [ "$has_disallowed" -eq 0 ]; then
+              keep_version=1
             fi
 
             if [ "$keep_version" -eq 1 ]; then
