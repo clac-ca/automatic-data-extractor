@@ -16548,29 +16548,6 @@
             ],
             "title": "Joinoperator",
             "default": "and"
-          },
-          "filterFlag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Filterflag"
-          },
-          "simpleFilters": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Simplefilters"
           }
         },
         "additionalProperties": false,

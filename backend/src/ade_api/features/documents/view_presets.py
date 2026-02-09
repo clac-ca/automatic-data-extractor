@@ -39,9 +39,16 @@ SYSTEM_DOCUMENT_VIEW_PRESETS: tuple[SystemDocumentViewPreset, ...] = (
             "lifecycle": "active",
             "q": None,
             "sort": [{"id": "createdAt", "desc": True}],
-            "filters": [],
+            "filters": [
+                {
+                    "id": "assigneeId",
+                    "operator": "inArray",
+                    "value": ["me"],
+                    "variant": "multiSelect",
+                    "filterId": "system-assigned-to-me",
+                }
+            ],
             "joinOperator": "and",
-            "simpleFilters": {"assigneeId": ["me"]},
         },
     ),
     SystemDocumentViewPreset(
@@ -52,9 +59,16 @@ SYSTEM_DOCUMENT_VIEW_PRESETS: tuple[SystemDocumentViewPreset, ...] = (
             "lifecycle": "active",
             "q": None,
             "sort": [{"id": "createdAt", "desc": True}],
-            "filters": [],
+            "filters": [
+                {
+                    "id": "assigneeId",
+                    "operator": "isEmpty",
+                    "value": "",
+                    "variant": "multiSelect",
+                    "filterId": "system-unassigned",
+                }
+            ],
             "joinOperator": "and",
-            "simpleFilters": {"assigneeId": ["__empty__"]},
         },
     ),
     SystemDocumentViewPreset(
