@@ -260,6 +260,11 @@ def _build_run_events_download_filename(*, run: Run, input_filename: str | None)
     response_model=RunResource,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
+    summary="Create and enqueue a run",
+    description=(
+        "Create a run in the target workspace and enqueue it for worker processing. "
+        "When `configuration_id` is omitted, the active workspace configuration is used."
+    ),
 )
 def create_workspace_run_endpoint(
     *,
@@ -306,6 +311,11 @@ def create_workspace_run_endpoint(
     response_model=RunBatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Security(require_csrf)],
+    summary="Create and enqueue runs in batch",
+    description=(
+        "Create one run per document in `document_ids` and enqueue all runs as a single "
+        "all-or-nothing operation."
+    ),
 )
 def create_workspace_runs_batch_endpoint(
     *,
@@ -346,6 +356,10 @@ def create_workspace_runs_batch_endpoint(
     "",
     response_model=RunPage,
     response_model_exclude_none=True,
+    summary="List runs in a workspace",
+    description=(
+        "Return a cursor-paginated run list for the workspace with filtering, search, and sorting."
+    ),
 )
 def list_workspace_runs_endpoint(
     workspace_id: WorkspacePath,
@@ -373,7 +387,12 @@ def list_workspace_runs_endpoint(
     )
 
 
-@router.get("/{runId}", response_model=RunResource)
+@router.get(
+    "/{runId}",
+    response_model=RunResource,
+    summary="Get run details",
+    description="Return a single run resource for the requested workspace and run identifier.",
+)
 def get_workspace_run_endpoint(
     workspace_id: WorkspacePath,
     run_id: RunPath,
@@ -388,6 +407,8 @@ def get_workspace_run_endpoint(
     "/{runId}/cancel",
     response_model=RunResource,
     dependencies=[Security(require_csrf)],
+    summary="Cancel a run",
+    description="Request cancellation for a run that is still cancellable.",
 )
 def cancel_workspace_run_endpoint(
     workspace_id: WorkspacePath,
@@ -409,6 +430,11 @@ def cancel_workspace_run_endpoint(
     "/{runId}/metrics",
     response_model=RunMetricsResource,
     response_model_exclude_none=True,
+    summary="Get run metrics",
+    description=(
+        "Return derived run metrics from worker events, including evaluation, validation, and "
+        "workbook statistics."
+    ),
 )
 def get_workspace_run_metrics_endpoint(
     workspace_id: WorkspacePath,
@@ -430,6 +456,8 @@ def get_workspace_run_metrics_endpoint(
     "/{runId}/fields",
     response_model=list[RunFieldResource],
     response_model_exclude_none=True,
+    summary="List run field detection results",
+    description="Return field-level detection outcomes captured for the run.",
 )
 def list_workspace_run_fields_endpoint(
     workspace_id: WorkspacePath,
@@ -449,6 +477,8 @@ def list_workspace_run_fields_endpoint(
     "/{runId}/columns",
     response_model=list[RunColumnResource],
     response_model_exclude_none=True,
+    summary="List run column mappings",
+    description="Return detected input columns and mapping metadata for the run.",
 )
 def list_workspace_run_columns_endpoint(
     workspace_id: WorkspacePath,
@@ -470,6 +500,7 @@ def list_workspace_run_columns_endpoint(
     response_model=RunInput,
     response_model_exclude_none=True,
     summary="Get run input metadata",
+    description="Return the input document/version metadata associated with the run.",
 )
 def get_workspace_run_input_endpoint(
     workspace_id: WorkspacePath,
@@ -491,6 +522,7 @@ def get_workspace_run_input_endpoint(
 @router.get(
     "/{runId}/input/download",
     summary="Download run input file",
+    description="Download the exact input file version used by this run.",
 )
 def download_workspace_run_input_endpoint(
     workspace_id: WorkspacePath,
@@ -527,6 +559,10 @@ def download_workspace_run_input_endpoint(
     "/{runId}/events/stream",
     responses={status.HTTP_404_NOT_FOUND: {"description": "Run not found"}},
     summary="Stream run events (SSE)",
+    description=(
+        "Stream run events using Server-Sent Events. "
+        "Use `cursor` or `Last-Event-ID` to resume from a prior position."
+    ),
 )
 async def stream_workspace_run_events_endpoint(
     workspace_id: WorkspacePath,
@@ -568,6 +604,7 @@ async def stream_workspace_run_events_endpoint(
     "/{runId}/events/download",
     responses={status.HTTP_404_NOT_FOUND: {"description": "Events unavailable"}},
     summary="Download run events (NDJSON log)",
+    description="Download the persisted NDJSON event log for the run.",
 )
 def download_workspace_run_events_file_endpoint(
     workspace_id: WorkspacePath,
@@ -610,6 +647,7 @@ def download_workspace_run_events_file_endpoint(
         status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
     },
     summary="Get run output metadata",
+    description="Return output file metadata, readiness, and download link information.",
 )
 def get_workspace_run_output_metadata_endpoint(
     workspace_id: WorkspacePath,
@@ -638,6 +676,7 @@ def get_workspace_run_output_metadata_endpoint(
         },
     },
     summary="Upload manual run output",
+    description="Upload an output artifact for a run managed manually outside worker execution.",
 )
 def upload_workspace_run_output_endpoint(
     workspace_id: WorkspacePath,
@@ -674,6 +713,7 @@ def upload_workspace_run_output_endpoint(
         status.HTTP_409_CONFLICT: {"description": "Output not ready"},
     },
     summary="Download run output file",
+    description="Download the latest output file artifact associated with the run.",
 )
 def download_workspace_run_output_endpoint(
     workspace_id: WorkspacePath,
@@ -730,6 +770,7 @@ def download_workspace_run_output_endpoint(
         },
     },
     summary="List run output worksheets",
+    description="List worksheets available in the run output artifact when sheet introspection is supported.",
 )
 def list_workspace_run_output_sheets_endpoint(
     workspace_id: WorkspacePath,
@@ -764,6 +805,10 @@ def list_workspace_run_output_sheets_endpoint(
     response_model=WorkbookSheetPreview,
     response_model_exclude_none=True,
     summary="Preview run output worksheet",
+    description=(
+        "Return a bounded preview of run output worksheet data with optional sheet selection "
+        "and trimming controls."
+    ),
     responses={
         status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
         status.HTTP_409_CONFLICT: {"description": "Output not ready"},

@@ -207,6 +207,11 @@ def list_config_files(
         status.HTTP_206_PARTIAL_CONTENT: {"content": {"application/octet-stream": {}}},
         status.HTTP_304_NOT_MODIFIED: {"model": None},
     },
+    summary="Read configuration file content",
+    description=(
+        "Read a file from a draft configuration as JSON (`format=json`) or raw bytes. "
+        "Supports ETag and HTTP range semantics."
+    ),
 )
 def read_config_file(
     workspace_id: WorkspaceIdPath,
@@ -358,6 +363,11 @@ def head_config_file(
         status.HTTP_200_OK: {"model": FileWriteResponse},
         status.HTTP_201_CREATED: {"model": FileWriteResponse},
     },
+    summary="Create or replace a configuration file",
+    description=(
+        "Write file content into a draft configuration path. "
+        "Supports conditional writes with `If-Match` and `If-None-Match`."
+    ),
 )
 def upsert_config_file(
     workspace_id: WorkspaceIdPath,
@@ -434,6 +444,8 @@ def upsert_config_file(
     "/configurations/{configurationId}/files/{filePath:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a configuration file",
+    description="Delete a file from a draft configuration with optional optimistic concurrency checks.",
 )
 def delete_config_file(
     workspace_id: WorkspaceIdPath,
@@ -494,6 +506,8 @@ def delete_config_file(
             "description": "Directory created",
         },
     },
+    summary="Create a configuration directory",
+    description="Create a directory path in a draft configuration.",
 )
 def create_config_directory(
     workspace_id: WorkspaceIdPath,
@@ -533,6 +547,8 @@ def create_config_directory(
     "/configurations/{configurationId}/directories/{directoryPath:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a configuration directory",
+    description="Delete a directory path from a draft configuration.",
 )
 def delete_config_directory(
     workspace_id: WorkspaceIdPath,

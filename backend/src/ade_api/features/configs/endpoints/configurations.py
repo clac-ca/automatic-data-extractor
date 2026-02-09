@@ -508,6 +508,8 @@ def archive_configuration_endpoint(
     responses={
         status.HTTP_200_OK: {"content": {"application/zip": {}}},
     },
+    summary="Export a configuration archive",
+    description="Export the selected configuration as a ZIP archive.",
 )
 def export_config(
     workspace_id: WorkspaceIdPath,

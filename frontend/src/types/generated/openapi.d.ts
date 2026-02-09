@@ -68,7 +68,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Return active SSO providers */
+        /**
+         * Return active SSO providers
+         * @description List public SSO providers currently available for interactive sign-in.
+         */
         get: operations["list_sso_providers_api_v1_auth_sso_providers_get"];
         put?: never;
         post?: never;
@@ -85,7 +88,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Authorize Sso */
+        /**
+         * Start SSO authorization
+         * @description Initiate the OIDC authorization flow and redirect to the configured identity provider.
+         */
         get: operations["authorize_sso_api_v1_auth_sso_authorize_get"];
         put?: never;
         post?: never;
@@ -102,7 +108,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Callback Sso */
+        /**
+         * Complete SSO authorization
+         * @description Handle the OIDC callback, validate the provider response, and establish an ADE session.
+         */
         get: operations["callback_sso_api_v1_auth_sso_callback_get"];
         put?: never;
         post?: never;
@@ -119,10 +128,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Return setup status for the first admin user */
+        /**
+         * Return setup status for the first admin user
+         * @description Return setup status for the first admin user.
+         */
         get: operations["get_setup_status_api_v1_auth_setup_get"];
         put?: never;
-        /** Create the first admin user and log them in */
+        /**
+         * Create the first admin user and log them in
+         * @description Create the first admin user and log them in.
+         */
         post: operations["complete_setup_api_v1_auth_setup_post"];
         delete?: never;
         options?: never;
@@ -137,7 +152,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Return configured authentication providers */
+        /**
+         * Return configured authentication providers
+         * @description Return configured authentication providers.
+         */
         get: operations["list_auth_providers_api_v1_auth_providers_get"];
         put?: never;
         post?: never;
@@ -156,7 +174,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Authenticate with local username/password */
+        /**
+         * Authenticate with local username/password
+         * @description Authenticate with local username/password.
+         */
         post: operations["login_local_api_v1_auth_login_post"];
         delete?: never;
         options?: never;
@@ -173,7 +194,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Logout current user and revoke their sessions */
+        /**
+         * Logout current user and revoke their sessions
+         * @description Logout current user and revoke their sessions.
+         */
         post: operations["logout_local_api_v1_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -190,7 +214,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Create a password reset token and schedule delivery */
+        /**
+         * Create a password reset token and schedule delivery
+         * @description Create a password reset token and schedule delivery.
+         */
         post: operations["password_forgot_api_v1_auth_password_forgot_post"];
         delete?: never;
         options?: never;
@@ -207,7 +234,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Consume a password reset token and update credentials */
+        /**
+         * Consume a password reset token and update credentials
+         * @description Consume a password reset token and update credentials.
+         */
         post: operations["password_reset_api_v1_auth_password_reset_post"];
         delete?: never;
         options?: never;
@@ -224,7 +254,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Start TOTP MFA enrollment for the current user */
+        /**
+         * Start TOTP MFA enrollment for the current user
+         * @description Start TOTP MFA enrollment for the current user.
+         */
         post: operations["mfa_enroll_start_api_v1_auth_mfa_totp_enroll_start_post"];
         delete?: never;
         options?: never;
@@ -239,11 +272,17 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Read TOTP MFA status for the current user */
+        /**
+         * Read TOTP MFA status for the current user
+         * @description Read TOTP MFA status for the current user.
+         */
         get: operations["mfa_status_api_v1_auth_mfa_totp_get"];
         put?: never;
         post?: never;
-        /** Disable TOTP for the current user */
+        /**
+         * Disable TOTP for the current user
+         * @description Disable TOTP for the current user.
+         */
         delete: operations["mfa_disable_api_v1_auth_mfa_totp_delete"];
         options?: never;
         head?: never;
@@ -259,7 +298,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Confirm TOTP enrollment with current code */
+        /**
+         * Confirm TOTP enrollment with current code
+         * @description Confirm TOTP enrollment with current code.
+         */
         post: operations["mfa_enroll_confirm_api_v1_auth_mfa_totp_enroll_confirm_post"];
         delete?: never;
         options?: never;
@@ -276,7 +318,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Regenerate recovery codes for current user */
+        /**
+         * Regenerate recovery codes for current user
+         * @description Regenerate recovery codes for current user.
+         */
         post: operations["mfa_regenerate_recovery_codes_api_v1_auth_mfa_totp_recovery_regenerate_post"];
         delete?: never;
         options?: never;
@@ -293,7 +338,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Verify MFA challenge and issue a session */
+        /**
+         * Verify MFA challenge and issue a session
+         * @description Verify MFA challenge and issue a session.
+         */
         post: operations["mfa_verify_challenge_api_v1_auth_mfa_challenge_verify_post"];
         delete?: never;
         options?: never;
@@ -657,10 +705,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List workspaces for the authenticated user */
+        /**
+         * List workspaces for the authenticated user
+         * @description List workspaces for the authenticated user.
+         */
         get: operations["list_workspaces_api_v1_workspaces_get"];
         put?: never;
-        /** Create a new workspace */
+        /**
+         * Create a new workspace
+         * @description Create a new workspace.
+         */
         post: operations["create_workspace_api_v1_workspaces_post"];
         delete?: never;
         options?: never;
@@ -675,15 +729,24 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve workspace context by identifier */
+        /**
+         * Retrieve workspace context by identifier
+         * @description Retrieve workspace context by identifier.
+         */
         get: operations["read_workspace_api_v1_workspaces__workspaceId__get"];
         put?: never;
         post?: never;
-        /** Delete a workspace */
+        /**
+         * Delete a workspace
+         * @description Delete a workspace.
+         */
         delete: operations["delete_workspace_api_v1_workspaces__workspaceId__delete"];
         options?: never;
         head?: never;
-        /** Update workspace metadata */
+        /**
+         * Update workspace metadata
+         * @description Update workspace metadata.
+         */
         patch: operations["update_workspace_api_v1_workspaces__workspaceId__patch"];
         trace?: never;
     };
@@ -695,7 +758,10 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Mark a workspace as the caller's default */
+        /**
+         * Mark a workspace as the caller's default
+         * @description Mark a workspace as the caller's default.
+         */
         put: operations["set_default_workspace_api_v1_workspaces__workspaceId__default_put"];
         post?: never;
         delete?: never;
@@ -711,10 +777,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List workspace members with their roles */
+        /**
+         * List workspace members with their roles
+         * @description List workspace members with their roles.
+         */
         get: operations["list_workspace_members_api_v1_workspaces__workspaceId__members_get"];
         put?: never;
-        /** Add a workspace member with roles */
+        /**
+         * Add a workspace member with roles
+         * @description Add a workspace member with roles.
+         */
         post: operations["add_workspace_member_api_v1_workspaces__workspaceId__members_post"];
         delete?: never;
         options?: never;
@@ -730,10 +802,16 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Replace workspace member roles */
+        /**
+         * Replace workspace member roles
+         * @description Replace workspace member roles.
+         */
         put: operations["update_workspace_member_api_v1_workspaces__workspaceId__members__userId__put"];
         post?: never;
-        /** Remove a workspace member */
+        /**
+         * Remove a workspace member
+         * @description Remove a workspace member.
+         */
         delete: operations["remove_workspace_member_api_v1_workspaces__workspaceId__members__userId__delete"];
         options?: never;
         head?: never;
@@ -747,7 +825,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List document tags */
+        /**
+         * List document tags
+         * @description List document tags.
+         */
         get: operations["list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get"];
         put?: never;
         post?: never;
@@ -764,10 +845,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List documents */
+        /**
+         * List documents
+         * @description List documents.
+         */
         get: operations["list_documents_api_v1_workspaces__workspaceId__documents_get"];
         put?: never;
-        /** Upload a document */
+        /**
+         * Upload a document
+         * @description Upload a document.
+         */
         post: operations["upload_document_api_v1_workspaces__workspaceId__documents_post"];
         delete?: never;
         options?: never;
@@ -784,7 +871,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Upload a new document version */
+        /**
+         * Upload a new document version
+         * @description Upload a new document version.
+         */
         post: operations["upload_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions_post"];
         delete?: never;
         options?: never;
@@ -799,10 +889,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List saved document views */
+        /**
+         * List saved document views
+         * @description List saved document views.
+         */
         get: operations["list_document_views_api_v1_workspaces__workspaceId__documents_views_get"];
         put?: never;
-        /** Create a saved document view */
+        /**
+         * Create a saved document view
+         * @description Create a saved document view.
+         */
         post: operations["create_document_view_api_v1_workspaces__workspaceId__documents_views_post"];
         delete?: never;
         options?: never;
@@ -820,11 +916,17 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a saved document view */
+        /**
+         * Delete a saved document view
+         * @description Delete a saved document view.
+         */
         delete: operations["delete_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__delete"];
         options?: never;
         head?: never;
-        /** Update a saved document view */
+        /**
+         * Update a saved document view
+         * @description Update a saved document view.
+         */
         patch: operations["update_document_view_api_v1_workspaces__workspaceId__documents_views__viewId__patch"];
         trace?: never;
     };
@@ -835,7 +937,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Stream document changes */
+        /**
+         * Stream document changes
+         * @description Stream document changes.
+         */
         get: operations["stream_document_changes_api_v1_workspaces__workspaceId__documents_stream_get"];
         put?: never;
         post?: never;
@@ -852,7 +957,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List document changes since token */
+        /**
+         * List document changes since token
+         * @description List document changes since token.
+         */
         get: operations["list_document_changes_delta_api_v1_workspaces__workspaceId__documents_delta_get"];
         put?: never;
         post?: never;
@@ -869,15 +977,24 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve document metadata */
+        /**
+         * Retrieve document metadata
+         * @description Retrieve document metadata.
+         */
         get: operations["read_document_api_v1_workspaces__workspaceId__documents__documentId__get"];
         put?: never;
         post?: never;
-        /** Soft delete a document */
+        /**
+         * Soft delete a document
+         * @description Soft delete a document.
+         */
         delete: operations["delete_document_api_v1_workspaces__workspaceId__documents__documentId__delete"];
         options?: never;
         head?: never;
-        /** Update document metadata, assignment, or name */
+        /**
+         * Update document metadata, assignment, or name
+         * @description Update document metadata, assignment, or name.
+         */
         patch: operations["update_document_api_v1_workspaces__workspaceId__documents__documentId__patch"];
         trace?: never;
     };
@@ -890,7 +1007,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Update tags on multiple documents */
+        /**
+         * Update tags on multiple documents
+         * @description Update tags on multiple documents.
+         */
         post: operations["patch_document_tags_batch_api_v1_workspaces__workspaceId__documents_batch_tags_post"];
         delete?: never;
         options?: never;
@@ -906,13 +1026,19 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Replace document tags */
+        /**
+         * Replace document tags
+         * @description Replace document tags.
+         */
         put: operations["replace_document_tags_api_v1_workspaces__workspaceId__documents__documentId__tags_put"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update document tags */
+        /**
+         * Update document tags
+         * @description Update document tags.
+         */
         patch: operations["patch_document_tags_api_v1_workspaces__workspaceId__documents__documentId__tags_patch"];
         trace?: never;
     };
@@ -923,7 +1049,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve document list row */
+        /**
+         * Retrieve document list row
+         * @description Retrieve document list row.
+         */
         get: operations["read_document_list_row_api_v1_workspaces__workspaceId__documents__documentId__listrow_get"];
         put?: never;
         post?: never;
@@ -940,10 +1069,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List document comments */
+        /**
+         * List document comments
+         * @description List document comments.
+         */
         get: operations["list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get"];
         put?: never;
-        /** Create a document comment */
+        /**
+         * Create a document comment
+         * @description Create a document comment.
+         */
         post: operations["create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post"];
         delete?: never;
         options?: never;
@@ -958,7 +1093,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download latest document artifact */
+        /**
+         * Download latest document artifact
+         * @description Download latest document artifact.
+         */
         get: operations["download_document_api_v1_workspaces__workspaceId__documents__documentId__download_get"];
         put?: never;
         post?: never;
@@ -975,7 +1113,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download original document version */
+        /**
+         * Download original document version
+         * @description Download original document version.
+         */
         get: operations["download_document_original_api_v1_workspaces__workspaceId__documents__documentId__original_download_get"];
         put?: never;
         post?: never;
@@ -992,7 +1133,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download a specific document version */
+        /**
+         * Download a specific document version
+         * @description Download a specific document version.
+         */
         get: operations["download_document_version_api_v1_workspaces__workspaceId__documents__documentId__versions__versionNo__download_get"];
         put?: never;
         post?: never;
@@ -1009,7 +1153,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Preview a document worksheet */
+        /**
+         * Preview a document worksheet
+         * @description Preview a document worksheet.
+         */
         get: operations["preview_document_api_v1_workspaces__workspaceId__documents__documentId__preview_get"];
         put?: never;
         post?: never;
@@ -1026,7 +1173,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List worksheets for a document */
+        /**
+         * List worksheets for a document
+         * @description List worksheets for a document.
+         */
         get: operations["list_document_sheets_endpoint_api_v1_workspaces__workspaceId__documents__documentId__sheets_get"];
         put?: never;
         post?: never;
@@ -1045,7 +1195,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Restore a soft-deleted document */
+        /**
+         * Restore a soft-deleted document
+         * @description Restore a soft-deleted document.
+         */
         post: operations["restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post"];
         delete?: never;
         options?: never;
@@ -1062,7 +1215,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Soft delete multiple documents */
+        /**
+         * Soft delete multiple documents
+         * @description Soft delete multiple documents.
+         */
         post: operations["delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post"];
         delete?: never;
         options?: never;
@@ -1079,7 +1235,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Restore multiple soft-deleted documents */
+        /**
+         * Restore multiple soft-deleted documents
+         * @description Restore multiple soft-deleted documents.
+         */
         post: operations["restore_documents_batch_api_v1_workspaces__workspaceId__documents_batch_restore_post"];
         delete?: never;
         options?: never;
@@ -1094,10 +1253,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List configurations for a workspace */
+        /**
+         * List configurations for a workspace
+         * @description List configurations for a workspace.
+         */
         get: operations["list_configurations_api_v1_workspaces__workspaceId__configurations_get"];
         put?: never;
-        /** Create a configuration from a template or clone */
+        /**
+         * Create a configuration from a template or clone
+         * @description Create a configuration from a template or clone.
+         */
         post: operations["create_configuration_api_v1_workspaces__workspaceId__configurations_post"];
         delete?: never;
         options?: never;
@@ -1112,7 +1277,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve workspace configuration timeline */
+        /**
+         * Retrieve workspace configuration timeline
+         * @description Retrieve workspace configuration timeline.
+         */
         get: operations["read_workspace_configuration_history_api_v1_workspaces__workspaceId__configurations_history_get"];
         put?: never;
         post?: never;
@@ -1129,14 +1297,20 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve configuration metadata */
+        /**
+         * Retrieve configuration metadata
+         * @description Retrieve configuration metadata.
+         */
         get: operations["read_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update editable metadata for a draft configuration */
+        /**
+         * Update editable metadata for a draft configuration
+         * @description Update editable metadata for a draft configuration.
+         */
         patch: operations["update_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__patch"];
         trace?: never;
     };
@@ -1149,7 +1323,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Restore a previous configuration as a new draft */
+        /**
+         * Restore a previous configuration as a new draft
+         * @description Restore a previous configuration as a new draft.
+         */
         post: operations["restore_configuration_api_v1_workspaces__workspaceId__configurations__configurationId__restore_post"];
         delete?: never;
         options?: never;
@@ -1166,7 +1343,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Create a configuration from an uploaded archive */
+        /**
+         * Create a configuration from an uploaded archive
+         * @description Create a configuration from an uploaded archive.
+         */
         post: operations["import_configuration_api_v1_workspaces__workspaceId__configurations_import_post"];
         delete?: never;
         options?: never;
@@ -1200,7 +1380,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Archive a draft or active configuration */
+        /**
+         * Archive a draft or active configuration
+         * @description Archive a draft or active configuration.
+         */
         post: operations["archive_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__archive_post"];
         delete?: never;
         options?: never;
@@ -1215,7 +1398,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Export Config */
+        /**
+         * Export a configuration archive
+         * @description Export the selected configuration as a ZIP archive.
+         */
         get: operations["export_config_api_v1_workspaces__workspaceId__configurations__configurationId__export_get"];
         put?: never;
         post?: never;
@@ -1233,7 +1419,10 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Replace a draft configuration from an uploaded archive */
+        /**
+         * Replace a draft configuration from an uploaded archive
+         * @description Replace a draft configuration from an uploaded archive.
+         */
         put: operations["replace_configuration_from_archive_api_v1_workspaces__workspaceId__configurations__configurationId__import_put"];
         post?: never;
         delete?: never;
@@ -1266,7 +1455,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List editable files and directories */
+        /**
+         * List editable files and directories
+         * @description List editable files and directories.
+         */
         get: operations["list_config_files_api_v1_workspaces__workspaceId__configurations__configurationId__files_get"];
         put?: never;
         post?: never;
@@ -1283,17 +1475,32 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Read Config File */
+        /**
+         * Read configuration file content
+         * @description Read a file from a draft configuration as JSON (`format=json`) or raw bytes. Supports ETag and HTTP range semantics.
+         */
         get: operations["read_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__get"];
-        /** Upsert Config File */
+        /**
+         * Create or replace a configuration file
+         * @description Write file content into a draft configuration path. Supports conditional writes with `If-Match` and `If-None-Match`.
+         */
         put: operations["upsert_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__put"];
         post?: never;
-        /** Delete Config File */
+        /**
+         * Delete a configuration file
+         * @description Delete a file from a draft configuration with optional optimistic concurrency checks.
+         */
         delete: operations["delete_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__delete"];
         options?: never;
-        /** Head Config File */
+        /**
+         * Head Config File
+         * @description Head Config File.
+         */
         head: operations["head_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__head"];
-        /** Rename or move a file */
+        /**
+         * Rename or move a file
+         * @description Rename or move a file.
+         */
         patch: operations["rename_config_file_api_v1_workspaces__workspaceId__configurations__configurationId__files__filePath__patch"];
         trace?: never;
     };
@@ -1305,10 +1512,16 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Create Config Directory */
+        /**
+         * Create a configuration directory
+         * @description Create a directory path in a draft configuration.
+         */
         put: operations["create_config_directory_api_v1_workspaces__workspaceId__configurations__configurationId__directories__directoryPath__put"];
         post?: never;
-        /** Delete Config Directory */
+        /**
+         * Delete a configuration directory
+         * @description Delete a directory path from a draft configuration.
+         */
         delete: operations["delete_config_directory_api_v1_workspaces__workspaceId__configurations__configurationId__directories__directoryPath__delete"];
         options?: never;
         head?: never;
@@ -1322,12 +1535,15 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List Workspace Runs Endpoint */
+        /**
+         * List runs in a workspace
+         * @description Return a cursor-paginated run list for the workspace with filtering, search, and sorting.
+         */
         get: operations["list_workspace_runs_endpoint_api_v1_workspaces__workspaceId__runs_get"];
         put?: never;
         /**
-         * Create Workspace Run Endpoint
-         * @description Create a run for ``workspace_id`` and enqueue execution.
+         * Create and enqueue a run
+         * @description Create a run in the target workspace and enqueue it for worker processing. When `configuration_id` is omitted, the active workspace configuration is used.
          */
         post: operations["create_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs_post"];
         delete?: never;
@@ -1346,8 +1562,8 @@ export type paths = {
         get?: never;
         put?: never;
         /**
-         * Create Workspace Runs Batch Endpoint
-         * @description Create multiple runs for ``workspace_id`` and enqueue execution.
+         * Create and enqueue runs in batch
+         * @description Create one run per document in `document_ids` and enqueue all runs as a single all-or-nothing operation.
          */
         post: operations["create_workspace_runs_batch_endpoint_api_v1_workspaces__workspaceId__runs_batch_post"];
         delete?: never;
@@ -1363,7 +1579,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get Workspace Run Endpoint */
+        /**
+         * Get run details
+         * @description Return a single run resource for the requested workspace and run identifier.
+         */
         get: operations["get_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs__runId__get"];
         put?: never;
         post?: never;
@@ -1382,7 +1601,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Cancel Workspace Run Endpoint */
+        /**
+         * Cancel a run
+         * @description Request cancellation for a run that is still cancellable.
+         */
         post: operations["cancel_workspace_run_endpoint_api_v1_workspaces__workspaceId__runs__runId__cancel_post"];
         delete?: never;
         options?: never;
@@ -1397,7 +1619,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get Workspace Run Metrics Endpoint */
+        /**
+         * Get run metrics
+         * @description Return derived run metrics from worker events, including evaluation, validation, and workbook statistics.
+         */
         get: operations["get_workspace_run_metrics_endpoint_api_v1_workspaces__workspaceId__runs__runId__metrics_get"];
         put?: never;
         post?: never;
@@ -1414,7 +1639,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List Workspace Run Fields Endpoint */
+        /**
+         * List run field detection results
+         * @description Return field-level detection outcomes captured for the run.
+         */
         get: operations["list_workspace_run_fields_endpoint_api_v1_workspaces__workspaceId__runs__runId__fields_get"];
         put?: never;
         post?: never;
@@ -1431,7 +1659,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List Workspace Run Columns Endpoint */
+        /**
+         * List run column mappings
+         * @description Return detected input columns and mapping metadata for the run.
+         */
         get: operations["list_workspace_run_columns_endpoint_api_v1_workspaces__workspaceId__runs__runId__columns_get"];
         put?: never;
         post?: never;
@@ -1448,7 +1679,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get run input metadata */
+        /**
+         * Get run input metadata
+         * @description Return the input document/version metadata associated with the run.
+         */
         get: operations["get_workspace_run_input_endpoint_api_v1_workspaces__workspaceId__runs__runId__input_get"];
         put?: never;
         post?: never;
@@ -1465,7 +1699,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download run input file */
+        /**
+         * Download run input file
+         * @description Download the exact input file version used by this run.
+         */
         get: operations["download_workspace_run_input_endpoint_api_v1_workspaces__workspaceId__runs__runId__input_download_get"];
         put?: never;
         post?: never;
@@ -1482,7 +1719,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Stream run events (SSE) */
+        /**
+         * Stream run events (SSE)
+         * @description Stream run events using Server-Sent Events. Use `cursor` or `Last-Event-ID` to resume from a prior position.
+         */
         get: operations["stream_workspace_run_events_endpoint_api_v1_workspaces__workspaceId__runs__runId__events_stream_get"];
         put?: never;
         post?: never;
@@ -1499,7 +1739,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download run events (NDJSON log) */
+        /**
+         * Download run events (NDJSON log)
+         * @description Download the persisted NDJSON event log for the run.
+         */
         get: operations["download_workspace_run_events_file_endpoint_api_v1_workspaces__workspaceId__runs__runId__events_download_get"];
         put?: never;
         post?: never;
@@ -1516,10 +1759,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get run output metadata */
+        /**
+         * Get run output metadata
+         * @description Return output file metadata, readiness, and download link information.
+         */
         get: operations["get_workspace_run_output_metadata_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_get"];
         put?: never;
-        /** Upload manual run output */
+        /**
+         * Upload manual run output
+         * @description Upload an output artifact for a run managed manually outside worker execution.
+         */
         post: operations["upload_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_post"];
         delete?: never;
         options?: never;
@@ -1534,7 +1783,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download run output file */
+        /**
+         * Download run output file
+         * @description Download the latest output file artifact associated with the run.
+         */
         get: operations["download_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_download_get"];
         put?: never;
         post?: never;
@@ -1551,7 +1803,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List run output worksheets */
+        /**
+         * List run output worksheets
+         * @description List worksheets available in the run output artifact when sheet introspection is supported.
+         */
         get: operations["list_workspace_run_output_sheets_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_sheets_get"];
         put?: never;
         post?: never;
@@ -1568,7 +1823,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Preview run output worksheet */
+        /**
+         * Preview run output worksheet
+         * @description Return a bounded preview of run output worksheet data with optional sheet selection and trimming controls.
+         */
         get: operations["preview_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_preview_get"];
         put?: never;
         post?: never;

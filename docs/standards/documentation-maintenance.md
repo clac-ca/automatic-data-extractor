@@ -28,6 +28,7 @@ Update docs whenever these change:
 npx --yes markdownlint-cli2 "docs/**/*.md" "README.md" "CONTRIBUTING.md" "backend/**/README.md"
 FILES="$(find docs -type f -name '*.md' -print) README.md CONTRIBUTING.md $(find backend -mindepth 2 -maxdepth 2 -name README.md -print)"
 lychee --no-progress $FILES
+python3 scripts/docs/check_api_docs_coverage.py
 ```
 
 ## Done Criteria
