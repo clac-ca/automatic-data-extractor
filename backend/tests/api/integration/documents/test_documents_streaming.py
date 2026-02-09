@@ -49,7 +49,7 @@ def test_stream_document_handles_missing_file(
     storage.delete(stored_row.blob_name)
 
     with pytest.raises(DocumentFileMissingError):
-        _, stream = service.stream_document(
+        _, _, _, stream = service.stream_document(
             workspace_id=workspace_id,
             document_id=record.id,
         )

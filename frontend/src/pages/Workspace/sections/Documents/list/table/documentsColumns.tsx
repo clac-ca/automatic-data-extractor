@@ -30,7 +30,7 @@ export type DocumentsColumnContext = {
   onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onRestoreRequest: (document: DocumentRow) => void;
-  onDownload: (document: DocumentRow) => void;
+  onDownloadLatest: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
@@ -53,7 +53,7 @@ export function useDocumentsColumns({
   onRenameRequest,
   onDeleteRequest,
   onRestoreRequest,
-  onDownload,
+  onDownloadLatest,
   onDownloadOriginal,
   onReprocessRequest,
   onCancelRunRequest,
@@ -347,7 +347,7 @@ export function useDocumentsColumns({
             onRenameRequest={onRenameRequest}
             onDeleteRequest={onDeleteRequest}
             onRestoreRequest={onRestoreRequest}
-            onDownload={onDownload}
+            onDownloadLatest={onDownloadLatest}
             onDownloadOriginal={onDownloadOriginal}
             onReprocessRequest={onReprocessRequest}
             onCancelRunRequest={onCancelRunRequest}
@@ -374,7 +374,7 @@ export function useDocumentsColumns({
       onRenameRequest,
       onDeleteRequest,
       onRestoreRequest,
-      onDownload,
+      onDownloadLatest,
       onDownloadOriginal,
       onReprocessRequest,
       onCancelRunRequest,

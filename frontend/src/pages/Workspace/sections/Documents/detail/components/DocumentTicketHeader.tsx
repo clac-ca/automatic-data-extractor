@@ -5,6 +5,12 @@ import { resolveApiUrl } from "@/api/client";
 import { CloseIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { formatTimestamp, shortId } from "@/pages/Workspace/sections/Documents/shared/utils";
 import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
@@ -21,35 +27,6 @@ const RUN_STATUS_BADGE_STYLES: Record<RunStatus, string> = {
 function formatRunStatus(value: RunStatus) {
   const normalized = value.replace(/_/g, " ");
   return normalized[0]?.toUpperCase() + normalized.slice(1);
-}
-
-function resolveNormalizedDownloadState(workspaceId: string, document: DocumentRow): {
-  href: string | null;
-  label: string;
-} {
-  const status = document.lastRun?.status ?? null;
-  const runId = document.lastRun?.id ?? null;
-
-  if (status === "succeeded" && runId) {
-    return {
-      href: resolveApiUrl(`/api/v1/workspaces/${workspaceId}/runs/${runId}/output/download`),
-      label: "Download normalized output",
-    };
-  }
-
-  if (status === "failed") {
-    return { href: null, label: "Latest run failed; output unavailable" };
-  }
-
-  if (status === "cancelled") {
-    return { href: null, label: "Latest run was cancelled; output unavailable" };
-  }
-
-  if (status === "running" || status === "queued") {
-    return { href: null, label: "Output not ready yet" };
-  }
-
-  return { href: null, label: "No normalized output available yet" };
 }
 
 export function DocumentTicketHeader({
@@ -69,12 +46,15 @@ export function DocumentTicketHeader({
   onCancelRunRequest: () => void;
   isRunActionPending?: boolean;
 }) {
-  const normalizedDownload = useMemo(
-    () => resolveNormalizedDownloadState(workspaceId, document),
-    [document, workspaceId],
+  const downloadHref = useMemo(
+    () => resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`),
+    [document.id, workspaceId],
   );
-  const originalHref = resolveApiUrl(
-    `/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`,
+  const originalHref = useMemo(
+    () => resolveApiUrl(
+    `/api/v1/workspaces/${workspaceId}/documents/${document.id}/original/download`,
+  ),
+    [document.id, workspaceId],
   );
   const runStatus = document.lastRun?.status ?? null;
   const isRunActive = runStatus === "queued" || runStatus === "running";
@@ -128,27 +108,25 @@ export function DocumentTicketHeader({
             <PencilLine className="h-4 w-4" />
             Rename
           </Button>
-          {normalizedDownload.href ? (
-            <Button asChild size="sm" variant="secondary">
-              <a href={normalizedDownload.href} target="_blank" rel="noreferrer">
-                Download normalized
-              </a>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled
-              title={normalizedDownload.label}
-            >
-              Download normalized
-            </Button>
-          )}
-          <Button asChild size="sm" variant="outline">
-            <a href={originalHref} target="_blank" rel="noreferrer">
-              Download original
+          <Button asChild size="sm" variant="secondary">
+            <a href={downloadHref} target="_blank" rel="noreferrer">
+              Download
             </a>
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                More
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <a href={originalHref} target="_blank" rel="noreferrer">
+                  Download original
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

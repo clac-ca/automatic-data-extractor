@@ -1107,8 +1107,8 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
-    ) -> tuple[DocumentOut, Iterator[bytes]]:
-        """Return a document record and iterator for its bytes."""
+    ) -> tuple[DocumentOut, str, str | None, Iterator[bytes]]:
+        """Return a document record, download filename/content type, and byte stream."""
 
         logger.debug(
             "document.stream.start",
@@ -1116,25 +1116,16 @@ class DocumentsService:
         )
 
         document = self._get_document(workspace_id, document_id)
-        current_version = document.current_version
-        if current_version is None:
-            logger.warning(
-                "document.stream.missing_file",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    document_id=document_id,
-                    blob_name=document.blob_name,
-                ),
-            )
-            raise DocumentFileMissingError(
-                document_id=document_id,
-                blob_name=document.blob_name,
-            )
+        target_file, target_version, selected_source = self._resolve_latest_download_target(
+            workspace_id=workspace_id,
+            document=document,
+        )
+        blob_name = target_file.blob_name
 
         try:
             stream = self._storage.stream(
-                document.blob_name,
-                version_id=current_version.storage_version_id,
+                blob_name,
+                version_id=target_version.storage_version_id,
                 chunk_size=self._settings.blob_download_chunk_size_bytes,
             )
         except FileNotFoundError as exc:
@@ -1143,12 +1134,14 @@ class DocumentsService:
                 extra=log_context(
                     workspace_id=workspace_id,
                     document_id=document_id,
-                    blob_name=document.blob_name,
+                    blob_name=blob_name,
+                    selected_source=selected_source,
                 ),
             )
             raise DocumentFileMissingError(
                 document_id=document_id,
-                blob_name=document.blob_name,
+                blob_name=blob_name,
+                version_id=target_version.storage_version_id,
             ) from exc
 
         def _guarded() -> Iterator[bytes]:
@@ -1161,28 +1154,36 @@ class DocumentsService:
                     extra=log_context(
                         workspace_id=workspace_id,
                         document_id=document_id,
-                        blob_name=document.blob_name,
+                        blob_name=blob_name,
+                        selected_source=selected_source,
                     ),
                 )
                 raise DocumentFileMissingError(
                     document_id=document_id,
-                    blob_name=document.blob_name,
+                    blob_name=blob_name,
+                    version_id=target_version.storage_version_id,
                 ) from exc
 
         payload = DocumentOut.model_validate(document)
         self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
 
+        if selected_source == "output":
+            filename = target_version.filename_at_upload or target_file.name
+        else:
+            filename = document.name
+
         logger.info(
             "document.stream.ready",
             extra=log_context(
                 workspace_id=workspace_id,
                 document_id=document_id,
-                byte_size=document.byte_size,
-                content_type=document.content_type,
+                selected_source=selected_source,
+                byte_size=target_version.byte_size,
+                content_type=target_version.content_type,
             ),
         )
-        return payload, _guarded()
+        return payload, filename, target_version.content_type, _guarded()
 
     def stream_document_version(
         self,
@@ -1592,6 +1593,59 @@ class DocumentsService:
                 version_no=version_no,
             )
         return version
+
+    def _resolve_latest_download_target(
+        self,
+        *,
+        workspace_id: UUID,
+        document: File,
+    ) -> tuple[File, FileVersion, str]:
+        input_version = document.current_version
+        if input_version is None:
+            logger.warning(
+                "document.stream.missing_file",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document.id,
+                    blob_name=document.blob_name,
+                ),
+            )
+            raise DocumentFileMissingError(
+                document_id=document.id,
+                blob_name=document.blob_name,
+            )
+
+        output_file = self._find_output_file_for_document(
+            workspace_id=workspace_id,
+            document_id=document.id,
+        )
+        output_version = output_file.current_version if output_file is not None else None
+        if output_file is None or output_version is None:
+            return document, input_version, "input"
+
+        if output_version.created_at >= input_version.created_at:
+            return output_file, output_version, "output"
+        return document, input_version, "input"
+
+    def _find_output_file_for_document(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+    ) -> File | None:
+        output_name_key = f"output:{document_id}"
+        stmt = (
+            select(File)
+            .options(selectinload(File.current_version))
+            .where(
+                File.workspace_id == workspace_id,
+                File.kind == FileKind.OUTPUT,
+                File.deleted_at.is_(None),
+                File.name_key == output_name_key,
+            )
+        )
+        result = self._session.execute(stmt)
+        return result.scalar_one_or_none()
 
     def _resolve_comment_mentions(
         self,

@@ -493,33 +493,20 @@ export function DocumentsTableContainer({
     }, 0);
   }, []);
 
-  const handleDownloadOutput = useCallback(
+  const handleDownloadLatest = useCallback(
     (document: DocumentRow) => {
-      const runId = document.lastRun?.status === "succeeded" ? document.lastRun.id : null;
-      if (!runId) {
-        notifyToast({
-          title: "Output not available",
-          description: "No successful run output exists for this document yet.",
-          intent: "warning",
-        });
-        return;
-      }
-
-      const url = resolveApiUrl(`/api/v1/workspaces/${workspaceId}/runs/${runId}/output/download`);
+      const url = resolveApiUrl(
+        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`,
+      );
       openDownload(url);
     },
-    [notifyToast, openDownload, workspaceId],
+    [openDownload, workspaceId],
   );
 
   const getOriginalDownloadUrl = useCallback(
     (document: DocumentRow) => {
-      const hasVersionHistory =
-        typeof document.currentVersionNo === "number" && document.currentVersionNo > 1;
-      if (!hasVersionHistory) {
-        return resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`);
-      }
       return resolveApiUrl(
-        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/versions/1/download`,
+        `/api/v1/workspaces/${workspaceId}/documents/${document.id}/original/download`,
       );
     },
     [workspaceId],
@@ -1485,7 +1472,7 @@ export function DocumentsTableContainer({
     onRestoreRequest,
     onReprocessRequest,
     onCancelRunRequest,
-    onDownload: handleDownloadOutput,
+    onDownloadLatest: handleDownloadLatest,
     onDownloadOriginal: handleDownloadOriginal,
     isRowActionPending: isRowMutationPending,
   });

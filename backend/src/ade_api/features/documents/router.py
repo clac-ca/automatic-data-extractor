@@ -1069,7 +1069,7 @@ def create_document_comment(
 
 @router.get(
     "/{documentId}/download",
-    summary="Download a stored document",
+    summary="Download latest document artifact",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to download documents.",
@@ -1098,13 +1098,68 @@ def download_document(
                 settings=settings,
                 storage=blob_storage,
             )
-            record, stream = service.stream_document(
+            _, filename, content_type, stream = service.stream_document(
                 workspace_id=workspace_id,
                 document_id=document_id,
             )
-            media_type = record.content_type or "application/octet-stream"
-            disposition = build_content_disposition(record.name)
+            media_type = content_type or "application/octet-stream"
+            disposition = build_content_disposition(filename)
     except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentFileMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    response = StreamingResponse(stream, media_type=media_type)
+    response.headers["Content-Disposition"] = disposition
+    return response
+
+
+@router.get(
+    "/{documentId}/original/download",
+    summary="Download original document version",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to download documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document downloads.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document or original version not found within the workspace.",
+        },
+    },
+)
+def download_document_original(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    request: Request,
+    settings: SettingsDep,
+    _actor: DocumentReader,
+) -> StreamingResponse:
+    blob_storage = get_storage_adapter(request)
+    session_factory = get_session_factory(request)
+    try:
+        with session_factory() as session:
+            service = DocumentsService(
+                session=session,
+                settings=settings,
+                storage=blob_storage,
+            )
+            record, version, stream = service.stream_document_version(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                version_no=1,
+            )
+            media_type = (
+                version.content_type
+                or record.content_type
+                or "application/octet-stream"
+            )
+            filename = version.filename_at_upload or record.name
+            disposition = build_content_disposition(filename)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentVersionNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentFileMissingError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

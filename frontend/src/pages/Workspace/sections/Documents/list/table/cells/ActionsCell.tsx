@@ -21,7 +21,7 @@ export function ActionsCell({
   onRenameRequest,
   onDeleteRequest,
   onRestoreRequest,
-  onDownload,
+  onDownloadLatest,
   onDownloadOriginal,
   onReprocessRequest,
   onCancelRunRequest,
@@ -34,14 +34,13 @@ export function ActionsCell({
   onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onRestoreRequest: (document: DocumentRow) => void;
-  onDownload: (document: DocumentRow) => void;
+  onDownloadLatest: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
 }) {
   const isDeletedLifecycle = lifecycle === "deleted";
   const isRunActive = document.lastRun?.status === "queued" || document.lastRun?.status === "running";
-  const canDownloadNormalizedOutput = document.lastRun?.status === "succeeded";
   const runActionLabel = isDeletedLifecycle ? "Restore" : isRunActive ? "Cancel run" : "Reprocess";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
@@ -91,9 +90,8 @@ export function ActionsCell({
         )}
       </IconButton>
       <IconButton
-        label={canDownloadNormalizedOutput ? "Download normalized output" : "Output not ready"}
-        onClick={() => onDownload(document)}
-        disabled={!canDownloadNormalizedOutput}
+        label="Download latest document"
+        onClick={() => onDownloadLatest(document)}
         className="hidden shrink-0 sm:inline-flex"
       >
         <DownloadIcon className="h-4 w-4" />
@@ -123,8 +121,7 @@ export function ActionsCell({
             {runActionLabel}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => onDownload(document)}
-            disabled={!canDownloadNormalizedOutput}
+            onSelect={() => onDownloadLatest(document)}
           >
             Download
           </DropdownMenuItem>
