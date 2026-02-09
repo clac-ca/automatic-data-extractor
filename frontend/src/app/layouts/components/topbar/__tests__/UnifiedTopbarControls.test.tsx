@@ -48,7 +48,7 @@ vi.mock("@/providers/theme/modeTransition", () => ({
   MOTION_PROFILE: {
     buttonPress: {
       durationMs: 120,
-      leadInMs: 40,
+      leadInMs: 12,
     },
   },
 }));
@@ -62,9 +62,29 @@ vi.mock("@/hooks/system", () => ({
   }),
 }));
 
+function mockMatchMedia(overrides: Partial<Record<string, boolean>> = {}) {
+  const implementation = vi.fn((query: string): MediaQueryList => ({
+    matches: overrides[query] ?? false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: implementation,
+  });
+}
+
 describe("UnifiedTopbarControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMatchMedia();
     mockNavigate.mockReset();
     mockUseTheme.mockReturnValue({
       theme: "default",
@@ -78,6 +98,13 @@ describe("UnifiedTopbarControls", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    document.documentElement.removeAttribute("data-mode-intent-active");
+    document.documentElement.removeAttribute("data-mode-intent-target");
+    document.documentElement.style.removeProperty("--mode-intent-x");
+    document.documentElement.style.removeProperty("--mode-intent-y");
+    document.documentElement.style.removeProperty("--mode-intent-strength");
+    document.documentElement.style.removeProperty("--mode-intent-angle");
+    document.documentElement.style.removeProperty("--mode-intent-distance");
   });
 
   it("toggles between light and dark from the primary mode button", async () => {
@@ -105,7 +132,7 @@ describe("UnifiedTopbarControls", () => {
     expect(mockSetModePreference).not.toHaveBeenCalled();
 
     act(() => {
-      vi.advanceTimersByTime(39);
+      vi.advanceTimersByTime(11);
     });
     expect(mockSetModePreference).not.toHaveBeenCalled();
 
@@ -123,10 +150,152 @@ describe("UnifiedTopbarControls", () => {
     );
 
     act(() => {
-      vi.advanceTimersByTime(80);
+      vi.advanceTimersByTime(108);
     });
     expect(toggleButton).toHaveAttribute("data-pressing", "false");
     expect(iconDrift).toHaveAttribute("data-drift", "idle");
+  });
+
+  it("applies pointer-proximity intent cue near the mode button", () => {
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelRafSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    render(<UnifiedTopbarControls />);
+
+    const toggleButton = screen.getByRole("button", { name: "Switch to dark mode" });
+    vi.spyOn(toggleButton, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 30,
+      height: 40,
+      right: 40,
+      bottom: 60,
+      x: 10,
+      y: 20,
+      toJSON: () => "",
+    } as DOMRect);
+
+    fireEvent.pointerEnter(toggleButton, { clientX: 26, clientY: 42 });
+    fireEvent.pointerMove(window, { clientX: 26, clientY: 42 });
+
+    expect(document.documentElement).toHaveAttribute("data-mode-intent-active", "true");
+    expect(document.documentElement).toHaveAttribute("data-mode-intent-target", "dark");
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-x")).toBe("25px");
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-y")).toBe("40px");
+    expect(Number(document.documentElement.style.getPropertyValue("--mode-intent-strength"))).toBeGreaterThan(0);
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-angle")).toContain("deg");
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-distance")).toContain("px");
+    expect(toggleButton.style.getPropertyValue("--mode-button-intent")).not.toBe("0");
+    expect(Number(toggleButton.style.getPropertyValue("--mode-button-limb"))).toBeGreaterThan(0);
+
+    rafSpy.mockRestore();
+    cancelRafSpy.mockRestore();
+  });
+
+  it("runs a focus pulse intent cue and clears it", () => {
+    vi.useFakeTimers();
+    render(<UnifiedTopbarControls />);
+
+    const toggleButton = screen.getByRole("button", { name: "Switch to dark mode" });
+    vi.spyOn(toggleButton, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 30,
+      height: 40,
+      right: 40,
+      bottom: 60,
+      x: 10,
+      y: 20,
+      toJSON: () => "",
+    } as DOMRect);
+
+    fireEvent.focus(toggleButton);
+    expect(document.documentElement).toHaveAttribute("data-mode-intent-active", "true");
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-strength")).toBe("0.320");
+    expect(toggleButton.style.getPropertyValue("--mode-button-intent")).toBe("0.516");
+    expect(Number(toggleButton.style.getPropertyValue("--mode-button-limb"))).toBeGreaterThan(0);
+
+    act(() => {
+      vi.advanceTimersByTime(260);
+    });
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-strength")).toBe("0");
+
+    act(() => {
+      vi.advanceTimersByTime(260);
+    });
+    expect(document.documentElement).not.toHaveAttribute("data-mode-intent-active");
+  });
+
+  it("disables proximity intent cue for coarse pointers but keeps keyboard focus pulse", () => {
+    mockMatchMedia({
+      "(pointer: coarse)": true,
+    });
+
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame");
+    render(<UnifiedTopbarControls />);
+
+    const toggleButton = screen.getByRole("button", { name: "Switch to dark mode" });
+    vi.spyOn(toggleButton, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 30,
+      height: 40,
+      right: 40,
+      bottom: 60,
+      x: 10,
+      y: 20,
+      toJSON: () => "",
+    } as DOMRect);
+
+    fireEvent.pointerMove(window, { clientX: 26, clientY: 42 });
+    expect(rafSpy).not.toHaveBeenCalled();
+    expect(document.documentElement).not.toHaveAttribute("data-mode-intent-active");
+
+    fireEvent.focus(toggleButton);
+    expect(document.documentElement).toHaveAttribute("data-mode-intent-active", "true");
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-strength")).toBe("0.320");
+  });
+
+  it("disables proximity for reduced motion and uses a short focus intent fade", () => {
+    vi.useFakeTimers();
+    mockMatchMedia({
+      "(prefers-reduced-motion: reduce)": true,
+    });
+
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame");
+    render(<UnifiedTopbarControls />);
+
+    const toggleButton = screen.getByRole("button", { name: "Switch to dark mode" });
+    vi.spyOn(toggleButton, "getBoundingClientRect").mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 30,
+      height: 40,
+      right: 40,
+      bottom: 60,
+      x: 10,
+      y: 20,
+      toJSON: () => "",
+    } as DOMRect);
+
+    fireEvent.pointerMove(window, { clientX: 26, clientY: 42 });
+    expect(rafSpy).not.toHaveBeenCalled();
+    expect(document.documentElement).not.toHaveAttribute("data-mode-intent-active");
+
+    fireEvent.focus(toggleButton);
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-strength")).toBe("0.224");
+
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+    expect(document.documentElement.style.getPropertyValue("--mode-intent-strength")).toBe("0");
+
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+    expect(document.documentElement).not.toHaveAttribute("data-mode-intent-active");
   });
 
   it("exposes Light, Dark, and System options in the mode menu", async () => {
