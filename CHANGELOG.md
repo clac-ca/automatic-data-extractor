@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.0...v1.7.1) (2026-02-09)
+
+
+### Bug Fixes
+
+* seed fresh release cycle after launch reset ([369fb6a](https://github.com/clac-ca/automatic-data-extractor/commit/369fb6af2d743aa2afd98da82eb9d7381a4be7c1))
+
 ## [1.7.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.6.5...v1.7.0) (2026-02-03)
 
 
