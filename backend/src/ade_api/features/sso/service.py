@@ -46,9 +46,7 @@ class AuthStateError(RuntimeError):
         self.code = code
 
 
-_LOCKED_PROVIDER_MESSAGE = (
-    "Provider is locked because it is managed by environment configuration."
-)
+_LOCKED_PROVIDER_MESSAGE = "Provider is locked because it is managed by environment configuration."
 
 
 def _normalize_domain(value: str) -> str:
@@ -272,7 +270,8 @@ class SsoService:
         if not self.is_sso_enabled():
             return []
         stmt = (
-            sa.select(SsoProvider)
+            sa
+            .select(SsoProvider)
             .where(SsoProvider.status == SsoProviderStatus.ACTIVE)
             .order_by(SsoProvider.id.asc())
         )
@@ -283,7 +282,8 @@ class SsoService:
             return None
         normalized = _normalize_domain(domain)
         stmt = (
-            sa.select(SsoProvider)
+            sa
+            .select(SsoProvider)
             .join(SsoProviderDomain, SsoProviderDomain.provider_id == SsoProvider.id)
             .where(SsoProviderDomain.domain == normalized)
             .where(SsoProvider.status == SsoProviderStatus.ACTIVE)
@@ -344,7 +344,8 @@ class SsoService:
             raise AuthStateError("STATE_REUSED")
 
         update_stmt = (
-            sa.update(SsoAuthState)
+            sa
+            .update(SsoAuthState)
             .where(SsoAuthState.state == state)
             .where(SsoAuthState.consumed_at.is_(None))
             .where(SsoAuthState.expires_at >= timestamp)
@@ -373,7 +374,8 @@ class SsoService:
     def _apply_domains(self, provider: SsoProvider, domains: list[str]) -> None:
         if domains:
             conflict_stmt = (
-                sa.select(SsoProviderDomain)
+                sa
+                .select(SsoProviderDomain)
                 .where(SsoProviderDomain.domain.in_(domains))
                 .where(SsoProviderDomain.provider_id != provider.id)
                 .limit(1)
@@ -422,7 +424,8 @@ class SsoService:
             return
 
         remaining_active = self.session.execute(
-            sa.select(sa.func.count())
+            sa
+            .select(sa.func.count())
             .select_from(SsoProvider)
             .where(SsoProvider.status == SsoProviderStatus.ACTIVE)
             .where(SsoProvider.id != provider.id)
@@ -434,14 +437,14 @@ class SsoService:
             error_type="validation_error",
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
-                "Cannot disable the last active provider while identity provider-only sign-in is enabled."
+                "Cannot disable the last active provider while "
+                "identity provider-only sign-in is enabled."
             ),
             errors=[
                 ProblemDetailsErrorItem(
                     path="status",
                     message=(
-                        "At least one active provider is required while "
-                        "auth.mode is idp_only."
+                        "At least one active provider is required while auth.mode is idp_only."
                     ),
                     code="active_provider_required",
                 )

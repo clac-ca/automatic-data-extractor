@@ -71,7 +71,8 @@ def parse_q(q: str | None) -> ParsedQuery:
 
 def escape_like(token: str) -> str:
     return (
-        token.replace(LIKE_ESCAPE, LIKE_ESCAPE + LIKE_ESCAPE)
+        token
+        .replace(LIKE_ESCAPE, LIKE_ESCAPE + LIKE_ESCAPE)
         .replace("%", f"{LIKE_ESCAPE}%")
         .replace("_", f"{LIKE_ESCAPE}_")
     )

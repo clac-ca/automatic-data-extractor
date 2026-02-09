@@ -17,8 +17,8 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_db.models import File, FileTag, FileVersion, FileVersionOrigin, Run, RunStatus
 from ade_api.settings import MAX_SET_SIZE
+from ade_db.models import File, FileTag, FileVersion, FileVersionOrigin, Run, RunStatus
 
 from .tags import TagValidationError, normalize_tag_set
 
@@ -72,175 +72,173 @@ def _activity_at_expr():
     )
 
 
-DOCUMENT_FILTER_REGISTRY = FilterRegistry(
-    [
-        FilterField(
-            id="id",
-            column=File.id,
-            operators={FilterOperator.EQ, FilterOperator.IN},
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="name",
-            column=File.name,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.ILIKE,
-                FilterOperator.NOT_ILIKE,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="lastRunPhase",
-            column=Run.status,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="fileType",
-            column=File.name,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="tags",
-            column=FileTag.tag,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="assigneeId",
-            column=File.assignee_user_id,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="uploaderId",
-            column=File.uploaded_by_user_id,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="createdAt",
-            column=File.created_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="updatedAt",
-            column=File.updated_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="activityAt",
-            column=_activity_at_expr(),
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="byteSize",
-            column=_current_version_byte_size_expr(),
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.INT,
-        ),
-        FilterField(
-            id="hasOutput",
-            column=Run.status,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-        FilterField(
-            id="source",
-            column=_current_version_origin_expr(),
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.ENUM,
-            enum_type=FileVersionOrigin,
-        ),
-    ]
-)
+DOCUMENT_FILTER_REGISTRY = FilterRegistry([
+    FilterField(
+        id="id",
+        column=File.id,
+        operators={FilterOperator.EQ, FilterOperator.IN},
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="name",
+        column=File.name,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.ILIKE,
+            FilterOperator.NOT_ILIKE,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="lastRunPhase",
+        column=Run.status,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="fileType",
+        column=File.name,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="tags",
+        column=FileTag.tag,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="assigneeId",
+        column=File.assignee_user_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="uploaderId",
+        column=File.uploaded_by_user_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="createdAt",
+        column=File.created_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="updatedAt",
+        column=File.updated_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="activityAt",
+        column=_activity_at_expr(),
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="byteSize",
+        column=_current_version_byte_size_expr(),
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.INT,
+    ),
+    FilterField(
+        id="hasOutput",
+        column=Run.status,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+    FilterField(
+        id="source",
+        column=_current_version_origin_expr(),
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.ENUM,
+        enum_type=FileVersionOrigin,
+    ),
+])
 
 
 def apply_document_filters(
@@ -266,7 +264,8 @@ def apply_document_filters(
                     select(
                         FileVersion.file_id.label("file_id"),
                         Run.status.label("status"),
-                        func.row_number()
+                        func
+                        .row_number()
                         .over(
                             partition_by=FileVersion.file_id,
                             order_by=timestamp.desc(),
@@ -280,8 +279,7 @@ def apply_document_filters(
                 )
                 stmt = stmt.outerjoin(
                     last_run_subquery,
-                    (last_run_subquery.c.file_id == File.id)
-                    & (last_run_subquery.c.rank == 1),
+                    (last_run_subquery.c.file_id == File.id) & (last_run_subquery.c.rank == 1),
                 )
                 status_expr = last_run_subquery.c.status
                 last_run_joined = True
@@ -331,11 +329,7 @@ def apply_document_filters(
                     phase_predicates.append(status_expr.in_(normalized))
                 if include_empty:
                     phase_predicates.append(status_expr.is_(None))
-                predicate = (
-                    or_(*phase_predicates)
-                    if phase_predicates
-                    else status_expr.is_(None)
-                )
+                predicate = or_(*phase_predicates) if phase_predicates else status_expr.is_(None)
             predicates.append(predicate)
             continue
 
@@ -359,9 +353,7 @@ def apply_document_filters(
                     or_(lower_name.like("%.xlsx"), lower_type.like("%spreadsheetml%"))
                 )
             if "xls" in normalized:
-                type_predicates.append(
-                    or_(lower_name.like("%.xls"), lower_type.like("%ms-excel%"))
-                )
+                type_predicates.append(or_(lower_name.like("%.xls"), lower_type.like("%ms-excel%")))
             if "csv" in normalized:
                 type_predicates.append(or_(lower_name.like("%.csv"), lower_type.like("%csv%")))
             if "pdf" in normalized:

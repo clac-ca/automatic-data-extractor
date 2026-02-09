@@ -17,81 +17,77 @@ from ade_db.models import UserRoleAssignment, Workspace
 
 from .schemas import WorkspaceOut
 
-WORKSPACE_FILTER_REGISTRY = FilterRegistry(
-    [
-        FilterField(
-            id="name",
-            column=Workspace.name,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.ILIKE,
-                FilterOperator.NOT_ILIKE,
-            },
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="slug",
-            column=Workspace.slug,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.ILIKE,
-                FilterOperator.NOT_ILIKE,
-            },
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="isDefault",
-            column=Workspace.id,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-        FilterField(
-            id="processingPaused",
-            column=Workspace.id,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-    ]
-)
+WORKSPACE_FILTER_REGISTRY = FilterRegistry([
+    FilterField(
+        id="name",
+        column=Workspace.name,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.ILIKE,
+            FilterOperator.NOT_ILIKE,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="slug",
+        column=Workspace.slug,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.ILIKE,
+            FilterOperator.NOT_ILIKE,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="isDefault",
+        column=Workspace.id,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+    FilterField(
+        id="processingPaused",
+        column=Workspace.id,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+])
 
-WORKSPACE_MEMBER_FILTER_REGISTRY = FilterRegistry(
-    [
-        FilterField(
-            id="userId",
-            column=UserRoleAssignment.user_id,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-            },
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="roleId",
-            column=UserRoleAssignment.role_id,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-            },
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="isActive",
-            column=UserRoleAssignment.user_id,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-    ]
-)
+WORKSPACE_MEMBER_FILTER_REGISTRY = FilterRegistry([
+    FilterField(
+        id="userId",
+        column=UserRoleAssignment.user_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="roleId",
+        column=UserRoleAssignment.role_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="isActive",
+        column=UserRoleAssignment.user_id,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+])
 
 
 def parse_workspace_filters(filters: list[FilterItem]) -> list[ParsedFilter]:

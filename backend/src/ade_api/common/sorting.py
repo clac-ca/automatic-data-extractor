@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
 import json
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, TypeVar
 
 from fastapi import HTTPException, Query
@@ -175,7 +175,7 @@ def make_sort_dependency(*, allowed: SortAllowedMap, default: Sequence[str], id_
     allowed_list = ", ".join(sorted(allowed.keys()))
     doc = (
         "JSON array of {id, desc}. "
-        f"Allowed: {allowed_list}. Example: [{{\"id\":\"createdAt\",\"desc\":true}}]"
+        f'Allowed: {allowed_list}. Example: [{{"id":"createdAt","desc":true}}]'
     )
 
     def dependency(sort: str | None = Query(None, description=doc)) -> OrderBy:

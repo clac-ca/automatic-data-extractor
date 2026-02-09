@@ -212,12 +212,12 @@ def setup_logging(settings: Settings) -> None:
         access_logger.propagate = False
         access_logger.disabled = True
 
-    # Optional: dedicated DB logger level for SQLAlchemy noise control.
-    db_level_name = settings.database_log_level
-    if db_level_name:
-        db_level = getattr(logging, db_level_name)
-        for name in ("sqlalchemy.engine", "sqlalchemy.pool"):
-            logging.getLogger(name).setLevel(db_level)
+    # SQLAlchemy logs are noisy in day-to-day dev; default to WARNING.
+    # Callers can opt in to SQL traces with ADE_DATABASE_LOG_LEVEL=INFO|DEBUG.
+    db_level_name = settings.database_log_level or "WARNING"
+    db_level = getattr(logging, db_level_name)
+    for name in ("sqlalchemy", "sqlalchemy.engine", "sqlalchemy.pool"):
+        logging.getLogger(name).setLevel(db_level)
 
 
 # ---------------------------------------------------------------------------

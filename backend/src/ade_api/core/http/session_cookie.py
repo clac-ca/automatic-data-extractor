@@ -27,4 +27,3 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
         path=settings.session_cookie_path or "/",
         domain=settings.session_cookie_domain,
     )
-

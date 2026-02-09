@@ -21,11 +21,11 @@ from ade_api.core.security.password_policy import (
     enforce_password_complexity,
     generate_password_for_policy,
 )
-from ade_api.features.api_keys.service import ApiKeyService
 from ade_api.features.admin_settings.service import RuntimeSettingsService
+from ade_api.features.api_keys.service import ApiKeyService
 from ade_api.features.rbac import RbacService
-from ade_db.models import User
 from ade_api.settings import Settings
+from ade_db.models import User
 
 from .filters import apply_user_filters
 from .repository import UsersRepository

@@ -157,11 +157,11 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "GET"),
         }
         if_match_routes = {
-                ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "PATCH"),
-                ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "DELETE"),
-                ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "DELETE"),
-                ("/api/v1/users/me/apikeys/{apiKeyId}", "DELETE"),
-                ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "DELETE"),
+            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "PATCH"),
+            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "DELETE"),
+            ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "DELETE"),
+            ("/api/v1/users/me/apikeys/{apiKeyId}", "DELETE"),
+            ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "DELETE"),
         }
         top_workflow_tags = {"auth", "me", "workspaces", "configurations", "documents", "runs"}
         operation_examples: dict[tuple[str, str], dict[str, Any]] = {
@@ -297,9 +297,7 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             if any(isinstance(item, dict) and item.get("$ref") == ref for item in params):
                 return
             if name and any(
-                isinstance(item, dict)
-                and item.get("name") == name
-                and item.get("in") == "header"
+                isinstance(item, dict) and item.get("name") == name and item.get("in") == "header"
                 for item in params
             ):
                 return

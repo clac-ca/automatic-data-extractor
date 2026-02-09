@@ -129,7 +129,6 @@ def _deps_digest_cache_key(configuration: Configuration) -> str:
     return "unknown"
 
 
-
 # --------------------------------------------------------------------------- #
 # Small helpers
 # --------------------------------------------------------------------------- #
@@ -148,7 +147,6 @@ def _normalize_run_operation(value: RunOperation | str) -> RunOperation:
     if isinstance(value, RunOperation):
         return value
     return RunOperation(str(value))
-
 
 
 # --------------------------------------------------------------------------- #
@@ -231,9 +229,7 @@ class RunsService:
         input_document_id = options.input_document_id
         if operation is RunOperation.PROCESS:
             if not input_document_id:
-                raise RunInputDocumentRequiredForProcessError(
-                    "input_document_required_for_process"
-                )
+                raise RunInputDocumentRequiredForProcessError("input_document_required_for_process")
             self._require_document(
                 workspace_id=configuration.workspace_id,
                 document_id=input_document_id,
@@ -414,9 +410,7 @@ class RunsService:
         if not document_ids:
             return []
         if operation is not RunOperation.PROCESS:
-            raise RunInputDocumentRequiredForProcessError(
-                "input_document_required_for_process"
-            )
+            raise RunInputDocumentRequiredForProcessError("input_document_required_for_process")
 
         configuration = self._resolve_configuration(configuration_id)
         self._require_documents(
@@ -562,9 +556,7 @@ class RunsService:
                 extra=log_context(run_id=run.id),
             )
             fallback_operation = (
-                run.operation
-                if isinstance(run.operation, RunOperation)
-                else RunOperation.PROCESS
+                run.operation if isinstance(run.operation, RunOperation) else RunOperation.PROCESS
             )
             fallback_document_id = (
                 self._resolve_document_id_for_version(run.input_file_version_id)
@@ -824,9 +816,7 @@ class RunsService:
         )
         result = self._session.execute(base_stmt)
         version_by_doc: dict[UUID, UUID] = {
-            doc_id: version_id
-            for doc_id, version_id in result.all()
-            if version_id is not None
+            doc_id: version_id for doc_id, version_id in result.all() if version_id is not None
         }
         version_to_doc = {version_id: doc_id for doc_id, version_id in version_by_doc.items()}
         eligible_ids = list(version_by_doc.keys())
@@ -1152,9 +1142,7 @@ class RunsService:
 
         if run.input_file_version_id:
             file_version_id = str(run.input_file_version_id)
-            download_url = (
-                f"/api/v1/workspaces/{run.workspace_id}/runs/{run.id}/input/download"
-            )
+            download_url = f"/api/v1/workspaces/{run.workspace_id}/runs/{run.id}/input/download"
             try:
                 document, version = self._require_document_with_version(
                     workspace_id=run.workspace_id,
@@ -1219,9 +1207,7 @@ class RunsService:
 
         return RunOutput(
             ready=ready,
-            download_url=(
-                f"/api/v1/workspaces/{run.workspace_id}/runs/{run.id}/output/download"
-            ),
+            download_url=(f"/api/v1/workspaces/{run.workspace_id}/runs/{run.id}/output/download"),
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes,
@@ -1705,8 +1691,7 @@ class RunsService:
                 if saw_bytes or buffer:
                     terminal_observed_at = now
                 grace_elapsed = (
-                    now - terminal_observed_at
-                    >= _RUN_EVENTS_STREAM_TERMINAL_EOF_GRACE_SECONDS
+                    now - terminal_observed_at >= _RUN_EVENTS_STREAM_TERMINAL_EOF_GRACE_SECONDS
                 )
                 if grace_elapsed and not saw_bytes and not buffer:
                     yield sse_text(

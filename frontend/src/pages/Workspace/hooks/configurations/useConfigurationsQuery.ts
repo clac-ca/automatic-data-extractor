@@ -11,12 +11,16 @@ import type {
 } from "@/types/configurations";
 
 const CONFIGURATIONS_PAGE_SIZE = 100;
+const DEFAULT_CONFIGURATION_STATUSES = ["draft", "active"] as const;
+
+type ConfigurationStatus = ConfigurationRecord["status"];
 
 interface UseConfigurationsQueryOptions {
   readonly workspaceId: string;
   readonly enabled?: boolean;
   readonly limit?: number;
   readonly cursor?: string | null;
+  readonly statuses?: readonly ConfigurationStatus[];
 }
 
 export function useConfigurationsQuery({
@@ -24,10 +28,11 @@ export function useConfigurationsQuery({
   enabled = true,
   limit = CONFIGURATIONS_PAGE_SIZE,
   cursor = null,
+  statuses = DEFAULT_CONFIGURATION_STATUSES,
 }: UseConfigurationsQueryOptions) {
   return useQuery<ConfigurationPage>({
-    queryKey: configurationKeys.list(workspaceId, { limit, cursor }),
-    queryFn: ({ signal }) => listConfigurations(workspaceId, { limit, cursor, signal }),
+    queryKey: configurationKeys.list(workspaceId, { limit, cursor, statuses }),
+    queryFn: ({ signal }) => listConfigurations(workspaceId, { limit, cursor, statuses, signal }),
     enabled: enabled && workspaceId.length > 0,
     staleTime: 15_000,
     placeholderData: (previous: ConfigurationPage | undefined) => previous,

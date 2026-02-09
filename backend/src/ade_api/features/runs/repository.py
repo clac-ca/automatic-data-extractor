@@ -9,7 +9,15 @@ from sqlalchemy.orm import Session
 
 from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
-from ade_db.models import FileVersion, Run, RunField, RunMetrics, RunOperation, RunStatus, RunTableColumn
+from ade_db.models import (
+    FileVersion,
+    Run,
+    RunField,
+    RunMetrics,
+    RunOperation,
+    RunStatus,
+    RunTableColumn,
+)
 
 from .filters import RunColumnFilters, apply_run_column_filters, apply_run_filters
 
@@ -113,11 +121,7 @@ class RunsRepository:
         return self._session.get(RunMetrics, run_id)
 
     def list_fields(self, run_id: UUID) -> list[RunField]:
-        stmt = (
-            select(RunField)
-            .where(RunField.run_id == run_id)
-            .order_by(RunField.field.asc())
-        )
+        stmt = select(RunField).where(RunField.run_id == run_id).order_by(RunField.field.asc())
         result = self._session.execute(stmt)
         return list(result.scalars().all())
 

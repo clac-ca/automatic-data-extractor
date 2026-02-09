@@ -21,109 +21,107 @@ from ade_api.common.list_filters import (
 )
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_db.models import FileVersion, Run, RunStatus, RunTableColumn
 from ade_api.settings import MAX_SET_SIZE
+from ade_db.models import FileVersion, Run, RunStatus, RunTableColumn
 
 ALLOWED_FILE_TYPES = {"xlsx", "xls", "csv", "pdf"}
 
-RUN_FILTER_REGISTRY = FilterRegistry(
-    [
-        FilterField(
-            id="status",
-            column=Run.status,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-            },
-            value_type=FilterValueType.ENUM,
-            enum_type=RunStatus,
-        ),
-        FilterField(
-            id="configurationId",
-            column=Run.configuration_id,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-            },
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="inputDocumentId",
-            column=FileVersion.file_id,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.UUID,
-        ),
-        FilterField(
-            id="createdAt",
-            column=Run.created_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="startedAt",
-            column=Run.started_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="completedAt",
-            column=Run.completed_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="fileType",
-            column=FileVersion.filename_at_upload,
-            operators={FilterOperator.EQ, FilterOperator.IN, FilterOperator.NOT_IN},
-            value_type=FilterValueType.STRING,
-        ),
-        FilterField(
-            id="hasOutput",
-            column=Run.status,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-    ]
-)
+RUN_FILTER_REGISTRY = FilterRegistry([
+    FilterField(
+        id="status",
+        column=Run.status,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.ENUM,
+        enum_type=RunStatus,
+    ),
+    FilterField(
+        id="configurationId",
+        column=Run.configuration_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="inputDocumentId",
+        column=FileVersion.file_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="createdAt",
+        column=Run.created_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="startedAt",
+        column=Run.started_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="completedAt",
+        column=Run.completed_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="fileType",
+        column=FileVersion.filename_at_upload,
+        operators={FilterOperator.EQ, FilterOperator.IN, FilterOperator.NOT_IN},
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="hasOutput",
+        column=Run.status,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+])
 
 
 class RunColumnFilters(FilterBase):

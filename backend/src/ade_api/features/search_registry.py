@@ -52,58 +52,56 @@ _ASSIGNMENT_SCOPE_TYPE = case(
 )
 
 
-SEARCH_REGISTRY = SearchRegistry(
-    {
-        "documents": [
-            _field("name", File.name),
-            _has_field("uploaderName", File.uploaded_by_user, User.display_name),
-            _has_field("uploaderEmail", File.uploaded_by_user, User.email),
-            _any_field("tags", File.tags, FileTag.tag),
-        ],
-        "runs": [
-            _field_cast("id", Run.id),
-            _field_cast("status", Run.status),
-            _field_cast("configurationId", Run.configuration_id),
-            _field("inputFilename", FileVersion.filename_at_upload),
-        ],
-        "configurations": [
-            _field("displayName", Configuration.display_name),
-            _field_cast("status", Configuration.status),
-        ],
-        "users": [
-            _field("email", User.email),
-            _field("displayName", User.display_name),
-        ],
-        "apikeys": [
-            _field("name", ApiKey.name),
-            _field("prefix", ApiKey.prefix),
-        ],
-        "workspaces": [
-            _field("name", Workspace.name),
-            _field("slug", Workspace.slug),
-        ],
-        "members": [
-            _field_cast("userId", UserRoleAssignment.user_id),
-            _has_field("roleSlugs", UserRoleAssignment.role, Role.slug),
-        ],
-        "permissions": [
-            _field("key", Permission.key),
-            _field("resource", Permission.resource),
-            _field("action", Permission.action),
-            _field("label", Permission.label),
-        ],
-        "roles": [
-            _field("name", Role.name),
-            _field("slug", Role.slug),
-            _field("description", Role.description),
-        ],
-        "roleassignments": [
-            _field_cast("userId", UserRoleAssignment.user_id),
-            _has_field("roleSlug", UserRoleAssignment.role, Role.slug),
-            _field("scopeType", _ASSIGNMENT_SCOPE_TYPE),
-            _field_cast("scopeId", UserRoleAssignment.workspace_id),
-        ],
-    }
-)
+SEARCH_REGISTRY = SearchRegistry({
+    "documents": [
+        _field("name", File.name),
+        _has_field("uploaderName", File.uploaded_by_user, User.display_name),
+        _has_field("uploaderEmail", File.uploaded_by_user, User.email),
+        _any_field("tags", File.tags, FileTag.tag),
+    ],
+    "runs": [
+        _field_cast("id", Run.id),
+        _field_cast("status", Run.status),
+        _field_cast("configurationId", Run.configuration_id),
+        _field("inputFilename", FileVersion.filename_at_upload),
+    ],
+    "configurations": [
+        _field("displayName", Configuration.display_name),
+        _field_cast("status", Configuration.status),
+    ],
+    "users": [
+        _field("email", User.email),
+        _field("displayName", User.display_name),
+    ],
+    "apikeys": [
+        _field("name", ApiKey.name),
+        _field("prefix", ApiKey.prefix),
+    ],
+    "workspaces": [
+        _field("name", Workspace.name),
+        _field("slug", Workspace.slug),
+    ],
+    "members": [
+        _field_cast("userId", UserRoleAssignment.user_id),
+        _has_field("roleSlugs", UserRoleAssignment.role, Role.slug),
+    ],
+    "permissions": [
+        _field("key", Permission.key),
+        _field("resource", Permission.resource),
+        _field("action", Permission.action),
+        _field("label", Permission.label),
+    ],
+    "roles": [
+        _field("name", Role.name),
+        _field("slug", Role.slug),
+        _field("description", Role.description),
+    ],
+    "roleassignments": [
+        _field_cast("userId", UserRoleAssignment.user_id),
+        _has_field("roleSlug", UserRoleAssignment.role, Role.slug),
+        _field("scopeType", _ASSIGNMENT_SCOPE_TYPE),
+        _field_cast("scopeId", UserRoleAssignment.workspace_id),
+    ],
+})
 
 __all__ = ["SEARCH_REGISTRY"]

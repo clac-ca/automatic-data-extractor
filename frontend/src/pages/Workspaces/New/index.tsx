@@ -118,7 +118,11 @@ function WorkspaceCreateContent() {
         },
         onError(error: unknown) {
           if (error instanceof ApiError) {
-            const detail = error.problem?.detail ?? error.message;
+            const problemDetail = error.problem?.detail;
+            const detail =
+              typeof problemDetail === "string" && problemDetail.trim().length > 0
+                ? problemDetail
+                : error.message;
             const fieldErrors = groupProblemDetailsErrors(error.problem?.errors);
             setError("root", { type: "server", message: detail });
             const nameError = fieldErrors.name?.[0];

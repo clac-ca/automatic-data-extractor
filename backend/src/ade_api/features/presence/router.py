@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 import re
+from collections.abc import Callable
 from typing import Annotated, Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
@@ -19,8 +19,8 @@ from ade_api.core.http.dependencies import (
     get_rbac_service,
 )
 from ade_api.db import get_session_factory
-from ade_db.models import User
 from ade_api.settings import Settings
+from ade_db.models import User
 
 from .registry import ChannelKey, PresenceParticipant, get_presence_registry
 
@@ -219,22 +219,18 @@ async def presence_ws(
             participant=participant,
             websocket=websocket,
         )
-        await websocket.send_json(
-            {
-                "type": "hello",
-                "client_id": client_id,
-                "heartbeat_interval": PRESENCE_HEARTBEAT_SECONDS,
-                "ttl_seconds": PRESENCE_TTL_SECONDS,
-            }
-        )
-        await websocket.send_json(
-            {
-                "type": "snapshot",
-                "scope": scope,
-                "context": context,
-                "participants": snapshot,
-            }
-        )
+        await websocket.send_json({
+            "type": "hello",
+            "client_id": client_id,
+            "heartbeat_interval": PRESENCE_HEARTBEAT_SECONDS,
+            "ttl_seconds": PRESENCE_TTL_SECONDS,
+        })
+        await websocket.send_json({
+            "type": "snapshot",
+            "scope": scope,
+            "context": context,
+            "participants": snapshot,
+        })
         await registry.broadcast(
             channel_key=channel_key,
             message={"type": "join", "participant": participant.to_public()},

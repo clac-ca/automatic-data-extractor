@@ -1,5 +1,5 @@
 import { apiFetch, client } from "@/api/client";
-import { buildListQuery } from "@/api/listing";
+import { buildListQuery, type FilterItem } from "@/api/listing";
 import { ApiError, buildApiErrorMessage, tryParseProblemDetails } from "@/api/errors";
 
 import type {
@@ -11,7 +11,7 @@ import type {
   FileRenameResponse,
   FileWriteResponse,
 } from "@/types/configurations";
-import type { paths } from "@/types";
+import type { components, paths } from "@/types";
 
 type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];
@@ -27,24 +27,40 @@ type UpdateConfigurationBody =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}"]["patch"]["requestBody"]["content"]["application/json"];
 type UpsertConfigurationFileQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files/{filePath}"]["put"]["parameters"]["query"];
+type ConfigurationStatus = components["schemas"]["ConfigurationStatus"];
 
 export interface ListConfigurationsOptions {
   readonly limit?: number;
   readonly cursor?: string | null;
   readonly sort?: string;
   readonly includeTotal?: boolean;
+  readonly statuses?: readonly ConfigurationStatus[];
   readonly signal?: AbortSignal;
+}
+
+function buildStatusFilters(statuses: readonly ConfigurationStatus[] | undefined): FilterItem[] | undefined {
+  if (!statuses?.length) {
+    return undefined;
+  }
+
+  const uniqueStatuses = Array.from(new Set(statuses));
+  if (uniqueStatuses.length === 1) {
+    return [{ id: "status", operator: "eq", value: uniqueStatuses[0] }];
+  }
+
+  return [{ id: "status", operator: "in", value: uniqueStatuses }];
 }
 
 export async function listConfigurations(
   workspaceId: string,
   options: ListConfigurationsOptions = {},
 ): Promise<ConfigurationPage> {
-  const { signal, limit, cursor, sort, includeTotal } = options;
+  const { signal, limit, cursor, sort, includeTotal, statuses } = options;
   const query = buildListQuery({
     limit,
     cursor: cursor ?? null,
     sort: sort ?? null,
+    filters: buildStatusFilters(statuses),
     includeTotal,
   });
 

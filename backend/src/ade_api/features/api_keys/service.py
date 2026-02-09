@@ -21,8 +21,8 @@ from ade_api.core.security.api_keys import (
     generate_api_key_secret,
     hash_api_key_secret,
 )
-from ade_db.models import ApiKey, User
 from ade_api.settings import Settings
+from ade_db.models import ApiKey, User
 
 from .filters import apply_api_key_filters
 
@@ -168,10 +168,7 @@ class ApiKeyService:
     ):
         """List keys for a specific user (self-service and admin use)."""
 
-        stmt = (
-            self._base_query()
-            .where(ApiKey.user_id == user_id)
-        )
+        stmt = self._base_query().where(ApiKey.user_id == user_id)
         stmt = apply_api_key_filters(
             stmt,
             filters,
@@ -251,9 +248,7 @@ class ApiKeyService:
 
         api_key = self.get_by_id(api_key_id)
         if api_key.user_id != user_id:
-            raise ApiKeyAccessDeniedError(
-                f"API key {api_key_id} is not owned by user {user_id}"
-            )
+            raise ApiKeyAccessDeniedError(f"API key {api_key_id} is not owned by user {user_id}")
         if api_key.revoked_at is not None:
             return api_key
         api_key.revoked_at = utc_now()
@@ -266,7 +261,8 @@ class ApiKeyService:
 
         now = utc_now()
         self._session.execute(
-            sa.update(ApiKey)
+            sa
+            .update(ApiKey)
             .where(ApiKey.user_id == user_id, ApiKey.revoked_at.is_(None))
             .values(revoked_at=now)
         )
@@ -292,7 +288,8 @@ class ApiKeyService:
             raise InvalidApiKeyFormatError("API key prefix and secret must be non-empty")
 
         result = self._session.execute(
-            self._base_query()
+            self
+            ._base_query()
             .where(ApiKey.prefix == prefix)
             .execution_options(populate_existing=True)
         )

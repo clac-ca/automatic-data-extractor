@@ -328,14 +328,15 @@ def seeded_identity(db_session: Session) -> SeededIdentity:
         db_session.flush()
         return SeededUser(id=user.id, email=email, password=password)
 
-    admin = _create_user("admin@example.com", "admin_pass")
-    owner = _create_user("owner@example.com", "owner_pass")
-    member = _create_user("member@example.com", "member_pass")
-    member_with_manage = _create_user("manage@example.com", "manage_pass")
-    orphan = _create_user("orphan@example.com", "orphan_pass")
+    suffix = uuid4().hex[:8]
+    admin = _create_user(f"admin-{suffix}@example.com", "admin_pass")
+    owner = _create_user(f"owner-{suffix}@example.com", "owner_pass")
+    member = _create_user(f"member-{suffix}@example.com", "member_pass")
+    member_with_manage = _create_user(f"manage-{suffix}@example.com", "manage_pass")
+    orphan = _create_user(f"orphan-{suffix}@example.com", "orphan_pass")
 
-    workspace = Workspace(name="Primary Workspace", slug="primary")
-    secondary_workspace = Workspace(name="Secondary Workspace", slug="secondary")
+    workspace = Workspace(name="Primary Workspace", slug=f"primary-{suffix}")
+    secondary_workspace = Workspace(name="Secondary Workspace", slug=f"secondary-{suffix}")
     db_session.add_all([workspace, secondary_workspace])
     db_session.flush()
 
@@ -421,7 +422,7 @@ def seed_identity(seeded_identity: SeededIdentity) -> SeededIdentity:
 
 @pytest.fixture()
 def seeded_workspace(db_session: Session) -> Workspace:
-    workspace = Workspace(name="Seeded Workspace", slug="seeded")
+    workspace = Workspace(name="Seeded Workspace", slug=f"seeded-{uuid4().hex[:8]}")
     db_session.add(workspace)
     db_session.commit()
     return workspace
@@ -429,7 +430,7 @@ def seeded_workspace(db_session: Session) -> Workspace:
 
 @pytest.fixture()
 def seeded_user(db_session: Session, seeded_workspace: Workspace) -> SeededUser:
-    email = "seeded@example.com"
+    email = f"seeded-{uuid4().hex[:8]}@example.com"
     password = "seeded_pass"
     user = User(
         email=email,
@@ -452,10 +453,11 @@ def seeded_user(db_session: Session, seeded_workspace: Workspace) -> SeededUser:
 
 @pytest.fixture()
 def seeded_workspace_with_user(db_session: Session) -> SeededIdentity:
-    admin = SeededUser(id=uuid4(), email="admin@example.com", password="admin")
-    user = SeededUser(id=uuid4(), email="user@example.com", password="user")
+    suffix = uuid4().hex[:8]
+    admin = SeededUser(id=uuid4(), email=f"admin-{suffix}@example.com", password="admin")
+    user = SeededUser(id=uuid4(), email=f"user-{suffix}@example.com", password="user")
 
-    workspace = Workspace(name="Workspace", slug="workspace")
+    workspace = Workspace(name="Workspace", slug=f"workspace-{suffix}")
     db_session.add(workspace)
     db_session.flush()
 

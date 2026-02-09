@@ -7,8 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, delete, select, true, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from ade_db.models import (
     Configuration,
@@ -195,13 +194,9 @@ class WorkspacesRepository:
 
         # Delete in dependency order to satisfy FK constraints across workspace data.
         self._session.execute(
-            update(FileVersion)
-            .where(FileVersion.id.in_(file_version_ids))
-            .values(run_id=None)
+            update(FileVersion).where(FileVersion.id.in_(file_version_ids)).values(run_id=None)
         )
-        self._session.execute(
-            delete(RunTableColumn).where(RunTableColumn.run_id.in_(run_ids))
-        )
+        self._session.execute(delete(RunTableColumn).where(RunTableColumn.run_id.in_(run_ids)))
         self._session.execute(delete(RunField).where(RunField.run_id.in_(run_ids)))
         self._session.execute(delete(RunMetrics).where(RunMetrics.run_id.in_(run_ids)))
         self._session.execute(delete(Run).where(Run.workspace_id == workspace_id))

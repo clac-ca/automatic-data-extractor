@@ -791,7 +791,10 @@ def download_workspace_run_output_endpoint(
         },
     },
     summary="List run output worksheets",
-    description="List worksheets available in the run output artifact when sheet introspection is supported.",
+    description=(
+        "List worksheets available in the run output artifact when sheet "
+        "introspection is supported."
+    ),
 )
 def list_workspace_run_output_sheets_endpoint(
     workspace_id: WorkspacePath,
@@ -885,8 +888,7 @@ def preview_workspace_run_output_endpoint(
         Query(
             alias="sheetName",
             description=(
-                "Optional worksheet name to preview "
-                "(defaults to the first sheet when omitted)."
+                "Optional worksheet name to preview (defaults to the first sheet when omitted)."
             ),
         ),
     ] = None,

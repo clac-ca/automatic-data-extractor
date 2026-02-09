@@ -94,7 +94,9 @@ class AuthPolicyResponse(BaseSchema):
     password_require_number: bool = Field(default=False, alias="passwordRequireNumber")
     password_require_symbol: bool = Field(default=False, alias="passwordRequireSymbol")
     password_lockout_max_attempts: int = Field(default=5, alias="passwordLockoutMaxAttempts")
-    password_lockout_duration_seconds: int = Field(default=300, alias="passwordLockoutDurationSeconds")
+    password_lockout_duration_seconds: int = Field(
+        default=300, alias="passwordLockoutDurationSeconds"
+    )
     idp_jit_provisioning_enabled: bool = Field(default=True, alias="idpJitProvisioningEnabled")
 
 

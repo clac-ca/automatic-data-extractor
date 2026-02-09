@@ -128,14 +128,10 @@ def _build_blob_container_client(settings: Settings):
         raise RuntimeError("ADE_BLOB_CONTAINER is required.")
 
     if settings.blob_connection_string:
-        service = BlobServiceClient.from_connection_string(
-            conn_str=settings.blob_connection_string
-        )
+        service = BlobServiceClient.from_connection_string(conn_str=settings.blob_connection_string)
     else:
         if not settings.blob_account_url:
-            raise RuntimeError(
-                "ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required."
-            )
+            raise RuntimeError("ADE_BLOB_CONNECTION_STRING or ADE_BLOB_ACCOUNT_URL is required.")
         service = BlobServiceClient(
             account_url=settings.blob_account_url,
             credential=DefaultAzureCredential(),
@@ -228,9 +224,7 @@ def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
     errors.extend(version_errors)
 
     if include_versions and versioning_mode == "auto":
-        unsupported_include = any(
-            isinstance(exc, HttpResponseError) for exc in version_errors
-        )
+        unsupported_include = any(isinstance(exc, HttpResponseError) for exc in version_errors)
         if unsupported_include and version_deleted == 0:
             fallback_deleted, fallback_errors = _delete_versions(None)
             deleted += fallback_deleted

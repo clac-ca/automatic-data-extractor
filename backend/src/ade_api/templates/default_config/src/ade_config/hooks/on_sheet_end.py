@@ -20,14 +20,13 @@ Guidance
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ade_engine.models import TableResult
 
 if TYPE_CHECKING:
     import openpyxl
     import openpyxl.worksheet.worksheet
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -80,7 +79,9 @@ def on_sheet_end_example_1_record_output_bounds(
     bounds = {
         "max_row": int(output_sheet.max_row or 0),
         "max_col": int(output_sheet.max_column or 0),
-        "dimension": output_sheet.calculate_dimension() if hasattr(output_sheet, "calculate_dimension") else None,
+        "dimension": output_sheet.calculate_dimension()
+        if hasattr(output_sheet, "calculate_dimension")
+        else None,
     }
 
     stats = state.get("sheet_output_bounds")
@@ -118,6 +119,8 @@ def on_sheet_end_example_insert_original_headers_row(
         output_sheet.insert_rows(insert_row, amount=1)
 
         # If you add Excel structured tables elsewhere, update their `ref` after row inserts.
-        for col in range(table_result.output_region.min_col, table_result.output_region.max_col + 1):
+        for col in range(
+            table_result.output_region.min_col, table_result.output_region.max_col + 1
+        ):
             field_name = output_sheet.cell(row=header_row, column=col).value
             output_sheet.cell(row=insert_row, column=col).value = original_by_field.get(field_name)

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import type { RunStatus } from "@/types";
+import type { FilterVariant } from "@/types/data-table";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DocumentPresenceEntry } from "@/pages/Workspace/hooks/presence/presenceParticipants";
@@ -39,7 +40,7 @@ export type DocumentsColumnContext = {
 type DocumentsColumnMeta = {
   label?: string;
   placeholder?: string;
-  variant?: string;
+  variant?: FilterVariant;
   options?: Array<{ label: string; value: string }>;
   unit?: string;
   headerClassName?: string;

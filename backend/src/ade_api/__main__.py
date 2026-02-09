@@ -8,5 +8,6 @@ def main() -> None:
     load_local_env()
     cli_app()
 
+
 if __name__ == "__main__":
     main()

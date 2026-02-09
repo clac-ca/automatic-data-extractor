@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Generator
+from collections.abc import Generator
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
@@ -101,7 +102,7 @@ def _log_unexpected_db_exception(request: Request, exc: BaseException) -> None:
     )
 
 
-def _get_session(request: Request) -> Generator[Session, None, None]:
+def _get_session(request: Request) -> Generator[Session]:
     session_factory = get_session_factory(request)
     session = session_factory()
     try:

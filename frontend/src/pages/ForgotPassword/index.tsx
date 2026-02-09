@@ -179,7 +179,9 @@ export default function ForgotPasswordScreen() {
           setFormError(resetUnavailableMessage);
           return;
         }
-        const message = error.problem?.detail ?? error.message ?? "Unable to request a password reset.";
+        const detail = error.problem?.detail;
+        const message =
+          typeof detail === "string" ? detail : error.message || "Unable to request a password reset.";
         setFormError(message);
       } else if (error instanceof Error) {
         setFormError(error.message);

@@ -81,9 +81,7 @@ def normalize_tag_query(value: str | None) -> str | None:
 
     normalized = collapsed.casefold()
     if len(normalized) < MIN_TAG_SEARCH_LEN:
-        raise TagValidationError(
-            f"Tag search must be at least {MIN_TAG_SEARCH_LEN} characters."
-        )
+        raise TagValidationError(f"Tag search must be at least {MIN_TAG_SEARCH_LEN} characters.")
     if len(normalized) > MAX_TAG_LENGTH:
         raise TagValidationError(f"Tag search must be at most {MAX_TAG_LENGTH} characters.")
 

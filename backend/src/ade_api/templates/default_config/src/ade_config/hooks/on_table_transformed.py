@@ -24,12 +24,11 @@ Guidance
 - When constructing literals in expressions, use ``pl.lit(...)``.
 """
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
 from datetime import date, datetime
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from ade_engine.models import TableRegion
@@ -37,7 +36,6 @@ from ade_engine.models import TableRegion
 if TYPE_CHECKING:
     import openpyxl
     import openpyxl.worksheet.worksheet
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -159,7 +157,9 @@ def on_table_transformed_example_2_add_provenance_columns(
     - Adding a stable row index with `pl.int_range(pl.len())` or `with_row_index`
     """
 
-    sheet_name = (getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "").strip()
+    sheet_name = (
+        getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+    ).strip()
 
     # 0-based index within this materialized table
     row_index_expr = pl.int_range(pl.len(), dtype=pl.UInt32).alias("__row_index")

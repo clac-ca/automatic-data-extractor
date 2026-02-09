@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DISCOVERY_TTL = timedelta(minutes=15)
 
-_discovery_cache: dict[str, tuple[datetime, "OidcMetadata"]] = {}
+_discovery_cache: dict[str, tuple[datetime, OidcMetadata]] = {}
 _jwks_clients: dict[str, PyJWKClient] = {}
 
 

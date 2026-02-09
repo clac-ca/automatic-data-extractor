@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
-from ade_api.core.auth.principal import AuthVia, AuthenticatedPrincipal, PrincipalType
+from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 from ade_api.core.rbac.registry import PERMISSION_REGISTRY, SYSTEM_ROLE_BY_SLUG
 from ade_api.core.rbac.service_interface import RbacService
 from ade_api.core.rbac.types import ScopeType
@@ -223,8 +223,34 @@ class MeService:
         user.updated_at = now
 
         role = SYSTEM_ROLE_BY_SLUG["global-admin"]
-        access = WorkspaceAccess(workspaces=[], memberships={}, default_workspace_id=None)
+        access = self._resolve_dev_workspace_access(principal)
         return user, [role.slug], sorted(role.permissions), access
+
+    def _resolve_dev_workspace_access(
+        self,
+        principal: AuthenticatedPrincipal,
+    ) -> WorkspaceAccess:
+        """Resolve workspace visibility for auth-disabled development principals."""
+
+        access = self._resolve_workspace_access(principal)
+        if access.workspaces:
+            return access
+
+        workspaces_stmt = select(Workspace)
+        workspaces_result = self.session.execute(workspaces_stmt)
+        workspaces = sorted(
+            workspaces_result.scalars().all(),
+            key=lambda workspace: workspace.name.lower(),
+        )
+        default_workspace_id = access.default_workspace_id
+        if default_workspace_id is None and workspaces:
+            default_workspace_id = workspaces[0].id
+
+        return WorkspaceAccess(
+            workspaces=workspaces,
+            memberships=access.memberships,
+            default_workspace_id=default_workspace_id,
+        )
 
     def _get_user_or_404(self, user_id: UUID) -> User:
         user = self.session.get(User, user_id)

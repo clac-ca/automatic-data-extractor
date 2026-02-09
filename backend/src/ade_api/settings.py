@@ -195,15 +195,16 @@ class Settings(
         self.auth_mode = mode
 
         removed_set = sorted(
-            env_name
-            for env_name in REMOVED_AUTH_ENV_VARS
-            if os.getenv(env_name) not in (None, "")
+            env_name for env_name in REMOVED_AUTH_ENV_VARS if os.getenv(env_name) not in (None, "")
         )
         if removed_set:
             raise ValueError(
                 "Removed auth environment variables are no longer supported: "
                 + ", ".join(removed_set)
-                + ". Use ADE_AUTH_MODE, ADE_AUTH_PASSWORD_*, and ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED."
+                + (
+                    ". Use ADE_AUTH_MODE, ADE_AUTH_PASSWORD_*, and "
+                    "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED."
+                )
             )
 
         if self.algorithm != "HS256":

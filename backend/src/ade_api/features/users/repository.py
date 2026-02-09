@@ -6,8 +6,7 @@ from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from ade_db.models import User
 
@@ -26,11 +25,7 @@ class UsersRepository:
         self._session = session
 
     def get_by_id(self, user_id: str | UUID) -> User | None:
-        stmt = (
-            select(User)
-            .options(selectinload(User.oauth_accounts))
-            .where(User.id == user_id)
-        )
+        stmt = select(User).options(selectinload(User.oauth_accounts)).where(User.id == user_id)
         result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 

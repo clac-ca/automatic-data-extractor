@@ -19,23 +19,24 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, MutableMapping
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from ade_engine.models import FieldDef
 
 if TYPE_CHECKING:
-    from ade_engine.models import TableRegion
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
+    from ade_engine.models import TableRegion
 
 
 def register(registry: Registry) -> None:
     """Register the `full_name` field and its detectors/transforms/validators."""
     registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string"))
-    registry.register_column_detector(detect_full_name_header_common_names, field="full_name", priority=60)
+    registry.register_column_detector(
+        detect_full_name_header_common_names, field="full_name", priority=60
+    )
     registry.register_column_transform(normalize_full_name, field="full_name", priority=0)
 
     # Examples (uncomment to enable)
@@ -47,7 +48,9 @@ def detect_full_name_header_common_names(
     *,
     table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
     column: pl.Series,  # Current column as a Series
-    column_sample_non_empty_values: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_sample_non_empty_values: list[
+        str
+    ],  # Trimmed, non-empty sample from this column (strings)
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
     field_name: str,  # Canonical field name (registered for this detector)
@@ -105,7 +108,9 @@ def detect_full_name_values_basic(
     *,
     table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
     column: pl.Series,  # Current column as a Series
-    column_sample_non_empty_values: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_sample_non_empty_values: list[
+        str
+    ],  # Trimmed, non-empty sample from this column (strings)
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
     field_name: str,  # Canonical field name (registered for this detector)

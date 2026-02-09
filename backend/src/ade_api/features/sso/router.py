@@ -14,9 +14,9 @@ from .schemas import (
     SsoProviderAdminOut,
     SsoProviderCreate,
     SsoProviderListResponse,
+    SsoProviderUpdate,
     SsoProviderValidateRequest,
     SsoProviderValidationResponse,
-    SsoProviderUpdate,
 )
 from .service import SsoService
 
@@ -150,13 +150,9 @@ def update_provider(
         label=payload.label,
         issuer=payload.issuer,
         client_id=payload.client_id,
-        client_secret=payload.client_secret.get_secret_value()
-        if payload.client_secret
-        else None,
+        client_secret=payload.client_secret.get_secret_value() if payload.client_secret else None,
         status_value=(
-            service.ui_status_to_db_status(payload.status)
-            if payload.status is not None
-            else None
+            service.ui_status_to_db_status(payload.status) if payload.status is not None else None
         ),
         domains=payload.domains,
     )

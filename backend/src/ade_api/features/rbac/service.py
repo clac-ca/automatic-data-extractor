@@ -10,10 +10,13 @@ from uuid import UUID
 
 from sqlalchemy import Select, delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
-from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor, paginate_sequence_cursor
+from ade_api.common.cursor_listing import (
+    ResolvedCursorSort,
+    paginate_query_cursor,
+    paginate_sequence_cursor,
+)
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.core.rbac.policy import GLOBAL_IMPLICATIONS, WORKSPACE_IMPLICATIONS
 from ade_api.core.rbac.registry import (
@@ -266,9 +269,7 @@ class RbacService:
         # Remove stale permissions
         stale_keys = set(existing) - desired_keys
         if stale_keys:
-            self._session.execute(
-                delete(Permission).where(Permission.key.in_(tuple(stale_keys)))
-            )
+            self._session.execute(delete(Permission).where(Permission.key.in_(tuple(stale_keys))))
 
         self._session.flush()
 
@@ -358,11 +359,8 @@ class RbacService:
         cursor: str | None,
         include_total: bool,
     ):
-        stmt: Select[Role] = (
-            select(Role)
-            .options(
-                selectinload(Role.permissions).selectinload(RolePermission.permission),
-            )
+        stmt: Select[Role] = select(Role).options(
+            selectinload(Role.permissions).selectinload(RolePermission.permission),
         )
         result = self._session.execute(stmt)
         roles = list(result.scalars().all())
@@ -559,14 +557,11 @@ class RbacService:
         include_total: bool,
         default_active_only: bool = True,
     ):
-        stmt: Select[UserRoleAssignment] = (
-            select(UserRoleAssignment)
-            .options(
-                selectinload(UserRoleAssignment.user),
-                selectinload(UserRoleAssignment.role)
-                .selectinload(Role.permissions)
-                .selectinload(RolePermission.permission),
-            )
+        stmt: Select[UserRoleAssignment] = select(UserRoleAssignment).options(
+            selectinload(UserRoleAssignment.user),
+            selectinload(UserRoleAssignment.role)
+            .selectinload(Role.permissions)
+            .selectinload(RolePermission.permission),
         )
         stmt = apply_assignment_filters(
             stmt,

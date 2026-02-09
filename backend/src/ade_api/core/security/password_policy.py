@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import secrets
 import string
+from dataclasses import dataclass
 
 from fastapi import status
 

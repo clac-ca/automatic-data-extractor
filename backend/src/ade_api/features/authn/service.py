@@ -209,9 +209,7 @@ class AuthnService:
             password_change_required=password_change_required,
         )
 
-    def create_session(
-        self, *, user_id: UUID, auth_method: SessionAuthMethod = "unknown"
-    ) -> str:
+    def create_session(self, *, user_id: UUID, auth_method: SessionAuthMethod = "unknown") -> str:
         token = mint_opaque_token()
         expires_at = utc_now() + self.settings.session_access_ttl
         self.session.add(
@@ -225,9 +223,7 @@ class AuthnService:
         )
         return token
 
-    def local_login_onboarding_flags(
-        self, *, has_mfa_enabled: bool
-    ) -> tuple[bool, bool]:
+    def local_login_onboarding_flags(self, *, has_mfa_enabled: bool) -> tuple[bool, bool]:
         if has_mfa_enabled:
             return False, False
         if self.get_policy().password_mfa_required:
@@ -429,7 +425,8 @@ class AuthnService:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Global-admin users must keep MFA enabled while identity provider-only sign-in is enabled."
+                    "Global-admin users must keep MFA enabled while "
+                    "identity provider-only sign-in is enabled."
                 ),
             )
         self.session.execute(delete(UserMfaTotp).where(UserMfaTotp.user_id == user.id))
@@ -535,8 +532,7 @@ class AuthnService:
                 detail={
                     "error": "admin_mfa_required",
                     "message": (
-                        "Global-admin users must enroll MFA for local login "
-                        "while SSO is enforced."
+                        "Global-admin users must enroll MFA for local login while SSO is enforced."
                     ),
                 },
             )

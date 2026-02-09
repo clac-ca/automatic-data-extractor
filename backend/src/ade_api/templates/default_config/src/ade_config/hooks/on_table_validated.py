@@ -26,16 +26,15 @@ Notes
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
-from polars._typing import PolarsDataType
 from ade_engine.models import TableRegion
+from polars._typing import PolarsDataType
 
 if TYPE_CHECKING:
     import openpyxl
     import openpyxl.worksheet.worksheet
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings

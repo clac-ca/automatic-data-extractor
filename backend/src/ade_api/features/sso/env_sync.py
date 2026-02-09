@@ -16,13 +16,13 @@ from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
 from ade_api.core.security.secrets import encrypt_secret
 from ade_api.features.sso.schemas import PROVIDER_ID_PATTERN, SsoProviderAdminBase
+from ade_api.settings import Settings
 from ade_db.models import (
     SsoProvider,
     SsoProviderDomain,
     SsoProviderManagedBy,
     SsoProviderStatus,
 )
-from ade_api.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,9 @@ def _parse_env_providers(raw: str) -> list[EnvProviderConfig]:
         try:
             parsed = EnvSsoProvider.model_validate(entry)
         except ValidationError as exc:
-            raise RuntimeError("ADE_AUTH_SSO_PROVIDERS_JSON contains invalid provider data") from exc
+            raise RuntimeError(
+                "ADE_AUTH_SSO_PROVIDERS_JSON contains invalid provider data"
+            ) from exc
 
         if parsed.id in seen_ids:
             raise RuntimeError(f"Duplicate provider id in ADE_AUTH_SSO_PROVIDERS_JSON: {parsed.id}")
@@ -117,9 +119,7 @@ def _parse_env_providers(raw: str) -> list[EnvProviderConfig]:
         normalized_domains = _normalize_domains(parsed.domains)
         for domain in normalized_domains:
             if domain in seen_domains:
-                raise RuntimeError(
-                    f"Duplicate domain in ADE_AUTH_SSO_PROVIDERS_JSON: {domain}"
-                )
+                raise RuntimeError(f"Duplicate domain in ADE_AUTH_SSO_PROVIDERS_JSON: {domain}")
             seen_domains.add(domain)
 
         configs.append(
@@ -150,9 +150,7 @@ def sync_sso_providers_from_env(*, session: Session, settings: Settings) -> None
         _upsert_provider(session, settings=settings, provider=provider, now=now)
         _sync_domains(session, provider_id=provider.id, domains=provider.domains, now=now)
 
-    release_stmt = sa.update(SsoProvider).where(
-        SsoProvider.managed_by == SsoProviderManagedBy.ENV
-    )
+    release_stmt = sa.update(SsoProvider).where(SsoProvider.managed_by == SsoProviderManagedBy.ENV)
     if providers:
         release_stmt = release_stmt.where(SsoProvider.id.not_in({p.id for p in providers}))
     release_stmt = release_stmt.values(
@@ -205,7 +203,8 @@ def _upsert_provider(
         try:
             with session.begin_nested():
                 update_stmt = (
-                    sa.update(SsoProvider)
+                    sa
+                    .update(SsoProvider)
                     .where(SsoProvider.id == provider.id)
                     .values(**update_values)
                 )
@@ -229,7 +228,8 @@ def _sync_domains(
 ) -> None:
     if domains:
         session.execute(
-            sa.delete(SsoProviderDomain)
+            sa
+            .delete(SsoProviderDomain)
             .where(SsoProviderDomain.provider_id == provider_id)
             .where(SsoProviderDomain.domain.not_in(domains))
         )
@@ -243,7 +243,8 @@ def _sync_domains(
             try:
                 with session.begin_nested():
                     update_stmt = (
-                        sa.update(SsoProviderDomain)
+                        sa
+                        .update(SsoProviderDomain)
                         .where(SsoProviderDomain.domain == domain)
                         .values(provider_id=provider_id)
                     )

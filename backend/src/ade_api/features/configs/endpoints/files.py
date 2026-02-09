@@ -56,9 +56,7 @@ router = APIRouter()
 FilePathParam = Annotated[str, Path(alias="filePath")]
 DirectoryPathParam = Annotated[str, Path(alias="directoryPath")]
 
-ConfigurationsServiceDep = Annotated[
-    ConfigurationsService, Depends(get_configurations_service)
-]
+ConfigurationsServiceDep = Annotated[ConfigurationsService, Depends(get_configurations_service)]
 ConfigurationsServiceReadDep = Annotated[
     ConfigurationsService, Depends(get_configurations_service_read)
 ]
@@ -445,7 +443,9 @@ def upsert_config_file(
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a configuration file",
-    description="Delete a file from a draft configuration with optional optimistic concurrency checks.",
+    description=(
+        "Delete a file from a draft configuration with optional optimistic concurrency checks."
+    ),
 )
 def delete_config_file(
     workspace_id: WorkspaceIdPath,

@@ -155,7 +155,8 @@ export default function SetupScreen() {
       navigate(nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
-        const message = error.problem?.detail ?? error.message ?? "Setup failed. Try again.";
+        const detail = error.problem?.detail;
+        const message = typeof detail === "string" ? detail : error.message || "Setup failed. Try again.";
         setFormError(message);
       } else if (error instanceof Error) {
         setFormError(error.message);

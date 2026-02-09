@@ -1,10 +1,17 @@
 import { useMemo, useState } from "react";
 import { fireEvent } from "@testing-library/react";
-import { getCoreRowModel, useReactTable, type ColumnDef, type SortingState } from "@tanstack/react-table";
+import {
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type PaginationState,
+  type RowSelectionState,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table";
 import { describe, expect, it, vi } from "vitest";
 
-import type { FilterJoinOperator } from "@/api/listing";
-import type { DocumentLifecycle } from "@/api/documents";
 import { render, screen } from "@/test/test-utils";
 
 import type { DocumentRow } from "../../../shared/types";
@@ -48,10 +55,10 @@ function TestHarness({
   );
 
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState([]);
-  const [columnVisibility, setColumnVisibility] = useState({});
-  const [rowSelection, setRowSelection] = useState({});
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 });
 
   const table = useReactTable({
     data,
@@ -74,13 +81,6 @@ function TestHarness({
     manualFiltering: true,
     manualSorting: true,
     manualPagination: true,
-    meta: {
-      filterFields: [],
-      joinOperator: "and" as FilterJoinOperator,
-      setJoinOperator: vi.fn(),
-      lifecycle: "active" as DocumentLifecycle,
-      setLifecycle: vi.fn(),
-    },
   });
 
   return (

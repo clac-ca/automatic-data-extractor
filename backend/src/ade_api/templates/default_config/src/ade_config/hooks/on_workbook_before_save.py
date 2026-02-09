@@ -20,16 +20,14 @@ Guidance
 - Keep expensive work in earlier hooks and reuse cached data from ``state`` when possible.
 """
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import openpyxl
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -70,6 +68,7 @@ def on_workbook_before_save(
 # ----------------------------
 # Examples (uncomment in register() to enable)
 # ----------------------------
+
 
 def on_workbook_before_save_example_1_set_properties_and_calc(
     *,
@@ -220,7 +219,6 @@ def on_workbook_before_save_example_3_namedstyle_headers(
         logger.info("Example 3: applied NamedStyle '%s' to header rows", header_style.name)
 
 
-
 def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
     *,
     output_workbook: openpyxl.Workbook,
@@ -364,7 +362,9 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
     header_row_idx = ws.max_row + 1
     ws.append(["sheet", "rows", "columns", "notes"])
 
-    data_sheets = [s for s in (getattr(output_workbook, "worksheets", []) or []) if s.title != ws.title]
+    data_sheets = [
+        s for s in (getattr(output_workbook, "worksheets", []) or []) if s.title != ws.title
+    ]
 
     for s in data_sheets:
         if s.max_row == 1 and s.max_column == 1 and s["A1"].value in (None, ""):
@@ -649,7 +649,9 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
 
     if logger:
         logger.info(
-            "Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, output_workbook.active
+            "Example 9: hidden helper sheets=%d; set active sheet index=%d",
+            hidden,
+            output_workbook.active,
         )
 
 
