@@ -16,10 +16,12 @@ from ade_storage import workspace_config_root
 
 from .constants import (
     CONFIG_COPY_IGNORE_PATTERNS,
+    CONFIG_DEP_FILES,
     CONFIG_EXCLUDED_NAMES,
     CONFIG_EXCLUDED_SUFFIXES,
     CONFIG_IGNORED_FILENAMES,
 )
+from .deps import ENGINE_DEPENDENCY_NAME, has_engine_dependency
 from .exceptions import (
     ConfigEngineDependencyMissingError,
     ConfigImportError,
@@ -27,7 +29,6 @@ from .exceptions import (
     ConfigSourceNotFoundError,
     ConfigStorageNotFoundError,
 )
-from .deps import ENGINE_DEPENDENCY_NAME, has_engine_dependency
 from .schemas import ConfigValidationIssue
 
 _DIGEST_SUFFIXES = {
@@ -41,11 +42,10 @@ _DIGEST_SUFFIXES = {
     ".yaml",
     ".csv",
 }
-_IMPORT_MAX_ARCHIVE_BYTES = 50 * 1024 * 1024  # 50 MiB compressed cap
 _IMPORT_MAX_EXPANDED_BYTES = 200 * 1024 * 1024  # 200 MiB safety cap
 _IMPORT_MAX_ENTRIES = 5000
-_IMPORT_CODE_MAX_BYTES = 512 * 1024  # mirror per-file limits used by write_file
-_IMPORT_ASSET_MAX_BYTES = 5 * 1024 * 1024
+_IMPORT_DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+_IMPORT_ROOT_SENTINELS = {"src", "assets", *CONFIG_DEP_FILES}
 _TEMPLATE_DIR_NAME = "default_config"
 
 
@@ -214,16 +214,18 @@ class ConfigStorage:
         workspace_root = self.workspace_root(workspace_id)
         destination = workspace_root / str(configuration_id)
         staging = workspace_root / f".import-{configuration_id}-{secrets.token_hex(4)}"
+        backup: Path | None = None
 
         workspace_root.mkdir(parents=True, exist_ok=True)
 
         try:
-            if len(archive) > _IMPORT_MAX_ARCHIVE_BYTES:
-                raise ConfigImportError("archive_too_large", limit=_IMPORT_MAX_ARCHIVE_BYTES)
+            max_bytes = self.import_max_bytes()
+            if len(archive) > max_bytes:
+                raise ConfigImportError("archive_too_large", limit=max_bytes)
             if staging.exists():
                 shutil.rmtree(staging, ignore_errors=True)
             staging.mkdir(parents=True, exist_ok=True)
-            _extract_archive(archive, staging)
+            _extract_archive(archive, staging, max_bytes=max_bytes)
             self._ensure_engine_dependency(staging)
 
             if destination.exists():
@@ -231,12 +233,33 @@ class ConfigStorage:
                     raise ConfigPublishConflictError(
                         f"Destination '{destination}' already exists"
                     )
-                shutil.rmtree(destination, ignore_errors=True)
-            staging.replace(destination)
+                backup = (
+                    workspace_root
+                    / f".replace-backup-{configuration_id}-{secrets.token_hex(4)}"
+                )
+                if backup.exists():
+                    shutil.rmtree(backup, ignore_errors=True)
+                destination.replace(backup)
+
+            try:
+                staging.replace(destination)
+            except Exception:
+                if backup is not None and backup.exists() and not destination.exists():
+                    backup.replace(destination)
+                raise
             return None
-        except Exception:
+        finally:
             shutil.rmtree(staging, ignore_errors=True)
-            raise
+            if backup is not None and backup.exists() and destination.exists():
+                shutil.rmtree(backup, ignore_errors=True)
+
+    def import_max_bytes(self) -> int:
+        return self._import_max_bytes()
+
+    def _import_max_bytes(self) -> int:
+        if self._settings is None:
+            return _IMPORT_DEFAULT_MAX_BYTES
+        return self._settings.config_import_max_bytes
 
     def _materialize_from_source(
         self,
@@ -290,53 +313,60 @@ def _collect_digest_files(root: Path) -> list[Path]:
     return files
 
 
-def _extract_archive(archive: bytes, destination: Path) -> None:
+def _extract_archive(archive: bytes, destination: Path, *, max_bytes: int) -> None:
     try:
-        zf = zipfile.ZipFile(io.BytesIO(archive))
+        with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+            entries = [info for info in zf.infolist() if not info.is_dir()]
+            if not entries:
+                raise ConfigImportError("archive_empty", detail="Archive contained no files")
+            if len(entries) > _IMPORT_MAX_ENTRIES:
+                raise ConfigImportError("too_many_entries", limit=_IMPORT_MAX_ENTRIES)
+
+            infos: list[zipfile.ZipInfo] = []
+            normalized_paths: list[PurePosixPath] = []
+            for info in entries:
+                rel_path = _normalize_archive_member(info.filename)
+                if rel_path is None:
+                    continue
+                infos.append(info)
+                normalized_paths.append(rel_path)
+
+            if not normalized_paths:
+                raise ConfigImportError("archive_empty", detail="Archive contained no files")
+
+            rebased_paths = _strip_archive_wrappers(normalized_paths)
+            destination_root = destination.resolve()
+            total_uncompressed = 0
+
+            for info, rel_path in zip(infos, rebased_paths, strict=True):
+                if info.file_size > max_bytes:
+                    raise ConfigImportError(
+                        "file_too_large",
+                        detail=rel_path.as_posix(),
+                        limit=max_bytes,
+                    )
+
+                total_uncompressed += info.file_size
+                if total_uncompressed > _IMPORT_MAX_EXPANDED_BYTES:
+                    raise ConfigImportError("archive_too_large", limit=_IMPORT_MAX_EXPANDED_BYTES)
+
+                target = destination / rel_path.as_posix()
+                resolved = target.resolve()
+                if destination_root not in resolved.parents and resolved != destination_root:
+                    raise ConfigImportError("path_not_allowed", detail=rel_path.as_posix())
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info, "r") as src, target.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
     except zipfile.BadZipFile as exc:
         raise ConfigImportError(
             "invalid_archive",
             detail="Archive is not a valid zip file",
         ) from exc
-
-    entries = [info for info in zf.infolist() if not info.is_dir()]
-    if not entries:
-        raise ConfigImportError("archive_empty", detail="Archive contained no files")
-
-    total_uncompressed = 0
-    entry_count = 0
-    destination_root = destination.resolve()
-    for info in entries:
-        entry_count += 1
-        if entry_count > _IMPORT_MAX_ENTRIES:
-            raise ConfigImportError("too_many_entries", limit=_IMPORT_MAX_ENTRIES)
-
-        rel_path = _normalize_archive_member(info.filename)
-        if rel_path is None:
-            continue
-
-        limit = (
-            _IMPORT_ASSET_MAX_BYTES
-            if rel_path.parts and rel_path.parts[0] == "assets"
-            else _IMPORT_CODE_MAX_BYTES
-        )
-        if info.file_size > limit:
-            raise ConfigImportError("file_too_large", detail=rel_path.as_posix(), limit=limit)
-
-        total_uncompressed += info.file_size
-        if total_uncompressed > _IMPORT_MAX_EXPANDED_BYTES:
-            raise ConfigImportError("archive_too_large", limit=_IMPORT_MAX_EXPANDED_BYTES)
-
-        target = destination / rel_path.as_posix()
-        resolved = target.resolve()
-        if destination_root not in resolved.parents and resolved != destination_root:
-            raise ConfigImportError("path_not_allowed", detail=rel_path.as_posix())
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with zf.open(info, "r") as src, target.open("wb") as dst:
-            shutil.copyfileobj(src, dst)
-
-    if total_uncompressed == 0:
-        raise ConfigImportError("archive_empty", detail="Archive contained no files")
+    except (zipfile.LargeZipFile, RuntimeError, NotImplementedError) as exc:
+        raise ConfigImportError(
+            "invalid_archive",
+            detail="Archive could not be read",
+        ) from exc
 
 
 def _normalize_archive_member(name: str) -> PurePosixPath | None:
@@ -347,13 +377,29 @@ def _normalize_archive_member(name: str) -> PurePosixPath | None:
     rel = PurePosixPath(*parts)
     if rel.is_absolute() or any(part == ".." for part in rel.parts):
         raise ConfigImportError("path_not_allowed", detail=name)
-    if rel.parts[0] in CONFIG_EXCLUDED_NAMES:
+    if any(part in CONFIG_EXCLUDED_NAMES for part in rel.parts):
         return None
     if rel.name in CONFIG_IGNORED_FILENAMES:
         return None
     if rel.suffix in CONFIG_EXCLUDED_SUFFIXES:
         return None
     return rel
+
+
+def _strip_archive_wrappers(paths: list[PurePosixPath]) -> list[PurePosixPath]:
+    """Drop redundant top-level wrapper folders from archive members."""
+
+    rebased = list(paths)
+    while True:
+        first_segments = {path.parts[0] for path in rebased if path.parts}
+        if len(first_segments) != 1:
+            return rebased
+        segment = next(iter(first_segments))
+        if segment in _IMPORT_ROOT_SENTINELS:
+            return rebased
+        if any(len(path.parts) <= 1 for path in rebased):
+            return rebased
+        rebased = [PurePosixPath(*path.parts[1:]) for path in rebased]
 
 
 __all__ = ["ConfigStorage", "compute_config_digest"]

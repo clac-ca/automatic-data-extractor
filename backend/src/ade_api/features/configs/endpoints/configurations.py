@@ -54,8 +54,10 @@ from ..schemas import (
     ConfigurationCreate,
     ConfigurationHistoryScope,
     ConfigurationHistoryStatusFilter,
+    ConfigurationImportGithubRequest,
     ConfigurationPage,
     ConfigurationRecord,
+    ConfigurationReplaceGithubRequest,
     ConfigurationRestoreRequest,
     ConfigurationUpdateRequest,
     ConfigurationWorkspaceHistoryResponse,
@@ -84,6 +86,14 @@ CONFIG_UPDATE_BODY = Body(
     ...,
     description="Update editable draft configuration metadata.",
 )
+CONFIG_IMPORT_GITHUB_BODY = Body(
+    ...,
+    description="Create a draft configuration from a public GitHub repository URL.",
+)
+CONFIG_REPLACE_GITHUB_BODY = Body(
+    ...,
+    description="Replace a draft configuration from a public GitHub repository URL.",
+)
 
 ConfigurationsServiceDep = Annotated[ConfigurationsService, Depends(get_configurations_service)]
 ConfigurationsServiceReadDep = Annotated[
@@ -96,6 +106,25 @@ def _engine_dependency_missing_detail(exc: ConfigEngineDependencyMissingError) -
     if exc.detail:
         detail["detail"] = exc.detail
     return detail
+
+
+def _config_import_error_detail(exc: ConfigImportError) -> dict[str, str | int | bool]:
+    detail: dict[str, str | int | bool] = {"__raw_detail__": True, "error": exc.code}
+    if exc.limit is not None:
+        detail["limit"] = exc.limit
+    if exc.detail:
+        detail["detail"] = exc.detail
+    return detail
+
+
+def _config_import_error_status(exc: ConfigImportError) -> int:
+    if exc.code == "archive_too_large" and exc.limit:
+        return status.HTTP_413_CONTENT_TOO_LARGE
+    if exc.code == "github_rate_limited":
+        return status.HTTP_429_TOO_MANY_REQUESTS
+    if exc.code == "github_download_failed":
+        return status.HTTP_502_BAD_GATEWAY
+    return status.HTTP_400_BAD_REQUEST
 
 
 @router.get(
@@ -385,15 +414,60 @@ def import_configuration(
     except ConfigPublishConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
     except ConfigImportError as exc:
-        status_code = (
-            status.HTTP_413_CONTENT_TOO_LARGE
-            if exc.code == "archive_too_large" and exc.limit
-            else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(
+            _config_import_error_status(exc),
+            detail=_config_import_error_detail(exc),
+        ) from exc
+
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.post(
+    "/configurations/import/github",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a configuration from a GitHub repository URL",
+    response_model_exclude_none=True,
+)
+def import_configuration_from_github(
+    workspace_id: WorkspaceIdPath,
+    service: ConfigurationsServiceDep,
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspaceId}"],
+        ),
+    ],
+    *,
+    payload: ConfigurationImportGithubRequest = CONFIG_IMPORT_GITHUB_BODY,
+) -> ConfigurationRecord:
+    try:
+        record = service.import_configuration_from_github_url(
+            workspace_id=workspace_id,
+            display_name=payload.display_name,
+            url=payload.url,
+            notes=payload.notes,
         )
-        detail: str | dict = exc.code
-        if exc.limit:
-            detail = {"error": exc.code, "limit": exc.limit}
-        raise HTTPException(status_code, detail=detail) from exc
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigEngineDependencyMissingError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_engine_dependency_missing_detail(exc),
+        ) from exc
+    except ConfigPublishConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
+    except ConfigImportError as exc:
+        raise HTTPException(
+            _config_import_error_status(exc),
+            detail=_config_import_error_detail(exc),
+        ) from exc
 
     return ConfigurationRecord.model_validate(record)
 
@@ -522,14 +596,70 @@ def replace_configuration_from_archive(
         }
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     except ConfigImportError as exc:
-        status_code = (
-            status.HTTP_413_CONTENT_TOO_LARGE
-            if exc.code == "archive_too_large" and exc.limit
-            else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(
+            _config_import_error_status(exc),
+            detail=_config_import_error_detail(exc),
+        ) from exc
+
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.put(
+    "/configurations/{configurationId}/import/github",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    summary="Replace a draft configuration from a GitHub repository URL",
+    response_model_exclude_none=True,
+)
+def replace_configuration_from_github(
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
+    request: Request,
+    service: ConfigurationsServiceDep,
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspaceId}"],
+        ),
+    ],
+    *,
+    payload: ConfigurationReplaceGithubRequest = CONFIG_REPLACE_GITHUB_BODY,
+) -> ConfigurationRecord:
+    try:
+        record = service.replace_configuration_from_github_url(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            url=payload.url,
+            if_match=request.headers.get("if-match"),
         )
-        detail: str | dict = exc.code
-        if exc.limit:
-            detail = {"error": exc.code, "limit": exc.limit}
-        raise HTTPException(status_code, detail=detail) from exc
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigStorageNotFoundError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="configuration_storage_missing",
+        ) from exc
+    except ConfigStateError as exc:
+        raise_problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
+    except PreconditionRequiredError:
+        raise_problem("precondition_required", status.HTTP_428_PRECONDITION_REQUIRED)
+    except PreconditionFailedError as exc:
+        raise_problem(
+            "precondition_failed",
+            status.HTTP_412_PRECONDITION_FAILED,
+            meta={"current_etag": format_etag(exc.current_etag)},
+        )
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigImportError as exc:
+        raise HTTPException(
+            _config_import_error_status(exc),
+            detail=_config_import_error_detail(exc),
+        ) from exc
 
     return ConfigurationRecord.model_validate(record)

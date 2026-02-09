@@ -30,7 +30,7 @@ def _problem_response(
     *,
     request: Request,
     status_code: int,
-    detail: str | None,
+    detail: str | dict[str, object] | None,
     errors,
     error_type: str | None = None,
     title: str | None = None,

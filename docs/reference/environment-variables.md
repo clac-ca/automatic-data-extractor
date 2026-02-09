@@ -129,6 +129,7 @@ Auth transport contract:
 | Variable | Component | Required Scope | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `ADE_STORAGE_UPLOAD_MAX_BYTES` | API | optional | `26214400` | max upload size |
+| `ADE_CONFIG_IMPORT_MAX_BYTES` | API | optional | `52428800` | max config zip import bytes (applies to archive size and per-file extraction size) |
 | `ADE_STORAGE_DOCUMENT_RETENTION_PERIOD` | API | optional | `30 days` | document retention |
 | `ADE_DOCUMENTS_UPLOAD_CONCURRENCY_LIMIT` | API | optional | `8` | upload concurrency cap |
 | `ADE_DOCUMENT_CHANGES_RETENTION_DAYS` | API | optional | `14` | change retention |

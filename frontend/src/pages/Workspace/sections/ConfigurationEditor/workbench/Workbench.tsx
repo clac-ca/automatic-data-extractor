@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ChangeEvent,
 } from "react";
 import clsx from "clsx";
 import { useQueryClient } from "@tanstack/react-query";
@@ -61,6 +60,10 @@ import { Separator } from "@/components/ui/separator";
 import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
 import { buildConfigurationEditorPath, buildConfigurationsPath } from "../paths";
 import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
+import {
+  ConfigurationImportDialog,
+  type ConfigurationImportSubmitPayload,
+} from "../components/ConfigurationImportDialog";
 
 const MIN_EDITOR_HEIGHT = 320;
 const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
@@ -235,10 +238,9 @@ export function Workbench({
     setPendingCompletion(info);
   }, []);
   const replaceConfig = useReplaceConfigurationMutation(workspaceId, configId);
-  const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const [actionsMenu, setActionsMenu] = useState<{ x: number; y: number } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishDialogPhase, setPublishDialogPhase] = useState<PublishDialogPhase>("confirm");
   const [publishDialogError, setPublishDialogError] = useState<string | null>(null);
@@ -979,6 +981,13 @@ export function Workbench({
     !runBusy;
   const canReplaceFromArchive =
     isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
+  const replaceDisabledReason = !isDraftConfig
+    ? "Only draft configurations can be replaced."
+    : usingSeed
+      ? "Archive replace is unavailable in preview mode."
+      : !currentFilesetEtag
+        ? "Refresh the file listing and try again."
+        : null;
   const canArchiveDraft = !usingSeed && isDraftConfig;
 
   const handlePublishRequest = useCallback(() => {
@@ -1203,18 +1212,20 @@ export function Workbench({
       return;
     }
     setActionsMenu(null);
-    setReplaceConfirmOpen(true);
+    setReplaceDialogOpen(true);
   }, [canReplaceFromArchive, showConsoleBanner]);
 
-  const handleReplaceFileChange = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0] ?? null;
-      event.target.value = "";
-      if (!file) {
-        return;
+  const handleReplaceArchiveSubmit = useCallback(
+    async (payload: ConfigurationImportSubmitPayload) => {
+      if (!canReplaceFromArchive) {
+        throw new Error("Replace is only available for draft configurations.");
       }
       try {
-        await replaceConfig.mutateAsync({ file, ifMatch: currentFilesetEtag });
+        await replaceConfig.mutateAsync(
+          payload.type === "github"
+            ? { type: "github", url: payload.url, ifMatch: currentFilesetEtag }
+            : { type: "zip", file: payload.file, ifMatch: currentFilesetEtag },
+        );
         tabPersistence?.clear?.();
         files.closeAllTabs();
         setFileId(undefined);
@@ -1223,30 +1234,29 @@ export function Workbench({
         const nextTree = listing ? createWorkbenchTreeFromListing(listing) : null;
         const firstFile = nextTree ? findFirstFile(nextTree) : null;
         setPendingOpenFileId(firstFile?.id ?? null);
-        showConsoleBanner("Configuration replaced from archive.", { intent: "success", duration: 6000 });
+        setReplaceDialogOpen(false);
+        showConsoleBanner("Configuration import completed.", { intent: "success", duration: 6000 });
       } catch (error) {
         const message =
           error instanceof ApiError && error.status === 412
             ? "Replace blocked: the configuration changed on the server. Reload and try again."
             : error instanceof ApiError && error.status === 428
               ? "Replace blocked: refresh the file list and try again."
-            : error instanceof Error
-              ? error.message
-              : "Unable to replace configuration.";
-        pushConsoleError(message);
-        showConsoleBanner(message, { intent: "danger", duration: 6000 });
+              : error instanceof Error
+                ? error.message
+                : "Unable to replace configuration.";
+        throw new Error(message);
       }
     },
     [
+      canReplaceFromArchive,
       replaceConfig,
       currentFilesetEtag,
       tabPersistence,
       files,
       filesQuery,
       setFileId,
-      setPendingOpenFileId,
       showConsoleBanner,
-      pushConsoleError,
     ],
   );
 
@@ -1275,7 +1285,7 @@ export function Workbench({
       },
       {
         id: "replace",
-        label: "Import from zip",
+        label: "Import",
         disabled: !canReplaceFromArchive,
         onSelect: handleReplaceArchiveRequest,
       },
@@ -1614,58 +1624,19 @@ export function Workbench({
         />
       ) : null}
 
-      <input
-        ref={replaceInputRef}
-        type="file"
-        accept=".zip"
-        onChange={handleReplaceFileChange}
-        className="hidden"
+      <ConfigurationImportDialog
+        open={replaceDialogOpen}
+        mode="replace"
+        isSubmitting={replaceConfig.isPending}
+        canSubmit={canReplaceFromArchive}
+        disabledReason={replaceDisabledReason}
+        hasUnsavedChanges={files.isDirty}
+        onClose={() => setReplaceDialogOpen(false)}
+        onSubmit={handleReplaceArchiveSubmit}
+        onError={(message) => {
+          showConsoleBanner(message, { intent: "danger", duration: 6000 });
+        }}
       />
-      {replaceConfirmOpen ? (
-        <div className="fixed inset-0 z-[var(--app-z-modal)] flex items-center justify-center bg-overlay-strong px-4">
-          <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="replace-config-title"
-          >
-            <div className="space-y-2">
-              <h2 id="replace-config-title" className="text-lg font-semibold text-foreground">
-                Import from zip
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Importing will replace this configuration’s current code with the uploaded archive. Unsaved editor changes
-                will be discarded.
-              </p>
-              {!canReplaceFromArchive ? (
-                <p className="text-sm font-medium text-destructive">Only draft configurations can be replaced.</p>
-              ) : null}
-              {files.isDirty ? (
-                <p className="text-sm font-medium text-accent-foreground">You have unsaved changes that will be lost.</p>
-              ) : null}
-            </div>
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => setReplaceConfirmOpen(false)}
-                disabled={replaceConfig.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  setReplaceConfirmOpen(false);
-                  replaceInputRef.current?.click();
-                }}
-                disabled={!canReplaceFromArchive || replaceConfig.isPending}
-                isLoading={replaceConfig.isPending}
-              >
-                Continue
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <PublishConfigurationDialog
         open={publishDialogOpen}
@@ -1719,7 +1690,7 @@ export function Workbench({
           guidedTourOpen &&
           !usingSeed &&
           !publishDialogOpen &&
-          !replaceConfirmOpen &&
+          !replaceDialogOpen &&
           !duplicateDialogOpen &&
           !archiveDraftDialogOpen &&
           !titleMenuOpen

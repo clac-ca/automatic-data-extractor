@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -13,6 +13,10 @@ import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext"
 import { useNotifications } from "@/providers/notifications";
 import { buildConfigurationEditorPath } from "../paths";
 import { normalizeConfigStatus, sortByUpdatedDesc, suggestDuplicateName } from "../utils/configs";
+import {
+  ConfigurationImportDialog,
+  type ConfigurationImportSubmitPayload,
+} from "../components/ConfigurationImportDialog";
 import { LauncherPrimaryActions } from "./components/LauncherPrimaryActions";
 import { RecentConfigurationList, type LauncherConfigurationItem } from "./components/RecentConfigurationList";
 
@@ -34,7 +38,6 @@ export function ConfigurationLauncherPage() {
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const { notifyToast } = useNotifications();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
   const createConfiguration = useCreateConfigurationMutation(workspace.id);
@@ -43,6 +46,7 @@ export function ConfigurationLauncherPage() {
   const archiveConfiguration = useArchiveConfigurationMutation(workspace.id);
 
   const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const configurations = configurationsQuery.data?.items ?? [];
   const configurationsById = useMemo(
@@ -123,31 +127,26 @@ export function ConfigurationLauncherPage() {
     workspace.name,
   ]);
 
-  const handleImportInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0] ?? null;
-      event.target.value = "";
-      if (!file) {
-        return;
-      }
+  const handleImportFromDialog = useCallback(
+    async (payload: ConfigurationImportSubmitPayload) => {
       const displayName = suggestAvailableName("Imported configuration", existingConfigNames);
-      importConfiguration.mutate(
-        { displayName, file },
-        {
-          onSuccess(record) {
-            navigate(buildConfigurationEditorPath(workspace.id, record.id));
-          },
-          onError(error) {
-            notifyToast({
-              title: error instanceof Error ? error.message : "Unable to import configuration.",
-              intent: "danger",
-              duration: 5000,
-            });
-          },
-        },
+      const record = await importConfiguration.mutateAsync(
+        payload.type === "github"
+          ? {
+              type: "github",
+              displayName,
+              url: payload.url,
+            }
+          : {
+              type: "zip",
+              displayName,
+              file: payload.file,
+            },
       );
+      setImportDialogOpen(false);
+      navigate(buildConfigurationEditorPath(workspace.id, record.id));
     },
-    [existingConfigNames, importConfiguration, navigate, notifyToast, workspace.id],
+    [existingConfigNames, importConfiguration, navigate, workspace.id],
   );
 
   const handleSaveAsNewDraft = useCallback(
@@ -229,7 +228,7 @@ export function ConfigurationLauncherPage() {
           isCreatingDraft={createConfiguration.isPending}
           isImporting={importConfiguration.isPending}
           onCreateDraft={handleCreateDraft}
-          onImportConfiguration={() => fileInputRef.current?.click()}
+          onImportConfiguration={() => setImportDialogOpen(true)}
           onOpenActiveConfiguration={() => {
             if (!activeConfiguration) {
               return;
@@ -257,12 +256,19 @@ export function ConfigurationLauncherPage() {
         />
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".zip"
-        className="hidden"
-        onChange={handleImportInputChange}
+      <ConfigurationImportDialog
+        open={importDialogOpen}
+        mode="create"
+        isSubmitting={importConfiguration.isPending}
+        onClose={() => setImportDialogOpen(false)}
+        onSubmit={handleImportFromDialog}
+        onError={(message) => {
+          notifyToast({
+            title: message,
+            intent: "danger",
+            duration: 6000,
+          });
+        }}
       />
 
       <ConfirmDialog

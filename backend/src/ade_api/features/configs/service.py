@@ -37,20 +37,21 @@ from .exceptions import (
     ConfigurationNotFoundError,
 )
 from .filters import apply_config_filters
+from .github_import import download_github_archive, normalize_github_import_url
 from .repository import ConfigurationsRepository
 from .schemas import (
+    ConfigSource,
+    ConfigSourceClone,
+    ConfigSourceTemplate,
     ConfigurationChangeSummary,
     ConfigurationHistoryEntry,
     ConfigurationHistoryScope,
     ConfigurationHistoryStatusFilter,
-    ConfigurationWorkspaceHistoryResponse,
-    ConfigSource,
-    ConfigSourceClone,
-    ConfigSourceTemplate,
     ConfigurationPage,
     ConfigurationRecord,
     ConfigurationRestoreRequest,
     ConfigurationUpdateRequest,
+    ConfigurationWorkspaceHistoryResponse,
 )
 from .storage import ConfigStorage
 
@@ -296,9 +297,17 @@ class ConfigurationsService:
             notes=notes,
             published_digest=None,
         )
-        self._session.add(record)
-        self._session.flush()
-        self._session.refresh(record)
+        try:
+            self._session.add(record)
+            self._session.flush()
+            self._session.refresh(record)
+        except Exception:
+            self._storage.delete_config(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                missing_ok=True,
+            )
+            raise
 
         logger.info(
             "config.import.success",
@@ -310,6 +319,22 @@ class ConfigurationsService:
             ),
         )
         return record
+
+    def import_configuration_from_github_url(
+        self,
+        *,
+        workspace_id: UUID,
+        display_name: str,
+        url: str,
+        notes: str | None = None,
+    ) -> Configuration:
+        archive = self._download_archive_from_github_url(url)
+        return self.import_configuration_from_archive(
+            workspace_id=workspace_id,
+            display_name=display_name,
+            archive=archive,
+            notes=notes,
+        )
 
     def restore_configuration(
         self,
@@ -444,15 +469,22 @@ class ConfigurationsService:
                     updated_at=config.updated_at,
                     activated_at=config.activated_at,
                     version_label=version_labels.get(config.id),
-                    is_current=focus_configuration is not None and config.id == focus_configuration.id,
+                    is_current=(
+                        focus_configuration is not None
+                        and config.id == focus_configuration.id
+                    ),
                     in_focus_lineage=config.id in focus_lineage_ids,
                     changes_unavailable=changes_unavailable,
                     changes=changes,
                 )
             )
         return ConfigurationWorkspaceHistoryResponse(
-            current_configuration_id=focus_configuration.id if focus_configuration is not None else None,
-            focus_configuration_id=focus_configuration.id if focus_configuration is not None else None,
+            current_configuration_id=(
+                focus_configuration.id if focus_configuration is not None else None
+            ),
+            focus_configuration_id=(
+                focus_configuration.id if focus_configuration is not None else None
+            ),
             scope=scope,
             status_filter=status_filter,
             next_cursor=next_cursor,
@@ -619,6 +651,22 @@ class ConfigurationsService:
             ),
         )
         return configuration
+
+    def replace_configuration_from_github_url(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        url: str,
+        if_match: str | None,
+    ) -> Configuration:
+        archive = self._download_archive_from_github_url(url)
+        return self.replace_configuration_from_archive(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            archive=archive,
+            if_match=if_match,
+        )
 
     def list_files(
         self,
@@ -1392,6 +1440,11 @@ class ConfigurationsService:
     def _mark_configuration_content_changed(configuration: Configuration) -> None:
         configuration.published_digest = None
         configuration.updated_at = utc_now()
+
+    def _download_archive_from_github_url(self, url: str) -> bytes:
+        owner, repo, ref = normalize_github_import_url(url)
+        max_bytes = self._storage.import_max_bytes()
+        return download_github_archive(owner, repo, ref, max_bytes=max_bytes)
 
     def _current_fileset_hash(self, config_path: Path) -> str:
         index = _build_file_index(config_path)

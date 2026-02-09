@@ -81,6 +81,7 @@ def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("ADE_API_PROXY_HEADERS_ENABLED", "false")
     monkeypatch.setenv("ADE_API_FORWARDED_ALLOW_IPS", "10.0.0.1,10.0.0.2")
     monkeypatch.setenv("ADE_API_THREADPOOL_TOKENS", "64")
+    monkeypatch.setenv("ADE_CONFIG_IMPORT_MAX_BYTES", "73400320")
     monkeypatch.setenv("ADE_DATABASE_CONNECTION_BUDGET", "120")
     monkeypatch.setenv("ADE_AUTH_ENFORCE_LOCAL_MFA", "true")
 
@@ -89,6 +90,7 @@ def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.api_proxy_headers_enabled is False
     assert settings.api_forwarded_allow_ips == "10.0.0.1,10.0.0.2"
     assert settings.api_threadpool_tokens == 64
+    assert settings.config_import_max_bytes == 73400320
     assert settings.database_connection_budget == 120
     assert settings.auth_enforce_local_mfa is True
 

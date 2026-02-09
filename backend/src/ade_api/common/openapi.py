@@ -84,7 +84,13 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                     "type": {"type": "string"},
                     "title": {"type": "string"},
                     "status": {"type": "integer"},
-                    "detail": {"type": "string", "nullable": True},
+                    "detail": {
+                        "nullable": True,
+                        "anyOf": [
+                            {"type": "string"},
+                            {"type": "object", "additionalProperties": True},
+                        ],
+                    },
                     "instance": {"type": "string"},
                     "requestId": {"type": "string", "nullable": True},
                     "errors": {

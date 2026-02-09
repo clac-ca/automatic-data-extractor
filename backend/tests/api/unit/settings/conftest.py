@@ -39,6 +39,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_BLOB_UPLOAD_CHUNK_SIZE_BYTES",
         "ADE_BLOB_DOWNLOAD_CHUNK_SIZE_BYTES",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
+        "ADE_CONFIG_IMPORT_MAX_BYTES",
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
         "ADE_DATABASE_URL",
         "ADE_DATABASE_CONNECTION_BUDGET",

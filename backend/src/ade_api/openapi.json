@@ -9705,6 +9705,99 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspaceId}/configurations/import/github": {
+      "post": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Create a configuration from a GitHub repository URL",
+        "operationId": "import_configuration_from_github_api_v1_workspaces__workspaceId__configurations_import_github_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigurationImportGithubRequest",
+                "description": "Create a draft configuration from a public GitHub repository URL."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive": {
       "post": {
         "tags": [
@@ -9941,6 +10034,111 @@
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_replace_configuration_from_archive_api_v1_workspaces__workspaceId__configurations__configurationId__import_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import/github": {
+      "put": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Replace a draft configuration from a GitHub repository URL",
+        "operationId": "replace_configuration_from_github_api_v1_workspaces__workspaceId__configurations__configurationId__import_github_put",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configurationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configurationid"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigurationReplaceGithubRequest",
+                "description": "Replace a draft configuration from a public GitHub repository URL."
               }
             }
           }
@@ -14345,6 +14543,40 @@
         "title": "ConfigurationHistoryEntry",
         "description": "Single history row for a configuration family."
       },
+      "ConfigurationImportGithubRequest": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Display Name"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Url"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "display_name",
+          "url"
+        ],
+        "title": "ConfigurationImportGithubRequest",
+        "description": "Create a configuration by importing a GitHub archive URL."
+      },
       "ConfigurationPage": {
         "properties": {
           "items": {
@@ -14474,6 +14706,22 @@
         ],
         "title": "ConfigurationRecord",
         "description": "Serialized configuration metadata."
+      },
+      "ConfigurationReplaceGithubRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ConfigurationReplaceGithubRequest",
+        "description": "Replace a draft configuration using a GitHub archive URL."
       },
       "ConfigurationRestoreRequest": {
         "properties": {
@@ -19601,8 +19849,16 @@
             "type": "integer"
           },
           "detail": {
-            "type": "string",
-            "nullable": true
+            "nullable": true,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": true
+              }
+            ]
           },
           "instance": {
             "type": "string"

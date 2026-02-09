@@ -53,7 +53,7 @@ export function LauncherPrimaryActions({
           isLoading={isImporting}
         >
           <Upload className="h-4 w-4" />
-          Import configuration (.zip)
+          Import configuration
         </Button>
         <Button
           type="button"

@@ -103,7 +103,7 @@ class ProblemDetails(BaseSchema):
     type: str
     title: str
     status: int
-    detail: str | None = None
+    detail: str | dict[str, Any] | None = None
     instance: str
     request_id: str | None = Field(default=None, alias="requestId")
     errors: list[ProblemDetailsErrorItem] | None = None
@@ -117,12 +117,13 @@ class ApiError(RuntimeError):
         *,
         error_type: str,
         status_code: int,
-        detail: str | None = None,
+        detail: str | dict[str, Any] | None = None,
         title: str | None = None,
         errors: list[ProblemDetailsErrorItem] | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(detail or title or error_type)
+        message = detail if isinstance(detail, str) and detail else title or error_type
+        super().__init__(message)
         self.error_type = error_type
         self.status_code = status_code
         self.detail = detail
@@ -189,8 +190,8 @@ def error_items_from_pydantic(errors: Iterable[dict[str, Any]]) -> list[ProblemD
 
 def coerce_detail_and_errors(
     detail: Any,
-) -> tuple[str | None, list[ProblemDetailsErrorItem] | None]:
-    """Normalize mixed ``detail`` payloads into a detail string + error items."""
+) -> tuple[str | dict[str, Any] | None, list[ProblemDetailsErrorItem] | None]:
+    """Normalize mixed ``detail`` payloads into API detail payload + error items."""
 
     if detail is None:
         return None, None
@@ -202,26 +203,40 @@ def coerce_detail_and_errors(
         return None, error_items_from_pydantic(detail)
 
     if isinstance(detail, dict):
-        detail_text: str | None = None
+        payload = dict(detail)
+        raw_detail = bool(payload.pop("__raw_detail__", False))
+        detail_text: str | dict[str, Any] | None = None
         errors: list[ProblemDetailsErrorItem] | None = None
 
-        if "errors" in detail and isinstance(detail["errors"], list):
-            errors = error_items_from_pydantic(detail["errors"])
+        if "errors" in payload and isinstance(payload["errors"], list):
+            errors = error_items_from_pydantic(payload["errors"])
 
-        if "issues" in detail and isinstance(detail["issues"], list):
-            issues = error_items_from_pydantic(detail["issues"])
+        if "issues" in payload and isinstance(payload["issues"], list):
+            issues = error_items_from_pydantic(payload["issues"])
             if issues:
                 errors = issues
                 if detail_text is None:
                     detail_text = "Validation error"
 
-        if "detail" in detail and isinstance(detail["detail"], str):
-            detail_text = detail["detail"]
-        elif "message" in detail and isinstance(detail["message"], str):
-            detail_text = detail["message"]
+        if raw_detail:
+            code = payload.get("error") or payload.get("code")
+            message = payload.get("detail") or payload.get("message")
+            if errors is None and (code or message):
+                errors = [
+                    ProblemDetailsErrorItem(
+                        message=str(message or code or "Request failed"),
+                        code=str(code) if code else None,
+                    )
+                ]
+            return payload, errors
 
-        if "error" in detail:
-            error_payload = detail["error"]
+        if "detail" in payload and isinstance(payload["detail"], str):
+            detail_text = payload["detail"]
+        elif "message" in payload and isinstance(payload["message"], str):
+            detail_text = payload["message"]
+
+        if "error" in payload:
+            error_payload = payload["error"]
             if isinstance(error_payload, dict):
                 code = error_payload.get("code") or error_payload.get("error")
                 message = error_payload.get("message") or error_payload.get("detail")
@@ -235,7 +250,7 @@ def coerce_detail_and_errors(
                     ]
             else:
                 code = str(error_payload)
-                detail_text = detail_text or detail.get("message") or code
+                detail_text = detail_text or payload.get("message") or code
                 if errors is None:
                     errors = [
                         ProblemDetailsErrorItem(
@@ -243,9 +258,9 @@ def coerce_detail_and_errors(
                             code=code,
                         )
                     ]
-        elif "code" in detail and isinstance(detail.get("code"), str):
-            code = detail["code"]
-            detail_text = detail_text or detail.get("message") or code
+        elif "code" in payload and isinstance(payload.get("code"), str):
+            code = payload["code"]
+            detail_text = detail_text or payload.get("message") or code
             if errors is None:
                 errors = [
                     ProblemDetailsErrorItem(
@@ -254,14 +269,14 @@ def coerce_detail_and_errors(
                     )
                 ]
 
-        if "latest_cursor" in detail:
-            cursor = detail.get("latest_cursor")
+        if "latest_cursor" in payload:
+            cursor = payload.get("latest_cursor")
             if cursor:
                 suffix = f" (latest_cursor={cursor})"
                 detail_text = (detail_text or "Resync required") + suffix
 
-        if "limit" in detail:
-            limit = detail["limit"]
+        if "limit" in payload:
+            limit = payload["limit"]
             if detail_text:
                 detail_text = f"{detail_text} (limit={limit})"
             else:
@@ -280,7 +295,7 @@ def build_problem_details(
     status_code: int,
     instance: str,
     request_id: str | None,
-    detail: str | None = None,
+    detail: str | dict[str, Any] | None = None,
     errors: list[ProblemDetailsErrorItem] | None = None,
     error_type: str | None = None,
     title: str | None = None,

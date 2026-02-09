@@ -30,6 +30,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.public_web_url == "http://localhost:8000"
     assert settings.server_cors_origins == []
     assert settings.server_cors_origin_regex is None
+    assert settings.config_import_max_bytes == 50 * 1024 * 1024
     url = make_url(str(settings.database_url))
     assert url.drivername == "postgresql+psycopg"
     assert url.host == "postgres"
