@@ -19,7 +19,7 @@ class ApplicationSetting(Base):
 
     __tablename__ = "application_settings"
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=False)
     schema_version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

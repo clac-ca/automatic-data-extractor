@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ade_db import GUID, Base, TimestampMixin, UTCDateTime, UUIDPrimaryKeyMixin
@@ -50,7 +50,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_service_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
