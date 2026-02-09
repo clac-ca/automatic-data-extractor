@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
@@ -24,7 +25,7 @@ class ParsedQuery:
 @dataclass(frozen=True)
 class SearchField:
     id: str
-    predicate: Callable[[str], ColumnElement[object]]
+    predicate: Callable[[str], ColumnElement[Any]]
 
 
 class SearchRegistry:
@@ -78,8 +79,8 @@ def escape_like(token: str) -> str:
     )
 
 
-def build_like_predicate(column: ColumnElement[object]) -> Callable[[str], ColumnElement[object]]:
-    def _predicate(token: str) -> ColumnElement[object]:
+def build_like_predicate(column: ColumnElement[Any]) -> Callable[[str], ColumnElement[Any]]:
+    def _predicate(token: str) -> ColumnElement[Any]:
         escaped = escape_like(token)
         pattern = f"%{escaped}%"
         return column.ilike(pattern, escape=LIKE_ESCAPE)
@@ -92,7 +93,7 @@ def build_q_predicate(
     resource: str,
     q: str | None,
     registry: SearchRegistry,
-) -> ColumnElement[object] | None:
+) -> ColumnElement[Any] | None:
     parsed = parse_q(q)
     if not parsed.tokens:
         return None
@@ -104,7 +105,7 @@ def build_q_predicate(
             detail=f"q is not supported for resource '{resource}'.",
         )
 
-    token_predicates: list[ColumnElement[object]] = []
+    token_predicates: list[ColumnElement[Any]] = []
     for token in parsed.tokens:
         field_predicates = [field.predicate(token) for field in fields]
         token_predicates.append(or_(*field_predicates))

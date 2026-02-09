@@ -323,10 +323,10 @@ def list_sso_providers(
 def authorize_sso(
     request: Request,
     return_to: Annotated[str | None, Query(alias="returnTo")] = None,
-    settings: Annotated[Settings, Depends(get_settings)] = None,
-    db: Annotated[Session, Depends(get_db_write)] = None,
+    *,
+    settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[Session, Depends(get_db_write)],
 ) -> Response:
-    settings = settings or get_settings()
     if not _AUTHORIZE_LIMITER.allow(_rate_limit_key(request, "authorize")):
         return _error_response(request, settings, code="RATE_LIMITED")
 
@@ -385,10 +385,9 @@ def authorize_sso(
 )
 def callback_sso(
     request: Request,
-    settings: Annotated[Settings, Depends(get_settings)] = None,
-    db: Annotated[Session, Depends(get_db_write)] = None,
+    settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[Session, Depends(get_db_write)],
 ) -> Response:
-    settings = settings or get_settings()
     try:
         if not _CALLBACK_LIMITER.allow(_rate_limit_key(request, "callback")):
             return _error_response(request, settings, code="RATE_LIMITED")

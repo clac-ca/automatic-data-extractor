@@ -428,7 +428,7 @@ def require_permission(
             raise PermissionDeniedError(
                 permission_key=permission_key,
                 scope_type="workspace" if workspace_id else "global",
-                scope_id=workspace_id,
+                scope_id=str(workspace_id) if workspace_id else None,
             )
         user = db.get(User, principal.user_id)
         if user is None:

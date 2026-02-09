@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
+from typing import Literal
 
 from fastapi import Response
 
@@ -13,7 +14,7 @@ from ade_api.settings import Settings
 @dataclass(frozen=True, slots=True)
 class CookieSettings:
     secure: bool
-    samesite: str
+    samesite: Literal["lax", "strict", "none"]
 
 
 def _resolve_cookie_settings(settings: Settings) -> CookieSettings:

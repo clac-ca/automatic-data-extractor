@@ -7,6 +7,7 @@ import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import MetaData, inspect
 from sqlalchemy.engine import URL, make_url
@@ -17,7 +18,9 @@ from ..settings import Settings
 
 
 def _normalize(path: Path | str | None) -> Path | None:
-    if path in (None, "", "."):
+    if path is None:
+        return None
+    if isinstance(path, str) and path in {"", "."}:
         return None
     candidate = path if isinstance(path, Path) else Path(path)
     resolved = candidate.expanduser().resolve()
@@ -114,7 +117,7 @@ def _cleanup_targets(targets: Iterable[Path]) -> list[tuple[Path, Exception]]:
     return errors
 
 
-def _build_blob_container_client(settings: Settings):
+def _build_blob_container_client(settings: Settings) -> Any:
     try:
         from azure.identity import DefaultAzureCredential
         from azure.storage.blob import BlobServiceClient
@@ -171,7 +174,7 @@ def _delete_blob_prefix(settings: Settings) -> tuple[int, list[Exception]]:
     prefix_label = prefix or "(root)"
     print(f"Removing blobs under prefix: {prefix_label}")
 
-    def _iter_blobs(include: list[str] | None) -> Iterable:
+    def _iter_blobs(include: list[str] | None) -> Iterable[Any]:
         try:
             if include:
                 return container_client.list_blobs(name_starts_with=prefix, include=include)
@@ -336,10 +339,10 @@ def main(argv: list[str] | None = None) -> int:
         print("❌ storage reset incomplete:")
         if drop_error:
             print(f"  - database reset failed: {drop_error}")
-        for path, exc in errors:
-            print(f"  - {path}: {exc}")
-        for exc in blob_errors:
-            print(f"  - blob cleanup failed: {exc}")
+        for path, error in errors:
+            print(f"  - {path}: {error}")
+        for error in blob_errors:
+            print(f"  - blob cleanup failed: {error}")
         return 1
 
     print("🧹 storage reset complete")

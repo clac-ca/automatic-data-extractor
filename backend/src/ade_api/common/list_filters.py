@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import and_, or_
+from sqlalchemy.orm.attributes import QueryableAttribute
 from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.common.validators import normalize_utc
@@ -69,7 +70,7 @@ RELATIVE_RANGE_PATTERN = re.compile(r"^(past|last|next)_(\d+)_days$")
 @dataclass(frozen=True)
 class FilterField:
     id: str
-    column: ColumnElement[Any]
+    column: ColumnElement[Any] | QueryableAttribute[Any]
     operators: set[FilterOperator]
     value_type: FilterValueType
     enum_type: type[Enum] | None = None
@@ -174,10 +175,12 @@ def _resolve_relative_date_range(value: Any) -> list[Any] | None:
             return [_start_of_day(timestamp), _end_of_day(timestamp)]
 
         try:
-            timestamp = normalize_utc(token)
+            normalized = normalize_utc(token)
         except ValueError:
             return None
-        return [_start_of_day(timestamp), _end_of_day(timestamp)]
+        if normalized is None:
+            return None
+        return [_start_of_day(normalized), _end_of_day(normalized)]
 
     return None
 
@@ -416,6 +419,11 @@ def build_predicate(parsed: ParsedFilter) -> ColumnElement[Any]:
     if operator == FilterOperator.NE:
         return column.is_not(None) if value is None else column != value
     if operator == FilterOperator.BETWEEN:
+        if not isinstance(value, list) or len(value) != 2:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Filter '{parsed.field.id}' expects a 2-element array value",
+            )
         return column.between(value[0], value[1])
 
     builder = _PREDICATE_BUILDERS.get(operator)
@@ -428,7 +436,10 @@ def build_predicate(parsed: ParsedFilter) -> ColumnElement[Any]:
     )
 
 
-_PredicateBuilder = Callable[[ColumnElement[Any], Any], ColumnElement[Any]]
+_PredicateBuilder = Callable[
+    [ColumnElement[Any] | QueryableAttribute[Any], Any],
+    ColumnElement[Any],
+]
 _PREDICATE_BUILDERS: dict[FilterOperator, _PredicateBuilder] = {
     FilterOperator.IN: lambda column, value: column.in_(value),
     FilterOperator.NOT_IN: lambda column, value: ~column.in_(value),
@@ -637,7 +648,10 @@ def _coerce_uuid(value: Any, field_id: str) -> UUID:
 
 def _coerce_datetime(value: Any, field_id: str) -> datetime:
     if isinstance(value, datetime):
-        return normalize_utc(value)
+        normalized = normalize_utc(value)
+        if normalized is None:
+            _raise_field_value_error(field_id, "an ISO datetime or epoch value")
+        return normalized
     if isinstance(value, (int, float)):
         return _epoch_to_datetime(float(value))
     if isinstance(value, str):
@@ -647,9 +661,12 @@ def _coerce_datetime(value: Any, field_id: str) -> datetime:
             if epoch_value is not None:
                 return _epoch_to_datetime(epoch_value)
         try:
-            return normalize_utc(trimmed)
+            normalized = normalize_utc(trimmed)
         except ValueError as exc:
             raise _field_value_error(field_id, "an ISO datetime or epoch value") from exc
+        if normalized is None:
+            _raise_field_value_error(field_id, "an ISO datetime or epoch value")
+        return normalized
     _raise_field_value_error(field_id, "an ISO datetime or epoch value")
 
 

@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
-from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
+from ade_api.common.cursor_listing import CursorPage, ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_db.models import (
     FileVersion,
@@ -47,7 +47,7 @@ class RunsRepository:
         limit: int,
         cursor: str | None,
         include_total: bool,
-    ):
+    ) -> CursorPage[Run]:
         """Return paginated runs for ``workspace_id`` filtered by config, status, or document."""
 
         stmt: Select = select(Run).where(Run.workspace_id == workspace_id)

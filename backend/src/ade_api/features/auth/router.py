@@ -127,7 +127,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def login_local(
         payload: AuthLoginRequest,
         db: Annotated[Session, Depends(get_db_write)],
-    ) -> AuthLoginSuccess | AuthLoginMfaRequired:
+    ) -> Response | AuthLoginMfaRequired:
         service = AuthnService(session=db, settings=settings)
         try:
             login_result = service.login_local(
@@ -135,7 +135,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
                 password=payload.password.get_secret_value(),
             )
         except MfaRequiredError as exc:
-            return AuthLoginMfaRequired(challengeToken=exc.challenge_token)
+            return AuthLoginMfaRequired(challenge_token=exc.challenge_token)
         except LoginError as exc:
             # Failed-login counters/lockouts must be persisted even when returning 401.
             db.commit()
@@ -153,16 +153,16 @@ def create_auth_router(settings: Settings) -> APIRouter:
 
         response = Response(
             content=AuthLoginSuccess(
-                mfaSetupRecommended=login_result.mfa_setup_recommended,
-                mfaSetupRequired=login_result.mfa_setup_required,
-                passwordChangeRequired=login_result.password_change_required,
+                mfa_setup_recommended=login_result.mfa_setup_recommended,
+                mfa_setup_required=login_result.mfa_setup_required,
+                password_change_required=login_result.password_change_required,
             ).model_dump_json(),
             media_type="application/json",
             status_code=status.HTTP_200_OK,
         )
         set_session_cookie(response, settings, login_result.session_token)
         set_csrf_cookie(response, settings)
-        return response  # type: ignore[return-value]
+        return response
 
     @router.post(
         "/logout",
@@ -243,9 +243,9 @@ def create_auth_router(settings: Settings) -> APIRouter:
         service = AuthnService(session=db, settings=settings)
         uri, issuer, account_name = service.start_totp_enrollment(user=user)
         return AuthMfaEnrollStartResponse(
-            otpauthUri=uri,
+            otpauth_uri=uri,
             issuer=issuer,
-            accountName=account_name,
+            account_name=account_name,
         )
 
     @router.get(
@@ -268,11 +268,11 @@ def create_auth_router(settings: Settings) -> APIRouter:
         )
         return AuthMfaStatusResponse(
             enabled=enabled,
-            enrolledAt=enrolled_at,
-            recoveryCodesRemaining=recovery_codes_remaining,
-            onboardingRecommended=onboarding_recommended,
-            onboardingRequired=onboarding_required,
-            skipAllowed=skip_allowed,
+            enrolled_at=enrolled_at,
+            recovery_codes_remaining=recovery_codes_remaining,
+            onboarding_recommended=onboarding_recommended,
+            onboarding_required=onboarding_required,
+            skip_allowed=skip_allowed,
         )
 
     @router.post(
@@ -289,7 +289,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     ) -> AuthMfaEnrollConfirmResponse:
         service = AuthnService(session=db, settings=settings)
         recovery_codes = service.confirm_totp_enrollment(user=user, code=payload.code)
-        return AuthMfaEnrollConfirmResponse(recoveryCodes=recovery_codes)
+        return AuthMfaEnrollConfirmResponse(recovery_codes=recovery_codes)
 
     @router.post(
         "/mfa/totp/recovery/regenerate",
@@ -305,7 +305,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     ) -> AuthMfaEnrollConfirmResponse:
         service = AuthnService(session=db, settings=settings)
         recovery_codes = service.regenerate_recovery_codes(user=user, code=payload.code)
-        return AuthMfaEnrollConfirmResponse(recoveryCodes=recovery_codes)
+        return AuthMfaEnrollConfirmResponse(recovery_codes=recovery_codes)
 
     @router.post(
         "/mfa/challenge/verify",
@@ -316,7 +316,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def mfa_verify_challenge(
         payload: AuthMfaChallengeVerifyRequest,
         db: Annotated[Session, Depends(get_db_write)],
-    ) -> AuthLoginSuccess:
+    ) -> Response:
         service = AuthnService(session=db, settings=settings)
         login_result = service.verify_challenge(
             challenge_token=payload.challenge_token,
@@ -324,16 +324,16 @@ def create_auth_router(settings: Settings) -> APIRouter:
         )
         response = Response(
             content=AuthLoginSuccess(
-                mfaSetupRecommended=login_result.mfa_setup_recommended,
-                mfaSetupRequired=login_result.mfa_setup_required,
-                passwordChangeRequired=login_result.password_change_required,
+                mfa_setup_recommended=login_result.mfa_setup_recommended,
+                mfa_setup_required=login_result.mfa_setup_required,
+                password_change_required=login_result.password_change_required,
             ).model_dump_json(),
             media_type="application/json",
             status_code=status.HTTP_200_OK,
         )
         set_session_cookie(response, settings, login_result.session_token)
         set_csrf_cookie(response, settings)
-        return response  # type: ignore[return-value]
+        return response
 
     @router.delete(
         "/mfa/totp",

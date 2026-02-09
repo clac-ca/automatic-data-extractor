@@ -240,10 +240,10 @@ class UsersService:
         )
         return UserCreateResponse(
             user=self._serialize_user(user),
-            passwordProvisioning=UserPasswordProvisioning(
+            password_provisioning=UserPasswordProvisioning(
                 mode=password_profile.mode,
-                initialPassword=initial_password,
-                forceChangeOnNextSignIn=bool(password_profile.force_change_on_next_sign_in),
+                initial_password=initial_password,
+                force_change_on_next_sign_in=bool(password_profile.force_change_on_next_sign_in),
             ),
         )
 

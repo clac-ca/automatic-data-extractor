@@ -159,7 +159,7 @@ def purge_document_changes(
         text("DELETE FROM document_changes WHERE changed_at < :cutoff"),
         {"cutoff": cutoff},
     )
-    return int(result.rowcount or 0)
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 def iter_document_change_ids(changes: Iterable[DocumentChangeRow]) -> list[int]:

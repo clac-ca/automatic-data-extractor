@@ -352,7 +352,7 @@ class SsoService:
             .values(consumed_at=timestamp)
         )
         result = self.session.execute(update_stmt)
-        if result.rowcount == 0:
+        if int(getattr(result, "rowcount", 0) or 0) == 0:
             refreshed = self.session.get(SsoAuthState, state)
             if refreshed is None:
                 raise AuthStateError("STATE_INVALID")
@@ -367,7 +367,7 @@ class SsoService:
         timestamp = now or utc_now()
         stmt = sa.delete(SsoAuthState).where(SsoAuthState.expires_at < timestamp)
         result = self.session.execute(stmt)
-        return int(result.rowcount or 0)
+        return int(getattr(result, "rowcount", 0) or 0)
 
     # -- Helpers --------------------------------------------------------
 

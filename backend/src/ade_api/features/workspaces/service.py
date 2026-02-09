@@ -779,12 +779,27 @@ class WorkspacesService:
         actor: User,
     ) -> Role:
         self._ensure_workspace(workspace_id)
+        existing_role = self._rbac.get_role(role_id)
+        if existing_role is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="Role not found",
+            )
+        existing_permissions = [
+            assignment.permission.key
+            for assignment in existing_role.permissions
+            if assignment.permission is not None
+        ]
         try:
             role = self._rbac.update_role(
                 role_id=role_id,
-                name=payload.name,
-                description=payload.description,
-                permissions=payload.permissions,
+                name=payload.name or existing_role.name,
+                description=(
+                    payload.description
+                    if payload.description is not None
+                    else existing_role.description
+                ),
+                permissions=payload.permissions or existing_permissions,
                 actor=actor,
             )
         except RoleImmutableError as exc:

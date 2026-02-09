@@ -13,7 +13,7 @@ from ade_api.settings import Settings
 def configure_openapi(app: FastAPI, settings: Settings) -> None:
     """Configure OpenAPI schema with ADE security schemes."""
 
-    auth_security = [
+    auth_security: list[dict[str, list[str]]] = [
         {"SessionCookie": []},
         {"APIKeyHeader": []},
     ]
@@ -398,7 +398,7 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         app.openapi_schema = schema
         return schema
 
-    app.openapi = custom_openapi
+    app.openapi = custom_openapi  # type: ignore[method-assign]
 
 
 __all__ = ["configure_openapi"]

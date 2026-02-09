@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, TypeVar
 
 from fastapi import HTTPException, Query
+from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.settings import MAX_SORT_FIELDS
 
@@ -86,7 +87,7 @@ def resolve_sort(
     *,
     allowed: SortAllowedMap,
     default: Sequence[str],
-    id_field,
+    id_field: tuple[ColumnElement[Any], ColumnElement[Any]],
 ) -> OrderBy:
     """Resolve canonical sort tokens into SQLAlchemy order-by columns."""
 
@@ -169,7 +170,12 @@ def sort_sequence(
     return ordered
 
 
-def make_sort_dependency(*, allowed: SortAllowedMap, default: Sequence[str], id_field):
+def make_sort_dependency(
+    *,
+    allowed: SortAllowedMap,
+    default: Sequence[str],
+    id_field: tuple[ColumnElement[Any], ColumnElement[Any]],
+) -> Callable[[str | None], OrderBy]:
     """Return a FastAPI dependency that parses and resolves sort tokens."""
 
     allowed_list = ", ".join(sorted(allowed.keys()))

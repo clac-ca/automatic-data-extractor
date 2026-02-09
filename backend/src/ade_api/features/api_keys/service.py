@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
-from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_query_cursor
+from ade_api.common.cursor_listing import CursorPage, ResolvedCursorSort, paginate_query_cursor
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.time import utc_now
 from ade_api.core.auth.errors import AuthenticationError
@@ -165,7 +165,7 @@ class ApiKeyService:
         limit: int,
         cursor: str | None,
         include_total: bool,
-    ):
+    ) -> CursorPage[ApiKey]:
         """List keys for a specific user (self-service and admin use)."""
 
         stmt = self._base_query().where(ApiKey.user_id == user_id)
@@ -197,7 +197,7 @@ class ApiKeyService:
         limit: int,
         cursor: str | None,
         include_total: bool,
-    ):
+    ) -> CursorPage[ApiKey]:
         """List keys across the tenant (admin use)."""
 
         stmt = self._base_query()

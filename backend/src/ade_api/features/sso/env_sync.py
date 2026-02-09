@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated
 
 import sqlalchemy as sa
@@ -162,7 +163,10 @@ def sync_sso_providers_from_env(*, session: Session, settings: Settings) -> None
 
     logger.info(
         "sso.env_sync.complete",
-        extra=log_context(env_count=len(providers), released=int(released.rowcount or 0)),
+        extra=log_context(
+            env_count=len(providers),
+            released=int(getattr(released, "rowcount", 0) or 0),
+        ),
     )
 
 
@@ -171,7 +175,7 @@ def _upsert_provider(
     *,
     settings: Settings,
     provider: EnvProviderConfig,
-    now,
+    now: datetime,
 ) -> None:
     secret_enc = encrypt_secret(provider.client_secret, settings)
     insert_values = {
@@ -209,7 +213,7 @@ def _upsert_provider(
                     .values(**update_values)
                 )
                 result = session.execute(update_stmt)
-                if result.rowcount:
+                if int(getattr(result, "rowcount", 0) or 0):
                     return
                 session.execute(sa.insert(SsoProvider).values(**insert_values))
             return
@@ -224,7 +228,7 @@ def _sync_domains(
     *,
     provider_id: str,
     domains: list[str],
-    now,
+    now: datetime,
 ) -> None:
     if domains:
         session.execute(
@@ -249,7 +253,7 @@ def _sync_domains(
                         .values(provider_id=provider_id)
                     )
                     result = session.execute(update_stmt)
-                    if result.rowcount:
+                    if int(getattr(result, "rowcount", 0) or 0):
                         break
                     session.execute(
                         sa.insert(SsoProviderDomain).values(
