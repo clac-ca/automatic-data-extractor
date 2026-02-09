@@ -19,9 +19,10 @@ This documentation is written for people who operate ADE in production and contr
 
 1. [Local Quickstart](tutorials/local-quickstart.md)
 2. [Production Bootstrap (Azure Container Apps, Single Container)](tutorials/production-bootstrap.md)
-3. [Deploy to Production](how-to/deploy-production.md)
-4. [Operate Runs](how-to/operate-runs.md)
-5. [Triage Playbook](troubleshooting/triage-playbook.md)
+3. [Bootstrap Azure Launch Infra](how-to/bootstrap-azure-launch-infra.md)
+4. [Deploy to Production](how-to/deploy-production.md)
+5. [Operate Runs](how-to/operate-runs.md)
+6. [Triage Playbook](troubleshooting/triage-playbook.md)
 
 ### Contributor Path
 
@@ -46,6 +47,7 @@ This documentation is written for people who operate ADE in production and contr
 | --- | --- |
 | Run ADE locally | [Local Quickstart](tutorials/local-quickstart.md) |
 | Set up first production deployment in Azure | [Production Bootstrap](tutorials/production-bootstrap.md) |
+| Bootstrap shared launch infrastructure in Azure (prod + optional dev) | [Bootstrap Azure Launch Infra](how-to/bootstrap-azure-launch-infra.md) |
 | Deploy or update production safely | [Deploy to Production](how-to/deploy-production.md) |
 | Improve processing capacity | [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md) |
 | Run migrations or resets safely | [Run Migrations and Resets](how-to/run-migrations-and-resets.md) |
@@ -72,6 +74,7 @@ This documentation is written for people who operate ADE in production and contr
   - [Local Quickstart](tutorials/local-quickstart.md)
   - [Production Bootstrap](tutorials/production-bootstrap.md)
 - How-to
+  - [Bootstrap Azure Launch Infra](how-to/bootstrap-azure-launch-infra.md)
   - [Run Local Dev Loop](how-to/run-local-dev-loop.md)
   - [Deploy to Production](how-to/deploy-production.md)
   - [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md)
