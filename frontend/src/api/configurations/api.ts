@@ -17,8 +17,12 @@ type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/directories/{directoryPath}"]["delete"]["parameters"]["query"];
 type ImportConfigurationBody =
   paths["/api/v1/workspaces/{workspaceId}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
+type ImportConfigurationGithubBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/import/github"]["post"]["requestBody"]["content"]["application/json"];
 type ReplaceConfigurationBody =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
+type ReplaceConfigurationGithubBody =
+  paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import/github"]["put"]["requestBody"]["content"]["application/json"];
 type UpdateConfigurationBody =
   paths["/api/v1/workspaces/{workspaceId}/configurations/{configurationId}"]["patch"]["requestBody"]["content"]["application/json"];
 type UpsertConfigurationFileQuery =
@@ -329,15 +333,27 @@ export async function deleteConfigurationDirectory(
   );
 }
 
-export interface ImportConfigurationPayload {
+export interface ImportConfigurationArchivePayload {
+  readonly type: "zip";
   readonly displayName: string;
   readonly file: File | Blob;
   readonly notes?: string | null;
 }
 
-export async function importConfiguration(
+export interface ImportConfigurationGithubPayload {
+  readonly type: "github";
+  readonly displayName: string;
+  readonly url: string;
+  readonly notes?: string | null;
+}
+
+export type ImportConfigurationPayload =
+  | ImportConfigurationArchivePayload
+  | ImportConfigurationGithubPayload;
+
+export async function importConfigurationFromArchive(
   workspaceId: string,
-  payload: ImportConfigurationPayload,
+  payload: ImportConfigurationArchivePayload,
 ): Promise<ConfigurationRecord> {
   const formData = new FormData();
   formData.append("display_name", payload.displayName);
@@ -357,15 +373,58 @@ export async function importConfiguration(
   return data as ConfigurationRecord;
 }
 
-export interface ReplaceConfigurationPayload {
+export async function importConfigurationFromGithub(
+  workspaceId: string,
+  payload: ImportConfigurationGithubPayload,
+): Promise<ConfigurationRecord> {
+  const body: ImportConfigurationGithubBody = {
+    display_name: payload.displayName.trim(),
+    url: payload.url.trim(),
+  };
+  if (payload.notes && payload.notes.trim().length > 0) {
+    body.notes = payload.notes.trim();
+  }
+
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/configurations/import/github", {
+    params: { path: { workspaceId } },
+    body,
+  });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export async function importConfiguration(
+  workspaceId: string,
+  payload: ImportConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  if (payload.type === "github") {
+    return importConfigurationFromGithub(workspaceId, payload);
+  }
+  return importConfigurationFromArchive(workspaceId, payload);
+}
+
+export interface ReplaceConfigurationArchivePayload {
+  readonly type: "zip";
   readonly file: File | Blob;
   readonly ifMatch?: string | null;
 }
 
+export interface ReplaceConfigurationGithubPayload {
+  readonly type: "github";
+  readonly url: string;
+  readonly ifMatch?: string | null;
+}
+
+export type ReplaceConfigurationPayload =
+  | ReplaceConfigurationArchivePayload
+  | ReplaceConfigurationGithubPayload;
+
 export async function replaceConfigurationFromArchive(
   workspaceId: string,
   configId: string,
-  payload: ReplaceConfigurationPayload,
+  payload: ReplaceConfigurationArchivePayload,
 ): Promise<ConfigurationRecord> {
   const formData = new FormData();
   formData.append("file", payload.file);
@@ -383,6 +442,39 @@ export async function replaceConfigurationFromArchive(
     throw new Error("Expected configuration payload.");
   }
   return data as ConfigurationRecord;
+}
+
+export async function replaceConfigurationFromGithub(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationGithubPayload,
+): Promise<ConfigurationRecord> {
+  const body: ReplaceConfigurationGithubBody = {
+    url: payload.url.trim(),
+  };
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import/github",
+    {
+      params: { path: { workspaceId, configurationId: configId } },
+      headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
+      body,
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export async function replaceConfigurationImport(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  if (payload.type === "github") {
+    return replaceConfigurationFromGithub(workspaceId, configId, payload);
+  }
+  return replaceConfigurationFromArchive(workspaceId, configId, payload);
 }
 
 export type ConfigurationSourceInput =

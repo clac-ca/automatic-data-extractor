@@ -1157,6 +1157,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/configurations/import/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a configuration from a GitHub repository URL */
+        post: operations["import_configuration_from_github_api_v1_workspaces__workspaceId__configurations_import_github_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive": {
         parameters: {
             query?: never;
@@ -1201,6 +1218,23 @@ export type paths = {
         get?: never;
         /** Replace a draft configuration from an uploaded archive */
         put: operations["replace_configuration_from_archive_api_v1_workspaces__workspaceId__configurations__configurationId__import_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/import/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a draft configuration from a GitHub repository URL */
+        put: operations["replace_configuration_from_github_api_v1_workspaces__workspaceId__configurations__configurationId__import_github_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2086,6 +2120,18 @@ export type components = {
             changes?: components["schemas"]["ConfigurationChangeSummary"] | null;
         };
         /**
+         * ConfigurationImportGithubRequest
+         * @description Create a configuration by importing a GitHub archive URL.
+         */
+        ConfigurationImportGithubRequest: {
+            /** Display Name */
+            display_name: string;
+            /** Url */
+            url: string;
+            /** Notes */
+            notes?: string | null;
+        };
+        /**
          * ConfigurationPage
          * @description Cursor-based configuration listing.
          */
@@ -2137,6 +2183,14 @@ export type components = {
             updated_at: string;
             /** Activated At */
             activated_at?: string | null;
+        };
+        /**
+         * ConfigurationReplaceGithubRequest
+         * @description Replace a draft configuration using a GitHub archive URL.
+         */
+        ConfigurationReplaceGithubRequest: {
+            /** Url */
+            url: string;
         };
         /**
          * ConfigurationRestoreRequest
@@ -4257,7 +4311,9 @@ export type components = {
             type: string;
             title: string;
             status: number;
-            detail?: string | null;
+            detail?: (string | {
+                [key: string]: unknown;
+            }) | null;
             instance: string;
             requestId?: string | null;
             errors?: components["schemas"]["ProblemDetailsErrorItem"][] | null;
@@ -8794,6 +8850,47 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    import_configuration_from_github_api_v1_workspaces__workspaceId__configurations_import_github_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationImportGithubRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     archive_configuration_endpoint_api_v1_workspaces__workspaceId__configurations__configurationId__archive_post: {
         parameters: {
             query?: never;
@@ -8890,6 +8987,49 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspaceId__configurations__configurationId__import_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    replace_configuration_from_github_api_v1_workspaces__workspaceId__configurations__configurationId__import_github_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Configuration identifier */
+                configurationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationReplaceGithubRequest"];
             };
         };
         responses: {

@@ -57,4 +57,79 @@ describe("buildApiErrorMessage", () => {
     expect(buildApiErrorMessage(titled, 400)).toBe("Bad Request");
     expect(buildApiErrorMessage(untitled, 500)).toBe("Request failed with status 500");
   });
+
+  it("maps config import file size errors to a friendly message", () => {
+    const problem = asProblemDetails({
+      type: "bad_request",
+      title: "Bad request",
+      status: 400,
+      instance: "/api/v1/workspaces/ws/configurations/import",
+      detail: "logs/too_big.ndjson (limit=52428800)",
+      errors: [{ message: "logs/too_big.ndjson", code: "file_too_large" }],
+    });
+
+    const message = buildApiErrorMessage(problem, 400);
+
+    expect(message).toContain("too large to import");
+    expect(message).toContain("50 MB");
+    expect(message).toContain("logs/too_big.ndjson");
+  });
+
+  it("maps archive size errors with limit from structured detail", () => {
+    const problem = asProblemDetails({
+      type: "bad_request",
+      title: "Bad request",
+      status: 413,
+      instance: "/api/v1/workspaces/ws/configurations/import",
+      detail: { error: "archive_too_large", limit: 73400320 },
+    });
+
+    const message = buildApiErrorMessage(problem, 413);
+
+    expect(message).toContain("archive is too large");
+    expect(message).toContain("70 MB");
+  });
+
+  it("maps github invalid URL errors", () => {
+    const problem = asProblemDetails({
+      type: "bad_request",
+      title: "Bad request",
+      status: 400,
+      instance: "/api/v1/workspaces/ws/configurations/import/github",
+      detail: { error: "github_url_invalid" },
+    });
+
+    const message = buildApiErrorMessage(problem, 400);
+
+    expect(message).toContain("valid GitHub repository URL");
+  });
+
+  it("maps github not found/private errors", () => {
+    const problem = asProblemDetails({
+      type: "bad_request",
+      title: "Bad request",
+      status: 400,
+      instance: "/api/v1/workspaces/ws/configurations/import/github",
+      detail: { error: "github_not_found_or_private" },
+    });
+
+    const message = buildApiErrorMessage(problem, 400);
+
+    expect(message).toContain("not found or private");
+    expect(message).toContain("Download ZIP");
+  });
+
+  it("maps github rate limit errors", () => {
+    const problem = asProblemDetails({
+      type: "bad_request",
+      title: "Bad request",
+      status: 429,
+      instance: "/api/v1/workspaces/ws/configurations/import/github",
+      detail: { error: "github_rate_limited" },
+    });
+
+    const message = buildApiErrorMessage(problem, 429);
+
+    expect(message).toContain("rate limit");
+  });
 });

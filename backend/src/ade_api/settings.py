@@ -76,6 +76,7 @@ class Settings(
 
     # Storage
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
+    config_import_max_bytes: int = Field(50 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
     documents_upload_concurrency_limit: int | None = Field(8, ge=1)
 

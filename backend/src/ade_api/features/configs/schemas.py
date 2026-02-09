@@ -8,8 +8,8 @@ from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
-from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
+from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
 from ade_db.models import ConfigurationSourceKind, ConfigurationStatus
 
@@ -192,6 +192,43 @@ class ConfigurationUpdateRequest(BaseSchema):
         return self
 
 
+class ConfigurationImportGithubRequest(BaseSchema):
+    """Create a configuration by importing a GitHub archive URL."""
+
+    display_name: str = Field(min_length=1, max_length=255)
+    url: str = Field(min_length=1)
+    notes: str | None = None
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def _clean_import_display_name(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _clean_import_url(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _clean_import_notes(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+
+class ConfigurationReplaceGithubRequest(BaseSchema):
+    """Replace a draft configuration using a GitHub archive URL."""
+
+    url: str = Field(min_length=1)
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _clean_replace_url(cls, value: str) -> str:
+        return value.strip()
+
+
 class FileCapabilities(BaseSchema):
     editable: bool
     can_create: bool
@@ -304,6 +341,8 @@ __all__ = [
     "ConfigurationRecord",
     "ConfigurationRestoreRequest",
     "ConfigurationUpdateRequest",
+    "ConfigurationImportGithubRequest",
+    "ConfigurationReplaceGithubRequest",
     "FileCapabilities",
     "FileSizeLimits",
     "FileListingSummary",

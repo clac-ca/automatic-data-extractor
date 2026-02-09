@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import {
   importConfiguration,
-  replaceConfigurationFromArchive,
+  replaceConfigurationImport,
   type ImportConfigurationPayload,
   type ReplaceConfigurationPayload,
 } from "@/api/configurations/api";
@@ -16,7 +16,6 @@ export function useImportConfigurationMutation(workspaceId: string) {
 
 export function useReplaceConfigurationMutation(workspaceId: string, configurationId: string) {
   return useMutation<ConfigurationRecord, Error, ReplaceConfigurationPayload>({
-    mutationFn: (payload) => replaceConfigurationFromArchive(workspaceId, configurationId, payload),
+    mutationFn: (payload) => replaceConfigurationImport(workspaceId, configurationId, payload),
   });
 }
-
