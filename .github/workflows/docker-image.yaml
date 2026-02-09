@@ -13,6 +13,8 @@ on:
       - ".github/workflows/docker-image.yaml"
   push:
     branches: [main, development]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -97,6 +99,8 @@ jobs:
             # Branch tags (main/development only)
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
+            # Immutable release tags for pinning (vX.Y.Z)
+            type=ref,event=tag
 
       - name: Build (and push if not PR)
         uses: docker/build-push-action@v6
