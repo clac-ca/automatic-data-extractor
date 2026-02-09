@@ -1,0 +1,74 @@
+import createClient, { type Middleware } from "openapi-fetch";
+
+import { readCsrfToken } from "./csrf";
+import { ApiError, buildApiErrorMessage, tryParseProblemDetails } from "./errors";
+import type { paths } from "@/types";
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
+export function resolveApiUrl(path: string) {
+  if (!path.startsWith("/")) {
+    throw new Error("API paths must begin with '/' relative to the server root");
+  }
+  return path;
+}
+
+export function buildApiHeaders(method: string, init?: HeadersInit) {
+  const headers = new Headers(init ?? {});
+  headers.set("X-Requested-With", "fetch");
+  const normalizedMethod = method.toUpperCase();
+  if (!SAFE_METHODS.has(normalizedMethod)) {
+    const token = readCsrfToken();
+    if (token && !headers.has("X-CSRF-Token")) {
+      headers.set("X-CSRF-Token", token);
+    }
+  }
+  return headers;
+}
+
+export async function apiFetch(path: string, init: RequestInit = {}) {
+  const target = resolveApiUrl(path);
+  const method = init.method ?? "GET";
+  const headers = buildApiHeaders(method, init.headers);
+  const response = await fetch(target, {
+    credentials: "include",
+    ...init,
+    headers,
+  });
+  return response;
+}
+
+export const client = createClient<paths>({
+  credentials: "include",
+  headers: {
+    "X-Requested-With": "fetch",
+  },
+});
+
+const csrfMiddleware: Middleware = {
+  onRequest({ request }) {
+    const method = request.method?.toUpperCase() ?? "GET";
+    if (!SAFE_METHODS.has(method)) {
+      const token = readCsrfToken();
+      if (token && !request.headers.has("X-CSRF-Token")) {
+        request.headers.set("X-CSRF-Token", token);
+      }
+    }
+    return request;
+  },
+};
+
+const throwOnError: Middleware = {
+  async onResponse({ response }) {
+    if (response.ok) {
+      return response;
+    }
+
+    const problem = await tryParseProblemDetails(response);
+    const message = buildApiErrorMessage(problem, response.status);
+    throw new ApiError(message, response.status, problem);
+  },
+};
+
+client.use(csrfMiddleware);
+client.use(throwOnError);

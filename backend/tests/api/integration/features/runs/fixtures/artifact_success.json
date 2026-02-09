@@ -1,0 +1,116 @@
+{
+  "schema": "ade.artifact/v1",
+  "version": "1.0.0",
+  "run": {
+    "id": "engine-run-1",
+    "status": "succeeded",
+    "started_at": "2024-01-01T00:00:00Z",
+    "completed_at": "2024-01-01T00:00:05Z",
+    "outputs": [
+      "normalized.xlsx"
+    ],
+    "engine_version": "1.6.1",
+    "error": null
+  },
+  "config": {
+    "schema": "ade.manifest/v1",
+    "version": "1.2.3",
+    "name": "Demo Config"
+  },
+  "tables": [
+    {
+      "source_file": "input.xlsx",
+      "source_sheet": "Sheet1",
+      "table_index": 0,
+      "header": {
+        "row_index": 1,
+        "cells": [
+          "ID",
+          "Email",
+          "Notes"
+        ]
+      },
+      "mapped_columns": [
+        {
+          "field": "member_id",
+          "header": "ID",
+          "source_column_index": 0,
+          "score": 0.9,
+          "contributions": []
+        },
+        {
+          "field": "email",
+          "header": "Email",
+          "source_column_index": 1,
+          "score": 0.8,
+          "contributions": []
+        }
+      ],
+      "unmapped_columns": [
+        {
+          "header": "Notes",
+          "source_column_index": 2,
+          "output_header": "raw_notes"
+        }
+      ],
+      "validation_issues": [
+        {
+          "row_index": 2,
+          "field": "email",
+          "code": "invalid_format",
+          "severity": "error",
+          "message": "bad email",
+          "details": null
+        },
+        {
+          "row_index": 3,
+          "field": "member_id",
+          "code": "missing_required",
+          "severity": "warning",
+          "message": "id missing",
+          "details": null
+        }
+      ]
+    },
+    {
+      "source_file": "input.xlsx",
+      "source_sheet": "Sheet1",
+      "table_index": 1,
+      "header": {
+        "row_index": 10,
+        "cells": [
+          "ID",
+          "Email"
+        ]
+      },
+      "mapped_columns": [
+        {
+          "field": "member_id",
+          "header": "ID",
+          "source_column_index": 0,
+          "score": 0.85,
+          "contributions": []
+        },
+        {
+          "field": "email",
+          "header": "Email",
+          "source_column_index": 1,
+          "score": 0.82,
+          "contributions": []
+        }
+      ],
+      "unmapped_columns": [],
+      "validation_issues": [
+        {
+          "row_index": 12,
+          "field": "email",
+          "code": "invalid_format",
+          "severity": "error",
+          "message": "bad email",
+          "details": null
+        }
+      ]
+    }
+  ],
+  "notes": []
+}

@@ -1,0 +1,6 @@
+{
+  ".": "1.7.0",
+  "apps/ade-api": "1.7.0",
+  "apps/ade-web": "1.7.0",
+  "apps/ade-worker": "0.3.0"
+}

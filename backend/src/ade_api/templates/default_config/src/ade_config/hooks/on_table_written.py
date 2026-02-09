@@ -1,0 +1,594 @@
+"""
+ADE hook: ``on_table_written``.
+
+This hook runs once per table after ADE has written the normalized output table into the
+*output* workbook/worksheet, and before the workbook is saved. The table range already
+exists as cells in ``output_sheet`` when this hook executes.
+
+Use this hook for Excel-only presentation and UX work: freeze panes, filters, column
+widths, styles, structured tables, comments/notes, and optionally hiding diagnostic
+columns while keeping them written. It can also record per-table facts into ``state`` for
+later hooks (e.g., building summary sheets).
+Use ``table_result`` for mapping facts (original headers, mapped columns, output region).
+
+Contract
+--------
+- Called once per written table.
+- Must return ``None`` (any other return value is an error).
+
+Guidance
+--------
+- Avoid changing table values here; perform value edits earlier (mapped/transformed/validated).
+- Prefer deterministic, idempotent formatting operations.
+- Use ``output_region`` as the authoritative written range (avoid inferring via ``max_row``).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, MutableMapping
+from typing import TYPE_CHECKING, Any
+
+from ade_engine.models import TableRegion, TableResult
+
+if TYPE_CHECKING:
+    import openpyxl
+    import openpyxl.worksheet.worksheet
+    import polars as pl
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
+
+
+def register(registry: Registry) -> None:
+    """
+    Register hook(s) with the ADE registry.
+
+    Keep the default hook minimal and safe. Enable examples by uncommenting
+    registrations below (you can also adjust priorities to control ordering).
+    """
+    registry.register_hook(on_table_written, hook="on_table_written", priority=0)
+
+    # --- Examples (uncomment to enable) -------------------------------------
+    # registry.register_hook(on_table_written_example_1_log_output_range, hook="on_table_written", priority=10)
+    # registry.register_hook(on_table_written_example_2_freeze_header_and_add_filters, hook="on_table_written", priority=20)
+    # registry.register_hook(on_table_written_example_3_style_header_row, hook="on_table_written", priority=30)
+    # registry.register_hook(on_table_written_example_4_hide_diagnostic_columns, hook="on_table_written", priority=40)
+    # registry.register_hook(on_table_written_example_5_collect_table_facts, hook="on_table_written", priority=50)
+
+    # High-value openpyxl examples for Excel UX:
+    # registry.register_hook(on_table_written_example_6_add_excel_structured_table, hook="on_table_written", priority=60)
+    # registry.register_hook(on_table_written_example_7_add_header_comments, hook="on_table_written", priority=70)
+    # registry.register_hook(on_table_written_example_8_highlight_and_comment_validation_issues, hook="on_table_written", priority=80)
+    # registry.register_hook(on_table_written_example_9_autofit_column_widths, hook="on_table_written", priority=90)
+
+
+def on_table_written(
+    *,
+    write_table: pl.DataFrame,  # Exact DF that was written (after output policies)
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,  # Output worksheet (openpyxl Worksheet)
+    output_workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
+    output_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
+    table_index: int,  # 0-based table index within the output sheet
+    table_result: TableResult,  # TableResult with mapping/output facts
+    input_file_name: str,  # Input filename (basename)
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
+    """
+    Called after ADE writes a single normalized table to the output worksheet.
+
+    Default implementation is a placeholder (no-op). Add Excel-only formatting here or
+    enable one of the examples in `register()`.
+
+    Keep this function *small*. Use additional hook registrations for examples
+    and project-specific behavior.
+
+    Tip: `write_table.columns` and `write_table.height` reflect what you see in `output_sheet`.
+    """
+    return None
+
+
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
+
+
+def on_table_written_example_1_log_output_range(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """Example 1: log the output range for THIS table."""
+
+    if logger:
+        logger.info("Output range for last table: %s", output_region.a1)
+
+
+def on_table_written_example_2_freeze_header_and_add_filters(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 2: freeze the header row and enable filters for this table range.
+
+    Note:
+    - If you also add an Excel *structured table* (example 6), Excel will add
+      filters automatically for that table.
+    """
+    # Freeze panes at the first cell *below* the header row.
+    output_sheet.freeze_panes = output_sheet.cell(
+        row=output_region.data_first_row, column=output_region.min_col
+    ).coordinate
+
+    # Enable worksheet auto-filter for the table region.
+    output_sheet.auto_filter.ref = output_region.a1
+
+
+def on_table_written_example_3_style_header_row(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 3: make the header row look nice (fill, font, wrap, alignment).
+
+    This is intentionally "manual" styling so developers can learn openpyxl
+    basics. If you use an Excel structured table (example 6), the table style
+    will also style the header row.
+    """
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    # Style constants (easy to tweak).
+    header_fill = PatternFill(
+        fill_type="solid", start_color="1F4E79", end_color="1F4E79"
+    )  # dark blue
+    header_font = Font(bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for col in range(output_region.min_col, output_region.max_col + 1):
+        cell = output_sheet.cell(row=output_region.header_row, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+    # Optional: slightly taller header row for wrapped text.
+    output_sheet.row_dimensions[output_region.header_row].height = 24
+
+
+def on_table_written_example_4_hide_diagnostic_columns(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 4: hide ADE diagnostic columns (if you choose to keep them written).
+    """
+    from openpyxl.utils import get_column_letter
+
+    ade_diagnostic_prefix = "__ade_"
+    for offset, col_name in enumerate(write_table.columns):
+        if str(col_name).startswith(ade_diagnostic_prefix):
+            col_idx = output_region.min_col + offset
+            output_sheet.column_dimensions[get_column_letter(col_idx)].hidden = True
+
+
+def on_table_written_example_5_collect_table_facts(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 5: collect per-table facts into shared `state` for later hooks.
+    """
+    cfg = state
+
+    table_region_ref = output_region.a1
+
+    tables = cfg.get("tables_written")
+    if not isinstance(tables, list):
+        tables = []
+        cfg["tables_written"] = tables
+
+    tables.append(
+        {
+            "input_file": input_file_name,
+            "output_sheet": getattr(output_sheet, "title", ""),
+            "table_index": table_index,
+            "rows": int(write_table.height),
+            "columns": list(write_table.columns),
+            "range": table_region_ref,
+        }
+    )
+
+
+def on_table_written_example_6_add_excel_structured_table(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 6: convert the written range into an Excel "structured table".
+
+    Why this is great:
+    - Users get built-in filter dropdowns
+    - Banded rows / table styles
+    - Structured references in formulas
+    - Better UX when people copy/paste or build pivot tables
+    """
+    import re
+
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+    cfg = state
+
+    ref = output_region.a1
+
+    # Excel tables are most useful when there is at least one data row.
+    if int(write_table.height) <= 0 or not output_region.has_data_rows:
+        if logger:
+            logger.info("Skipping Excel table creation (no data rows).")
+        return
+
+    sheet_name = getattr(output_sheet, "title", "Sheet")
+    base = f"{sheet_name}_Table_{table_index}"
+
+    # Make a valid Excel table name (simple + conservative).
+    # Rules (high level): starts with letter/_/\, contains letters/numbers/._, no spaces,
+    # can't look like A1 or R1C1, max 255 chars.
+    name = re.sub(r"\s+", "_", (base or "").strip()) or "Table"
+    name = re.sub(r"[^A-Za-z0-9_.]", "_", name)
+    if not re.match(r"^[A-Za-z_]", name):
+        name = f"T_{name}"
+    if re.match(r"^[A-Za-z]{1,3}\d+$", name) or re.match(r"^[Rr]\d+[Cc]\d+$", name):
+        name = f"T_{name}"
+    name = name[:255]
+
+    existing: set[str] = set()
+    for ws in getattr(output_workbook, "worksheets", []) or []:
+        tables = getattr(ws, "tables", None)
+        if not tables:
+            continue
+        if hasattr(tables, "keys"):
+            try:
+                existing.update(str(k) for k in tables.keys())
+            except Exception:
+                pass
+
+    table_name = name
+    if table_name in existing:
+        for i in range(2, 10_000):
+            suffix = f"_{i}"
+            candidate = f"{name[: 255 - len(suffix)]}{suffix}"
+            if candidate not in existing:
+                table_name = candidate
+                break
+
+    tab = Table(displayName=table_name, ref=ref)
+
+    # Built-in Excel table styles (pick any "TableStyle..." string)
+    style = TableStyleInfo(
+        name="TableStyleMedium9",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    tab.tableStyleInfo = style
+
+    # Important: use ws.add_table()
+    output_sheet.add_table(tab)
+
+    excel_tables = cfg.get("excel_tables")
+    if not isinstance(excel_tables, list):
+        excel_tables = []
+        cfg["excel_tables"] = excel_tables
+    excel_tables.append({"output_sheet": sheet_name, "name": table_name, "ref": ref})
+
+    if logger:
+        logger.info("Added Excel structured table: %s (%s)", table_name, ref)
+
+
+def on_table_written_example_7_add_header_comments(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 7: add helpful comments to header cells.
+
+    Header comments are a great "self-documenting output" technique—especially
+    when workbook consumers may not know ADE or your schema.
+    """
+    from openpyxl.comments import Comment
+
+    cfg = state
+
+    if not write_table.columns:
+        return
+
+    ade_has_issues_col = "__ade_has_issues"
+    ade_issue_count_col = "__ade_issue_count"
+
+    # Built-in comments for ADE diagnostic columns.
+    default_comments: dict[str, str] = {
+        ade_has_issues_col: "TRUE when any field in this row failed validation.",
+        ade_issue_count_col: "Number of fields with validation issues in this row.",
+    }
+
+    # Merge in any project-specific comments from shared state.
+    # Example: state["header_comments"] = {"amount": "USD, must be >= 0"}
+    extra: Mapping[str, str] = cfg.get("header_comments", {}) or {}
+    comments: dict[str, str] = {**default_comments, **dict(extra)}
+
+    col_to_idx = {name: output_region.min_col + i for i, name in enumerate(write_table.columns)}
+
+    added = 0
+    for col_name, comment_text in comments.items():
+        col_idx = col_to_idx.get(col_name)
+        if not col_idx:
+            continue
+        cell = output_sheet.cell(row=output_region.header_row, column=col_idx)
+        comment = Comment(text=comment_text, author="ADE")
+        comment.width = 320
+        comment.height = 120
+        cell.comment = comment
+        added += 1
+
+    if logger and added:
+        logger.info("Added %d header comments.", added)
+
+
+def on_table_written_example_8_highlight_and_comment_validation_issues(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 8: use ADE diagnostics to improve UX for validation failures.
+
+    This example does two things:
+    1) Adds row-level conditional formatting when __ade_has_issues is TRUE.
+    2) Adds cell-level comments on specific cells that failed validation, using
+       the message from __ade_issue__<field>.
+
+    NOTE: Adding thousands of comments can produce very large Excel files.
+    This example includes a safety limit.
+    """
+    from openpyxl.comments import Comment
+    from openpyxl.formatting.rule import FormulaRule
+    from openpyxl.styles import PatternFill
+    from openpyxl.utils import get_column_letter
+
+    cfg = state
+
+    if not output_region.has_data_rows or not write_table.columns:
+        return
+
+    from openpyxl.worksheet.cell_range import CellRange
+
+    data_ref = CellRange(
+        min_row=output_region.data_first_row,
+        max_row=output_region.max_row,
+        min_col=output_region.min_col,
+        max_col=output_region.max_col,
+    ).coord
+    data_first_row = output_region.data_first_row
+    last_row = output_region.max_row
+
+    ade_has_issues_col = "__ade_has_issues"
+    ade_issue_prefix = "__ade_issue__"
+
+    col_to_idx = {name: output_region.min_col + i for i, name in enumerate(write_table.columns)}
+    has_issues_idx = col_to_idx.get(ade_has_issues_col)
+    if not has_issues_idx:
+        return  # diagnostics not present / dropped
+
+    issue_cols = [c for c in write_table.columns if str(c).startswith(ade_issue_prefix)]
+    if not issue_cols:
+        return
+
+    # 1) Row-level conditional formatting
+    #
+    # Use an absolute column reference ($X) and a relative row number so the rule
+    # applies per-row over the whole range.
+    issue_col_letter = get_column_letter(has_issues_idx)
+    warn_fill = PatternFill(
+        fill_type="solid", start_color="FFF2CC", end_color="FFF2CC"
+    )  # light yellow
+    rule = FormulaRule(
+        formula=[f"=${issue_col_letter}{data_first_row}=TRUE"],
+        fill=warn_fill,
+    )
+    output_sheet.conditional_formatting.add(data_ref, rule)
+
+    # 2) Per-cell comments for issue messages
+    max_comments = int(cfg.get("max_issue_comments", 500) or 500)
+    comments_added = 0
+
+    # Iterate only the __ade_has_issues column to find problematic rows efficiently.
+    for offset, (flag,) in enumerate(
+        output_sheet.iter_rows(
+            min_row=data_first_row,
+            max_row=last_row,
+            min_col=has_issues_idx,
+            max_col=has_issues_idx,
+            values_only=True,
+        ),
+        start=0,
+    ):
+        if not flag:
+            continue
+
+        excel_row = data_first_row + offset
+
+        for issue_col in issue_cols:
+            msg_idx = col_to_idx.get(issue_col)
+            if not msg_idx:
+                continue
+
+            msg = output_sheet.cell(row=excel_row, column=msg_idx).value
+            if msg in (None, ""):
+                continue
+
+            # Map "__ade_issue__amount" -> "amount"
+            field = str(issue_col)[len(ade_issue_prefix) :]
+            target_idx = col_to_idx.get(field)
+            if not target_idx:
+                continue  # field column renamed/dropped
+
+            target_cell = output_sheet.cell(row=excel_row, column=target_idx)
+            comment = Comment(text=str(msg), author="ADE Validation")
+            comment.width = 360
+            comment.height = 140
+            target_cell.comment = comment
+            comments_added += 1
+
+            if comments_added >= max_comments:
+                break
+
+        if comments_added >= max_comments:
+            break
+
+    if logger and comments_added:
+        logger.info("Added %d validation comments (limit=%d).", comments_added, max_comments)
+        if comments_added >= max_comments:
+            logger.warning(
+                "Stopped adding validation comments at limit=%d. "
+                "Consider relying on conditional formatting instead for huge tables.",
+                max_comments,
+            )
+
+
+def on_table_written_example_9_autofit_column_widths(
+    *,
+    write_table: pl.DataFrame,
+    output_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    output_workbook: openpyxl.Workbook,
+    output_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    table_result: TableResult,
+    input_file_name: str,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
+    """
+    Example 9: approximate Excel "auto-fit" for column widths.
+
+    Excel doesn't auto-size columns when writing files programmatically. This
+    heuristic measures string lengths in the header + a sample of data rows.
+
+    The result is an approximation (often good enough for reports).
+    """
+    from openpyxl.utils import get_column_letter
+
+    cfg = state
+
+    sample_rows = int(cfg.get("autofit_sample_rows", 200) or 200)
+    max_width = float(cfg.get("autofit_max_width", 60) or 60)
+    padding = float(cfg.get("autofit_padding", 2) or 2)
+    skip_diagnostics = bool(cfg.get("autofit_skip_diagnostics", True))
+
+    ade_diagnostic_prefix = "__ade_"
+    scan_last_row = min(
+        output_region.max_row, output_region.data_first_row + max(sample_rows, 0) - 1
+    )
+
+    for col in range(output_region.min_col, output_region.max_col + 1):
+        col_name = write_table.columns[col - output_region.min_col]
+        if str(col_name).startswith(ade_diagnostic_prefix) and skip_diagnostics:
+            continue
+
+        best = 0
+
+        header_val = output_sheet.cell(row=output_region.header_row, column=col).value
+        best = max(best, len(str(header_val)) if header_val is not None else 0)
+
+        if output_region.has_data_rows and scan_last_row >= output_region.data_first_row:
+            for r in range(output_region.data_first_row, scan_last_row + 1):
+                v = output_sheet.cell(row=r, column=col).value
+                if v is None:
+                    continue
+                best = max(best, len(str(v)))
+
+        width = min(max_width, best + padding)
+        output_sheet.column_dimensions[get_column_letter(col)].width = width
+
+    if logger:
+        logger.info("Auto-fit applied (sample_rows=%d, max_width=%s).", sample_rows, max_width)

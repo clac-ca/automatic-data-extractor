@@ -1,0 +1,41 @@
+# Python
+.venv/
+backend/.venv/
+.ade/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Node / web
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/public/version.json
+
+# Local env / secrets
+.env
+
+# Local data volumes
+backend/data/**
+!backend/data/**/.gitkeep
+
+# OS
+.DS_Store
+
+# Local automation artifacts
+.playwright-cli/
+tmp/playwright/
+.playwright/
+output/playwright/
+output/runtime-validation/
+
+# Workpackages
+workpackages/**
+!workpackages/**/
+!workpackages/**/*.md
+!workpackages/**/*.py

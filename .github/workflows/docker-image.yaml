@@ -1,0 +1,121 @@
+name: Build and Publish Docker Image (GHCR)
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yaml"
+      - "docker-compose.prod.yaml"
+      - "docker-compose.prod.split.yaml"
+      - ".devcontainer/**"
+      - "scripts/**"
+      - ".github/workflows/docker-image.yaml"
+  push:
+    branches: [main, development]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build image and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve app metadata
+        id: app-meta
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            app_version="${GITHUB_REF_NAME#v}"
+          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            app_version="main"
+          elif [ "${GITHUB_REF}" = "refs/heads/development" ]; then
+            app_version="development"
+          else
+            app_version="dev"
+          fi
+          echo "value=$app_version" >> "$GITHUB_OUTPUT"
+          echo "sha=$short_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: github.event_name != 'pull_request'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Compose configs
+        env:
+          ADE_DOCKER_TAG: ci
+          ADE_PUBLIC_WEB_URL: https://ade-ci.example.com
+          ADE_DATABASE_URL: postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable
+          ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=dev;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+          ADE_BLOB_CONTAINER: ade
+          ADE_SECRET_KEY: ci-only-unsafe-secret-key-000000000000000000000000
+        run: |
+          docker compose -f docker-compose.yaml -f .devcontainer/docker-compose.override.yaml config >/dev/null
+          docker compose -f docker-compose.yaml config >/dev/null
+          docker compose -f docker-compose.prod.yaml config >/dev/null
+          docker compose -f docker-compose.prod.split.yaml config >/dev/null
+
+      - name: Build production target (smoke)
+        run: docker build --target production --platform linux/amd64 -t ade-ci:production .
+
+      - name: Build devcontainer target (smoke)
+        run: docker build --target devcontainer --platform linux/amd64 -t ade-ci:devcontainer .
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Branch tags (main/development only)
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
+            # Short SHA (e.g. sha-abc1234)
+            type=sha,format=short,prefix=sha-
+            # Release tags from git tag vX.Y.Z
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Build (and push if not PR)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          build-args: |
+            APP_VERSION=${{ steps.app-meta.outputs.value }}
+            APP_COMMIT_SHA=${{ steps.app-meta.outputs.sha }}
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

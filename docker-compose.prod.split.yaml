@@ -1,0 +1,76 @@
+# docker-compose.prod.split.yaml
+#
+# Production scale-out deployment:
+# - app container runs api + web
+# - worker container runs worker only (scale this service independently)
+#
+# Start:
+#   docker compose -f docker-compose.prod.split.yaml up -d
+#
+# Scale workers:
+#   docker compose -f docker-compose.prod.split.yaml up -d --scale worker=3
+#
+# Required variables:
+# - ADE_PUBLIC_WEB_URL
+# - ADE_DATABASE_URL
+# - ADE_BLOB_CONTAINER
+# - ADE_SECRET_KEY
+# - ADE_BLOB_CONNECTION_STRING (or ADE_BLOB_ACCOUNT_URL for managed identity auth)
+#
+# Optional:
+# - ADE_DOCKER_TAG (default: main; compose image selector, set in shell/CI at deploy time)
+# - ADE_API_PROCESSES (default: 2)
+# - ADE_WORKER_RUN_CONCURRENCY (default: 4)
+
+services:
+  app:
+    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}
+    command: ["ade", "start"]
+    env_file:
+      - path: ./.env
+        required: false
+    restart: unless-stopped
+    volumes:
+      - app_data:/app/data
+    ports:
+      - 8000:8000
+    environment:
+      ADE_SERVICES: api,web
+      ADE_API_PROCESSES: ${ADE_API_PROCESSES:-2} # benchmark-backed baseline for production
+      ADE_AUTH_DISABLED: "false"
+      ADE_PUBLIC_WEB_URL: ${ADE_PUBLIC_WEB_URL:?Set ADE_PUBLIC_WEB_URL to your external web URL}
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:?Set ADE_DATABASE_URL}
+      ADE_DATA_DIR: /app/data
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE-}
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT-}
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING-} # Alternatively set ADE_BLOB_ACCOUNT_URL in .env for managed identity auth.
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:?Set ADE_BLOB_CONTAINER}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX-}
+      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto|require|off; see docs/reference/environment-variables.md
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?Set ADE_SECRET_KEY}
+
+  worker:
+    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}
+    command: ["ade", "start"]
+    env_file:
+      - path: ./.env
+        required: false
+    restart: unless-stopped
+    volumes:
+      - app_data:/app/data
+    environment:
+      ADE_SERVICES: worker
+      ADE_WORKER_RUN_CONCURRENCY: ${ADE_WORKER_RUN_CONCURRENCY:-4} # benchmark-backed baseline for production
+      ADE_AUTH_DISABLED: "false"
+      ADE_DATABASE_URL: ${ADE_DATABASE_URL:?Set ADE_DATABASE_URL}
+      ADE_DATA_DIR: /app/data
+      ADE_DATABASE_AUTH_MODE: ${ADE_DATABASE_AUTH_MODE-}
+      ADE_DATABASE_SSLROOTCERT: ${ADE_DATABASE_SSLROOTCERT-}
+      ADE_BLOB_CONNECTION_STRING: ${ADE_BLOB_CONNECTION_STRING-} # Alternatively set ADE_BLOB_ACCOUNT_URL in .env for managed identity auth.
+      ADE_BLOB_CONTAINER: ${ADE_BLOB_CONTAINER:?Set ADE_BLOB_CONTAINER}
+      ADE_BLOB_PREFIX: ${ADE_BLOB_PREFIX-}
+      ADE_BLOB_VERSIONING_MODE: ${ADE_BLOB_VERSIONING_MODE:-auto} # auto|require|off; see docs/reference/environment-variables.md
+      ADE_SECRET_KEY: ${ADE_SECRET_KEY:?Set ADE_SECRET_KEY}
+
+volumes:
+  app_data:
