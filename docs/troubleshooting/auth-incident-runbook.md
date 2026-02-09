@@ -32,15 +32,15 @@ Use this runbook for auth-related production incidents:
 ## SSO Outage Fallback
 
 1. Confirm provider outage/misconfiguration.
-2. If `enforceSso=true` and access is blocked, use global-admin local login path.
+2. If `auth.mode=idp_only` and member access is blocked, use global-admin password + MFA break-glass login.
 3. Ensure global-admin MFA remains enabled.
-4. Temporarily relax SSO enforcement only if required for continuity and approved by incident lead.
+4. Temporarily change mode to `password_and_idp` only if required for continuity and approved by incident lead.
 
 ## Admin Access Recovery
 
 1. Use a global-admin account with MFA to regain control.
-2. Validate `/api/v1/admin/sso/settings` and provider status.
-3. Re-establish expected policy (`enabled`, `enforceSso`, `allowJitProvisioning`).
+2. Validate `/api/v1/admin/settings` and provider status.
+3. Re-establish expected policy (`auth.mode`, `auth.password.*`, `auth.identityProvider.jitProvisioningEnabled`).
 
 ## Secret Rotation Verification
 

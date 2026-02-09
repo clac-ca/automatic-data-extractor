@@ -7,19 +7,16 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
 from ade_api.api.deps import get_sso_service, get_sso_service_read
-from ade_api.db import get_db_read, get_db_write
 from ade_api.core.http import require_authenticated, require_csrf, require_global
-from ade_api.settings import Settings, get_settings
-from ade_api.features.authn.schemas import AuthPolicyUpdateRequest
-from ade_api.features.authn.service import AuthnService
 from ade_db.models import SsoProvider
 
 from .schemas import (
     SsoProviderAdminOut,
     SsoProviderCreate,
     SsoProviderListResponse,
+    SsoProviderValidateRequest,
+    SsoProviderValidationResponse,
     SsoProviderUpdate,
-    SsoSettings,
 )
 from .service import SsoService
 
@@ -32,6 +29,7 @@ router = APIRouter(
 PROVIDER_ID_PARAM = Annotated[str, Path(description="Provider identifier.", alias="id")]
 PROVIDER_CREATE_BODY = Body(..., description="SSO provider to create.")
 PROVIDER_UPDATE_BODY = Body(..., description="SSO provider fields to update.")
+PROVIDER_VALIDATE_BODY = Body(..., description="SSO provider fields to validate.")
 
 
 def _serialize_provider(provider: SsoProvider) -> SsoProviderAdminOut:
@@ -42,7 +40,7 @@ def _serialize_provider(provider: SsoProvider) -> SsoProviderAdminOut:
         label=provider.label,
         issuer=provider.issuer,
         client_id=provider.client_id,
-        status=provider.status,
+        status=SsoService.db_status_to_ui_status(provider.status),
         domains=domains,
         managed_by=provider.managed_by,
         locked=provider.locked,
@@ -67,6 +65,32 @@ def list_providers(
 
 
 @router.post(
+    "/providers/validate",
+    dependencies=[Security(require_csrf)],
+    response_model=SsoProviderValidationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Validate SSO provider configuration (admin)",
+    response_model_exclude_none=True,
+)
+def validate_provider(
+    _: Annotated[object, Security(require_global("system.settings.manage"))],
+    service: Annotated[SsoService, Depends(get_sso_service)],
+    payload: SsoProviderValidateRequest = PROVIDER_VALIDATE_BODY,
+) -> SsoProviderValidationResponse:
+    metadata = service.validate_provider_configuration(
+        issuer=payload.issuer,
+        client_id=payload.client_id,
+        client_secret=payload.client_secret.get_secret_value(),
+    )
+    return SsoProviderValidationResponse(
+        issuer=metadata.issuer,
+        authorization_endpoint=metadata.authorization_endpoint,
+        token_endpoint=metadata.token_endpoint,
+        jwks_uri=metadata.jwks_uri,
+    )
+
+
+@router.post(
     "/providers",
     dependencies=[Security(require_csrf)],
     response_model=SsoProviderAdminOut,
@@ -85,7 +109,7 @@ def create_provider(
         issuer=payload.issuer,
         client_id=payload.client_id,
         client_secret=payload.client_secret.get_secret_value(),
-        status_value=payload.status,
+        status_value=service.ui_status_to_db_status(payload.status),
         domains=payload.domains,
     )
     return _serialize_provider(provider)
@@ -129,7 +153,11 @@ def update_provider(
         client_secret=payload.client_secret.get_secret_value()
         if payload.client_secret
         else None,
-        status_value=payload.status,
+        status_value=(
+            service.ui_status_to_db_status(payload.status)
+            if payload.status is not None
+            else None
+        ),
         domains=payload.domains,
     )
     return _serialize_provider(provider)
@@ -148,57 +176,6 @@ def delete_provider(
 ) -> Response:
     service.delete_provider(provider_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get(
-    "/settings",
-    response_model=SsoSettings,
-    status_code=status.HTTP_200_OK,
-    summary="Read SSO global settings (admin)",
-    response_model_exclude_none=True,
-)
-def read_sso_settings(
-    _: Annotated[object, Security(require_global("system.settings.read"))],
-    db=Depends(get_db_read),
-    settings: Annotated[Settings, Depends(get_settings)] = None,
-) -> SsoSettings:
-    settings = settings or get_settings()
-    policy = AuthnService(session=db, settings=settings).get_policy()
-    return SsoSettings(
-        enabled=policy.external_enabled,
-        enforceSso=policy.enforce_sso,
-        allowJitProvisioning=policy.allow_jit_provisioning,
-    )
-
-
-@router.put(
-    "/settings",
-    dependencies=[Security(require_csrf)],
-    response_model=SsoSettings,
-    status_code=status.HTTP_200_OK,
-    summary="Update SSO global settings (admin)",
-    response_model_exclude_none=True,
-)
-def update_sso_settings(
-    _: Annotated[object, Security(require_global("system.settings.manage"))],
-    payload: SsoSettings = Body(..., description="SSO global settings."),
-    db=Depends(get_db_write),
-    settings: Annotated[Settings, Depends(get_settings)] = None,
-) -> SsoSettings:
-    settings = settings or get_settings()
-    service = AuthnService(session=db, settings=settings)
-    updated = service.update_policy(
-        AuthPolicyUpdateRequest(
-            externalEnabled=payload.enabled,
-            enforceSso=payload.enforce_sso,
-            allowJitProvisioning=payload.allow_jit_provisioning,
-        )
-    )
-    return SsoSettings(
-        enabled=updated.external_enabled,
-        enforceSso=updated.enforce_sso,
-        allowJitProvisioning=updated.allow_jit_provisioning,
-    )
 
 
 __all__ = ["router"]

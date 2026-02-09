@@ -12,6 +12,5 @@ export const adminKeys = {
   userApiKeys: (userId: string) => [...adminKeys.apiKeys(), "user", userId] as const,
   sso: () => [...adminKeys.all(), "sso"] as const,
   ssoProviders: () => [...adminKeys.sso(), "providers"] as const,
-  ssoSettings: () => [...adminKeys.sso(), "settings"] as const,
-  safeMode: () => [...adminKeys.all(), "safe-mode"] as const,
+  settings: () => [...adminKeys.all(), "settings"] as const,
 };

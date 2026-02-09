@@ -11,14 +11,6 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import anyio.to_thread
-from ade_db.models import User
-from ade_storage import (
-    StorageError,
-    ensure_storage_roots,
-    get_storage_adapter,
-    init_storage,
-    shutdown_storage,
-)
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
 from sqlalchemy import text
@@ -29,11 +21,24 @@ from ade_api.common.time import utc_now
 from ade_api.core.auth.pipeline import dev_principal
 from ade_api.core.security.hashing import hash_password
 from ade_api.db import get_engine_from_app, get_session_factory_from_app, init_db, shutdown_db
+from ade_api.features.admin_settings.service import (
+    RuntimeSettingsInvariantError,
+    RuntimeSettingsSchemaVersionError,
+    RuntimeSettingsService,
+)
 from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
 from ade_api.settings import Settings, get_settings
+from ade_db.models import User
+from ade_storage import (
+    StorageError,
+    ensure_storage_roots,
+    get_storage_adapter,
+    init_storage,
+    shutdown_storage,
+)
 
 logger = logging.getLogger(__name__)
 MAINTENANCE_INTERVAL_SECONDS = 24 * 60 * 60
@@ -221,6 +226,13 @@ def create_application_lifespan(
                 with session.begin():
                     sync_sso_providers_from_env(session=session, settings=settings)
 
+        def _assert_runtime_settings_schema() -> None:
+            with session_factory() as session:
+                with session.begin():
+                    RuntimeSettingsService(
+                        session=session,
+                    ).assert_schema_supported()
+
         def _maintain_document_changes() -> int:
             with session_factory() as session:
                 with session.begin():
@@ -271,6 +283,14 @@ def create_application_lifespan(
 
             await asyncio.to_thread(_sync_rbac_registry)
             await asyncio.to_thread(_seed_dev_user)
+            try:
+                await asyncio.to_thread(_assert_runtime_settings_schema)
+            except (
+                RuntimeSettingsInvariantError,
+                RuntimeSettingsSchemaVersionError,
+            ) as exc:
+                logger.error("runtime_settings.schema_unsupported", exc_info=True)
+                raise RuntimeError(str(exc)) from exc
             await asyncio.to_thread(_sync_sso_env_providers)
             await asyncio.to_thread(_maintain_document_changes)
 

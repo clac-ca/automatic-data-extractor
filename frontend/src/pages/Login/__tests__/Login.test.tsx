@@ -37,7 +37,7 @@ function renderWithPath(path: string) {
   return render(<LoginScreen />);
 }
 
-describe("LoginScreen SSO UX", () => {
+describe("LoginScreen", () => {
   beforeEach(() => {
     mockUseSessionQuery.mockReset();
     mockUseSetupStatusQuery.mockReset();
@@ -66,7 +66,7 @@ describe("LoginScreen SSO UX", () => {
     });
 
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false, passwordResetEnabled: true },
+      data: { providers: [], mode: "password_only", passwordResetEnabled: true },
       isError: false,
       isFetching: false,
       isLoading: false,
@@ -120,7 +120,7 @@ describe("LoginScreen SSO UX", () => {
   it("renders provider buttons with the sanitized returnTo", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
-        forceSso: false,
+        mode: "password_and_idp",
         passwordResetEnabled: true,
         providers: [
           {
@@ -148,7 +148,7 @@ describe("LoginScreen SSO UX", () => {
   it("sanitizes unsafe returnTo values before building SSO URLs", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
-        forceSso: false,
+        mode: "password_and_idp",
         passwordResetEnabled: true,
         providers: [
           {
@@ -170,24 +170,9 @@ describe("LoginScreen SSO UX", () => {
     expect(link).toHaveAttribute("href", "/api/v1/auth/sso/okta/authorize?returnTo=%2F");
   });
 
-  it("links forgot-password with a sanitized returnTo parameter", () => {
-    renderWithPath("/login?returnTo=/workspaces/alpha");
-
-    const link = screen.getByRole("link", { name: "Forgot your password?" });
-    expect(link).toHaveAttribute("href", "/forgot-password?returnTo=%2Fworkspaces%2Falpha");
-  });
-
-  it("shows a success message when redirected after password reset", () => {
-    renderWithPath("/login?passwordReset=success");
-
-    expect(
-      screen.getByText("Your password was reset. Sign in with your new password."),
-    ).toBeInTheDocument();
-  });
-
-  it("shows a blocking error when forceSso is enabled without providers", () => {
+  it("shows global-admin break-glass path in idp-only mode", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: true, passwordResetEnabled: false },
+      data: { providers: [], mode: "idp_only", passwordResetEnabled: false },
       isError: false,
       isFetching: false,
       isLoading: false,
@@ -195,18 +180,14 @@ describe("LoginScreen SSO UX", () => {
 
     renderWithPath("/login");
 
-    expect(
-      screen.getByText(
-        "Single sign-on is required, but no providers are available. Contact your administrator.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Identity provider sign-in is required for organization members.")).toBeInTheDocument();
     expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Forgot your password?" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Global admin password sign-in" })).toBeInTheDocument();
   });
 
-  it("keeps password login available when providers fail to load and forceSso is false", () => {
+  it("keeps password login available when provider load fails in password mode", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false, passwordResetEnabled: true },
+      data: { providers: [], mode: "password_only", passwordResetEnabled: true },
       isError: true,
       isFetching: false,
       isLoading: false,
@@ -216,7 +197,7 @@ describe("LoginScreen SSO UX", () => {
 
     expect(
       screen.getByText(
-        "We couldn't load the list of providers. Refresh the page or continue with email.",
+        "We couldn't load identity provider options. Refresh the page or continue with password sign-in.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
@@ -225,7 +206,7 @@ describe("LoginScreen SSO UX", () => {
   it("maps backend ssoError codes to deterministic messages", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: {
-        forceSso: false,
+        mode: "password_and_idp",
         passwordResetEnabled: true,
         providers: [
           {
@@ -250,65 +231,9 @@ describe("LoginScreen SSO UX", () => {
     ).toBeInTheDocument();
   });
 
-  it("surfaces missing email errors from the IdP", () => {
-    mockUseAuthProvidersQuery.mockReturnValue({
-      data: {
-        forceSso: false,
-        passwordResetEnabled: true,
-        providers: [
-          {
-            id: "okta",
-            label: "Okta",
-            type: "oidc",
-            startUrl: "/api/v1/auth/sso/okta/authorize",
-          },
-        ],
-      },
-      isError: false,
-      isFetching: false,
-      isLoading: false,
-    });
-
-    renderWithPath("/login?ssoError=EMAIL_MISSING&providerId=okta");
-
-    expect(
-      screen.getByText(
-        "Okta sign-in failed. Your identity provider did not return an email address.",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("surfaces auto-provisioning disabled errors", () => {
-    mockUseAuthProvidersQuery.mockReturnValue({
-      data: {
-        forceSso: false,
-        passwordResetEnabled: true,
-        providers: [
-          {
-            id: "okta",
-            label: "Okta",
-            type: "oidc",
-            startUrl: "/api/v1/auth/sso/okta/authorize",
-          },
-        ],
-      },
-      isError: false,
-      isFetching: false,
-      isLoading: false,
-    });
-
-    renderWithPath("/login?ssoError=AUTO_PROVISION_DISABLED&providerId=okta");
-
-    expect(
-      screen.getByText(
-        "Okta sign-in failed. Your account must be provisioned before signing in.",
-      ),
-    ).toBeInTheDocument();
-  });
-
   it("hides forgot-password entry when password reset is disabled", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
-      data: { providers: [], forceSso: false, passwordResetEnabled: false },
+      data: { providers: [], mode: "password_only", passwordResetEnabled: false },
       isError: false,
       isFetching: false,
       isLoading: false,

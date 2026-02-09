@@ -32,7 +32,12 @@ beforeEach(() => {
   mockApiFetch.mockReset();
   mockClient.POST.mockResolvedValue({ data: null });
   mockClient.GET.mockResolvedValue({ data: meBootstrap });
-  mockApiFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true, mfa_required: false }), { status: 200 }));
+  mockApiFetch.mockResolvedValue(
+    new Response(
+      JSON.stringify({ ok: true, mfa_required: false, passwordChangeRequired: false }),
+      { status: 200 },
+    ),
+  );
 });
 
 afterEach(() => {
@@ -59,6 +64,7 @@ describe("auth api", () => {
       expect(result.session.user.email).toBe("user@example.com");
       expect(result.mfaSetupRecommended).toBe(false);
       expect(result.mfaSetupRequired).toBe(false);
+      expect(result.passwordChangeRequired).toBe(false);
     }
   });
 
@@ -82,6 +88,27 @@ describe("auth api", () => {
     if (result.kind === "session") {
       expect(result.mfaSetupRecommended).toBe(true);
       expect(result.mfaSetupRequired).toBe(false);
+      expect(result.passwordChangeRequired).toBe(false);
+    }
+  });
+
+  it("surfaces password-change requirement from login response", async () => {
+    mockApiFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          mfa_required: false,
+          passwordChangeRequired: true,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const { createSession } = await import("../api");
+    const result = await createSession({ email: "user@example.com", password: "pass" });
+    expect(result.kind).toBe("session");
+    if (result.kind === "session") {
+      expect(result.passwordChangeRequired).toBe(true);
     }
   });
 
@@ -150,11 +177,32 @@ describe("auth api", () => {
     );
   });
 
-  it("normalizes auth providers including password reset availability", async () => {
+  it("changes password using the authenticated change endpoint", async () => {
+    mockApiFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const { changePassword } = await import("../api");
+    await changePassword({
+      currentPassword: "OldPassword123!",
+      newPassword: "NewPassword123!",
+    });
+
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      "/api/v1/auth/password/change",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: "OldPassword123!",
+          newPassword: "NewPassword123!",
+        }),
+      }),
+    );
+  });
+
+  it("normalizes auth providers including auth mode", async () => {
     mockClient.GET.mockResolvedValueOnce({
       data: {
         providers: [],
-        force_sso: true,
+        mode: "idp_only",
         password_reset_enabled: false,
       },
     });
@@ -164,16 +212,16 @@ describe("auth api", () => {
 
     expect(providers).toEqual({
       providers: [],
-      forceSso: true,
+      mode: "idp_only",
       passwordResetEnabled: false,
     });
   });
 
-  it("falls back to reset enabled when force_sso is false and flag is missing", async () => {
+  it("falls back to reset enabled when mode allows password sign-in and flag is missing", async () => {
     mockClient.GET.mockResolvedValueOnce({
       data: {
         providers: [],
-        force_sso: false,
+        mode: "password_and_idp",
       },
     });
 

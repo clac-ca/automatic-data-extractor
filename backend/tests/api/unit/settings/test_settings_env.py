@@ -83,7 +83,7 @@ def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("ADE_API_THREADPOOL_TOKENS", "64")
     monkeypatch.setenv("ADE_CONFIG_IMPORT_MAX_BYTES", "73400320")
     monkeypatch.setenv("ADE_DATABASE_CONNECTION_BUDGET", "120")
-    monkeypatch.setenv("ADE_AUTH_ENFORCE_LOCAL_MFA", "true")
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_MFA_REQUIRED", "true")
 
     settings = Settings(_env_file=None)
 
@@ -92,7 +92,7 @@ def test_api_runtime_tuning_env_overrides(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.api_threadpool_tokens == 64
     assert settings.config_import_max_bytes == 73400320
     assert settings.database_connection_budget == 120
-    assert settings.auth_enforce_local_mfa is True
+    assert settings.auth_password_mfa_required is True
 
 
 def test_api_forwarded_allow_ips_must_not_be_empty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -163,12 +163,12 @@ def test_password_reset_toggle_env_override(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
     monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
     monkeypatch.setenv("ADE_AUTH_PASSWORD_RESET_ENABLED", "false")
-    monkeypatch.setenv("ADE_AUTH_ENFORCE_LOCAL_MFA", "true")
+    monkeypatch.setenv("ADE_AUTH_PASSWORD_MFA_REQUIRED", "true")
 
     settings = Settings(_env_file=None)
 
     assert settings.auth_password_reset_enabled is False
-    assert settings.auth_enforce_local_mfa is True
+    assert settings.auth_password_mfa_required is True
 
 
 

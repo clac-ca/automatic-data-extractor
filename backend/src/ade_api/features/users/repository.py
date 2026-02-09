@@ -62,6 +62,7 @@ class UsersRepository:
         is_active: bool = True,
         is_service_account: bool = False,
         is_verified: bool = True,
+        must_change_password: bool = False,
     ) -> User:
         user = User(
             email=email,
@@ -70,6 +71,7 @@ class UsersRepository:
             is_active=is_active,
             is_service_account=is_service_account,
             is_verified=is_verified,
+            must_change_password=must_change_password,
             failed_login_count=0,
         )
         self._session.add(user)

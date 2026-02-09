@@ -8,10 +8,9 @@ from datetime import UTC, datetime
 from pydantic import ValidationError
 
 from ade_api.common.logging import log_context
-from ade_api.features.system_settings.schemas import SafeModeStatus
-from ade_api.features.system_settings.service import (
-    SAFE_MODE_DEFAULT_DETAIL,
-    SafeModeService,
+from ade_api.features.admin_settings.service import (
+    RuntimeSettingsService,
+    resolve_runtime_settings_from_env_defaults,
 )
 from ade_api.settings import Settings
 
@@ -28,10 +27,10 @@ class HealthService:
         self,
         *,
         settings: Settings,
-        safe_mode_service: SafeModeService | None = None,
+        runtime_settings_service: RuntimeSettingsService | None = None,
     ) -> None:
         self._settings = settings
-        self._safe_mode_service = safe_mode_service
+        self._runtime_settings_service = runtime_settings_service
 
     def status(self) -> HealthCheckResponse:
         """Return the overall system health."""
@@ -52,20 +51,20 @@ class HealthService:
                 ),
             ]
 
-            safe_mode = self._safe_mode_status()
-            if safe_mode.enabled:
+            runtime = self._runtime_settings()
+            if runtime.safe_mode.enabled:
                 components.append(
                     HealthComponentStatus(
                         name="safe-mode",
                         status="degraded",
-                        detail=safe_mode.detail,
+                        detail=runtime.safe_mode.detail,
                     )
                 )
                 logger.warning(
                     "health.status.degraded_safe_mode",
                     extra=log_context(
                         safe_mode_enabled=True,
-                        safe_mode_detail=safe_mode.detail,
+                        safe_mode_detail=runtime.safe_mode.detail,
                     ),
                 )
 
@@ -80,7 +79,7 @@ class HealthService:
                 extra=log_context(
                     status=response.status,
                     component_count=len(response.components),
-                    safe_mode_enabled=safe_mode.enabled,
+                    safe_mode_enabled=runtime.safe_mode.enabled,
                 ),
             )
             return response
@@ -94,24 +93,22 @@ class HealthService:
             )
             raise HealthCheckError("Failed to compute health status") from exc
 
-    def _safe_mode_status(self) -> SafeModeStatus:
-        if self._safe_mode_service is not None:
+    def _runtime_settings(self):
+        if self._runtime_settings_service is not None:
             logger.debug(
-                "health.safe_mode.fetch_from_service",
+                "health.runtime_settings.fetch_from_service",
                 extra=log_context(
                     source="service",
                 ),
             )
-            return self._safe_mode_service.get_status()
+            return self._runtime_settings_service.get_effective_values()
 
         logger.debug(
-            "health.safe_mode.derived_from_settings",
+            "health.runtime_settings.derived_from_env_settings",
             extra=log_context(
                 source="settings",
                 safe_mode_enabled=self._settings.safe_mode,
             ),
         )
-        return SafeModeStatus(
-            enabled=self._settings.safe_mode,
-            detail=SAFE_MODE_DEFAULT_DETAIL,
-        )
+        # This fallback is for health probe paths that do not wire DB dependencies.
+        return resolve_runtime_settings_from_env_defaults(self._settings)

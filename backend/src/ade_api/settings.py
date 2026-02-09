@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import timedelta
 from pathlib import Path
@@ -32,6 +33,13 @@ MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
 MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
+
+REMOVED_AUTH_ENV_VARS = (
+    "ADE_AUTH_EXTERNAL_ENABLED",
+    "ADE_AUTH_FORCE_SSO",
+    "ADE_AUTH_SSO_AUTO_PROVISION",
+    "ADE_AUTH_ENFORCE_LOCAL_MFA",
+)
 
 
 # ---- Settings ---------------------------------------------------------------
@@ -106,10 +114,17 @@ class Settings(
     auth_disabled: bool = False
     auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
-    auth_force_sso: bool = False
+    auth_mode: str = "password_only"
     auth_password_reset_enabled: bool = True
-    auth_enforce_local_mfa: bool = False
-    auth_sso_auto_provision: bool = False
+    auth_password_mfa_required: bool = False
+    auth_password_min_length: int = Field(12, ge=8, le=128)
+    auth_password_require_uppercase: bool = False
+    auth_password_require_lowercase: bool = False
+    auth_password_require_number: bool = False
+    auth_password_require_symbol: bool = False
+    auth_password_lockout_max_attempts: int = Field(5, ge=1, le=20)
+    auth_password_lockout_duration_seconds: int = Field(300, ge=30, le=86_400)
+    auth_idp_jit_provisioning_enabled: bool = True
     auth_sso_providers_json: str | None = None
     sso_encryption_key: SecretStr | None = None
 
@@ -171,6 +186,25 @@ class Settings(
             self.database_log_level,
             env_var="ADE_DATABASE_LOG_LEVEL",
         )
+
+        mode = (self.auth_mode or "").strip().lower()
+        if mode not in {"password_only", "idp_only", "password_and_idp"}:
+            raise ValueError(
+                "ADE_AUTH_MODE must be one of: password_only, idp_only, password_and_idp."
+            )
+        self.auth_mode = mode
+
+        removed_set = sorted(
+            env_name
+            for env_name in REMOVED_AUTH_ENV_VARS
+            if os.getenv(env_name) not in (None, "")
+        )
+        if removed_set:
+            raise ValueError(
+                "Removed auth environment variables are no longer supported: "
+                + ", ".join(removed_set)
+                + ". Use ADE_AUTH_MODE, ADE_AUTH_PASSWORD_*, and ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED."
+            )
 
         if self.algorithm != "HS256":
             raise ValueError("ADE_ALGORITHM must be HS256.")

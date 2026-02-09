@@ -12,8 +12,8 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from ade_api.db import get_db_read, get_db_write
-from ade_storage import StorageAdapter, get_storage_adapter
 from ade_api.settings import Settings, get_settings
+from ade_storage import StorageAdapter, get_storage_adapter
 
 WriteSessionDep = Annotated[Session, Depends(get_db_write)]
 ReadSessionDep = Annotated[Session, Depends(get_db_read)]
@@ -68,16 +68,16 @@ def get_auth_service_read(session: ReadSessionDep, settings: SettingsDep):
     return AuthService(session=session, settings=settings)
 
 
-def get_system_settings_service(session: WriteSessionDep):
-    from ade_api.features.system_settings.service import SystemSettingsService
+def get_runtime_settings_service(session: WriteSessionDep):
+    from ade_api.features.admin_settings.service import RuntimeSettingsService
 
-    return SystemSettingsService(session=session)
+    return RuntimeSettingsService(session=session)
 
 
-def get_system_settings_service_read(session: ReadSessionDep):
-    from ade_api.features.system_settings.service import SystemSettingsService
+def get_runtime_settings_service_read(session: ReadSessionDep):
+    from ade_api.features.admin_settings.service import RuntimeSettingsService
 
-    return SystemSettingsService(session=session)
+    return RuntimeSettingsService(session=session)
 
 
 def get_documents_service(session: WriteSessionDep, settings: SettingsDep, storage: StorageDep):
@@ -95,31 +95,19 @@ def get_documents_service_read(
 
 
 def get_health_service(session: WriteSessionDep, settings: SettingsDep):
+    from ade_api.features.admin_settings.service import RuntimeSettingsService
     from ade_api.features.health.service import HealthService
-    from ade_api.features.system_settings.service import SafeModeService
 
-    safe_mode = SafeModeService(session=session, settings=settings)
-    return HealthService(settings=settings, safe_mode_service=safe_mode)
+    runtime_settings = RuntimeSettingsService(session=session)
+    return HealthService(settings=settings, runtime_settings_service=runtime_settings)
 
 
 def get_health_service_read(session: ReadSessionDep, settings: SettingsDep):
+    from ade_api.features.admin_settings.service import RuntimeSettingsService
     from ade_api.features.health.service import HealthService
-    from ade_api.features.system_settings.service import SafeModeService
 
-    safe_mode = SafeModeService(session=session, settings=settings)
-    return HealthService(settings=settings, safe_mode_service=safe_mode)
-
-
-def get_safe_mode_service(session: WriteSessionDep, settings: SettingsDep):
-    from ade_api.features.system_settings.service import SafeModeService
-
-    return SafeModeService(session=session, settings=settings)
-
-
-def get_safe_mode_service_read(session: ReadSessionDep, settings: SettingsDep):
-    from ade_api.features.system_settings.service import SafeModeService
-
-    return SafeModeService(session=session, settings=settings)
+    runtime_settings = RuntimeSettingsService(session=session)
+    return HealthService(settings=settings, runtime_settings_service=runtime_settings)
 
 
 def get_configurations_service(session: WriteSessionDep, settings: SettingsDep):
@@ -191,14 +179,12 @@ __all__ = [
     "get_api_keys_service_read",
     "get_auth_service",
     "get_auth_service_read",
-    "get_system_settings_service",
-    "get_system_settings_service_read",
+    "get_runtime_settings_service",
+    "get_runtime_settings_service_read",
     "get_documents_service",
     "get_documents_service_read",
     "get_health_service",
     "get_health_service_read",
-    "get_safe_mode_service",
-    "get_safe_mode_service_read",
     "get_configurations_service",
     "get_configurations_service_read",
     "get_runs_service",

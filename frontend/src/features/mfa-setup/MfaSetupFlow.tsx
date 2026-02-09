@@ -602,7 +602,7 @@ export function MfaSetupFlow({
       >
         {mfaStatus?.enabled ? (
           <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-foreground">
-            You may be blocked from disabling MFA when SSO enforcement is active for global-admin accounts.
+            You may be blocked from disabling MFA when identity provider-only sign-in is active for global-admin accounts.
           </p>
         ) : (
           <p className="rounded-md border border-border/80 bg-background px-3 py-2 text-sm text-muted-foreground">

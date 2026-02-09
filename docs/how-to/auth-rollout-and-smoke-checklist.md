@@ -32,8 +32,8 @@ git diff -- backend/src/ade_api/openapi.json frontend/src/types/generated/openap
 4. Recovery code works once and replay fails.
 5. Forgot-password returns uniform `202`.
 6. Password reset token is single-use.
-7. SSO enforcement blocks non-admin local login.
-8. Global-admin local login remains available with MFA.
+7. In `idp_only` mode, organization members cannot use password sign-in.
+8. Global-admin password sign-in remains available with MFA in `idp_only` mode.
 9. API key auth works via `X-API-Key` and rejects bearer style.
 10. RBAC-protected endpoint behavior is unchanged.
 

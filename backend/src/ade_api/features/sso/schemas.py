@@ -9,9 +9,10 @@ from urllib.parse import urlparse
 from pydantic import Field, SecretStr, field_validator
 
 from ade_api.common.schema import BaseSchema
-from ade_db.models import SsoProviderManagedBy, SsoProviderStatus, SsoProviderType
+from ade_db.models import SsoProviderManagedBy, SsoProviderType
 
 PROVIDER_ID_PATTERN = r"^[a-z0-9][a-z0-9-_]{2,63}$"
+SsoProviderUiStatus = Literal["active", "disabled"]
 
 
 class SsoProviderAdminBase(BaseSchema):
@@ -21,7 +22,7 @@ class SsoProviderAdminBase(BaseSchema):
     label: str = Field(..., max_length=255)
     issuer: str
     client_id: str = Field(..., alias="clientId", max_length=255)
-    status: SsoProviderStatus = Field(default=SsoProviderStatus.DISABLED)
+    status: SsoProviderUiStatus = Field(default="disabled")
     domains: list[str] = Field(default_factory=list)
 
     @field_validator("label")
@@ -79,7 +80,7 @@ class SsoProviderUpdate(BaseSchema):
     issuer: str | None = None
     client_id: str | None = Field(default=None, alias="clientId", max_length=255)
     client_secret: SecretStr | None = Field(default=None, alias="clientSecret")
-    status: SsoProviderStatus | None = None
+    status: SsoProviderUiStatus | None = None
     domains: list[str] | None = None
 
     @field_validator("label")
@@ -123,6 +124,47 @@ class SsoProviderUpdate(BaseSchema):
         return value
 
 
+class SsoProviderValidateRequest(BaseSchema):
+    """Payload used to validate provider OIDC discovery metadata."""
+
+    issuer: str
+    client_id: str = Field(..., alias="clientId", max_length=255)
+    client_secret: SecretStr = Field(..., alias="clientSecret")
+
+    @field_validator("issuer")
+    @classmethod
+    def _clean_issuer(cls, value: str) -> str:
+        cleaned = value.strip().rstrip("/")
+        parsed = urlparse(cleaned)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("Issuer must be an https URL")
+        return parsed.geturl()
+
+    @field_validator("client_id")
+    @classmethod
+    def _clean_client_id(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Client ID must not be blank")
+        return cleaned
+
+    @field_validator("client_secret")
+    @classmethod
+    def _clean_secret(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("Client secret must not be blank")
+        return value
+
+
+class SsoProviderValidationResponse(BaseSchema):
+    """Normalized discovery metadata returned after validation."""
+
+    issuer: str
+    authorization_endpoint: str = Field(alias="authorizationEndpoint")
+    token_endpoint: str = Field(alias="tokenEndpoint")
+    jwks_uri: str = Field(alias="jwksUri")
+
+
 class SsoProviderAdminOut(BaseSchema):
     """Provider details returned to administrators."""
 
@@ -131,7 +173,7 @@ class SsoProviderAdminOut(BaseSchema):
     label: str
     issuer: str
     client_id: str = Field(..., alias="clientId")
-    status: SsoProviderStatus
+    status: SsoProviderUiStatus
     domains: list[str]
     managed_by: SsoProviderManagedBy = Field(..., alias="managedBy")
     locked: bool
@@ -154,13 +196,7 @@ class PublicSsoProvider(BaseSchema):
 
 class PublicSsoProviderListResponse(BaseSchema):
     providers: list[PublicSsoProvider]
-    force_sso: bool = Field(default=False, alias="forceSso")
-
-
-class SsoSettings(BaseSchema):
-    enabled: bool = True
-    enforce_sso: bool = Field(default=False, alias="enforceSso")
-    allow_jit_provisioning: bool = Field(default=True, alias="allowJitProvisioning")
+    mode: Literal["password_only", "idp_only", "password_and_idp"] = "password_only"
 
 
 __all__ = [
@@ -170,6 +206,8 @@ __all__ = [
     "SsoProviderAdminOut",
     "SsoProviderCreate",
     "SsoProviderListResponse",
+    "SsoProviderUiStatus",
+    "SsoProviderValidateRequest",
+    "SsoProviderValidationResponse",
     "SsoProviderUpdate",
-    "SsoSettings",
 ]

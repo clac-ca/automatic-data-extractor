@@ -4,19 +4,21 @@ import {
   createSsoProvider,
   deleteSsoProvider,
   listSsoProviders,
-  readSafeModeStatus,
-  readSsoSettings,
-  updateSafeModeStatus,
+  validateSsoProvider,
   updateSsoProvider,
-  updateSsoSettings,
-  type SafeModeStatus,
-  type SafeModeUpdateRequest,
   type SsoProviderAdmin,
   type SsoProviderCreateRequest,
   type SsoProviderListResponse,
   type SsoProviderUpdateRequest,
-  type SsoSettings,
+  type SsoProviderValidateRequest,
+  type SsoProviderValidationResponse,
 } from "@/api/admin/sso";
+import {
+  patchAdminSettings,
+  readAdminSettings,
+  type AdminSettingsPatchRequest,
+  type AdminSettingsReadResponse,
+} from "@/api/admin/settings";
 import { adminKeys } from "@/hooks/admin/keys";
 
 export function useSsoProvidersQuery(options: { enabled?: boolean } = {}) {
@@ -29,20 +31,10 @@ export function useSsoProvidersQuery(options: { enabled?: boolean } = {}) {
   });
 }
 
-export function useSsoSettingsQuery(options: { enabled?: boolean } = {}) {
-  return useQuery<SsoSettings>({
-    queryKey: adminKeys.ssoSettings(),
-    queryFn: ({ signal }) => readSsoSettings({ signal }),
-    enabled: options.enabled ?? true,
-    staleTime: 30_000,
-    placeholderData: (previous) => previous,
-  });
-}
-
-export function useSafeModeQuery(options: { enabled?: boolean } = {}) {
-  return useQuery<SafeModeStatus>({
-    queryKey: adminKeys.safeMode(),
-    queryFn: ({ signal }) => readSafeModeStatus({ signal }),
+export function useAdminSettingsQuery(options: { enabled?: boolean } = {}) {
+  return useQuery<AdminSettingsReadResponse>({
+    queryKey: adminKeys.settings(),
+    queryFn: ({ signal }) => readAdminSettings({ signal }),
     enabled: options.enabled ?? true,
     staleTime: 10_000,
     placeholderData: (previous) => previous,
@@ -56,6 +48,12 @@ export function useCreateSsoProviderMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.ssoProviders() });
     },
+  });
+}
+
+export function useValidateSsoProviderMutation() {
+  return useMutation<SsoProviderValidationResponse, Error, SsoProviderValidateRequest>({
+    mutationFn: (payload) => validateSsoProvider(payload),
   });
 }
 
@@ -79,22 +77,13 @@ export function useDeleteSsoProviderMutation() {
   });
 }
 
-export function useUpdateSsoSettingsMutation() {
+export function usePatchAdminSettingsMutation() {
   const queryClient = useQueryClient();
-  return useMutation<SsoSettings, Error, SsoSettings>({
-    mutationFn: (payload) => updateSsoSettings(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: adminKeys.ssoSettings() });
-    },
-  });
-}
-
-export function useUpdateSafeModeMutation() {
-  const queryClient = useQueryClient();
-  return useMutation<SafeModeStatus, Error, SafeModeUpdateRequest>({
-    mutationFn: (payload) => updateSafeModeStatus(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: adminKeys.safeMode() });
+  return useMutation<AdminSettingsReadResponse, Error, AdminSettingsPatchRequest>({
+    mutationFn: (payload) => patchAdminSettings(payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(adminKeys.settings(), data);
+      queryClient.invalidateQueries({ queryKey: adminKeys.settings() });
     },
   });
 }

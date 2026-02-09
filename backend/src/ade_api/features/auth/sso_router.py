@@ -170,7 +170,7 @@ def _provider_domains(session: Session, provider_id: str) -> set[str]:
 def _load_provider_snapshot(session: Session, settings: Settings) -> tuple[SsoProvider, str]:
     authn = AuthnService(session=session, settings=settings)
     policy = authn.get_policy()
-    if not policy.external_enabled:
+    if policy.mode == "password_only":
         raise ProvisioningError("PROVIDER_DISABLED")
     provider = authn.get_external_provider()
     if provider is None or provider.status == SsoProviderStatus.DELETED:
@@ -245,7 +245,7 @@ def _resolve_user(
         return user
 
     authn = AuthnService(session=session, settings=settings)
-    if not authn.get_policy().allow_jit_provisioning:
+    if not authn.get_policy().idp_jit_provisioning_enabled:
         raise ProvisioningError("AUTO_PROVISION_DISABLED")
 
     domain = _extract_domain(canonical_email)
@@ -292,9 +292,14 @@ def list_sso_providers(
     db: Annotated[Session, Depends(get_db_read)],
 ) -> PublicSsoProviderListResponse:
     authn = AuthnService(session=db, settings=settings)
+    policy = authn.get_policy()
     provider = authn.get_external_provider()
-    if provider is None or provider.status != SsoProviderStatus.ACTIVE or not authn.get_policy().external_enabled:
-        return PublicSsoProviderListResponse(providers=[], forceSso=authn.get_policy().enforce_sso)
+    if (
+        provider is None
+        or provider.status != SsoProviderStatus.ACTIVE
+        or policy.mode == "password_only"
+    ):
+        return PublicSsoProviderListResponse(providers=[], mode=policy.mode)
     return PublicSsoProviderListResponse(
         providers=[
             {
@@ -304,7 +309,7 @@ def list_sso_providers(
                 "startUrl": "/api/v1/auth/sso/authorize",
             }
         ],
-        forceSso=authn.get_policy().enforce_sso,
+        mode=policy.mode,
     )
 
 

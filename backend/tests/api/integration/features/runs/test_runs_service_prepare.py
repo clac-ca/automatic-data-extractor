@@ -4,13 +4,13 @@ import pytest
 from sqlalchemy import select
 
 from ade_api.features.configs.exceptions import ConfigEngineDependencyMissingError
+from ade_api.features.runs.exceptions import RunSafeModeEnabledError
 from ade_api.features.runs.schemas import (
     RunBatchCreateOptions,
     RunCreateOptions,
     RunCreateOptionsBase,
 )
 from ade_db.models import Run, RunStatus
-
 from tests.api.integration.features.runs.helpers import build_runs_service
 
 
@@ -31,6 +31,18 @@ def test_prepare_run_creates_queued_run(session, tmp_path: Path) -> None:
     assert run.run_options.get("input_document_id") == str(document.id)
 
 
+def test_prepare_run_blocked_when_safe_mode_enabled(session, tmp_path: Path) -> None:
+    service, configuration, document, _settings = build_runs_service(
+        session,
+        tmp_path,
+        safe_mode=True,
+    )
+
+    options = RunCreateOptions(input_document_id=str(document.id))
+    with pytest.raises(RunSafeModeEnabledError):
+        service.prepare_run(configuration_id=configuration.id, options=options)
+
+
 def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
     session,
     tmp_path: Path,
@@ -45,7 +57,9 @@ def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
     )
     assert queued == 1
 
-    result = session.execute(select(Run).where(Run.input_file_version_id == document.current_version_id))
+    result = session.execute(
+        select(Run).where(Run.input_file_version_id == document.current_version_id)
+    )
     runs = result.scalars().all()
     assert len(runs) == 1
     assert runs[0].configuration_id == configuration.id

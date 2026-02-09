@@ -572,6 +572,80 @@
         "description": "Consume a password reset token and update credentials."
       }
     },
+    "/api/v1/auth/password/change": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change password for the current authenticated user",
+        "operationId": "password_change_api_v1_auth_password_change_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthPasswordChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Change password for the current authenticated user."
+      }
+    },
     "/api/v1/auth/mfa/totp/enroll/start": {
       "post": {
         "tags": [
@@ -2454,7 +2528,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserOut"
+                  "$ref": "#/components/schemas/UserCreateResponse"
                 }
               }
             },
@@ -9915,7 +9989,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Create a configuration from a GitHub repository URL."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/archive": {
@@ -10308,7 +10383,8 @@
           {
             "APIKeyHeader": []
           }
-        ]
+        ],
+        "description": "Replace a draft configuration from a GitHub repository URL."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations/{configurationId}/files": {
@@ -13252,6 +13328,87 @@
         ]
       }
     },
+    "/api/v1/admin/sso/providers/validate": {
+      "post": {
+        "tags": [
+          "sso"
+        ],
+        "summary": "Validate SSO provider configuration (admin)",
+        "operationId": "validate_provider_api_v1_admin_sso_providers_validate_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoProviderValidateRequest",
+                "description": "SSO provider fields to validate."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SsoProviderValidationResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/sso/providers/{id}": {
       "get": {
         "tags": [
@@ -13479,20 +13636,20 @@
         ]
       }
     },
-    "/api/v1/admin/sso/settings": {
+    "/api/v1/admin/settings": {
       "get": {
         "tags": [
-          "sso"
+          "admin-settings"
         ],
-        "summary": "Read SSO global settings (admin)",
-        "operationId": "read_sso_settings_api_v1_admin_sso_settings_get",
+        "summary": "Read runtime admin settings",
+        "operationId": "read_admin_settings_api_v1_admin_settings_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SsoSettings"
+                  "$ref": "#/components/schemas/AdminSettingsReadResponse"
                 }
               }
             },
@@ -13515,12 +13672,12 @@
           }
         ]
       },
-      "put": {
+      "patch": {
         "tags": [
-          "sso"
+          "admin-settings"
         ],
-        "summary": "Update SSO global settings (admin)",
-        "operationId": "update_sso_settings_api_v1_admin_sso_settings_put",
+        "summary": "Update runtime admin settings",
+        "operationId": "patch_admin_settings_api_v1_admin_settings_patch",
         "parameters": [
           {
             "name": "X-CSRF-Token",
@@ -13544,8 +13701,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SsoSettings",
-                "description": "SSO global settings."
+                "$ref": "#/components/schemas/AdminSettingsPatchRequest"
               }
             }
           }
@@ -13556,120 +13712,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SsoSettings"
+                  "$ref": "#/components/schemas/AdminSettingsReadResponse"
                 }
               }
             },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/system/safemode": {
-      "get": {
-        "tags": [
-          "system"
-        ],
-        "summary": "Read ADE safe mode status",
-        "description": "Return the current ADE safe mode status.",
-        "operationId": "read_safe_mode_api_v1_system_safemode_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SafeModeStatus"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "system"
-        ],
-        "summary": "Toggle ADE safe mode",
-        "description": "Persist and broadcast an updated ADE safe mode state.",
-        "operationId": "update_safe_mode_api_v1_system_safemode_put",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SafeModeUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -13708,6 +13754,70 @@
   },
   "components": {
     "schemas": {
+      "AdminSettingsPatchRequest": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/RuntimeSettingsPatch"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision",
+          "changes"
+        ],
+        "title": "AdminSettingsPatchRequest"
+      },
+      "AdminSettingsReadResponse": {
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "title": "Schemaversion"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "values": {
+            "$ref": "#/components/schemas/RuntimeSettingsValues"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/RuntimeSettingsMeta"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          },
+          "updatedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedby"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "revision",
+          "values",
+          "meta",
+          "updatedAt"
+        ],
+        "title": "AdminSettingsReadResponse"
+      },
       "ApiKeyCreateRequest": {
         "properties": {
           "name": {
@@ -13991,6 +14101,11 @@
             "type": "boolean",
             "title": "Mfasetuprequired",
             "default": false
+          },
+          "passwordChangeRequired": {
+            "type": "boolean",
+            "title": "Passwordchangerequired",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -14145,6 +14260,29 @@
         ],
         "title": "AuthMfaStatusResponse"
       },
+      "AuthPasswordChangeRequest": {
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "format": "password",
+            "title": "Currentpassword",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "title": "Newpassword",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "title": "AuthPasswordChangeRequest"
+      },
       "AuthPasswordForgotRequest": {
         "properties": {
           "email": {
@@ -14248,11 +14386,16 @@
             "type": "array",
             "title": "Providers"
           },
-          "force_sso": {
-            "type": "boolean",
-            "title": "Force Sso",
-            "description": "When true, the frontend should offer only SSO.",
-            "default": false
+          "mode": {
+            "type": "string",
+            "enum": [
+              "password_only",
+              "idp_only",
+              "password_and_idp"
+            ],
+            "title": "Mode",
+            "description": "Effective authentication mode for this organization.",
+            "default": "password_only"
           },
           "password_reset_enabled": {
             "type": "boolean",
@@ -17444,10 +17587,15 @@
             "type": "array",
             "title": "Providers"
           },
-          "forceSso": {
-            "type": "boolean",
-            "title": "Forcesso",
-            "default": false
+          "mode": {
+            "type": "string",
+            "enum": [
+              "password_only",
+              "idp_only",
+              "password_and_idp"
+            ],
+            "title": "Mode",
+            "default": "password_only"
           }
         },
         "additionalProperties": false,
@@ -18894,33 +19042,462 @@
         "title": "RunWorkspaceCreateRequest",
         "description": "Payload accepted by the workspace run creation endpoint."
       },
-      "SafeModeStatus": {
+      "RuntimeAuthMeta": {
         "properties": {
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "description": "Whether ADE is short-circuiting user runs"
+          "mode": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
           },
-          "detail": {
-            "type": "string",
-            "title": "Detail",
-            "description": "User-visible explanation of the safe mode status"
+          "password": {
+            "$ref": "#/components/schemas/RuntimePasswordMeta"
+          },
+          "identityProvider": {
+            "$ref": "#/components/schemas/RuntimeIdentityProviderMeta"
           }
         },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "password",
+          "identityProvider"
+        ],
+        "title": "RuntimeAuthMeta"
+      },
+      "RuntimeAuthPatch": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "password_only",
+                  "idp_only",
+                  "password_and_idp"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimePasswordPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "identityProvider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeIdentityProviderPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimeAuthPatch"
+      },
+      "RuntimeAuthValues": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "password_only",
+              "idp_only",
+              "password_and_idp"
+            ],
+            "title": "Mode"
+          },
+          "password": {
+            "$ref": "#/components/schemas/RuntimePasswordValues"
+          },
+          "identityProvider": {
+            "$ref": "#/components/schemas/RuntimeIdentityProviderValues"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "password",
+          "identityProvider"
+        ],
+        "title": "RuntimeAuthValues"
+      },
+      "RuntimeIdentityProviderMeta": {
+        "properties": {
+          "jitProvisioningEnabled": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "jitProvisioningEnabled"
+        ],
+        "title": "RuntimeIdentityProviderMeta"
+      },
+      "RuntimeIdentityProviderPatch": {
+        "properties": {
+          "jitProvisioningEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitprovisioningenabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimeIdentityProviderPatch"
+      },
+      "RuntimeIdentityProviderValues": {
+        "properties": {
+          "jitProvisioningEnabled": {
+            "type": "boolean",
+            "title": "Jitprovisioningenabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "jitProvisioningEnabled"
+        ],
+        "title": "RuntimeIdentityProviderValues"
+      },
+      "RuntimePasswordComplexityMeta": {
+        "properties": {
+          "minLength": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "requireUppercase": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "requireLowercase": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "requireNumber": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "requireSymbol": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "minLength",
+          "requireUppercase",
+          "requireLowercase",
+          "requireNumber",
+          "requireSymbol"
+        ],
+        "title": "RuntimePasswordComplexityMeta"
+      },
+      "RuntimePasswordComplexityPatch": {
+        "properties": {
+          "minLength": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minlength"
+          },
+          "requireUppercase": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requireuppercase"
+          },
+          "requireLowercase": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirelowercase"
+          },
+          "requireNumber": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirenumber"
+          },
+          "requireSymbol": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requiresymbol"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimePasswordComplexityPatch"
+      },
+      "RuntimePasswordComplexityValues": {
+        "properties": {
+          "minLength": {
+            "type": "integer",
+            "title": "Minlength"
+          },
+          "requireUppercase": {
+            "type": "boolean",
+            "title": "Requireuppercase"
+          },
+          "requireLowercase": {
+            "type": "boolean",
+            "title": "Requirelowercase"
+          },
+          "requireNumber": {
+            "type": "boolean",
+            "title": "Requirenumber"
+          },
+          "requireSymbol": {
+            "type": "boolean",
+            "title": "Requiresymbol"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "minLength",
+          "requireUppercase",
+          "requireLowercase",
+          "requireNumber",
+          "requireSymbol"
+        ],
+        "title": "RuntimePasswordComplexityValues"
+      },
+      "RuntimePasswordLockoutMeta": {
+        "properties": {
+          "maxAttempts": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "durationSeconds": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "maxAttempts",
+          "durationSeconds"
+        ],
+        "title": "RuntimePasswordLockoutMeta"
+      },
+      "RuntimePasswordLockoutPatch": {
+        "properties": {
+          "maxAttempts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxattempts"
+          },
+          "durationSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationseconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimePasswordLockoutPatch"
+      },
+      "RuntimePasswordLockoutValues": {
+        "properties": {
+          "maxAttempts": {
+            "type": "integer",
+            "title": "Maxattempts"
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "title": "Durationseconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "maxAttempts",
+          "durationSeconds"
+        ],
+        "title": "RuntimePasswordLockoutValues"
+      },
+      "RuntimePasswordMeta": {
+        "properties": {
+          "resetEnabled": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "mfaRequired": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "complexity": {
+            "$ref": "#/components/schemas/RuntimePasswordComplexityMeta"
+          },
+          "lockout": {
+            "$ref": "#/components/schemas/RuntimePasswordLockoutMeta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "resetEnabled",
+          "mfaRequired",
+          "complexity",
+          "lockout"
+        ],
+        "title": "RuntimePasswordMeta"
+      },
+      "RuntimePasswordPatch": {
+        "properties": {
+          "resetEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetenabled"
+          },
+          "mfaRequired": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mfarequired"
+          },
+          "complexity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimePasswordComplexityPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lockout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimePasswordLockoutPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimePasswordPatch"
+      },
+      "RuntimePasswordValues": {
+        "properties": {
+          "resetEnabled": {
+            "type": "boolean",
+            "title": "Resetenabled"
+          },
+          "mfaRequired": {
+            "type": "boolean",
+            "title": "Mfarequired"
+          },
+          "complexity": {
+            "$ref": "#/components/schemas/RuntimePasswordComplexityValues"
+          },
+          "lockout": {
+            "$ref": "#/components/schemas/RuntimePasswordLockoutValues"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "resetEnabled",
+          "mfaRequired",
+          "complexity",
+          "lockout"
+        ],
+        "title": "RuntimePasswordValues"
+      },
+      "RuntimeSafeModeMeta": {
+        "properties": {
+          "enabled": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          },
+          "detail": {
+            "$ref": "#/components/schemas/RuntimeSettingFieldMeta"
+          }
+        },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "enabled",
           "detail"
         ],
-        "title": "SafeModeStatus",
-        "description": "Represents the current safe mode state."
+        "title": "RuntimeSafeModeMeta"
       },
-      "SafeModeUpdateRequest": {
+      "RuntimeSafeModePatch": {
         "properties": {
           "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "description": "Updated safe mode state"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
           },
           "detail": {
             "anyOf": [
@@ -18931,16 +19508,132 @@
                 "type": "null"
               }
             ],
-            "title": "Detail",
-            "description": "Optional message describing the active state"
+            "title": "Detail"
           }
         },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimeSafeModePatch"
+      },
+      "RuntimeSafeModeValues": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "enabled"
+          "enabled",
+          "detail"
         ],
-        "title": "SafeModeUpdateRequest",
-        "description": "Request payload for toggling safe mode."
+        "title": "RuntimeSafeModeValues"
+      },
+      "RuntimeSettingFieldMeta": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "env",
+              "db",
+              "default"
+            ],
+            "title": "Source"
+          },
+          "lockedByEnv": {
+            "type": "boolean",
+            "title": "Lockedbyenv"
+          },
+          "envVar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Envvar"
+          },
+          "restartRequired": {
+            "type": "boolean",
+            "title": "Restartrequired",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "lockedByEnv"
+        ],
+        "title": "RuntimeSettingFieldMeta"
+      },
+      "RuntimeSettingsMeta": {
+        "properties": {
+          "safeMode": {
+            "$ref": "#/components/schemas/RuntimeSafeModeMeta"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/RuntimeAuthMeta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "safeMode",
+          "auth"
+        ],
+        "title": "RuntimeSettingsMeta"
+      },
+      "RuntimeSettingsPatch": {
+        "properties": {
+          "safeMode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeSafeModePatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeAuthPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimeSettingsPatch"
+      },
+      "RuntimeSettingsValues": {
+        "properties": {
+          "safeMode": {
+            "$ref": "#/components/schemas/RuntimeSafeModeValues"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/RuntimeAuthValues"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "safeMode",
+          "auth"
+        ],
+        "title": "RuntimeSettingsValues"
       },
       "ScopeType": {
         "type": "string",
@@ -18973,7 +19666,12 @@
             "title": "Clientid"
           },
           "status": {
-            "$ref": "#/components/schemas/SsoProviderStatus"
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status"
           },
           "domains": {
             "items": {
@@ -19039,7 +19737,12 @@
             "title": "Clientid"
           },
           "status": {
-            "$ref": "#/components/schemas/SsoProviderStatus",
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
             "default": "disabled"
           },
           "domains": {
@@ -19098,16 +19801,6 @@
         ],
         "title": "SsoProviderManagedBy",
         "description": "Source-of-truth marker for provider configuration."
-      },
-      "SsoProviderStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "disabled",
-          "deleted"
-        ],
-        "title": "SsoProviderStatus",
-        "description": "Lifecycle status for SSO providers."
       },
       "SsoProviderType": {
         "type": "string",
@@ -19170,12 +19863,17 @@
           "status": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SsoProviderStatus"
+                "type": "string",
+                "enum": [
+                  "active",
+                  "disabled"
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Status"
           },
           "domains": {
             "anyOf": [
@@ -19197,27 +19895,63 @@
         "title": "SsoProviderUpdate",
         "description": "Payload to update a provider."
       },
-      "SsoSettings": {
+      "SsoProviderValidateRequest": {
         "properties": {
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "default": true
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
           },
-          "enforceSso": {
-            "type": "boolean",
-            "title": "Enforcesso",
-            "default": false
+          "clientId": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Clientid"
           },
-          "allowJitProvisioning": {
-            "type": "boolean",
-            "title": "Allowjitprovisioning",
-            "default": true
+          "clientSecret": {
+            "type": "string",
+            "format": "password",
+            "title": "Clientsecret",
+            "writeOnly": true
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "SsoSettings"
+        "required": [
+          "issuer",
+          "clientId",
+          "clientSecret"
+        ],
+        "title": "SsoProviderValidateRequest",
+        "description": "Payload used to validate provider OIDC discovery metadata."
+      },
+      "SsoProviderValidationResponse": {
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "title": "Issuer"
+          },
+          "authorizationEndpoint": {
+            "type": "string",
+            "title": "Authorizationendpoint"
+          },
+          "tokenEndpoint": {
+            "type": "string",
+            "title": "Tokenendpoint"
+          },
+          "jwksUri": {
+            "type": "string",
+            "title": "Jwksuri"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "issuer",
+          "authorizationEndpoint",
+          "tokenEndpoint",
+          "jwksUri"
+        ],
+        "title": "SsoProviderValidationResponse",
+        "description": "Normalized discovery metadata returned after validation."
       },
       "TagCatalogItem": {
         "properties": {
@@ -19282,7 +20016,7 @@
             "title": "Email",
             "description": "User email."
           },
-          "display_name": {
+          "displayName": {
             "anyOf": [
               {
                 "type": "string",
@@ -19292,17 +20026,40 @@
                 "type": "null"
               }
             ],
-            "title": "Display Name",
+            "title": "Displayname",
             "description": "Optional display name for the user."
+          },
+          "passwordProfile": {
+            "$ref": "#/components/schemas/UserPasswordProfile",
+            "description": "Password provisioning mode for the user account."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "email"
+          "email",
+          "passwordProfile"
         ],
         "title": "UserCreate",
         "description": "Payload for pre-provisioning a user account."
+      },
+      "UserCreateResponse": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "passwordProvisioning": {
+            "$ref": "#/components/schemas/UserPasswordProvisioning"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user",
+          "passwordProvisioning"
+        ],
+        "title": "UserCreateResponse",
+        "description": "Create-user response including one-time password provisioning payload."
       },
       "UserOut": {
         "properties": {
@@ -19419,6 +20176,78 @@
         ],
         "title": "UserPage",
         "description": "Cursor-based collection of users."
+      },
+      "UserPasswordProfile": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto_generate",
+              "explicit"
+            ],
+            "title": "Mode"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "password",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "forceChangeOnNextSignIn": {
+            "type": "boolean",
+            "title": "Forcechangeonnextsignin",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "UserPasswordProfile",
+        "description": "Password provisioning mode for user creation."
+      },
+      "UserPasswordProvisioning": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto_generate",
+              "explicit"
+            ],
+            "title": "Mode"
+          },
+          "initialPassword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initialpassword"
+          },
+          "forceChangeOnNextSignIn": {
+            "type": "boolean",
+            "title": "Forcechangeonnextsignin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "forceChangeOnNextSignIn"
+        ],
+        "title": "UserPasswordProvisioning",
+        "description": "Password provisioning result for created users."
       },
       "UserRoleSummary": {
         "properties": {

@@ -64,6 +64,7 @@ from .exceptions import (
     RunOutputPreviewUnsupportedError,
     RunOutputSheetParseError,
     RunOutputSheetUnsupportedError,
+    RunSafeModeEnabledError,
 )
 from .filters import RunColumnFilters
 from .schemas import (
@@ -302,6 +303,16 @@ def create_workspace_run_endpoint(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_engine_dependency_missing_detail(exc),
         ) from exc
+    except RunSafeModeEnabledError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "SAFE_MODE_ENABLED",
+                    "message": str(exc) or "Safe mode is enabled.",
+                }
+            },
+        ) from exc
 
     return service.to_resource(run)
 
@@ -346,6 +357,16 @@ def create_workspace_runs_batch_endpoint(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_engine_dependency_missing_detail(exc),
+        ) from exc
+    except RunSafeModeEnabledError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "SAFE_MODE_ENABLED",
+                    "message": str(exc) or "Safe mode is enabled.",
+                }
+            },
         ) from exc
 
     resources = [service.to_resource(run) for run in runs]

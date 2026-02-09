@@ -12,6 +12,7 @@ import {
 describe("organization settings nav", () => {
   it("builds grouped navigation links for each section", () => {
     const navGroups = buildOrganizationSettingsNav(() => true);
+    const labels = navGroups.flatMap((group) => group.items.map((item) => item.label));
     const links = navGroups.flatMap((group) => group.items.map((item) => item.href));
 
     expect(links).toEqual([
@@ -20,6 +21,13 @@ describe("organization settings nav", () => {
       "/organization/api-keys",
       "/organization/system/sso",
       "/organization/system/safe-mode",
+    ]);
+    expect(labels).toEqual([
+      "Users",
+      "Roles",
+      "API Keys",
+      "Authentication",
+      "Run controls",
     ]);
     expect(defaultOrganizationSettingsSection.path).toBe("users");
   });

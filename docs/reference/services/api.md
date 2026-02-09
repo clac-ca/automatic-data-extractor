@@ -38,5 +38,6 @@ uv run ade api lint
 ## Links
 
 - `../../how-to/run-local-dev-loop.md`
+- `../../how-to/manage-runtime-settings.md`
 - `../../reference/cli-reference.md`
 - `../../explanation/system-architecture.md`

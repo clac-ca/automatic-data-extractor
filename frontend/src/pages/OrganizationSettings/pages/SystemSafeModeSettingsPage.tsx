@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ShieldCheck, ShieldX } from "lucide-react";
 
 import { mapUiError } from "@/api/uiErrors";
+import type { ProblemDetailsErrorMap } from "@/api/errors";
+import type { AdminSettingsPatchRequest } from "@/api/admin/settings";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
-import { useSafeModeQuery, useUpdateSafeModeMutation } from "@/hooks/admin";
+import { useAdminSettingsQuery, usePatchAdminSettingsMutation } from "@/hooks/admin";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { SettingsSection } from "@/pages/Workspace/sections/Settings/components/SettingsSection";
+import { useUnsavedChangesGuard } from "@/pages/Workspace/sections/ConfigurationEditor/workbench/state/useUnsavedChangesGuard";
+import { SettingsFieldRow } from "../components/SettingsFieldRow";
+import { SettingsSaveBar } from "../components/SettingsSaveBar";
+import { SettingsTechnicalDetails } from "../components/SettingsTechnicalDetails";
+import { findRuntimeSettingFieldError, hasProblemCode } from "../components/runtimeSettingsUtils";
 
 type FeedbackTone = "success" | "danger";
 type FeedbackMessage = { tone: FeedbackTone; message: string };
@@ -18,110 +24,211 @@ export function SystemSafeModeSettingsPage() {
   const canManage = hasPermission("system.settings.manage");
   const canRead = hasPermission("system.settings.read") || canManage;
 
-  const safeModeQuery = useSafeModeQuery({ enabled: canRead });
-  const updateSafeMode = useUpdateSafeModeMutation();
+  const settingsQuery = useAdminSettingsQuery({ enabled: canRead });
+  const patchSettings = usePatchAdminSettingsMutation();
 
   const [enabled, setEnabled] = useState(false);
   const [detail, setDetail] = useState("");
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ProblemDetailsErrorMap>({});
   const [confirmEnableOpen, setConfirmEnableOpen] = useState(false);
-
-  useEffect(() => {
-    if (!safeModeQuery.data) {
-      return;
-    }
-    setEnabled(Boolean(safeModeQuery.data.enabled));
-    setDetail(safeModeQuery.data.detail || "");
-  }, [safeModeQuery.data]);
+  const [syncedRevision, setSyncedRevision] = useState<number | null>(null);
 
   const hasUnsavedChanges = useMemo(() => {
-    if (!safeModeQuery.data) {
+    if (!settingsQuery.data) {
       return false;
     }
-    const savedDetail = normalizeDetail(safeModeQuery.data.detail || "");
+    const savedDetail = normalizeDetail(settingsQuery.data.values.safeMode.detail || "");
     const draftDetail = normalizeDetail(detail);
-    return enabled !== Boolean(safeModeQuery.data.enabled) || draftDetail !== savedDetail;
-  }, [detail, enabled, safeModeQuery.data]);
+    return enabled !== Boolean(settingsQuery.data.values.safeMode.enabled) || draftDetail !== savedDetail;
+  }, [detail, enabled, settingsQuery.data]);
+
+  useEffect(() => {
+    if (!settingsQuery.data) {
+      return;
+    }
+    const shouldSyncDraft = syncedRevision === null || (!hasUnsavedChanges && syncedRevision !== settingsQuery.data.revision);
+    if (!shouldSyncDraft) {
+      return;
+    }
+
+    setEnabled(Boolean(settingsQuery.data.values.safeMode.enabled));
+    setDetail(settingsQuery.data.values.safeMode.detail || "");
+    setSyncedRevision(settingsQuery.data.revision);
+    setFieldErrors({});
+  }, [hasUnsavedChanges, settingsQuery.data, syncedRevision]);
+
+  useUnsavedChangesGuard({
+    isDirty: hasUnsavedChanges,
+    message: "You have unsaved changes in Run controls. Are you sure you want to leave?",
+    shouldBypassNavigation: () => patchSettings.isPending,
+  });
+
+  const safeModeMeta = settingsQuery.data?.meta.safeMode;
+  const enabledLocked = Boolean(safeModeMeta?.enabled.lockedByEnv);
+  const detailLocked = Boolean(safeModeMeta?.detail.lockedByEnv);
+
+  const hasEditableChanges = useMemo(() => {
+    if (!settingsQuery.data) {
+      return false;
+    }
+    const savedEnabled = Boolean(settingsQuery.data.values.safeMode.enabled);
+    const savedDetail = normalizeDetail(settingsQuery.data.values.safeMode.detail || "");
+    const draftDetail = normalizeDetail(detail);
+
+    const enabledChanged = enabled !== savedEnabled && !enabledLocked;
+    const detailChanged = draftDetail !== savedDetail && !detailLocked;
+    return enabledChanged || detailChanged;
+  }, [detail, detailLocked, enabled, enabledLocked, settingsQuery.data]);
+
+  const detailError = findRuntimeSettingFieldError(fieldErrors, "safeMode.detail");
+  const enabledError = findRuntimeSettingFieldError(fieldErrors, "safeMode.enabled");
+
+  const resetDraft = () => {
+    if (!settingsQuery.data) {
+      return;
+    }
+    setEnabled(Boolean(settingsQuery.data.values.safeMode.enabled));
+    setDetail(settingsQuery.data.values.safeMode.detail || "");
+    setSyncedRevision(settingsQuery.data.revision);
+    setFieldErrors({});
+    setFeedback(null);
+  };
+
+  const handleSave = async () => {
+    setFeedback(null);
+    setFieldErrors({});
+    const current = settingsQuery.data;
+    if (!current) {
+      return;
+    }
+
+    const safeModeChanges: NonNullable<AdminSettingsPatchRequest["changes"]["safeMode"]> = {};
+    if (!enabledLocked && enabled !== Boolean(current.values.safeMode.enabled)) {
+      safeModeChanges.enabled = enabled;
+    }
+    if (!detailLocked && normalizeDetail(detail) !== normalizeDetail(current.values.safeMode.detail || "")) {
+      safeModeChanges.detail = detail;
+    }
+    if (Object.keys(safeModeChanges).length === 0) {
+      return;
+    }
+
+    try {
+      const updated = await patchSettings.mutateAsync({
+        revision: current.revision,
+        changes: { safeMode: safeModeChanges },
+      });
+      setSyncedRevision(updated.revision);
+      setFeedback({
+        tone: "success",
+        message: enabled ? "Safe mode enabled." : "Safe mode disabled.",
+      });
+    } catch (error) {
+      const mapped = mapUiError(error, {
+        fallback: "Unable to update run controls.",
+        statusMessages: {
+          409: "Settings changed while you were editing. Review your draft and save again.",
+        },
+      });
+      setFeedback({ tone: "danger", message: mapped.message });
+      setFieldErrors(mapped.fieldErrors);
+      if (hasProblemCode(error, "settings_revision_conflict")) {
+        await settingsQuery.refetch();
+      }
+    }
+  };
 
   if (!canRead) {
-    return <Alert tone="danger">You do not have permission to access safe mode settings.</Alert>;
+    return <Alert tone="danger">You do not have permission to access run controls.</Alert>;
   }
 
   return (
     <div className="space-y-6">
       {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
-      {safeModeQuery.isError ? (
+      {settingsQuery.isError ? (
         <Alert tone="danger">
-          {mapUiError(safeModeQuery.error, { fallback: "Unable to load safe mode settings." }).message}
+          {mapUiError(settingsQuery.error, { fallback: "Unable to load run controls." }).message}
         </Alert>
       ) : null}
 
       <SettingsSection
-        title="Safe mode"
-        description="Pause engine execution during incidents or maintenance windows."
-        actions={
-          <Button
-            type="button"
-            disabled={!canManage || updateSafeMode.isPending || !hasUnsavedChanges}
-            onClick={async () => {
-              setFeedback(null);
-              try {
-                await updateSafeMode.mutateAsync({ enabled, detail: detail.trim() || null });
-                setFeedback({
-                  tone: "success",
-                  message: enabled ? "Safe mode enabled." : "Safe mode disabled.",
-                });
-              } catch (error) {
-                const mapped = mapUiError(error, {
-                  fallback: "Unable to update safe mode settings.",
-                });
-                setFeedback({ tone: "danger", message: mapped.message });
-              }
-            }}
-          >
-            {updateSafeMode.isPending ? "Saving..." : "Save"}
-          </Button>
-        }
+        title="Run controls"
+        description="Pause or resume run creation during incidents or maintenance."
       >
-        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
-          <p className="text-sm font-semibold text-warning-foreground">Operational impact</p>
-          <p className="mt-1 text-xs text-warning-foreground/90">
-            When safe mode is enabled, new engine runs are blocked. Keep the detail message clear so operators and
-            tenants understand why automation is paused.
-          </p>
+        <Alert
+          tone={enabled ? "warning" : "info"}
+          heading={enabled ? "Safe mode is active" : "Safe mode is inactive"}
+          icon={enabled ? <ShieldX className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+        >
+          {enabled
+            ? "New runs are blocked until safe mode is disabled."
+            : "Run creation is currently allowed."}
+        </Alert>
+
+        <div className="space-y-4">
+          <SettingsFieldRow
+            label="Safe mode enabled"
+            description="Immediately block new run creation across ADE."
+            meta={safeModeMeta?.enabled}
+            error={enabledError}
+          >
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={enabled}
+                onChange={(event) => {
+                  const nextChecked = event.target.checked;
+                  if (nextChecked && !enabled) {
+                    setConfirmEnableOpen(true);
+                    return;
+                  }
+                  setEnabled(nextChecked);
+                }}
+                disabled={!canManage || patchSettings.isPending || settingsQuery.isLoading || enabledLocked}
+              />
+              <span>{enabled ? "Enabled" : "Disabled"}</span>
+            </label>
+          </SettingsFieldRow>
+
+          <SettingsFieldRow
+            label="Safe mode detail message"
+            description="Shown to operators and users when safe mode is active."
+            hint="Whitespace-only values are normalized to the default detail."
+            meta={safeModeMeta?.detail}
+            error={detailError}
+          >
+            <Input
+              value={detail}
+              onChange={(event) => setDetail(event.target.value)}
+              placeholder="Maintenance window"
+              disabled={!canManage || patchSettings.isPending || detailLocked}
+            />
+          </SettingsFieldRow>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-border"
-            checked={enabled}
-            onChange={(event) => {
-              const nextChecked = event.target.checked;
-              if (nextChecked && !enabled) {
-                setConfirmEnableOpen(true);
-                return;
-              }
-              setEnabled(nextChecked);
-            }}
-            disabled={!canManage || updateSafeMode.isPending || safeModeQuery.isLoading}
-          />
-          Enable safe mode
-        </label>
-
-        <FormField label="Detail" hint="Optional operator-facing message for safe mode state.">
-          <Input
-            value={detail}
-            onChange={(event) => setDetail(event.target.value)}
-            placeholder="Maintenance window"
-            disabled={!canManage || updateSafeMode.isPending}
-          />
-        </FormField>
-
-        {hasUnsavedChanges ? (
-          <p className="text-xs font-medium text-warning">You have unsaved safe mode changes.</p>
+        {(enabledLocked || detailLocked) ? (
+          <Alert tone="info" icon={<AlertTriangle className="h-4 w-4" />}>
+            One or more fields are managed by environment variables and cannot be edited here.
+          </Alert>
         ) : null}
+
+        <SettingsTechnicalDetails
+          settings={settingsQuery.data}
+          isLoading={settingsQuery.isLoading}
+          onRefresh={() => settingsQuery.refetch()}
+        />
       </SettingsSection>
+
+      <SettingsSaveBar
+        visible={hasUnsavedChanges}
+        canManage={canManage}
+        isSaving={patchSettings.isPending}
+        canSave={hasEditableChanges}
+        onSave={handleSave}
+        onDiscard={resetDraft}
+      />
 
       <ConfirmDialog
         open={confirmEnableOpen}

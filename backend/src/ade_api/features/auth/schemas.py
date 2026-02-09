@@ -44,9 +44,9 @@ class AuthProviderListResponse(BaseSchema):
     """Response payload returned by /auth/providers."""
 
     providers: list[AuthProvider]
-    force_sso: bool = Field(
-        default=False,
-        description="When true, the frontend should offer only SSO.",
+    mode: Literal["password_only", "idp_only", "password_and_idp"] = Field(
+        default="password_only",
+        description="Effective authentication mode for this organization.",
     )
     password_reset_enabled: bool = Field(
         default=True,

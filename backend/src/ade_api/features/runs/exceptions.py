@@ -16,6 +16,7 @@ __all__ = [
     "RunOutputSheetParseError",
     "RunInputMissingError",
     "RunInputDocumentRequiredForProcessError",
+    "RunSafeModeEnabledError",
 ]
 
 
@@ -69,3 +70,7 @@ class RunInputMissingError(RuntimeError):
 
 class RunInputDocumentRequiredForProcessError(RunInputMissingError):
     """Raised when process operation is requested without an input document."""
+
+
+class RunSafeModeEnabledError(RuntimeError):
+    """Raised when run creation is attempted while safe mode is active."""

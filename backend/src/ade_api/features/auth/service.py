@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ade_api.core.security.hashing import hash_password
+from ade_api.core.security.password_policy import (
+    PasswordComplexityPolicy,
+    enforce_password_complexity,
+)
 from ade_api.features.authn.service import AuthnService
 from ade_api.features.rbac import RbacService
 from ade_db.models import SsoProviderStatus, User
@@ -66,7 +71,11 @@ class AuthService:
         from ade_api.features.sso.service import SsoService
 
         sso_service = SsoService(session=self.session, settings=self.settings)
-        active = sso_service.list_active_providers() if policy.external_enabled else []
+        active = (
+            sso_service.list_active_providers()
+            if policy.mode in {"idp_only", "password_and_idp"}
+            else []
+        )
         for provider in active[:1]:
             providers.append(
                 AuthProvider(
@@ -79,7 +88,7 @@ class AuthService:
 
         return AuthProviderListResponse(
             providers=providers,
-            force_sso=bool(policy.enforce_sso),
+            mode=policy.mode,
             password_reset_enabled=authn.is_password_reset_enabled(),
         )
 
@@ -92,9 +101,24 @@ class AuthService:
                 return True
         return False
 
-    def create_first_admin(self, payload: AuthSetupRequest, *, password_hash: str) -> User:
+    def create_first_admin(self, payload: AuthSetupRequest) -> User:
         if not self.is_setup_required():
             raise SetupAlreadyCompletedError("Initial setup has already been completed.")
+
+        authn = AuthnService(session=self.session, settings=self.settings)
+        policy = authn.get_policy()
+        enforce_password_complexity(
+            payload.password.get_secret_value(),
+            policy=PasswordComplexityPolicy(
+                min_length=policy.password_min_length,
+                require_uppercase=policy.password_require_uppercase,
+                require_lowercase=policy.password_require_lowercase,
+                require_number=policy.password_require_number,
+                require_symbol=policy.password_require_symbol,
+            ),
+            field_path="password",
+        )
+        password_hash = hash_password(payload.password.get_secret_value())
 
         email = str(payload.email).strip()
         display_name = (payload.display_name or "").strip() or None

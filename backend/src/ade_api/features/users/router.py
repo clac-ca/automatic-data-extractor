@@ -17,7 +17,7 @@ from ade_api.common.cursor_listing import (
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 from ade_db.models import User
 
-from .schemas import UserCreate, UserOut, UserPage, UserUpdate
+from .schemas import UserCreate, UserCreateResponse, UserOut, UserPage, UserUpdate
 from .service import UsersService
 from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -75,7 +75,7 @@ def list_users(
 @router.post(
     "/users",
     dependencies=[Security(require_csrf)],
-    response_model=UserOut,
+    response_model=UserCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a user (administrator only)",
     response_model_exclude_none=True,
@@ -95,10 +95,11 @@ def create_user(
     _: Annotated[User, Security(require_global("users.manage_all"))],
     service: Annotated[UsersService, Depends(get_users_service)],
     payload: UserCreate = USER_CREATE_BODY,
-) -> UserOut:
+) -> UserCreateResponse:
     return service.create_user(
         email=str(payload.email),
         display_name=payload.display_name,
+        password_profile=payload.password_profile,
     )
 
 

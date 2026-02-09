@@ -64,9 +64,9 @@ export default function ResetPasswordScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const providersQuery = useAuthProvidersQuery();
-  const forceSso = providersQuery.data?.forceSso ?? false;
-  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? !forceSso;
-  const resetUnavailableMessage = forceSso
+  const authMode = providersQuery.data?.mode ?? "password_only";
+  const passwordResetEnabled = providersQuery.data?.passwordResetEnabled ?? authMode !== "idp_only";
+  const resetUnavailableMessage = authMode === "idp_only"
     ? "Password reset is managed by your organization's identity provider. Use SSO sign-in or contact your administrator."
     : "Password reset is unavailable. Contact your administrator.";
 
