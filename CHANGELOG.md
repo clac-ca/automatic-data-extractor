@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.5](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.4...v1.7.5) (2026-02-09)
+
+
+### Bug Fixes
+
+* **ci:** support clean release tag rebuilds via workflow inputs ([93f1e82](https://github.com/clac-ca/automatic-data-extractor/commit/93f1e827c74f4f8c26cd18b84c0756f2f721bca4))
+
 ## [1.7.4](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.3...v1.7.4) (2026-02-09)
 
 
