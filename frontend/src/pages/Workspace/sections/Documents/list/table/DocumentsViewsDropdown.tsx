@@ -35,13 +35,20 @@ export function DocumentsViewsDropdown({
   publicViews,
   privateViews,
   selectedViewId,
+  hasExplicitListState = false,
   isEdited = false,
   isLoading,
   isFetching,
+  isSaving = false,
+  isCreating = false,
+  isDeleting = false,
+  canMutateSelectedView = false,
   disabled = false,
   canMutateView,
   onSelectView,
   onCreateView,
+  onSaveSelectedView,
+  onDiscardViewChanges,
   onRenameView,
   onDuplicateView,
   onDeleteView,
@@ -50,13 +57,20 @@ export function DocumentsViewsDropdown({
   publicViews: DocumentViewRecord[];
   privateViews: DocumentViewRecord[];
   selectedViewId: string | null;
+  hasExplicitListState?: boolean;
   isEdited?: boolean;
   isLoading: boolean;
   isFetching: boolean;
+  isSaving?: boolean;
+  isCreating?: boolean;
+  isDeleting?: boolean;
+  canMutateSelectedView?: boolean;
   disabled?: boolean;
   canMutateView: (view: DocumentViewRecord) => boolean;
   onSelectView: (view: DocumentViewRecord) => void | Promise<void>;
   onCreateView: () => void;
+  onSaveSelectedView: () => void;
+  onDiscardViewChanges: () => void;
   onRenameView: (view: DocumentViewRecord) => void;
   onDuplicateView: (view: DocumentViewRecord) => void;
   onDeleteView: (view: DocumentViewRecord) => void;
@@ -76,6 +90,8 @@ export function DocumentsViewsDropdown({
   );
 
   const hasViews = sections.some((section) => section.items.length > 0);
+  const showEditedControls = Boolean(selectedView && isEdited);
+  const showCreateFromCurrent = !selectedView && hasExplicitListState;
 
   return (
     <Popover>
@@ -94,12 +110,17 @@ export function DocumentsViewsDropdown({
               {selectedView.name}
             </span>
           ) : null}
+          {isEdited ? (
+            <Badge variant="outline" className="h-5 text-[10px] uppercase tracking-wide">
+              Edited
+            </Badge>
+          ) : null}
           {isFetching ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           ) : null}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[380px] p-0" align="end">
+      <PopoverContent className="w-[380px] p-0" align="start">
         <div className="border-b px-3 py-2">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Active view</p>
           <div className="mt-1 flex items-center gap-2">
@@ -109,11 +130,6 @@ export function DocumentsViewsDropdown({
             {selectedView ? (
               <Badge variant="secondary" className="h-5 text-[10px] uppercase tracking-wide">
                 {visibilityLabel(selectedView)}
-              </Badge>
-            ) : null}
-            {isEdited ? (
-              <Badge variant="outline" className="h-5 text-[10px] uppercase tracking-wide">
-                Edited
               </Badge>
             ) : null}
           </div>
@@ -201,7 +217,57 @@ export function DocumentsViewsDropdown({
           </CommandList>
         </Command>
 
-        <div className="border-t p-2">
+        <div className="space-y-2 border-t p-2">
+          {showEditedControls ? (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/70 bg-muted/30 px-2 py-2">
+              {canMutateSelectedView ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={onSaveSelectedView}
+                  disabled={isSaving || isDeleting}
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2"
+                onClick={onCreateView}
+                disabled={isCreating || isDeleting}
+              >
+                Save as new
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={onDiscardViewChanges}
+                disabled={isSaving || isCreating || isDeleting}
+              >
+                Discard
+              </Button>
+            </div>
+          ) : null}
+
+          {showCreateFromCurrent ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={onCreateView}
+              disabled={isCreating || isDeleting}
+            >
+              Save as new view
+            </Button>
+          ) : null}
+
           <Button type="button" variant="outline" size="sm" className="w-full" onClick={onCreateView}>
             <Plus className="h-4 w-4" />
             New view

@@ -4,6 +4,7 @@ import {
   buildDocumentsQuerySnapshot,
   canonicalizeSnapshotForViewPersistence,
   encodeSnapshotForViewPersistence,
+  parseViewQueryStateToSnapshot,
   resolveListFiltersForApi,
 } from "../queryState";
 
@@ -14,37 +15,27 @@ describe("queryState", () => {
       sort: { id: "createdAt", desc: true },
       filters: { id: "assigneeId", operator: "isAnyOf", value: ["me"] },
       joinOperator: "invalid",
-      filterFlag: "unknown",
       lifecycle: "wrong",
-      simpleFilters: {
-        assigneeId: null,
-      },
     });
 
     expect(snapshot.q).toBeNull();
     expect(snapshot.sort).toEqual([]);
     expect(snapshot.filters).toEqual([]);
     expect(snapshot.joinOperator).toBe("and");
-    expect(snapshot.filterFlag).toBeNull();
     expect(snapshot.lifecycle).toBe("active");
   });
 
-  it("resolves assigneeId=me in simple mode for API payloads", () => {
+  it("resolves assigneeId=me in filters payload", () => {
     const snapshot = buildDocumentsQuerySnapshot({
       q: null,
       sort: [],
-      filters: [],
+      filters: [{ id: "assigneeId", operator: "inArray", value: ["me"] }],
       joinOperator: "and",
-      filterFlag: null,
       lifecycle: "active",
-      simpleFilters: {
-        assigneeId: ["me"],
-      },
     });
 
     const result = resolveListFiltersForApi({
       snapshot,
-      filterMode: "simple",
       currentUserId: "user-123",
     });
 
@@ -58,47 +49,25 @@ describe("queryState", () => {
     ]);
   });
 
-  it("normalizes advanced and simple snapshots for persistence", () => {
-    const advancedSnapshot = buildDocumentsQuerySnapshot({
+  it("normalizes empty-filter snapshots for view persistence", () => {
+    const snapshot = buildDocumentsQuerySnapshot({
       q: "abc",
       sort: [{ id: "createdAt", desc: true }],
-      filters: [{ id: "name", operator: "contains", value: "report" }],
+      filters: [],
       joinOperator: "or",
-      filterFlag: "advancedFilters",
       lifecycle: "active",
-      simpleFilters: {
-        assigneeId: ["me"],
-      },
-    });
-    const simpleSnapshot = buildDocumentsQuerySnapshot({
-      q: "abc",
-      sort: [{ id: "createdAt", desc: true }],
-      filters: [{ id: "name", operator: "contains", value: "report" }],
-      joinOperator: "or",
-      filterFlag: null,
-      lifecycle: "active",
-      simpleFilters: {
-        assigneeId: ["me"],
-      },
     });
 
-    expect(canonicalizeSnapshotForViewPersistence(advancedSnapshot).simpleFilters).toEqual({});
-    expect(canonicalizeSnapshotForViewPersistence(simpleSnapshot).filters).toEqual([]);
-    expect(canonicalizeSnapshotForViewPersistence(simpleSnapshot).joinOperator).toBe("and");
-    expect(canonicalizeSnapshotForViewPersistence(simpleSnapshot).filterFlag).toBeNull();
+    expect(canonicalizeSnapshotForViewPersistence(snapshot).joinOperator).toBe("and");
   });
 
   it("encodes current user assignee values back to me when saving views", () => {
     const snapshot = buildDocumentsQuerySnapshot({
       q: null,
       sort: [],
-      filters: [],
+      filters: [{ id: "assigneeId", operator: "inArray", value: ["user-123", "other"] }],
       joinOperator: "and",
-      filterFlag: null,
       lifecycle: "active",
-      simpleFilters: {
-        assigneeId: ["user-123", "__empty__"],
-      },
     });
 
     const encoded = encodeSnapshotForViewPersistence({
@@ -106,8 +75,32 @@ describe("queryState", () => {
       currentUserId: "user-123",
     });
 
-    expect(encoded.simpleFilters).toEqual({
-      assigneeId: ["me", "__empty__"],
+    expect(encoded.filters).toEqual([
+      {
+        id: "assigneeId",
+        operator: "inArray",
+        value: ["me", "other"],
+      },
+    ]);
+    expect((encoded as Record<string, unknown>).filterFlag).toBeUndefined();
+    expect((encoded as Record<string, unknown>).simpleFilters).toBeUndefined();
+  });
+
+  it("parses persisted view query state", () => {
+    const snapshot = parseViewQueryStateToSnapshot({
+      q: "sales",
+      sort: [{ id: "createdAt", desc: true }],
+      filters: [{ id: "name", operator: "contains", value: "Q4" }],
+      joinOperator: "or",
+      lifecycle: "deleted",
+    });
+
+    expect(snapshot).toEqual({
+      q: "sales",
+      sort: [{ id: "createdAt", desc: true }],
+      filters: [{ id: "name", operator: "contains", value: "Q4" }],
+      joinOperator: "or",
+      lifecycle: "deleted",
     });
   });
 });

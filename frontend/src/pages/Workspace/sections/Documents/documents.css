@@ -23,3 +23,103 @@
 .documents-table [data-slot="table-head"][style*="right:"] {
   z-index: 3 !important;
 }
+
+.documents-table [data-slot="table-row"] {
+  transition: background-color 140ms ease, box-shadow 140ms ease, outline-color 140ms ease;
+  background-color: var(--card);
+}
+
+.documents-table [data-slot="table-row"]:hover {
+  background-color: hsl(var(--muted) / 0.58);
+  box-shadow: inset 3px 0 0 hsl(var(--primary) / 0.42);
+}
+
+.documents-table [data-slot="table-row"][data-state="selected"] {
+  background-color: hsl(var(--accent) / 0.52);
+}
+
+.documents-table [data-slot="table-row"][data-state="selected"]:hover {
+  background-color: hsl(var(--accent) / 0.68);
+  box-shadow: inset 3px 0 0 hsl(var(--primary) / 0.5);
+}
+
+.documents-table [data-slot="table-row"]:focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.75);
+  outline-offset: -2px;
+  box-shadow: inset 3px 0 0 hsl(var(--primary) / 0.6);
+}
+
+.documents-toolbar-row > * {
+  flex-shrink: 0;
+}
+
+.documents-toolbar-row > .ml-auto {
+  min-width: 0;
+}
+
+.documents-filter-rail {
+  container-type: inline-size;
+}
+
+.documents-mobile-card {
+  border: 1px solid hsl(var(--border) / 0.8);
+  background: hsl(var(--card));
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.03);
+}
+
+.documents-mobile-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.documents-mobile-card__title {
+  min-width: 0;
+  font-weight: 600;
+  font-size: 1.125rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documents-mobile-card__meta-grid {
+  margin-top: 0.625rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem 0.75rem;
+}
+
+.documents-mobile-card__field {
+  min-width: 0;
+}
+
+.documents-mobile-card__label {
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 1279px) {
+  .documents-table > div.overflow-hidden {
+    border-radius: 0.625rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .documents-toolbar-row {
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .documents-mobile-card__title {
+    font-size: 1rem;
+  }
+}

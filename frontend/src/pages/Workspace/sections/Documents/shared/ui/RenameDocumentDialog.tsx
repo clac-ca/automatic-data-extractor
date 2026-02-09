@@ -10,22 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-
-type DocumentNameParts = {
-  baseName: string;
-  extension: string;
-};
-
-function splitDocumentName(name: string): DocumentNameParts {
-  const index = name.lastIndexOf(".");
-  if (index <= 0) {
-    return { baseName: name, extension: "" };
-  }
-  return {
-    baseName: name.slice(0, index),
-    extension: name.slice(index),
-  };
-}
+import {
+  composeFileName,
+  splitFileName,
+  type FileNameParts,
+} from "@/pages/Workspace/sections/Documents/shared/rename/fileNameParts";
 
 export function RenameDocumentDialog({
   open,
@@ -46,7 +35,7 @@ export function RenameDocumentDialog({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { baseName, extension } = useMemo(
-    () => splitDocumentName(documentName),
+    () => splitFileName(documentName),
     [documentName],
   );
   const [draftBaseName, setDraftBaseName] = useState(baseName);
@@ -73,7 +62,12 @@ export function RenameDocumentDialog({
       setLocalError("Document name cannot be blank.");
       return;
     }
-    await onSubmit(extension ? `${normalizedBase}${extension}` : normalizedBase);
+    await onSubmit(
+      composeFileName({
+        baseName: normalizedBase,
+        extension,
+      }),
+    );
   };
 
   const message = localError ?? errorMessage;
@@ -141,4 +135,4 @@ export function RenameDocumentDialog({
   );
 }
 
-export { splitDocumentName };
+export const splitDocumentName = (name: string): FileNameParts => splitFileName(name);

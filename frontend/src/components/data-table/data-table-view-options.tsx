@@ -23,11 +23,13 @@ interface DataTableViewOptionsProps<TData>
   extends React.ComponentProps<typeof PopoverContent> {
   table: Table<TData>;
   disabled?: boolean;
+  buttonClassName?: string;
 }
 
 export function DataTableViewOptions<TData>({
   table,
   disabled,
+  buttonClassName,
   ...props
 }: DataTableViewOptionsProps<TData>) {
   const columns = React.useMemo(
@@ -49,7 +51,7 @@ export function DataTableViewOptions<TData>({
           role="combobox"
           variant="outline"
           size="sm"
-          className="ml-auto hidden h-8 font-normal lg:flex"
+          className={cn("ml-auto h-8 font-normal", buttonClassName)}
           disabled={disabled}
         >
           <Settings2 className="text-muted-foreground" />

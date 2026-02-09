@@ -255,6 +255,10 @@ export function TagSelector({
         <PopoverContent
           align="start"
           className={cn("w-64 p-0", contentClassName)}
+          data-row-interactive
+          onPointerDownCapture={(event) => {
+            event.stopPropagation();
+          }}
           onOpenAutoFocus={(e) => {
             // Keep focus in the input rather than PopoverContent.
             e.preventDefault();

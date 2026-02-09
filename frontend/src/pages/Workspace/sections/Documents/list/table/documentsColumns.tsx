@@ -1,33 +1,31 @@
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { PresenceParticipant } from "@/types/presence";
 
 import type { RunStatus } from "@/types";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { DocumentPresenceEntry } from "@/pages/Workspace/hooks/presence/presenceParticipants";
 
 import type { DocumentRow, FileType, WorkspacePerson } from "../../shared/types";
 import { fileTypeLabel, formatBytes, formatTimestamp, shortId } from "../../shared/utils";
-import { ActionsCell } from "./cells/ActionsCell";
 import { AssigneeCell } from "./cells/AssigneeCell";
 import { DocumentNameCell } from "./cells/DocumentNameCell";
 import { DocumentRunPhaseCell } from "./cells/DocumentRunPhaseCell";
 import { TagsCell } from "./cells/TagsCell";
 
 export type DocumentsColumnContext = {
-  filterMode: "simple" | "advanced";
   lifecycle: "active" | "deleted";
   people: WorkspacePerson[];
+  currentUserId: string;
   tagOptions: string[];
   onTagOptionsChange?: (nextOptions: string[]) => void;
   onCreateTag?: (tag: string) => void | Promise<void>;
-  rowPresence?: Map<string, PresenceParticipant[]>;
-  onOpenDocument?: (documentId: string) => void;
+  rowPresence?: Map<string, DocumentPresenceEntry[]>;
   onOpenPreview?: (documentId: string) => void;
   onOpenActivity?: (documentId: string) => void;
   onAssign: (documentId: string, assigneeId: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
-  onRenameRequest: (document: DocumentRow) => void;
+  onRenameInline: (document: DocumentRow, nextName: string) => Promise<void>;
   onDeleteRequest: (document: DocumentRow) => void;
   onRestoreRequest: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
@@ -35,22 +33,32 @@ export type DocumentsColumnContext = {
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
   isRowActionPending?: (documentId: string) => boolean;
+  inlineRenameRequest?: { documentId: string; nonce: number } | null;
+};
+
+type DocumentsColumnMeta = {
+  label?: string;
+  placeholder?: string;
+  variant?: string;
+  options?: Array<{ label: string; value: string }>;
+  unit?: string;
+  headerClassName?: string;
+  cellClassName?: string;
 };
 
 export function useDocumentsColumns({
-  filterMode,
   lifecycle,
   people,
+  currentUserId,
   tagOptions,
   onTagOptionsChange,
   onCreateTag,
   rowPresence,
-  onOpenDocument,
   onOpenPreview,
   onOpenActivity,
   onAssign,
   onToggleTag,
-  onRenameRequest,
+  onRenameInline,
   onDeleteRequest,
   onRestoreRequest,
   onDownloadLatest,
@@ -58,8 +66,8 @@ export function useDocumentsColumns({
   onReprocessRequest,
   onCancelRunRequest,
   isRowActionPending,
+  inlineRenameRequest,
 }: DocumentsColumnContext) {
-  const enableAdvancedOnly = filterMode === "advanced";
   const isDeletedLifecycle = lifecycle === "deleted";
   const runStatusOptions = useMemo(() => {
     const statuses = (["queued", "running", "succeeded", "failed", "cancelled"] as RunStatus[]).map((value) => ({
@@ -97,7 +105,7 @@ export function useDocumentsColumns({
       {
         id: "select",
         header: ({ table }) => (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center" data-ignore-row-click>
             <Checkbox
               checked={
                 table.getIsAllPageRowsSelected() ||
@@ -109,7 +117,7 @@ export function useDocumentsColumns({
           </div>
         ),
         cell: ({ row }) => (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center" data-ignore-row-click>
             <Checkbox
               checked={row.getIsSelected()}
               onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
@@ -126,22 +134,38 @@ export function useDocumentsColumns({
         id: "name",
         accessorKey: "name",
         header: ({ column }) => <DataTableColumnHeader column={column} label="Document" />,
-        cell: ({ row }) => (
-          <DocumentNameCell
-            name={row.getValue<string>("name")}
-            viewers={rowPresence?.get(row.original.id) ?? []}
-            onOpen={
-              onOpenDocument ? () => onOpenDocument(row.original.id) : undefined
-            }
-          />
-        ),
+        cell: ({ row }) => {
+          const rowPending = isRowActionPending?.(row.original.id) ?? false;
+          return (
+            <DocumentNameCell
+              document={row.original}
+              lifecycle={lifecycle}
+              presenceEntries={rowPresence?.get(row.original.id) ?? []}
+              isBusy={rowPending}
+              currentUserId={currentUserId}
+              onOpenPreview={onOpenPreview ? () => onOpenPreview(row.original.id) : undefined}
+              onOpenActivity={onOpenActivity ? () => onOpenActivity(row.original.id) : undefined}
+              onRename={(nextName) => onRenameInline(row.original, nextName)}
+              onAssignToMe={() => onAssign(row.original.id, currentUserId)}
+              onDeleteRequest={onDeleteRequest}
+              onRestoreRequest={onRestoreRequest}
+              onDownloadLatest={onDownloadLatest}
+              onDownloadOriginal={onDownloadOriginal}
+              onReprocessRequest={onReprocessRequest}
+              onCancelRunRequest={onCancelRunRequest}
+              externalRenameSignal={
+                inlineRenameRequest?.documentId === row.original.id ? inlineRenameRequest.nonce : 0
+              }
+            />
+          );
+        },
         meta: {
           label: "Document",
           placeholder: "Search documents...",
           variant: "text",
-        },
-        size: 260,
-        enableColumnFilter: enableAdvancedOnly,
+        } as DocumentsColumnMeta,
+        size: 420,
+        enableColumnFilter: true,
         enableHiding: false,
       },
       {
@@ -152,6 +176,7 @@ export function useDocumentsColumns({
           <AssigneeCell
             assigneeId={row.original.assignee?.id ?? null}
             people={people}
+            currentUserId={currentUserId}
             onAssign={(assigneeId) => onAssign(row.original.id, assigneeId)}
             disabled={isDeletedLifecycle || (isRowActionPending?.(row.original.id) ?? false)}
           />
@@ -160,7 +185,9 @@ export function useDocumentsColumns({
           label: "Assignee",
           variant: "multiSelect",
           options: assigneeFilterOptions,
-        },
+          headerClassName: "hidden lg:table-cell",
+          cellClassName: "hidden lg:table-cell",
+        } as DocumentsColumnMeta,
         size: 160,
         enableColumnFilter: true,
         enableSorting: false,
@@ -184,7 +211,9 @@ export function useDocumentsColumns({
           label: "Tags",
           variant: "multiSelect",
           options: tagFilterOptions,
-        },
+          headerClassName: "hidden xl:table-cell",
+          cellClassName: "hidden xl:table-cell",
+        } as DocumentsColumnMeta,
         size: 180,
         enableColumnFilter: true,
         enableSorting: false,
@@ -204,7 +233,7 @@ export function useDocumentsColumns({
           label: "Run status",
           variant: "multiSelect",
           options: runStatusOptions,
-        },
+        } as DocumentsColumnMeta,
         size: 140,
         enableColumnFilter: true,
         enableHiding: true,
@@ -217,7 +246,9 @@ export function useDocumentsColumns({
         cell: ({ row }) => renderRunSummary(row.original.lastRun),
         meta: {
           label: "Last Run",
-        },
+          headerClassName: "hidden xl:table-cell",
+          cellClassName: "hidden xl:table-cell",
+        } as DocumentsColumnMeta,
         size: 180,
         enableHiding: true,
       },
@@ -229,9 +260,11 @@ export function useDocumentsColumns({
         meta: {
           label: "Updated",
           variant: "dateRange",
-        },
+          headerClassName: "hidden md:table-cell",
+          cellClassName: "hidden md:table-cell",
+        } as DocumentsColumnMeta,
         size: 150,
-        enableColumnFilter: enableAdvancedOnly,
+        enableColumnFilter: true,
         enableHiding: true,
       },
       {
@@ -242,7 +275,9 @@ export function useDocumentsColumns({
         meta: {
           label: "Created",
           variant: "dateRange",
-        },
+          headerClassName: "hidden lg:table-cell",
+          cellClassName: "hidden lg:table-cell",
+        } as DocumentsColumnMeta,
         size: 150,
         enableColumnFilter: true,
         enableHiding: true,
@@ -257,7 +292,7 @@ export function useDocumentsColumns({
         },
         meta: {
           label: "Deleted",
-        },
+        } as DocumentsColumnMeta,
         size: 150,
         enableColumnFilter: false,
         enableHiding: true,
@@ -271,7 +306,7 @@ export function useDocumentsColumns({
           label: "Type",
           variant: "multiSelect",
           options: fileTypeOptions,
-        },
+        } as DocumentsColumnMeta,
         size: 100,
         enableColumnFilter: true,
         enableSorting: false,
@@ -285,7 +320,7 @@ export function useDocumentsColumns({
           label: "Uploader",
           variant: "multiSelect",
           options: memberOptions,
-        },
+        } as DocumentsColumnMeta,
         size: 160,
         enableColumnFilter: true,
         enableSorting: false,
@@ -300,9 +335,9 @@ export function useDocumentsColumns({
           label: "Size",
           variant: "number",
           unit: "bytes",
-        },
+        } as DocumentsColumnMeta,
         size: 110,
-        enableColumnFilter: enableAdvancedOnly,
+        enableColumnFilter: true,
         enableHiding: true,
       },
       {
@@ -313,9 +348,9 @@ export function useDocumentsColumns({
         meta: {
           label: "Activity",
           variant: "dateRange",
-        },
+        } as DocumentsColumnMeta,
         size: 150,
-        enableColumnFilter: enableAdvancedOnly,
+        enableColumnFilter: true,
         enableHiding: true,
       },
       {
@@ -329,55 +364,31 @@ export function useDocumentsColumns({
         ),
         meta: {
           label: "ID",
-        },
+        } as DocumentsColumnMeta,
         size: 120,
         enableHiding: true,
       },
-      {
-        id: "actions",
-        cell: ({ row }) => (
-          <ActionsCell
-            document={row.original}
-            lifecycle={lifecycle}
-            onOpenDocument={() =>
-              (onOpenPreview ?? onOpenDocument)?.(row.original.id)
-            }
-            onOpenActivity={() => onOpenActivity?.(row.original.id)}
-            isBusy={isRowActionPending?.(row.original.id) ?? false}
-            onRenameRequest={onRenameRequest}
-            onDeleteRequest={onDeleteRequest}
-            onRestoreRequest={onRestoreRequest}
-            onDownloadLatest={onDownloadLatest}
-            onDownloadOriginal={onDownloadOriginal}
-            onReprocessRequest={onReprocessRequest}
-            onCancelRunRequest={onCancelRunRequest}
-          />
-        ),
-        size: 192,
-        enableSorting: false,
-        enableHiding: false,
-      },
     ],
     [
-      enableAdvancedOnly,
       lifecycle,
       fileTypeOptions,
       isDeletedLifecycle,
       isRowActionPending,
       assigneeFilterOptions,
+      currentUserId,
       memberOptions,
       onCreateTag,
       onOpenActivity,
-      onOpenDocument,
       onOpenPreview,
       onAssign,
-      onRenameRequest,
       onDeleteRequest,
       onRestoreRequest,
       onDownloadLatest,
       onDownloadOriginal,
       onReprocessRequest,
       onCancelRunRequest,
+      inlineRenameRequest,
+      onRenameInline,
       onTagOptionsChange,
       onToggleTag,
       people,
@@ -418,13 +429,11 @@ function renderUserSummary(user: DocumentRow["uploader"]) {
   }
 
   const primary = user.name ?? user.email ?? "Unknown";
-  const secondary = user.name ? user.email : null;
-
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="truncate">{primary}</span>
-      {secondary ? (
-        <span className="truncate text-xs text-muted-foreground">{secondary}</span>
+      {user.email && user.email !== primary ? (
+        <span className="truncate text-xs text-muted-foreground">{user.email}</span>
       ) : null}
     </div>
   );
