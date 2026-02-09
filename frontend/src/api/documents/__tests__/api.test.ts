@@ -111,14 +111,66 @@ describe("documents api helpers", () => {
     });
   });
 
+  it("sends restore rename payload when provided", async () => {
+    const responsePayload = {
+      id: "doc-1",
+      workspaceId: "ws-1",
+      name: "Quarterly Intake (2).xlsx",
+      byteSize: 123,
+      metadata: {},
+      tags: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+      activityAt: "2026-01-01T00:00:00Z",
+      fileType: "xlsx",
+    };
+    const spy = vi.spyOn(client, "POST").mockResolvedValue(
+      { data: responsePayload } as unknown as PostResponse,
+    );
+
+    const result = await restoreWorkspaceDocument("ws-1", "doc-1", { name: "Quarterly Intake (2).xlsx" });
+
+    expect(result).toEqual(responsePayload);
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
+      params: { path: { workspaceId: "ws-1", documentId: "doc-1" } },
+      body: { name: "Quarterly Intake (2).xlsx" },
+    });
+  });
+
   it("calls the batch restore endpoint", async () => {
     const spy = vi.spyOn(client, "POST").mockResolvedValue(
-      { data: { documentIds: ["doc-1", "doc-2"] } } as unknown as PostResponse,
+      {
+        data: {
+          restoredIds: ["doc-2"],
+          conflicts: [
+            {
+              documentId: "doc-1",
+              name: "Quarterly Intake.xlsx",
+              conflictingDocumentId: "doc-active",
+              conflictingName: "Quarterly Intake.xlsx",
+              suggestedName: "Quarterly Intake (2).xlsx",
+            },
+          ],
+          notFoundIds: ["doc-missing"],
+        },
+      } as unknown as PostResponse,
     );
 
     const result = await restoreWorkspaceDocumentsBatch("ws-1", ["doc-1", "doc-2"]);
 
-    expect(result).toEqual(["doc-1", "doc-2"]);
+    expect(result).toEqual({
+      restoredIds: ["doc-2"],
+      conflicts: [
+        {
+          documentId: "doc-1",
+          name: "Quarterly Intake.xlsx",
+          conflictingDocumentId: "doc-active",
+          conflictingName: "Quarterly Intake.xlsx",
+          suggestedName: "Quarterly Intake (2).xlsx",
+        },
+      ],
+      notFoundIds: ["doc-missing"],
+    });
     expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
       params: { path: { workspaceId: "ws-1" } },
       body: { documentIds: ["doc-1", "doc-2"] },

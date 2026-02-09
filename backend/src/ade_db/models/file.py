@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
@@ -145,11 +146,13 @@ class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "files_workspace_kind_name_key",
             "workspace_id",
             "kind",
             "name_key",
-            name="files_workspace_kind_name_key",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
         Index("ix_files_workspace_created", "workspace_id", "created_at"),
         Index("ix_files_workspace_last_run_id", "workspace_id", "last_run_id"),

@@ -21,7 +21,7 @@ import {
   updateDocumentView as updateSavedDocumentView,
   type DocumentViewRecord,
 } from "@/api/documents/views";
-import { ApiError } from "@/api/errors";
+import { ApiError, groupProblemDetailsErrors } from "@/api/errors";
 import { cancelRun, createRun, createRunsBatch } from "@/api/runs/api";
 import type { RunStreamOptions } from "@/api/runs/api";
 import { listWorkspaceMembers } from "@/api/workspaces/api";
@@ -151,6 +151,21 @@ function deriveFileType(name: string): DocumentRow["fileType"] {
   return inferFileType(name);
 }
 
+function extractRestoreConflict(error: ApiError): { message: string; suggestedName: string | null } {
+  const fallbackMessage = error.message || "Unable to restore document.";
+  const detail = error.problem?.detail;
+  const message = typeof detail === "string" && detail.trim().length > 0 ? detail : fallbackMessage;
+
+  const groupedErrors = groupProblemDetailsErrors(error.problem?.errors);
+  const firstSuggestedName = groupedErrors.suggestedName?.[0];
+  const suggestedName =
+    typeof firstSuggestedName === "string" && firstSuggestedName.trim().length > 0
+      ? firstSuggestedName
+      : null;
+
+  return { message, suggestedName };
+}
+
 function isRunActive(document: DocumentRow) {
   return document.lastRun?.status === "queued" || document.lastRun?.status === "running";
 }
@@ -184,6 +199,9 @@ export function DocumentsTableContainer({
   const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<DocumentRow | null>(null);
+  const [restoreRenameTarget, setRestoreRenameTarget] = useState<DocumentRow | null>(null);
+  const [restoreRenameInitialName, setRestoreRenameInitialName] = useState("");
+  const [restoreRenameError, setRestoreRenameError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<DocumentRow | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
@@ -304,6 +322,9 @@ export function DocumentsTableContainer({
   useEffect(() => {
     setDeleteTarget(null);
     setRestoreTarget(null);
+    setRestoreRenameTarget(null);
+    setRestoreRenameInitialName("");
+    setRestoreRenameError(null);
     setRenameTarget(null);
     setRenameError(null);
     setSaveAsOpen(false);
@@ -1029,16 +1050,33 @@ export function DocumentsTableContainer({
     targets.forEach((documentId) => markRowPending(documentId, "restore"));
     setIsBulkRestoreSubmitting(true);
     try {
-      const restoredIds = await restoreWorkspaceDocumentsBatch(workspaceId, targets);
-      const resolvedRestoredIds = restoredIds.length > 0 ? restoredIds : targets;
-      resolvedRestoredIds.forEach((documentId) => removeRow(documentId));
+      const result = await restoreWorkspaceDocumentsBatch(workspaceId, targets);
+      const restoredIds = result.restoredIds ?? [];
+      const conflictCount = result.conflicts?.length ?? 0;
+      const notFoundCount = result.notFoundIds?.length ?? 0;
+
+      restoredIds.forEach((documentId) => removeRow(documentId));
       void refreshSnapshot();
+
+      const summaryParts: string[] = [];
+      if (restoredIds.length > 0) {
+        summaryParts.push(`${restoredIds.length} restored`);
+      }
+      if (conflictCount > 0) {
+        summaryParts.push(`${conflictCount} need rename`);
+      }
+      if (notFoundCount > 0) {
+        summaryParts.push(`${notFoundCount} not found`);
+      }
+
       notifyToast({
-        title: "Documents restored",
-        description: `${resolvedRestoredIds.length} document${resolvedRestoredIds.length === 1 ? "" : "s"} restored.`,
-        intent: "success",
+        title: "Batch restore complete",
+        description: summaryParts.length > 0 ? summaryParts.join(", ") : "No documents were restored.",
+        intent: conflictCount > 0 || notFoundCount > 0 ? "warning" : "success",
       });
-      setSelectionResetToken((value) => value + 1);
+      if (restoredIds.length > 0) {
+        setSelectionResetToken((value) => value + 1);
+      }
       onBulkRestoreCancel();
     } catch (error) {
       notifyToast({
@@ -1334,30 +1372,101 @@ export function DocumentsTableContainer({
 
   const onRestoreRequest = useCallback((document: DocumentRow) => {
     setRestoreTarget(document);
+    setRestoreRenameTarget(null);
+    setRestoreRenameInitialName("");
+    setRestoreRenameError(null);
   }, []);
 
   const onRestoreCancel = useCallback(() => {
     setRestoreTarget(null);
   }, []);
 
+  const onRestoreRenameCancel = useCallback(() => {
+    setRestoreRenameTarget(null);
+    setRestoreRenameInitialName("");
+    setRestoreRenameError(null);
+  }, []);
+
   const onRestoreConfirm = useCallback(async () => {
     if (!restoreTarget) return;
-    markRowPending(restoreTarget.id, "restore");
+    const current = documentsById[restoreTarget.id] ?? restoreTarget;
+    markRowPending(current.id, "restore");
     try {
-      await restoreWorkspaceDocument(workspaceId, restoreTarget.id);
-      removeRow(restoreTarget.id);
+      await restoreWorkspaceDocument(workspaceId, current.id);
+      removeRow(current.id);
       void refreshSnapshot();
       notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
       setRestoreTarget(null);
+      onRestoreRenameCancel();
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        const restoreConflict = extractRestoreConflict(error);
+        setRestoreTarget(null);
+        setRestoreRenameTarget(current);
+        setRestoreRenameInitialName(restoreConflict.suggestedName ?? current.name);
+        setRestoreRenameError(null);
+        return;
+      }
       notifyToast({
         title: error instanceof Error ? error.message : "Unable to restore document.",
         intent: "danger",
       });
     } finally {
-      clearRowPending(restoreTarget.id, "restore");
+      clearRowPending(current.id, "restore");
     }
-  }, [clearRowPending, markRowPending, notifyToast, refreshSnapshot, removeRow, restoreTarget, workspaceId]);
+  }, [
+    clearRowPending,
+    documentsById,
+    markRowPending,
+    notifyToast,
+    onRestoreRenameCancel,
+    refreshSnapshot,
+    removeRow,
+    restoreTarget,
+    workspaceId,
+  ]);
+
+  const onRestoreRenameConfirm = useCallback(async (nextName: string) => {
+    if (!restoreRenameTarget) return;
+    const current = documentsById[restoreRenameTarget.id] ?? restoreRenameTarget;
+    markRowPending(current.id, "restore");
+    setRestoreRenameError(null);
+    try {
+      await restoreWorkspaceDocument(workspaceId, current.id, { name: nextName });
+      removeRow(current.id);
+      void refreshSnapshot();
+      notifyToast({ title: "Document restored.", intent: "success", duration: 4000 });
+      onRestoreRenameCancel();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        const restoreConflict = extractRestoreConflict(error);
+        setRestoreRenameError(restoreConflict.message);
+        if (restoreConflict.suggestedName) {
+          setRestoreRenameInitialName(restoreConflict.suggestedName);
+        }
+        return;
+      }
+      const description = error instanceof Error ? error.message : "Unable to restore document.";
+      setRestoreRenameError(description);
+      notifyToast({
+        title: "Unable to restore document",
+        description,
+        intent: "danger",
+      });
+    } finally {
+      clearRowPending(current.id, "restore");
+    }
+  }, [
+    clearRowPending,
+    documentsById,
+    markRowPending,
+    notifyToast,
+    onRestoreRenameCancel,
+    refreshSnapshot,
+    removeRow,
+    restoreRenameTarget,
+    workspaceId,
+  ]);
 
   const markStale = useCallback(() => {
     if (page > 1) {
@@ -1784,6 +1893,8 @@ export function DocumentsTableContainer({
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
   const restorePending =
     restoreTarget ? pendingMutations[restoreTarget.id]?.has("restore") ?? false : false;
+  const restoreRenamePending =
+    restoreRenameTarget ? pendingMutations[restoreRenameTarget.id]?.has("restore") ?? false : false;
   const renamePending =
     renameTarget ? pendingMutations[renameTarget.id]?.has("rename") ?? false : false;
   const bulkAssignCount = bulkAssignTargets.length;
@@ -2098,6 +2209,19 @@ export function DocumentsTableContainer({
           if (renameError) setRenameError(null);
         }}
         onSubmit={onRenameConfirm}
+      />
+      <RenameDocumentDialog
+        open={Boolean(restoreRenameTarget)}
+        documentName={restoreRenameInitialName || restoreRenameTarget?.name || ""}
+        isPending={restoreRenamePending}
+        errorMessage={restoreRenameError}
+        onOpenChange={(open) => {
+          if (!open) onRestoreRenameCancel();
+        }}
+        onClearError={() => {
+          if (restoreRenameError) setRestoreRenameError(null);
+        }}
+        onSubmit={onRestoreRenameConfirm}
       />
       <ReprocessPreflightDialog
         open={reprocessTargets.length > 0}

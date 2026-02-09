@@ -2263,23 +2263,51 @@ export type components = {
             documentIds?: string[];
         };
         /**
+         * DocumentBatchRestoreConflict
+         * @description Conflict payload for a document that could not be restored.
+         */
+        DocumentBatchRestoreConflict: {
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            documentId: string;
+            /** Name */
+            name: string;
+            /**
+             * Conflictingdocumentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            conflictingDocumentId: string;
+            /** Conflictingname */
+            conflictingName: string;
+            /** Suggestedname */
+            suggestedName: string;
+        };
+        /**
          * DocumentBatchRestoreRequest
          * @description Payload for restoring multiple soft-deleted documents.
          */
         DocumentBatchRestoreRequest: {
             /**
              * Documentids
-             * @description Documents to restore (all-or-nothing).
+             * @description Documents to restore (each document resolved independently).
              */
             documentIds: string[];
         };
         /**
          * DocumentBatchRestoreResponse
-         * @description Response envelope for batch restores.
+         * @description Response envelope for partial batch restore operations.
          */
         DocumentBatchRestoreResponse: {
-            /** Documentids */
-            documentIds?: string[];
+            /** Restoredids */
+            restoredIds?: string[];
+            /** Conflicts */
+            conflicts?: components["schemas"]["DocumentBatchRestoreConflict"][];
+            /** Notfoundids */
+            notFoundIds?: string[];
         };
         /**
          * DocumentBatchTagsRequest
@@ -2581,6 +2609,17 @@ export type components = {
             lastRunFields?: components["schemas"]["RunFieldResource"][] | null;
             /** @description Optional list row projection for table updates. */
             listRow?: components["schemas"]["DocumentListRow"] | null;
+        };
+        /**
+         * DocumentRestoreRequest
+         * @description Optional payload for restoring a document with a new name.
+         */
+        DocumentRestoreRequest: {
+            /**
+             * Name
+             * @description Optional replacement name used while restoring a deleted document.
+             */
+            name?: string | null;
         };
         /**
          * DocumentRunSummary
@@ -8394,7 +8433,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DocumentRestoreRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -8430,15 +8473,21 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Document name conflicts with an active document. */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Restore name is invalid (for example extension mismatch). */
             422: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
             default: components["responses"]["ProblemDetails"];
         };
@@ -8546,14 +8595,6 @@ export interface operations {
             };
             /** @description Workspace permissions do not allow document restoration. */
             403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more documents were not found within the workspace. */
-            404: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;

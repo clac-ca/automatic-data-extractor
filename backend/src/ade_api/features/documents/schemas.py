@@ -230,6 +230,24 @@ class DocumentUpdateRequest(BaseSchema):
         return self
 
 
+class DocumentRestoreRequest(BaseSchema):
+    """Optional payload for restoring a document with a new name."""
+
+    name: str | None = Field(
+        default=None,
+        description="Optional replacement name used while restoring a deleted document.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.strip():
+            raise ValueError("name is required")
+        return value
+
+
 class DocumentBatchTagsRequest(BaseSchema):
     """Payload for updating tags on multiple documents."""
 
@@ -285,14 +303,26 @@ class DocumentBatchRestoreRequest(BaseSchema):
         ...,
         min_length=1,
         alias="documentIds",
-        description="Documents to restore (all-or-nothing).",
+        description="Documents to restore (each document resolved independently).",
     )
 
 
 class DocumentBatchRestoreResponse(BaseSchema):
-    """Response envelope for batch restores."""
+    """Response envelope for partial batch restore operations."""
 
-    document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
+    restored_ids: list[UUIDStr] = Field(default_factory=list, alias="restoredIds")
+    conflicts: list[DocumentBatchRestoreConflict] = Field(default_factory=list)
+    not_found_ids: list[UUIDStr] = Field(default_factory=list, alias="notFoundIds")
+
+
+class DocumentBatchRestoreConflict(BaseSchema):
+    """Conflict payload for a document that could not be restored."""
+
+    document_id: UUIDStr = Field(alias="documentId")
+    name: str
+    conflicting_document_id: UUIDStr = Field(alias="conflictingDocumentId")
+    conflicting_name: str = Field(alias="conflictingName")
+    suggested_name: str = Field(alias="suggestedName")
 
 
 class TagCatalogItem(BaseSchema):
@@ -541,10 +571,12 @@ class DocumentSheet(BaseSchema):
 __all__ = [
     "DocumentBatchDeleteRequest",
     "DocumentBatchDeleteResponse",
+    "DocumentBatchRestoreConflict",
     "DocumentBatchRestoreRequest",
     "DocumentBatchRestoreResponse",
     "DocumentBatchTagsRequest",
     "DocumentBatchTagsResponse",
+    "DocumentRestoreRequest",
     "DocumentListLifecycle",
     "DocumentConflictMode",
     "DocumentChangeDeltaResponse",

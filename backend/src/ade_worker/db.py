@@ -287,6 +287,7 @@ def ensure_output_file(
         files.c.workspace_id == workspace_id,
         files.c.kind == "output",
         files.c.name_key == name_key,
+        files.c.deleted_at.is_(None),
     )
     row = session.execute(stmt).mappings().first()
     if row:
@@ -316,7 +317,10 @@ def ensure_output_file(
     session.execute(
         pg_insert(files)
         .values(**payload)
-        .on_conflict_do_nothing(index_elements=["workspace_id", "kind", "name_key"])
+        .on_conflict_do_nothing(
+            index_elements=["workspace_id", "kind", "name_key"],
+            index_where=files.c.deleted_at.is_(None),
+        )
     )
     row = session.execute(stmt).mappings().first()
     return dict(row) if row else payload

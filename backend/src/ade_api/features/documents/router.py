@@ -66,6 +66,7 @@ from .exceptions import (
     DocumentFileMissingError,
     DocumentNameConflictError,
     DocumentNotFoundError,
+    DocumentRestoreNameConflictError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
@@ -82,6 +83,7 @@ from .exceptions import (
 from .schemas import (
     DocumentBatchDeleteRequest,
     DocumentBatchDeleteResponse,
+    DocumentBatchRestoreConflict,
     DocumentBatchRestoreRequest,
     DocumentBatchRestoreResponse,
     DocumentBatchTagsRequest,
@@ -96,6 +98,7 @@ from .schemas import (
     DocumentListLifecycle,
     DocumentListRow,
     DocumentOut,
+    DocumentRestoreRequest,
     DocumentSheet,
     DocumentTagsPatch,
     DocumentTagsReplace,
@@ -1408,8 +1411,14 @@ def delete_document(
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document restoration.",
         },
+        status.HTTP_409_CONFLICT: {
+            "description": "Document name conflicts with an active document.",
+        },
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Restore name is invalid (for example extension mismatch).",
         },
     },
 )
@@ -1418,12 +1427,50 @@ def restore_document(
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     _actor: DocumentManager,
+    payload: DocumentRestoreRequest | None = None,
 ) -> DocumentOut:
     try:
         return service.restore_document(
             workspace_id=workspace_id,
             document_id=document_id,
+            name=payload.name if payload is not None else None,
         )
+    except DocumentRestoreNameConflictError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(exc),
+                "errors": [
+                    {
+                        "path": "documentId",
+                        "message": exc.document_id,
+                        "code": "restore_document_id",
+                    },
+                    {
+                        "path": "name",
+                        "message": exc.name,
+                        "code": "restore_name",
+                    },
+                    {
+                        "path": "conflictingDocumentId",
+                        "message": exc.conflicting_document_id,
+                        "code": "restore_conflicting_document_id",
+                    },
+                    {
+                        "path": "conflictingName",
+                        "message": exc.conflicting_name,
+                        "code": "restore_conflicting_name",
+                    },
+                    {
+                        "path": "suggestedName",
+                        "message": exc.suggested_name,
+                        "code": "restore_suggested_name",
+                    },
+                ],
+            },
+        ) from exc
+    except InvalidDocumentRenameError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -1477,9 +1524,6 @@ def delete_documents_batch(
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document restoration.",
         },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "One or more documents were not found within the workspace.",
-        },
     },
 )
 def restore_documents_batch(
@@ -1488,15 +1532,24 @@ def restore_documents_batch(
     service: DocumentsServiceDep,
     _actor: DocumentManager,
 ) -> DocumentBatchRestoreResponse:
-    try:
-        restored_ids = service.restore_documents_batch(
-            workspace_id=workspace_id,
-            document_ids=payload.document_ids,
-        )
-    except DocumentNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return DocumentBatchRestoreResponse(document_ids=restored_ids)
+    result = service.restore_documents_batch(
+        workspace_id=workspace_id,
+        document_ids=payload.document_ids,
+    )
+    return DocumentBatchRestoreResponse(
+        restored_ids=result.restored_ids,
+        conflicts=[
+            DocumentBatchRestoreConflict(
+                document_id=conflict.document_id,
+                name=conflict.name,
+                conflicting_document_id=conflict.conflicting_document_id,
+                conflicting_name=conflict.conflicting_name,
+                suggested_name=conflict.suggested_name,
+            )
+            for conflict in result.conflicts
+        ],
+        not_found_ids=result.not_found_ids,
+    )
 
 
 @tags_router.get(
