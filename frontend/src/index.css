@@ -63,18 +63,18 @@ body,
 }
 
 :root[data-mode-intent-active="true"][data-mode-intent-target="dark"]::before {
-  opacity: clamp(0, calc(var(--mode-intent-strength) * 1.26), 0.24);
+  opacity: clamp(0, calc(var(--mode-intent-strength) * 1.14), 0.21);
   background:
     radial-gradient(
-      circle 224px at var(--mode-intent-x) var(--mode-intent-y),
-      rgb(20 28 52 / 0.44) 0%,
-      rgb(27 37 66 / 0.3) 30%,
-      rgb(21 30 54 / 0.2) 55%,
+      circle 216px at var(--mode-intent-x) var(--mode-intent-y),
+      rgb(20 28 52 / 0.39) 0%,
+      rgb(27 37 66 / 0.26) 30%,
+      rgb(21 30 54 / 0.17) 55%,
       rgb(13 17 31 / 0) 82%
     ),
     radial-gradient(
-      circle 324px at var(--mode-intent-x) var(--mode-intent-y),
-      rgb(10 15 26 / 0.31) 0%,
+      circle 316px at var(--mode-intent-x) var(--mode-intent-y),
+      rgb(10 15 26 / 0.26) 0%,
       rgb(10 15 26 / 0) 74%
     );
 }
