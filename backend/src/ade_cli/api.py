@@ -20,6 +20,7 @@ DEV_RELOAD_DIRS = (
     "tests/api",
     "tests/worker",
 )
+INTEGRATION_TEST_REQUIRED_ENV = ("ADE_TEST_DATABASE_URL",)
 
 
 app = typer.Typer(
@@ -66,7 +67,8 @@ def run_dev(
         sys.executable,
         "-m",
         "uvicorn",
-        "ade_api.main:app",
+        "ade_api.main:create_app",
+        "--factory",
         "--host",
         host,
         "--port",
@@ -105,7 +107,8 @@ def run_start(
         sys.executable,
         "-m",
         "uvicorn",
-        "ade_api.main:app",
+        "ade_api.main:create_app",
+        "--factory",
         "--host",
         host,
         "--port",
@@ -138,11 +141,31 @@ def run_tests(suite: TestSuite) -> None:
         cmd.extend(["-m", suite.value])
     if suite is TestSuite.UNIT:
         cmd.extend(["--ignore", f"{api_tests}/integration"])
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("ADE_")
-    }
+    if suite is TestSuite.UNIT:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("ADE_")
+        }
+    else:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("ADE_") or key.startswith("ADE_TEST_")
+        }
+        missing = [name for name in INTEGRATION_TEST_REQUIRED_ENV if not env.get(name)]
+        if missing:
+            missing_csv = ", ".join(missing)
+            typer.echo(
+                "error: integration tests require explicit test environment variables: "
+                f"{missing_csv}",
+                err=True,
+            )
+            typer.echo(
+                "hint: set ADE_TEST_DATABASE_URL (and ADE_TEST_BLOB_CONNECTION_STRING if needed).",
+                err=True,
+            )
+            raise typer.Exit(code=1)
     run(cmd, cwd=BACKEND_ROOT, env=env)
 
 

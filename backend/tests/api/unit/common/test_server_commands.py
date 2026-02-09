@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from typer.testing import CliRunner
 
 from ade_cli import api
@@ -42,6 +43,8 @@ def test_run_dev_defaults_to_single_process_reload(monkeypatch):
 
     command = captured["command"]
     assert command[:3] == [api.sys.executable, "-m", "uvicorn"]
+    assert command[3] == "ade_api.main:create_app"
+    assert "--factory" in command
     assert "--reload" in command
     assert "--workers" not in command
 
@@ -117,6 +120,8 @@ def test_run_start_uses_uvicorn_production_profile(monkeypatch):
 
     command = captured["command"]
     assert command[:3] == [api.sys.executable, "-m", "uvicorn"]
+    assert command[3] == "ade_api.main:create_app"
+    assert "--factory" in command
     assert command[command.index("--loop") + 1] == "uvloop"
     assert command[command.index("--http") + 1] == "httptools"
     assert "--proxy-headers" in command
@@ -242,3 +247,53 @@ def test_start_command_reads_ade_api_port_env(monkeypatch):
 
     assert result.exit_code == 0
     assert captured["port"] == 8202
+
+
+def test_run_tests_unit_scrubs_ade_env(monkeypatch):
+    captured: dict[str, object] = {}
+
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://hidden")
+    monkeypatch.setenv("ADE_TEST_DATABASE_URL", "postgresql+psycopg://should-not-be-kept")
+    monkeypatch.setattr(
+        api,
+        "run",
+        lambda command, *, cwd, env=None: captured.update(
+            {"command": list(command), "cwd": cwd, "env": env}
+        ),
+    )
+
+    api.run_tests(api.TestSuite.UNIT)
+
+    assert captured["cwd"] == BACKEND_ROOT
+    env = captured["env"]
+    assert "ADE_DATABASE_URL" not in env
+    assert "ADE_TEST_DATABASE_URL" not in env
+
+
+def test_run_tests_integration_preserves_ade_test_env(monkeypatch):
+    captured: dict[str, object] = {}
+
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://runtime")
+    monkeypatch.setenv("ADE_TEST_DATABASE_URL", "postgresql+psycopg://integration")
+    monkeypatch.setattr(
+        api,
+        "run",
+        lambda command, *, cwd, env=None: captured.update(
+            {"command": list(command), "cwd": cwd, "env": env}
+        ),
+    )
+
+    api.run_tests(api.TestSuite.INTEGRATION)
+
+    env = captured["env"]
+    assert env["ADE_TEST_DATABASE_URL"] == "postgresql+psycopg://integration"
+    assert "ADE_DATABASE_URL" not in env
+
+
+def test_run_tests_integration_requires_test_database_url(monkeypatch):
+    monkeypatch.delenv("ADE_TEST_DATABASE_URL", raising=False)
+
+    with pytest.raises(api.typer.Exit) as excinfo:
+        api.run_tests(api.TestSuite.INTEGRATION)
+
+    assert excinfo.value.exit_code == 1

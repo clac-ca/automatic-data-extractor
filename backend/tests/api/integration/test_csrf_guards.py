@@ -5,12 +5,16 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterable
 
+import pytest
 from fastapi.routing import APIRoute
 
 from ade_api.core.http import require_csrf
 from ade_api.main import create_app
 
-app = create_app()
+
+@pytest.fixture()
+def app(empty_database_settings):
+    return create_app(settings=empty_database_settings)
 
 MUTATING_METHODS: set[str] = {"POST", "PUT", "PATCH", "DELETE"}
 CSRF_ROUTE_ALLOWLIST: set[tuple[str, str]] = {
@@ -40,7 +44,7 @@ def _has_require_csrf(route: APIRoute) -> bool:
     return any(call is require_csrf for call in _dependency_calls(route))
 
 
-def test_mutating_routes_require_csrf() -> None:
+def test_mutating_routes_require_csrf(app) -> None:
     """All mutating routes should include the CSRF dependency unless allowlisted."""
 
     for route in app.router.routes:

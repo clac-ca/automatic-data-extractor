@@ -9,9 +9,23 @@ from pathlib import Path
 from paths import REPO_ROOT
 
 from ..main import create_app
+from ..settings import Settings
 
 DEFAULT_OUTPUT = REPO_ROOT / "backend" / "src" / "ade_api" / "openapi.json"
 CANONICAL_SERVER_URL = "http://localhost:8000"
+OPENAPI_DB_URL = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_openapi?sslmode=disable"
+OPENAPI_SECRET_KEY = "openapi-generation-only-secret-key-1234567890"
+
+
+def _openapi_settings() -> Settings:
+    return Settings.model_validate(
+        {
+            "database_url": OPENAPI_DB_URL,
+            "secret_key": OPENAPI_SECRET_KEY,
+            "blob_connection_string": "UseDevelopmentStorage=true",
+            "blob_versioning_mode": "off",
+        }
+    )
 
 
 def _write_schema(path: Path, schema: dict, indent: int | None) -> None:
@@ -47,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     indent = 0 if args.compact else max(args.indent, 0)
-    schema = create_app().openapi()
+    schema = create_app(settings=_openapi_settings()).openapi()
     # Keep generated artifacts deterministic regardless of local ADE_PUBLIC_WEB_URL.
     schema["servers"] = [{"url": CANONICAL_SERVER_URL}]
     output_path = args.output.expanduser().resolve()

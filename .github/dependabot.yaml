@@ -5,7 +5,7 @@ updates:
   # Web (npm) dependencies
   # -----------------------------
   - package-ecosystem: "npm"
-    directory: "/apps/ade-web"
+    directory: "/frontend"
     target-branch: "development"
     schedule:
       interval: "monthly"
@@ -20,7 +20,7 @@ updates:
   # API + Worker (uv) dependencies
   # -----------------------------
   - package-ecosystem: "uv"
-    directory: "/"
+    directory: "/backend"
     target-branch: "development"
     schedule:
       interval: "monthly"

@@ -19,6 +19,7 @@ app = typer.Typer(
     help="ADE worker CLI (start, dev, test, gc).",
 )
 WORKER_TEST_DIR = "tests/worker"
+INTEGRATION_TEST_REQUIRED_ENV = ("ADE_TEST_DATABASE_URL",)
 
 
 @app.callback()
@@ -57,11 +58,31 @@ def test(
         cmd.extend(["-m", resolved.value])
     if resolved is TestSuite.UNIT:
         cmd.extend(["--ignore", f"{WORKER_TEST_DIR}/integration"])
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("ADE_")
-    }
+    if resolved is TestSuite.UNIT:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("ADE_")
+        }
+    else:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("ADE_") or key.startswith("ADE_TEST_")
+        }
+        missing = [name for name in INTEGRATION_TEST_REQUIRED_ENV if not env.get(name)]
+        if missing:
+            missing_csv = ", ".join(missing)
+            typer.echo(
+                "error: integration tests require explicit test environment variables: "
+                f"{missing_csv}",
+                err=True,
+            )
+            typer.echo(
+                "hint: set ADE_TEST_DATABASE_URL before running worker integration tests.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
     run(cmd, cwd=BACKEND_ROOT, env=env)
 
 
