@@ -36,6 +36,10 @@ jobs:
       CI: "true"
       ADE_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable
       ADE_TEST_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+      # Keep runtime settings valid during module import in test collection.
+      ADE_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable
+      ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+      ADE_SECRET_KEY: test-secret-key-for-ci-only-do-not-use-in-prod
 
     steps:
       - name: Checkout
