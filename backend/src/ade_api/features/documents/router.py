@@ -31,13 +31,13 @@ from ade_api.api.deps import (
     get_runs_service,
     get_runs_service_read,
 )
-from ade_api.common.downloads import build_content_disposition
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
     cursor_query_params,
     resolve_cursor_sort,
     strict_cursor_query_guard,
 )
+from ade_api.common.downloads import build_content_disposition
 from ade_api.common.logging import log_context
 from ade_api.common.sse import sse_json
 from ade_api.common.workbook_preview import (
@@ -52,8 +52,8 @@ from ade_api.db import get_session_factory
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.service import RunsService
-from ade_storage import get_storage_adapter
 from ade_db.models import User
+from ade_storage import get_storage_adapter
 
 from .changes import (
     DEFAULT_DELTA_LIMIT,
@@ -66,10 +66,10 @@ from .exceptions import (
     DocumentFileMissingError,
     DocumentNameConflictError,
     DocumentNotFoundError,
-    DocumentRestoreNameConflictError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
+    DocumentRestoreNameConflictError,
     DocumentTooLargeError,
     DocumentVersionNotFoundError,
     DocumentViewConflictError,
@@ -94,8 +94,8 @@ from .schemas import (
     DocumentCommentOut,
     DocumentCommentPage,
     DocumentConflictMode,
-    DocumentListPage,
     DocumentListLifecycle,
+    DocumentListPage,
     DocumentListRow,
     DocumentOut,
     DocumentRestoreRequest,
@@ -110,7 +110,6 @@ from .schemas import (
     DocumentViewUpdate,
     TagCatalogPage,
 )
-from .upload_metadata import build_upload_metadata
 from .service import DocumentsService
 from .sorting import (
     COMMENT_CURSOR_FIELDS,
@@ -122,6 +121,7 @@ from .sorting import (
     ID_FIELD,
     SORT_FIELDS,
 )
+from .upload_metadata import build_upload_metadata
 
 router = APIRouter(
     prefix="/workspaces/{workspaceId}/documents",
@@ -159,9 +159,7 @@ ViewPath = Annotated[
     ),
 ]
 DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
-DocumentsServiceReadDep = Annotated[
-    DocumentsService, Depends(get_documents_service_read)
-]
+DocumentsServiceReadDep = Annotated[DocumentsService, Depends(get_documents_service_read)]
 RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
 RunsServiceReadDep = Annotated[RunsService, Depends(get_runs_service_read)]
 DocumentReader = Annotated[
@@ -178,6 +176,7 @@ DocumentManager = Annotated[
         scopes=["{workspaceId}"],
     ),
 ]
+
 
 def _resolve_event_token(request: Request, cursor: str | None) -> int | None:
     last_event_id = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
@@ -642,7 +641,7 @@ async def stream_document_changes(
 
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield sse_json("keepalive", {})
                     continue
 
@@ -928,7 +927,7 @@ def read_document(
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
     include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
-    ) -> DocumentOut:
+) -> DocumentOut:
     try:
         document = service.get_document(
             workspace_id=workspace_id,
@@ -1153,11 +1152,7 @@ def download_document_original(
                 document_id=document_id,
                 version_no=1,
             )
-            media_type = (
-                version.content_type
-                or record.content_type
-                or "application/octet-stream"
-            )
+            media_type = version.content_type or record.content_type or "application/octet-stream"
             filename = version.filename_at_upload or record.name
             disposition = build_content_disposition(filename)
     except DocumentNotFoundError as exc:
@@ -1209,11 +1204,7 @@ def download_document_version(
                 document_id=document_id,
                 version_no=version_no,
             )
-            media_type = (
-                version.content_type
-                or record.content_type
-                or "application/octet-stream"
-            )
+            media_type = version.content_type or record.content_type or "application/octet-stream"
             filename = version.filename_at_upload or record.name
             disposition = build_content_disposition(filename)
     except DocumentNotFoundError as exc:
@@ -1288,8 +1279,7 @@ def preview_document(
         Query(
             alias="sheetName",
             description=(
-                "Optional worksheet name to preview "
-                "(defaults to the first sheet when omitted)."
+                "Optional worksheet name to preview (defaults to the first sheet when omitted)."
             ),
         ),
     ] = None,

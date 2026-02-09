@@ -36,7 +36,11 @@ async def test_cookie_login_sets_session_and_bootstrap(
     assert async_client.cookies.get(settings.session_cookie_name)
 
     def _load_tokens():
-        return db_session.execute(select(AuthSession)).scalars().all()
+        return (
+            db_session.execute(select(AuthSession).where(AuthSession.user_id == admin.id))
+            .scalars()
+            .all()
+        )
 
     tokens = await anyio.to_thread.run_sync(_load_tokens)
     assert len(tokens) == 1
@@ -218,7 +222,11 @@ async def test_cookie_logout_revokes_access_tokens(
     assert not async_client.cookies.get(settings.session_cookie_name)
 
     def _load_tokens():
-        return db_session.execute(select(AuthSession)).scalars().all()
+        return (
+            db_session.execute(select(AuthSession).where(AuthSession.user_id == admin.id))
+            .scalars()
+            .all()
+        )
 
     tokens = await anyio.to_thread.run_sync(_load_tokens)
     assert len(tokens) == 1

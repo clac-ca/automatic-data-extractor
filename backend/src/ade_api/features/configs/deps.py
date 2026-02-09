@@ -38,18 +38,12 @@ def _iter_pyproject_dependencies(pyproject_path: Path) -> list[str]:
                     dependencies.extend(item for item in items if isinstance(item, str))
 
     poetry = (
-        payload.get("tool", {}).get("poetry")
-        if isinstance(payload.get("tool"), dict)
-        else None
+        payload.get("tool", {}).get("poetry") if isinstance(payload.get("tool"), dict) else None
     )
     if isinstance(poetry, dict):
         poetry_deps = poetry.get("dependencies")
         if isinstance(poetry_deps, dict):
-            dependencies.extend(
-                str(name)
-                for name in poetry_deps.keys()
-                if isinstance(name, str)
-            )
+            dependencies.extend(str(name) for name in poetry_deps.keys() if isinstance(name, str))
 
     return dependencies
 

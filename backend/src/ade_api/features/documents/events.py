@@ -8,10 +8,12 @@ import logging
 import random
 import threading
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import psycopg
 from fastapi import FastAPI, Request
+
 from ade_api.settings import Settings
 from ade_db.engine import build_psycopg_connect_kwargs
 

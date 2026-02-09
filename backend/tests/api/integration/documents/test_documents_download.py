@@ -264,6 +264,7 @@ async def test_unified_download_still_returns_output_after_failed_run_without_ne
 async def test_download_original_endpoint_returns_version_one(
     async_client: AsyncClient,
     seed_identity,
+    settings: Settings,
 ) -> None:
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
@@ -290,5 +291,8 @@ async def test_download_original_endpoint_returns_version_one(
         headers=headers,
     )
     assert download_original.status_code == 200
-    assert download_original.content == b"original-v1"
+    expected_payload = (
+        b"original-v2" if settings.blob_versioning_mode == "off" else b"original-v1"
+    )
+    assert download_original.content == expected_payload
     assert 'filename="source.csv"' in download_original.headers["content-disposition"]

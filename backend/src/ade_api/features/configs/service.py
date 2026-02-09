@@ -31,6 +31,7 @@ from ade_db.models import Configuration, ConfigurationSourceKind, ConfigurationS
 
 from .constants import CONFIG_EXCLUDED_NAMES, CONFIG_EXCLUDED_SUFFIXES, CONFIG_IGNORED_FILENAMES
 from .exceptions import (
+    ConfigImportError,
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
     ConfigStateError,
@@ -301,13 +302,24 @@ class ConfigurationsService:
             self._session.add(record)
             self._session.flush()
             self._session.refresh(record)
-        except Exception:
+        except Exception as exc:
             self._storage.delete_config(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 missing_ok=True,
             )
-            raise
+            logger.exception(
+                "config.import.persist_failed",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                    display_name=display_name,
+                ),
+            )
+            raise ConfigImportError(
+                "internal_error",
+                detail="Failed to persist imported configuration metadata.",
+            ) from exc
 
         logger.info(
             "config.import.success",
@@ -470,8 +482,7 @@ class ConfigurationsService:
                     activated_at=config.activated_at,
                     version_label=version_labels.get(config.id),
                     is_current=(
-                        focus_configuration is not None
-                        and config.id == focus_configuration.id
+                        focus_configuration is not None and config.id == focus_configuration.id
                     ),
                     in_focus_lineage=config.id in focus_lineage_ids,
                     changes_unavailable=changes_unavailable,

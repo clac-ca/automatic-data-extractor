@@ -23,6 +23,7 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 def get_blob_storage(request: Request) -> StorageAdapter:
     return get_storage_adapter(request)
 
+
 StorageDep = Annotated[StorageAdapter, Depends(get_blob_storage)]
 
 
@@ -86,9 +87,7 @@ def get_documents_service(session: WriteSessionDep, settings: SettingsDep, stora
     return DocumentsService(session=session, settings=settings, storage=storage)
 
 
-def get_documents_service_read(
-    session: ReadSessionDep, settings: SettingsDep, storage: StorageDep
-):
+def get_documents_service_read(session: ReadSessionDep, settings: SettingsDep, storage: StorageDep):
     from ade_api.features.documents.service import DocumentsService
 
     return DocumentsService(session=session, settings=settings, storage=storage)

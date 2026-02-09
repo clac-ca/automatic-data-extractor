@@ -15,8 +15,8 @@ from ade_api.core.security.password_policy import (
 )
 from ade_api.features.authn.service import AuthnService
 from ade_api.features.rbac import RbacService
-from ade_db.models import SsoProviderStatus, User
 from ade_api.settings import Settings
+from ade_db.models import SsoProviderStatus, User
 
 from .schemas import (
     AuthProvider,

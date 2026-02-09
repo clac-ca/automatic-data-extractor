@@ -8,17 +8,16 @@ import shutil
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select, true, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
-from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_sequence_cursor
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.search import matches_tokens, parse_q
 from ade_api.features.rbac import (
@@ -30,6 +29,7 @@ from ade_api.features.rbac import (
     RoleValidationError,
     ScopeMismatchError,
 )
+from ade_api.settings import Settings
 from ade_db.models import (
     Role,
     RolePermission,
@@ -38,7 +38,6 @@ from ade_db.models import (
     Workspace,
     WorkspaceMembership,
 )
-from ade_api.settings import Settings
 
 from ..users.repository import UsersRepository
 from .filters import (
@@ -128,13 +127,21 @@ class WorkspacesService:
                 permissions = self._rbac.get_workspace_permissions_for_user(
                     user=user, workspace_id=workspace_id
                 )
+                roles = self._workspace_roles_for_user(
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                )
+                membership = self._repo.get_membership_for_workspace(
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                )
                 profile = WorkspaceOut(
                     id=workspace.id,
                     name=workspace.name,
                     slug=workspace.slug,
-                    roles=[],
+                    roles=sorted(role.slug for role in roles),
                     permissions=sorted(permissions),
-                    is_default=False,
+                    is_default=membership.is_default if membership else False,
                     processing_paused=self._processing_paused(workspace),
                 )
                 logger.info(
@@ -272,14 +279,22 @@ class WorkspacesService:
                 permissions = self._rbac.get_workspace_permissions_for_user(
                     user=user, workspace_id=workspace.id
                 )
+                roles = self._workspace_roles_for_user(
+                    user_id=user_id,
+                    workspace_id=workspace.id,
+                )
+                membership = self._repo.get_membership_for_workspace(
+                    user_id=user_id,
+                    workspace_id=workspace.id,
+                )
                 profiles.append(
                     WorkspaceOut(
                         id=workspace.id,
                         name=workspace.name,
                         slug=workspace.slug,
-                        roles=[],
+                        roles=sorted(role.slug for role in roles),
                         permissions=sorted(permissions),
-                        is_default=False,
+                        is_default=membership.is_default if membership else False,
                         processing_paused=self._processing_paused(workspace),
                     )
                 )
@@ -350,7 +365,9 @@ class WorkspacesService:
             include_total=include_total,
             changes_cursor="0",
         )
-        return WorkspacePage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
+        return WorkspacePage(
+            items=page_result.items, meta=page_result.meta, facets=page_result.facets
+        )
 
     # ------------------------------------------------------------------
     # CRUD
@@ -565,9 +582,7 @@ class WorkspacesService:
     ) -> WorkspaceMemberPage:
         self._ensure_workspace(workspace_id)
         parsed_filters = parse_workspace_member_filters(filters)
-        include_inactive = any(
-            parsed.field.id == "isActive" for parsed in parsed_filters
-        )
+        include_inactive = any(parsed.field.id == "isActive" for parsed in parsed_filters)
         assignments = self._get_workspace_assignments(
             workspace_id=workspace_id,
             user_id=None,
@@ -599,7 +614,9 @@ class WorkspacesService:
             include_total=include_total,
             changes_cursor="0",
         )
-        return WorkspaceMemberPage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
+        return WorkspaceMemberPage(
+            items=page_result.items, meta=page_result.meta, facets=page_result.facets
+        )
 
     def add_workspace_member(
         self,
@@ -1047,5 +1064,6 @@ class WorkspacesService:
                 status.HTTP_400_BAD_REQUEST,
                 detail="Workspace must retain at least one owner",
             )
+
 
 __all__ = ["WorkspacesService"]

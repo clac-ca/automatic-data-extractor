@@ -26,13 +26,12 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
 if TYPE_CHECKING:
     import openpyxl
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -211,7 +210,9 @@ def on_workbook_start_example_1_fail_fast_missing_sheets(
     sheet_names = set(getattr(source_workbook, "sheetnames", []) or [])
     missing = sorted(required - sheet_names)
     if missing:
-        raise ValueError("Input source_workbook is missing required worksheet(s): " + ", ".join(missing))
+        raise ValueError(
+            "Input source_workbook is missing required worksheet(s): " + ", ".join(missing)
+        )
 
     return None
 

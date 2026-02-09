@@ -327,7 +327,9 @@ export function useUploadManager({
             return;
           }
           if (error instanceof ApiError && error.status === 409) {
-            const message = error.problem?.detail ?? error.message ?? "Document name already exists.";
+            const detail = error.problem?.detail;
+            const message =
+              typeof detail === "string" ? detail : error.message || "Document name already exists.";
             setItems((current) =>
               current.map((entry) =>
                 entry.id === item.id

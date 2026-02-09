@@ -1,6 +1,9 @@
 export const configurationKeys = {
   root: (workspaceId: string) => ["workspaces", workspaceId, "configurations"] as const,
-  list: (workspaceId: string, params: { limit?: number; cursor?: string | null } = {}) =>
+  list: (
+    workspaceId: string,
+    params: { limit?: number; cursor?: string | null; statuses?: readonly string[] } = {},
+  ) =>
     [...configurationKeys.root(workspaceId), "list", { ...params }] as const,
   detail: (workspaceId: string, configId: string) =>
     [...configurationKeys.root(workspaceId), "detail", configId] as const,

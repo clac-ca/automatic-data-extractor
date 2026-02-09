@@ -15,7 +15,6 @@ from .errors import AuthenticationError
 from .principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 
 
-
 @runtime_checkable
 class ApiKeyAuthenticator(Protocol):
     """Interface for authenticating API key strings."""

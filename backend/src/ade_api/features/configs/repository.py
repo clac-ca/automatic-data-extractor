@@ -27,7 +27,8 @@ class ConfigurationsRepository:
         configuration_id: UUID,
     ) -> Configuration | None:
         stmt = (
-            self.base_query()
+            self
+            .base_query()
             .where(
                 Configuration.workspace_id == workspace_id,
                 Configuration.id == configuration_id,
@@ -39,7 +40,8 @@ class ConfigurationsRepository:
 
     def list_for_workspace(self, workspace_id: UUID) -> Sequence[Configuration]:
         stmt = (
-            self.base_query()
+            self
+            .base_query()
             .where(Configuration.workspace_id == workspace_id)
             .order_by(Configuration.created_at.asc())
         )
@@ -59,7 +61,8 @@ class ConfigurationsRepository:
 
     def get_active(self, workspace_id: UUID) -> Configuration | None:
         stmt = (
-            self.base_query()
+            self
+            .base_query()
             .where(
                 Configuration.workspace_id == workspace_id,
                 Configuration.status == ConfigurationStatus.ACTIVE,

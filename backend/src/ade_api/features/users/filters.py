@@ -17,68 +17,66 @@ from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
 from ade_db.models import User
 
-USER_FILTER_REGISTRY = FilterRegistry(
-    [
-        FilterField(
-            id="isActive",
-            column=User.is_active,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-        FilterField(
-            id="isServiceAccount",
-            column=User.is_service_account,
-            operators={FilterOperator.EQ, FilterOperator.NE},
-            value_type=FilterValueType.BOOL,
-        ),
-        FilterField(
-            id="createdAt",
-            column=User.created_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="lastLoginAt",
-            column=User.last_login_at,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IS_EMPTY,
-                FilterOperator.IS_NOT_EMPTY,
-            },
-            value_type=FilterValueType.DATETIME,
-        ),
-        FilterField(
-            id="failedLoginCount",
-            column=User.failed_login_count,
-            operators={
-                FilterOperator.EQ,
-                FilterOperator.NE,
-                FilterOperator.LT,
-                FilterOperator.LTE,
-                FilterOperator.GT,
-                FilterOperator.GTE,
-                FilterOperator.BETWEEN,
-                FilterOperator.IN,
-                FilterOperator.NOT_IN,
-            },
-            value_type=FilterValueType.INT,
-        ),
-    ]
-)
+USER_FILTER_REGISTRY = FilterRegistry([
+    FilterField(
+        id="isActive",
+        column=User.is_active,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+    FilterField(
+        id="isServiceAccount",
+        column=User.is_service_account,
+        operators={FilterOperator.EQ, FilterOperator.NE},
+        value_type=FilterValueType.BOOL,
+    ),
+    FilterField(
+        id="createdAt",
+        column=User.created_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="lastLoginAt",
+        column=User.last_login_at,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.DATETIME,
+    ),
+    FilterField(
+        id="failedLoginCount",
+        column=User.failed_login_count,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.LT,
+            FilterOperator.LTE,
+            FilterOperator.GT,
+            FilterOperator.GTE,
+            FilterOperator.BETWEEN,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.INT,
+    ),
+])
 
 
 def apply_user_filters(

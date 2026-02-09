@@ -121,7 +121,8 @@ export default function ResetPasswordScreen() {
           setFormError(resetUnavailableMessage);
           return;
         }
-        const message = error.problem?.detail ?? error.message ?? "Unable to reset password.";
+        const detail = error.problem?.detail;
+        const message = typeof detail === "string" ? detail : error.message || "Unable to reset password.";
         setFormError(message);
       } else if (error instanceof Error) {
         setFormError(error.message);

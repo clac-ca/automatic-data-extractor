@@ -9,6 +9,7 @@ pytestmark = pytest.mark.asyncio
 async def test_auth_disabled_bootstrap_returns_dev_user(
     async_client: AsyncClient,
     override_app_settings,
+    seed_identity,
 ) -> None:
     override_app_settings(
         auth_disabled=True,
@@ -20,3 +21,10 @@ async def test_auth_disabled_bootstrap_returns_dev_user(
     payload = response.json()
     assert payload["user"]["email"] == "dev-auth-disabled@example.com"
     assert "global-admin" in payload["roles"]
+    assert payload["workspaces"]
+    workspace_ids = {item["id"] for item in payload["workspaces"]}
+    assert str(seed_identity.workspace_id) in workspace_ids
+    assert str(seed_identity.secondary_workspace_id) in workspace_ids
+    preferred_workspace_id = payload["user"]["preferred_workspace_id"]
+    assert isinstance(preferred_workspace_id, str)
+    assert preferred_workspace_id in workspace_ids

@@ -21,16 +21,14 @@ Guidance
   structured events via the provided logger.
 """
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import openpyxl
     import openpyxl.worksheet.worksheet
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -100,7 +98,9 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
     stats["sheets_seen"] = int(stats.get("sheets_seen", 0) or 0) + 1
 
     # --- sheet facts + per-sheet context dict
-    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+    sheet_name = str(
+        getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+    )
 
     sheet_index: int | None = None
     raw_index = metadata.get("sheet_index", None)
@@ -193,7 +193,9 @@ def on_sheet_start_example_1_route_or_skip_sheets(
         state["sheets"][sheet_name]["skip"] = True
     which your detectors/transforms can consult to avoid scanning/processing.
     """
-    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+    sheet_name = str(
+        getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+    )
 
     cfg = state
 
@@ -270,7 +272,9 @@ def on_sheet_start_example_2_capture_excel_tables(
     - If your spreadsheets already define tables, you can use those definitions as
       strong hints (or even as the source of truth) for ADE table detection.
     """
-    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+    sheet_name = str(
+        getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+    )
     tables = getattr(source_sheet, "tables", None)
     if not tables:
         return None
@@ -346,7 +350,9 @@ def on_sheet_start_example_3_hint_header_from_freeze_panes(
     This example stashes a hint that downstream detectors can use to start scanning
     for tables below the header region (without scanning the whole sheet).
     """
-    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+    sheet_name = str(
+        getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+    )
 
     fp = getattr(source_sheet, "freeze_panes", None)
     coord = fp if isinstance(fp, str) else getattr(fp, "coordinate", None)

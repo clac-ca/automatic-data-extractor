@@ -27,9 +27,7 @@ from .sorting import DEFAULT_SORT, WORKSPACE_CURSOR_FIELDS
 
 router = APIRouter(tags=["workspaces"], dependencies=[Security(require_authenticated)])
 WorkspacesServiceDep = Annotated[WorkspacesService, Depends(get_workspaces_service)]
-WorkspacesServiceReadDep = Annotated[
-    WorkspacesService, Depends(get_workspaces_service_read)
-]
+WorkspacesServiceReadDep = Annotated[WorkspacesService, Depends(get_workspaces_service_read)]
 
 WORKSPACE_CREATE_BODY = Body(...)
 WORKSPACE_UPDATE_BODY = Body(...)

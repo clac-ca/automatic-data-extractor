@@ -47,7 +47,6 @@ class DocumentTooLargeError(Exception):
         self.received = received
 
 
-
 class DocumentWorksheetParseError(Exception):
     """Raised when worksheet metadata cannot be read from a workbook."""
 
@@ -59,9 +58,7 @@ class DocumentWorksheetParseError(Exception):
         if reason:
             details = f" Parse failed ({reason})."
 
-        message = (
-            f"Worksheet inspection failed for document {doc_id!r} at {blob_name!r}.{details}"
-        )
+        message = f"Worksheet inspection failed for document {doc_id!r} at {blob_name!r}.{details}"
 
         super().__init__(message)
         self.document_id = doc_id
@@ -74,9 +71,7 @@ class DocumentPreviewUnsupportedError(Exception):
 
     def __init__(self, *, document_id: UUID | str, file_type: str) -> None:
         doc_id = str(document_id)
-        message = (
-            f"Preview is not supported for document {doc_id!r} with file type {file_type!r}."
-        )
+        message = f"Preview is not supported for document {doc_id!r} with file type {file_type!r}."
         super().__init__(message)
         self.document_id = doc_id
         self.file_type = file_type
@@ -103,9 +98,7 @@ class DocumentPreviewParseError(Exception):
         details = " Unable to generate document preview."
         if reason:
             details = f" Preview generation failed ({reason})."
-        message = (
-            f"Preview generation failed for document {doc_id!r} at {blob_name!r}.{details}"
-        )
+        message = f"Preview generation failed for document {doc_id!r} at {blob_name!r}.{details}"
         super().__init__(message)
         self.document_id = doc_id
         self.blob_name = blob_name

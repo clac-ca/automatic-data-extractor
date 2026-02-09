@@ -7,7 +7,8 @@ import re
 import tempfile
 import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,8 +24,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
-from ade_api.common.ids import generate_uuid7
-from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.cursor_listing import (
     ResolvedCursorSort,
     cursor_field,
@@ -33,19 +32,22 @@ from ade_api.common.cursor_listing import (
     parse_str,
     resolve_cursor_sort,
 )
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.workbook_preview import (
     WorkbookSheetPreview,
     build_workbook_preview_from_csv,
     build_workbook_preview_from_xlsx,
 )
-from ade_storage import StorageAdapter, StorageError, StorageLimitError, StoredObject
+from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
+from ade_api.settings import Settings
 from ade_db.models import (
+    DocumentView,
+    DocumentViewVisibility,
     File,
     FileComment,
     FileCommentMention,
-    DocumentView,
-    DocumentViewVisibility,
     FileKind,
     FileTag,
     FileVersion,
@@ -58,8 +60,7 @@ from ade_db.models import (
     User,
     WorkspaceMembership,
 )
-from ade_api.settings import Settings
-from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
+from ade_storage import StorageAdapter, StorageError, StorageLimitError, StoredObject
 
 from .changes import (
     DocumentChangeDelta,
@@ -68,20 +69,20 @@ from .changes import (
 )
 from .exceptions import (
     DocumentFileMissingError,
-    DocumentTooLargeError,
     DocumentNameConflictError,
-    DocumentRestoreNameConflictError,
     DocumentNotFoundError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
     DocumentPreviewUnsupportedError,
+    DocumentRestoreNameConflictError,
+    DocumentTooLargeError,
     DocumentVersionNotFoundError,
     DocumentViewConflictError,
     DocumentViewImmutableError,
     DocumentViewNotFoundError,
     DocumentWorksheetParseError,
-    InvalidDocumentRenameError,
     InvalidDocumentCommentMentionsError,
+    InvalidDocumentRenameError,
     InvalidDocumentTagsError,
 )
 from .filters import apply_document_filters
@@ -90,20 +91,20 @@ from .schemas import (
     DocumentCommentOut,
     DocumentCommentPage,
     DocumentConflictMode,
-    DocumentListLifecycle,
     DocumentFileType,
+    DocumentListLifecycle,
     DocumentListPage,
     DocumentListRow,
     DocumentOut,
     DocumentRunSummary,
     DocumentSheet,
+    DocumentUpdateRequest,
     DocumentViewCreate,
     DocumentViewListResponse,
     DocumentViewOut,
     DocumentViewQueryState,
     DocumentViewTableState,
     DocumentViewUpdate,
-    DocumentUpdateRequest,
     TagCatalogItem,
     TagCatalogPage,
 )
@@ -141,7 +142,7 @@ def _run_with_timeout(func, *, timeout: float, **kwargs):
 
 def _map_document_row(row: Mapping[str, Any]) -> File:
     document = row[File]
-    setattr(document, "_last_run_at", row.get("last_run_at"))
+    document._last_run_at = row.get("last_run_at")
     return document
 
 
@@ -456,9 +457,7 @@ class DocumentsService:
             q=q,
         )
         last_run_at_expr = (
-            select(
-                func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at))
-            )
+            select(func.max(func.coalesce(Run.completed_at, Run.started_at, Run.created_at)))
             .select_from(Run)
             .join(FileVersion, Run.input_file_version_id == FileVersion.id)
             .where(
@@ -643,7 +642,9 @@ class DocumentsService:
             if next_visibility == DocumentViewVisibility.PUBLIC and not can_manage_public_views:
                 raise PermissionError("You do not have permission to create public views.")
             view.visibility = next_visibility
-            view.owner_user_id = actor.id if next_visibility == DocumentViewVisibility.PRIVATE else None
+            view.owner_user_id = (
+                actor.id if next_visibility == DocumentViewVisibility.PRIVATE else None
+            )
 
         if "query_state" in payload.model_fields_set:
             if payload.query_state is None:
@@ -715,9 +716,7 @@ class DocumentsService:
             .where(FileComment.file_id == document_id)
             .options(
                 selectinload(FileComment.author_user),
-                selectinload(FileComment.mentions).selectinload(
-                    FileCommentMention.mentioned_user
-                ),
+                selectinload(FileComment.mentions).selectinload(FileCommentMention.mentioned_user),
             )
         )
 
@@ -756,10 +755,9 @@ class DocumentsService:
             author_user_id=actor.id,
             body=body,
         )
-        comment.author_user = actor
-        comment.mentions = [
-            FileCommentMention(mentioned_user=user) for user in mention_users
-        ]
+        # ``actor`` may come from a different SQLAlchemy session via auth deps.
+        comment.author_user = self._session.merge(actor, load=False)
+        comment.mentions = [FileCommentMention(mentioned_user=user) for user in mention_users]
 
         document.comment_count = (document.comment_count or 0) + 1
 
@@ -775,7 +773,8 @@ class DocumentsService:
         document_id: UUID,
     ) -> DocumentListRow | None:
         stmt = (
-            self._repository.base_query(workspace_id)
+            self._repository
+            .base_query(workspace_id)
             .where(File.id == document_id)
             .where(File.deleted_at.is_(None))
         )
@@ -1173,8 +1172,7 @@ class DocumentsService:
 
         def _guarded() -> Iterator[bytes]:
             try:
-                for chunk in stream:
-                    yield chunk
+                yield from stream
             except FileNotFoundError as exc:
                 logger.warning(
                     "document.stream.file_lost_during_stream",
@@ -1257,8 +1255,7 @@ class DocumentsService:
 
         def _guarded() -> Iterator[bytes]:
             try:
-                for chunk in stream:
-                    yield chunk
+                yield from stream
             except FileNotFoundError as exc:
                 logger.warning(
                     "document.stream_version.file_lost",
@@ -1674,7 +1671,9 @@ class DocumentsService:
             ),
         )
 
-        return TagCatalogPage(items=page_result.items, meta=page_result.meta, facets=page_result.facets)
+        return TagCatalogPage(
+            items=page_result.items, meta=page_result.meta, facets=page_result.facets
+        )
 
     def _get_document(
         self,
@@ -1892,15 +1891,11 @@ class DocumentsService:
             document_ids=doc_ids,
         )
         run_ids = [run.id for run in last_runs.values()]
-        metrics_by_run_id = (
-            self._last_run_metrics(run_ids=run_ids) if include_run_metrics else {}
-        )
+        metrics_by_run_id = self._last_run_metrics(run_ids=run_ids) if include_run_metrics else {}
         table_columns_by_run_id = (
             self._last_run_table_columns(run_ids=run_ids) if include_run_table_columns else {}
         )
-        fields_by_run_id = (
-            self._last_run_fields(run_ids=run_ids) if include_run_fields else {}
-        )
+        fields_by_run_id = self._last_run_fields(run_ids=run_ids) if include_run_fields else {}
         for document in documents:
             run = last_runs.get(document.id)
             document.last_run = run
@@ -1965,8 +1960,7 @@ class DocumentsService:
                 .group_by(expr)
             ).all()
             buckets = [
-                {"value": coerce_value(value), "count": int(count or 0)}
-                for value, count in rows
+                {"value": coerce_value(value), "count": int(count or 0)} for value, count in rows
             ]
             buckets.sort(key=lambda bucket: str(bucket["value"]))
             return buckets
@@ -2007,7 +2001,8 @@ class DocumentsService:
             select(
                 FileVersion.file_id.label("document_id"),
                 Run.status.label("status"),
-                func.row_number()
+                func
+                .row_number()
                 .over(
                     partition_by=FileVersion.file_id,
                     order_by=timestamp.desc(),
@@ -2028,14 +2023,12 @@ class DocumentsService:
             .join(filtered_ids, filtered_ids.c.id == File.id)
             .outerjoin(
                 ranked_runs,
-                (ranked_runs.c.document_id == File.id)
-                & (ranked_runs.c.rank == 1),
+                (ranked_runs.c.document_id == File.id) & (ranked_runs.c.rank == 1),
             )
             .group_by(ranked_runs.c.status)
         ).all()
         status_buckets = [
-            {"value": coerce_value(value), "count": int(count or 0)}
-            for value, count in status_rows
+            {"value": coerce_value(value), "count": int(count or 0)} for value, count in status_rows
         ]
         status_buckets.sort(key=lambda bucket: str(bucket["value"]))
 
@@ -2082,7 +2075,8 @@ class DocumentsService:
                 Run.completed_at.label("completed_at"),
                 Run.started_at.label("started_at"),
                 Run.created_at.label("created_at"),
-                func.row_number()
+                func
+                .row_number()
                 .over(
                     partition_by=FileVersion.file_id,
                     order_by=timestamp.desc(),
@@ -2318,7 +2312,8 @@ class DocumentsService:
 
     def _find_by_name_key(self, *, workspace_id: UUID, name_key: str) -> File | None:
         stmt = (
-            self._repository.base_query(workspace_id)
+            self._repository
+            .base_query(workspace_id)
             .where(File.deleted_at.is_(None))
             .where(File.name_key == name_key)
         )

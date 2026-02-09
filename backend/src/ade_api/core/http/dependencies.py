@@ -43,6 +43,7 @@ _PASSWORD_CHANGE_ALLOWLIST = {
     "/api/v1/me/bootstrap",
 }
 
+
 class _RbacAdapter(RbacServiceInterface):
     """Bridge the RBAC feature service to the interface expected by dependencies."""
 
@@ -159,9 +160,7 @@ def get_api_key_authenticator(
         def _touch_usage(self, api_key_id: UUID) -> None:
             with self._session_factory() as session:
                 session.execute(
-                    update(ApiKey)
-                    .where(ApiKey.id == api_key_id)
-                    .values(last_used_at=utc_now())
+                    update(ApiKey).where(ApiKey.id == api_key_id).values(last_used_at=utc_now())
                 )
                 session.commit()
 
@@ -251,9 +250,7 @@ def get_cookie_authenticator(
                 principal_type=PrincipalType.USER,
                 auth_via=AuthVia.SESSION,
                 api_key_id=None,
-                session_auth_method=_normalize_session_auth_method(
-                    auth_session.auth_method
-                ),
+                session_auth_method=_normalize_session_auth_method(auth_session.auth_method),
             )
 
     return _CookieAuthenticator()
@@ -352,9 +349,7 @@ def _enforce_password_mfa_onboarding(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "error": "mfa_setup_required",
-            "message": (
-                "Multi-factor authentication setup is required before continuing."
-            ),
+            "message": ("Multi-factor authentication setup is required before continuing."),
         },
     )
 

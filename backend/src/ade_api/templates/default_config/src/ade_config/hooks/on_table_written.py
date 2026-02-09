@@ -23,11 +23,10 @@ Guidance
 - Use ``output_region`` as the authoritative written range (avoid inferring via ``max_row``).
 """
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ade_engine.models import TableRegion, TableResult
 
@@ -35,7 +34,6 @@ if TYPE_CHECKING:
     import openpyxl
     import openpyxl.worksheet.worksheet
     import polars as pl
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -62,6 +60,7 @@ def register(registry: Registry) -> None:
     # registry.register_hook(on_table_written_example_7_add_header_comments, hook="on_table_written", priority=70)
     # registry.register_hook(on_table_written_example_8_highlight_and_comment_validation_issues, hook="on_table_written", priority=80)
     # registry.register_hook(on_table_written_example_9_autofit_column_widths, hook="on_table_written", priority=90)
+
 
 def on_table_written(
     *,
@@ -90,9 +89,11 @@ def on_table_written(
     """
     return None
 
+
 # ----------------------------
 # Examples (uncomment in register() to enable)
 # ----------------------------
+
 
 def on_table_written_example_1_log_output_range(
     *,
@@ -565,7 +566,9 @@ def on_table_written_example_9_autofit_column_widths(
     skip_diagnostics = bool(cfg.get("autofit_skip_diagnostics", True))
 
     ade_diagnostic_prefix = "__ade_"
-    scan_last_row = min(output_region.max_row, output_region.data_first_row + max(sample_rows, 0) - 1)
+    scan_last_row = min(
+        output_region.max_row, output_region.data_first_row + max(sample_rows, 0) - 1
+    )
 
     for col in range(output_region.min_col, output_region.max_col + 1):
         col_name = write_table.columns[col - output_region.min_col]

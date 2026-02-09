@@ -7,8 +7,8 @@ from typing import Literal
 
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
-from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
+from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
 
 

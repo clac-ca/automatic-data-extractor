@@ -118,6 +118,8 @@ def _config_import_error_detail(exc: ConfigImportError) -> dict[str, str | int |
 
 
 def _config_import_error_status(exc: ConfigImportError) -> int:
+    if exc.code == "internal_error":
+        return status.HTTP_500_INTERNAL_SERVER_ERROR
     if exc.code == "archive_too_large" and exc.limit:
         return status.HTTP_413_CONTENT_TOO_LARGE
     if exc.code == "github_rate_limited":
@@ -174,9 +176,7 @@ def list_configurations(
 def read_workspace_configuration_history(
     workspace_id: WorkspaceIdPath,
     service: ConfigurationsServiceReadDep,
-    focus_configuration_id: Annotated[
-        UUID | None, Query(alias="focus_configuration_id")
-    ] = None,
+    focus_configuration_id: Annotated[UUID | None, Query(alias="focus_configuration_id")] = None,
     scope: Annotated[ConfigurationHistoryScope, Query()] = "workspace",
     status_filter: Annotated[
         ConfigurationHistoryStatusFilter, Query(alias="status_filter")

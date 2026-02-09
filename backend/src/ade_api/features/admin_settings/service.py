@@ -59,8 +59,17 @@ _FIELD_ENV_VARS: dict[_FIELD_PATH, str] = {
     ("auth", "password", "complexity", "require_number"): "ADE_AUTH_PASSWORD_REQUIRE_NUMBER",
     ("auth", "password", "complexity", "require_symbol"): "ADE_AUTH_PASSWORD_REQUIRE_SYMBOL",
     ("auth", "password", "lockout", "max_attempts"): "ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS",
-    ("auth", "password", "lockout", "duration_seconds"): "ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS",
-    ("auth", "identity_provider", "jit_provisioning_enabled"): "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
+    (
+        "auth",
+        "password",
+        "lockout",
+        "duration_seconds",
+    ): "ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS",
+    (
+        "auth",
+        "identity_provider",
+        "jit_provisioning_enabled",
+    ): "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
 }
 
 _FIELD_API_PATHS: dict[_FIELD_PATH, str] = {
@@ -70,13 +79,27 @@ _FIELD_API_PATHS: dict[_FIELD_PATH, str] = {
     ("auth", "password", "reset_enabled"): "auth.password.resetEnabled",
     ("auth", "password", "mfa_required"): "auth.password.mfaRequired",
     ("auth", "password", "complexity", "min_length"): "auth.password.complexity.minLength",
-    ("auth", "password", "complexity", "require_uppercase"): "auth.password.complexity.requireUppercase",
-    ("auth", "password", "complexity", "require_lowercase"): "auth.password.complexity.requireLowercase",
+    (
+        "auth",
+        "password",
+        "complexity",
+        "require_uppercase",
+    ): "auth.password.complexity.requireUppercase",
+    (
+        "auth",
+        "password",
+        "complexity",
+        "require_lowercase",
+    ): "auth.password.complexity.requireLowercase",
     ("auth", "password", "complexity", "require_number"): "auth.password.complexity.requireNumber",
     ("auth", "password", "complexity", "require_symbol"): "auth.password.complexity.requireSymbol",
     ("auth", "password", "lockout", "max_attempts"): "auth.password.lockout.maxAttempts",
     ("auth", "password", "lockout", "duration_seconds"): "auth.password.lockout.durationSeconds",
-    ("auth", "identity_provider", "jit_provisioning_enabled"): "auth.identityProvider.jitProvisioningEnabled",
+    (
+        "auth",
+        "identity_provider",
+        "jit_provisioning_enabled",
+    ): "auth.identityProvider.jitProvisioningEnabled",
 }
 
 
@@ -115,7 +138,9 @@ class PasswordAuthSettingsModel(BaseModel):
 
     reset_enabled: bool = True
     mfa_required: bool = False
-    complexity: PasswordComplexitySettingsModel = Field(default_factory=PasswordComplexitySettingsModel)
+    complexity: PasswordComplexitySettingsModel = Field(
+        default_factory=PasswordComplexitySettingsModel
+    )
     lockout: PasswordLockoutSettingsModel = Field(default_factory=PasswordLockoutSettingsModel)
 
 
@@ -130,7 +155,9 @@ class AuthPolicySettingsModel(BaseModel):
 
     mode: AuthMode = "password_only"
     password: PasswordAuthSettingsModel = Field(default_factory=PasswordAuthSettingsModel)
-    identity_provider: IdentityProviderSettingsModel = Field(default_factory=IdentityProviderSettingsModel)
+    identity_provider: IdentityProviderSettingsModel = Field(
+        default_factory=IdentityProviderSettingsModel
+    )
 
 
 class RuntimeSettingsV2(BaseModel):
@@ -184,7 +211,8 @@ class RuntimeSettingsSchemaVersionError(RuntimeError):
     def __init__(self, *, expected: int, found: int) -> None:
         super().__init__(
             "Unsupported runtime settings schema version. "
-            f"Expected {expected}, found {found}. Reset runtime settings data to the current schema."
+            f"Expected {expected}, found {found}. "
+            "Reset runtime settings data to the current schema."
         )
         self.expected = expected
         self.found = found
@@ -276,9 +304,7 @@ class RuntimeSettingsService:
                 errors=[
                     ProblemDetailsErrorItem(
                         path=_FIELD_API_PATHS[path],
-                        message=(
-                            f"{_FIELD_API_PATHS[path]} is locked by {_FIELD_ENV_VARS[path]}."
-                        ),
+                        message=(f"{_FIELD_API_PATHS[path]} is locked by {_FIELD_ENV_VARS[path]}."),
                         code="setting_locked_by_env",
                     )
                     for path in locked
@@ -335,13 +361,32 @@ class RuntimeSettingsService:
             ("auth", "password", "reset_enabled"): env.auth_password_reset_enabled,
             ("auth", "password", "mfa_required"): env.auth_password_mfa_required,
             ("auth", "password", "complexity", "min_length"): env.auth_password_min_length,
-            ("auth", "password", "complexity", "require_uppercase"): env.auth_password_require_uppercase,
-            ("auth", "password", "complexity", "require_lowercase"): env.auth_password_require_lowercase,
+            (
+                "auth",
+                "password",
+                "complexity",
+                "require_uppercase",
+            ): env.auth_password_require_uppercase,
+            (
+                "auth",
+                "password",
+                "complexity",
+                "require_lowercase",
+            ): env.auth_password_require_lowercase,
             ("auth", "password", "complexity", "require_number"): env.auth_password_require_number,
             ("auth", "password", "complexity", "require_symbol"): env.auth_password_require_symbol,
             ("auth", "password", "lockout", "max_attempts"): env.auth_password_lockout_max_attempts,
-            ("auth", "password", "lockout", "duration_seconds"): env.auth_password_lockout_duration_seconds,
-            ("auth", "identity_provider", "jit_provisioning_enabled"): env.auth_idp_jit_provisioning_enabled,
+            (
+                "auth",
+                "password",
+                "lockout",
+                "duration_seconds",
+            ): env.auth_password_lockout_duration_seconds,
+            (
+                "auth",
+                "identity_provider",
+                "jit_provisioning_enabled",
+            ): env.auth_idp_jit_provisioning_enabled,
         }
 
         field_meta: dict[_FIELD_PATH, RuntimeSettingFieldMeta] = {}
@@ -416,7 +461,9 @@ class RuntimeSettingsService:
                     resetEnabled=resolved.field_meta[("auth", "password", "reset_enabled")],
                     mfaRequired=resolved.field_meta[("auth", "password", "mfa_required")],
                     complexity=RuntimePasswordComplexityMeta(
-                        minLength=resolved.field_meta[("auth", "password", "complexity", "min_length")],
+                        minLength=resolved.field_meta[
+                            ("auth", "password", "complexity", "min_length")
+                        ],
                         requireUppercase=resolved.field_meta[
                             ("auth", "password", "complexity", "require_uppercase")
                         ],
@@ -431,7 +478,9 @@ class RuntimeSettingsService:
                         ],
                     ),
                     lockout=RuntimePasswordLockoutMeta(
-                        maxAttempts=resolved.field_meta[("auth", "password", "lockout", "max_attempts")],
+                        maxAttempts=resolved.field_meta[
+                            ("auth", "password", "lockout", "max_attempts")
+                        ],
                         durationSeconds=resolved.field_meta[
                             ("auth", "password", "lockout", "duration_seconds")
                         ],
@@ -483,7 +532,8 @@ class RuntimeSettingsService:
         if mode != "idp_only":
             return
         provider = (
-            self._session.execute(
+            self._session
+            .execute(
                 select(SsoProvider)
                 .where(SsoProvider.status == SsoProviderStatus.ACTIVE)
                 .order_by(SsoProvider.updated_at.desc())
@@ -496,12 +546,16 @@ class RuntimeSettingsService:
             raise ApiError(
                 error_type="validation_error",
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="An active identity provider is required when authentication mode includes identity provider sign-in.",
+                detail=(
+                    "An active identity provider is required when authentication "
+                    "mode includes identity provider sign-in."
+                ),
                 errors=[
                     ProblemDetailsErrorItem(
                         path="auth.mode",
                         message=(
-                            "Add and activate at least one provider before using this authentication mode."
+                            "Add and activate at least one provider before using this "
+                            "authentication mode."
                         ),
                         code="active_provider_required",
                     )
@@ -545,13 +599,32 @@ def resolve_runtime_settings_from_env_defaults(settings: Settings) -> RuntimeSet
         ("auth", "password", "reset_enabled"): env.auth_password_reset_enabled,
         ("auth", "password", "mfa_required"): env.auth_password_mfa_required,
         ("auth", "password", "complexity", "min_length"): env.auth_password_min_length,
-        ("auth", "password", "complexity", "require_uppercase"): env.auth_password_require_uppercase,
-        ("auth", "password", "complexity", "require_lowercase"): env.auth_password_require_lowercase,
+        (
+            "auth",
+            "password",
+            "complexity",
+            "require_uppercase",
+        ): env.auth_password_require_uppercase,
+        (
+            "auth",
+            "password",
+            "complexity",
+            "require_lowercase",
+        ): env.auth_password_require_lowercase,
         ("auth", "password", "complexity", "require_number"): env.auth_password_require_number,
         ("auth", "password", "complexity", "require_symbol"): env.auth_password_require_symbol,
         ("auth", "password", "lockout", "max_attempts"): env.auth_password_lockout_max_attempts,
-        ("auth", "password", "lockout", "duration_seconds"): env.auth_password_lockout_duration_seconds,
-        ("auth", "identity_provider", "jit_provisioning_enabled"): env.auth_idp_jit_provisioning_enabled,
+        (
+            "auth",
+            "password",
+            "lockout",
+            "duration_seconds",
+        ): env.auth_password_lockout_duration_seconds,
+        (
+            "auth",
+            "identity_provider",
+            "jit_provisioning_enabled",
+        ): env.auth_idp_jit_provisioning_enabled,
     }
     for path, env_value in env_map.items():
         if env_value is not None:

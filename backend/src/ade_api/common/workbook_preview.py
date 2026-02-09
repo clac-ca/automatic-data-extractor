@@ -159,9 +159,7 @@ def _preview_sheet_from_rows(
 ) -> WorkbookSheetPreview:
     max_row_length = max((len(row) for row in rows), default=0)
     preview_columns = min(max_columns, total_columns or max_row_length)
-    normalized_rows = [
-        _normalize_row(list(row), preview_columns) for row in rows
-    ]
+    normalized_rows = [_normalize_row(list(row), preview_columns) for row in rows]
     if trim_empty_rows:
         normalized_rows = _trim_empty_rows(normalized_rows)
     if trim_empty_columns:
@@ -201,9 +199,7 @@ def _trim_empty_columns(rows: Sequence[Sequence[str]]) -> list[list[str]]:
         return [list(row) for row in rows]
 
     keep_indices = [
-        index
-        for index in range(column_count)
-        if any(row[index].strip() for row in rows)
+        index for index in range(column_count) if any(row[index].strip() for row in rows)
     ]
 
     if not keep_indices:

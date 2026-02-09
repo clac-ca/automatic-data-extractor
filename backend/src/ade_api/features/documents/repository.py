@@ -6,8 +6,7 @@ from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from ade_db.models import File, FileKind
 

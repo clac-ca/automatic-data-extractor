@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import base64
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Generic, TypeVar
 from functools import cmp_to_key
+from typing import Any, TypeVar
 from uuid import UUID
 
 from fastapi import HTTPException, Query, Request, status
@@ -72,7 +72,7 @@ class CursorMeta(BaseSchema):
     changes_cursor: str | None = Field(default=None, alias="changesCursor")
 
 
-class CursorPage(BaseSchema, Generic[T]):
+class CursorPage[T](BaseSchema):
     items: Sequence[T]
     meta: CursorMeta
     facets: dict[str, Any] | None = None
@@ -85,7 +85,7 @@ class CursorToken:
 
 
 @dataclass(frozen=True)
-class CursorFieldSpec(Generic[T]):
+class CursorFieldSpec[T]:
     key: Callable[[T], Sequence[Any]]
     parse: Callable[[Sequence[Any]], Sequence[Any]]
     directions: Callable[[bool], Sequence[str]]
@@ -93,7 +93,7 @@ class CursorFieldSpec(Generic[T]):
 
 
 @dataclass(frozen=True)
-class ResolvedCursorField(Generic[T]):
+class ResolvedCursorField[T]:
     field_id: str
     order_by: tuple[ColumnElement[Any], ...]
     directions: tuple[str, ...]
@@ -101,7 +101,7 @@ class ResolvedCursorField(Generic[T]):
 
 
 @dataclass(frozen=True)
-class ResolvedCursorSort(Generic[T]):
+class ResolvedCursorSort[T]:
     tokens: list[str]
     fields: list[ResolvedCursorField[T]]
     order_by: tuple[ColumnElement[Any], ...]
@@ -202,7 +202,9 @@ def _is_desc(ordering: ColumnElement[Any]) -> bool:
     return getattr(ordering, "modifier", None) is desc_op
 
 
-def _normalize_order_by(ordering: ColumnElement[Any] | Sequence[ColumnElement[Any]]) -> tuple[ColumnElement[Any], ...]:
+def _normalize_order_by(
+    ordering: ColumnElement[Any] | Sequence[ColumnElement[Any]],
+) -> tuple[ColumnElement[Any], ...]:
     if isinstance(ordering, (list, tuple)):
         return tuple(ordering)
     return (ordering,)
@@ -217,7 +219,7 @@ def _dedupe_order_by(orderings: Sequence[ColumnElement[Any]]) -> tuple[ColumnEle
     return tuple(unique)
 
 
-def resolve_cursor_sort(
+def resolve_cursor_sort[T](
     tokens: Iterable[str],
     *,
     allowed: Mapping[str, tuple[ColumnElement[Any], ColumnElement[Any]]],
@@ -301,7 +303,7 @@ def resolve_cursor_sort(
     return ResolvedCursorSort(tokens=tokens_out, fields=fields, order_by=_dedupe_order_by(order_by))
 
 
-def resolve_cursor_sort_sequence(
+def resolve_cursor_sort_sequence[T](
     tokens: Iterable[str],
     *,
     cursor_fields: Mapping[str, CursorFieldSpec[T]],
@@ -425,7 +427,7 @@ def _unwrap_ordering(expr: ColumnElement[Any]) -> ColumnElement[Any]:
     return getattr(expr, "element", expr)
 
 
-def _build_cursor_predicate(
+def _build_cursor_predicate[T](
     fields: Sequence[ResolvedCursorField[T]],
     values: Sequence[Any],
 ) -> ColumnElement[Any]:
@@ -434,7 +436,7 @@ def _build_cursor_predicate(
     for field in fields:
         segment = values[idx : idx + field.spec.arity]
         idx += field.spec.arity
-        for expr, direction, value in zip(field.order_by, field.directions, segment):
+        for expr, direction, value in zip(field.order_by, field.directions, segment, strict=False):
             keys.append((expr, direction, value))
 
     if not keys:
@@ -443,8 +445,7 @@ def _build_cursor_predicate(
     conditions = []
     for i, (expr, direction, value) in enumerate(keys):
         eq_conditions = [
-            _compare_eq(_unwrap_ordering(eq_expr), eq_value)
-            for eq_expr, _, eq_value in keys[:i]
+            _compare_eq(_unwrap_ordering(eq_expr), eq_value) for eq_expr, _, eq_value in keys[:i]
         ]
         comp = _compare_after(_unwrap_ordering(expr), value, direction)
         if comp is None:
@@ -456,7 +457,7 @@ def _build_cursor_predicate(
     return or_(*conditions)
 
 
-def _parse_cursor_values(
+def _parse_cursor_values[T](
     token: CursorToken,
     resolved: ResolvedCursorSort[T],
 ) -> list[Any]:
@@ -557,7 +558,7 @@ def _sequence_sort_key(
     return tuple(values)
 
 
-def _sequence_sort_directions(
+def _sequence_sort_directions[T](
     *,
     resolved_sort: ResolvedCursorSort[T],
 ) -> tuple[str, ...]:
@@ -572,7 +573,7 @@ def _compare_sequence_keys(
     rhs: tuple[Any, ...],
     directions: Sequence[str],
 ) -> int:
-    for (l_val, r_val, direction) in zip(lhs, rhs, directions, strict=False):
+    for l_val, r_val, direction in zip(lhs, rhs, directions, strict=False):
         if l_val == r_val:
             continue
         if l_val is None and r_val is None:
@@ -686,7 +687,7 @@ def paginate_sequence_cursor(
     return CursorPage(items=page_items, meta=meta, facets=None)
 
 
-def cursor_field(
+def cursor_field[T](
     key: Callable[[T], Any],
     parse: Callable[[Any], Any],
 ) -> CursorFieldSpec[T]:
@@ -698,7 +699,7 @@ def cursor_field(
     )
 
 
-def cursor_field_nulls_last(
+def cursor_field_nulls_last[T](
     key: Callable[[T], Any],
     parse: Callable[[Any], Any],
 ) -> CursorFieldSpec[T]:

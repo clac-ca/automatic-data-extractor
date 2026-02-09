@@ -14,6 +14,7 @@ from ade_db.models import User
 from .schemas import WorkspaceOut
 from .service import WorkspacesService
 
+
 def get_workspace_profile(
     user: Annotated[User, Depends(require_authenticated)],
     session: ReadSessionDep,

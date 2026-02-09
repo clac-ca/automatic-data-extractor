@@ -5,6 +5,7 @@ import {
   createConfigurationDirectory,
   deleteConfigurationDirectory,
   importConfiguration,
+  listConfigurations,
   replaceConfigurationImport,
 } from "../api";
 
@@ -72,6 +73,34 @@ describe("configuration directory api helpers", () => {
         display_name: "Imported configuration",
         url: "https://github.com/octo/repo",
       },
+    });
+  });
+
+  it("sends explicit status filters when listing configurations", async () => {
+    const spy = vi
+      .spyOn(client, "GET")
+      .mockResolvedValue(
+        { data: { items: [], meta: { has_more: false } } } as unknown as Awaited<
+          ReturnType<(typeof client)["GET"]>
+        >,
+      );
+
+    await listConfigurations("ws1", { statuses: ["draft", "active"] });
+
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/configurations", {
+      params: {
+        path: { workspaceId: "ws1" },
+        query: {
+          filters: JSON.stringify([
+            {
+              id: "status",
+              operator: "in",
+              value: ["draft", "active"],
+            },
+          ]),
+        },
+      },
+      signal: undefined,
     });
   });
 

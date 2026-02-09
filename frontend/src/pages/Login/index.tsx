@@ -329,7 +329,8 @@ export default function LoginScreen() {
       navigate(nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
-        const message = error.problem?.detail ?? error.message ?? "Unable to sign in.";
+        const detail = error.problem?.detail;
+        const message = typeof detail === "string" ? detail : error.message || "Unable to sign in.";
         setFormError(message);
       } else if (error instanceof Error) {
         setFormError(error.message);

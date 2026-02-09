@@ -38,20 +38,28 @@ $env:WORKSPACE_ID = "<workspace-uuid>"
 
 ### 1. List configurations
 
+Pass an explicit status filter so clients never rely on implicit defaults.
+
 ```bash
+STATUS_FILTER='[{"id":"status","operator":"in","value":["draft","active"]}]'
 curl -sS \
   -H "X-API-Key: $API_KEY" \
-  "$BASE_URL/api/v1/workspaces/$WORKSPACE_ID/configurations?limit=20"
+  --get \
+  --data-urlencode "limit=20" \
+  --data-urlencode "filters=$STATUS_FILTER" \
+  "$BASE_URL/api/v1/workspaces/$WORKSPACE_ID/configurations"
 ```
 
 ```python
 import requests
+import json
 
 headers = {"X-API-Key": API_KEY}
+filters = [{"id": "status", "operator": "in", "value": ["draft", "active"]}]
 response = requests.get(
     f"{BASE_URL}/api/v1/workspaces/{WORKSPACE_ID}/configurations",
     headers=headers,
-    params={"limit": 20},
+    params={"limit": 20, "filters": json.dumps(filters)},
     timeout=30,
 )
 response.raise_for_status()
@@ -60,9 +68,10 @@ print(response.json())
 
 ```powershell
 $headers = @{ "X-API-Key" = $env:API_KEY }
+$filters = '[{"id":"status","operator":"in","value":["draft","active"]}]'
 $configs = Invoke-RestMethod `
   -Method Get `
-  -Uri "$($env:BASE_URL)/api/v1/workspaces/$($env:WORKSPACE_ID)/configurations?limit=20" `
+  -Uri "$($env:BASE_URL)/api/v1/workspaces/$($env:WORKSPACE_ID)/configurations?limit=20&filters=$([uri]::EscapeDataString($filters))" `
   -Headers $headers
 $configs
 ```

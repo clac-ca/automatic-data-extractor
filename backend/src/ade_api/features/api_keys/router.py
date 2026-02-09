@@ -19,7 +19,6 @@ from fastapi import (
 
 from ade_api.api.deps import get_api_keys_service, get_api_keys_service_read
 from ade_api.common.concurrency import require_if_match
-from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.common.cursor_listing import (
     CursorPage,
     CursorQueryParams,
@@ -27,6 +26,7 @@ from ade_api.common.cursor_listing import (
     resolve_cursor_sort,
     strict_cursor_query_guard,
 )
+from ade_api.common.etag import build_etag_token, format_weak_etag
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf, require_global
 from ade_db.models import ApiKey

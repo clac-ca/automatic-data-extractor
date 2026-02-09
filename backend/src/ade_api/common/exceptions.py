@@ -107,7 +107,9 @@ def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse
     detail_text, errors = coerce_detail_and_errors(exc.detail)
     if errors and detail_text is None and exc.status_code == 422:
         detail_text = "Invalid request"
-    if exc.status_code >= 500:
+    # Keep opaque responses for unexpected internal errors, while preserving
+    # explicit upstream/service error contracts for non-500 statuses (e.g. 502).
+    if exc.status_code == 500:
         detail_text = "Internal server error"
         errors = None
 

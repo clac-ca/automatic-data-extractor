@@ -43,9 +43,7 @@ def raise_problem(
 
     detail_text = detail
     if meta:
-        meta_bits = ", ".join(
-            f"{key}={value}" for key, value in meta.items() if value is not None
-        )
+        meta_bits = ", ".join(f"{key}={value}" for key, value in meta.items() if value is not None)
         if meta_bits:
             detail_text = f"{detail_text} ({meta_bits})" if detail_text else meta_bits
 

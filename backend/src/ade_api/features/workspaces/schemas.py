@@ -7,8 +7,8 @@ from typing import Any
 
 from pydantic import Field
 
-from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
+from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
 
 

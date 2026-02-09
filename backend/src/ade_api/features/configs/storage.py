@@ -230,12 +230,9 @@ class ConfigStorage:
 
             if destination.exists():
                 if not replace:
-                    raise ConfigPublishConflictError(
-                        f"Destination '{destination}' already exists"
-                    )
+                    raise ConfigPublishConflictError(f"Destination '{destination}' already exists")
                 backup = (
-                    workspace_root
-                    / f".replace-backup-{configuration_id}-{secrets.token_hex(4)}"
+                    workspace_root / f".replace-backup-{configuration_id}-{secrets.token_hex(4)}"
                 )
                 if backup.exists():
                     shutil.rmtree(backup, ignore_errors=True)
@@ -288,6 +285,7 @@ class ConfigStorage:
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
+
 
 def _calculate_digest(root: Path) -> str:
     files = _collect_digest_files(root)

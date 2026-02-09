@@ -22,11 +22,10 @@ Guidance
 - Avoid mutating the input workbook/worksheet; treat ``source_region`` as source context.
 """
 
-
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from ade_engine.models import TableRegion
@@ -34,7 +33,6 @@ from ade_engine.models import TableRegion
 if TYPE_CHECKING:
     import openpyxl
     import openpyxl.worksheet.worksheet
-
     from ade_engine.extensions.registry import Registry
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
@@ -155,7 +153,9 @@ def on_table_mapped_example_1_basic_cleanup(
     after_rows, after_cols = int(cleaned.height), int(cleaned.width)
 
     if logger and (after_rows != before_rows or after_cols != before_cols):
-        sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+        sheet_name = str(
+            getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+        )
         logger.info(
             "Basic cleanup: rows %d->%d, cols %d->%d (source_sheet=%s)",
             before_rows,
@@ -243,7 +243,9 @@ def on_table_mapped_example_4_drop_fully_empty_rows(
     if logger:
         removed = before - int(out.height)
         if removed:
-            sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+            sheet_name = str(
+                getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+            )
             logger.info("Dropped %d fully-empty rows (source_sheet=%s)", removed, sheet_name)
 
     return out
@@ -296,7 +298,9 @@ def on_table_mapped_example_5_drop_fully_empty_columns(
     if logger:
         removed_cols = [c for c in before_cols if c not in set(out.columns)]
         if removed_cols:
-            sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+            sheet_name = str(
+                getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+            )
             logger.info(
                 "Dropped %d empty columns (source_sheet=%s): %s",
                 len(removed_cols),
@@ -391,7 +395,9 @@ def on_table_mapped_example_7_drop_repeated_header_rows(
 
     removed = int(table.height) - int(out.height)
     if logger and removed:
-        sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+        sheet_name = str(
+            getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+        )
         logger.info(
             "Dropped %d repeated header-like rows (source_sheet=%s, threshold=%d/%d)",
             removed,
@@ -425,7 +431,9 @@ def on_table_mapped_example_8_record_table_facts(
         tables = []
         cfg["tables_mapped"] = tables
 
-    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+    sheet_name = str(
+        getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or ""
+    )
     tables.append(
         {
             "input_file": input_file_name,

@@ -7,7 +7,7 @@ import contextlib
 from dataclasses import dataclass
 import json
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -53,10 +53,11 @@ def _seed_identity(session: Session) -> SeededIdentity:
         session.flush()
         return SeededUser(id=user.id, email=email, password=password)
 
-    admin = _create_user("admin@example.com", "admin_pass")
-    member = _create_user("member@example.com", "member_pass")
+    suffix = uuid4().hex[:8]
+    admin = _create_user(f"admin-{suffix}@example.com", "admin_pass")
+    member = _create_user(f"member-{suffix}@example.com", "member_pass")
 
-    workspace = Workspace(name="Primary Workspace", slug="primary")
+    workspace = Workspace(name="Primary Workspace", slug=f"primary-{suffix}")
     session.add(workspace)
     session.flush()
 

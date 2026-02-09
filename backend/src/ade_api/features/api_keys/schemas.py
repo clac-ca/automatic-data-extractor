@@ -6,8 +6,8 @@ from datetime import datetime
 
 from pydantic import Field, field_validator
 
-from ade_api.common.ids import UUIDStr
 from ade_api.common.cursor_listing import CursorPage
+from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
 
 

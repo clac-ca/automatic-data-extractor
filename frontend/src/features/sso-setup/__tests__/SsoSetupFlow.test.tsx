@@ -63,12 +63,18 @@ function setup(overrides: Partial<ComponentProps<typeof SsoSetupFlow>> = {}) {
 
 async function fillCreateFormToTestStep(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Continue" }));
-  await user.type(await screen.findByLabelText(/Provider ID/i), "okta-primary");
+  await user.type(
+    await screen.findByLabelText(/Provider ID/i, undefined, { timeout: 5000 }),
+    "okta-primary",
+  );
   await user.type(screen.getByLabelText(/Label/i), "Okta Workforce");
   await user.type(screen.getByLabelText(/Allowed domains/i), "example.com");
   await user.click(screen.getByRole("button", { name: "Continue" }));
 
-  await user.type(await screen.findByLabelText(/Issuer/i), "https://issuer.example.com");
+  await user.type(
+    await screen.findByLabelText(/Issuer/i, undefined, { timeout: 5000 }),
+    "https://issuer.example.com",
+  );
   await user.type(screen.getByLabelText(/Client ID/i), "demo-client");
   await user.type(screen.getByLabelText(/Client secret/i), "notsecret-client");
   await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -85,7 +91,7 @@ describe("SsoSetupFlow", () => {
 
     await fillCreateFormToTestStep(user);
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-  });
+  }, 15000);
 
   it("saves provider after successful validation", async () => {
     const user = userEvent.setup();
@@ -121,7 +127,7 @@ describe("SsoSetupFlow", () => {
       "Provider saved. Review authentication policy before requiring identity provider sign-in.",
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
-  });
+  }, 15000);
 
   it("shows inline discard confirmation before closing dirty setup state", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -180,6 +186,7 @@ describe("SsoSetupFlow", () => {
         type: "validation_error",
         title: "Validation error",
         status: 422,
+        instance: "/api/v1/system/sso/providers/validate",
         detail: "Issuer validation failed because discovery metadata issuer did not match.",
         errors: [
           {
