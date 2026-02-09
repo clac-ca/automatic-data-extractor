@@ -22,7 +22,7 @@ cd backend && uv run ade --help
 | --- | --- |
 | `ade start` | Start API + worker + web |
 | `ade dev` | Start API + worker + web in dev mode |
-| `ade test` | Run API, worker, and web tests |
+| `ade test` | Run API unit + worker unit + web tests (excludes integration suites) |
 | `ade reset` | Reset DB/storage/local state (destructive) |
 | `ade api ...` | Run API subcommands |
 | `ade worker ...` | Run worker subcommands |
@@ -44,7 +44,7 @@ Key options for `ade start`/`ade dev`:
 | --- | --- |
 | `ade-api dev` | Run API in development mode |
 | `ade-api start` | Run API in production-style mode |
-| `ade-api test <suite>` | Run tests (`unit`, `integration`, `all`) |
+| `ade-api test <suite>` | Run tests (`unit`, `integration`, `all`; default `unit`) |
 | `ade-api lint` | Run lint/type checks |
 | `ade-api routes` | Print route list |
 | `ade-api types` | Generate OpenAPI + TypeScript types |
@@ -60,7 +60,7 @@ Common API options:
 | --- | --- |
 | `ade-worker start` | Start worker |
 | `ade-worker dev` | Start worker in dev mode |
-| `ade-worker test <suite>` | Run tests (`unit`, `integration`, `all`) |
+| `ade-worker test <suite>` | Run tests (`unit`, `integration`, `all`; default `unit`) |
 | `ade-worker gc` | Run one garbage-collection pass |
 
 ## DB CLI: `ade-db`
@@ -102,4 +102,22 @@ cd backend && uv run ade dev --open
 cd backend && uv run ade start --services worker --no-migrate
 cd backend && uv run ade db migrate
 cd backend && uv run ade api types
+```
+
+## Integration Test Prerequisites
+
+Integration suites use explicit `ADE_TEST_*` settings and do not read runtime `ADE_*` values.
+
+At minimum set:
+
+- `ADE_TEST_DATABASE_URL`
+- `ADE_TEST_BLOB_CONNECTION_STRING` (recommended for API integration coverage)
+
+Example:
+
+```bash
+cd backend && \
+ADE_TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable' \
+ADE_TEST_BLOB_CONNECTION_STRING='UseDevelopmentStorage=true' \
+uv run ade api test integration
 ```

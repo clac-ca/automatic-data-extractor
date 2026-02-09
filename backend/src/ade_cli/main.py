@@ -23,7 +23,8 @@ from .db import app as db_app
 from .infra import app as infra_app
 from .local_dev import missing_core_runtime_env
 from .storage import app as storage_app
-from .web import app as web_app, resolve_public_web_url
+from .web import app as web_app
+from .web import resolve_public_web_url
 from .worker import app as worker_app
 
 SERVICE_ORDER = ("api", "worker", "web")
@@ -287,7 +288,7 @@ def dev(
     run_many(_build_processes(mode="dev", selected=selected), cwd=REPO_ROOT)
 
 
-@app.command(name="test", help="Run API, worker, and web tests.")
+@app.command(name="test", help="Run API unit tests, worker unit tests, and web tests.")
 def test() -> None:
     env = _clean_test_env()
     run([sys.executable, "-m", "ade_api", "test"], cwd=REPO_ROOT, env=env)

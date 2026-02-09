@@ -1126,12 +1126,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -1161,12 +1158,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -1329,12 +1323,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -1364,12 +1355,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -1839,12 +1827,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -1874,12 +1859,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -2373,12 +2355,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -2408,12 +2387,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -2967,12 +2943,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -3002,12 +2975,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -3154,12 +3124,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -3189,12 +3156,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -3648,12 +3612,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -3683,12 +3644,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -4602,12 +4560,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -4637,12 +4592,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -5215,12 +5167,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -5250,12 +5199,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -5697,12 +5643,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -5732,12 +5675,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -6101,12 +6041,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -6136,12 +6073,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -7861,12 +7795,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -7896,12 +7827,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -9142,12 +9070,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -9177,12 +9102,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
@@ -11562,12 +11484,9 @@
                 }
               ],
               "description": "URL-encoded JSON array of filter objects.",
-              "examples": {
-                "statusIn": {
-                  "summary": "Status filter",
-                  "value": "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-                }
-              },
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
               "title": "Filters"
             },
             "description": "URL-encoded JSON array of filter objects."
@@ -11597,12 +11516,9 @@
                 }
               ],
               "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": {
-                "multiToken": {
-                  "summary": "Search multiple tokens",
-                  "value": "acme invoice"
-                }
-              },
+              "examples": [
+                "acme invoice"
+              ],
               "title": "Q"
             },
             "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."

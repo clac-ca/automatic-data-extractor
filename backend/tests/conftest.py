@@ -6,6 +6,8 @@ import pytest
 
 
 def pytest_collection_modifyitems(config, items) -> None:
+    """Auto-tag tests by directory convention (unit/integration)."""
+
     for item in items:
         parts = Path(str(item.fspath)).parts
         if "integration" in parts:

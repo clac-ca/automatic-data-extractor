@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.routing import APIRoute
 
 from ade_api.main import create_app
 
-app = create_app()
+
+@pytest.fixture()
+def app(empty_database_settings):
+    return create_app(settings=empty_database_settings)
 
 
-def test_routes_use_lower_camel_case_segments() -> None:
+def test_routes_use_lower_camel_case_segments(app) -> None:
     """Ensure no route segment contains '-' or ':' characters."""
 
     for route in app.router.routes:

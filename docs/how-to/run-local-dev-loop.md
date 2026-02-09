@@ -110,10 +110,23 @@ cd backend && uv run ade web dev
 
 ## Tests and Lint
 
-All tests:
+Default test pass (API unit + worker unit + web tests):
 
 ```bash
 cd backend && uv run ade test
+```
+
+Integration suites (requires explicit `ADE_TEST_*` settings):
+
+```bash
+cd backend && \
+ADE_TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable' \
+ADE_TEST_BLOB_CONNECTION_STRING='UseDevelopmentStorage=true' \
+uv run ade api test integration
+
+cd backend && \
+ADE_TEST_DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable' \
+uv run ade worker test integration
 ```
 
 Service-level checks:

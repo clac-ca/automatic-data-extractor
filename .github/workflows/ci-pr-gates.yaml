@@ -10,8 +10,74 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  strict-green:
-    name: Strict Green Checks
+  backend-lint-types:
+    name: Backend Lint + API Types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Sync backend environment
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Run backend lint and API type generation
+        working-directory: backend
+        run: |
+          uv run ade api lint
+          uv run ade api types
+
+      - name: Assert generated API artifacts are committed
+        run: |
+          git diff --exit-code -- backend/src/ade_api/openapi.json frontend/src/types/generated/openapi.d.ts
+
+  backend-unit:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Sync backend environment
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Run backend unit suites
+        working-directory: backend
+        run: |
+          uv run ade api test
+          uv run ade worker test
+
+  backend-api-integration:
+    name: Backend API Integration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -36,10 +102,7 @@ jobs:
       CI: "true"
       ADE_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable
       ADE_TEST_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
-      # Keep runtime settings valid during module import in test collection.
-      ADE_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable
-      ADE_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
-      ADE_SECRET_KEY: test-secret-key-for-ci-only-do-not-use-in-prod
+      ADE_TEST_DATABASE_NAME_PREFIX: ade_api_test
 
     steps:
       - name: Checkout
@@ -53,6 +116,82 @@ jobs:
       - name: Install uv
         run: python -m pip install --upgrade pip uv
 
+      - name: Sync backend environment
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Run API integration tests
+        working-directory: backend
+        run: uv run ade api test integration
+
+  backend-worker-integration:
+    name: Backend Worker Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ade_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite
+        ports:
+          - 10000:10000
+
+    env:
+      CI: "true"
+      ADE_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ade_test?sslmode=disable
+      ADE_TEST_BLOB_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+      ADE_TEST_DATABASE_NAME_PREFIX: ade_worker_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Sync backend environment
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Run worker integration tests
+        working-directory: backend
+        run: uv run ade worker test integration
+
+  frontend-checks:
+    name: Frontend Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Sync backend environment
+        working-directory: backend
+        run: uv sync --frozen
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -63,20 +202,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix frontend ci
 
-      - name: Sync backend environment
-        working-directory: backend
-        run: uv sync --frozen
-
-      - name: Run strict green matrix
+      - name: Run frontend checks
         working-directory: backend
         run: |
-          uv run ade api lint
-          uv run ade api test
-          uv run ade api test integration
-          uv run ade worker test
-          uv run ade worker test integration
-          uv run ade api types
           uv run ade web lint
           uv run ade web typecheck
           uv run ade web test
-          uv run ade test

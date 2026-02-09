@@ -1,39 +1,36 @@
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
-from dotenv import dotenv_values
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.engine import Connection, Engine, make_url
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.core.auth.pipeline import reset_auth_state
 from ade_api.core.security.hashing import hash_password
 from ade_api.db import get_db_read, get_db_write
-from ade_api.features.sso.oidc import OidcMetadata
 from ade_api.features.rbac.service import RbacService
+from ade_api.features.sso.oidc import OidcMetadata
 from ade_api.main import create_app
 from ade_api.settings import Settings, get_settings
 from ade_db.engine import build_engine
 from ade_db.migrations_runner import run_migrations
 from ade_db.models import User, Workspace, WorkspaceMembership
-from paths import REPO_ROOT
-
-_DOTENV = {
-    key: value
-    for key, value in dotenv_values(Path(REPO_ROOT) / ".env").items()
-    if key and value not in {None, ""}
-}
+from tests.integration_support import (
+    IsolatedTestDatabase,
+    create_isolated_test_database,
+    drop_isolated_test_database,
+    resolve_isolated_test_database,
+    test_env,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,33 +55,18 @@ class SeededIdentity:
         return self.member
 
 
-def _env(name: str, default: str | None = None) -> str | None:
-    key_test = f"ADE_TEST_{name}"
-    key = f"ADE_{name}"
-    return (
-        os.getenv(key_test)
-        or os.getenv(key)
-        or _DOTENV.get(key_test)
-        or _DOTENV.get(key)
-        or default
-    )
-
-
-def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
+def _build_test_settings(
+    tmp_path_factory: pytest.TempPathFactory,
+    *,
+    database_url: str,
+) -> Settings:
     root = tmp_path_factory.mktemp("ade-api-tests")
     data_dir = root / "backend" / "data"
 
-    auth_mode = (_env("DATABASE_AUTH_MODE") or "password").strip().lower()
-    base_url = _env("DATABASE_URL")
-    if not base_url:
-        raise RuntimeError(
-            "Integration tests require ADE_DATABASE_URL (or ADE_TEST_DATABASE_URL). "
-            "Set it in .env or the environment."
-        )
-    url = make_url(base_url)
-    blob_container = _env("BLOB_CONTAINER") or "ade-test"
-    blob_connection_string = _env("BLOB_CONNECTION_STRING")
-    blob_account_url = _env("BLOB_ACCOUNT_URL")
+    auth_mode = (test_env("DATABASE_AUTH_MODE") or "password").strip().lower()
+    blob_container = test_env("BLOB_CONTAINER") or "ade-test"
+    blob_connection_string = test_env("BLOB_CONNECTION_STRING")
+    blob_account_url = test_env("BLOB_ACCOUNT_URL")
     if not blob_connection_string and not blob_account_url:
         blob_connection_string = "UseDevelopmentStorage=true"
     settings = Settings(
@@ -94,9 +76,9 @@ def _build_test_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
         safe_mode=False,
         secret_key="test-secret-key-for-tests-please-change",
         auth_mode="password_only",
-        database_url=url.render_as_string(hide_password=False),
+        database_url=database_url,
         database_auth_mode=auth_mode,
-        database_sslrootcert=_env("DATABASE_SSLROOTCERT"),
+        database_sslrootcert=test_env("DATABASE_SSLROOTCERT"),
         blob_container=blob_container,
         blob_connection_string=blob_connection_string,
         blob_account_url=blob_account_url,
@@ -124,15 +106,42 @@ def _ensure_blob_container(settings: Settings) -> None:
 
 
 @pytest.fixture(scope="session")
-def base_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
-    settings = _build_test_settings(tmp_path_factory)
+def isolated_test_database() -> Iterator[IsolatedTestDatabase]:
+    database = resolve_isolated_test_database(default_prefix="ade_api_test")
+    create_isolated_test_database(database)
+    try:
+        yield database
+    finally:
+        drop_isolated_test_database(database)
+
+
+@pytest.fixture(scope="session")
+def base_settings(
+    tmp_path_factory: pytest.TempPathFactory,
+    isolated_test_database: IsolatedTestDatabase,
+) -> Settings:
+    settings = _build_test_settings(
+        tmp_path_factory,
+        database_url=isolated_test_database.database_url.render_as_string(hide_password=False),
+    )
     _ensure_blob_container(settings)
     return settings
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _migrate_database(base_settings: Settings) -> None:
+    run_migrations(base_settings)
+
+
 @pytest.fixture()
-def empty_database_settings(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Settings]:
-    yield _build_test_settings(tmp_path_factory)
+def empty_database_settings(
+    tmp_path_factory: pytest.TempPathFactory,
+    isolated_test_database: IsolatedTestDatabase,
+) -> Settings:
+    return _build_test_settings(
+        tmp_path_factory,
+        database_url=isolated_test_database.database_url.render_as_string(hide_password=False),
+    )
 
 
 @pytest.fixture()
@@ -195,8 +204,7 @@ def _stub_sso_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(scope="session")
-def migrated_db(base_settings: Settings) -> Iterator[Engine]:
-    run_migrations(base_settings)
+def migrated_db(base_settings: Settings, _migrate_database: None) -> Iterator[Engine]:
     engine = build_engine(base_settings)
 
     with Session(engine) as session:

@@ -81,6 +81,3 @@ __all__ = [
     "API_PREFIX",
     "create_app",
 ]
-
-# ASGI entrypoint used by uvicorn / gunicorn.
-app = create_app()
