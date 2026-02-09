@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import unicodedata
+from datetime import UTC, datetime
+from pathlib import Path as FilePath
 from typing import Annotated
 from uuid import UUID
 
@@ -123,6 +126,7 @@ _COLUMN_FILTER_KEYS = {
     "mapped_field",
     "mapping_status",
 }
+_RUN_EVENTS_FILENAME_STEM_MAX_LEN = 80
 
 
 def _require_workspace_run(
@@ -217,6 +221,38 @@ def _output_missing_detail(*, run: Run, message: str) -> str | dict[str, dict[st
     if run.status is RunStatus.CANCELLED:
         return _run_cancelled_no_output_detail(message)
     return message
+
+
+def _normalise_run_events_filename_stem(value: str | None) -> str:
+    if value is None:
+        return ""
+    candidate = value.strip()
+    if not candidate:
+        return ""
+    filtered = "".join(ch for ch in candidate if unicodedata.category(ch)[0] != "C")
+    collapsed = " ".join(filtered.split()).strip()
+    if not collapsed:
+        return ""
+    if len(collapsed) > _RUN_EVENTS_FILENAME_STEM_MAX_LEN:
+        collapsed = collapsed[:_RUN_EVENTS_FILENAME_STEM_MAX_LEN].rstrip()
+    return collapsed
+
+
+def _format_run_events_timestamp(value: datetime) -> str:
+    if value.tzinfo is None:
+        normalized = value.replace(tzinfo=UTC)
+    else:
+        normalized = value.astimezone(UTC)
+    return normalized.strftime("%Y%m%dT%H%M%SZ")
+
+
+def _build_run_events_download_filename(*, run: Run, input_filename: str | None) -> str:
+    source_stem = FilePath(input_filename).stem if input_filename else None
+    stem = _normalise_run_events_filename_stem(source_stem)
+    if not stem:
+        stem = f"run-{str(run.id)[:8]}"
+    timestamp = _format_run_events_timestamp(run.created_at)
+    return f"{stem}_{timestamp}.ndjson"
 
 
 @router.post(
@@ -541,9 +577,10 @@ def download_workspace_run_events_file_endpoint(
     service: RunsServiceReadDep,
     _actor: RunReader,
 ):
-    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
+    run = _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
     blob_storage = get_storage_adapter(request)
     session_factory = get_session_factory(request)
+    input_filename: str | None = None
     try:
         with session_factory() as session:
             local_service = RunsService(
@@ -552,9 +589,14 @@ def download_workspace_run_events_file_endpoint(
                 blob_storage=blob_storage,
             )
             stream = local_service.stream_run_logs(run_id=run_id)
+            try:
+                input_metadata = local_service.get_run_input_metadata(run_id=run_id)
+                input_filename = input_metadata.filename
+            except (RunInputMissingError, RunDocumentMissingError):
+                input_filename = None
     except (RunNotFoundError, RunLogsFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    filename = "events.ndjson"
+    filename = _build_run_events_download_filename(run=run, input_filename=input_filename)
     response = StreamingResponse(stream, media_type="application/x-ndjson")
     response.headers["Content-Disposition"] = build_content_disposition(filename)
     return response

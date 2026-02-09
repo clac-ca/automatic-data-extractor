@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from datetime import UTC, datetime
 
 import anyio
 import pytest
@@ -300,6 +301,91 @@ async def test_run_events_stream_endpoint_emits_terminal_end_after_status_transi
     assert "event: ready" in joined
     assert "event: end" in joined
     assert '"status":"cancelled"' in joined
+
+
+async def test_events_download_uses_document_stem_and_timestamp_filename(
+    async_client,
+    seed_identity,
+    db_session,
+    settings: Settings,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    configuration = make_configuration(workspace_id=workspace_id, name="Download Name Config")
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    document = make_document(workspace_id=workspace_id, filename="Quarterly Intake.xlsx")
+    db_session.add(document)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    run = make_run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        file_version_id=document.current_version_id,
+        status=RunStatus.SUCCEEDED,
+    )
+    run.created_at = datetime(2026, 2, 9, 21, 45, 0, tzinfo=UTC)
+    run.completed_at = utc_now()
+    db_session.add(run)
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    events_blob_name = f"{workspace_id}/runs/{run.id}/logs/events.ndjson"
+    events_payload = b'{"timestamp":"2026-02-09T21:45:01Z","event":"run.complete","data":{}}\n'
+    storage = build_storage_adapter(settings)
+    storage.write(events_blob_name, io.BytesIO(events_payload))
+
+    headers = await auth_headers(async_client, seed_identity.workspace_owner)
+    response = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/events/download",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert (
+        'filename="Quarterly Intake_20260209T214500Z.ndjson"'
+        in response.headers["content-disposition"]
+    )
+    assert response.text == events_payload.decode("utf-8")
+
+
+async def test_events_download_falls_back_to_run_id_filename_when_input_missing(
+    async_client,
+    seed_identity,
+    db_session,
+    settings: Settings,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    configuration = make_configuration(workspace_id=workspace_id, name="Download Fallback Config")
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    run = Run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        input_file_version_id=None,
+        deps_digest="sha256:fallback",
+        status=RunStatus.SUCCEEDED,
+        created_at=datetime(2026, 2, 9, 21, 45, 0, tzinfo=UTC),
+    )
+    run.completed_at = utc_now()
+    db_session.add(run)
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    events_blob_name = f"{workspace_id}/runs/{run.id}/logs/events.ndjson"
+    events_payload = b'{"timestamp":"2026-02-09T21:45:01Z","event":"run.complete","data":{}}\n'
+    storage = build_storage_adapter(settings)
+    storage.write(events_blob_name, io.BytesIO(events_payload))
+
+    headers = await auth_headers(async_client, seed_identity.workspace_owner)
+    response = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/events/download",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    expected = f'filename="run-{str(run.id)[:8]}_20260209T214500Z.ndjson"'
+    assert expected in response.headers["content-disposition"]
+    assert response.text == events_payload.decode("utf-8")
 
 
 async def test_run_events_stream_requires_workspace_permission(
