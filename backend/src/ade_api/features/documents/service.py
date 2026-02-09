@@ -70,6 +70,7 @@ from .exceptions import (
     DocumentFileMissingError,
     DocumentTooLargeError,
     DocumentNameConflictError,
+    DocumentRestoreNameConflictError,
     DocumentNotFoundError,
     DocumentPreviewParseError,
     DocumentPreviewSheetNotFoundError,
@@ -166,6 +167,22 @@ class UploadPlan:
     name: str
     name_key: str
     source_file_id: UUID | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class RestoreConflict:
+    document_id: UUID
+    name: str
+    conflicting_document_id: UUID
+    conflicting_name: str
+    suggested_name: str
+
+
+@dataclass(slots=True)
+class RestoreBatchResult:
+    restored_ids: list[UUID]
+    conflicts: list[RestoreConflict]
+    not_found_ids: list[UUID]
 
 
 class DocumentsService:
@@ -325,6 +342,16 @@ class DocumentsService:
             self._session.flush()
             document.current_version_id = file_version.id
             self._session.flush()
+        except IntegrityError as exc:
+            if owns_stage:
+                self.discard_staged_upload(staged=staged_upload)
+            constraint_name = self._extract_constraint_name(exc)
+            if constraint_name == _FILES_NAME_KEY_CONSTRAINT:
+                raise DocumentNameConflictError(
+                    document_id=plan.file_id,
+                    name=plan.name,
+                ) from exc
+            raise
         except Exception:
             if owns_stage:
                 self.discard_staged_upload(staged=staged_upload)
@@ -1332,6 +1359,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_id: UUID,
+        name: str | None = None,
     ) -> DocumentOut:
         """Restore a soft-deleted document."""
 
@@ -1340,10 +1368,45 @@ class DocumentsService:
             document_id=document_id,
             include_deleted=True,
         )
-        if document.deleted_at is not None or document.deleted_by_user_id is not None:
-            document.deleted_at = None
-            document.deleted_by_user_id = None
-            self._session.flush()
+        if document.deleted_at is None and document.deleted_by_user_id is None:
+            restored = DocumentOut.model_validate(document)
+            self._attach_last_runs(workspace_id, [restored])
+            self._apply_derived_fields(restored)
+            restored.list_row = self._build_list_row(restored)
+            return restored
+
+        target_name, target_name_key = self._resolve_restore_name(
+            workspace_id=workspace_id,
+            document=document,
+            requested_name=name,
+        )
+        try:
+            with self._session.begin_nested():
+                document.name = target_name
+                document.name_key = target_name_key
+                document.deleted_at = None
+                document.deleted_by_user_id = None
+                self._session.flush()
+        except IntegrityError as exc:
+            constraint_name = self._extract_constraint_name(exc)
+            if constraint_name != _FILES_NAME_KEY_CONSTRAINT:
+                raise
+            conflict = self._find_restore_name_conflict(
+                workspace_id=workspace_id,
+                document_id=document.id,
+                name_key=target_name_key,
+                reserved_name_keys={},
+            )
+            if conflict is None:
+                conflict = (document.id, target_name)
+            raise self._build_restore_name_conflict(
+                workspace_id=workspace_id,
+                document_id=document.id,
+                name=target_name,
+                conflicting_document_id=conflict[0],
+                conflicting_name=conflict[1],
+                reserved_name_keys={},
+            ) from exc
 
         restored = DocumentOut.model_validate(document)
         self._attach_last_runs(workspace_id, [restored])
@@ -1356,27 +1419,83 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
-    ) -> list[UUID]:
-        """Restore multiple soft-deleted documents."""
+    ) -> RestoreBatchResult:
+        """Restore multiple soft-deleted documents with partial conflict reporting."""
 
         ordered_ids = list(dict.fromkeys(document_ids))
         if not ordered_ids:
-            return []
-        documents = self._require_documents(
-            workspace_id=workspace_id,
-            document_ids=ordered_ids,
-            include_deleted=True,
-        )
-        changed = False
-        for document in documents:
-            if document.deleted_at is None and document.deleted_by_user_id is None:
+            return RestoreBatchResult(restored_ids=[], conflicts=[], not_found_ids=[])
+
+        stmt = self._repository.base_query(workspace_id).where(File.id.in_(ordered_ids))
+        result = self._session.execute(stmt)
+        documents = {document.id: document for document in result.scalars()}
+
+        restored_ids: list[UUID] = []
+        conflicts: list[RestoreConflict] = []
+        not_found_ids: list[UUID] = []
+        reserved_name_keys: dict[str, tuple[UUID, str]] = {}
+
+        for document_id in ordered_ids:
+            document = documents.get(document_id)
+            if document is None:
+                not_found_ids.append(document_id)
                 continue
-            document.deleted_at = None
-            document.deleted_by_user_id = None
-            changed = True
-        if changed:
-            self._session.flush()
-        return ordered_ids
+
+            if document.deleted_at is None and document.deleted_by_user_id is None:
+                active_name_key = self._build_name_key(document.name)
+                reserved_name_keys.setdefault(active_name_key, (document.id, document.name))
+                restored_ids.append(document.id)
+                continue
+
+            try:
+                target_name, target_name_key = self._resolve_restore_name(
+                    workspace_id=workspace_id,
+                    document=document,
+                    requested_name=None,
+                    reserved_name_keys=reserved_name_keys,
+                )
+            except DocumentRestoreNameConflictError as exc:
+                conflicts.append(self._to_restore_conflict(exc))
+                continue
+
+            try:
+                with self._session.begin_nested():
+                    document.name = target_name
+                    document.name_key = target_name_key
+                    document.deleted_at = None
+                    document.deleted_by_user_id = None
+                    self._session.flush()
+            except IntegrityError as exc:
+                constraint_name = self._extract_constraint_name(exc)
+                if constraint_name != _FILES_NAME_KEY_CONSTRAINT:
+                    raise
+                conflict = self._find_restore_name_conflict(
+                    workspace_id=workspace_id,
+                    document_id=document.id,
+                    name_key=target_name_key,
+                    reserved_name_keys=reserved_name_keys,
+                )
+                if conflict is None:
+                    conflict = (document.id, target_name)
+                conflict_error = self._build_restore_name_conflict(
+                    workspace_id=workspace_id,
+                    document_id=document.id,
+                    name=target_name,
+                    conflicting_document_id=conflict[0],
+                    conflicting_name=conflict[1],
+                    reserved_name_keys=reserved_name_keys,
+                )
+                conflicts.append(self._to_restore_conflict(conflict_error))
+                continue
+
+            reserved_name_keys[target_name_key] = (document.id, target_name)
+            restored_ids.append(document.id)
+
+        return RestoreBatchResult(
+            restored_ids=restored_ids,
+            conflicts=conflicts,
+            not_found_ids=not_found_ids,
+        )
 
     def replace_document_tags(
         self,
@@ -2044,6 +2163,93 @@ class DocumentsService:
         collapsed = " ".join(normalized.split())
         return collapsed.casefold()
 
+    def _resolve_restore_name(
+        self,
+        *,
+        workspace_id: UUID,
+        document: File,
+        requested_name: str | None,
+        reserved_name_keys: Mapping[str, tuple[UUID, str]] | None = None,
+    ) -> tuple[str, str]:
+        if requested_name is None:
+            restore_name = document.name
+            restore_name_key = self._build_name_key(restore_name)
+        else:
+            restore_name, restore_name_key = self._prepare_rename(
+                current_name=document.name,
+                candidate_name=requested_name,
+            )
+
+        conflict = self._find_restore_name_conflict(
+            workspace_id=workspace_id,
+            document_id=document.id,
+            name_key=restore_name_key,
+            reserved_name_keys=reserved_name_keys or {},
+        )
+        if conflict is not None:
+            raise self._build_restore_name_conflict(
+                workspace_id=workspace_id,
+                document_id=document.id,
+                name=restore_name,
+                conflicting_document_id=conflict[0],
+                conflicting_name=conflict[1],
+                reserved_name_keys=reserved_name_keys or {},
+            )
+
+        return restore_name, restore_name_key
+
+    def _find_restore_name_conflict(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        name_key: str,
+        reserved_name_keys: Mapping[str, tuple[UUID, str]],
+    ) -> tuple[UUID, str] | None:
+        reserved_conflict = reserved_name_keys.get(name_key)
+        if reserved_conflict is not None and reserved_conflict[0] != document_id:
+            return reserved_conflict
+
+        existing = self._find_by_name_key(workspace_id=workspace_id, name_key=name_key)
+        if existing is None or existing.id == document_id:
+            return None
+        return existing.id, existing.name
+
+    def _build_restore_name_conflict(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        name: str,
+        conflicting_document_id: UUID,
+        conflicting_name: str,
+        reserved_name_keys: Mapping[str, tuple[UUID, str]],
+    ) -> DocumentRestoreNameConflictError:
+        reserved = set(reserved_name_keys.keys())
+        reserved.add(self._build_name_key(name))
+        suggested_name, _ = self._disambiguate_name(
+            workspace_id=workspace_id,
+            base_name=name,
+            reserved_name_keys=reserved,
+        )
+        return DocumentRestoreNameConflictError(
+            document_id=document_id,
+            name=name,
+            conflicting_document_id=conflicting_document_id,
+            conflicting_name=conflicting_name,
+            suggested_name=suggested_name,
+        )
+
+    @staticmethod
+    def _to_restore_conflict(exc: DocumentRestoreNameConflictError) -> RestoreConflict:
+        return RestoreConflict(
+            document_id=UUID(exc.document_id),
+            name=exc.name,
+            conflicting_document_id=UUID(exc.conflicting_document_id),
+            conflicting_name=exc.conflicting_name,
+            suggested_name=exc.suggested_name,
+        )
+
     def _build_view_name_key(self, name: str) -> str:
         normalized = unicodedata.normalize("NFKC", name).casefold()
         candidate = _VIEW_NAME_PATTERN.sub("-", normalized).strip("-")
@@ -2065,7 +2271,14 @@ class DocumentsService:
         result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    def _disambiguate_name(self, *, workspace_id: UUID, base_name: str) -> tuple[str, str]:
+    def _disambiguate_name(
+        self,
+        *,
+        workspace_id: UUID,
+        base_name: str,
+        reserved_name_keys: set[str] | None = None,
+    ) -> tuple[str, str]:
+        reserved = reserved_name_keys or set()
         stem = Path(base_name).stem.strip() or "Document"
         suffix = Path(base_name).suffix
         for index in range(2, 1000):
@@ -2074,6 +2287,8 @@ class DocumentsService:
             trimmed = stem[:max_stem].rstrip() or "Document"
             candidate = f"{trimmed}{label}{suffix}"
             name_key = self._build_name_key(candidate)
+            if name_key in reserved:
+                continue
             if self._find_by_name_key(workspace_id=workspace_id, name_key=name_key) is None:
                 return candidate, name_key
         raise RuntimeError("Unable to disambiguate document name.")

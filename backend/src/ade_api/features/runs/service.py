@@ -1844,6 +1844,7 @@ class RunsService:
             File.workspace_id == workspace_id,
             File.kind == FileKind.OUTPUT,
             File.name_key == name_key,
+            File.deleted_at.is_(None),
         )
         existing = self._session.execute(stmt).scalar_one_or_none()
         if existing is not None:

@@ -8483,6 +8483,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DocumentRestoreRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -8515,6 +8532,14 @@
               }
             }
           },
+          "409": {
+            "description": "Document name conflicts with an active document.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
           "404": {
             "description": "Document not found within the workspace.",
             "headers": {
@@ -8524,14 +8549,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
+            "description": "Restore name is invalid (for example extension mismatch).",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -8741,14 +8759,6 @@
           },
           "403": {
             "description": "Workspace permissions do not allow document restoration.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -14653,6 +14663,45 @@
         "title": "DocumentBatchDeleteResponse",
         "description": "Response envelope for batch deletions."
       },
+      "DocumentBatchRestoreConflict": {
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Documentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "conflictingDocumentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Conflictingdocumentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "conflictingName": {
+            "type": "string",
+            "title": "Conflictingname"
+          },
+          "suggestedName": {
+            "type": "string",
+            "title": "Suggestedname"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "documentId",
+          "name",
+          "conflictingDocumentId",
+          "conflictingName",
+          "suggestedName"
+        ],
+        "title": "DocumentBatchRestoreConflict",
+        "description": "Conflict payload for a document that could not be restored."
+      },
       "DocumentBatchRestoreRequest": {
         "properties": {
           "documentIds": {
@@ -14664,7 +14713,7 @@
             "type": "array",
             "minItems": 1,
             "title": "Documentids",
-            "description": "Documents to restore (all-or-nothing)."
+            "description": "Documents to restore (each document resolved independently)."
           }
         },
         "additionalProperties": false,
@@ -14677,20 +14726,36 @@
       },
       "DocumentBatchRestoreResponse": {
         "properties": {
-          "documentIds": {
+          "restoredIds": {
             "items": {
               "type": "string",
               "format": "uuid",
               "description": "UUIDv7 (RFC 9562) generated in the application layer."
             },
             "type": "array",
-            "title": "Documentids"
+            "title": "Restoredids"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentBatchRestoreConflict"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          },
+          "notFoundIds": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "title": "Notfoundids"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "DocumentBatchRestoreResponse",
-        "description": "Response envelope for batch restores."
+        "description": "Response envelope for partial batch restore operations."
       },
       "DocumentBatchTagsRequest": {
         "properties": {
@@ -15408,6 +15473,26 @@
         ],
         "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
+      },
+      "DocumentRestoreRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Optional replacement name used while restoring a deleted document."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentRestoreRequest",
+        "description": "Optional payload for restoring a document with a new name."
       },
       "DocumentRunSummary": {
         "properties": {

@@ -11,6 +11,7 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.encoding import json_dumps
+from ade_api.features.documents.service import DocumentsService
 from ade_db.models import File
 from tests.api.utils import login
 
@@ -172,3 +173,38 @@ async def test_upload_document_exceeds_limit_returns_413(
     )
 
     assert response.status_code == 413
+
+
+async def test_upload_same_name_with_stale_plan_returns_conflict_not_500(
+    async_client: AsyncClient,
+    seed_identity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    first = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("race-name.txt", b"first", "text/plain")},
+    )
+    assert first.status_code == 201, first.text
+
+    original_find_by_name_key = DocumentsService._find_by_name_key
+
+    def _stale_find_by_name_key(self: DocumentsService, *, workspace_id: UUID, name_key: str):
+        if name_key == "race-name.txt":
+            return None
+        return original_find_by_name_key(self, workspace_id=workspace_id, name_key=name_key)
+
+    monkeypatch.setattr(DocumentsService, "_find_by_name_key", _stale_find_by_name_key)
+
+    second = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("race-name.txt", b"second", "text/plain")},
+    )
+    assert second.status_code == 409, second.text
+    assert second.status_code != 500

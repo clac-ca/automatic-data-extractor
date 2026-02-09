@@ -7,6 +7,8 @@ export type DocumentListRow = components["schemas"]["DocumentListRow"];
 export type DocumentListPage = components["schemas"]["DocumentListPage"];
 export type DocumentPageResult = DocumentListPage;
 export type DocumentSheet = components["schemas"]["DocumentSheet"];
+export type DocumentBatchRestoreConflict = components["schemas"]["DocumentBatchRestoreConflict"];
+export type DocumentBatchRestoreResult = components["schemas"]["DocumentBatchRestoreResponse"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
@@ -224,10 +226,20 @@ export async function deleteWorkspaceDocumentsBatch(
 export async function restoreWorkspaceDocument(
   workspaceId: string,
   documentId: string,
+  options: { name?: string } = {},
 ): Promise<DocumentRecord> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore", {
-    params: { path: { workspaceId, documentId } },
-  });
+  const params = { path: { workspaceId, documentId } };
+  const request =
+    "name" in options
+      ? {
+          params,
+          body: { name: options.name },
+        }
+      : { params };
+  const { data } = await client.POST(
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore",
+    request,
+  );
   if (!data) throw new Error("Expected restored document payload.");
   return data;
 }
@@ -235,13 +247,17 @@ export async function restoreWorkspaceDocument(
 export async function restoreWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
-): Promise<string[]> {
+): Promise<DocumentBatchRestoreResult> {
   const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/restore", {
     params: { path: { workspaceId } },
     body: { documentIds },
   });
   if (!data) throw new Error("Expected batch restore response.");
-  return data.documentIds ?? [];
+  return {
+    restoredIds: data.restoredIds ?? [],
+    conflicts: data.conflicts ?? [],
+    notFoundIds: data.notFoundIds ?? [],
+  };
 }
 
 const DEFAULT_ID_FILTER_BATCH = 50;

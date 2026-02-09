@@ -123,6 +123,32 @@ class DocumentNameConflictError(Exception):
         self.name = name
 
 
+class DocumentRestoreNameConflictError(Exception):
+    """Raised when restoring a document would collide with an active document name."""
+
+    def __init__(
+        self,
+        *,
+        document_id: UUID | str,
+        name: str,
+        conflicting_document_id: UUID | str,
+        conflicting_name: str,
+        suggested_name: str,
+    ) -> None:
+        doc_id = str(document_id)
+        conflicting_id = str(conflicting_document_id)
+        message = (
+            f"Cannot restore document {doc_id!r} as {name!r}; "
+            f"active document {conflicting_id!r} already uses {conflicting_name!r}."
+        )
+        super().__init__(message)
+        self.document_id = doc_id
+        self.name = name
+        self.conflicting_document_id = conflicting_id
+        self.conflicting_name = conflicting_name
+        self.suggested_name = suggested_name
+
+
 class InvalidDocumentRenameError(Exception):
     """Raised when a rename request violates filename rules."""
 
@@ -187,6 +213,7 @@ __all__ = [
     "DocumentPreviewSheetNotFoundError",
     "DocumentPreviewParseError",
     "DocumentNameConflictError",
+    "DocumentRestoreNameConflictError",
     "InvalidDocumentRenameError",
     "DocumentVersionNotFoundError",
     "InvalidDocumentTagsError",
