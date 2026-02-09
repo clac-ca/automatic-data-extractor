@@ -13,8 +13,6 @@ on:
       - ".github/workflows/docker-image.yaml"
   push:
     branches: [main, development]
-    tags:
-      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -93,17 +91,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             # Branch tags (main/development only)
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
-            # Short SHA (e.g. sha-abc1234)
-            type=sha,format=short,prefix=sha-
-            # Release tags from git tag vX.Y.Z
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
 
       - name: Build (and push if not PR)
         uses: docker/build-push-action@v6

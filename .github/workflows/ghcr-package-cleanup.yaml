@@ -10,7 +10,7 @@ on:
       keep_tags:
         description: Comma-separated tags to keep
         required: true
-        default: main,development,1.7.0,1.7,1
+        default: main,development
       dry_run:
         description: If true, report only
         required: true
