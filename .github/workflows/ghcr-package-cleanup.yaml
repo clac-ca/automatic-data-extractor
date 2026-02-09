@@ -1,0 +1,109 @@
+name: Cleanup GHCR Package Versions
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: Container package name
+        required: true
+        default: automatic-data-extractor
+      keep_tags:
+        description: Comma-separated tags to keep
+        required: true
+        default: main,development,1.7.0,1.7,1
+      dry_run:
+        description: If true, report only
+        required: true
+        default: "false"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OWNER: ${{ github.repository_owner }}
+      PACKAGE_NAME: ${{ inputs.package_name }}
+      KEEP_TAGS: ${{ inputs.keep_tags }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Evaluate and prune package versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          declare -A KEEP=()
+          IFS=',' read -r -a keep_tags <<< "$KEEP_TAGS"
+          for raw in "${keep_tags[@]}"; do
+            tag="$(echo "$raw" | xargs)"
+            [ -n "$tag" ] && KEEP["$tag"]=1
+          done
+
+          echo "Package: ${OWNER}/${PACKAGE_NAME}"
+          echo "Keep tags: ${KEEP_TAGS}"
+          echo "Dry run: ${DRY_RUN}"
+
+          kept=0
+          deleted=0
+          failed=0
+
+          while IFS= read -r row; do
+            version_json="$(echo "$row" | base64 --decode)"
+            id="$(jq -r '.id' <<<"$version_json")"
+            mapfile -t tags < <(jq -r '.metadata.container.tags[]? // empty' <<<"$version_json")
+
+            keep_version=0
+            if [ "${#tags[@]}" -eq 0 ]; then
+              keep_version=0
+            else
+              for tag in "${tags[@]}"; do
+                if [ -n "${KEEP[$tag]+x}" ]; then
+                  keep_version=1
+                  break
+                fi
+              done
+            fi
+
+            if [ "$keep_version" -eq 1 ]; then
+              kept=$((kept + 1))
+              echo "KEEP id=${id} tags=$(IFS=,; echo "${tags[*]}")"
+              continue
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              deleted=$((deleted + 1))
+              echo "DRY-RUN DELETE id=${id} tags=$(IFS=,; echo "${tags[*]}")"
+              continue
+            fi
+
+            if gh api -X DELETE \
+              "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${id}" >/dev/null; then
+              deleted=$((deleted + 1))
+              echo "DELETED id=${id} tags=$(IFS=,; echo "${tags[*]}")"
+            else
+              failed=$((failed + 1))
+              echo "FAILED id=${id} tags=$(IFS=,; echo "${tags[*]}")" >&2
+            fi
+          done < <(
+            gh api --paginate \
+              "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
+              --jq '.[] | @base64'
+          )
+
+          echo "Summary: kept=${kept} deleted=${deleted} failed=${failed}"
+          if [ "$failed" -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Show remaining tags
+        if: ${{ inputs.dry_run != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate \
+            "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions?per_page=100" \
+            --jq '.[] | .metadata.container.tags[]? // empty' \
+            | sort -u
