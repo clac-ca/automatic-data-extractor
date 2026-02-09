@@ -243,7 +243,10 @@ export function useDocumentsColumns({
         accessorFn: (row) =>
           row.lastRun?.completedAt ?? row.lastRun?.startedAt ?? row.lastRun?.createdAt ?? null,
         header: ({ column }) => <DataTableColumnHeader column={column} label="Last Run" />,
-        cell: ({ row }) => renderRunSummary(row.original.lastRun),
+        cell: ({ row }) => {
+          const value = row.getValue<string | null>("lastRunAt");
+          return value ? formatTimestamp(value) : <span className="text-muted-foreground">-</span>;
+        },
         meta: {
           label: "Last Run",
           headerClassName: "hidden xl:table-cell",
@@ -397,29 +400,6 @@ export function useDocumentsColumns({
       tagFilterOptions,
       tagOptions,
     ],
-  );
-}
-
-function formatRunStatus(value: string) {
-  if (!value) return "-";
-  const normalized = value.replace(/_/g, " ");
-  return normalized[0]?.toUpperCase() + normalized.slice(1);
-}
-
-function renderRunSummary(run: DocumentRow["lastRun"] | null | undefined) {
-  if (!run) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-
-  const timestamp = run.completedAt ?? run.startedAt ?? run.createdAt;
-  const statusLabel = formatRunStatus(String(run.status));
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5" title={run.errorMessage ?? undefined}>
-      <span className="truncate capitalize">{statusLabel}</span>
-      <span className="truncate text-xs text-muted-foreground">
-        {timestamp ? formatTimestamp(timestamp) : "-"}
-      </span>
-    </div>
   );
 }
 
