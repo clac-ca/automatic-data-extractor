@@ -17,13 +17,13 @@
 # - ADE_BLOB_CONNECTION_STRING (or ADE_BLOB_ACCOUNT_URL for managed identity auth)
 #
 # Optional:
-# - ADE_DOCKER_TAG (default: main; compose image selector, set in shell/CI at deploy time)
+# - ADE_DOCKER_TAG (default: v1.7.0; compose image selector, set in shell/CI at deploy time)
 # - ADE_API_PROCESSES (default: 2)
 # - ADE_WORKER_RUN_CONCURRENCY (default: 4)
 
 services:
   app:
-    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-main}
+    image: ghcr.io/clac-ca/automatic-data-extractor:${ADE_DOCKER_TAG:-v1.7.0}
     command: ["ade", "start"]
     env_file:
       - path: ./.env
