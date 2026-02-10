@@ -41,8 +41,8 @@ az deployment group create \
     postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" \
     postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" \
     postgresEntraAdminPrincipalType="User" \
-    postgresAllowAzureServicesRuleEnabled=true \
-    postgresAuthenticationMethod="microsoft_entra" \
+    postgresAllowPublicAccessFromAzureServices=true \
+    postgresAuthenticationMode="microsoft_entra_only" \
     storageSku="Standard_LRS" \
     storageBlobAuthenticationMethod="microsoft_entra" \
     allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' \

@@ -60,7 +60,7 @@ param postgresEntraAdminPrincipalName string
 param postgresEntraAdminPrincipalType string = 'User'
 
 @description('Enable PostgreSQL firewall rule equivalent to "Allow public access from any Azure service within Azure to this server" (0.0.0.0 rule).')
-param postgresAllowAzureServicesRuleEnabled bool = true
+param postgresAllowPublicAccessFromAzureServices bool = true
 
 @description('Allowed public IPv4 addresses for PostgreSQL firewall rules and Azure Storage IP network rules.')
 param allowedPublicIpAddresses array = []
@@ -69,11 +69,12 @@ param allowedPublicIpAddresses array = []
 param storageSku string = 'Standard_LRS'
 
 @allowed([
-  'postgresql'
-  'microsoft_entra'
+  'postgresql_only'
+  'microsoft_entra_only'
+  'postgresql_and_microsoft_entra'
 ])
-@description('PostgreSQL authentication method for the app connection. microsoft_entra uses managed identity token auth; postgresql uses local password auth.')
-param postgresAuthenticationMethod string = 'microsoft_entra'
+@description('PostgreSQL Flexible Server authentication mode. postgresql_only enables password auth only, microsoft_entra_only enables Microsoft Entra auth only, and postgresql_and_microsoft_entra enables both.')
+param postgresAuthenticationMode string = 'microsoft_entra_only'
 
 @allowed([
   'microsoft_entra'
@@ -163,15 +164,23 @@ var effectiveDevContainerAppPublicWebUrl = empty(devContainerAppPublicWebUrl) ? 
 var effectiveDevContainerAppEnvAdeSecretKey = empty(devContainerAppEnvAdeSecretKey) ? prodContainerAppEnvAdeSecretKey : devContainerAppEnvAdeSecretKey
 var hasDevParameterOverrides = !empty(devContainerAppImage) || !empty(devContainerAppPublicWebUrl) || !empty(devContainerAppEnvAdeSecretKey) || (length(items(devContainerAppEnvOverrides)) > 0) || (devContainerAppMinReplicas != 0) || (devContainerAppMaxReplicas != 1) || (postgresDevDatabaseName != 'ade_dev')
 var deployDevEffective = deployDev || hasDevParameterOverrides
-var useMicrosoftEntraPostgresAuth = postgresAuthenticationMethod == 'microsoft_entra'
+var postgresServerUsesEntraAuth = contains([
+  'microsoft_entra_only'
+  'postgresql_and_microsoft_entra'
+], postgresAuthenticationMode)
+var postgresServerUsesPasswordAuth = contains([
+  'postgresql_only'
+  'postgresql_and_microsoft_entra'
+], postgresAuthenticationMode)
+var useManagedIdentityDatabaseAuth = postgresAuthenticationMode != 'postgresql_only'
 var useSharedKeyBlobAuth = storageBlobAuthenticationMethod == 'shared_key'
 var useMicrosoftEntraBlobAuth = storageBlobAuthenticationMethod == 'microsoft_entra'
-var adeDatabaseAuthMode = useMicrosoftEntraPostgresAuth ? 'managed_identity' : 'password'
+var containerAppEnvAdeDatabaseAuthMode = useManagedIdentityDatabaseAuth ? 'managed_identity' : 'password'
 
-var prodDatabaseUrl = useMicrosoftEntraPostgresAuth
+var prodDatabaseUrl = useManagedIdentityDatabaseAuth
   ? 'postgresql+psycopg://${prodAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresProdDatabaseName}?sslmode=require'
   : 'postgresql+psycopg://${uriComponent(postgresAdminUser)}:${uriComponent(postgresAdminPassword)}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresProdDatabaseName}?sslmode=require'
-var devDatabaseUrl = useMicrosoftEntraPostgresAuth
+var devDatabaseUrl = useManagedIdentityDatabaseAuth
   ? 'postgresql+psycopg://${devAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDevDatabaseName}?sslmode=require'
   : 'postgresql+psycopg://${uriComponent(postgresAdminUser)}:${uriComponent(postgresAdminPassword)}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDevDatabaseName}?sslmode=require'
 var blobAccountUrl = 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
@@ -218,7 +227,7 @@ var prodContainerAppBaseEnv = [
   }
   {
     name: 'ADE_DATABASE_AUTH_MODE'
-    value: adeDatabaseAuthMode
+    value: containerAppEnvAdeDatabaseAuthMode
   }
   {
     name: 'ADE_DATABASE_URL'
@@ -262,7 +271,7 @@ var devContainerAppBaseEnv = [
   }
   {
     name: 'ADE_DATABASE_AUTH_MODE'
-    value: adeDatabaseAuthMode
+    value: containerAppEnvAdeDatabaseAuthMode
   }
   {
     name: 'ADE_DATABASE_URL'
@@ -307,7 +316,7 @@ var allowedIpFirewallRules = [for ip in allowedPublicIpAddresses: {
 }]
 
 var postgresFirewallRules = concat(
-  postgresAllowAzureServicesRuleEnabled
+  postgresAllowPublicAccessFromAzureServices
     ? [
         {
           name: 'allow-azure-services'
@@ -420,8 +429,8 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' =
       publicNetworkAccess: 'Enabled'
     }
     authConfig: {
-      activeDirectoryAuth: 'Enabled'
-      passwordAuth: 'Enabled'
+      activeDirectoryAuth: postgresServerUsesEntraAuth ? 'Enabled' : 'Disabled'
+      passwordAuth: postgresServerUsesPasswordAuth ? 'Enabled' : 'Disabled'
       tenantId: tenant().tenantId
     }
   }
@@ -454,7 +463,7 @@ resource postgresFirewallRuleResources 'Microsoft.DBforPostgreSQL/flexibleServer
   }
 }]
 
-resource postgresEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
+resource postgresEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = if (postgresServerUsesEntraAuth) {
   parent: postgresServer
   name: postgresEntraAdminObjectId
   properties: {
@@ -464,7 +473,7 @@ resource postgresEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administr
   }
 }
 
-resource postgresBootstrapIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (useMicrosoftEntraPostgresAuth) {
+resource postgresBootstrapIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (useManagedIdentityDatabaseAuth) {
   name: postgresBootstrapIdentityName
   location: location
 }
@@ -704,7 +713,7 @@ resource devApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDevEffectiv
 var postgresBootstrapReaderRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
 var postgresBootstrapScriptForceUpdateTag = guid(postgresEntraBootstrapForceUpdateTag, prodApp.identity.principalId!, deployDevEffective ? devApp!.identity.principalId! : 'none')
 
-resource postgresBootstrapEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = if (useMicrosoftEntraPostgresAuth) {
+resource postgresBootstrapEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = if (useManagedIdentityDatabaseAuth) {
   parent: postgresServer
   name: postgresBootstrapIdentity!.name
   properties: {
@@ -714,7 +723,7 @@ resource postgresBootstrapEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/
   }
 }
 
-resource postgresBootstrapReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (useMicrosoftEntraPostgresAuth) {
+resource postgresBootstrapReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (useManagedIdentityDatabaseAuth) {
   name: guid(postgresServer.id, postgresBootstrapIdentity!.id, postgresBootstrapReaderRoleDefinitionId)
   scope: postgresServer
   properties: {
@@ -724,7 +733,7 @@ resource postgresBootstrapReaderRoleAssignment 'Microsoft.Authorization/roleAssi
   }
 }
 
-resource postgresManagedIdentityRoleBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (useMicrosoftEntraPostgresAuth) {
+resource postgresManagedIdentityRoleBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (useManagedIdentityDatabaseAuth) {
   name: postgresBootstrapScriptName
   location: location
   kind: 'AzureCLI'
@@ -868,7 +877,8 @@ output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
 output postgresServerName string = postgresServer.name
 output postgresFqdn string = postgresServer.properties.fullyQualifiedDomainName
 output postgresVersion string = string(postgresServer.properties.version)
-output postgresAuthenticationMethod string = postgresAuthenticationMethod
+output postgresAuthenticationMode string = postgresAuthenticationMode
+output containerAppEnvAdeDatabaseAuthMode string = containerAppEnvAdeDatabaseAuthMode
 output storageBlobAuthenticationMethod string = storageBlobAuthenticationMethod
 output postgresProdDatabaseName string = postgresProdDatabaseName
 output postgresDevDatabaseName string = deployDevEffective ? postgresDevDatabaseName : ''

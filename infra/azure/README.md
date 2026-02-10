@@ -31,7 +31,7 @@ This deploys:
 - 1 PostgreSQL Flexible Server with production database
 - 1 Storage account with production blob container and file share
 
-Full runnable command (all parameters, secure defaults = `microsoft_entra` for PostgreSQL and Blob):
+Full runnable command (all parameters, secure defaults = `microsoft_entra_only` for PostgreSQL and `microsoft_entra` for Blob):
 
 ```bash
 az login
@@ -61,8 +61,8 @@ az deployment group create \
     postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" \
     postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" \
     postgresEntraAdminPrincipalType="User" \
-    postgresAllowAzureServicesRuleEnabled=true \
-    postgresAuthenticationMethod="microsoft_entra" \
+    postgresAllowPublicAccessFromAzureServices=true \
+    postgresAuthenticationMode="microsoft_entra_only" \
     storageSku="Standard_LRS" \
     storageBlobAuthenticationMethod="microsoft_entra" \
     allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' \
@@ -92,7 +92,7 @@ This deploys:
 - 1 PostgreSQL server with prod and dev databases
 - 1 Storage account with prod and dev blob containers/file shares
 
-Full runnable command (all parameters, secure defaults = `microsoft_entra` for PostgreSQL and Blob):
+Full runnable command (all parameters, secure defaults = `microsoft_entra_only` for PostgreSQL and `microsoft_entra` for Blob):
 
 ```bash
 az login
@@ -122,8 +122,8 @@ az deployment group create \
     postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" \
     postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" \
     postgresEntraAdminPrincipalType="User" \
-    postgresAllowAzureServicesRuleEnabled=true \
-    postgresAuthenticationMethod="microsoft_entra" \
+    postgresAllowPublicAccessFromAzureServices=true \
+    postgresAuthenticationMode="microsoft_entra_only" \
     storageSku="Standard_LRS" \
     storageBlobAuthenticationMethod="microsoft_entra" \
     allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' \
@@ -156,9 +156,9 @@ Tip:
 
 Operational notes:
 
-- PostgreSQL access: if `postgresAllowAzureServicesRuleEnabled=false` and `allowedPublicIpAddresses=[]`, no public client IPs are allowed and the app cannot connect to PostgreSQL over the public endpoint.
-- PostgreSQL Microsoft Entra bootstrap: when `postgresAuthenticationMethod="microsoft_entra"`, this template creates DB roles/grants automatically via an idempotent deployment script.
-- PostgreSQL bootstrap connectivity: the bootstrap script needs network access to PostgreSQL. If you disable `postgresAllowAzureServicesRuleEnabled`, ensure connectivity is still possible or use the manual fallback in the FAQ.
+- PostgreSQL access: if `postgresAllowPublicAccessFromAzureServices=false` and `allowedPublicIpAddresses=[]`, no public client IPs are allowed and the app cannot connect to PostgreSQL over the public endpoint.
+- PostgreSQL Microsoft Entra bootstrap: when `postgresAuthenticationMode` includes Microsoft Entra auth (`microsoft_entra_only` or `postgresql_and_microsoft_entra`), this template creates DB roles/grants automatically via an idempotent deployment script.
+- PostgreSQL bootstrap connectivity: the bootstrap script needs network access to PostgreSQL. If you disable `postgresAllowPublicAccessFromAzureServices`, ensure connectivity is still possible or use the manual fallback in the FAQ.
 - Storage RBAC propagation: when `storageBlobAuthenticationMethod="microsoft_entra"`, blob role assignments can take up to 10 minutes to apply. Right after deployment, the app may restart until access is active. See [RBAC propagation][rbac-propagation].
 
 Custom env vars:
@@ -183,8 +183,8 @@ Custom env vars:
 | `instance` | `string` | No | `001` | Naming token for instance/environment numbering. |
 | `vnetCidr` | `string` | No | `10.80.0.0/16` | Shared VNet address space in [CIDR notation][cidr]. |
 | `acaSubnetCidr` | `string` | No | `10.80.0.0/23` | Container Apps subnet address space in [CIDR notation][cidr]. |
-| `postgresAdminUser` | `string` | No | `adeadmin` | PostgreSQL local admin username. Required by PostgreSQL Flexible Server and used when `postgresAuthenticationMethod="postgresql"`. |
-| `postgresAdminPassword` | `secure string` | Yes | None | PostgreSQL local admin password. Required by PostgreSQL Flexible Server and used when `postgresAuthenticationMethod="postgresql"`. |
+| `postgresAdminUser` | `string` | No | `adeadmin` | PostgreSQL local admin username. Required by PostgreSQL Flexible Server and used when `postgresAuthenticationMode` includes password auth (`postgresql_only` or `postgresql_and_microsoft_entra`). |
+| `postgresAdminPassword` | `secure string` | Yes | None | PostgreSQL local admin password. Required by PostgreSQL Flexible Server and used when `postgresAuthenticationMode` includes password auth (`postgresql_only` or `postgresql_and_microsoft_entra`). |
 | `postgresVersion` | `string` | No | `16` | PostgreSQL major version. |
 | `postgresTier` | `string` | No | `Burstable` | PostgreSQL compute tier. |
 | `postgresSkuName` | `string` | No | `Standard_B1ms` | PostgreSQL SKU size (compute/memory class). |
@@ -192,10 +192,10 @@ Custom env vars:
 | `postgresEntraAdminObjectId` | `string` | Yes | None | Entra object ID configured as PostgreSQL Entra admin. |
 | `postgresEntraAdminPrincipalName` | `string` | Yes | None | Entra principal name configured as PostgreSQL Entra admin. |
 | `postgresEntraAdminPrincipalType` | `string` | No | `User` | Entra principal type: `User`, `Group`, `ServicePrincipal`. |
-| `postgresAllowAzureServicesRuleEnabled` | `bool` | No | `true` | Adds PostgreSQL `0.0.0.0` firewall rule ("Allow public access from any Azure service within Azure to this server"). See [PostgreSQL firewall rules][pg-firewall]. |
+| `postgresAllowPublicAccessFromAzureServices` | `bool` | No | `true` | Adds PostgreSQL `0.0.0.0` firewall rule ("Allow public access from any Azure service within Azure to this server"). Set `false` to tighten access, then explicitly allow required IPs or use private networking. See [PostgreSQL firewall rules][pg-firewall]. |
 | `allowedPublicIpAddresses` | `array` | No | `[]` | Public IPv4 allowlist for PostgreSQL and Storage firewall/network rules. Empty means no explicit public IP allow rules. See [PostgreSQL firewall rules][pg-firewall] and [Storage IP rules][storage-ip-rules]. |
 | `storageSku` | `string` | No | `Standard_LRS` | Storage redundancy/SKU. |
-| `postgresAuthenticationMethod` | `string` | No | `microsoft_entra` | PostgreSQL authentication method used by the app. `postgresql` = password auth, `microsoft_entra` = token auth via managed identity. The template maps this to app env var `ADE_DATABASE_AUTH_MODE`. See [PostgreSQL auth modes][pg-auth]. |
+| `postgresAuthenticationMode` | `string` | No | `microsoft_entra_only` | PostgreSQL Flexible Server authentication mode. Allowed values: `postgresql_only`, `microsoft_entra_only`, `postgresql_and_microsoft_entra`. The template sets `ADE_DATABASE_AUTH_MODE` to `managed_identity` for Entra-capable modes and `password` for `postgresql_only`. See [PostgreSQL auth modes][pg-auth]. |
 | `storageBlobAuthenticationMethod` | `string` | No | `microsoft_entra` | Blob authentication method used by the app. `microsoft_entra` sets `ADE_BLOB_ACCOUNT_URL` + RBAC; `shared_key` sets `ADE_BLOB_CONNECTION_STRING` from storage account keys. See [Blob auth options][storage-auth]. |
 | `postgresEntraBootstrapForceUpdateTag` | `string` | No | auto-generated GUID | Internal force-update token for the PostgreSQL Microsoft Entra bootstrap script. Leave as default in normal usage. |
 | `postgresProdDatabaseName` | `string` | No | `ade` | PostgreSQL production database name. |
@@ -236,11 +236,11 @@ See: [Managed identities in Azure Container Apps][aca-mi]
 Start from **Option A** or **Option B** and set:
 
 ```bash
-postgresAuthenticationMethod="microsoft_entra"
+postgresAuthenticationMode="microsoft_entra_only"
 ```
 
 No extra SQL command is required.  
-When `postgresAuthenticationMethod="microsoft_entra"`, the template runs an idempotent Azure deployment script that:
+When `postgresAuthenticationMode` includes Microsoft Entra auth (`microsoft_entra_only` or `postgresql_and_microsoft_entra`), the template runs an idempotent Azure deployment script that:
 
 - Creates PostgreSQL roles for the Container App managed identities (prod and optional dev)
 - Grants `CONNECT`, `CREATE`, and `TEMP` on each app database
@@ -249,7 +249,7 @@ When `postgresAuthenticationMethod="microsoft_entra"`, the template runs an idem
 > **TIP — Switching an Existing Deployment**
 > Bicep deployments are **safe and idempotent** to re-run.
 > To switch an existing environment to Microsoft Entra auth, re-run the same deployment command with
-> `postgresAuthenticationMethod="microsoft_entra"`.
+> `postgresAuthenticationMode="microsoft_entra_only"`.
 
 ## Teardown
 
@@ -261,7 +261,9 @@ az group delete --name "<RESOURCE_GROUP>" --yes --no-wait
 
 **What does this Bicep template configure for authentication?**
 
-- PostgreSQL: sets `ADE_DATABASE_AUTH_MODE` from `postgresAuthenticationMethod` (`microsoft_entra` or `postgresql`).
+- PostgreSQL:
+  - Server auth mode is set by `postgresAuthenticationMode` (`postgresql_only`, `microsoft_entra_only`, `postgresql_and_microsoft_entra`).
+  - App env var `ADE_DATABASE_AUTH_MODE` is derived from that mode (`managed_identity` for Entra-capable modes, `password` for `postgresql_only`).
 - Blob: sets either `ADE_BLOB_ACCOUNT_URL` (`microsoft_entra`) or `ADE_BLOB_CONNECTION_STRING` (`shared_key`).
 - `ADE_SECRET_KEY` is set from `prodContainerAppEnvAdeSecretKey` / `devContainerAppEnvAdeSecretKey`.
 
@@ -278,6 +280,13 @@ az group delete --name "<RESOURCE_GROUP>" --yes --no-wait
 - See [Container Apps ingress][aca-ingress] and [built-in environment variables][aca-env-vars] (`CONTAINER_APP_NAME` + `CONTAINER_APP_ENV_DNS_SUFFIX`) for how the default URL is formed.
 - If you configure a [custom domain][aca-custom-domains] in the Container App (Portal: Ingress > Custom domains), set the matching `prodContainerAppPublicWebUrl` / `devContainerAppPublicWebUrl` to that custom HTTPS origin and redeploy.
 - If you change `ADE_PUBLIC_WEB_URL` directly in the portal, Azure creates a new revision for the app config change. See [environment variables][aca-env-vars].
+
+**Can I disable shared key authorization on the storage account?**
+
+- Not with this template as-is. The Container Apps Azure Files volume mount uses the storage account key for `managedEnvironments/storages`.
+- Blob data auth for ADE still uses your selected `storageBlobAuthenticationMethod` (`microsoft_entra` recommended).
+- If you enforce "Prevent Shared Key authorization" at the storage account level, Azure Files mounts in this template will fail until you move off key-based file share mounts.
+- See [Storage shared key hardening][storage-shared-key-hardening] and [Container Apps storage mounts][aca-storage-mounts].
 
 **Is it safe to re-run deployments?**
 
@@ -302,12 +311,14 @@ az postgres flexible-server execute \
 [arm-what-if]: https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-what-if
 [cidr]: https://learn.microsoft.com/en-us/azure/virtual-network/manage-virtual-network
 [pg-firewall]: https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-firewall-rules
-[pg-auth]: https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-authentication
+[pg-auth]: https://learn.microsoft.com/en-us/azure/postgresql/security/security-entra-concepts
 [storage-ip-rules]: https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security-ip-address-range
 [storage-auth]: https://learn.microsoft.com/en-us/azure/storage/common/authorize-data-access
+[storage-shared-key-hardening]: https://learn.microsoft.com/en-us/azure/storage/common/shared-key-authorization-prevent
 [aca-replicas]: https://learn.microsoft.com/en-us/azure/container-apps/scale-app
 [aca-mi]: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
 [aca-ingress]: https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview
 [aca-custom-domains]: https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-managed-certificates
 [aca-env-vars]: https://learn.microsoft.com/en-us/azure/container-apps/environment-variables
+[aca-storage-mounts]: https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts
 [rbac-propagation]: https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting#symptom---role-assignment-changes-are-not-being-detected
